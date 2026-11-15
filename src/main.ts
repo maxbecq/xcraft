@@ -1,5 +1,6 @@
 import { Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, WebGLRenderer } from 'three';
 import { AI } from './ai/ai';
+import { Audio } from './audio';
 import { CameraRig } from './camera';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
@@ -69,10 +70,11 @@ const input = new Input(world, map, PLAYER, {
   focus: (x, z) => rig.lookAt(x, z),
   click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
 }, renderer.domElement);
-const hud = new Hud(world, map, PLAYER, input, scene, issue);
+const audio = new Audio();
+const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
-const effects = new Effects(scene, map);
+const effects = new Effects(scene, map, audio);
 const overlay = new Overlay(map);
 document.body.insertBefore(overlay.canvas, minimap.canvas);
 
@@ -114,25 +116,79 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
 let acc = 0;
-loadModels(Object.keys(DEFS)).then(() => renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.25);
-  acc += dt * SPEED;
-  while (acc >= TICK) {
-    world.step([...pending, ...ais.flatMap((ai) => ai.think())]);
-    pending = [];
-    hud.notify(world.events);
-    effects.collect(world, seenAt);
-    if (world.tick % 4 === 1) updateFog();
-    acc -= TICK;
+// Title screen, help and music toggle.
+const tools = document.createElement('div');
+tools.className = 'tools';
+tools.innerHTML = '<button class="tool" data-t="help">? Aide</button><button class="tool" data-t="music">♪ Musique</button>';
+const help = document.createElement('div');
+help.className = 'help';
+help.hidden = true;
+help.innerHTML = `<h3>Contrôles</h3>
+Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
+Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
+<kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
+<kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
+<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
+Flèches, bords d'écran, minimap : caméra · molette : zoom<br>
+<kbd>F1</kbd> : cette aide`;
+document.body.append(tools, help);
+tools.addEventListener('click', (e) => {
+  const t = (e.target as HTMLElement).dataset.t;
+  if (t === 'help') help.hidden = !help.hidden;
+  if (t === 'music') (e.target as HTMLElement).style.opacity = audio.toggleMusic() ? '1' : '0.5';
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F1') {
+    e.preventDefault();
+    help.hidden = !help.hidden;
   }
-  const [dx, dy] = scrollDirection();
-  rig.pan(dx, dy, dt);
-  rig.update(window.innerWidth / window.innerHeight);
-  input.prune();
-  units.sync(world, acc / TICK, input.selected, PLAYER, sees);
-  hud.update();
-  effects.update(dt);
-  overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
-  minimap.draw(world, sees);
-  renderer.render(scene, rig.camera);
-}));
+});
+window.addEventListener('pointerdown', () => audio.start(), { once: true });
+
+const ready = loadModels(Object.keys(DEFS));
+if (SPECTATE || params.has('play')) {
+  ready.then(start);
+} else {
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = `<h1>XCRAFT</h1><p>Les Humains — V1</p>
+    <button data-m="play">Jouer contre l'IA</button>
+    <button data-m="watch">Regarder IA contre IA</button>`;
+  document.body.append(menu);
+  menu.addEventListener('click', async (e) => {
+    const m = (e.target as HTMLElement).dataset.m;
+    if (m === 'watch') location.search = '?spectate&speed=2';
+    if (m !== 'play') return;
+    audio.start();
+    menu.remove();
+    await ready;
+    start();
+  });
+}
+
+function start(): void {
+  clock.getDelta();
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.25);
+    acc += dt * SPEED;
+    while (acc >= TICK) {
+      world.step([...pending, ...ais.flatMap((ai) => ai.think())]);
+      pending = [];
+      hud.notify(world.events);
+      effects.collect(world, seenAt);
+      if (world.tick % 4 === 1) updateFog();
+      acc -= TICK;
+    }
+    const [dx, dy] = scrollDirection();
+    rig.pan(dx, dy, dt);
+    rig.update(window.innerWidth / window.innerHeight);
+    input.prune();
+    units.sync(world, acc / TICK, input.selected, PLAYER, sees);
+    hud.update();
+    effects.update(dt);
+    overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
+    audio.frame();
+    minimap.draw(world, sees);
+    renderer.render(scene, rig.camera);
+  });
+}

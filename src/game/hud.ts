@@ -3,6 +3,7 @@ import { type BuildingDef, type Cost, DEFS, type UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
+import type { Audio } from '../audio';
 import type { Input } from './input';
 
 interface Button {
@@ -42,6 +43,7 @@ export class Hud {
     private readonly input: Input,
     scene: Scene,
     private readonly issue: (c: Command) => void,
+    private readonly audio: Audio,
   ) {
     document.body.append(this.bar, this.panel, this.card, this.toasts, this.banner);
     this.banner.hidden = true;
@@ -51,7 +53,11 @@ export class Hud {
 
     this.card.addEventListener('pointerdown', (e) => {
       const key = (e.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key;
-      this.buttons.find((b) => b.key === key)?.action();
+      const b = this.buttons.find((x) => x.key === key);
+      if (b) {
+        this.audio.play('click');
+        b.action();
+      }
     });
     this.panel.addEventListener('pointerdown', (e) => {
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
@@ -116,7 +122,8 @@ export class Hud {
   notify(events: GameEvent[]): void {
     for (const ev of events) {
       if (ev.player !== this.player) continue;
-      const t = el('div', 'hud-toast');
+      const t = el('div', `hud-toast ${ev.kind}`);
+      this.audio.play(ev.kind);
       t.textContent = ev.text;
       this.toasts.append(t);
       setTimeout(() => t.remove(), 2500);

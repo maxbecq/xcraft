@@ -30,6 +30,20 @@ canvas { display: block; }
 
 .hud-toasts { position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
 .hud-toast { padding: 4px 10px; background: rgba(60, 20, 10, 0.85); color: #ffd2c4; border-radius: 4px; }
+.hud-toast.done { background: rgba(20, 50, 20, 0.85); color: #c8ffc4; }
+.hud-toast.alert { background: rgba(120, 20, 10, 0.9); color: #fff; font-weight: 700; }
+
+.menu { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; background: radial-gradient(ellipse at center, rgba(30, 26, 18, 0.75), rgba(5, 5, 5, 0.92)); z-index: 10; }
+.menu h1 { margin: 0; font: 800 72px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.12em; color: #e7c66b; text-shadow: 0 3px 18px #000; }
+.menu p { margin: 0 0 10px; opacity: 0.8; }
+.menu button, .tool { padding: 10px 26px; min-width: 260px; font: 600 16px system-ui; background: #3a3222; color: #f0e6cc; border: 1px solid #8a7550; border-radius: 6px; cursor: pointer; }
+.menu button:hover { background: #4b4029; }
+.tools { position: fixed; top: 8px; left: 12px; display: flex; gap: 6px; }
+.tool { min-width: 0; padding: 4px 10px; font-size: 13px; }
+.help { position: fixed; top: 44px; left: 12px; width: 300px; padding: 10px 14px; background: rgba(20, 18, 14, 0.92); border: 1px solid #5a4d36; border-radius: 6px; line-height: 1.5; }
+.help h3 { margin: 0 0 6px; }
+.help kbd { display: inline-block; min-width: 18px; padding: 0 4px; background: #3a3222; border: 1px solid #6d5e40; border-radius: 3px; text-align: center; font: 600 11px system-ui; }
+
 
 .overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
 body.targeting canvas { cursor: crosshair; }

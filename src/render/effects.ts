@@ -4,6 +4,7 @@ import {
 } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
+import type { Audio } from '../audio';
 import type { World } from '../sim/world';
 
 const SHOT_TIME = 0.12;
@@ -27,12 +28,13 @@ export class Effects {
   private puffs: Puff[] = [];
   private readonly sphere = new SphereGeometry(0.5, 10, 8);
 
-  constructor(private readonly scene: Scene, private readonly map: GameMap) {}
+  constructor(private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {}
 
   /** Collects the effects of the tick that just ran. */
   collect(world: World, seen: (x: number, y: number) => boolean): void {
     for (const s of world.shots) {
       if (!seen(s.x1, s.y1) && !seen(s.x2, s.y2)) continue;
+      this.audio.play(s.kind, 0.6);
       const a = this.point(s.x1, s.y1, 0.45);
       const b = this.point(s.x2, s.y2, 0.45);
       if (s.kind === 'melee') {
@@ -49,6 +51,7 @@ export class Effects {
     }
     for (const d of world.deaths) {
       if (!seen(d.x, d.y)) continue;
+      this.audio.play('death', d.type in BUILDING_SIZES ? 1.5 : 0.7);
       const big = d.type in BUILDING_SIZES;
       const mesh = new Mesh(this.sphere, new MeshBasicMaterial({ color: big ? 0x6b5a48 : 0x5a1010, transparent: true, opacity: 0.8 }));
       const [x, y, z] = this.point(d.x, d.y, 0.3);

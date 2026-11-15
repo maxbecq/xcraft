@@ -86,6 +86,7 @@ export interface Death {
 export interface GameEvent {
   player: number;
   text: string;
+  kind: 'error' | 'done' | 'alert';
 }
 
 const REACH = FP / 4;
@@ -104,6 +105,7 @@ export class World {
   /** Winning player once the game is over. */
   winner: number | null = null;
   private nextId = 1;
+  private readonly lastAlert: Record<number, number> = {};
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
@@ -235,8 +237,8 @@ export class World {
     this.players[player].energy += def.cost.energy;
   }
 
-  private say(player: number, text: string): false {
-    this.events.push({ player, text });
+  private say(player: number, text: string, kind: GameEvent['kind'] = 'error'): false {
+    this.events.push({ player, text, kind });
     return false;
   }
 
@@ -424,6 +426,7 @@ export class World {
         const total = ticks((b.def as BuildingDef).buildTime);
         b.buildLeft--;
         b.hp = Math.min(b.maxHp, b.hp + Math.max(1, idiv(b.maxHp * 9, total * 10)));
+        if (b.buildLeft === 0) this.say(b.owner, `Construction terminée : ${b.def.name}.`, 'done');
         return;
       }
       case 'gather':
@@ -576,6 +579,10 @@ export class World {
     const armor = 'armor' in t.def ? t.def.armor : 0;
     const bonus = t.def.kind === 'building' ? (a.vsMechanical ?? 0) : 0;
     t.hp -= Math.max(1, a.damage + bonus - armor);
+    if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
+      this.lastAlert[t.owner] = this.tick;
+      this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
+    }
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged' });
     // Idle soldiers hit from afar fight back.
     const td = t.def as UnitDef;
