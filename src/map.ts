@@ -8,9 +8,15 @@ export interface GameMap {
   level: Uint8Array;
   /** Ramp tiles climb from their level to level + 1 towards this side. */
   ramp: (Dir | null)[];
+  /** Position along a ramp: 0 is the tile touching the higher ground. */
+  rampStep: Uint8Array;
 }
 
-export const LEVEL_HEIGHT = 1.5;
+export const LEVEL_HEIGHT = 1.25;
+/** Ramps are this many tiles long, for a gentle slope. */
+export const RAMP_LENGTH = 4;
+/** Corner heights are integers in 1/SUB of a level (so ramps can climb in steps). */
+export const SUB = 12;
 
 const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };
 export const STEP: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
@@ -24,15 +30,30 @@ function octagon(dx: number, dy: number, half: number, cut: number): boolean {
 export function createMap(): GameMap {
   const width = 96;
   const height = 96;
-  const map: GameMap = { width, height, level: new Uint8Array(width * height), ramp: new Array(width * height).fill(null) };
+  const map: GameMap = {
+    width, height, level: new Uint8Array(width * height), ramp: new Array(width * height).fill(null), rampStep: new Uint8Array(width * height),
+  };
 
   // Paints a tile and its mirror for the opposite player.
-  const set = (x: number, y: number, level: number, ramp: Dir | null = null) => {
+  const set = (x: number, y: number, level: number, ramp: Dir | null = null, step = 0) => {
     map.level[y * width + x] = level;
     map.ramp[y * width + x] = ramp;
+    map.rampStep[y * width + x] = step;
     const i = (height - 1 - y) * width + (width - 1 - x);
     map.level[i] = level;
     map.ramp[i] = ramp && OPPOSITE[ramp];
+    map.rampStep[i] = step;
+  };
+  /** A ramp RAMP_LENGTH tiles long, starting at (x, y) next to the higher ground on side `up`, `width` tiles wide. */
+  const ramp = (x: number, y: number, up: Dir, across: number, level: number) => {
+    const [dx, dy] = STEP[up];
+    for (let k = 0; k < RAMP_LENGTH; k++) {
+      for (let w = 0; w < across; w++) {
+        const tx = x - dx * k + (dx === 0 ? w : 0);
+        const ty = y - dy * k + (dy === 0 ? w : 0);
+        set(tx, ty, level, up, k);
+      }
+    }
   };
   const paint = (test: (x: number, y: number) => boolean, level: number) => {
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (test(x, y)) set(x, y, level);
@@ -42,10 +63,10 @@ export function createMap(): GameMap {
   paint((x, y) => octagon(x - 14, y - 14, 10, 5), 2); // main base
   paint((x, y) => octagon(x - 47.5, y - 47.5, 6, 3), 1); // centre hill
 
-  for (let y = 13; y <= 15; y++) set(25, y, 1, 'W'); // main -> natural
-  for (let x = 19; x <= 21; x++) set(x, 38, 0, 'N'); // natural -> low ground (south)
-  for (let y = 19; y <= 21; y++) set(38, y, 0, 'W'); // natural -> low ground (east)
-  for (let x = 46; x <= 49; x++) set(x, 41, 0, 'S'); // low ground -> centre hill
+  ramp(25, 13, 'W', 3, 1); // main -> natural
+  ramp(19, 38, 'N', 3, 0); // natural -> low ground (south)
+  ramp(38, 19, 'W', 3, 0); // natural -> low ground (east)
+  ramp(46, 41, 'S', 4, 0); // low ground -> centre hill
 
   return map;
 }
@@ -56,11 +77,13 @@ export function tileAt(map: GameMap, x: number, y: number): { level: number; ram
   return { level: map.level[i], ramp: map.ramp[i] };
 }
 
-/** Cliff levels of a tile's corners, in order [nw, ne, se, sw]. */
+/** Corner heights of a tile in 1/SUB level units, in order [nw, ne, se, sw]. */
 export function cornerLevels(map: GameMap, x: number, y: number): [number, number, number, number] {
   const i = y * map.width + x;
-  const lo = map.level[i];
-  const hi = lo + 1;
+  const step = map.rampStep[i];
+  // Along a ramp: the high side of step k sits k/RAMP_LENGTH below the upper level.
+  const hi = (map.level[i] + 1) * SUB - (step * SUB) / RAMP_LENGTH;
+  const lo = map.ramp[i] ? hi - SUB / RAMP_LENGTH : map.level[i] * SUB;
   switch (map.ramp[i]) {
     case 'N': return [hi, hi, lo, lo];
     case 'S': return [lo, lo, hi, hi];
@@ -72,7 +95,7 @@ export function cornerLevels(map: GameMap, x: number, y: number): [number, numbe
 
 /** World heights of a tile's corners, in order [nw, ne, se, sw]. */
 export function cornerHeights(map: GameMap, x: number, y: number): [number, number, number, number] {
-  return cornerLevels(map, x, y).map((l) => l * LEVEL_HEIGHT) as [number, number, number, number];
+  return cornerLevels(map, x, y).map((l) => (l / SUB) * LEVEL_HEIGHT) as [number, number, number, number];
 }
 
 /** Corner offsets, in corner order [nw, ne, se, sw]. */

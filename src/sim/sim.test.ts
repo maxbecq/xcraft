@@ -84,7 +84,10 @@ describe('World', () => {
         const e = w.entities.get(id)!;
         const [px, py] = prev.get(id)!;
         const [tx, ty] = [tileOf(e.x), tileOf(e.y)];
-        if (tx !== px || ty !== py) expect(w.grid.canStep(px, py, tx, ty)).toBe(true);
+        // A tick can chain a move and a push: allow a legal two-step detour through an orthogonal neighbour.
+        const g = w.grid;
+        const legal = g.canStep(px, py, tx, ty) || (g.canStep(px, py, tx, py) && g.canStep(tx, py, tx, ty)) || (g.canStep(px, py, px, ty) && g.canStep(px, ty, tx, ty));
+        if (tx !== px || ty !== py) expect(legal).toBe(true);
         prev.set(id, [tx, ty]);
       }
     }

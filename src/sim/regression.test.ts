@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMap } from '../map';
+import { SUB, createMap } from '../map';
 import { FP, tileOf, ticks } from './fixed';
 import { createMatch } from './setup';
 import { World } from './world';
@@ -43,7 +43,7 @@ describe('regressions', () => {
     w.spawn('caserne', 0, 18 * FP, 18 * FP);
     for (let i = 0; i < ticks(20); i++) w.step([]);
     expect(w.grid.open(tileOf(u.x), tileOf(u.y))).toBe(true);
-    expect(w.grid.level(tileOf(u.x), tileOf(u.y))).toBe(2);
+    expect(w.grid.level(tileOf(u.x), tileOf(u.y))).toBe(2 * SUB);
   });
 
   it('ignores attack orders on enemies hidden in the fog', () => {

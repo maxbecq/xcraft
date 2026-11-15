@@ -767,6 +767,9 @@ export class World {
   /** Advances along the path; true once it is exhausted. */
   private follow(e: Entity): boolean {
     if (e.path.length === 0) return true;
+    // Intermediate waypoints count as reached within half a tile, so a crowd never circles one point.
+    // Only skip when the next waypoint is in straight reach, so corners around cliffs are still respected.
+    if (e.path.length > 2 && dist(e.x, e.y, e.path[0], e.path[1]) <= FP / 2 && this.grid.lineWalkable(e.x, e.y, e.path[2], e.path[3])) e.path.splice(0, 2);
     const tx = e.path[0];
     const ty = e.path[1];
     const d = dist(e.x, e.y, tx, ty);
