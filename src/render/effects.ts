@@ -1,5 +1,6 @@
 import {
-  AdditiveBlending, BoxGeometry, CanvasTexture, Color, Mesh, MeshStandardMaterial, NormalBlending, type Scene, Sprite,
+  AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Color, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
+  type Scene, Sprite,
   SpriteMaterial, type Texture, Vector3,
 } from 'three';
 import type { Audio } from '../audio';
@@ -45,6 +46,12 @@ interface Particle {
   active: boolean;
 }
 
+interface Decal {
+  mesh: Mesh;
+  age: number;
+  life: number;
+}
+
 interface Debris {
   mesh: Mesh;
   vel: Vector3;
@@ -59,6 +66,8 @@ interface Debris {
 export class Effects {
   private readonly pool: Particle[] = [];
   private debris: Debris[] = [];
+  private decals: Decal[] = [];
+  private readonly decalGeo = new CircleGeometry(0.5, 20);
   private readonly tex = {
     glow: blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'),
     smoke: blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true),
@@ -80,8 +89,13 @@ export class Effects {
       if (!seen(d.x, d.y)) continue;
       const size = BUILDING_SIZES[d.type];
       this.audio.play('death', size ? 1.5 : 0.7);
-      if (size) this.explosion(this.at(d.x, d.y, 0.5), size);
-      else if (d.type !== 'minerai') this.dust(this.at(d.x, d.y, 0.3), d.owner);
+      if (size) {
+        this.explosion(this.at(d.x, d.y, 0.5), size);
+        this.decal(this.at(d.x, d.y, 0.04), size * 1.1, 0x1a1410, 40);
+      } else if (d.type !== 'minerai') {
+        this.dust(this.at(d.x, d.y, 0.3), d.owner);
+        this.decal(this.at(d.x, d.y, 0.03), 0.8, 0x2a1a12, 15);
+      }
     }
   }
 
@@ -141,6 +155,18 @@ export class Effects {
     }
   }
 
+  /** A dark scorch mark on the ground that fades away. */
+  private decal(p: Vector3, size: number, color: number, life: number): void {
+    const mesh = new Mesh(this.decalGeo, new MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = Math.random() * Math.PI;
+    mesh.scale.set(size, size * (0.7 + Math.random() * 0.3), 1);
+    mesh.position.copy(p);
+    mesh.renderOrder = 1;
+    this.scene.add(mesh);
+    this.decals.push({ mesh, age: 0, life });
+  }
+
   /** Smoke (and fire when badly hurt) rising from a damaged building; call every frame with its hp fraction. */
   burn(p: Vector3, hp: number, size: number, dt: number): void {
     if (hp > 0.5) return;
@@ -188,6 +214,14 @@ export class Effects {
       p.sprite.scale.setScalar(p.size0 + (p.size1 - p.size0) * f);
       p.sprite.material.opacity = p.alpha * (1 - f) * Math.min(1, f * 8 + 0.3);
     }
+    this.decals = this.decals.filter((d) => {
+      d.age += dt;
+      (d.mesh.material as MeshBasicMaterial).opacity = 0.6 * Math.min(1, (d.life - d.age) / (d.life * 0.3));
+      if (d.age < d.life) return true;
+      this.scene.remove(d.mesh);
+      (d.mesh.material as MeshBasicMaterial).dispose();
+      return false;
+    });
     this.debris = this.debris.filter((d) => {
       d.age += dt;
       d.vel.y -= 12 * dt;
