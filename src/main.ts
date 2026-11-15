@@ -1,4 +1,5 @@
 import { Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, WebGLRenderer } from 'three';
+import { AI } from './ai/ai';
 import { CameraRig } from './camera';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
@@ -8,11 +9,16 @@ import { Overlay } from './render/overlay';
 import { EntityRenderer } from './render/units';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
-import type { Command } from './sim/world';
+import type { Command, Entity } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain } from './terrain';
 
 const EDGE_PX = 8;
+const params = new URLSearchParams(location.search);
+/** `?spectate`: watch the AI play itself, without fog. */
+const SPECTATE = params.has('spectate');
+/** `?speed=4`: simulation speed multiplier. */
+const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 const PLAYER = 0;
 
 const renderer = new WebGLRenderer({ antialias: true });
@@ -22,6 +28,10 @@ renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const world = createMatch();
+/** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
+const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
+const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
+const ais = SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
 const map = world.map;
 const scene = new Scene();
 scene.background = new Color(0x0d0f12);
@@ -67,7 +77,7 @@ document.body.insertBefore(overlay.canvas, minimap.canvas);
 
 /** Copies the player's fog of war to the terrain and minimap. */
 function updateFog(): void {
-  const tiles = world.vision[PLAYER].tiles;
+  const tiles = SPECTATE ? world.vision[PLAYER].tiles.map(() => 2) : world.vision[PLAYER].tiles;
   const data = fog.image.data as Uint8Array;
   for (let i = 0; i < tiles.length; i++) data[i] = tiles[i] === 2 ? 255 : tiles[i] === 1 ? 128 : 0;
   fog.needsUpdate = true;
@@ -105,12 +115,12 @@ const clock = new Clock();
 let acc = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.25);
-  acc += dt;
+  acc += dt * SPEED;
   while (acc >= TICK) {
-    world.step(pending);
+    world.step([...pending, ...ais.flatMap((ai) => ai.think())]);
     pending = [];
     hud.notify(world.events);
-    effects.collect(world, PLAYER);
+    effects.collect(world, seenAt);
     if (world.tick % 4 === 1) updateFog();
     acc -= TICK;
   }
@@ -118,10 +128,10 @@ renderer.setAnimationLoop(() => {
   rig.pan(dx, dy, dt);
   rig.update(window.innerWidth / window.innerHeight);
   input.prune();
-  units.sync(world, acc / TICK, input.selected, PLAYER);
+  units.sync(world, acc / TICK, input.selected, PLAYER, sees);
   hud.update();
   effects.update(dt);
-  overlay.draw(world, rig.camera, input.selected, PLAYER, acc / TICK);
-  minimap.draw(world, PLAYER);
+  overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
+  minimap.draw(world, sees);
   renderer.render(scene, rig.camera);
 });

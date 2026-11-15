@@ -30,9 +30,7 @@ export class Effects {
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
   /** Collects the effects of the tick that just ran. */
-  collect(world: World, player: number): void {
-    const vision = world.vision[player];
-    const seen = (x: number, y: number) => vision.visible(Math.floor(x / FP), Math.floor(y / FP));
+  collect(world: World, seen: (x: number, y: number) => boolean): void {
     for (const s of world.shots) {
       if (!seen(s.x1, s.y1) && !seen(s.x2, s.y2)) continue;
       const a = this.point(s.x1, s.y1, 0.45);

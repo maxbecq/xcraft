@@ -12,6 +12,10 @@ const FIELDS: [number, number][] = [
   [33, 25], [34, 26], [35, 27], [35, 28], [35, 29], [34, 30], [33, 31],
 ];
 const WELLS: [number, number][] = [[17, 6], [26, 33]];
+/** Council spot at the natural expansion. */
+const NATURAL: [number, number] = [27, 26];
+/** Natural expansion council spot (top-left tile) for each player. */
+export const EXPANSIONS: [number, number][] = [NATURAL, [96 - NATURAL[0] - 5, 96 - NATURAL[1] - 5]];
 
 /** A new two-player match on the V1 map. */
 export function createMatch(): World {

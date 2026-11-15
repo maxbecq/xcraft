@@ -1,7 +1,7 @@
 import type { CameraRig } from './camera';
 import { TEAM_COLORS } from './render/units';
 import { FP } from './sim/fixed';
-import type { World } from './sim/world';
+import type { Entity, World } from './sim/world';
 import type { GameMap } from './map';
 import { tileColor } from './terrain';
 
@@ -76,7 +76,7 @@ export class Minimap {
     this.tiles.getContext('2d')!.putImageData(this.image, 0, 0);
   }
 
-  draw(world: World, player: number): void {
+  draw(world: World, sees: (e: Entity) => boolean): void {
     const ctx = this.ctx;
     ctx.resetTransform();
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -85,7 +85,7 @@ export class Minimap {
     ctx.drawImage(this.tiles, 0, 0);
 
     for (const e of world.entities.values()) {
-      if (e.owner < 0 || !world.sees(player, e)) continue;
+      if (e.owner < 0 || !sees(e)) continue;
       ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
       const s = Math.max(1.5, (e.radius * 2) / FP);
       ctx.fillRect(e.x / FP - s / 2, e.y / FP - s / 2, s, s);

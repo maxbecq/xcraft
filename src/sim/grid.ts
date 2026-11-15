@@ -128,17 +128,20 @@ export class Grid {
     return path.reverse();
   }
 
-  /** Nearest open tile to (x, y), searching outward in rings. */
-  nearestOpen(x: number, y: number): [number, number] {
+  /** Nearest open tile to (x, y), searching outward in rings; prefers tiles at `level` (so a target on a cliff is approached from the top). */
+  nearestOpen(x: number, y: number, level = -1): [number, number] {
+    let fallback: [number, number] | null = null;
     for (let r = 0; r < Math.max(this.width, this.height); r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if (this.open(x + dx, y + dy)) return [x + dx, y + dy];
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !this.open(x + dx, y + dy)) continue;
+          if (level < 0 || this.level(x + dx, y + dy) === level) return [x + dx, y + dy];
+          fallback ??= [x + dx, y + dy];
         }
       }
+      if (fallback && r >= 6) return fallback;
     }
-    return [x, y];
+    return fallback ?? [x, y];
   }
 }
 

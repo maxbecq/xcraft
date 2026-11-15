@@ -698,7 +698,7 @@ export class World {
     let gx = Math.min(g.width - 1, Math.max(0, tileOf(x)));
     let gy = Math.min(g.height - 1, Math.max(0, tileOf(y)));
     const exact = g.open(gx, gy);
-    if (!exact) [gx, gy] = g.nearestOpen(gx, gy);
+    if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy));
     const tiles = g.findPath(tileOf(e.x), tileOf(e.y), gx, gy);
     const pts: number[] = [];
     for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);

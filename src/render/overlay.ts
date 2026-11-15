@@ -2,7 +2,7 @@ import { Vector3, type Camera } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import type { World } from '../sim/world';
+import type { Entity, World } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities. */
 export class Overlay {
@@ -15,7 +15,7 @@ export class Overlay {
     this.ctx = this.canvas.getContext('2d')!;
   }
 
-  draw(world: World, camera: Camera, selected: ReadonlySet<number>, player: number, alpha: number): void {
+  draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     const dpr = window.devicePixelRatio;
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -29,7 +29,7 @@ export class Overlay {
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp) continue;
       if (!selected.has(e.id) && e.hp >= e.maxHp) continue;
-      if (!world.sees(player, e)) continue;
+      if (!sees(e)) continue;
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;

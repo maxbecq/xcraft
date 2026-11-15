@@ -118,7 +118,7 @@ export class EntityRenderer {
     return [...this.views.values()].map((v) => v.root);
   }
 
-  sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number): void {
+  sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
     for (const [id, v] of this.views) {
       if (!world.entities.has(id)) {
         this.scene.remove(v.root);
@@ -128,7 +128,7 @@ export class EntityRenderer {
     for (const e of world.entities.values()) {
       const v = this.views.get(e.id) ?? this.create(e, player);
       if (e.owner >= 0 && e.owner !== player) {
-        const now = world.sees(player, e);
+        const now = sees(e);
         v.seen ||= now;
         v.root.visible = e.def.kind === 'unit' ? now : v.seen;
         if (!v.root.visible) continue;
