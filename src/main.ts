@@ -1,4 +1,4 @@
-import { Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio } from './audio';
 import { CameraRig } from './camera';
@@ -6,6 +6,7 @@ import { Hud } from './game/hud';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
 import { Effects } from './render/effects';
+import { Post } from './render/post';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, loadModels } from './render/units';
 import { DEFS } from './data';
@@ -24,7 +25,9 @@ const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 const PLAYER = 0;
 
 const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.toneMapping = ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
@@ -42,21 +45,26 @@ const terrain = buildTerrain(map);
 scene.add(terrain);
 const fog = addFog(terrain, map);
 
-scene.add(new HemisphereLight(0xcfd8ff, 0x3a3020, 1.2));
-const sun = new DirectionalLight(0xfff1d6, 2.2);
-sun.position.set(map.width / 2 - 30, 60, map.height / 2 - 20);
-sun.target.position.set(map.width / 2, 0, map.height / 2);
+// Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.
+scene.add(new HemisphereLight(0xb8c8e8, 0x4a3820, 1.1));
+const sun = new DirectionalLight(0xffe2b8, 3.2);
+const SUN_OFFSET = new Vector3(-22, 40, -12);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, far: 200 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.02;
+// The shadow box follows the camera, so shadows stay crisp.
+Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 140 });
 scene.add(sun, sun.target);
 
 let pending: Command[] = [];
-if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, issue: (c: Command) => pending.push(c) } });
+
 
 const rig = new CameraRig(map.width, map.height);
 const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === 'conseil')!;
 rig.lookAt(home.x / FP + 2, home.y / FP + 2);
+
+if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
 
 const minimap = new Minimap(map, rig);
 document.body.appendChild(minimap.canvas);
@@ -111,8 +119,12 @@ function scrollDirection(): [number, number] {
   return [dx, dy];
 }
 
-window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
 renderer.setSize(window.innerWidth, window.innerHeight);
+const post = new Post(renderer, scene, rig.camera, !params.has('lowfx'));
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  post.setSize(window.innerWidth, window.innerHeight);
+});
 
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
@@ -187,6 +199,8 @@ function start(): void {
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     audio.frame();
     minimap.draw(world, sees);
-    renderer.render(scene, rig.camera);
+    sun.target.position.copy(rig.target);
+    sun.position.copy(rig.target).add(SUN_OFFSET);
+    post.render();
   });
 }

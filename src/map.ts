@@ -75,12 +75,56 @@ export function cornerHeights(map: GameMap, x: number, y: number): [number, numb
   return cornerLevels(map, x, y).map((l) => l * LEVEL_HEIGHT) as [number, number, number, number];
 }
 
+/** Corner offsets, in corner order [nw, ne, se, sw]. */
+const CORNER_DIR: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+/**
+ * Plateau corners on a staircase cliff are cut diagonally when drawn, so diagonal cliffs look straight.
+ * Returns the removed corner (0..3, see cornerLevels) or -1. Rendering only: pathing stays on tiles.
+ */
+export function cutCorner(map: GameMap, x: number, y: number): number {
+  const t = tileAt(map, x, y);
+  if (!t || t.ramp) return -1;
+  const lowerFlat = (tx: number, ty: number) => {
+    const n = tileAt(map, tx, ty);
+    return !!n && !n.ramp && n.level < t.level;
+  };
+  let found = -1;
+  for (let c = 0; c < 4; c++) {
+    const [dx, dy] = CORNER_DIR[c];
+    const h = tileAt(map, x + dx, y);
+    const v = tileAt(map, x, y + dy);
+    if (!lowerFlat(x + dx, y) || !lowerFlat(x, y + dy) || !lowerFlat(x + dx, y + dy) || h!.level !== v!.level) continue;
+    if (found >= 0) return -1; // a thin spike: leave it square
+    found = c;
+  }
+  return found;
+}
+
+/** Level the cut part of a tile drops to. */
+export function cutLevel(map: GameMap, x: number, y: number, corner: number): number {
+  return tileAt(map, x + CORNER_DIR[corner][0], y)!.level;
+}
+
+/** Is local point (u, v) of a tile inside the triangle removed at `corner`? */
+export function inCut(corner: number, u: number, v: number): boolean {
+  switch (corner) {
+    case 0: return u + v < 1;
+    case 1: return u > v;
+    case 2: return u + v > 1;
+    case 3: return v > u;
+    default: return false;
+  }
+}
+
 /** Ground height under a world point (in tiles), for rendering. */
 export function heightAt(map: GameMap, x: number, y: number): number {
   const tx = Math.min(map.width - 1, Math.max(0, Math.floor(x)));
   const ty = Math.min(map.height - 1, Math.max(0, Math.floor(y)));
-  const [nw, ne, se, sw] = cornerHeights(map, tx, ty);
   const u = Math.min(1, Math.max(0, x - tx));
   const v = Math.min(1, Math.max(0, y - ty));
+  const cut = cutCorner(map, tx, ty);
+  if (cut >= 0 && inCut(cut, u, v)) return cutLevel(map, tx, ty, cut) * LEVEL_HEIGHT;
+  const [nw, ne, se, sw] = cornerHeights(map, tx, ty);
   return (nw * (1 - u) + ne * u) * (1 - v) + (sw * (1 - u) + se * u) * v;
 }

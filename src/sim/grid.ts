@@ -1,4 +1,4 @@
-import { type GameMap, cornerLevels } from '../map';
+import { type GameMap, cornerLevels, cutCorner } from '../map';
 import { FP, idiv, isqrt, tileOf } from './fixed';
 
 /** Ground passability: cliffs from the map plus tiles blocked by buildings. */
@@ -8,14 +8,20 @@ export class Grid {
   /** Count of blockers per tile (buildings, resources). */
   readonly blocked: Uint8Array;
   private readonly corners: Int8Array;
+  /** Tiles drawn with a diagonal cliff cut: walkable, but not buildable. */
+  private readonly cut: Uint8Array;
 
   constructor(map: GameMap) {
     this.width = map.width;
     this.height = map.height;
     this.blocked = new Uint8Array(map.width * map.height);
     this.corners = new Int8Array(map.width * map.height * 4);
+    this.cut = new Uint8Array(map.width * map.height);
     for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) this.corners.set(cornerLevels(map, x, y), (y * map.width + x) * 4);
+      for (let x = 0; x < map.width; x++) {
+        this.corners.set(cornerLevels(map, x, y), (y * map.width + x) * 4);
+        this.cut[y * map.width + x] = cutCorner(map, x, y) >= 0 ? 1 : 0;
+      }
     }
   }
 
@@ -27,8 +33,9 @@ export class Grid {
     return this.inside(x, y) && this.blocked[y * this.width + x] === 0;
   }
 
-  /** Level of a flat tile, or -1 for a ramp. */
+  /** Level of a flat, buildable tile, or -1 for a ramp or a cut cliff corner. */
   flatLevel(x: number, y: number): number {
+    if (this.cut[y * this.width + x]) return -1;
     const c = (y * this.width + x) * 4;
     const l = this.corners[c];
     return this.corners[c + 1] === l && this.corners[c + 2] === l && this.corners[c + 3] === l ? l : -1;
