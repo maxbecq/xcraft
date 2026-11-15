@@ -12,6 +12,7 @@ RTS jouable dans le navigateur, en 3D isométrique façon StarCraft 1, d'après 
 - Ressources : minerai (récolté par les serfs) et énergie (produite par les mines).
 - Brouillard de guerre : on ne voit pas en haut d'une falaise depuis le bas.
 - Victoire : détruire tous les bâtiments adverses.
+- IA : trois difficultés (facile, normale, difficile) par handicap de récolte (70 %, 100 %, 130 %).
 
 Stats issues du mod SC2 « XC Mod 1.53 ».
 
@@ -27,7 +28,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Caméra | flèches, bords de l'écran, minimap ; molette pour zoomer |
 | Aide | `F1` |
 
-Paramètres d'URL : `?play` (sans écran titre), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4).
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines).
 
 ## Développement
 
@@ -44,5 +45,7 @@ Architecture :
 - `src/sim/` : simulation déterministe en entiers (virgule fixe, 20 ticks/s), pilotée uniquement par des commandes. Prête pour les replays et le multijoueur lockstep.
 - `src/ai/` : IA qui joue par commandes, comme un humain.
 - `src/render/`, `src/game/` : rendu Three.js, HUD et contrôles. Le rendu lit la simulation et ne la modifie jamais.
-- `tools/blender/models.py` : modèles low-poly générés par script (Blender 5.3, sans interface). La matière nommée `team` prend la couleur du joueur.
+- `tools/blender/models.py` : modèles low-poly générés par script (Blender 5.3, sans interface), membres animables séparés, décors (`doodads.glb`) et icônes du HUD. La matière nommée `team` prend la couleur du joueur.
+- `src/render/` : terrain texturé procédural (falaises rocheuses inclinées, diagonales lissées), décors instanciés, particules, post-traitement (occlusion ambiante GTAO, bloom, tone mapping ACES, SMAA).
+- Sons : bruitages synthétisés en WebAudio. La musique sera ajoutée à part.
 - `src/data.ts` : toutes les stats des unités et bâtiments.
