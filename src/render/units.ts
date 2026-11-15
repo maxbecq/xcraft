@@ -15,6 +15,8 @@ const UNIT_SCALE = 1.35;
 
 const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra });
 const teamMaterials = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6 }));
+/** Team colour for Blender models, keeping their hand-painted vertex colours. */
+const teamPainted = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6, vertexColors: true }));
 const neutral = mat(0x9a8f7a);
 const skin = mat(0xd9b48f);
 const steel = mat(0x8c949c, { metalness: 0.6, roughness: 0.4 });
@@ -57,7 +59,7 @@ function model(type: string, team: Material): Group {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
     o.receiveShadow = true;
-    if ((o.material as Material).name === 'team') o.material = team;
+    if ((o.material as Material).name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
   });
   return g;
 }

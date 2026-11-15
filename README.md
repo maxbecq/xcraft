@@ -28,7 +28,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Caméra | flèches, bords de l'écran, minimap ; molette pour zoomer |
 | Aide | `F1` |
 
-Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines).
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD).
 
 ## Développement
 
@@ -46,6 +46,6 @@ Architecture :
 - `src/ai/` : IA qui joue par commandes, comme un humain.
 - `src/render/`, `src/game/` : rendu Three.js, HUD et contrôles. Le rendu lit la simulation et ne la modifie jamais.
 - `tools/blender/models.py` : modèles low-poly générés par script (Blender 5.3, sans interface), membres animables séparés, décors (`doodads.glb`) et icônes du HUD. La matière nommée `team` prend la couleur du joueur.
-- `src/render/` : terrain texturé procédural (falaises rocheuses inclinées, diagonales lissées), décors instanciés, particules, post-traitement (occlusion ambiante GTAO, bloom, tone mapping ACES, SMAA).
+- `src/render/` : terrain texturé procédural (falaises rocheuses inclinées, diagonales lissées), décors instanciés, particules, post-traitement (occlusion ambiante GTAO, trait encré et étalonnage façon BD peinte, bloom, tone mapping ACES, SMAA). Les modèles sont « peints » en couleurs de sommets dans Blender (rehauts sur les arêtes, dégradés).
 - Sons : bruitages synthétisés en WebAudio. La musique sera ajoutée à part.
 - `src/data.ts` : toutes les stats des unités et bâtiments.

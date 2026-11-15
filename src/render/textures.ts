@@ -49,7 +49,9 @@ function bake(size: number, height: (u: number, v: number) => number, shade: (h:
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      const g = Math.max(0, Math.min(255, shade(at(x, y), x / size, y / size) * 200));
+      // Half-posterized: flat painted patches instead of photographic grain.
+      const raw = shade(at(x, y), x / size, y / size);
+      const g = Math.max(0, Math.min(255, (raw * 0.45 + (Math.round(raw * 7) / 7) * 0.55) * 200));
       a.data[i] = a.data[i + 1] = a.data[i + 2] = g;
       a.data[i + 3] = 255;
       const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
@@ -82,7 +84,8 @@ export function groundTextures(): [Texture, Texture] {
     const pebble = fbm(u, v, 2, 48, 37);
     return base * 0.6 - cracks * 0.25 + (pebble > 0.72 ? (pebble - 0.72) * 3 : 0);
   };
-  const shade = (h: number, u: number, v: number) => 0.82 + h * 0.35 + (fbm(u, v, 3, 16, 41) - 0.5) * 0.18;
+  // Directional brush strokes on top of the relief.
+  const shade = (h: number, u: number, v: number) => 0.84 + h * 0.3 + (fbm(u * 0.6 + v * 0.2, v * 2.2, 3, 8, 41) - 0.5) * 0.22;
   return bake(512, height, shade, 6);
 }
 

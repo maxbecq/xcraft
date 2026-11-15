@@ -37,7 +37,18 @@ def mat(name, color, emission=None, metallic=0.0, rough=0.8):
         return MATS[name]
     m = bpy.data.materials.new(name)
     m.use_nodes = True
-    b = m.node_tree.nodes["Principled BSDF"]
+    nodes = m.node_tree.nodes
+    b = nodes["Principled BSDF"]
+    # Base colour times the hand-painted vertex colour (see paint()).
+    attr = nodes.new("ShaderNodeVertexColor")
+    attr.layer_name = "Col"
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.blend_type = "MULTIPLY"
+    mix.inputs["Factor"].default_value = 1.0
+    mix.inputs[6].default_value = (*linear(color), 1)
+    m.node_tree.links.new(attr.outputs["Color"], mix.inputs[7])
+    m.node_tree.links.new(mix.outputs[2], b.inputs["Base Color"])
     b.inputs["Base Color"].default_value = (*linear(color), 1)
     b.inputs["Metallic"].default_value = metallic
     b.inputs["Roughness"].default_value = rough
@@ -550,6 +561,37 @@ MODELS = {
 
 # ------------------------------------------------------------------ export
 
+def paint(o):
+    """Hand-painted look baked into vertex colours: dark feet, lit tops, light edge wear, uneven strokes."""
+    me = o.data
+    if "Col" in me.color_attributes:
+        me.color_attributes.remove(me.color_attributes["Col"])
+    col = me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    zs = [v.co.z for v in me.vertices]
+    z0, z1 = min(zs), max(zs)
+    span = max(z1 - z0, 1e-3)
+    for poly in me.polygons:
+        n = poly.normal
+        verts = [me.vertices[i].co for i in poly.vertices]
+        edges = [(verts[i] - verts[(i + 1) % len(verts)]).length for i in range(len(verts))]
+        axes = sorted((abs(n.x), abs(n.y), abs(n.z)))
+        # Thin slanted faces are the bevels: paint them as worn, light-catching edges.
+        bevel = min(edges) < 0.06 and axes[2] < 0.97 and axes[1] > 0.2
+        rnd = ((poly.index * 7919) % 1000) / 1000
+        stroke = 0.94 + rnd * 0.12
+        warm = (rnd - 0.5) * 0.06
+        for li in poly.loop_indices:
+            z = me.vertices[me.loops[li].vertex_index].co.z
+            h = (z - z0) / span
+            shade = (0.72 + 0.34 * h) * stroke
+            if n.z > 0.7:
+                shade += 0.1
+            if bevel:
+                shade += 0.28
+            col.data[li].color = (min(1, shade * (1 + warm)), min(1, shade), min(1, shade * (1 - warm)), 1)
+    me.color_attributes.active_color = col
+
+
 def join(objs, name):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
@@ -559,6 +601,7 @@ def join(objs, name):
     o = bpy.context.active_object
     o.name = name
     bpy.ops.object.shade_flat()
+    paint(o)
     return o
 
 
@@ -586,7 +629,7 @@ def export(objs, path):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True)
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_vertex_color="ACTIVE")
 
 
 def icon(objs, path):
@@ -641,8 +684,9 @@ def export_doodads(path):
         o.name = name
         o.data.name = name
         bpy.ops.object.shade_flat()
+        paint(o)
     bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True)
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_vertex_color="ACTIVE")
     print(f"DOODADS {len(DOODADS)}")
 
 

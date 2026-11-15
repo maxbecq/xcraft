@@ -57,15 +57,15 @@ export function buildTerrain(map: GameMap): Group {
 
   // Ground vertices: tinted by level and noise, darkened along cliff edges, gently bumped away from them.
   const levelAt = (x: number, y: number) => tileAt(map, Math.min(map.width - 1, Math.max(0, x)), Math.min(map.height - 1, Math.max(0, y)))!.level;
-  const onEdge = (vx: number, vz: number) => {
-    const l = levelAt(vx, vz);
-    return levelAt(vx - 1, vz) !== l || levelAt(vx, vz - 1) !== l || levelAt(vx - 1, vz - 1) !== l;
-  };
+  const around = (vx: number, vz: number) => [levelAt(vx, vz), levelAt(vx - 1, vz), levelAt(vx, vz - 1), levelAt(vx - 1, vz - 1)];
   const groundVertex = (vx: number, h: number, vz: number, level: number): [Vector3, Color] => {
-    const edge = onEdge(vx, vz);
+    const ls = around(vx, vz);
+    const edge = Math.min(...ls) !== Math.max(...ls);
+    // Painted cliffs: a light rim along the top, a dark band at the foot.
+    const rim = edge ? (level >= Math.max(...ls) ? 1.18 : 0.72) : 1;
     const bump = edge ? 0 : (noise(vx, vz, 3, 7) - 0.5) * 0.14;
     const c = LEVEL_COLORS[Math.min(2, level)].clone().lerp(PATCH, Math.max(0, noise(vx, vz, 9, 3) - 0.3) * 1.6).lerp(SAND, Math.max(0, noise(vx, vz, 14, 9) - 0.55) * 1.8);
-    c.multiplyScalar((edge ? 0.82 : 1) * (0.94 + noise(vx, vz, 2, 5) * 0.12));
+    c.multiplyScalar(rim * (0.94 + noise(vx, vz, 2, 5) * 0.12));
     return [new Vector3(vx, h + bump, vz), c];
   };
 
