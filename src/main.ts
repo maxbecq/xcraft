@@ -1,11 +1,13 @@
 import { Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, WebGLRenderer } from 'three';
 import { CameraRig } from './camera';
+import { Hud } from './game/hud';
 import { Input } from './game/input';
-import { createMap } from './map';
 import { Minimap } from './minimap';
 import { EntityRenderer } from './render/units';
 import { FP, TICK_RATE } from './sim/fixed';
-import { type Command, World } from './sim/world';
+import { createMatch } from './sim/setup';
+import type { Command } from './sim/world';
+import './style.css';
 import { buildTerrain } from './terrain';
 
 const EDGE_PX = 8;
@@ -17,7 +19,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const map = createMap();
+const world = createMatch();
+const map = world.map;
 const scene = new Scene();
 scene.background = new Color(0x0d0f12);
 const terrain = buildTerrain(map);
@@ -32,22 +35,26 @@ sun.shadow.mapSize.set(4096, 4096);
 Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, far: 200 });
 scene.add(sun, sun.target);
 
-// Simulation, with a starting squad for each player until the economy exists (M3).
-const world = new World(map);
-const squad = ['serf', 'serf', 'serf', 'auxiliaire', 'auxiliaire', 'auxiliaire', 'auxiliaire', 'legionnaire', 'legionnaire', 'soigneur'];
-for (const [owner, cx, cy] of [[0, 14, 14], [1, 81, 81]]) {
-  squad.forEach((type, i) => world.spawn(type, owner, (cx - 2 + (i % 4)) * FP + FP / 2, (cy - 1 + Math.floor(i / 4)) * FP + FP / 2));
-}
 let pending: Command[] = [];
 
 const rig = new CameraRig(map.width, map.height);
-rig.lookAt(14, 14); // player 1's main base
+const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === 'conseil')!;
+rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
 const minimap = new Minimap(map, rig);
 document.body.appendChild(minimap.canvas);
 
 const units = new EntityRenderer(scene, map);
-const input = new Input(world, map, PLAYER, () => rig.camera, terrain, (c) => pending.push(c), (x, z) => rig.lookAt(x, z), renderer.domElement);
+const issue = (c: Command) => pending.push(c);
+const input = new Input(world, map, PLAYER, {
+  camera: () => rig.camera,
+  terrain,
+  roots: () => units.roots,
+  issue,
+  focus: (x, z) => rig.lookAt(x, z),
+  click: (button, ground, shift) => hud.click(button, ground, shift),
+}, renderer.domElement);
+const hud = new Hud(world, map, PLAYER, input, scene, issue);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 
 // Camera: arrow keys, screen-edge scrolling, wheel zoom.
@@ -85,12 +92,15 @@ renderer.setAnimationLoop(() => {
   while (acc >= TICK) {
     world.step(pending);
     pending = [];
+    hud.notify(world.events);
     acc -= TICK;
   }
   const [dx, dy] = scrollDirection();
   rig.pan(dx, dy, dt);
   rig.update(window.innerWidth / window.innerHeight);
+  input.prune();
   units.sync(world, acc / TICK, input.selected, PLAYER);
+  hud.update();
   minimap.draw(world);
   renderer.render(scene, rig.camera);
 });

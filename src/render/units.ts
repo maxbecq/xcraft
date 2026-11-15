@@ -1,29 +1,38 @@
 import {
   BoxGeometry, CapsuleGeometry, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, RingGeometry, type BufferGeometry, type Scene,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene,
 } from 'three';
+import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
-import { FP } from '../sim/fixed';
+import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
 
-const teamMaterials = TEAM_COLORS.map((c) => new MeshStandardMaterial({ color: c, roughness: 0.6 }));
-const neutral = new MeshStandardMaterial({ color: 0x9a8f7a, roughness: 0.9 });
-const skin = new MeshStandardMaterial({ color: 0xd9b48f, roughness: 0.8 });
-const steel = new MeshStandardMaterial({ color: 0x8c949c, metalness: 0.6, roughness: 0.4 });
+const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra });
+const teamMaterials = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6 }));
+const neutral = mat(0x9a8f7a);
+const skin = mat(0xd9b48f);
+const steel = mat(0x8c949c, { metalness: 0.6, roughness: 0.4 });
+const stone = mat(0xb9ae94);
+const darkStone = mat(0x7d7464);
+const wood = mat(0x7a5634);
+const crystal = mat(0x56c8ff, { emissive: 0x0f4d80, roughness: 0.25, metalness: 0.1 });
+const wellGlow = mat(0x9b5cff, { emissive: 0x5a20c0, roughness: 0.3 });
 const ringMaterial = new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.85 });
 const enemyRingMaterial = new MeshBasicMaterial({ color: 0xff5544, transparent: true, opacity: 0.85 });
+const neutralRingMaterial = new MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.85 });
 
-/** Placeholder models, until the Blender pipeline provides real ones. */
-function placeholder(type: string, team: MeshStandardMaterial): Object3D {
+/** Placeholder models, until the Blender pipeline provides real ones. Units face +Z. */
+function placeholder(type: string, team: Material): Group {
   const g = new Group();
-  const add = (geo: BufferGeometry, mat: MeshStandardMaterial, x: number, y: number, z: number) => {
-    const m = new Mesh(geo, mat);
-    m.position.set(x, y, z);
-    m.castShadow = true;
-    g.add(m);
-    return m;
+  const add = (geo: BufferGeometry, m: Material, x: number, y: number, z: number) => {
+    const mesh = new Mesh(geo, m);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    return mesh;
   };
   const body = (h: number) => add(new CapsuleGeometry(0.2, h, 4, 8), team, 0, 0.2 + h / 2, 0);
   const head = (y: number) => add(new BoxGeometry(0.18, 0.18, 0.18), skin, 0, y, 0);
@@ -31,7 +40,8 @@ function placeholder(type: string, team: MeshStandardMaterial): Object3D {
     case 'serf':
       body(0.25);
       head(0.62);
-      add(new BoxGeometry(0.06, 0.06, 0.4), neutral, 0.2, 0.4, 0.15); // tool
+      add(new BoxGeometry(0.06, 0.06, 0.4), wood, 0.2, 0.4, 0.15);
+      add(new SphereGeometry(0.12, 6, 4), crystal, 0, 0.55, -0.22).name = 'cargo';
       break;
     case 'auxiliaire':
       body(0.35);
@@ -41,12 +51,45 @@ function placeholder(type: string, team: MeshStandardMaterial): Object3D {
     case 'legionnaire':
       add(new CapsuleGeometry(0.25, 0.35, 4, 8), team, 0, 0.42, 0);
       head(0.8);
-      add(new CylinderGeometry(0.22, 0.22, 0.04, 12), steel, 0.25, 0.45, 0.2).rotation.z = Math.PI / 2; // saw
+      add(new CylinderGeometry(0.22, 0.22, 0.04, 12), steel, 0.25, 0.45, 0.2).rotation.z = Math.PI / 2;
       break;
     case 'soigneur':
       body(0.3);
       add(new ConeGeometry(0.14, 0.2, 8), skin, 0, 0.72, 0);
-      add(new BoxGeometry(0.25, 0.06, 0.06), steel, 0, 0.45, 0.22); // crossbow
+      add(new BoxGeometry(0.25, 0.06, 0.06), steel, 0, 0.45, 0.22);
+      break;
+    case 'conseil': {
+      add(new BoxGeometry(4.8, 0.4, 4.8), darkStone, 0, 0.2, 0);
+      add(new BoxGeometry(3.6, 1.6, 3.6), stone, 0, 1.2, 0);
+      const roof = add(new ConeGeometry(2.9, 1.4, 4), team, 0, 2.7, 0);
+      roof.rotation.y = Math.PI / 4;
+      for (const [x, z] of [[-2, -2], [2, -2], [2, 2], [-2, 2]]) add(new CylinderGeometry(0.18, 0.2, 2, 8), stone, x, 1.2, z);
+      break;
+    }
+    case 'grenier':
+      add(new CylinderGeometry(0.75, 0.85, 1.2, 12), wood, 0, 0.6, 0);
+      add(new SphereGeometry(0.78, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), team, 0, 1.2, 0);
+      break;
+    case 'caserne':
+      add(new BoxGeometry(2.8, 1.3, 2.8), stone, 0, 0.65, 0);
+      for (let i = -1; i <= 1; i += 2) for (let j = -1; j <= 1; j += 2) add(new BoxGeometry(0.5, 0.5, 0.5), darkStone, i * 1.15, 1.55, j * 1.15);
+      add(new BoxGeometry(0.05, 1.2, 0.7), team, 0, 1.9, 0).position.x = 0.6;
+      add(new CylinderGeometry(0.04, 0.04, 1.4), wood, 0.6, 1.9, -0.35);
+      break;
+    case 'mine':
+      add(new CylinderGeometry(1.4, 1.5, 0.5, 16), darkStone, 0, 0.25, 0);
+      add(new BoxGeometry(1.2, 2.2, 1.2), stone, 0, 1.3, 0);
+      add(new BoxGeometry(1.3, 0.3, 1.3), team, 0, 2.5, 0);
+      add(new CylinderGeometry(0.15, 0.15, 1.6), wellGlow, 0.9, 0.9, 0.5);
+      break;
+    case 'minerai':
+      add(new ConeGeometry(0.28, 0.9, 5), crystal, -0.12, 0.45, 0.05);
+      add(new ConeGeometry(0.22, 0.65, 5), crystal, 0.2, 0.32, -0.1).rotation.z = -0.3;
+      add(new ConeGeometry(0.18, 0.5, 5), crystal, 0.05, 0.25, 0.25).rotation.x = 0.4;
+      break;
+    case 'puits':
+      add(new CylinderGeometry(1.4, 1.5, 0.12, 20), darkStone, 0, 0.06, 0);
+      add(new CylinderGeometry(0.8, 0.8, 0.14, 20), wellGlow, 0, 0.08, 0);
       break;
     default:
       body(0.3);
@@ -54,43 +97,62 @@ function placeholder(type: string, team: MeshStandardMaterial): Object3D {
   return g;
 }
 
+interface View {
+  root: Object3D;
+  model: Group;
+  ring: Mesh;
+  heading: number;
+  cargo?: Object3D;
+}
+
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
-  private readonly objects = new Map<number, { root: Object3D; ring: Mesh; heading: number }>();
+  private readonly views = new Map<number, View>();
 
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
+  /** All entity roots, for picking; each carries its entity id in userData. */
+  get roots(): Object3D[] {
+    return [...this.views.values()].map((v) => v.root);
+  }
+
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number): void {
-    for (const [id, o] of this.objects) {
+    for (const [id, v] of this.views) {
       if (!world.entities.has(id)) {
-        this.scene.remove(o.root);
-        this.objects.delete(id);
+        this.scene.remove(v.root);
+        this.views.delete(id);
       }
     }
     for (const e of world.entities.values()) {
-      let o = this.objects.get(e.id);
-      if (!o) o = this.create(e, player);
+      const v = this.views.get(e.id) ?? this.create(e, player);
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
-      if (e.x !== e.px || e.y !== e.py) o.heading = Math.atan2(e.x - e.px, e.y - e.py);
-      o.root.position.set(x, heightAt(this.map, x, z), z);
-      o.root.children[0].rotation.y = o.heading;
-      o.ring.visible = selected.has(e.id);
+      if (e.x !== e.px || e.y !== e.py) v.heading = Math.atan2(e.x - e.px, e.y - e.py);
+      v.root.position.set(x, heightAt(this.map, x, z), z);
+      v.ring.visible = selected.has(e.id);
+      if (e.def.kind === 'unit') v.model.rotation.y = v.heading;
+      if (v.cargo) v.cargo.visible = e.carry > 0;
+      if (e.def.kind === 'building') {
+        const total = ticks((e.def as BuildingDef).buildTime);
+        v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
+      }
     }
   }
 
-  private create(e: Entity, player: number) {
+  private create(e: Entity, player: number): View {
     const root = new Group();
-    const model = placeholder(e.type, teamMaterials[e.owner] ?? (neutral as MeshStandardMaterial));
+    root.userData.id = e.id;
+    const model = placeholder(e.type, teamMaterials[e.owner] ?? neutral);
     root.add(model);
     const r = e.radius / FP;
-    const ring = new Mesh(new RingGeometry(r * 1.15, r * 1.4, 32), e.owner === player ? ringMaterial : enemyRingMaterial);
+    const ringMat = e.owner === player ? ringMaterial : e.owner < 0 ? neutralRingMaterial : enemyRingMaterial;
+    const ring = new Mesh(new RingGeometry(r * 1.1, r * 1.1 + 0.08, 40), ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.04;
+    ring.position.y = 0.05;
     root.add(ring);
     this.scene.add(root);
-    const o = { root, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75 };
-    this.objects.set(e.id, o);
-    return o;
+    const v: View = { root, model, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: model.getObjectByName('cargo') };
+    this.views.set(e.id, v);
+    return v;
   }
 }

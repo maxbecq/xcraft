@@ -42,7 +42,8 @@ export class Grid {
 
   /** Can a ground unit step between two adjacent tiles (8-neighbourhood, no corner cutting)? */
   canStep(ax: number, ay: number, bx: number, by: number): boolean {
-    if (!this.open(bx, by) || !this.open(ax, ay)) return false;
+    // Leaving a blocked tile is allowed, so units caught under a new building can walk out.
+    if (!this.open(bx, by) || !this.inside(ax, ay)) return false;
     const dx = bx - ax;
     const dy = by - ay;
     if (dx !== 0 && dy !== 0) {

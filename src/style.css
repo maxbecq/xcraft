@@ -1,0 +1,31 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font: 13px/1.3 system-ui, sans-serif; color: #e8e2d0; user-select: none; }
+canvas { display: block; }
+
+.minimap { position: fixed; left: 12px; bottom: 12px; cursor: crosshair; background: rgba(0, 0, 0, 0.35); border-radius: 6px; }
+.selection-box { position: fixed; border: 1px solid #5f6; background: rgba(85, 255, 102, 0.08); pointer-events: none; }
+
+.hud-bar { position: fixed; top: 8px; right: 12px; display: flex; gap: 16px; padding: 6px 12px; background: rgba(20, 18, 14, 0.8); border: 1px solid #5a4d36; border-radius: 6px; font-weight: 600; }
+.res.min { color: #7fd0ff; }
+.res.nrg { color: #c79bff; }
+.res.sup.full { color: #ff7a6a; }
+
+.hud-panel { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(360px, 40vw); min-height: 96px; padding: 10px 12px; background: rgba(20, 18, 14, 0.85); border: 1px solid #5a4d36; border-radius: 6px; }
+.hud-panel .name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.hud-panel .info { opacity: 0.85; margin: 2px 0; }
+.hud-panel .hp, .hud-panel .bar { height: 6px; background: #2b261c; border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.hud-panel .hp > div { height: 100%; background: #5fd35f; }
+.hud-panel .bar > div { height: 100%; background: #e0b84f; }
+.hud-panel .queue { display: flex; gap: 4px; margin-top: 4px; }
+.hud-panel .queue span, .hud-panel .tile { display: inline-grid; place-items: center; width: 34px; height: 26px; background: #3a3222; border: 1px solid #6d5e40; border-radius: 3px; font-size: 11px; }
+.hud-panel .grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.hud-panel .tile { cursor: pointer; box-shadow: inset 0 -3px 0 hsl(calc(var(--hp) * 120), 70%, 45%); }
+
+.hud-card { position: fixed; right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 84px); gap: 6px; }
+.cmd { position: relative; height: 58px; padding: 16px 4px 4px; background: #3a3222; color: #f0e6cc; border: 1px solid #8a7550; border-radius: 5px; font: 600 11px system-ui, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.cmd:hover { background: #4b4029; }
+.cmd.off { opacity: 0.5; }
+.cmd kbd { position: absolute; top: 3px; left: 4px; font: 700 10px system-ui; color: #ffd76a; }
+.cmd small { font-weight: 400; opacity: 0.85; }
+
+.hud-toasts { position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+.hud-toast { padding: 4px 10px; background: rgba(60, 20, 10, 0.85); color: #ffd2c4; border-radius: 4px; }
