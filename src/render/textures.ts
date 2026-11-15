@@ -89,6 +89,31 @@ export function groundTextures(): [Texture, Texture] {
   return bake(512, height, shade, 6);
 }
 
+/** White where the ground texture has cracks: used to make glowing veins on strange worlds. */
+export function crackMask(): Texture {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const crack = 1 - Math.min(1, Math.abs(fbm(x / size, y / size, 3, 6, 23) - 0.5) * 30);
+      const i = (y * size + x) * 4;
+      // Red: thin cracks. Green: broad patches deciding where the cracks glow (sampled at another scale).
+      img.data[i] = Math.pow(Math.max(0, crack), 2) * 255;
+      img.data[i + 1] = fbm(x / size, y / size, 4, 2, 71) * 255;
+      img.data[i + 2] = 0;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.colorSpace = NoColorSpace;
+  return t;
+}
+
 /** Layered rock for cliff faces: horizontal strata broken by noise. u runs along the cliff, v up it. */
 export function rockTextures(): [Texture, Texture] {
   const height = (u: number, v: number) => {

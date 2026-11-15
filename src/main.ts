@@ -15,7 +15,8 @@ import { createMatch } from './sim/setup';
 import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
-import { addFog, buildTerrain, createFog, fogMaterial } from './terrain';
+import { addFog, buildTerrain, createFog, fogMaterial, setBiome } from './terrain';
+import { BIOMES, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 
 const EDGE_PX = 8;
@@ -31,7 +32,8 @@ const PLAYER = 0;
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 renderer.toneMapping = ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+const biome = pickBiome(params);
+renderer.toneMappingExposure = biome.exposure;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
@@ -44,16 +46,17 @@ const ais = SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)]
 if (!SPECTATE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
 const map = world.map;
 const scene = new Scene();
-scene.background = new Color(0x0d0f12);
+scene.background = new Color(biome.background);
+setBiome(biome);
 const terrain = buildTerrain(map);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world);
+const decor = new Decor(map, world, biome.decorTint);
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.
-scene.add(new HemisphereLight(0xb8c8e8, 0x4a3820, 1.1));
-const sun = new DirectionalLight(0xffe2b8, 3.2);
+scene.add(new HemisphereLight(biome.sky.color, biome.sky.ground, biome.sky.intensity));
+const sun = new DirectionalLight(biome.sun.color, biome.sun.intensity);
 const SUN_OFFSET = new Vector3(-22, 40, -12);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
@@ -183,12 +186,23 @@ if (!ATTRACT) {
     <button data-m="easy">Jouer — IA facile</button>
     <button data-m="normal">Jouer — IA normale</button>
     <button data-m="hard">Jouer — IA difficile</button>
-    <button data-m="watch">Regarder IA contre IA</button>`;
+    <button data-m="watch">Regarder IA contre IA</button>
+    <button data-m="biome" class="biome">Planète : ${biome.name}</button>`;
   document.body.append(menu);
   menu.addEventListener('click', (e) => {
     const m = (e.target as HTMLElement).dataset.m;
-    if (m === 'watch') location.search = '?spectate&speed=2';
-    else if (m) location.search = `?play&ai=${m}`;
+    if (m === 'biome') {
+      // Cycle planets; the title screen reloads to show the new one.
+      const ids = Object.keys(BIOMES);
+      const next = ids[(ids.indexOf(biome.id) + 1) % ids.length];
+      try {
+        localStorage.setItem('xcraft.biome', next);
+      } catch {
+        // storage unavailable: the URL still carries it
+      }
+      location.search = `?biome=${next}`;
+    } else if (m === 'watch') location.search = `?spectate&speed=2&biome=${biome.id}`;
+    else if (m) location.search = `?play&ai=${m}&biome=${biome.id}`;
   });
 }
 

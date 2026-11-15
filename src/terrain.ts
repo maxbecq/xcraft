@@ -3,15 +3,15 @@ import {
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, tileAt } from './map';
-import { fbm, groundTextures, rockTextures } from './render/textures';
+import { type Biome, BIOMES } from './render/biome';
+import { crackMask, fbm, groundTextures, rockTextures } from './render/textures';
 
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
-const LEVEL_COLORS = [new Color(0xb08f5e), new Color(0xa48a62), new Color(0xbcad8c)];
-const PATCH = new Color(0x6e5a3e);
-const SAND = new Color(0xd2b47e);
-const RAMP = new Color(0xc9a878);
-const ROCK = new Color(0x9a7a5e);
-const ROCK_DARK = new Color(0x4a382c);
+/** Current planet look; set before building the terrain. */
+let B: Biome = BIOMES.desert;
+export function setBiome(b: Biome): void {
+  B = b;
+}
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
 const WALL_SEGMENTS = 4;
@@ -23,9 +23,9 @@ const noise = (x: number, z: number, scale: number, seed: number) => fbm((x / sc
 /** Colour of a tile for the minimap. */
 export function tileColor(map: GameMap, x: number, y: number): Color {
   const t = tileAt(map, x, y)!;
-  const c = LEVEL_COLORS[t.level].clone();
-  if (t.ramp) c.lerp(LEVEL_COLORS[t.level + 1], 0.5);
-  return c.lerp(PATCH, noise(x, y, 9, 3) * 0.5);
+  const c = B.levels[t.level].clone();
+  if (t.ramp) c.lerp(B.levels[t.level + 1], 0.5);
+  return c.lerp(B.patch, noise(x, y, 9, 3) * 0.5);
 }
 
 /** Corner order [nw, ne, se, sw]; each edge lists its two corners going clockwise, and its outward direction. */
@@ -64,7 +64,7 @@ export function buildTerrain(map: GameMap): Group {
     // Painted cliffs: a light rim along the top, a dark band at the foot.
     const rim = edge ? (level >= Math.max(...ls) ? 1.18 : 0.72) : 1;
     const bump = edge ? 0 : (noise(vx, vz, 3, 7) - 0.5) * 0.14;
-    const c = LEVEL_COLORS[Math.min(2, level)].clone().lerp(PATCH, Math.max(0, noise(vx, vz, 9, 3) - 0.3) * 1.6).lerp(SAND, Math.max(0, noise(vx, vz, 14, 9) - 0.55) * 1.8);
+    const c = B.levels[Math.min(2, level)].clone().lerp(B.patch, Math.max(0, noise(vx, vz, 9, 3) - 0.3) * 1.6).lerp(B.sand, Math.max(0, noise(vx, vz, 14, 9) - 0.55) * 1.8);
     c.multiplyScalar(rim * (0.94 + noise(vx, vz, 2, 5) * 0.12));
     return [new Vector3(vx, h + bump, vz), c];
   };
@@ -75,7 +75,7 @@ export function buildTerrain(map: GameMap): Group {
       const h = cornerHeights(map, x, y);
       const cut = cutCorner(map, x, y);
       const v = CORNER_POS.map(([cx, cy], i) => groundVertex(x + cx, h[i], y + cy, t.level + (t.ramp && h[i] > t.level * LEVEL_HEIGHT ? 1 : 0)));
-      if (t.ramp) for (const [, c] of v) c.lerp(RAMP, 0.6); // packed-dirt track
+      if (t.ramp) for (const [, c] of v) c.lerp(B.ramp, 0.6); // packed-dirt track
       if (cut < 0) {
         ground.quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
         continue;
@@ -116,6 +116,12 @@ export function buildTerrain(map: GameMap): Group {
   const [gMap, gNormal] = groundTextures();
   const [rMap, rNormal] = rockTextures();
   const groundMat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(0.8, 0.8), roughness: 0.95 });
+  if (B.veins) {
+    // Strange worlds: light glows up through the cracks.
+    groundMat.emissiveMap = crackMask();
+    groundMat.emissive = B.veins;
+    groundMat.emissiveIntensity = 2.2;
+  }
   untile(groundMat);
   const groundMesh = ground.mesh(groundMat);
   const cliffMesh = cliffs.mesh(new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true }));
@@ -166,7 +172,7 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       const lean = j === 0 ? 0 : SLANT * Math.pow(s, 0.8) + n * 0.42;
       const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.3;
       row.push(new Vector3(px + dir.x * lean, y + lift, pz + dir.y * lean));
-      crow.push(ROCK.clone().lerp(ROCK_DARK, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
+      crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
     }
     grid.push(row);
     cols.push(crow);
@@ -227,6 +233,14 @@ function untile(m: MeshStandardMaterial): void {
         vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.37 + 0.31;
         vec4 texelColor = mix(texture2D(map, vMapUv), texture2D(map, uv2), 0.45);
         diffuseColor *= texelColor;
+      #endif`,
+    ).replace(
+      '#include <emissivemap_fragment>',
+      `#ifdef USE_EMISSIVEMAP
+        // Glowing veins only in some areas: cracks (red) masked by large patches (green) sampled at another scale.
+        vec2 patchUv = mat2(0.6, 0.8, -0.8, 0.6) * vEmissiveMapUv * 0.23 + 0.17;
+        float glow = texture2D(emissiveMap, vEmissiveMapUv).r * smoothstep(0.58, 0.78, texture2D(emissiveMap, patchUv).g);
+        totalEmissiveRadiance *= glow;
       #endif`,
     );
   };

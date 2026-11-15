@@ -1,4 +1,4 @@
-import { InstancedMesh, type Material, Matrix4, Mesh, Object3D, Quaternion, type Scene, Vector3 } from 'three';
+import { Color, InstancedMesh, Matrix4, Mesh, type MeshStandardMaterial, Object3D, Quaternion, type Scene, Vector3, type Material } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type GameMap, cutCorner, heightAt, tileAt } from '../map';
 import { EXPANSIONS } from '../sim/setup';
@@ -31,7 +31,7 @@ export class Decor {
   private readonly meshes = new Map<string, InstancedMesh[]>();
   readonly root = new Object3D();
 
-  constructor(private readonly map: GameMap, world: World) {
+  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1)) {
     const keepClear = new Set<number>();
     const clear = (cx: number, cy: number, r: number) => {
       for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) keepClear.add(y * map.width + x);
@@ -86,7 +86,11 @@ export class Decor {
       const parts: Mesh[] = [];
       node.traverse((o) => o instanceof Mesh && parts.push(o));
       const ims = parts.map((part) => {
-        fog(part.material as Material);
+        // Tinted copy so scenery matches the planet.
+        const m = (part.material as MeshStandardMaterial).clone();
+        m.color.multiply(this.tint);
+        part.material = m;
+        fog(m);
         const im = new InstancedMesh(part.geometry, part.material, list.length);
         // Parts keep their offset inside the doodad.
         const local = part.matrixWorld.clone().premultiply(new Matrix4().copy(node.matrixWorld).invert());

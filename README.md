@@ -28,7 +28,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Caméra | flèches, bords de l'écran, minimap ; molette pour zoomer |
 | Aide | `F1` |
 
-Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD).
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète ; aussi au choix dans le menu).
 
 ## Développement
 
