@@ -12,6 +12,7 @@ import { EntityRenderer, loadModels } from './render/units';
 import { DEFS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
+import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial } from './terrain';
@@ -87,7 +88,8 @@ const audio = new Audio();
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
-const effects = new Effects(scene, map, audio);
+const fxScene = new Scene();
+const effects = new Effects(fxScene, scene, map, audio);
 const overlay = new Overlay(map);
 document.body.insertBefore(overlay.canvas, minimap.canvas);
 
@@ -124,7 +126,7 @@ function scrollDirection(): [number, number] {
 }
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-const post = new Post(renderer, scene, rig.camera, !params.has('lowfx'));
+const post = new Post(renderer, scene, fxScene, rig.camera, !params.has('lowfx'));
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   post.setSize(window.innerWidth, window.innerHeight);
@@ -190,9 +192,9 @@ function start(): void {
     timing[name] = (timing[name] ?? 0) * 0.9 + (now - mark) * 0.1;
     mark = now;
   };
-  renderer.setAnimationLoop(() => {
+  const frame = (elapsed: number) => {
     mark = performance.now();
-    const dt = Math.min(clock.getDelta(), 0.25);
+    const dt = Math.min(elapsed, 0.25);
     acc += dt * SPEED;
     while (acc >= TICK) {
       world.step([...pending, ...ais.flatMap((ai) => ai.think())]);
@@ -211,6 +213,13 @@ function start(): void {
     lap('units');
     hud.update();
     lap('hud');
+    for (const e of world.entities.values()) {
+      if (e.def.kind !== 'building' || e.buildLeft > 0 || e.hp > e.maxHp / 2 || !sees(e)) continue;
+      const size = e.def.size;
+      const x = e.x / FP;
+      const z = e.y / FP;
+      effects.burn(new Vector3(x, heightAt(map, x, z) + size * 0.4, z), e.hp / e.maxHp, size, dt);
+    }
     effects.update(dt);
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     audio.frame();
@@ -221,5 +230,8 @@ function start(): void {
     sun.position.copy(rig.target).add(SUN_OFFSET);
     post.render();
     lap('render');
-  });
+  };
+  // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene });
+  renderer.setAnimationLoop(() => frame(clock.getDelta()));
 }

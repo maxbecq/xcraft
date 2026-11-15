@@ -15,7 +15,8 @@ export class Post {
   private readonly composer: EffectComposer | null;
   private readonly ao: GTAOPass | null = null;
 
-  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly camera: Camera, enabled: boolean) {
+  /** `fx` holds particles: drawn after ambient occlusion, which would otherwise shade their quads. */
+  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean) {
     // Soft image-based light so metal and glass pick up reflections.
     const pmrem = new PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -31,6 +32,9 @@ export class Post {
     this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2 });
     this.ao.blendIntensity = 0.85;
     composer.addPass(this.ao);
+    const fxPass = new RenderPass(fx, camera);
+    fxPass.clear = false;
+    composer.addPass(fxPass);
     composer.addPass(new UnrealBloomPass(size, 0.5, 0.4, 0.9));
     composer.addPass(new OutputPass());
     composer.addPass(new SMAAPass());
@@ -43,6 +47,11 @@ export class Post {
 
   render(): void {
     if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    else {
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.fx, this.camera);
+      this.renderer.autoClear = true;
+    }
   }
 }
