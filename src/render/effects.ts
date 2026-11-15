@@ -167,6 +167,13 @@ export class Effects {
     this.decals.push({ mesh, age: 0, life });
   }
 
+  /** Light, steady smoke from a chimney or fire; call every frame. */
+  ambient(p: Vector3, dt: number, dark: boolean): void {
+    if (Math.random() < dt * 3) {
+      this.spawn(this.tex.smoke, dark ? 0x3a3430 : 0xb8b0a4, p.clone().add(rnd(0.08)), new Vector3(0.25, 0.9, 0.1), 2.5, 0.15, 0.9, dark ? 0.45 : 0.3, 0, false);
+    }
+  }
+
   /** Smoke (and fire when badly hurt) rising from a damaged building; call every frame with its hp fraction. */
   burn(p: Vector3, hp: number, size: number, dt: number): void {
     if (hp > 0.5) return;

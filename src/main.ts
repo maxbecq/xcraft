@@ -134,6 +134,12 @@ window.addEventListener('resize', () => {
   post.setSize(window.innerWidth, window.innerHeight);
 });
 
+/** Where buildings give off smoke or steam: [x, y, z offset from the centre, dark smoke?]. */
+const VENTS: Record<string, [number, number, number, boolean]> = {
+  conseil: [-1.4, 0.8, 2.0, true], // the burning tyre stack
+  mine: [-0.9, 0.9, -0.7, false], // generator steam
+};
+
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
 let acc = 0;
@@ -222,7 +228,14 @@ function start(): void {
     hud.update();
     lap('hud');
     for (const e of world.entities.values()) {
-      if (e.def.kind !== 'building' || e.buildLeft > 0 || e.hp > e.maxHp / 2 || !sees(e)) continue;
+      if (e.def.kind !== 'building' || e.buildLeft > 0 || !sees(e)) continue;
+      const vent = VENTS[e.type];
+      if (vent) {
+        const vx = e.x / FP + vent[0];
+        const vz = e.y / FP + vent[2];
+        effects.ambient(new Vector3(vx, heightAt(map, e.x / FP, e.y / FP) + vent[1], vz), dt, vent[3]);
+      }
+      if (e.hp > e.maxHp / 2) continue;
       const size = e.def.size;
       const x = e.x / FP;
       const z = e.y / FP;
