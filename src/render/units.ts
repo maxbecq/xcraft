@@ -3,7 +3,7 @@ import {
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { BuildingDef } from '../data';
+import type { BuildingDef, UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
@@ -138,6 +138,8 @@ interface View {
   cargo?: Object3D;
   /** Enemy buildings stay on screen once spotted. */
   seen: boolean;
+  /** Animated parts from the Blender model, if any. */
+  limbs: { legL?: Object3D; legR?: Object3D; armL?: Object3D; armR?: Object3D };
 }
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
@@ -176,9 +178,7 @@ export class EntityRenderer {
       v.ring.visible = selected.has(e.id);
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
-        // Walking bob.
-        const moving = e.x !== e.px || e.y !== e.py;
-        v.model.position.y = moving ? Math.abs(Math.sin(performance.now() / 90 + e.id)) * 0.05 : 0;
+        this.animate(v, e);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       if (e.def.kind === 'building') {
@@ -186,6 +186,28 @@ export class EntityRenderer {
         v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
       }
     }
+  }
+
+  /** Walk cycle, weapon recoil or melee swing, eased so poses never snap. */
+  private animate(v: View, e: Entity): void {
+    const moving = e.x !== e.px || e.y !== e.py;
+    const phase = performance.now() / 110 + e.id;
+    const swing = moving ? Math.sin(phase) * 0.6 : 0;
+    const a = (e.def as UnitDef).attack;
+    const fired = a && e.cooldown > 0 && !moving ? e.cooldown / ticks(a.cooldown) : 0;
+    const melee = !!a && a.range < 1;
+    const ease = (o: Object3D | undefined, target: number) => {
+      if (o) o.rotation.x += (target - o.rotation.x) * 0.3;
+    };
+    ease(v.limbs.legL, swing);
+    ease(v.limbs.legR, -swing);
+    ease(v.limbs.armL, -swing * 0.7);
+    // Melee: the weapon arm hacks down right after a hit. Ranged: a small kick back.
+    ease(v.limbs.armR, melee ? -1.3 * fired * fired : moving ? swing * 0.4 : 0);
+    v.model.position.y = moving ? Math.abs(Math.sin(phase)) * 0.04 : 0;
+    v.model.position.z = 0;
+    const kick = !melee && fired > 0.75 ? (fired - 0.75) * 0.25 : 0;
+    v.model.children[0].position.z = -kick;
   }
 
   private create(e: Entity, player: number): View {
@@ -211,7 +233,8 @@ export class EntityRenderer {
     ring.position.y = 0.05;
     root.add(ring);
     this.scene.add(root);
-    const v: View = { root, model: pivot, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false };
+    const v: View = { root, model: pivot, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false,
+      limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     this.views.set(e.id, v);
     return v;
   }

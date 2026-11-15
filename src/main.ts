@@ -182,7 +182,16 @@ if (SPECTATE || params.has('play')) {
 
 function start(): void {
   clock.getDelta();
+  const timing: Record<string, number> = {};
+  if (import.meta.env.DEV) Object.assign(window, { timing });
+  let mark = 0;
+  const lap = (name: string) => {
+    const now = performance.now();
+    timing[name] = (timing[name] ?? 0) * 0.9 + (now - mark) * 0.1;
+    mark = now;
+  };
   renderer.setAnimationLoop(() => {
+    mark = performance.now();
     const dt = Math.min(clock.getDelta(), 0.25);
     acc += dt * SPEED;
     while (acc >= TICK) {
@@ -193,18 +202,24 @@ function start(): void {
       if (world.tick % 4 === 1) updateFog();
       acc -= TICK;
     }
+    lap('sim');
     const [dx, dy] = scrollDirection();
     rig.pan(dx, dy, dt);
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
+    lap('units');
     hud.update();
+    lap('hud');
     effects.update(dt);
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     audio.frame();
+    lap('fx+overlay');
     minimap.draw(world, sees);
+    lap('minimap');
     sun.target.position.copy(rig.target);
     sun.position.copy(rig.target).add(SUN_OFFSET);
     post.render();
+    lap('render');
   });
 }

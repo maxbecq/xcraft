@@ -19,6 +19,8 @@ ICONS = argv[1] if len(argv) > 1 else "public/icons"
 ONLY = set(argv[2:])
 
 MATS = {}
+#: Pivot points of animated parts (legs, arms), filled by humanoid().
+JOINTS = {}
 
 
 def linear(hex_color):
@@ -118,13 +120,16 @@ def ball(m, r, loc, scale=(1, 1, 1), seg=10, rings=6, name="ball"):
 def humanoid(p, outfit, height=1.0, bulk=1.0):
     """Boots, legs, torso, arms and head. Returns the head height."""
     h = height
-    for x in (-0.07, 0.07):
-        box(p["rubber"], (0.1 * bulk, 0.13, 0.08), (x * bulk, -0.02, 0.04))  # boots
-        box(outfit, (0.09 * bulk, 0.1, 0.24 * h), (x * bulk, 0, 0.19 * h))
+    # Legs and arms are separate parts, pivoting at hip and shoulder, so the game can animate them.
+    for side, x in (("l", -0.07), ("r", 0.07)):
+        box(p["rubber"], (0.1 * bulk, 0.13, 0.08), (x * bulk, -0.02, 0.04), name=f"leg_{side}")  # boot
+        box(outfit, (0.09 * bulk, 0.1, 0.24 * h), (x * bulk, 0, 0.19 * h), name=f"leg_{side}")
+        JOINTS[f"leg_{side}"] = (x * bulk, 0, 0.31 * h)
     box(outfit, (0.26 * bulk, 0.17 * bulk, 0.3 * h), (0, 0, 0.45 * h))
     box(p["leather"], (0.27 * bulk, 0.18 * bulk, 0.045), (0, 0, 0.32 * h))
-    for x in (-0.175, 0.175):
-        box(outfit, (0.07 * bulk, 0.08, 0.27 * h), (x * bulk, -0.03, 0.46 * h), rot=(0.35, 0, 0))
+    for side, x in (("l", -0.175), ("r", 0.175)):
+        box(outfit, (0.07 * bulk, 0.08, 0.27 * h), (x * bulk, -0.03, 0.46 * h), rot=(0.35, 0, 0), name=f"arm_{side}")
+        JOINTS[f"arm_{side}"] = (x * bulk, 0, 0.58 * h)
     ball(p["skin"], 0.085, (0, 0, 0.7 * h))
     return 0.7 * h
 
@@ -395,29 +400,46 @@ MODELS = {
 
 # ------------------------------------------------------------------ export
 
-def build(name, fn):
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    MATS.clear()
-    fn(palette())
-    objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+def join(objs, name):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]
     bpy.ops.object.join()
-    model = bpy.context.active_object
-    model.name = name
+    o = bpy.context.active_object
+    o.name = name
     bpy.ops.object.shade_flat()
-    return model
+    return o
 
 
-def export(model, path):
+def build(name, fn):
+    """Joins the model into a body plus its animated parts; returns all of them."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    MATS.clear()
+    JOINTS.clear()
+    fn(palette())
+    parts = []
+    for part, pivot in JOINTS.items():
+        pieces = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts and o.name.split(".")[0] == part]
+        if not pieces:
+            continue
+        o = join(pieces, part)
+        bpy.context.scene.cursor.location = pivot
+        bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+        parts.append(o)
+    rest = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts]
+    body = join(rest, name)
+    return [body, *parts]
+
+
+def export(objs, path):
     bpy.ops.object.select_all(action="DESELECT")
-    model.select_set(True)
+    for o in objs:
+        o.select_set(True)
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True)
 
 
-def icon(model, path):
+def icon(objs, path):
     """Renders a transparent 128px icon from the game's camera angle."""
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
@@ -425,8 +447,8 @@ def icon(model, path):
     scene.render.film_transparent = True
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
-    corners = [model.matrix_world @ Vector(c) for c in model.bound_box]
-    centre = sum(corners, Vector()) / 8
+    corners = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
+    centre = sum(corners, Vector()) / len(corners)
     radius = max((c - centre).length for c in corners)
     cam_data = bpy.data.cameras.new("cam")
     cam_data.type = "ORTHO"
@@ -479,9 +501,9 @@ os.makedirs(ICONS, exist_ok=True)
 for name, fn in MODELS.items():
     if ONLY and name not in ONLY:
         continue
-    model = build(name, fn)
-    export(model, os.path.join(OUT, f"{name}.glb"))
-    icon(model, os.path.join(ICONS, f"{name}.png"))
-    print(f"MODEL {name}: {len(model.data.polygons)} faces")
+    objs = build(name, fn)
+    export(objs, os.path.join(OUT, f"{name}.glb"))
+    icon(objs, os.path.join(ICONS, f"{name}.png"))
+    print(f"MODEL {name}: {sum(len(o.data.polygons) for o in objs)} faces, parts {[o.name for o in objs[1:]]}")
 if not ONLY or "doodads" in ONLY:
     export_doodads(os.path.join(OUT, "doodads.glb"))
