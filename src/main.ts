@@ -21,7 +21,9 @@ import { Decor } from './render/decor';
 const EDGE_PX = 8;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
-const SPECTATE = params.has('spectate');
+/** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
+const ATTRACT = !params.has('spectate') && !params.has('play');
+const SPECTATE = params.has('spectate') || ATTRACT;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 const PLAYER = 0;
@@ -164,9 +166,11 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
 
 const ready = Promise.all([loadModels(Object.keys(DEFS)), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
-if (SPECTATE || params.has('play')) {
+if (!ATTRACT) {
   ready.then(start);
 } else {
+  document.body.classList.add('attract');
+  ready.then(start);
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Les Humains — V1</p>
@@ -206,7 +210,11 @@ function start(): void {
     }
     lap('sim');
     const [dx, dy] = scrollDirection();
-    rig.pan(dx, dy, dt);
+    if (ATTRACT) {
+      // Slow orbit over the battlefield.
+      const t = performance.now() / 1000 / 40;
+      rig.lookAt(map.width / 2 + Math.cos(t) * 26, map.height / 2 + Math.sin(t) * 26);
+    } else rig.pan(dx, dy, dt);
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
