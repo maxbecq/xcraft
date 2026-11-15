@@ -96,6 +96,7 @@ def palette():
         "crystal_pale": mat("crystal_pale", 0xA8E8FF, emission=0x2A7AB0, rough=0.15),
         "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
         "purple_deep": mat("purple_deep", 0xE0C0FF, emission=0xB060FF),
+        "crystal_vein": mat("crystal_vein", 0x8FE6FF, emission=0x2AA8FF),
         "deadwood": mat("deadwood", 0x5E4A3A, rough=0.95),
         "drygrass": mat("drygrass", 0xB59A5C, rough=1.0),
         "bone": mat("bone", 0xB8AC92, rough=0.95),
@@ -452,36 +453,106 @@ def mine(p):
     tag(p, (-0.95, -0.96, 0.55), (0.42, 0.21))
 
 
-# Mineral fields: several crystal clusters, so a mineral line never looks copy-pasted.
-def crystal_cluster(p, spec, base_size):
-    for x, y, h, r, tx, ty, mat_name in spec:
-        cone(p[mat_name], r, h, (x, y, h / 2 * 0.9), rot=(tx, ty, 0), verts=6)
-    rock_mesh(p, len(spec) * 7, base_size, (0, 0, 0.02), squash=0.35)
+# Mineral fields: outcrops where crystal veins break through slabs of rock, not crystals sitting on the ground.
+def crystal(p, mat, base, tilt, length, radius):
+    """A hexagonal crystal with a pointed tip, growing from `base` along `tilt` (x, z rotation in radians)."""
+    body = cyl(p[mat], radius, length, (0, 0, length / 2), verts=6)
+    tip = cone(p[mat], radius, radius * 2.2, (0, 0, length + radius * 1.1), verts=6)
+    for o in (body, tip):
+        # Bake the offset into the mesh so both pieces pivot around the crystal's base.
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+        o.rotation_euler = (tilt[0], 0, tilt[1])
+        o.location = base
+    # Rotation and location are applied when the model is joined.
+    return body, tip
+
+
+def slab(p, seed, size, loc, tilt):
+    """A broken plate of rock pushed up through the ground, partly buried."""
+    o = rock_mesh(p, seed, 1.0, (0, 0, 0), squash=1.0)
+    o.scale = size
+    o.rotation_euler = tilt
+    o.location = loc
+    return o
+
+
+def vein(p, a, b, w=0.025):
+    """A thin glowing seam of crystal running over the rock."""
+    return pipe(p["crystal_vein"], a, b, r=w, verts=4)
+
+
+def outcrop(p, seed, slabs, clusters, shards):
+    r = lambda k: ((seed * 7919 + k * 104729) % 1000) / 1000
+    for i, (size, loc, tilt) in enumerate(slabs):
+        slab(p, seed * 10 + i, size, loc, tilt)
+    k = 0
+    for (cx, cy, cz), n, spread, lean in clusters:
+        for j in range(n):
+            k += 1
+            ang = r(k) * math.tau
+            length = 0.2 + r(k + 50) * 0.5 * (1.2 if j == 0 else 0.8)
+            rad = 0.05 + r(k + 90) * 0.07
+            mat = ("crystal", "crystal_pale", "crystal_deep")[int(r(k + 130) * 3) % 3]
+            base = (cx + math.cos(ang) * spread * r(k + 7), cy + math.sin(ang) * spread * r(k + 11), cz - 0.08)
+            crystal(p, mat, base, (lean * (0.4 + r(k + 3)), ang + math.pi / 2), length, rad)
+    for j in range(shards):
+        k += 1
+        ang = r(k) * math.tau
+        d = 0.45 + r(k + 5) * 0.4
+        crystal(p, "crystal_pale", (math.cos(ang) * d, math.sin(ang) * d, 0.0), (1.3, r(k + 9) * math.tau), 0.1 + r(k + 13) * 0.12, 0.03)
 
 
 def minerai(p):
-    crystal_cluster(p, ((0, 0, 0.95, 0.2, 0, 0, "crystal"), (0.2, 0.1, 0.65, 0.15, 0.35, 0.1, "crystal_pale"), (-0.18, 0.12, 0.55, 0.14, -0.4, 0, "crystal"), (0.05, -0.2, 0.5, 0.13, 0.3, -0.2, "crystal_deep")), 0.32)
+    outcrop(p, 1,
+            [((0.55, 0.35, 0.22), (-0.15, 0.1, 0.05), (0.2, -0.3, 0.4)), ((0.4, 0.3, 0.18), (0.35, -0.15, 0.02), (-0.25, 0.2, -0.5))],
+            [((0.05, -0.05, 0.15), 6, 0.18, 0.55), ((-0.35, 0.25, 0.1), 3, 0.1, 0.7)], 4)
+    vein(p, (-0.5, 0.0, 0.12), (0.1, 0.2, 0.22))
+    vein(p, (0.2, -0.3, 0.12), (0.55, -0.05, 0.1))
 
 
 def minerai_1(p):
-    crystal_cluster(p, ((0.08, 0.05, 1.1, 0.17, 0.1, 0.05, "crystal_pale"), (-0.15, -0.08, 0.8, 0.16, -0.25, -0.2, "crystal"), (0.22, -0.15, 0.45, 0.12, 0.4, 0.3, "crystal_deep")), 0.3)
+    outcrop(p, 2,
+            [((0.65, 0.3, 0.2), (0.0, 0.0, 0.0), (-0.15, 0.25, 0.9)), ((0.3, 0.25, 0.16), (-0.45, -0.2, 0.0), (0.3, 0.1, 0.2))],
+            [((0.1, 0.05, 0.15), 5, 0.2, 0.45), ((-0.4, -0.15, 0.08), 2, 0.08, 0.8)], 5)
+    vein(p, (-0.55, 0.1, 0.1), (0.4, -0.1, 0.18))
 
 
 def minerai_2(p):
-    crystal_cluster(p, ((-0.1, 0.1, 0.7, 0.22, -0.15, 0.1, "crystal_deep"), (0.15, 0.0, 0.85, 0.18, 0.2, -0.1, "crystal"), (0.0, -0.22, 0.5, 0.13, 0.35, 0.0, "crystal_pale"), (-0.25, -0.1, 0.35, 0.1, -0.5, -0.3, "crystal"), (0.25, 0.22, 0.4, 0.1, 0.3, 0.45, "crystal_pale")), 0.36)
+    outcrop(p, 3,
+            [((0.5, 0.4, 0.25), (0.1, 0.1, 0.05), (0.35, -0.2, 0.3)), ((0.35, 0.3, 0.2), (-0.35, -0.1, 0.0), (-0.3, 0.3, -0.7)), ((0.25, 0.2, 0.14), (0.4, -0.35, 0.0), (0.2, 0.2, 1.2))],
+            [((0.0, 0.0, 0.2), 7, 0.22, 0.4), ((0.4, -0.3, 0.08), 2, 0.06, 0.9)], 3)
+    vein(p, (-0.45, 0.2, 0.15), (0.45, 0.05, 0.25))
+    vein(p, (0.0, -0.4, 0.1), (0.15, 0.3, 0.22))
 
 
 def minerai_3(p):
-    crystal_cluster(p, ((0, 0, 0.6, 0.26, 0, 0, "crystal"), (0.2, 0.15, 0.4, 0.14, 0.45, 0.2, "crystal_deep"), (-0.2, 0.15, 0.45, 0.14, -0.3, 0.35, "crystal_pale")), 0.38)
+    outcrop(p, 4,
+            [((0.6, 0.45, 0.18), (0.0, 0.0, 0.0), (0.1, 0.15, 0.2))],
+            [((0.15, 0.1, 0.12), 4, 0.12, 0.6), ((-0.25, -0.15, 0.1), 4, 0.12, 0.5)], 6)
+    vein(p, (-0.5, -0.2, 0.08), (0.5, 0.25, 0.12))
 
 
 def puits(p):
-    cyl(p["rock"], 1.45, 0.16, (0, 0, 0.08), verts=16)
-    cyl(p["purple_glow"], 0.9, 0.18, (0, 0, 0.1), verts=16)
-    cyl(p["purple_deep"], 0.5, 0.2, (0, 0, 0.11), verts=12)
-    for i in range(9):
-        a = i / 9 * math.tau
-        rock_mesh(p, 40 + i, 0.22 + (i % 3) * 0.05, (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.1), squash=0.6)
+    """An energy well: a crater with a raised, broken rim, glowing fissures and a sunken pool of light."""
+    cyl(p["rock"], 1.3, 0.1, (0, 0, -0.02), verts=18)  # basin floor
+    cyl(p["purple_glow"], 0.75, 0.08, (0, 0, 0.03), verts=16)
+    cyl(p["purple_deep"], 0.38, 0.1, (0, 0, 0.05), verts=12)
+    for i in range(11):  # rim of slabs leaning outwards
+        a = i / 11 * math.tau + 0.2
+        size = 0.32 + (i % 3) * 0.08
+        o = rock_mesh(p, 60 + i, 1.0, (0, 0, 0), squash=1.0)
+        o.scale = (size, size * 0.7, size * 0.9)
+        o.rotation_euler = (0.5 * math.cos(a), 0.5 * math.sin(a), a)
+        o.location = (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.1)
+    for i in range(7):  # fissures running out from the pool
+        a = i / 7 * math.tau + 0.4
+        pipe(p["purple_glow"], (math.cos(a) * 0.7, math.sin(a) * 0.7, 0.04), (math.cos(a + 0.15) * 1.45, math.sin(a + 0.15) * 1.45, 0.02), r=0.035, verts=4)
+    for i in range(5):  # crystal growths around the rim
+        a = i / 5 * math.tau
+        crystal(p, "purple_glow", (math.cos(a) * 1.0, math.sin(a) * 1.0, 0.0), (0.6, a + math.pi / 2), 0.25 + (i % 2) * 0.15, 0.06)
 
 
 # ------------------------------------------------------------------ doodads (scenery, render only)

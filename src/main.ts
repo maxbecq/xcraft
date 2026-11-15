@@ -18,6 +18,7 @@ import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome } from './terrain';
 import { BIOMES, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
+import { addDeposits } from './render/deposits';
 
 const EDGE_PX = 8;
 const params = new URLSearchParams(location.search);
@@ -53,6 +54,7 @@ scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
 const decor = new Decor(map, world, biome.decorTint);
+addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.
 scene.add(new HemisphereLight(biome.sky.color, biome.sky.ground, biome.sky.intensity));
@@ -141,6 +143,7 @@ window.addEventListener('resize', () => {
 const VENTS: Record<string, [number, number, number, boolean]> = {
   conseil: [-1.4, 0.8, 2.0, true], // the burning tyre stack
   mine: [-0.9, 0.9, -0.7, false], // generator steam
+  puits: [0, 0.2, 0, false], // energy mist rising from the well
 };
 
 const TICK = 1 / TICK_RATE;
@@ -242,6 +245,11 @@ function start(): void {
     hud.update();
     lap('hud');
     for (const e of world.entities.values()) {
+      if (e.type === 'puits') {
+        const covered = [...world.entities.values()].some((m) => m.type === 'mine' && m.tx === e.tx && m.ty === e.ty);
+        if (!covered) effects.ambient(new Vector3(e.x / FP, heightAt(map, e.x / FP, e.y / FP) + 0.2, e.y / FP), dt, false);
+        continue;
+      }
       if (e.def.kind !== 'building' || e.buildLeft > 0 || !sees(e)) continue;
       const vent = VENTS[e.type];
       if (vent) {
