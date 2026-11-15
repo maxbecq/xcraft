@@ -70,8 +70,7 @@ rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
 if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
 
-const minimap = new Minimap(map, rig);
-document.body.appendChild(minimap.canvas);
+const minimap = new Minimap(map, rig, 164);
 
 const units = new EntityRenderer(scene, map);
 units.onBuilding = (e) => decor.hideUnder(e.tx, e.ty, (e.def as { size: number }).size);
@@ -86,12 +85,13 @@ const input = new Input(world, map, PLAYER, {
 }, renderer.domElement);
 const audio = new Audio();
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
+hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 const overlay = new Overlay(map);
-document.body.insertBefore(overlay.canvas, minimap.canvas);
+document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
 function updateFog(): void {

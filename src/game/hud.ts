@@ -24,6 +24,9 @@ const KEY_LABEL: Record<string, string> = { Escape: 'Échap' };
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
   private readonly bar = el('div', 'hud-bar');
+  /** Bottom console: minimap slot, selection panel, command card. */
+  private readonly console = el('div', 'console');
+  readonly mapSlot = el('div', 'slot map-slot');
   private readonly panel = el('div', 'hud-panel');
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
@@ -45,7 +48,10 @@ export class Hud {
     private readonly issue: (c: Command) => void,
     private readonly audio: Audio,
   ) {
-    document.body.append(this.bar, this.panel, this.card, this.toasts, this.banner);
+    this.panel.classList.add('slot');
+    this.card.classList.add('slot');
+    this.console.append(this.mapSlot, this.panel, this.card);
+    document.body.append(this.bar, this.console, this.toasts, this.banner);
     this.banner.hidden = true;
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
@@ -135,7 +141,7 @@ export class Hud {
     const p = this.world.players[this.player];
     const s = this.world.supply(this.player);
     const secs = Math.floor((this.world.tick / ticks(60)) * 60);
-    this.bar.innerHTML = `<span class="res clock">${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</span><span class="res min">◆ ${p.minerals}</span><span class="res nrg">⚡ ${p.energy}</span><span class="res sup${s.used >= s.max ? ' full' : ''}">⌂ ${s.used}/${s.max}</span>`;
+    this.bar.innerHTML = `<span class="res clock">${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</span><span class="res min"><i></i>${p.minerals}</span><span class="res nrg"><i></i>${p.energy}</span><span class="res sup${s.used >= s.max ? ' full' : ''}"><i></i>${s.used}/${s.max}</span>`;
     this.updatePanel();
     this.updateCard();
     this.updateGhost();
@@ -153,10 +159,8 @@ export class Hud {
     const sel = [...this.input.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e);
     if (sel.length === 0) {
       this.panel.innerHTML = '';
-      this.panel.hidden = true;
       return;
     }
-    this.panel.hidden = false;
     if (sel.length > 1) {
       this.panel.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
