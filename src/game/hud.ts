@@ -28,6 +28,9 @@ export class Hud {
   private cardKey = '';
   private buildMenu = false;
   private placing: string | null = null;
+  /** Waiting for a click to attack or attack-move. */
+  private targeting = false;
+  private readonly banner = el('div', 'hud-banner');
   private readonly ghost: Mesh;
 
   constructor(
@@ -38,7 +41,8 @@ export class Hud {
     scene: Scene,
     private readonly issue: (c: Command) => void,
   ) {
-    document.body.append(this.bar, this.panel, this.card, this.toasts);
+    document.body.append(this.bar, this.panel, this.card, this.toasts, this.banner);
+    this.banner.hidden = true;
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
@@ -64,8 +68,13 @@ export class Hud {
     });
   }
 
-  /** Mouse clicks on the map while placing a building. */
-  click(button: number, ground: Vector3 | null, shift: boolean): boolean {
+  /** Mouse clicks on the map while placing a building or choosing an attack target. */
+  click(button: number, ground: Vector3 | null, shift: boolean, target?: Entity): boolean {
+    if (this.targeting) {
+      if (button === 0 && ground) this.attack(ground.x, ground.z, target);
+      if (!shift || button === 2) this.setTargeting(false);
+      return true;
+    }
     if (!this.placing) return false;
     if (button === 2) {
       this.placing = null;
@@ -81,6 +90,25 @@ export class Hud {
       }
     }
     return true;
+  }
+
+  /** Left-click on the minimap: attack-move when targeting. */
+  minimapClick(x: number, y: number): boolean {
+    if (!this.targeting) return false;
+    this.attack(x, y);
+    this.setTargeting(false);
+    return true;
+  }
+
+  private attack(x: number, z: number, target?: Entity): void {
+    const ids = this.input.own().map((e) => e.id);
+    const enemy = target && target.owner >= 0 && target.owner !== this.player ? target.id : undefined;
+    this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy });
+  }
+
+  private setTargeting(on: boolean): void {
+    this.targeting = on;
+    document.body.classList.toggle('targeting', on);
   }
 
   notify(events: GameEvent[]): void {
@@ -101,6 +129,12 @@ export class Hud {
     this.updatePanel();
     this.updateCard();
     this.updateGhost();
+    if (this.world.winner !== null && this.banner.hidden) {
+      const won = this.world.winner === this.player;
+      this.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><button onclick="location.reload()">Rejouer</button>`;
+      this.banner.classList.toggle('won', won);
+      this.banner.hidden = false;
+    }
   }
 
   // ---------------------------------------------------------------- selection panel
@@ -152,6 +186,7 @@ export class Hud {
     const ids = own.map((e) => e.id);
     const cmd = (c: Order) => this.issue({ ...c, player: this.player } as Command);
     if (this.placing) return [{ label: 'Annuler', key: 'Escape', action: () => (this.placing = null) }];
+    if (this.targeting) return [{ label: 'Annuler', key: 'Escape', action: () => this.setTargeting(false) }];
     const units = own.filter((e) => e.def.kind === 'unit');
     if (units.length) {
       if (this.buildMenu && this.workers().length) {
@@ -164,6 +199,7 @@ export class Hud {
         ];
       }
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
+      if (units.some((u) => (u.def as UnitDef).attack)) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
       if (this.workers().length) list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = true) });
       return list;
     }

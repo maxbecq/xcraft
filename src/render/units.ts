@@ -103,6 +103,8 @@ interface View {
   ring: Mesh;
   heading: number;
   cargo?: Object3D;
+  /** Enemy buildings stay on screen once spotted. */
+  seen: boolean;
 }
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
@@ -125,6 +127,12 @@ export class EntityRenderer {
     }
     for (const e of world.entities.values()) {
       const v = this.views.get(e.id) ?? this.create(e, player);
+      if (e.owner >= 0 && e.owner !== player) {
+        const now = world.sees(player, e);
+        v.seen ||= now;
+        v.root.visible = e.def.kind === 'unit' ? now : v.seen;
+        if (!v.root.visible) continue;
+      }
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       if (e.x !== e.px || e.y !== e.py) v.heading = Math.atan2(e.x - e.px, e.y - e.py);
@@ -151,7 +159,7 @@ export class EntityRenderer {
     ring.position.y = 0.05;
     root.add(ring);
     this.scene.add(root);
-    const v: View = { root, model, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: model.getObjectByName('cargo') };
+    const v: View = { root, model, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: model.getObjectByName('cargo'), seen: false };
     this.views.set(e.id, v);
     return v;
   }

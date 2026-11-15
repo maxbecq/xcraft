@@ -1,5 +1,6 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font: 13px/1.3 system-ui, sans-serif; color: #e8e2d0; user-select: none; }
 canvas { display: block; }
+[hidden] { display: none !important; }
 
 .minimap { position: fixed; left: 12px; bottom: 12px; cursor: crosshair; background: rgba(0, 0, 0, 0.35); border-radius: 6px; }
 .selection-box { position: fixed; border: 1px solid #5f6; background: rgba(85, 255, 102, 0.08); pointer-events: none; }
@@ -29,3 +30,10 @@ canvas { display: block; }
 
 .hud-toasts { position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
 .hud-toast { padding: 4px 10px; background: rgba(60, 20, 10, 0.85); color: #ffd2c4; border-radius: 4px; }
+
+.overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+body.targeting canvas { cursor: crosshair; }
+.hud-banner { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; background: rgba(0, 0, 0, 0.55); }
+.hud-banner h1 { margin: 0; font-size: 56px; color: #ff7a6a; text-shadow: 0 2px 12px #000; }
+.hud-banner.won h1 { color: #ffd76a; }
+.hud-banner button { padding: 8px 20px; font: 600 15px system-ui; background: #3a3222; color: #f0e6cc; border: 1px solid #8a7550; border-radius: 5px; cursor: pointer; }

@@ -3,12 +3,14 @@ import { CameraRig } from './camera';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
+import { Effects } from './render/effects';
+import { Overlay } from './render/overlay';
 import { EntityRenderer } from './render/units';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import type { Command } from './sim/world';
 import './style.css';
-import { buildTerrain } from './terrain';
+import { addFog, buildTerrain } from './terrain';
 
 const EDGE_PX = 8;
 const PLAYER = 0;
@@ -25,6 +27,7 @@ const scene = new Scene();
 scene.background = new Color(0x0d0f12);
 const terrain = buildTerrain(map);
 scene.add(terrain);
+const fog = addFog(terrain, map);
 
 scene.add(new HemisphereLight(0xcfd8ff, 0x3a3020, 1.2));
 const sun = new DirectionalLight(0xfff1d6, 2.2);
@@ -36,6 +39,7 @@ Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, f
 scene.add(sun, sun.target);
 
 let pending: Command[] = [];
+if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, issue: (c: Command) => pending.push(c) } });
 
 const rig = new CameraRig(map.width, map.height);
 const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === 'conseil')!;
@@ -52,10 +56,23 @@ const input = new Input(world, map, PLAYER, {
   roots: () => units.roots,
   issue,
   focus: (x, z) => rig.lookAt(x, z),
-  click: (button, ground, shift) => hud.click(button, ground, shift),
+  click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
 }, renderer.domElement);
 const hud = new Hud(world, map, PLAYER, input, scene, issue);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
+minimap.intercept = (x, y) => hud.minimapClick(x, y);
+const effects = new Effects(scene, map);
+const overlay = new Overlay(map);
+document.body.insertBefore(overlay.canvas, minimap.canvas);
+
+/** Copies the player's fog of war to the terrain and minimap. */
+function updateFog(): void {
+  const tiles = world.vision[PLAYER].tiles;
+  const data = fog.image.data as Uint8Array;
+  for (let i = 0; i < tiles.length; i++) data[i] = tiles[i] === 2 ? 255 : tiles[i] === 1 ? 128 : 0;
+  fog.needsUpdate = true;
+  minimap.fog(tiles);
+}
 
 // Camera: arrow keys, screen-edge scrolling, wheel zoom.
 const keys = new Set<string>();
@@ -93,6 +110,8 @@ renderer.setAnimationLoop(() => {
     world.step(pending);
     pending = [];
     hud.notify(world.events);
+    effects.collect(world, PLAYER);
+    if (world.tick % 4 === 1) updateFog();
     acc -= TICK;
   }
   const [dx, dy] = scrollDirection();
@@ -101,6 +120,8 @@ renderer.setAnimationLoop(() => {
   input.prune();
   units.sync(world, acc / TICK, input.selected, PLAYER);
   hud.update();
-  minimap.draw(world);
+  effects.update(dt);
+  overlay.draw(world, rig.camera, input.selected, PLAYER, acc / TICK);
+  minimap.draw(world, PLAYER);
   renderer.render(scene, rig.camera);
 });

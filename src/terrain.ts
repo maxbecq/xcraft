@@ -1,4 +1,6 @@
-import { BufferGeometry, Color, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import {
+  BufferGeometry, Color, DataTexture, Float32BufferAttribute, LinearFilter, Mesh, MeshStandardMaterial, RedFormat, Vector3,
+} from 'three';
 import { type GameMap, cornerHeights, tileAt } from './map';
 
 const LEVEL_COLORS = [new Color(0x5b6b3c), new Color(0x7d7247), new Color(0x948d6c)];
@@ -84,4 +86,24 @@ export function buildTerrain(map: GameMap): Mesh {
   mesh.receiveShadow = true;
   mesh.castShadow = true;
   return mesh;
+}
+
+/** Darkens unexplored and out-of-sight ground. Write 0 / 128 / 255 per tile into `data`, then set needsUpdate. */
+export function addFog(mesh: Mesh, map: GameMap): DataTexture {
+  const fog = new DataTexture(new Uint8Array(map.width * map.height), map.width, map.height, RedFormat);
+  fog.magFilter = LinearFilter;
+  fog.minFilter = LinearFilter;
+  fog.needsUpdate = true;
+  const material = mesh.material as MeshStandardMaterial;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.fogMap = { value: fog };
+    shader.uniforms.mapSize = { value: [map.width, map.height] };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform vec2 mapSize;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFogUv = position.xz / mapSize;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.12 + 0.88 * texture2D(fogMap, vFogUv).r;');
+  };
+  return fog;
 }

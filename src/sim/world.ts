@@ -2,12 +2,17 @@ import { type BuildingDef, DEFS, type Def, HARVEST, type UnitDef } from '../data
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
+import { Vision } from './vision';
 
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
   | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number }
   | { kind: 'build'; type: string; tx: number; ty: number }
-  | { kind: 'construct'; target: number };
+  | { kind: 'construct'; target: number }
+  /** `auto`: picked by the unit itself; it gives up beyond its leash point (lx, ly). */
+  | { kind: 'attack'; target: number; auto: boolean; lx: number; ly: number }
+  | { kind: 'attackMove'; x: number; y: number; target: number }
+  | { kind: 'heal'; target: number };
 
 export interface Entity {
   id: number;
@@ -41,6 +46,8 @@ export interface Entity {
   amount: number;
   miner: number;
   timer: number;
+  /** Ticks before the next attack or heal. */
+  cooldown: number;
 }
 
 export interface Player {
@@ -56,7 +63,25 @@ export type Command =
   | { player: number; kind: 'stop'; ids: number[] }
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number }
   | { player: number; kind: 'train'; ids: number[]; type: string }
-  | { player: number; kind: 'cancel'; ids: number[] };
+  | { player: number; kind: 'cancel'; ids: number[] }
+  /** Attack a target, or attack-move to a point when there is none. */
+  | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number };
+
+export interface Shot {
+  /** Shooter and target centres (fixed-point). */
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  kind: 'ranged' | 'melee' | 'heal';
+}
+
+export interface Death {
+  x: number;
+  y: number;
+  type: string;
+  owner: number;
+}
 
 export interface GameEvent {
   player: number;
@@ -72,11 +97,18 @@ export class World {
   readonly players: Player[];
   /** Messages for the players, cleared at each tick. */
   events: GameEvent[] = [];
+  /** Attacks and deaths of the last tick, for visual effects. */
+  shots: Shot[] = [];
+  deaths: Death[] = [];
+  readonly vision: Vision[];
+  /** Winning player once the game is over. */
+  winner: number | null = null;
   private nextId = 1;
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
     this.players = Array.from({ length: playerCount }, (_, id) => ({ id, minerals: 0, energy: 0 }));
+    this.vision = this.players.map(() => new Vision(this.grid));
   }
 
   /** Units spawn centred on (x, y); buildings and resources at top-left tile (tx, ty). */
@@ -90,7 +122,7 @@ export class World {
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null,
-      carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0,
+      carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -115,17 +147,61 @@ export class World {
 
   step(commands: readonly Command[]): void {
     this.events = [];
+    this.shots = [];
+    this.deaths = [];
+    if (this.tick % 4 === 0) this.see();
     for (const c of commands) this.apply(c);
     for (const e of this.entities.values()) {
       e.px = e.x;
       e.py = e.y;
+      if (e.cooldown > 0) e.cooldown--;
     }
     for (const e of [...this.entities.values()]) {
+      if (e.hp <= 0 && e.def.kind !== 'resource') continue;
       if (e.def.kind === 'unit') this.think(e);
       else if (e.def.kind === 'building') this.operate(e);
     }
+    this.bury();
     this.separate();
+    if (this.tick % 20 === 0) this.judge();
     this.tick++;
+  }
+
+  // ---------------------------------------------------------------- vision, death, victory
+
+  private see(): void {
+    for (const v of this.vision) v.begin();
+    for (const e of this.entities.values()) {
+      if (e.owner < 0 || !('sight' in e.def)) continue;
+      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
+      this.vision[e.owner].reveal(tileOf(e.x), tileOf(e.y), r);
+    }
+  }
+
+  /** Can this player currently see the entity? */
+  sees(player: number, e: Entity): boolean {
+    if (e.owner === player) return true;
+    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y));
+    const size = (e.def as BuildingDef).size ?? 1;
+    for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
+    return false;
+  }
+
+  private bury(): void {
+    for (const e of [...this.entities.values()]) {
+      if (e.hp > 0 || e.def.kind === 'resource') continue;
+      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner });
+      if (e.order?.kind === 'gather') this.release(e, e.order.target);
+      this.remove(e);
+    }
+  }
+
+  /** A player with no building left is defeated. */
+  private judge(): void {
+    if (this.winner !== null) return;
+    const alive = this.players.filter((p) => [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
+    if (alive.length === 1) this.winner = alive[0].id;
+    else if (alive.length === 0) this.winner = -1;
   }
 
   // ---------------------------------------------------------------- players
@@ -184,6 +260,16 @@ export class World {
       case 'smart':
         this.smart(c, units, buildings);
         return;
+      case 'attack': {
+        const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
+        const fighters = units.filter((e) => 'attack' in e.def && e.def.attack);
+        if (t && t.owner >= 0 && t.owner !== c.player) {
+          for (const e of fighters) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
+        } else {
+          for (const e of fighters) this.setOrder(e, { kind: 'attackMove', x: c.x, y: c.y, target: 0 });
+        }
+        return;
+      }
       case 'build': {
         const worker = units.find((e) => (e.def as UnitDef).worker);
         if (!worker || DEFS[c.type]?.kind !== 'building') return;
@@ -226,7 +312,11 @@ export class World {
     const movers: Entity[] = [];
     for (const e of units) {
       const worker = (e.def as UnitDef).worker;
-      if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
+      if (t && t.owner >= 0 && t.owner !== e.owner && (e.def as UnitDef).attack) {
+        this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
+      } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
+        this.setOrder(e, { kind: 'heal', target: t.id });
+      } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
       } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0) {
         this.setOrder(e, { kind: 'construct', target: t.id });
@@ -292,8 +382,16 @@ export class World {
 
   private think(e: Entity): void {
     const o = e.order;
-    if (!o) return this.evict(e);
+    if (!o) {
+      if ((this.tick + e.id) % 4 === 0) this.acquire(e);
+      if (!e.order) this.evict(e);
+      return;
+    }
     switch (o.kind) {
+      case 'attack':
+      case 'attackMove':
+      case 'heal':
+        return this.fight(e, o);
       case 'move':
         if (dist(e.x, e.y, o.x, o.y) <= o.arrive && this.touchesIdleFriend(e)) return this.setOrder(e, null);
         if (this.goTo(e, o.x, o.y)) this.setOrder(e, null);
@@ -403,6 +501,129 @@ export class World {
       if (b.owner !== e.owner || b.buildLeft > 0 || !(b.def as BuildingDef).dropoff) continue;
       const d = dist(e.x, e.y, b.x, b.y);
       if (d < bestD) [best, bestD] = [b, d];
+    }
+    return best;
+  }
+
+  // ---------------------------------------------------------------- combat
+
+  /** Idle units pick a fight (or a patient) in sight. Workers only fight when told to. */
+  private acquire(e: Entity): void {
+    const def = e.def as UnitDef;
+    if (def.worker) return;
+    const patient = def.heal ? this.patient(e) : undefined;
+    if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
+    if (!def.attack) return;
+    const t = this.enemyNear(e, def.sight * FP);
+    if (t) this.setOrder(e, { kind: 'attack', target: t.id, auto: true, lx: e.x, ly: e.y });
+  }
+
+  private fight(e: Entity, o: Extract<Order, { kind: 'attack' | 'attackMove' | 'heal' }>): void {
+    const def = e.def as UnitDef;
+    if (o.kind === 'heal') {
+      const t = this.entities.get(o.target);
+      if (!t || t.hp <= 0 || t.hp >= t.maxHp || !def.heal) return this.setOrder(e, null);
+      if (this.gap(e, t) > 2 * FP) return this.chase(e, t);
+      e.goal = null;
+      if (e.cooldown === 0) {
+        t.hp = Math.min(t.maxHp, t.hp + 1);
+        e.cooldown = ticks(1 / def.heal);
+        if ((this.tick + e.id) % 8 === 0) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
+      }
+      return;
+    }
+    if (o.kind === 'attackMove') {
+      // Heal on the way if needed, otherwise engage what comes into sight, then carry on.
+      if (def.heal && (this.tick + e.id) % 4 === 0) {
+        const p = this.patient(e);
+        if (p) {
+          if (this.gap(e, p) > 2 * FP) return this.chase(e, p);
+          if (e.cooldown === 0) {
+            p.hp = Math.min(p.maxHp, p.hp + 1);
+            e.cooldown = ticks(1 / def.heal);
+          }
+          return;
+        }
+      }
+      let t = this.entities.get(o.target);
+      if (!t || t.hp <= 0 || !this.sees(e.owner, t) || this.gap(e, t) > (def.sight + 2) * FP) {
+        t = (this.tick + e.id) % 4 === 0 ? this.enemyNear(e, def.sight * FP) : undefined;
+        o.target = t?.id ?? 0;
+        if (!t && this.goTo(e, o.x, o.y)) this.setOrder(e, null);
+        if (!t) return;
+        e.goal = null;
+      }
+      return this.strike(e, t);
+    }
+    const t = this.entities.get(o.target);
+    if (!t || t.hp <= 0 || (!this.sees(e.owner, t) && o.auto)) return this.setOrder(e, null);
+    if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
+      // Chased too far: walk back.
+      return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
+    }
+    this.strike(e, t);
+  }
+
+  /** Attacks if in range, otherwise closes in. */
+  private strike(e: Entity, t: Entity): void {
+    const a = (e.def as UnitDef).attack;
+    if (!a) return;
+    if (this.gap(e, t) > toFp(a.range) + FP / 8) return this.chase(e, t);
+    e.goal = null;
+    e.path = [];
+    if (e.cooldown > 0) return;
+    e.cooldown = ticks(a.cooldown);
+    const armor = 'armor' in t.def ? t.def.armor : 0;
+    const bonus = t.def.kind === 'building' ? (a.vsMechanical ?? 0) : 0;
+    t.hp -= Math.max(1, a.damage + bonus - armor);
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged' });
+    // Idle soldiers hit from afar fight back.
+    const td = t.def as UnitDef;
+    if (!t.order && t.def.kind === 'unit' && td.attack && !td.worker) {
+      this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
+    }
+  }
+
+  private chase(e: Entity, t: Entity): void {
+    if (t.def.kind === 'building') return this.goNear(e, t.tx, t.ty, (t.def as BuildingDef).size);
+    if (!e.goal || dist(e.goal.x, e.goal.y, t.x, t.y) > FP) this.plan(e, t.x, t.y);
+    this.follow(e);
+  }
+
+  /** Edge-to-edge distance. */
+  private gap(e: Entity, t: Entity): number {
+    if (t.def.kind === 'unit') return dist(e.x, e.y, t.x, t.y) - e.radius - t.radius;
+    const size = (t.def as BuildingDef).size;
+    const nx = Math.max(t.tx * FP, Math.min(e.x, (t.tx + size) * FP));
+    const ny = Math.max(t.ty * FP, Math.min(e.y, (t.ty + size) * FP));
+    return dist(e.x, e.y, nx, ny) - e.radius;
+  }
+
+  /** Most threatening visible enemy within range: armed units first, then others, then buildings. */
+  private enemyNear(e: Entity, range: number): Entity | undefined {
+    let best: Entity | undefined;
+    let bestScore = Infinity;
+    for (const t of this.entities.values()) {
+      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource') continue;
+      const d = this.gap(e, t);
+      if (d > range || !this.sees(e.owner, t)) continue;
+      const armed = t.def.kind === 'unit' && !!(t.def as UnitDef).attack && !(t.def as UnitDef).worker;
+      const score = d + (t.def.kind === 'building' ? 8 * FP : armed ? 0 : 3 * FP);
+      if (score < bestScore) [best, bestScore] = [t, score];
+    }
+    return best;
+  }
+
+  /** Most wounded friendly unit in sight. */
+  private patient(e: Entity): Entity | undefined {
+    let best: Entity | undefined;
+    let worst = 1;
+    const range = (e.def as UnitDef).sight * FP;
+    for (const t of this.entities.values()) {
+      if (t === e || t.owner !== e.owner || t.def.kind !== 'unit' || t.hp >= t.maxHp) continue;
+      if (dist(e.x, e.y, t.x, t.y) > range) continue;
+      const f = t.hp / t.maxHp;
+      if (f < worst) [best, worst] = [t, f];
     }
     return best;
   }

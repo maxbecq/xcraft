@@ -13,9 +13,13 @@ export class Minimap {
   private readonly toCanvas: DOMMatrix;
   private readonly toMap: DOMMatrix;
   private readonly scale: number;
+  private readonly image: ImageData;
+  private readonly base: Uint8ClampedArray;
 
   /** Called with a right-clicked map point, in tiles. */
   onOrder: (x: number, y: number) => void = () => {};
+  /** Left-click hook (e.g. attack-move); return true to keep the camera still. */
+  intercept: (x: number, y: number) => boolean = () => false;
 
   constructor(map: GameMap, private readonly rig: CameraRig, size = 200) {
     this.canvas.width = this.canvas.height = size;
@@ -35,6 +39,8 @@ export class Minimap {
       }
     }
     tctx.putImageData(img, 0, 0);
+    this.image = img;
+    this.base = img.data.slice();
 
     // Fit the map's diagonal into the canvas; +45° puts the camera's far side at the top.
     this.scale = size / (Math.max(map.width, map.height) * Math.SQRT2);
@@ -47,11 +53,9 @@ export class Minimap {
       this.rig.lookAt(p.x, p.y);
     };
     this.canvas.addEventListener('pointerdown', (e) => {
-      if (e.button === 2) {
-        const p = point(e);
-        this.onOrder(p.x, p.y);
-        return;
-      }
+      const p = point(e);
+      if (e.button === 2) return this.onOrder(p.x, p.y);
+      if (this.intercept(p.x, p.y)) return;
       this.canvas.setPointerCapture(e.pointerId);
       move(e);
     });
@@ -60,7 +64,19 @@ export class Minimap {
     });
   }
 
-  draw(world: World): void {
+  /** Redraws the ground darkened by the player's fog of war. */
+  fog(tiles: Uint8Array): void {
+    const d = this.image.data;
+    for (let i = 0; i < tiles.length; i++) {
+      const f = tiles[i] === 2 ? 1 : tiles[i] === 1 ? 0.55 : 0.15;
+      d[i * 4] = this.base[i * 4] * f;
+      d[i * 4 + 1] = this.base[i * 4 + 1] * f;
+      d[i * 4 + 2] = this.base[i * 4 + 2] * f;
+    }
+    this.tiles.getContext('2d')!.putImageData(this.image, 0, 0);
+  }
+
+  draw(world: World, player: number): void {
     const ctx = this.ctx;
     ctx.resetTransform();
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -69,7 +85,7 @@ export class Minimap {
     ctx.drawImage(this.tiles, 0, 0);
 
     for (const e of world.entities.values()) {
-      if (e.owner < 0) continue;
+      if (e.owner < 0 || !world.sees(player, e)) continue;
       ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
       const s = Math.max(1.5, (e.radius * 2) / FP);
       ctx.fillRect(e.x / FP - s / 2, e.y / FP - s / 2, s, s);

@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+import { createMap } from '../map';
+import { FP, ticks } from './fixed';
+import { createMatch } from './setup';
+import { type Entity, World } from './world';
+
+const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
+
+function army(w: World, owner: number, type: string, tx: number, ty: number, n: number): Entity[] {
+  return Array.from({ length: n }, (_, i) => w.spawn(type, owner, ...at(tx + (i % 3), ty + Math.floor(i / 3))));
+}
+
+function run(w: World, seconds: number): void {
+  for (let i = 0; i < ticks(seconds); i++) w.step([]);
+}
+
+const alive = (w: World, owner: number) => [...w.entities.values()].filter((e) => e.owner === owner && e.def.kind === 'unit');
+
+describe('combat', () => {
+  it('lets idle armies in sight of each other fight to the end', () => {
+    const w = new World(createMap());
+    army(w, 0, 'auxiliaire', 40, 60, 6);
+    army(w, 1, 'auxiliaire', 46, 60, 4);
+    run(w, 40);
+    expect(alive(w, 1)).toHaveLength(0);
+    expect(alive(w, 0).length).toBeGreaterThan(0);
+  });
+
+  it('attack-moves into an enemy base and razes a building', () => {
+    const w = new World(createMap());
+    const squad = army(w, 0, 'legionnaire', 40, 60, 6);
+    const target = w.spawn('grenier', 1, 60 * FP, 60 * FP);
+    w.step([{ player: 0, kind: 'attack', ids: squad.map((e) => e.id), x: 61 * FP, y: 61 * FP }]);
+    run(w, 60);
+    expect(w.entities.has(target.id)).toBe(false);
+  });
+
+  it('heals wounded allies with a soigneur', () => {
+    const w = new World(createMap());
+    const [hurt] = army(w, 0, 'auxiliaire', 40, 60, 1);
+    army(w, 0, 'soigneur', 43, 60, 1);
+    hurt.hp = 20;
+    run(w, 15);
+    expect(hurt.hp).toBe(hurt.maxHp);
+  });
+
+  it('cannot see, so cannot shoot, up a cliff', () => {
+    const w = new World(createMap());
+    // Main plateau (level 2) edge at x=24; low ground (level 1) right below at x=26.
+    const [high] = army(w, 0, 'auxiliaire', 23, 8, 1);
+    const [low] = army(w, 1, 'auxiliaire', 26, 8, 1);
+    run(w, 5);
+    expect(w.sees(1, high)).toBe(false);
+    expect(w.sees(0, low)).toBe(true);
+    expect(high.hp).toBe(high.maxHp);
+    expect(low.hp).toBeLessThan(low.maxHp);
+  });
+
+  it('declares a winner when a player has no buildings left', () => {
+    const w = createMatch();
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'building') e.hp = 0;
+    run(w, 2);
+    expect(w.winner).toBe(0);
+  });
+
+  it('stays deterministic through a battle', () => {
+    const play = () => {
+      const w = new World(createMap());
+      const a = [...army(w, 0, 'auxiliaire', 30, 60, 6), ...army(w, 0, 'soigneur', 30, 63, 2)];
+      const b = army(w, 1, 'legionnaire', 60, 60, 6);
+      w.step([
+        { player: 0, kind: 'attack', ids: a.map((e) => e.id), x: 60 * FP, y: 60 * FP },
+        { player: 1, kind: 'attack', ids: b.map((e) => e.id), x: 30 * FP, y: 60 * FP },
+      ]);
+      run(w, 60);
+      return w.hash();
+    };
+    expect(play()).toBe(play());
+  });
+});

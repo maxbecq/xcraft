@@ -15,7 +15,7 @@ export interface InputHooks {
   issue: (c: Command) => void;
   focus: (x: number, z: number) => void;
   /** Lets the HUD take a click first (e.g. to place a building); true if consumed. */
-  click?: (button: number, ground: Vector3 | null, shift: boolean) => boolean;
+  click?: (button: number, ground: Vector3 | null, shift: boolean, target?: Entity) => boolean;
 }
 
 /** Mouse and keyboard: selection, control groups and right-click orders for the local player. */
@@ -43,7 +43,7 @@ export class Input {
     window.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
       const ground = this.groundAt(e.clientX, e.clientY);
-      if (this.hooks.click?.(e.button, ground, e.shiftKey)) return;
+      if (this.hooks.click?.(e.button, ground, e.shiftKey, this.entityAt(e.clientX, e.clientY))) return;
       if (e.button === 0) {
         this.dragStart = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
