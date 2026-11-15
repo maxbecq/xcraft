@@ -52,31 +52,33 @@ Pas de moteur lourd (Unity/Godot) ni de librairie ECS : inutile pour la V1.
 
 ## 4. Jalons
 
-**M0 — Socle (½ j)**
+État au 16/11/2026 : **M0 à M6 livrés**, V1 jouable en ligne (voir README).
+
+**M0 — Socle (½ j)** ✅
 Vite + TS + Three.js + Vitest, déploiement auto sur Pages, `Old_Project/` exclu de git.
 *Fini quand* : page vide déployée en ligne.
 
-**M1 — Terrain & caméra**
+**M1 — Terrain & caméra** ✅
 Carte en tuiles avec hauteurs, caméra iso, scroll bords d'écran / flèches, zoom borné, minimap.
 *Fini quand* : on se balade sur la carte.
 
-**M2 — Cœur de simulation**
+**M2 — Cœur de simulation** ✅
 Boucle à tick fixe + interpolation de rendu, entités, sélection (clic, rectangle, Maj, groupes Ctrl+1..9), ordre de déplacement, A*, évitement simple.
 *Fini quand* : on sélectionne et déplace 20 unités ; test de déterminisme (même seed → même état).
 
-**M3 — Économie**
+**M3 — Économie** ✅
 Serfs récoltent minerai/énergie, Conseil, placement de bâtiments sur grille, chantier, Grenier (supply), file de production Caserne.
 *Fini quand* : on monte une base et produit des unités.
 
-**M4 — Combat**
+**M4 — Combat** ✅
 PV/armure, attaque mêlée/distance, acquisition de cible, attack-move, mort, Soigneur, brouillard de guerre, condition de victoire.
 *Fini quand* : une partie peut être gagnée/perdue contre un adversaire passif.
 
-**M5 — IA**
+**M5 — IA** ✅
 IA scriptée d'après l'opening « Bioball auxiliaire » simplifié ; mode IA vs IA headless ; boucle d'équilibrage (stats extraites du mod SC2).
 *Fini quand* : l'IA bat un débutant et 100 parties IA-vs-IA se terminent toutes.
 
-**M6 — Habillage → V1**
+**M6 — Habillage → V1** ✅
 Modèles Humains, animations simples, effets, HUD façon SC (portrait, cartes de commande, raccourcis), sons de base, écran titre.
 *Fini quand* : V1 jouable en ligne de bout en bout.
 
