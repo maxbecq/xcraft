@@ -78,6 +78,12 @@ def palette():
         "glass": mat("glass", 0x9FD8E0, metallic=0.2, rough=0.1),
         "dark_glass": mat("dark_glass", 0x1C2A30, metallic=0.3, rough=0.15),
         "boulder": mat("boulder", 0x8A6E56, rough=0.95),
+        "window_glow": mat("window_glow", 0xFFC870, emission=0xFFA040),
+        "lamp_glow": mat("lamp_glow", 0xFFF2C0, emission=0xFFE090),
+        "red_glow": mat("red_glow", 0xFF4A3A, emission=0xFF2010),
+        "crystal_pale": mat("crystal_pale", 0xA8E8FF, emission=0x2A7AB0, rough=0.15),
+        "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
+        "purple_deep": mat("purple_deep", 0xE0C0FF, emission=0xB060FF),
         "deadwood": mat("deadwood", 0x5E4A3A, rough=0.95),
         "drygrass": mat("drygrass", 0xB59A5C, rough=1.0),
         "bone": mat("bone", 0xB8AC92, rough=0.95),
@@ -223,97 +229,232 @@ def container(p, size, loc, paint):
         x = loc[0] - sx / 2 + 0.15 + i * 0.3
         box(paint, (0.05, sy + 0.04, sz - 0.1), (x, loc[1], loc[2]))
     box(p["rust"], (sx + 0.02, sy + 0.02, 0.06), (loc[0], loc[1], loc[2] + sz / 2))
+    box(p["rust"], (sx * 0.3, sy + 0.03, sz * 0.25), (loc[0] - sx * 0.25, loc[1], loc[2] - sz * 0.3))  # rust stain
+
+
+def pipe(m, a, b, r=0.05, verts=8):
+    """A cylinder from point a to point b."""
+    a, b = Vector(a), Vector(b)
+    d = b - a
+    o = cyl(m, r, d.length, (a + b) / 2, verts=verts)
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = d.to_track_quat("Z", "Y")
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    return o
+
+
+def ladder(p, x, y, z0, z1, along="x"):
+    w = 0.12
+    for s in (-w, w):
+        pipe(p["scrap"], (x + (s if along == "x" else 0), y + (0 if along == "x" else s), z0), (x + (s if along == "x" else 0), y + (0 if along == "x" else s), z1), r=0.018, verts=5)
+    z = z0 + 0.15
+    while z < z1:
+        box(p["scrap"], (2 * w if along == "x" else 0.025, 0.025 if along == "x" else 2 * w, 0.025), (x, y, z))
+        z += 0.18
+
+
+def window(p, size, loc):
+    """A lit window: dark frame around a warm glow."""
+    box(p["dark"], (size[0] + 0.06, size[1] + 0.02, size[2] + 0.06), loc)
+    box(p["window_glow"], (size[0], size[1] + 0.04, size[2]), loc)
+
+
+def lamp(p, loc):
+    cyl(p["dark"], 0.06, 0.08, loc, verts=8)
+    ball(p["lamp_glow"], 0.07, (loc[0], loc[1], loc[2] - 0.06), seg=8, rings=4)
+
+
+def sandbags(p, cx, cy, r, a0, a1, n, z=0.2):
+    for i in range(n):
+        a = a0 + (a1 - a0) * (i + 0.5) / n
+        ball(p["khaki"], 0.22, (cx + math.cos(a) * r, cy + math.sin(a) * r, z), scale=(1.25, 0.7, 0.45), seg=8, rings=4)
+        if i % 2 == 0:
+            ball(p["khaki"], 0.2, (cx + math.cos(a + 0.12) * r, cy + math.sin(a + 0.12) * r, z + 0.18), scale=(1.2, 0.7, 0.45), seg=8, rings=4)
+
+
+def plate_floor(p, size):
+    """Base pad: concrete with welded steel plates and hazard edges."""
+    box(p["concrete"], (size, size, 0.2), (0, 0, 0.1))
+    for i, (x, y) in enumerate(((-0.25, -0.25), (0.25, -0.25), (0.25, 0.25), (-0.25, 0.25))):
+        box(p["scrap"] if i % 2 else p["rust"], (size * 0.45, size * 0.45, 0.04), (x * size, y * size, 0.21))
+    for s in (-1, 1):
+        box(p["hazard"], (size, 0.1, 0.05), (0, s * (size / 2 - 0.05), 0.22))
 
 
 def conseil(p):
-    """Command post: stacked shipping containers, a watchtower, antenna mast and tyre walls."""
-    box(p["concrete"], (4.9, 4.9, 0.2), (0, 0, 0.1))
-    container(p, (3.2, 1.3, 1.1), (-0.4, 0.6, 0.75), p["team"])
-    container(p, (3.0, 1.3, 1.1), (0.2, -0.75, 0.75), p["rust"])
-    container(p, (2.4, 1.3, 1.0), (-0.1, 0.0, 1.85), p["scrap"])
-    box(p["hazard"], (0.9, 0.06, 0.6), (0.2, -1.42, 0.6))  # door panel
-    box(p["dark_glass"], (0.7, 0.04, 0.25), (-0.1, -0.66, 2.0))  # window
-    # Watchtower on stilts.
+    """Command post: stacked containers, a watchtower, antenna mast, pipes, lit windows and tyre fires."""
+    plate_floor(p, 4.9)
+    container(p, (3.2, 1.3, 1.1), (-0.4, 0.6, 0.85), p["team"])
+    container(p, (3.0, 1.3, 1.1), (0.2, -0.75, 0.85), p["rust"])
+    container(p, (2.4, 1.3, 1.0), (-0.1, 0.0, 1.95), p["scrap"])
+    corrugated(p["rust"], (2.6, 1.5, 0.05), (-0.1, 0.0, 2.5))
+    box(p["hazard"], (0.9, 0.06, 0.65), (0.2, -1.42, 0.65))  # door
+    box(p["dark"], (0.7, 0.07, 0.55), (0.2, -1.43, 0.62))
+    lamp(p, (0.2, -1.5, 1.15))
+    for x in (-1.0, -0.4, 0.8):
+        window(p, (0.32, 0.04, 0.22), (x, -1.42, 1.1))
+    window(p, (0.7, 0.04, 0.25), (-0.1, -0.66, 2.05))
+    # Catwalk along the upper container, with a railing.
+    box(p["scrap"], (2.6, 0.35, 0.05), (-0.1, -0.85, 1.42))
+    for i in range(6):
+        pipe(p["scrap"], (-1.35 + i * 0.5, -1.0, 1.42), (-1.35 + i * 0.5, -1.0, 1.75), r=0.02, verts=5)
+    pipe(p["scrap"], (-1.35, -1.0, 1.75), (1.15, -1.0, 1.75), r=0.02, verts=5)
+    ladder(p, 1.45, -1.3, 0.25, 1.45)
+    # Watchtower on stilts with a searchlight.
     for x, y in ((1.35, 1.0), (2.05, 1.0), (1.35, 1.7), (2.05, 1.7)):
-        cyl(p["scrap"], 0.05, 2.6, (x, y, 1.3), verts=6)
-    box(p["team"], (1.0, 1.0, 0.55), (1.7, 1.35, 2.75))
-    corrugated(p["rust"], (1.2, 1.2, 0.06), (1.7, 1.35, 3.1))
-    # Antenna and dish.
-    cyl(p["steel"], 0.03, 2.2, (-1.5, 1.4, 2.9), verts=6)
-    cone(p["scrap"], 0.35, 0.2, (-1.5, 1.4, 4.0), rot=(math.radians(-60), 0, 0), verts=10)
-    cyl(p["orange_glow"], 0.05, 0.05, (-1.5, 1.4, 4.02), verts=6)
-    # Tyre stacks and barrels.
+        cyl(p["scrap"], 0.05, 2.6, (x, y, 1.4), verts=6)
+    pipe(p["rust"], (1.35, 1.0, 0.6), (2.05, 1.7, 2.0), r=0.025, verts=5)
+    pipe(p["rust"], (2.05, 1.0, 0.6), (1.35, 1.7, 2.0), r=0.025, verts=5)
+    box(p["team"], (1.0, 1.0, 0.55), (1.7, 1.35, 2.85))
+    window(p, (0.6, 0.04, 0.18), (1.7, 0.84, 2.9))
+    corrugated(p["rust"], (1.2, 1.2, 0.06), (1.7, 1.35, 3.2))
+    ladder(p, 2.15, 1.35, 0.25, 2.6, along="y")
+    cyl(p["steel"], 0.1, 0.18, (1.25, 0.9, 3.0), rot=(math.radians(70), 0, 0), verts=10)  # searchlight
+    cyl(p["lamp_glow"], 0.08, 0.02, (1.25, 0.82, 2.97), rot=(math.radians(70), 0, 0), verts=10)
+    # Antenna mast, dish and a blinking-red tip.
+    cyl(p["steel"], 0.03, 2.4, (-1.5, 1.4, 3.1), verts=6)
+    for z in (2.4, 3.0, 3.6):
+        box(p["steel"], (0.3, 0.02, 0.02), (-1.5, 1.4, z))
+    cone(p["scrap"], 0.38, 0.2, (-1.2, 1.4, 3.6), rot=(0, math.radians(-60), 0), verts=12)
+    ball(p["red_glow"], 0.05, (-1.5, 1.4, 4.32), seg=6, rings=4)
+    # Pipes from the tank to the containers.
+    cyl(p["team"], 0.32, 0.9, (-1.95, -0.6, 0.65), verts=12)
+    pipe(p["scrap"], (-1.95, -0.6, 1.0), (-1.95, -0.1, 1.0), r=0.05)
+    pipe(p["scrap"], (-1.95, -0.1, 1.0), (-1.95, -0.1, 1.6), r=0.05)
+    pipe(p["scrap"], (-1.95, -0.1, 1.6), (-1.3, -0.1, 1.6), r=0.05)
+    # Sandbags, tyre stacks with a fire, barrels.
+    sandbags(p, 0.2, -1.6, 1.1, math.radians(200), math.radians(250), 3)
+    sandbags(p, 0.2, -1.6, 1.1, math.radians(290), math.radians(340), 3)
     for x, y in ((-2.0, -1.9), (-1.4, -2.0), (2.0, -1.9)):
         for k in range(3):
-            cyl(p["rubber"], 0.25, 0.12, (x, y, 0.27 + k * 0.13), verts=10)
+            cyl(p["rubber"], 0.25, 0.12, (x, y, 0.32 + k * 0.13), verts=10)
+    cone(p["orange_glow"], 0.16, 0.35, (-1.4, -2.0, 0.85), verts=6)
     for x in (1.0, 1.35):
-        cyl(p["hazard"], 0.16, 0.45, (x, -2.0, 0.42), verts=10)
-    cyl(p["orange_glow"], 0.14, 0.05, (-1.4, -2.0, 0.67), verts=8)  # fire in the tyres
+        cyl(p["hazard"], 0.16, 0.45, (x, -2.0, 0.45), verts=10)
+    box(p["team"], (0.5, 0.03, 0.32), (-1.25, 1.4, 3.75))  # flag
 
 
 def grenier(p):
-    """Supply depot: a tower of welded drums with a team-painted tank on top."""
-    box(p["concrete"], (1.9, 1.9, 0.15), (0, 0, 0.075))
+    """Supply depot: welded drums under a team-painted tank, with a ladder, valves and a pipe."""
+    plate_floor(p, 1.9)
     for x, y in ((-0.45, -0.45), (0.45, -0.45), (0.45, 0.45), (-0.45, 0.45)):
-        cyl(p["rust"], 0.3, 0.75, (x, y, 0.52), verts=10)
-        cyl(p["scrap"], 0.31, 0.05, (x, y, 0.7), verts=10)
-    cyl(p["team"], 0.75, 0.7, (0, 0, 1.25), verts=12)
-    cyl(p["hazard"], 0.76, 0.08, (0, 0, 1.0), verts=12)
-    cone(p["scrap"], 0.8, 0.3, (0, 0, 1.75), verts=12)
-    cyl(p["steel"], 0.04, 0.6, (0.5, -0.5, 2.0), verts=6)
+        cyl(p["rust"], 0.3, 0.75, (x, y, 0.6), verts=12)
+        cyl(p["scrap"], 0.31, 0.05, (x, y, 0.8), verts=12)
+        cyl(p["scrap"], 0.31, 0.05, (x, y, 0.42), verts=12)
+    cyl(p["team"], 0.75, 0.7, (0, 0, 1.33), verts=16)
+    for z in (1.08, 1.58):
+        cyl(p["scrap"], 0.77, 0.05, (0, 0, z), verts=16)  # straps
+    cyl(p["hazard"], 0.76, 0.08, (0, 0, 1.33), verts=16)
+    cone(p["scrap"], 0.8, 0.3, (0, 0, 1.83), verts=16)
+    cyl(p["steel"], 0.06, 0.2, (0, 0, 2.05), verts=8)  # vent
+    ladder(p, 0.0, -0.78, 0.25, 1.7)
+    cyl(p["red_glow"], 0.07, 0.03, (0.55, -0.55, 1.2), rot=(math.radians(90), 0, math.radians(45)), verts=10)  # valve wheel
+    pipe(p["scrap"], (0.5, 0.5, 1.1), (0.9, 0.9, 0.3), r=0.04)
+    lamp(p, (0.0, -0.8, 1.85))
 
 
 def caserne(p):
-    """Barracks: a bunker of scrap walls behind sandbags, with a corrugated roof and spikes."""
-    box(p["concrete"], (2.9, 2.9, 0.15), (0, 0, 0.075))
-    box(p["scrap"], (2.4, 2.4, 1.1), (0, 0, 0.7))
-    corrugated(p["team"], (2.6, 2.6, 0.08), (0, 0, 1.3))
-    box(p["dark"], (0.9, 0.1, 0.8), (0, -1.22, 0.55))  # gate
-    box(p["hazard"], (1.0, 0.12, 0.1), (0, -1.23, 1.0))
+    """Barracks: a scrap bunker behind sandbags, with firing slits, spotlights, barbed wire and a flag."""
+    plate_floor(p, 2.9)
+    box(p["scrap"], (2.4, 2.4, 1.1), (0, 0, 0.75))
+    for i in range(4):  # welded plates on the walls
+        box(p["rust"], (0.5, 0.04, 0.4), (-0.8 + i * 0.55, -1.21, 0.55 + (i % 2) * 0.3))
+    corrugated(p["team"], (2.6, 2.6, 0.08), (0, 0, 1.35))
+    box(p["hazard"], (2.62, 2.62, 0.06), (0, 0, 1.28))
+    box(p["dark"], (0.9, 0.1, 0.8), (0, -1.22, 0.6))  # gate
+    for x in (-0.22, 0.22):
+        box(p["rust"], (0.4, 0.12, 0.78), (x, -1.23, 0.6))
+    box(p["hazard"], (1.0, 0.12, 0.1), (0, -1.23, 1.05))
+    for x in (-0.85, 0.85):
+        window(p, (0.4, 0.04, 0.08), (x, -1.21, 0.95))  # firing slits
+        lamp(p, (x, -1.3, 1.2))
     for i in range(11):  # sandbag ring
         a = i / 11 * math.tau
-        x, y = math.cos(a) * 1.35, math.sin(a) * 1.35
-        if y < -1.0 and abs(x) < 0.6:
+        x, y = math.cos(a) * 1.38, math.sin(a) * 1.38
+        if y < -1.0 and abs(x) < 0.7:
             continue  # keep the gate clear
-        ball(p["khaki"], 0.24, (x, y, 0.25), scale=(1.2, 0.7, 0.45), seg=8, rings=4)
+        ball(p["khaki"], 0.24, (x, y, 0.3), scale=(1.2, 0.7, 0.45), seg=8, rings=4)
+        ball(p["khaki"], 0.22, (x * 0.98, y * 0.98, 0.48), scale=(1.15, 0.7, 0.45), seg=8, rings=4)
     for x, y in ((-1.2, -1.2), (1.2, -1.2), (1.2, 1.2), (-1.2, 1.2)):
-        cone(p["steel"], 0.06, 0.45, (x, y, 1.55), verts=5)  # spikes
-    cyl(p["steel"], 0.03, 1.2, (0.9, 0.9, 1.9), verts=6)
-    box(p["team"], (0.5, 0.03, 0.32), (1.15, 0.9, 2.3))  # flag
+        cone(p["steel"], 0.06, 0.45, (x, y, 1.6), verts=5)  # spikes
+    for s in (-1, 1):  # barbed wire along the roof edge
+        pipe(p["steel"], (-1.25, s * 1.25, 1.5), (1.25, s * 1.25, 1.5), r=0.012, verts=4)
+        pipe(p["steel"], (s * 1.25, -1.25, 1.5), (s * 1.25, 1.25, 1.5), r=0.012, verts=4)
+    box(p["scrap"], (0.5, 0.5, 0.35), (-0.6, 0.6, 1.55))  # roof vent
+    for i in range(3):
+        box(p["dark"], (0.4, 0.02, 0.04), (-0.6, 0.34, 1.45 + i * 0.1))
+    cyl(p["steel"], 0.03, 1.4, (0.9, 0.9, 2.05), verts=6)
+    box(p["team"], (0.55, 0.03, 0.35), (1.17, 0.9, 2.55))  # flag
+    cyl(p["steel"], 0.1, 0.16, (0.7, -0.9, 1.5), rot=(math.radians(-70), 0, 0), verts=10)  # spotlight
+    cyl(p["lamp_glow"], 0.08, 0.02, (0.7, -0.97, 1.47), rot=(math.radians(-70), 0, 0), verts=10)
 
 
 def mine(p):
-    """Energy rig: a lattice derrick over the well, a pumpjack and glowing pipes."""
-    cyl(p["concrete"], 1.45, 0.3, (0, 0, 0.15), verts=16)
+    """Energy rig: lattice derrick, pumpjack, storage tank, gas flare and glowing pipelines."""
+    cyl(p["concrete"], 1.45, 0.3, (0, 0, 0.15), verts=20)
+    box(p["hazard"], (2.6, 0.1, 0.05), (0, -1.3, 0.31))
     legs = ((-0.6, -0.6), (0.6, -0.6), (0.6, 0.6), (-0.6, 0.6))
-    for x, y in legs:  # leaning derrick legs
-        cyl(p["scrap"], 0.05, 2.8, (x * 0.7, y * 0.7, 1.6), rot=(y * 0.25, -x * 0.25, 0), verts=6)
-    for z in (1.0, 1.8, 2.5):
-        s = 1.2 - z * 0.3
-        box(p["rust"], (s, 0.06, 0.06), (0, -s / 2, z))
-        box(p["rust"], (s, 0.06, 0.06), (0, s / 2, z))
-    box(p["team"], (0.6, 0.6, 0.25), (0, 0, 3.05))
-    # Pumpjack.
-    box(p["scrap"], (0.25, 0.25, 0.7), (0.9, -0.6, 0.65))
-    box(p["hazard"], (1.2, 0.12, 0.12), (0.75, -0.6, 1.05), rot=(0, math.radians(15), 0))
-    box(p["rust"], (0.5, 0.5, 0.45), (-0.9, 0.7, 0.52))  # generator
-    cyl(p["purple_glow"], 0.12, 1.5, (0.3, 0.95, 0.4), rot=(0, math.radians(90), 0), verts=8)
-    cyl(p["purple_glow"], 0.1, 1.2, (-0.95, -0.2, 0.4), rot=(math.radians(90), 0, 0), verts=8)
+    top = 3.0
+    for x, y in legs:  # derrick legs leaning in to a point
+        pipe(p["scrap"], (x * 1.0, y * 1.0, 0.3), (x * 0.25, y * 0.25, top), r=0.05, verts=6)
+    for z in (0.9, 1.5, 2.1, 2.6):
+        f = 1 - (z - 0.3) / (top - 0.3) * 0.75
+        corners = [(x * f, y * f, z) for x, y in legs]
+        for i in range(4):
+            pipe(p["rust"], corners[i], corners[(i + 1) % 4], r=0.025, verts=5)
+    box(p["team"], (0.6, 0.6, 0.25), (0, 0, top + 0.1))
+    ball(p["red_glow"], 0.06, (0, 0, top + 0.3), seg=6, rings=4)
+    pipe(p["steel"], (0, 0, 0.3), (0, 0, top), r=0.04, verts=6)  # drill string
+    # Pumpjack: base, walking beam, horse head, counterweight.
+    box(p["scrap"], (0.2, 0.2, 0.8), (0.95, -0.55, 0.7))
+    box(p["hazard"], (1.3, 0.12, 0.12), (0.85, -0.55, 1.12), rot=(0, math.radians(12), 0))
+    box(p["scrap"], (0.18, 0.2, 0.35), (0.25, -0.55, 1.12))
+    cyl(p["rust"], 0.22, 0.14, (1.45, -0.55, 0.55), rot=(math.radians(90), 0, 0), verts=12)
+    # Storage tank and generator.
+    cyl(p["team"], 0.38, 0.9, (-0.85, 0.75, 0.75), verts=14)
+    cyl(p["scrap"], 0.4, 0.05, (-0.85, 0.75, 1.2), verts=14)
+    box(p["rust"], (0.5, 0.5, 0.45), (-0.95, -0.7, 0.52))
+    for i in range(3):
+        box(p["dark"], (0.02, 0.4, 0.04), (-0.69, -0.7, 0.42 + i * 0.1))
+    # Gas flare with its flame.
+    pipe(p["scrap"], (1.0, 0.9, 0.3), (1.0, 0.9, 2.0), r=0.05)
+    cone(p["orange_glow"], 0.1, 0.35, (1.0, 0.9, 2.2), verts=6)
+    # Glowing energy pipes into the ground.
+    pipe(p["purple_glow"], (0.3, 0.4, 0.35), (-0.85, 0.75, 0.35), r=0.09)
+    pipe(p["purple_glow"], (-0.3, -0.2, 0.35), (-0.95, -0.7, 0.35), r=0.07)
+    lamp(p, (0.0, -0.95, 1.2))
+
+
+# Mineral fields: several crystal clusters, so a mineral line never looks copy-pasted.
+def crystal_cluster(p, spec, base_size):
+    for x, y, h, r, tx, ty, mat_name in spec:
+        cone(p[mat_name], r, h, (x, y, h / 2 * 0.9), rot=(tx, ty, 0), verts=6)
+    rock_mesh(p, len(spec) * 7, base_size, (0, 0, 0.02), squash=0.35)
 
 
 def minerai(p):
-    for x, y, h, r, tilt in ((0, 0, 0.95, 0.2, 0), (0.2, 0.1, 0.65, 0.15, 0.35), (-0.18, 0.12, 0.55, 0.14, -0.4), (0.05, -0.2, 0.5, 0.13, 0.3)):
-        cone(p["crystal"], r, h, (x, y, h / 2), rot=(tilt, tilt * 0.5, 0), verts=5)
-    ball(p["rock"], 0.32, (0, 0, 0.02), scale=(1.2, 1.2, 0.35), seg=7, rings=4)
+    crystal_cluster(p, ((0, 0, 0.95, 0.2, 0, 0, "crystal"), (0.2, 0.1, 0.65, 0.15, 0.35, 0.1, "crystal_pale"), (-0.18, 0.12, 0.55, 0.14, -0.4, 0, "crystal"), (0.05, -0.2, 0.5, 0.13, 0.3, -0.2, "crystal_deep")), 0.32)
+
+
+def minerai_1(p):
+    crystal_cluster(p, ((0.08, 0.05, 1.1, 0.17, 0.1, 0.05, "crystal_pale"), (-0.15, -0.08, 0.8, 0.16, -0.25, -0.2, "crystal"), (0.22, -0.15, 0.45, 0.12, 0.4, 0.3, "crystal_deep")), 0.3)
+
+
+def minerai_2(p):
+    crystal_cluster(p, ((-0.1, 0.1, 0.7, 0.22, -0.15, 0.1, "crystal_deep"), (0.15, 0.0, 0.85, 0.18, 0.2, -0.1, "crystal"), (0.0, -0.22, 0.5, 0.13, 0.35, 0.0, "crystal_pale"), (-0.25, -0.1, 0.35, 0.1, -0.5, -0.3, "crystal"), (0.25, 0.22, 0.4, 0.1, 0.3, 0.45, "crystal_pale")), 0.36)
+
+
+def minerai_3(p):
+    crystal_cluster(p, ((0, 0, 0.6, 0.26, 0, 0, "crystal"), (0.2, 0.15, 0.4, 0.14, 0.45, 0.2, "crystal_deep"), (-0.2, 0.15, 0.45, 0.14, -0.3, 0.35, "crystal_pale")), 0.38)
 
 
 def puits(p):
-    cyl(p["rock"], 1.45, 0.16, (0, 0, 0.08), verts=14)
-    cyl(p["purple_glow"], 0.9, 0.18, (0, 0, 0.1), verts=14)
-    for i in range(7):
-        a = i / 7 * math.tau
-        ball(p["rock"], 0.22, (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.12), scale=(1, 0.8, 0.6), seg=6, rings=4)
-
+    cyl(p["rock"], 1.45, 0.16, (0, 0, 0.08), verts=16)
+    cyl(p["purple_glow"], 0.9, 0.18, (0, 0, 0.1), verts=16)
+    cyl(p["purple_deep"], 0.5, 0.2, (0, 0, 0.11), verts=12)
+    for i in range(9):
+        a = i / 9 * math.tau
+        rock_mesh(p, 40 + i, 0.22 + (i % 3) * 0.05, (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.1), squash=0.6)
 
 
 # ------------------------------------------------------------------ doodads (scenery, render only)
@@ -403,6 +544,7 @@ DOODADS = {
 MODELS = {
     "serf": serf, "auxiliaire": auxiliaire, "legionnaire": legionnaire, "soigneur": soigneur,
     "conseil": conseil, "grenier": grenier, "caserne": caserne, "mine": mine, "minerai": minerai, "puits": puits,
+    "minerai_1": minerai_1, "minerai_2": minerai_2, "minerai_3": minerai_3,
 }
 
 

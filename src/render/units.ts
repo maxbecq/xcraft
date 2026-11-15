@@ -9,6 +9,8 @@ import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
+/** Blender models for mineral fields; the renderer picks one per field. */
+export const MINERAL_VARIANTS = ['minerai', 'minerai_1', 'minerai_2', 'minerai_3'];
 const UNIT_SCALE = 1.35;
 
 const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra });
@@ -186,6 +188,11 @@ export class EntityRenderer {
         this.animate(v, e);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
+      if (e.type === 'minerai') {
+        // Fields shrink as they are mined out.
+        const body = v.model.children[0];
+        body.scale.setScalar(body.userData.base * (0.5 + 0.5 * Math.min(1, e.amount / (e.def as { amount: number }).amount)));
+      }
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
         v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
@@ -220,7 +227,13 @@ export class EntityRenderer {
     if (e.def.kind === 'building') this.onBuilding(e);
     const root = new Group();
     root.userData.id = e.id;
-    const body = model(e.type, teamMaterials[e.owner] ?? neutral);
+    // Mineral fields use one of several crystal clusters, turned and sized at random (stable per field).
+    const variant = e.type === 'minerai' ? MINERAL_VARIANTS[e.id % MINERAL_VARIANTS.length] : e.type;
+    const body = model(variant, teamMaterials[e.owner] ?? neutral);
+    if (e.type === 'minerai') {
+      body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
+      body.userData.base = 0.85 + ((e.id * 40503) % 100) / 330;
+    }
     const pivot = new Group(); // animated wrapper, so the model keeps its own transform
     pivot.add(body);
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.

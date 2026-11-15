@@ -8,7 +8,7 @@ import { Minimap } from './minimap';
 import { Effects } from './render/effects';
 import { Post } from './render/post';
 import { Overlay } from './render/overlay';
-import { EntityRenderer, loadModels } from './render/units';
+import { EntityRenderer, MINERAL_VARIANTS, loadModels } from './render/units';
 import { DEFS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -171,7 +171,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
 
-const ready = Promise.all([loadModels(Object.keys(DEFS)), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
+const ready = Promise.all([loadModels([...Object.keys(DEFS), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (!ATTRACT) {
   ready.then(start);
 } else {
