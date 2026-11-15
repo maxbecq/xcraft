@@ -63,6 +63,11 @@ Pas de moteur lourd (Unity/Godot) ni de librairie ECS : inutile pour la V1.
 
 État au 16/11/2026 : **M0 à M6 livrés**, V1 jouable en ligne (voir README).
 
+Faits en plus pendant la nuit du 15 au 16/11 :
+- IA en trois difficultés, IA contre IA en arrière-plan de l'écran titre.
+- Passe visuelle vers StarCraft II : post-traitement, terrain texturé à falaises rocheuses, décors, membres animés, particules, console d'interface en tôle.
+- Modèles Humains refaits dans la DA Mad Max / Terran.
+
 **M0 — Socle (½ j)** ✅
 Vite + TS + Three.js + Vitest, déploiement auto sur Pages, `Old_Project/` exclu de git.
 *Fini quand* : page vide déployée en ligne.
