@@ -33,6 +33,8 @@ export interface Entity {
   goal: { x: number; y: number } | null;
   path: number[];
   blockedTicks: number;
+  /** Replans in a row that went nowhere; build orders give up after a few. */
+  stuck: number;
   /** Buildings: top-left tile, ticks of construction left (0 = complete), training queue. */
   tx: number;
   ty: number;
@@ -126,7 +128,7 @@ export class World {
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0,
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
-      order: null, goal: null, path: [], blockedTicks: 0,
+      order: null, goal: null, path: [], blockedTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
     };
@@ -248,11 +250,15 @@ export class World {
 
   // ---------------------------------------------------------------- commands
 
+  /** The player's own entities named by a command, each once. */
   private owned(c: Command): Entity[] {
-    return c.ids.map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.owner === c.player);
+    return [...new Set(c.ids)].map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.owner === c.player);
   }
 
   private apply(c: Command): void {
+    // Commands will come from other machines one day: reject malformed numbers.
+    if (!Array.isArray(c.ids) || ('x' in c && !(Number.isSafeInteger(c.x) && Number.isSafeInteger(c.y)))) return;
+    if ('tx' in c && !(Number.isSafeInteger(c.tx) && Number.isSafeInteger(c.ty))) return;
     const mine = this.owned(c);
     const units = mine.filter((e) => e.def.kind === 'unit');
     const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);
@@ -267,7 +273,7 @@ export class World {
         this.smart(c, units, buildings);
         return;
       case 'attack': {
-        const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
+        const t = this.target(c);
         const fighters = units.filter((e) => 'attack' in e.def && e.def.attack);
         if (t && t.owner >= 0 && t.owner !== c.player) {
           for (const e of fighters) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
@@ -313,7 +319,7 @@ export class World {
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
-    const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
+    const t = this.target(c);
     for (const b of buildings) {
       if (!(b.def as BuildingDef).trains) continue;
       b.rally = { x: c.x, y: c.y };
@@ -339,6 +345,12 @@ export class World {
     this.moveGroup(movers, c.x, c.y);
   }
 
+  /** A command's target, only if the player can see it (no clicking enemies through the fog). */
+  private target(c: { player: number; target?: number }): Entity | undefined {
+    const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
+    return t && (t.owner < 0 || this.sees(c.player, t)) ? t : undefined;
+  }
+
   private moveGroup(units: Entity[], x: number, y: number): void {
     if (units.length === 0) return;
     // A compact group keeps its formation; a spread-out group converges on the point.
@@ -360,6 +372,7 @@ export class World {
     e.goal = null;
     e.path = [];
     e.blockedTicks = 0;
+    e.stuck = 0;
   }
 
   // ---------------------------------------------------------------- placement
@@ -391,6 +404,8 @@ export class World {
   // ---------------------------------------------------------------- unit behaviour
 
   private think(e: Entity): void {
+    // Caught under a new building (with or without orders): walk out first.
+    if (!this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     const o = e.order;
     if (!o) {
       if ((this.tick + e.id) % 4 === 0) this.acquire(e);
@@ -408,6 +423,10 @@ export class World {
         return;
       case 'build': {
         const def = DEFS[o.type] as BuildingDef;
+        if (e.stuck > 5) {
+          this.say(e.owner, 'Emplacement inaccessible.');
+          return this.setOrder(e, null);
+        }
         if (!this.reachRect(e, o.tx, o.ty, def.size)) {
           this.goNear(e, o.tx, o.ty, def.size);
           return;
@@ -425,7 +444,7 @@ export class World {
       }
       case 'construct': {
         const b = this.entities.get(o.target);
-        if (!b || b.buildLeft === 0) return this.setOrder(e, null);
+        if (!b || b.buildLeft === 0 || e.stuck > 5) return this.setOrder(e, null);
         if (!this.reachRect(e, b.tx, b.ty, (b.def as BuildingDef).size)) {
           this.goNear(e, b.tx, b.ty, (b.def as BuildingDef).size);
           return;
@@ -620,7 +639,7 @@ export class World {
     let best: Entity | undefined;
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
-      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource') continue;
+      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource' || t.hp <= 0) continue;
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const armed = t.def.kind === 'unit' && !!(t.def as UnitDef).attack && !(t.def as UnitDef).worker;
@@ -636,7 +655,7 @@ export class World {
     let worst = 1;
     const range = (e.def as UnitDef).sight * FP;
     for (const t of this.entities.values()) {
-      if (t === e || t.owner !== e.owner || t.def.kind !== 'unit' || t.hp >= t.maxHp) continue;
+      if (t === e || t.owner !== e.owner || t.def.kind !== 'unit' || t.hp >= t.maxHp || t.hp <= 0) continue;
       if (dist(e.x, e.y, t.x, t.y) > range) continue;
       const f = t.hp / t.maxHp;
       if (f < worst) [best, worst] = [t, f];
@@ -668,7 +687,7 @@ export class World {
   private spawnBeside(type: string, b: Entity): Entity {
     const size = (b.def as BuildingDef).size;
     const toward = b.rally ?? { x: b.x + FP, y: b.y + FP };
-    let best: [number, number] = [b.tx + size, b.ty + size];
+    let best = this.grid.nearestOpen(b.tx + size, b.ty + size, this.grid.level(b.tx, b.ty)); // walled in: closest open tile
     let bestD = Infinity;
     for (let y = b.ty - 1; y <= b.ty + size; y++) {
       for (let x = b.tx - 1; x <= b.tx + size; x++) {
@@ -699,7 +718,10 @@ export class World {
     const d = dist(e.x, e.y, nx, ny);
     const s = Math.min(e.speed, d);
     if (d === 0 || !this.tryMove(e, e.x + idiv((nx - e.x) * s, d), e.y + idiv((ny - e.y) * s, d))) {
-      if (++e.blockedTicks > 10) e.goal = null;
+      if (++e.blockedTicks > 10) {
+        e.goal = null;
+        e.stuck++;
+      }
     }
   }
 
@@ -764,13 +786,10 @@ export class World {
     const x = tileOf(e.x);
     const y = tileOf(e.y);
     if (this.grid.open(x, y)) return;
-    const [ox, oy] = this.grid.nearestOpen(x, y);
+    const [ox, oy] = this.grid.nearestOpen(x, y, this.grid.level(x, y));
     const d = dist(e.x, e.y, ox * FP + FP / 2, oy * FP + FP / 2);
     const s = Math.min(e.speed, d);
-    if (d > 0) {
-      e.x += idiv((ox * FP + FP / 2 - e.x) * s, d);
-      e.y += idiv((oy * FP + FP / 2 - e.y) * s, d);
-    }
+    if (d > 0) this.tryMove(e, e.x + idiv((ox * FP + FP / 2 - e.x) * s, d), e.y + idiv((oy * FP + FP / 2 - e.y) * s, d), true);
   }
 
   private touchesIdleFriend(e: Entity): boolean {
@@ -781,13 +800,13 @@ export class World {
     return false;
   }
 
-  /** Moves if the step crosses no cliff or obstacle. */
-  private tryMove(e: Entity, nx: number, ny: number): boolean {
+  /** Moves if the step crosses no cliff or obstacle (`throughBuildings`: cliffs only). */
+  private tryMove(e: Entity, nx: number, ny: number, throughBuildings = false): boolean {
     const ax = tileOf(e.x);
     const ay = tileOf(e.y);
     const bx = tileOf(nx);
     const by = tileOf(ny);
-    if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by))) return false;
+    if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings))) return false;
     e.x = nx;
     e.y = ny;
     return true;

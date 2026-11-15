@@ -47,14 +47,18 @@ export class Grid {
     return Math.min(this.corners[c], this.corners[c + 1], this.corners[c + 2], this.corners[c + 3]);
   }
 
-  /** Can a ground unit step between two adjacent tiles (8-neighbourhood, no corner cutting)? */
-  canStep(ax: number, ay: number, bx: number, by: number): boolean {
+  /**
+   * Can a ground unit step between two adjacent tiles (8-neighbourhood, no corner cutting)?
+   * `throughBuildings` ignores buildings (to walk out from under one) but never cliffs.
+   */
+  canStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
     // Leaving a blocked tile is allowed, so units caught under a new building can walk out.
-    if (!this.open(bx, by) || !this.inside(ax, ay)) return false;
+    if (!this.inside(ax, ay) || !this.inside(bx, by) || (!throughBuildings && !this.open(bx, by))) return false;
     const dx = bx - ax;
     const dy = by - ay;
     if (dx !== 0 && dy !== 0) {
-      return this.canStep(ax, ay, bx, ay) && this.canStep(bx, ay, bx, by) && this.canStep(ax, ay, ax, by) && this.canStep(ax, by, bx, by);
+      const t = throughBuildings;
+      return this.canStep(ax, ay, bx, ay, t) && this.canStep(bx, ay, bx, by, t) && this.canStep(ax, ay, ax, by, t) && this.canStep(ax, by, bx, by, t);
     }
     // Tiles connect when the corners along their shared edge are at the same level.
     const a = (ay * this.width + ax) * 4;

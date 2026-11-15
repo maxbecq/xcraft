@@ -139,7 +139,7 @@ export class Input {
     let best: Entity | undefined;
     let bestD = PICK_PX;
     for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit') continue;
+      if (e.def.kind !== 'unit' || !this.world.sees(this.player, e)) continue;
       const s = this.screenOf(e);
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < bestD) [best, bestD] = [e, d];
