@@ -40,6 +40,8 @@ export interface Entity {
   queue: string[];
   trainLeft: number;
   rally: { x: number; y: number } | null;
+  /** Rally on a mineral field: new workers start mining it. */
+  rallyTarget: number;
   /** Workers: minerals carried. */
   carry: number;
   /** Resources: amount left, and the worker currently mining. */
@@ -54,6 +56,8 @@ export interface Player {
   id: number;
   minerals: number;
   energy: number;
+  /** Percentage of harvested minerals actually banked (AI difficulty). */
+  handicap: number;
 }
 
 export type Command =
@@ -109,7 +113,7 @@ export class World {
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
-    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, minerals: 0, energy: 0 }));
+    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, minerals: 0, energy: 0, handicap: 100 }));
     this.vision = this.players.map(() => new Vision(this.grid));
   }
 
@@ -123,7 +127,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0,
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
     };
     if (size) {
@@ -309,8 +313,12 @@ export class World {
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
-    for (const b of buildings) if ((b.def as BuildingDef).trains) b.rally = { x: c.x, y: c.y };
     const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
+    for (const b of buildings) {
+      if (!(b.def as BuildingDef).trains) continue;
+      b.rally = { x: c.x, y: c.y };
+      b.rallyTarget = t?.type === 'minerai' ? t.id : 0;
+    }
     const movers: Entity[] = [];
     for (const e of units) {
       const worker = (e.def as UnitDef).worker;
@@ -441,7 +449,8 @@ export class World {
       if (!home) return this.setOrder(e, null);
       const size = (home.def as BuildingDef).size;
       if (!this.reachRect(e, home.tx, home.ty, size)) return void this.goNear(e, home.tx, home.ty, size);
-      this.players[e.owner].minerals += e.carry;
+      const p = this.players[e.owner];
+      p.minerals += idiv(e.carry * p.handicap, 100);
       e.carry = 0;
       o.phase = 'go';
       e.goal = null;
@@ -647,7 +656,10 @@ export class World {
     if (b.queue.length && --b.trainLeft <= 0) {
       const type = b.queue.shift()!;
       const u = this.spawnBeside(type, b);
-      if (b.rally) this.setOrder(u, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
+      const field = (u.def as UnitDef).worker && (!b.rally || b.rallyTarget) ? (this.entities.get(b.rallyTarget) ?? this.nearestField(u)) : undefined;
+      // Workers go mining by default (or on the rallied field); others walk to the rally point.
+      if (field) this.setOrder(u, { kind: 'gather', target: field.id, phase: 'go', timer: 0 });
+      else if (b.rally) this.setOrder(u, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
       if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UnitDef).buildTime);
     }
   }

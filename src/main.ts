@@ -1,5 +1,5 @@
 import { Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, WebGLRenderer } from 'three';
-import { AI } from './ai/ai';
+import { AI, DIFFICULTY } from './ai/ai';
 import { Audio } from './audio';
 import { CameraRig } from './camera';
 import { Hud } from './game/hud';
@@ -34,6 +34,7 @@ const world = createMatch();
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 const ais = SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
+if (!SPECTATE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
 const map = world.map;
 const scene = new Scene();
 scene.background = new Color(0x0d0f12);
@@ -116,10 +117,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
 let acc = 0;
-// Title screen, help and music toggle.
+// Title screen and help.
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="help">? Aide</button><button class="tool" data-t="music">♪ Musique</button>';
+tools.innerHTML = '<button class="tool" data-t="help">? Aide</button>';
 const help = document.createElement('div');
 help.className = 'help';
 help.hidden = true;
@@ -135,7 +136,6 @@ document.body.append(tools, help);
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).dataset.t;
   if (t === 'help') help.hidden = !help.hidden;
-  if (t === 'music') (e.target as HTMLElement).style.opacity = audio.toggleMusic() ? '1' : '0.5';
 });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'F1') {
@@ -152,17 +152,15 @@ if (SPECTATE || params.has('play')) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Les Humains — V1</p>
-    <button data-m="play">Jouer contre l'IA</button>
+    <button data-m="easy">Jouer — IA facile</button>
+    <button data-m="normal">Jouer — IA normale</button>
+    <button data-m="hard">Jouer — IA difficile</button>
     <button data-m="watch">Regarder IA contre IA</button>`;
   document.body.append(menu);
-  menu.addEventListener('click', async (e) => {
+  menu.addEventListener('click', (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'watch') location.search = '?spectate&speed=2';
-    if (m !== 'play') return;
-    audio.start();
-    menu.remove();
-    await ready;
-    start();
+    else if (m) location.search = `?play&ai=${m}`;
   });
 }
 

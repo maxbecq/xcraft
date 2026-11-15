@@ -1,4 +1,4 @@
-// All sounds are synthesised with WebAudio: no audio files.
+// Sound effects, synthesised with WebAudio: no audio files. Music is handled separately.
 
 export type Sfx = 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click';
 
@@ -7,10 +7,8 @@ const MAX_PER_FRAME = 4;
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
-  private musicGain!: GainNode;
   private played = 0;
   private noise!: AudioBuffer;
-  musicOn = true;
 
   /** Must be called from a user gesture (browsers keep audio locked until then). */
   start(): void {
@@ -19,24 +17,14 @@ export class Audio {
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.5;
     this.master.connect(this.ctx.destination);
-    this.musicGain = this.ctx.createGain();
-    this.musicGain.gain.value = 0.12;
-    this.musicGain.connect(this.master);
     this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate / 4, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    this.music();
   }
 
   /** Call once per frame to reset the per-frame sound budget. */
   frame(): void {
     this.played = 0;
-  }
-
-  toggleMusic(): boolean {
-    this.musicOn = !this.musicOn;
-    if (this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn ? 0.12 : 0, this.ctx.currentTime, 0.3);
-    return this.musicOn;
   }
 
   play(sfx: Sfx, volume = 1): void {
@@ -123,35 +111,5 @@ export class Audio {
     o.connect(g);
     o.start(t);
     o.stop(t + dur);
-  }
-
-  /** A slow modal pad (D dorian), changing chord every 8 seconds. */
-  private music(): void {
-    const ctx = this.ctx!;
-    const chords = [[146.8, 220, 293.7, 349.2], [130.8, 196, 261.6, 329.6], [116.5, 174.6, 233.1, 293.7], [130.8, 196, 246.9, 329.6]];
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 900;
-    filter.connect(this.musicGain);
-    const voices = chords[0].map((f, i) => {
-      const o = ctx.createOscillator();
-      o.type = i % 2 ? 'triangle' : 'sawtooth';
-      o.frequency.value = f;
-      o.detune.value = (i - 1.5) * 6;
-      const g = ctx.createGain();
-      g.gain.value = i === 0 ? 0.35 : 0.18;
-      o.connect(g).connect(filter);
-      o.start();
-      return o;
-    });
-    let step = 0;
-    const next = () => {
-      if (!this.ctx) return;
-      step = (step + 1) % chords.length;
-      const t = ctx.currentTime;
-      voices.forEach((o, i) => o.frequency.setTargetAtTime(chords[step][i], t, 1.5));
-      filter.frequency.setTargetAtTime(700 + 400 * Math.random(), t, 3);
-    };
-    setInterval(next, 8000);
   }
 }

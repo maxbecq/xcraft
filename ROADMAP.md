@@ -15,6 +15,15 @@
 
 **Leçons de Battledrones** (Simon Willison, oct. 2026) : TypeScript + Three.js, simulation déterministe séparée du rendu, site statique (PWA), modèles 3D faits en code au début, matchs IA-vs-IA automatisés pour équilibrer, multijoueur plus tard via un petit relais WebSocket.
 
+## 1 bis. Direction artistique
+
+Base commune : vue isométrique 3D façon SC1, low-poly lisible, couleur d'équipe sur les grandes surfaces.
+
+- **Humains** : low tech et débrouillards, mélange de Mad Max et des Terrans. Tôle rouillée, plaques soudées, récup', bidons, tuyaux, fumées. L'alchimie de la notice devient de la chimie bricolée : fioles, réservoirs, flammes de napalm.
+- **Isdaris** : science-fiction classique des années 1930 à 1950, design épuré et Art déco. Lignes courbes élégantes, chromes, grande place à la lumière et aux rayons.
+- **Dieux** : entités magiques, mythologie et fantasy façon Warcraft III. Matériaux nobles, runes, auras, couleurs saturées.
+- **Z** : robotique très sophistiquée et technologique. Insectes métalliques, carbone et néons, articulations précises, creep de câbles.
+
 ## 2. Périmètre V1 (très simple)
 
 - **1 camp : Humains**, en miroir, contre **1 IA** scriptée.

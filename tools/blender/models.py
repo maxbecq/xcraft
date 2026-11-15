@@ -66,6 +66,15 @@ def palette():
         "purple_glow": mat("purple_glow", 0xB27BFF, emission=0x7A30FF),
         "crystal": mat("crystal", 0x56C8FF, emission=0x0F5A99, rough=0.2),
         "rock": mat("rock", 0x6E655A),
+        "rust": mat("rust", 0x8E4E2C, metallic=0.4, rough=0.9),
+        "scrap": mat("scrap", 0x7D786C, metallic=0.6, rough=0.6),
+        "hazard": mat("hazard", 0xD9A420, rough=0.7),
+        "khaki": mat("khaki", 0x8F8460),
+        "coat": mat("coat", 0xBDB49A),
+        "rubber": mat("rubber", 0x2A2724, rough=0.95),
+        "concrete": mat("concrete", 0x8E8a80),
+        "glass": mat("glass", 0x9FD8E0, metallic=0.2, rough=0.1),
+        "dark_glass": mat("dark_glass", 0x1C2A30, metallic=0.3, rough=0.15),
     }
 
 
@@ -100,111 +109,179 @@ def ball(m, r, loc, scale=(1, 1, 1), seg=10, rings=6, name="ball"):
     return _finish(o, m, name)
 
 
-# ------------------------------------------------------------------ units
+# ------------------------------------------------------------------ Humans: low tech, scavenged, Mad Max meets Terrans
 
-def humanoid(p, tunic, height=1.0, bulk=1.0):
-    """Legs, torso, arms and head. Returns the shoulder height."""
+def humanoid(p, outfit, height=1.0, bulk=1.0):
+    """Boots, legs, torso, arms and head. Returns the head height."""
     h = height
     for x in (-0.07, 0.07):
-        box(p["dark"], (0.09 * bulk, 0.1, 0.3 * h), (x * bulk, 0, 0.15 * h))
-    box(tunic, (0.26 * bulk, 0.17 * bulk, 0.3 * h), (0, 0, 0.45 * h))
-    box(p["leather"], (0.27 * bulk, 0.18 * bulk, 0.04), (0, 0, 0.32 * h))
+        box(p["rubber"], (0.1 * bulk, 0.13, 0.08), (x * bulk, -0.02, 0.04))  # boots
+        box(outfit, (0.09 * bulk, 0.1, 0.24 * h), (x * bulk, 0, 0.19 * h))
+    box(outfit, (0.26 * bulk, 0.17 * bulk, 0.3 * h), (0, 0, 0.45 * h))
+    box(p["leather"], (0.27 * bulk, 0.18 * bulk, 0.045), (0, 0, 0.32 * h))
     for x in (-0.175, 0.175):
-        box(tunic, (0.07 * bulk, 0.08, 0.27 * h), (x * bulk, -0.03, 0.46 * h), rot=(0.35, 0, 0))
+        box(outfit, (0.07 * bulk, 0.08, 0.27 * h), (x * bulk, -0.03, 0.46 * h), rot=(0.35, 0, 0))
     ball(p["skin"], 0.085, (0, 0, 0.7 * h))
-    return 0.58 * h
+    return 0.7 * h
+
+
+def goggles(p, z, glass="glass"):
+    box(p["rubber"], (0.18, 0.04, 0.035), (0, -0.07, z))
+    for x in (-0.04, 0.04):
+        cyl(p[glass], 0.028, 0.03, (x, -0.09, z), rot=(math.radians(90), 0, 0), verts=8)
 
 
 def serf(p):
-    humanoid(p, p["cloth"])
-    cone(p["team"], 0.1, 0.14, (0, 0, 0.8), verts=6)  # hood
-    box(p["linen"], (0.18, 0.12, 0.16), (0, 0.13, 0.48))  # sack on the back
-    cyl(p["wood"], 0.018, 0.5, (0.2, -0.12, 0.42), rot=(math.radians(-30), 0, 0), verts=6)  # pick handle
-    box(p["steel"], (0.2, 0.03, 0.04), (0.2, -0.24, 0.63))  # pick head
+    """Scavenger: khaki overalls, goggles, scrap backpack, big wrench."""
+    head = humanoid(p, p["khaki"])
+    goggles(p, head + 0.02)
+    box(p["team"], (0.19, 0.18, 0.04), (0, 0, head + 0.06))  # bandana
+    box(p["scrap"], (0.2, 0.12, 0.22), (0, 0.13, 0.5))  # scrap pack
+    cyl(p["rust"], 0.06, 0.2, (0.07, 0.2, 0.62), verts=8)  # tin can
+    box(p["hazard"], (0.21, 0.02, 0.04), (0, 0.195, 0.45))
+    cyl(p["steel"], 0.02, 0.42, (0.2, -0.14, 0.42), rot=(math.radians(-30), 0, 0), verts=6)  # wrench
+    box(p["steel"], (0.08, 0.03, 0.06), (0.2, -0.25, 0.6))
 
 
 def auxiliaire(p):
-    humanoid(p, p["team"])
-    box(p["bronze"], (0.24, 0.05, 0.2), (0, -0.09, 0.5))  # breastplate
-    ball(p["bronze"], 0.1, (0, 0, 0.74), scale=(1, 1, 0.8))  # helmet
-    box(p["team"], (0.03, 0.18, 0.06), (0, 0.01, 0.83))  # crest
-    # Chemical rifle held forward, with a glowing vial.
-    cyl(p["steel"], 0.025, 0.55, (0.12, -0.3, 0.5), rot=(math.radians(90), 0, 0), verts=8)
-    cyl(p["green_glow"], 0.04, 0.12, (0.12, -0.12, 0.56), rot=(math.radians(90), 0, 0), verts=8)
+    """Rifleman: mismatched plates, gas mask, pipe rifle with a chemical tank."""
+    head = humanoid(p, p["khaki"])
+    box(p["team"], (0.25, 0.05, 0.2), (0, -0.09, 0.5))  # painted chest plate
+    box(p["rust"], (0.1, 0.12, 0.06), (0.18, 0, 0.6))  # odd shoulder plate
+    ball(p["scrap"], 0.1, (0, 0.01, head + 0.03), scale=(1, 1, 0.75), seg=8, rings=5)  # helmet
+    box(p["rubber"], (0.12, 0.06, 0.09), (0, -0.08, head - 0.02))  # gas mask
+    cyl(p["scrap"], 0.03, 0.06, (0, -0.13, head - 0.05), rot=(math.radians(90), 0, 0), verts=8)  # filter
+    cyl(p["scrap"], 0.03, 0.58, (0.12, -0.3, 0.5), rot=(math.radians(90), 0, 0), verts=6)  # pipe barrel
+    box(p["wood"], (0.05, 0.16, 0.08), (0.12, -0.02, 0.46))  # stock
+    cyl(p["green_glow"], 0.045, 0.14, (0.17, -0.18, 0.5), rot=(math.radians(90), 0, 0), verts=8)  # chem tank
 
 
 def legionnaire(p):
-    humanoid(p, p["team"], height=1.08, bulk=1.25)
-    box(p["steel"], (0.33, 0.06, 0.24), (0, -0.12, 0.52))  # heavy plate
-    ball(p["steel"], 0.11, (0, 0, 0.78), scale=(1, 1, 0.85))
-    for x in (-0.06, 0.06):  # alchemical tubes on the back
-        cyl(p["orange_glow"], 0.025, 0.3, (x, 0.13, 0.55), verts=6)
-    # Portable saw, held forward.
-    cyl(p["steel"], 0.2, 0.025, (0.24, -0.28, 0.45), rot=(0, math.radians(90), 0), verts=16)
-    cyl(p["dark"], 0.05, 0.06, (0.24, -0.28, 0.45), rot=(0, math.radians(90), 0), verts=8)
+    """Brute in welded scrap armour, spiked pauldrons, buzz saw and smoking exhausts."""
+    head = humanoid(p, p["rubber"], height=1.08, bulk=1.25)
+    box(p["scrap"], (0.34, 0.08, 0.26), (0, -0.12, 0.52))
+    box(p["hazard"], (0.34, 0.085, 0.04), (0, -0.12, 0.4))
+    for x in (-0.24, 0.24):
+        box(p["team"], (0.16, 0.2, 0.08), (x, 0, 0.66), rot=(0, x * 1.2, 0))  # pauldrons
+        cone(p["steel"], 0.035, 0.12, (x * 1.1, 0, 0.75), verts=5)  # spikes
+    box(p["rust"], (0.16, 0.16, 0.14), (0, 0, head + 0.02))  # bucket helmet
+    box(p["dark_glass"], (0.12, 0.02, 0.03), (0, -0.081, head + 0.03))  # visor slit
+    for x in (-0.07, 0.07):
+        cyl(p["scrap"], 0.03, 0.28, (x, 0.14, 0.65), verts=6)  # exhausts
+        cyl(p["orange_glow"], 0.032, 0.04, (x, 0.14, 0.8), verts=6)
+    cyl(p["steel"], 0.21, 0.025, (0.27, -0.3, 0.45), rot=(0, math.radians(90), 0), verts=14)  # buzz saw
+    cyl(p["hazard"], 0.06, 0.05, (0.27, -0.3, 0.45), rot=(0, math.radians(90), 0), verts=8)
+    box(p["scrap"], (0.06, 0.22, 0.06), (0.27, -0.14, 0.45))
 
 
 def soigneur(p):
-    humanoid(p, p["linen"])
-    box(p["team"], (0.06, 0.19, 0.3), (0.06, 0, 0.47), rot=(0, math.radians(25), 0))  # sash
-    cone(p["linen"], 0.11, 0.18, (0, 0, 0.82), verts=8)  # hood
-    box(p["leather"], (0.14, 0.08, 0.1), (-0.15, 0.06, 0.36))  # satchel
-    for x in (-0.19, -0.15, -0.11):
-        cyl(p["cyan_glow"], 0.018, 0.08, (x, 0.06, 0.44), verts=6)
-    # Energy crossbow.
-    box(p["wood"], (0.05, 0.36, 0.05), (0.12, -0.24, 0.5))
-    box(p["steel"], (0.32, 0.04, 0.03), (0.12, -0.38, 0.5))
+    """Field medic: dirty coat, goggles, team armband, back tank and injector crossbow."""
+    head = humanoid(p, p["coat"])
+    goggles(p, head + 0.02, glass="cyan_glow")
+    box(p["team"], (0.08, 0.09, 0.07), (-0.19, -0.03, 0.55))  # armband
+    cyl(p["scrap"], 0.07, 0.3, (0, 0.14, 0.5), verts=8)  # back tank
+    cyl(p["cyan_glow"], 0.02, 0.32, (0.08, 0.13, 0.5), verts=6)
+    box(p["wood"], (0.05, 0.34, 0.05), (0.13, -0.24, 0.5))  # crossbow stock
+    box(p["scrap"], (0.32, 0.04, 0.03), (0.13, -0.37, 0.5))
+    cyl(p["cyan_glow"], 0.025, 0.1, (0.13, -0.42, 0.53), rot=(math.radians(90), 0, 0), verts=6)  # injector bolt
 
 
-# ------------------------------------------------------------------ buildings
+def corrugated(m, size, loc, ribs_along="x"):
+    """A sheet of corrugated metal: a plate with raised ribs."""
+    sx, sy, sz = size
+    box(m, size, loc)
+    n = max(2, int((sx if ribs_along == "x" else sy) / 0.25))
+    for i in range(n):
+        t = -0.5 + (i + 0.5) / n
+        if ribs_along == "x":
+            box(m, (0.06, sy, sz + 0.05), (loc[0] + t * sx, loc[1], loc[2]))
+        else:
+            box(m, (sx, 0.06, sz + 0.05), (loc[0], loc[1] + t * sy, loc[2]))
+
+
+def container(p, size, loc, paint):
+    sx, sy, sz = size
+    box(paint, size, loc)
+    for i in range(int(sx / 0.3)):  # ribbed sides
+        x = loc[0] - sx / 2 + 0.15 + i * 0.3
+        box(paint, (0.05, sy + 0.04, sz - 0.1), (x, loc[1], loc[2]))
+    box(p["rust"], (sx + 0.02, sy + 0.02, 0.06), (loc[0], loc[1], loc[2] + sz / 2))
+
 
 def conseil(p):
-    """Council of Aldermen: a stepped temple with a team-coloured roof and braziers."""
-    box(p["stone_dark"], (4.9, 4.9, 0.3), (0, 0, 0.15))
-    box(p["stone"], (4.4, 4.4, 0.2), (0, 0, 0.4))
-    box(p["stone"], (3.0, 2.6, 1.5), (0, 0, 1.25))
-    for i in range(5):
-        for x, y in ((-1.9 + i * 0.95, -1.9), (-1.9 + i * 0.95, 1.9), (-1.9, -1.9 + i * 0.95), (1.9, -1.9 + i * 0.95)):
-            cyl(p["linen"], 0.13, 1.6, (x, y, 1.3), verts=10)
-    box(p["stone"], (4.2, 4.2, 0.2), (0, 0, 2.2))
-    # Gabled roof: two slanted planes meeting at a ridge along X.
-    for side in (-1, 1):
-        box(p["team"], (4.4, 2.45, 0.14), (0, side * 1.08, 2.78), rot=(-side * math.radians(24), 0, 0))
-    box(p["dark"], (0.8, 0.1, 1.0), (0, -1.31, 1.0))  # door
-    for x in (-1.5, 1.5):  # braziers
-        cyl(p["bronze"], 0.18, 0.5, (x, -2.25, 0.75), verts=8, r2=0.25)
-        cone(p["orange_glow"], 0.16, 0.35, (x, -2.25, 1.15), verts=6)
+    """Command post: stacked shipping containers, a watchtower, antenna mast and tyre walls."""
+    box(p["concrete"], (4.9, 4.9, 0.2), (0, 0, 0.1))
+    container(p, (3.2, 1.3, 1.1), (-0.4, 0.6, 0.75), p["team"])
+    container(p, (3.0, 1.3, 1.1), (0.2, -0.75, 0.75), p["rust"])
+    container(p, (2.4, 1.3, 1.0), (-0.1, 0.0, 1.85), p["scrap"])
+    box(p["hazard"], (0.9, 0.06, 0.6), (0.2, -1.42, 0.6))  # door panel
+    box(p["dark_glass"], (0.7, 0.04, 0.25), (-0.1, -0.66, 2.0))  # window
+    # Watchtower on stilts.
+    for x, y in ((1.35, 1.0), (2.05, 1.0), (1.35, 1.7), (2.05, 1.7)):
+        cyl(p["scrap"], 0.05, 2.6, (x, y, 1.3), verts=6)
+    box(p["team"], (1.0, 1.0, 0.55), (1.7, 1.35, 2.75))
+    corrugated(p["rust"], (1.2, 1.2, 0.06), (1.7, 1.35, 3.1))
+    # Antenna and dish.
+    cyl(p["steel"], 0.03, 2.2, (-1.5, 1.4, 2.9), verts=6)
+    cone(p["scrap"], 0.35, 0.2, (-1.5, 1.4, 4.0), rot=(math.radians(-60), 0, 0), verts=10)
+    cyl(p["orange_glow"], 0.05, 0.05, (-1.5, 1.4, 4.02), verts=6)
+    # Tyre stacks and barrels.
+    for x, y in ((-2.0, -1.9), (-1.4, -2.0), (2.0, -1.9)):
+        for k in range(3):
+            cyl(p["rubber"], 0.25, 0.12, (x, y, 0.27 + k * 0.13), verts=10)
+    for x in (1.0, 1.35):
+        cyl(p["hazard"], 0.16, 0.45, (x, -2.0, 0.42), verts=10)
+    cyl(p["orange_glow"], 0.14, 0.05, (-1.4, -2.0, 0.67), verts=8)  # fire in the tyres
 
 
 def grenier(p):
-    cyl(p["wood"], 0.78, 1.2, (0, 0, 0.6), verts=12)
-    cyl(p["team"], 0.8, 0.12, (0, 0, 1.0), verts=12)
-    cone(p["thatch"], 0.95, 0.8, (0, 0, 1.6), verts=12)
-    box(p["dark"], (0.35, 0.1, 0.55), (0, -0.76, 0.28))
+    """Supply depot: a tower of welded drums with a team-painted tank on top."""
+    box(p["concrete"], (1.9, 1.9, 0.15), (0, 0, 0.075))
+    for x, y in ((-0.45, -0.45), (0.45, -0.45), (0.45, 0.45), (-0.45, 0.45)):
+        cyl(p["rust"], 0.3, 0.75, (x, y, 0.52), verts=10)
+        cyl(p["scrap"], 0.31, 0.05, (x, y, 0.7), verts=10)
+    cyl(p["team"], 0.75, 0.7, (0, 0, 1.25), verts=12)
+    cyl(p["hazard"], 0.76, 0.08, (0, 0, 1.0), verts=12)
+    cone(p["scrap"], 0.8, 0.3, (0, 0, 1.75), verts=12)
+    cyl(p["steel"], 0.04, 0.6, (0.5, -0.5, 2.0), verts=6)
 
 
 def caserne(p):
-    box(p["stone"], (2.8, 2.8, 1.3), (0, 0, 0.65))
-    for i in range(6):
-        t = -1.25 + i * 0.5
-        for x, y in ((t, -1.3), (t, 1.3), (-1.3, t), (1.3, t)):
-            box(p["stone_dark"], (0.25, 0.25, 0.3), (x, y, 1.45))
-    box(p["dark"], (0.8, 0.2, 0.9), (0, -1.35, 0.45))  # gate
-    for x in (-0.9, 0.9):
-        cyl(p["wood"], 0.035, 1.6, (x, -1.0, 2.0), verts=6)
-        box(p["team"], (0.45, 0.03, 0.6), (x + 0.23, -1.0, 2.45))  # banner
-    box(p["team"], (2.2, 2.2, 0.08), (0, 0, 1.32))  # courtyard roof
+    """Barracks: a bunker of scrap walls behind sandbags, with a corrugated roof and spikes."""
+    box(p["concrete"], (2.9, 2.9, 0.15), (0, 0, 0.075))
+    box(p["scrap"], (2.4, 2.4, 1.1), (0, 0, 0.7))
+    corrugated(p["team"], (2.6, 2.6, 0.08), (0, 0, 1.3))
+    box(p["dark"], (0.9, 0.1, 0.8), (0, -1.22, 0.55))  # gate
+    box(p["hazard"], (1.0, 0.12, 0.1), (0, -1.23, 1.0))
+    for i in range(11):  # sandbag ring
+        a = i / 11 * math.tau
+        x, y = math.cos(a) * 1.35, math.sin(a) * 1.35
+        if y < -1.0 and abs(x) < 0.6:
+            continue  # keep the gate clear
+        ball(p["khaki"], 0.24, (x, y, 0.25), scale=(1.2, 0.7, 0.45), seg=8, rings=4)
+    for x, y in ((-1.2, -1.2), (1.2, -1.2), (1.2, 1.2), (-1.2, 1.2)):
+        cone(p["steel"], 0.06, 0.45, (x, y, 1.55), verts=5)  # spikes
+    cyl(p["steel"], 0.03, 1.2, (0.9, 0.9, 1.9), verts=6)
+    box(p["team"], (0.5, 0.03, 0.32), (1.15, 0.9, 2.3))  # flag
 
 
 def mine(p):
-    cyl(p["stone_dark"], 1.45, 0.5, (0, 0, 0.25), verts=16)
-    box(p["stone"], (1.1, 1.1, 2.0), (0, 0, 1.4))
-    box(p["team"], (1.25, 1.25, 0.25), (0, 0, 2.5))
-    for x, y in ((-0.9, -0.9), (0.9, -0.9), (0.9, 0.9), (-0.9, 0.9)):  # derrick legs
-        cyl(p["wood"], 0.05, 2.6, (x * 0.8, y * 0.8, 1.3), verts=6)
-    cyl(p["purple_glow"], 0.12, 1.4, (0.95, -0.4, 0.9), verts=8)
-    cyl(p["purple_glow"], 0.12, 1.0, (-0.95, 0.5, 0.75), verts=8)
-    cyl(p["steel"], 0.35, 0.08, (0, -0.6, 1.9), rot=(math.radians(90), 0, 0), verts=12)  # gear
+    """Energy rig: a lattice derrick over the well, a pumpjack and glowing pipes."""
+    cyl(p["concrete"], 1.45, 0.3, (0, 0, 0.15), verts=16)
+    legs = ((-0.6, -0.6), (0.6, -0.6), (0.6, 0.6), (-0.6, 0.6))
+    for x, y in legs:  # leaning derrick legs
+        cyl(p["scrap"], 0.05, 2.8, (x * 0.7, y * 0.7, 1.6), rot=(y * 0.25, -x * 0.25, 0), verts=6)
+    for z in (1.0, 1.8, 2.5):
+        s = 1.2 - z * 0.3
+        box(p["rust"], (s, 0.06, 0.06), (0, -s / 2, z))
+        box(p["rust"], (s, 0.06, 0.06), (0, s / 2, z))
+    box(p["team"], (0.6, 0.6, 0.25), (0, 0, 3.05))
+    # Pumpjack.
+    box(p["scrap"], (0.25, 0.25, 0.7), (0.9, -0.6, 0.65))
+    box(p["hazard"], (1.2, 0.12, 0.12), (0.75, -0.6, 1.05), rot=(0, math.radians(15), 0))
+    box(p["rust"], (0.5, 0.5, 0.45), (-0.9, 0.7, 0.52))  # generator
+    cyl(p["purple_glow"], 0.12, 1.5, (0.3, 0.95, 0.4), rot=(0, math.radians(90), 0), verts=8)
+    cyl(p["purple_glow"], 0.1, 1.2, (-0.95, -0.2, 0.4), rot=(math.radians(90), 0, 0), verts=8)
 
 
 def minerai(p):

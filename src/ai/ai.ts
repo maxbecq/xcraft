@@ -19,7 +19,7 @@ export interface Plan {
   legionShare: number;
 }
 
-/** "Bioball auxiliaire" from the Human openings, simplified. */
+/** "Bioball auxiliaire" from the Human openings, simplified (normal difficulty). */
 export const BIOBALL: Plan = {
   serfs: 16,
   casernes: [[9, 1], [12, 2], [15, 3]],
@@ -29,6 +29,9 @@ export const BIOBALL: Plan = {
   healerEvery: 4,
   legionShare: 0.3,
 };
+
+/** Difficulty: the AI plays the same plan, with a harvesting handicap (percent of minerals banked). */
+export const DIFFICULTY: Record<string, number> = { easy: 70, normal: 100, hard: 130 };
 
 const THINK_EVERY = 10; // ticks
 const DEFEND_RADIUS = 14 * FP;

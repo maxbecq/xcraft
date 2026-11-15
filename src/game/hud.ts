@@ -134,7 +134,8 @@ export class Hud {
   update(): void {
     const p = this.world.players[this.player];
     const s = this.world.supply(this.player);
-    this.bar.innerHTML = `<span class="res min">◆ ${p.minerals}</span><span class="res nrg">⚡ ${p.energy}</span><span class="res sup${s.used >= s.max ? ' full' : ''}">⌂ ${s.used}/${s.max}</span>`;
+    const secs = Math.floor((this.world.tick / ticks(60)) * 60);
+    this.bar.innerHTML = `<span class="res clock">${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</span><span class="res min">◆ ${p.minerals}</span><span class="res nrg">⚡ ${p.energy}</span><span class="res sup${s.used >= s.max ? ' full' : ''}">⌂ ${s.used}/${s.max}</span>`;
     this.updatePanel();
     this.updateCard();
     this.updateGhost();
