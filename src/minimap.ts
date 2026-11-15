@@ -35,6 +35,14 @@ export class Minimap {
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const c = tileColor(map, x, y);
+        // Cliff edges drawn dark, like a relief map.
+        const l = map.level[y * map.width + x];
+        const edge = [[1, 0], [0, 1], [-1, 0], [0, -1]].some(([dx, dy]) => {
+          const nx = x + dx;
+          const ny = y + dy;
+          return nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.level[ny * map.width + nx] < l && !map.ramp[ny * map.width + nx];
+        });
+        if (edge) c.multiplyScalar(0.45);
         img.data.set([c.r * 255, c.g * 255, c.b * 255, 255], (y * map.width + x) * 4);
       }
     }
@@ -85,6 +93,11 @@ export class Minimap {
     ctx.drawImage(this.tiles, 0, 0);
 
     for (const e of world.entities.values()) {
+      if (e.type === 'minerai' || e.type === 'puits') {
+        ctx.fillStyle = e.type === 'minerai' ? '#7fd8ff' : '#c08bff';
+        ctx.fillRect(e.tx, e.ty, e.type === 'puits' ? 3 : 1, e.type === 'puits' ? 3 : 1);
+        continue;
+      }
       if (e.owner < 0 || !sees(e)) continue;
       ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
       const s = Math.max(1.5, (e.radius * 2) / FP);
