@@ -144,82 +144,117 @@ def ball(m, r, loc, scale=(1, 1, 1), seg=10, rings=6, name="ball"):
 
 # ------------------------------------------------------------------ Humans: low tech, scavenged, Mad Max meets Terrans
 
-def humanoid(p, outfit, height=1.0, bulk=1.0):
-    """Boots, legs, torso, arms and head. Returns the head height."""
+def humanoid(p, outfit, height=1.0, bulk=1.0, armor=None):
+    """A chunky, heroic figure: tapered limbs, broad shoulders, hands and boots. Returns the head height.
+    Legs and arms are separate parts pivoting at hip and shoulder, so the game can animate them."""
     h = height
-    # Legs and arms are separate parts, pivoting at hip and shoulder, so the game can animate them.
-    for side, x in (("l", -0.07), ("r", 0.07)):
-        box(p["rubber"], (0.1 * bulk, 0.13, 0.08), (x * bulk, -0.02, 0.04), name=f"leg_{side}")  # boot
-        box(outfit, (0.09 * bulk, 0.1, 0.24 * h), (x * bulk, 0, 0.19 * h), name=f"leg_{side}")
-        JOINTS[f"leg_{side}"] = (x * bulk, 0, 0.31 * h)
-    box(outfit, (0.26 * bulk, 0.17 * bulk, 0.3 * h), (0, 0, 0.45 * h))
-    box(p["leather"], (0.27 * bulk, 0.18 * bulk, 0.045), (0, 0, 0.32 * h))
-    for side, x in (("l", -0.175), ("r", 0.175)):
-        box(outfit, (0.07 * bulk, 0.08, 0.27 * h), (x * bulk, -0.03, 0.46 * h), rot=(0.35, 0, 0), name=f"arm_{side}")
-        JOINTS[f"arm_{side}"] = (x * bulk, 0, 0.58 * h)
-    ball(p["skin"], 0.085, (0, 0, 0.7 * h))
-    return 0.7 * h
+    armor = armor or outfit
+    for side, x in (("l", -0.075), ("r", 0.075)):
+        cyl(outfit, 0.06 * bulk, 0.26 * h, (x * bulk, 0, 0.2 * h), verts=6, r2=0.045 * bulk, name=f"leg_{side}")
+        box(p["rubber"], (0.11 * bulk, 0.16, 0.08), (x * bulk, -0.025, 0.045), name=f"leg_{side}")  # boot
+        box(armor, (0.08 * bulk, 0.05, 0.09), (x * bulk, -0.055, 0.2 * h), name=f"leg_{side}")  # knee pad
+        JOINTS[f"leg_{side}"] = (x * bulk, 0, 0.33 * h)
+    # Torso: narrow waist, broad chest.
+    cyl(outfit, 0.15 * bulk, 0.16 * h, (0, 0, 0.4 * h), verts=8, r2=0.17 * bulk)
+    box(outfit, (0.32 * bulk, 0.19 * bulk, 0.16 * h), (0, 0, 0.54 * h))
+    box(p["leather"], (0.3 * bulk, 0.2 * bulk, 0.045), (0, 0, 0.33 * h))  # belt
+    box(p["leather"], (0.05, 0.21 * bulk, 0.2 * h), (0.07, 0, 0.5 * h), rot=(0, 0.5, 0))  # harness strap
+    for x in (-0.09, 0.09):
+        box(p["leather"], (0.06, 0.05, 0.06), (x * bulk, -0.11 * bulk, 0.34 * h))  # pouches
+    cyl(p["skin"], 0.04, 0.06, (0, 0, 0.64 * h), verts=6)  # neck
+    for side, x in (("l", -0.2), ("r", 0.2)):
+        cyl(outfit, 0.05 * bulk, 0.26 * h, (x * bulk, -0.02, 0.48 * h), rot=(0.3, 0, 0), verts=6, r2=0.04 * bulk, name=f"arm_{side}")
+        box(p["leather"], (0.07, 0.07, 0.07), (x * bulk, -0.06, 0.36 * h), name=f"arm_{side}")  # glove
+        JOINTS[f"arm_{side}"] = (x * bulk, 0, 0.6 * h)
+    ball(p["skin"], 0.09, (0, -0.01, 0.73 * h), scale=(0.95, 1, 1.05), seg=10, rings=6)
+    return 0.73 * h
 
 
 def goggles(p, z, glass="glass"):
-    box(p["rubber"], (0.18, 0.04, 0.035), (0, -0.07, z))
-    for x in (-0.04, 0.04):
-        cyl(p[glass], 0.028, 0.03, (x, -0.09, z), rot=(math.radians(90), 0, 0), verts=8)
+    box(p["rubber"], (0.19, 0.04, 0.04), (0, -0.08, z))
+    for x in (-0.045, 0.045):
+        cyl(p[glass], 0.03, 0.035, (x, -0.1, z), rot=(math.radians(90), 0, 0), verts=8)
+
+
+def pauldron(p, m, x, z, size=0.11):
+    ball(m, size, (x, 0, z), scale=(1.1, 1.0, 0.7), seg=8, rings=5)
 
 
 def serf(p):
-    """Scavenger: khaki overalls, goggles, scrap backpack, big wrench."""
+    """Scavenger: hard hat with a lamp, goggles, a big scrap pack with an antenna, wrench in hand."""
     head = humanoid(p, p["khaki"])
-    goggles(p, head + 0.02)
-    box(p["team"], (0.19, 0.18, 0.04), (0, 0, head + 0.06))  # bandana
-    box(p["scrap"], (0.2, 0.12, 0.22), (0, 0.13, 0.5))  # scrap pack
-    cyl(p["rust"], 0.06, 0.2, (0.07, 0.2, 0.62), verts=8)  # tin can
-    box(p["hazard"], (0.21, 0.02, 0.04), (0, 0.195, 0.45))
-    cyl(p["steel"], 0.02, 0.42, (0.2, -0.14, 0.42), rot=(math.radians(-30), 0, 0), verts=6)  # wrench
-    box(p["steel"], (0.08, 0.03, 0.06), (0.2, -0.25, 0.6))
+    goggles(p, head + 0.01)
+    ball(p["hazard"], 0.1, (0, 0, head + 0.05), scale=(1.05, 1.05, 0.6), seg=10, rings=5)  # hard hat
+    box(p["hazard"], (0.24, 0.24, 0.02), (0, 0, head + 0.03))
+    cyl(p["lamp_glow"], 0.025, 0.03, (0, -0.1, head + 0.07), rot=(math.radians(90), 0, 0), verts=8)
+    box(p["team"], (0.33, 0.2, 0.05), (0, 0, 0.6))  # team shoulder band
+    box(p["scrap"], (0.24, 0.14, 0.26), (0, 0.16, 0.52))  # pack
+    cyl(p["rust"], 0.07, 0.24, (0.08, 0.22, 0.66), verts=8)
+    box(p["hazard"], (0.25, 0.02, 0.04), (0, 0.235, 0.46))
+    pipe(p["steel"], (-0.08, 0.2, 0.62), (-0.12, 0.25, 0.95), r=0.008, verts=4)  # antenna
+    ball(p["red_glow"], 0.015, (-0.12, 0.25, 0.96), seg=6, rings=4)
+    cyl(p["steel"], 0.02, 0.4, (0.21, -0.15, 0.3), rot=(math.radians(-25), 0, 0), verts=6)  # wrench
+    box(p["steel"], (0.1, 0.035, 0.06), (0.21, -0.24, 0.48))
 
 
 def auxiliaire(p):
-    """Rifleman: mismatched plates, gas mask, pipe rifle with a chemical tank."""
-    head = humanoid(p, p["khaki"])
-    box(p["team"], (0.25, 0.05, 0.2), (0, -0.09, 0.5))  # painted chest plate
-    box(p["rust"], (0.1, 0.12, 0.06), (0.18, 0, 0.6))  # odd shoulder plate
-    ball(p["scrap"], 0.1, (0, 0.01, head + 0.03), scale=(1, 1, 0.75), seg=8, rings=5)  # helmet
-    box(p["rubber"], (0.12, 0.06, 0.09), (0, -0.08, head - 0.02))  # gas mask
-    cyl(p["scrap"], 0.03, 0.06, (0, -0.13, head - 0.05), rot=(math.radians(90), 0, 0), verts=8)  # filter
-    cyl(p["scrap"], 0.03, 0.58, (0.12, -0.3, 0.5), rot=(math.radians(90), 0, 0), verts=6)  # pipe barrel
-    box(p["wood"], (0.05, 0.16, 0.08), (0.12, -0.02, 0.46))  # stock
-    cyl(p["green_glow"], 0.045, 0.14, (0.17, -0.18, 0.5), rot=(math.radians(90), 0, 0), verts=8)  # chem tank
+    """Rifleman: painted chest plate, team pauldrons, gas mask piped to a back tank, scoped pipe rifle."""
+    head = humanoid(p, p["khaki"], armor=p["scrap"])
+    box(p["team"], (0.3, 0.06, 0.2), (0, -0.1, 0.54))  # chest plate
+    box(p["hazard"], (0.3, 0.065, 0.03), (0, -0.1, 0.45))
+    pauldron(p, p["team"], -0.2, 0.64)
+    pauldron(p, p["scrap"], 0.2, 0.64)
+    ball(p["scrap"], 0.105, (0, 0.01, head + 0.03), scale=(1, 1.05, 0.8), seg=10, rings=5)  # helmet
+    box(p["rubber"], (0.13, 0.07, 0.1), (0, -0.08, head - 0.03))  # gas mask
+    cyl(p["scrap"], 0.032, 0.06, (0, -0.14, head - 0.06), rot=(math.radians(90), 0, 0), verts=8)
+    cyl(p["green_glow"], 0.06, 0.24, (0, 0.16, 0.54), verts=8)  # back tank
+    pipe(p["rubber"], (0.03, -0.12, head - 0.07), (0.1, 0.12, 0.6), r=0.015, verts=4)
+    for x in (-0.1, 0.0, 0.1):
+        box(p["leather"], (0.06, 0.04, 0.08), (x, -0.13, 0.37))  # ammo pouches
+    cyl(p["scrap"], 0.03, 0.62, (0.13, -0.3, 0.5), rot=(math.radians(90), 0, 0), verts=6)  # barrel
+    box(p["wood"], (0.05, 0.18, 0.09), (0.13, -0.02, 0.46))  # stock
+    cyl(p["steel"], 0.02, 0.14, (0.13, -0.2, 0.56), rot=(math.radians(90), 0, 0), verts=6)  # scope
+    cyl(p["green_glow"], 0.045, 0.14, (0.18, -0.2, 0.47), rot=(math.radians(90), 0, 0), verts=8)
 
 
 def legionnaire(p):
-    """Brute in welded scrap armour, spiked pauldrons, buzz saw and smoking exhausts."""
-    head = humanoid(p, p["rubber"], height=1.08, bulk=1.25)
-    box(p["scrap"], (0.34, 0.08, 0.26), (0, -0.12, 0.52))
-    box(p["hazard"], (0.34, 0.085, 0.04), (0, -0.12, 0.4))
-    for x in (-0.24, 0.24):
-        box(p["team"], (0.16, 0.2, 0.08), (x, 0, 0.66), rot=(0, x * 1.2, 0))  # pauldrons
-        cone(p["steel"], 0.035, 0.12, (x * 1.1, 0, 0.75), verts=5)  # spikes
-    box(p["rust"], (0.16, 0.16, 0.14), (0, 0, head + 0.02))  # bucket helmet
-    box(p["dark_glass"], (0.12, 0.02, 0.03), (0, -0.081, head + 0.03))  # visor slit
-    for x in (-0.07, 0.07):
-        cyl(p["scrap"], 0.03, 0.28, (x, 0.14, 0.65), verts=6)  # exhausts
-        cyl(p["orange_glow"], 0.032, 0.04, (x, 0.14, 0.8), verts=6)
-    cyl(p["steel"], 0.21, 0.025, (0.27, -0.3, 0.45), rot=(0, math.radians(90), 0), verts=14)  # buzz saw
-    cyl(p["hazard"], 0.06, 0.05, (0.27, -0.3, 0.45), rot=(0, math.radians(90), 0), verts=8)
-    box(p["scrap"], (0.06, 0.22, 0.06), (0.27, -0.14, 0.45))
+    """Brute in welded scrap armour: spiked pauldrons, bucket helmet with a glowing slit, buzz saw, exhausts."""
+    head = humanoid(p, p["rubber"], height=1.08, bulk=1.3, armor=p["scrap"])
+    box(p["scrap"], (0.4, 0.09, 0.28), (0, -0.13, 0.58))
+    box(p["hazard"], (0.4, 0.095, 0.04), (0, -0.13, 0.45))
+    for x in (-0.3, 0.3):
+        pauldron(p, p["team"], x, 0.72, size=0.15)
+        for k in (-1, 1):
+            cone(p["steel"], 0.03, 0.14, (x * 1.05, k * 0.05, 0.82), verts=5)
+    box(p["rust"], (0.18, 0.18, 0.16), (0, 0, head + 0.02))  # bucket helmet
+    box(p["red_glow"], (0.13, 0.02, 0.025), (0, -0.091, head + 0.03))  # eye slit
+    for x in (-0.08, 0.08):
+        cyl(p["scrap"], 0.035, 0.32, (x, 0.15, 0.72), verts=6)
+        cyl(p["orange_glow"], 0.036, 0.04, (x, 0.15, 0.89), verts=6)
+    cyl(p["steel"], 0.22, 0.025, (0.3, -0.32, 0.45), rot=(0, math.radians(90), 0), verts=16)  # saw
+    for k in range(8):
+        a = k / 8 * math.tau
+        cone(p["steel"], 0.02, 0.05, (0.3, -0.32 + math.cos(a) * 0.23, 0.45 + math.sin(a) * 0.23), rot=(a + math.pi / 2, 0, 0), verts=3)
+    cyl(p["hazard"], 0.06, 0.05, (0.3, -0.32, 0.45), rot=(0, math.radians(90), 0), verts=8)
+    box(p["scrap"], (0.07, 0.25, 0.07), (0.3, -0.15, 0.45))
+    box(p["scrap"], (0.03, 0.2, 0.2), (0.34, -0.3, 0.55))  # saw guard
 
 
 def soigneur(p):
-    """Field medic: dirty coat, goggles, team armband, back tank and injector crossbow."""
+    """Field medic: long coat, goggles, team armband, tank pack with tubes, injector crossbow."""
     head = humanoid(p, p["coat"])
-    goggles(p, head + 0.02, glass="cyan_glow")
-    box(p["team"], (0.08, 0.09, 0.07), (-0.19, -0.03, 0.55))  # armband
-    cyl(p["scrap"], 0.07, 0.3, (0, 0.14, 0.5), verts=8)  # back tank
-    cyl(p["cyan_glow"], 0.02, 0.32, (0.08, 0.13, 0.5), verts=6)
-    box(p["wood"], (0.05, 0.34, 0.05), (0.13, -0.24, 0.5))  # crossbow stock
-    box(p["scrap"], (0.32, 0.04, 0.03), (0.13, -0.37, 0.5))
-    cyl(p["cyan_glow"], 0.025, 0.1, (0.13, -0.42, 0.53), rot=(math.radians(90), 0, 0), verts=6)  # injector bolt
+    box(p["coat"], (0.3, 0.2, 0.22), (0, 0.01, 0.24))  # coat skirt
+    goggles(p, head + 0.01, glass="cyan_glow")
+    cone(p["coat"], 0.12, 0.2, (0, 0.01, head + 0.08), verts=8)  # hood
+    box(p["team"], (0.08, 0.09, 0.07), (-0.2, -0.03, 0.55))  # armband
+    for x in (-0.06, 0.06):
+        cyl(p["scrap"], 0.055, 0.3, (x, 0.15, 0.52), verts=8)
+        cyl(p["cyan_glow"], 0.02, 0.32, (x, 0.2, 0.52), verts=6)
+    pipe(p["rubber"], (0.06, 0.15, 0.68), (0.2, -0.05, 0.5), r=0.012, verts=4)
+    box(p["leather"], (0.14, 0.08, 0.1), (-0.17, 0.06, 0.36))  # satchel
+    box(p["wood"], (0.05, 0.34, 0.05), (0.14, -0.24, 0.5))  # crossbow
+    box(p["scrap"], (0.34, 0.04, 0.03), (0.14, -0.37, 0.5))
+    cyl(p["cyan_glow"], 0.025, 0.12, (0.14, -0.43, 0.53), rot=(math.radians(90), 0, 0), verts=6)
 
 
 def corrugated(m, size, loc, ribs_along="x"):

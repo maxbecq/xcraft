@@ -10,6 +10,14 @@ import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
+/** Turning speed of units, in radians per second. */
+const TURN_SPEED = 9;
+
+/** Turns angle `from` towards `to` by at most `max`, the short way round. */
+function turnToward(from: number, to: number, max: number): number {
+  const d = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return from + Math.max(-max, Math.min(max, d));
+}
 /** Blender models for mineral fields; the renderer picks one per field. */
 export const MINERAL_VARIANTS = ['minerai', 'minerai_1', 'minerai_2', 'minerai_3'];
 const UNIT_SCALE = 1.35;
@@ -168,6 +176,8 @@ interface View {
   ring: Object3D;
   scaffold?: Object3D;
   heading: number;
+  /** Direction the unit wants to face; `heading` turns towards it. */
+  target: number;
   cargo?: Object3D;
   /** Enemy buildings stay on screen once spotted. */
   seen: boolean;
@@ -178,6 +188,8 @@ interface View {
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
   private readonly views = new Map<number, View>();
+  private dying: { v: View; age: number; side: number }[] = [];
+  private last = performance.now();
 
   /** Called when a building first appears (to clear scenery under it). */
   onBuilding: (e: Entity) => void = () => {};
@@ -190,12 +202,28 @@ export class EntityRenderer {
   }
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.last = now;
     for (const [id, v] of this.views) {
       if (!world.entities.has(id)) {
-        this.scene.remove(v.root);
         this.views.delete(id);
+        // Fallen soldiers topple over and sink into the ground; buildings just go (they explode).
+        if (v.limbs.legL && v.root.visible) {
+          v.ring.visible = false;
+          this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
+        } else this.scene.remove(v.root);
       }
     }
+    this.dying = this.dying.filter((d) => {
+      d.age += dt;
+      const f = Math.min(1, d.age / 0.45);
+      d.v.model.rotation.z = d.side * (Math.PI / 2) * f * f;
+      d.v.model.position.y = 0.12 * f - Math.max(0, d.age - 2.5) * 0.4;
+      if (d.age < 4) return true;
+      this.scene.remove(d.v.root);
+      return false;
+    });
     for (const e of world.entities.values()) {
       const v = this.views.get(e.id) ?? this.create(e, player);
       if (e.owner >= 0 && e.owner !== player) {
@@ -206,7 +234,8 @@ export class EntityRenderer {
       }
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
-      if (e.x !== e.px || e.y !== e.py) v.heading = Math.atan2(e.x - e.px, e.y - e.py);
+      if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
+      if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       v.root.position.set(x, heightAt(this.map, x, z), z);
       v.ring.visible = selected.has(e.id);
       if (e.def.kind === 'unit') {
@@ -227,26 +256,39 @@ export class EntityRenderer {
     }
   }
 
-  /** Walk cycle, weapon recoil or melee swing, eased so poses never snap. */
+  /**
+   * Walk cycle (legs, counter-swinging arms, bob, forward lean, sway), breathing when idle,
+   * aiming and recoil for gunners, a full-body swing for melee. Everything is eased so poses never snap.
+   */
   private animate(v: View, e: Entity): void {
+    const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py;
-    const phase = performance.now() / 110 + e.id;
-    const swing = moving ? Math.sin(phase) * 0.6 : 0;
+    const speed = (e.def as UnitDef).speed;
+    const phase = t * speed * 4.2 + e.id;
     const a = (e.def as UnitDef).attack;
-    const fired = a && e.cooldown > 0 && !moving ? e.cooldown / ticks(a.cooldown) : 0;
+    const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
+    const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
     const melee = !!a && a.range < 1;
-    const ease = (o: Object3D | undefined, target: number) => {
-      if (o) o.rotation.x += (target - o.rotation.x) * 0.3;
+    const ease = (o: Object3D | undefined, axis: 'x' | 'y' | 'z', target: number, rate = 0.25) => {
+      if (o) o.rotation[axis] += (target - o.rotation[axis]) * rate;
     };
-    ease(v.limbs.legL, swing);
-    ease(v.limbs.legR, -swing);
-    ease(v.limbs.armL, -swing * 0.7);
-    // Melee: the weapon arm hacks down right after a hit. Ranged: a small kick back.
-    ease(v.limbs.armR, melee ? -1.3 * fired * fired : moving ? swing * 0.4 : 0);
-    v.model.position.y = moving ? Math.abs(Math.sin(phase)) * 0.04 : 0;
-    v.model.position.z = 0;
-    const kick = !melee && fired > 0.75 ? (fired - 0.75) * 0.25 : 0;
-    v.model.children[0].position.z = -kick;
+    const step = moving ? Math.sin(phase) : 0;
+    ease(v.limbs.legL, 'x', step * 0.75);
+    ease(v.limbs.legR, 'x', -step * 0.75);
+    ease(v.limbs.armL, 'x', fighting && !melee ? -0.9 : -step * 0.6);
+    let armR = moving ? step * 0.35 : 0;
+    if (fighting && !melee) armR = -0.8 - (fired > 0.8 ? (fired - 0.8) * 2 : 0); // shouldered weapon, kick on each shot
+    if (melee && fighting) armR = fired > 0.7 ? -2.4 * (1 - fired) / 0.3 + 0.6 : -2.2 * fired; // wind up, then hack down
+    ease(v.limbs.armR, 'x', armR, melee ? 0.45 : 0.25);
+    const body = v.model.children[0];
+    // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
+    const bob = moving ? Math.abs(Math.sin(phase)) * 0.045 : Math.sin(t * 2 + e.id) * 0.008;
+    v.model.position.y += (bob - v.model.position.y) * 0.4;
+    ease(body, 'x', moving ? 0.14 : fighting && !melee ? 0.06 : 0, 0.15);
+    ease(body, 'z', moving ? Math.sin(phase) * 0.05 : 0, 0.2);
+    ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
+    const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
+    body.position.z += (-kick - body.position.z) * 0.5;
   }
 
   private create(e: Entity, player: number): View {
@@ -292,7 +334,8 @@ export class EntityRenderer {
       root.add(scaffold);
     }
     this.scene.add(root);
-    const v: View = { root, model: pivot, ring, scaffold, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false,
+    const facing = e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75;
+    const v: View = { root, model: pivot, ring, scaffold, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false,
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     this.views.set(e.id, v);
     return v;
