@@ -1,4 +1,7 @@
 import type { CameraRig } from './camera';
+import { TEAM_COLORS } from './render/units';
+import { FP } from './sim/fixed';
+import type { World } from './sim/world';
 import type { GameMap } from './map';
 import { tileColor } from './terrain';
 
@@ -10,6 +13,9 @@ export class Minimap {
   private readonly toCanvas: DOMMatrix;
   private readonly toMap: DOMMatrix;
   private readonly scale: number;
+
+  /** Called with a right-clicked map point, in tiles. */
+  onOrder: (x: number, y: number) => void = () => {};
 
   constructor(map: GameMap, private readonly rig: CameraRig, size = 200) {
     this.canvas.width = this.canvas.height = size;
@@ -35,11 +41,17 @@ export class Minimap {
     this.toCanvas = new DOMMatrix().translate(size / 2, size / 2).rotate(45).scale(this.scale).translate(-map.width / 2, -map.height / 2);
     this.toMap = this.toCanvas.inverse();
 
+    const point = (e: PointerEvent) => this.toMap.transformPoint(new DOMPoint(e.offsetX, e.offsetY));
     const move = (e: PointerEvent) => {
-      const p = this.toMap.transformPoint(new DOMPoint(e.offsetX, e.offsetY));
+      const p = point(e);
       this.rig.lookAt(p.x, p.y);
     };
     this.canvas.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) {
+        const p = point(e);
+        this.onOrder(p.x, p.y);
+        return;
+      }
       this.canvas.setPointerCapture(e.pointerId);
       move(e);
     });
@@ -48,13 +60,20 @@ export class Minimap {
     });
   }
 
-  draw(): void {
+  draw(world: World): void {
     const ctx = this.ctx;
     ctx.resetTransform();
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.toCanvas);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.tiles, 0, 0);
+
+    for (const e of world.entities.values()) {
+      if (e.owner < 0) continue;
+      ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
+      const s = Math.max(1.5, (e.radius * 2) / FP);
+      ctx.fillRect(e.x / FP - s / 2, e.y / FP - s / 2, s, s);
+    }
 
     ctx.beginPath();
     for (const p of this.rig.footprint()) ctx.lineTo(p.x, p.z);

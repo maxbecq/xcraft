@@ -56,16 +56,31 @@ export function tileAt(map: GameMap, x: number, y: number): { level: number; ram
   return { level: map.level[i], ramp: map.ramp[i] };
 }
 
-/** World heights of a tile's corners, in order [nw, ne, se, sw]. */
-export function cornerHeights(map: GameMap, x: number, y: number): [number, number, number, number] {
-  const t = tileAt(map, x, y)!;
-  const lo = t.level * LEVEL_HEIGHT;
-  const hi = lo + LEVEL_HEIGHT;
-  switch (t.ramp) {
+/** Cliff levels of a tile's corners, in order [nw, ne, se, sw]. */
+export function cornerLevels(map: GameMap, x: number, y: number): [number, number, number, number] {
+  const i = y * map.width + x;
+  const lo = map.level[i];
+  const hi = lo + 1;
+  switch (map.ramp[i]) {
     case 'N': return [hi, hi, lo, lo];
     case 'S': return [lo, lo, hi, hi];
     case 'E': return [lo, hi, hi, lo];
     case 'W': return [hi, lo, lo, hi];
     default: return [lo, lo, lo, lo];
   }
+}
+
+/** World heights of a tile's corners, in order [nw, ne, se, sw]. */
+export function cornerHeights(map: GameMap, x: number, y: number): [number, number, number, number] {
+  return cornerLevels(map, x, y).map((l) => l * LEVEL_HEIGHT) as [number, number, number, number];
+}
+
+/** Ground height under a world point (in tiles), for rendering. */
+export function heightAt(map: GameMap, x: number, y: number): number {
+  const tx = Math.min(map.width - 1, Math.max(0, Math.floor(x)));
+  const ty = Math.min(map.height - 1, Math.max(0, Math.floor(y)));
+  const [nw, ne, se, sw] = cornerHeights(map, tx, ty);
+  const u = Math.min(1, Math.max(0, x - tx));
+  const v = Math.min(1, Math.max(0, y - ty));
+  return (nw * (1 - u) + ne * u) * (1 - v) + (sw * (1 - u) + se * u) * v;
 }
