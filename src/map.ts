@@ -1,0 +1,71 @@
+export type Dir = 'N' | 'E' | 'S' | 'W';
+
+/** Tile grid. x grows east (+X), y grows south (+Z). One tile = one world unit. */
+export interface GameMap {
+  width: number;
+  height: number;
+  /** Cliff level of each tile: 0 (low ground) to 2 (high ground). */
+  level: Uint8Array;
+  /** Ramp tiles climb from their level to level + 1 towards this side. */
+  ramp: (Dir | null)[];
+}
+
+export const LEVEL_HEIGHT = 1.5;
+
+const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };
+export const STEP: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+
+/** Square with cut corners, centred on (0,0). */
+function octagon(dx: number, dy: number, half: number, cut: number): boolean {
+  return Math.abs(dx) <= half && Math.abs(dy) <= half && Math.abs(dx) + Math.abs(dy) <= 2 * half - cut;
+}
+
+/** The V1 two-player map, symmetric by 180° rotation. */
+export function createMap(): GameMap {
+  const width = 96;
+  const height = 96;
+  const map: GameMap = { width, height, level: new Uint8Array(width * height), ramp: new Array(width * height).fill(null) };
+
+  // Paints a tile and its mirror for the opposite player.
+  const set = (x: number, y: number, level: number, ramp: Dir | null = null) => {
+    map.level[y * width + x] = level;
+    map.ramp[y * width + x] = ramp;
+    const i = (height - 1 - y) * width + (width - 1 - x);
+    map.level[i] = level;
+    map.ramp[i] = ramp && OPPOSITE[ramp];
+  };
+  const paint = (test: (x: number, y: number) => boolean, level: number) => {
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (test(x, y)) set(x, y, level);
+  };
+
+  paint((x, y) => octagon(x - 20, y - 20, 17, 8), 1); // natural expansion plateau
+  paint((x, y) => octagon(x - 14, y - 14, 10, 5), 2); // main base
+  paint((x, y) => octagon(x - 47.5, y - 47.5, 6, 3), 1); // centre hill
+
+  for (let y = 13; y <= 15; y++) set(25, y, 1, 'W'); // main -> natural
+  for (let x = 19; x <= 21; x++) set(x, 38, 0, 'N'); // natural -> low ground (south)
+  for (let y = 19; y <= 21; y++) set(38, y, 0, 'W'); // natural -> low ground (east)
+  for (let x = 46; x <= 49; x++) set(x, 41, 0, 'S'); // low ground -> centre hill
+
+  return map;
+}
+
+export function tileAt(map: GameMap, x: number, y: number): { level: number; ramp: Dir | null } | null {
+  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
+  const i = y * map.width + x;
+  return { level: map.level[i], ramp: map.ramp[i] };
+}
+
+/** World heights of a tile's corners, in order [nw, ne, se, sw]. */
+export function cornerHeights(map: GameMap, x: number, y: number): [number, number, number, number] {
+  const t = tileAt(map, x, y)!;
+  const lo = t.level * LEVEL_HEIGHT;
+  const hi = lo + LEVEL_HEIGHT;
+  switch (t.ramp) {
+    case 'N': return [hi, hi, lo, lo];
+    case 'S': return [lo, lo, hi, hi];
+    case 'E': return [lo, hi, hi, lo];
+    case 'W': return [hi, lo, lo, hi];
+    default: return [lo, lo, lo, lo];
+  }
+}
