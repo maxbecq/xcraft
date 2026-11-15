@@ -96,7 +96,15 @@ def box(m, size, loc, rot=(0, 0, 0), name="box"):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc, rotation=rot)
     o = bpy.context.active_object
     o.scale = size
-    return _finish(o, m, name)
+    _finish(o, m, name)
+    # Chamfered edges catch the light, which reads much better than razor-sharp boxes.
+    width = min(size) * 0.12
+    if width > 0.004:
+        mod = o.modifiers.new("bevel", "BEVEL")
+        mod.width = min(width, 0.05)
+        mod.segments = 1
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    return o
 
 
 def cyl(m, r, depth, loc, rot=(0, 0, 0), verts=12, r2=None, name="cyl"):
@@ -452,7 +460,7 @@ def icon(objs, path):
     radius = max((c - centre).length for c in corners)
     cam_data = bpy.data.cameras.new("cam")
     cam_data.type = "ORTHO"
-    cam_data.ortho_scale = radius * 2.1
+    cam_data.ortho_scale = radius * 1.65
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
     direction = Vector((math.sin(math.radians(45)) * math.cos(math.radians(35)), -math.cos(math.radians(45)) * math.cos(math.radians(35)), math.sin(math.radians(35))))
@@ -462,12 +470,12 @@ def icon(objs, path):
     cam.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
     sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
-    sun.data.energy = 4
+    sun.data.energy = 6
     sun.rotation_euler = (math.radians(40), math.radians(-20), math.radians(30))
     scene.collection.objects.link(sun)
     world = bpy.data.worlds.new("w")
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.8
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.3
     scene.world = world
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)

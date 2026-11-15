@@ -9,6 +9,7 @@ import { fbm, groundTextures, rockTextures } from './render/textures';
 const LEVEL_COLORS = [new Color(0xb08f5e), new Color(0xa48a62), new Color(0xbcad8c)];
 const PATCH = new Color(0x6e5a3e);
 const SAND = new Color(0xd2b47e);
+const RAMP = new Color(0xc9a878);
 const ROCK = new Color(0x9a7a5e);
 const ROCK_DARK = new Color(0x4a382c);
 /** How far a cliff's foot leans out from its top, in tiles. */
@@ -74,6 +75,7 @@ export function buildTerrain(map: GameMap): Group {
       const h = cornerHeights(map, x, y);
       const cut = cutCorner(map, x, y);
       const v = CORNER_POS.map(([cx, cy], i) => groundVertex(x + cx, h[i], y + cy, t.level + (t.ramp && h[i] > t.level * LEVEL_HEIGHT ? 1 : 0)));
+      if (t.ramp) for (const [, c] of v) c.lerp(RAMP, 0.6); // packed-dirt track
       if (cut < 0) {
         ground.quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
         continue;

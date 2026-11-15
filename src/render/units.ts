@@ -1,5 +1,5 @@
 import {
-  BoxGeometry, CapsuleGeometry, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -21,9 +21,13 @@ const darkStone = mat(0x7d7464);
 const wood = mat(0x7a5634);
 const crystal = mat(0x56c8ff, { emissive: 0x0f4d80, roughness: 0.25, metalness: 0.1 });
 const wellGlow = mat(0x9b5cff, { emissive: 0x5a20c0, roughness: 0.3 });
-const ringMaterial = new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.85 });
-const enemyRingMaterial = new MeshBasicMaterial({ color: 0xff5544, transparent: true, opacity: 0.85 });
-const neutralRingMaterial = new MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.85 });
+const ring = (color: number, opacity: number) => new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: AdditiveBlending });
+const RINGS = {
+  own: [ring(0x4dff6a, 0.95), ring(0x4dff6a, 0.22)],
+  enemy: [ring(0xff4a3a, 0.95), ring(0xff4a3a, 0.22)],
+  neutral: [ring(0xffe27a, 0.95), ring(0xffe27a, 0.22)],
+};
+const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
 
 /** Models built by tools/blender/models.py, by entity type. */
 const templates = new Map<string, Group>();
@@ -133,7 +137,8 @@ function placeholder(type: string, team: Material): Group {
 interface View {
   root: Object3D;
   model: Group;
-  ring: Mesh;
+  ring: Object3D;
+  scaffold?: Object3D;
   heading: number;
   cargo?: Object3D;
   /** Enemy buildings stay on screen once spotted. */
@@ -184,6 +189,7 @@ export class EntityRenderer {
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
         v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
+        if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
       }
     }
   }
@@ -220,20 +226,34 @@ export class EntityRenderer {
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
     if (e.def.kind === 'unit') body.scale.setScalar(UNIT_SCALE);
     root.add(pivot);
-    const r = e.radius / FP;
+    // Selection: a bright ring with a soft halo outside it.
+    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.25 : 0.95);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
       const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
       cargo.name = 'cargo';
       cargo.position.set(0, 0.62, -0.2);
       pivot.add(cargo);
     }
-    const ringMat = e.owner === player ? ringMaterial : e.owner < 0 ? neutralRingMaterial : enemyRingMaterial;
-    const ring = new Mesh(new RingGeometry(r * 1.1, r * 1.1 + 0.08, 40), ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
+    const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : RINGS.enemy;
+    const ring = new Group();
+    for (const [inner, outer, m] of [[r, r + 0.09, core], [r + 0.09, r + 0.3, halo]] as const) {
+      const mesh = new Mesh(new RingGeometry(inner, outer, 48), m);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = 0.06;
+      mesh.renderOrder = 2;
+      ring.add(mesh);
+    }
     root.add(ring);
+    let scaffold: Object3D | undefined;
+    if (e.def.kind === 'building') {
+      // Scaffolding shown while under construction.
+      const size = new Box3().setFromObject(body).getSize(new Vector3());
+      scaffold = new LineSegments(new EdgesGeometry(new BoxGeometry(size.x * 1.05, size.y * 1.02, size.z * 1.05, 3, 2, 3)), scaffoldMaterial);
+      scaffold.position.y = (size.y * 1.02) / 2;
+      root.add(scaffold);
+    }
     this.scene.add(root);
-    const v: View = { root, model: pivot, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false,
+    const v: View = { root, model: pivot, ring, scaffold, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false,
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     this.views.set(e.id, v);
     return v;
