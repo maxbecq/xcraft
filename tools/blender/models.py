@@ -89,6 +89,7 @@ def palette():
         "glass": mat("glass", 0x9FD8E0, metallic=0.2, rough=0.1),
         "dark_glass": mat("dark_glass", 0x1C2A30, metallic=0.3, rough=0.15),
         "boulder": mat("boulder", 0x8A6E56, rough=0.95),
+        "tag": mat("tag", 0xFFFFFF),
         "window_glow": mat("window_glow", 0xFFC870, emission=0xFFA040),
         "lamp_glow": mat("lamp_glow", 0xFFF2C0, emission=0xFFE090),
         "red_glow": mat("red_glow", 0xFF4A3A, emission=0xFF2010),
@@ -283,6 +284,15 @@ def sandbags(p, cx, cy, r, a0, a1, n, z=0.2):
             ball(p["khaki"], 0.2, (cx + math.cos(a + 0.12) * r, cy + math.sin(a + 0.12) * r, z + 0.18), scale=(1.2, 0.7, 0.45), seg=8, rings=4)
 
 
+def tag(p, loc, size, facing="-y"):
+    """A quad flush on a wall where the game paints a graffiti (material "tag", UV 0..1)."""
+    rot = {"-y": (math.radians(90), 0, 0), "+x": (math.radians(90), 0, math.radians(90))}[facing]
+    bpy.ops.mesh.primitive_plane_add(size=1, location=loc, rotation=rot)
+    o = bpy.context.active_object
+    o.scale = (size[0] * 1.3, size[1] * 1.3, 1)
+    return _finish(o, p["tag"], "tag")
+
+
 def plate_floor(p, size):
     """Base pad: concrete with welded steel plates and hazard edges."""
     box(p["concrete"], (size, size, 0.2), (0, 0, 0.1))
@@ -343,6 +353,8 @@ def conseil(p):
     for x in (1.0, 1.35):
         cyl(p["hazard"], 0.16, 0.45, (x, -2.0, 0.45), verts=10)
     box(p["team"], (0.5, 0.03, 0.32), (-1.25, 1.4, 3.75))  # flag
+    tag(p, (-0.75, -1.44, 0.55), (0.8, 0.32))
+    tag(p, (1.12, 0.0, 1.95), (0.9, 0.36), "+x")
 
 
 def grenier(p):
@@ -362,6 +374,7 @@ def grenier(p):
     cyl(p["red_glow"], 0.07, 0.03, (0.55, -0.55, 1.2), rot=(math.radians(90), 0, math.radians(45)), verts=10)  # valve wheel
     pipe(p["scrap"], (0.5, 0.5, 1.1), (0.9, 0.9, 0.3), r=0.04)
     lamp(p, (0.0, -0.8, 1.85))
+    tag(p, (0.45, -0.765, 0.62), (0.4, 0.2))
 
 
 def caserne(p):
@@ -398,6 +411,8 @@ def caserne(p):
     box(p["team"], (0.55, 0.03, 0.35), (1.17, 0.9, 2.55))  # flag
     cyl(p["steel"], 0.1, 0.16, (0.7, -0.9, 1.5), rot=(math.radians(-70), 0, 0), verts=10)  # spotlight
     cyl(p["lamp_glow"], 0.08, 0.02, (0.7, -0.97, 1.47), rot=(math.radians(-70), 0, 0), verts=10)
+    tag(p, (-0.72, -1.235, 0.5), (0.6, 0.28))
+    tag(p, (1.215, 0.25, 0.7), (0.9, 0.4), "+x")
 
 
 def mine(p):
@@ -434,6 +449,7 @@ def mine(p):
     pipe(p["purple_glow"], (0.3, 0.4, 0.35), (-0.85, 0.75, 0.35), r=0.09)
     pipe(p["purple_glow"], (-0.3, -0.2, 0.35), (-0.95, -0.7, 0.35), r=0.07)
     lamp(p, (0.0, -0.95, 1.2))
+    tag(p, (-0.95, -0.96, 0.55), (0.42, 0.21))
 
 
 # Mineral fields: several crystal clusters, so a mineral line never looks copy-pasted.
@@ -620,9 +636,13 @@ def build(name, fn):
         bpy.context.scene.cursor.location = pivot
         bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
         parts.append(o)
-    rest = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts]
+    # Graffiti quads stay separate objects, so the game can paint a different tag on each.
+    tags = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name.split(".")[0] == "tag"]
+    for i, t in enumerate(tags):
+        t.name = f"tag_{i}"
+    rest = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts and o not in tags]
     body = join(rest, name)
-    return [body, *parts]
+    return [body, *parts, *tags]
 
 
 def export(objs, path):

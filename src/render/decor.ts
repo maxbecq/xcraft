@@ -2,6 +2,7 @@ import { Color, InstancedMesh, Matrix4, Mesh, type MeshStandardMaterial, Object3
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type GameMap, cutCorner, heightAt, tileAt } from '../map';
 import { EXPANSIONS } from '../sim/setup';
+import { weather } from './weathering';
 import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
@@ -90,6 +91,7 @@ export class Decor {
         const m = (part.material as MeshStandardMaterial).clone();
         m.color.multiply(this.tint);
         part.material = m;
+        weather(m, 1);
         fog(m);
         const im = new InstancedMesh(part.geometry, part.material, list.length);
         // Parts keep their offset inside the doodad.

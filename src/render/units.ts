@@ -1,9 +1,10 @@
 import {
   AdditiveBlending, Box3, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { BuildingDef, UnitDef } from '../data';
+import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { graffiti, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
@@ -17,6 +18,18 @@ const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new M
 const teamMaterials = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6 }));
 /** Team colour for Blender models, keeping their hand-painted vertex colours. */
 const teamPainted = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6, vertexColors: true }));
+teamPainted.forEach((m) => weather(m, 0.8));
+
+const tagMaterials = new Map<Texture, MeshStandardMaterial>();
+/** Graffiti on a wall: transparent, drawn just in front of it. */
+function tagMaterial(map: Texture): MeshStandardMaterial {
+  let m = tagMaterials.get(map);
+  if (!m) {
+    m = new MeshStandardMaterial({ map, transparent: true, alphaTest: 0.15, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.9 });
+    tagMaterials.set(map, m);
+  }
+  return m;
+}
 const neutral = mat(0x9a8f7a);
 const skin = mat(0xd9b48f);
 const steel = mat(0x8c949c, { metalness: 0.6, roughness: 0.4 });
@@ -43,6 +56,9 @@ export async function loadModels(types: string[]): Promise<void> {
     types.map(async (type) => {
       try {
         const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}.glb`);
+        // Rust, damp and grime: heavy on buildings, light on soldiers, none on crystals.
+        const amount = type.startsWith('minerai') || type === 'puits' ? 0 : DEFS[type]?.kind === 'unit' ? 0.35 : 1;
+        if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
         templates.set(type, gltf.scene);
       } catch {
         // keep the placeholder
@@ -51,15 +67,23 @@ export async function loadModels(types: string[]): Promise<void> {
   );
 }
 
-function model(type: string, team: Material): Group {
+/** A copy of a Blender model; `seed` picks its graffiti. */
+function model(type: string, team: Material, seed = 0): Group {
   const t = templates.get(type);
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
+  let tagIndex = 0;
   g.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
     o.receiveShadow = true;
-    if ((o.material as Material).name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
+    const name = (o.material as Material).name;
+    if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
+    if (name === 'tag') {
+      const tags = graffiti();
+      o.material = tagMaterial(tags[(seed * 7 + tagIndex++) % tags.length]);
+      o.castShadow = false;
+    }
   });
   return g;
 }
@@ -231,7 +255,7 @@ export class EntityRenderer {
     root.userData.id = e.id;
     // Mineral fields use one of several crystal clusters, turned and sized at random (stable per field).
     const variant = e.type === 'minerai' ? MINERAL_VARIANTS[e.id % MINERAL_VARIANTS.length] : e.type;
-    const body = model(variant, teamMaterials[e.owner] ?? neutral);
+    const body = model(variant, teamMaterials[e.owner] ?? neutral, e.id);
     if (e.type === 'minerai') {
       body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
       body.userData.base = 0.85 + ((e.id * 40503) % 100) / 330;

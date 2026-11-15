@@ -4,6 +4,7 @@ import {
 } from 'three';
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, tileAt } from './map';
 import { type Biome, BIOMES } from './render/biome';
+import { weather } from './render/weathering';
 import { crackMask, fbm, groundTextures, rockTextures } from './render/textures';
 
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
@@ -124,7 +125,9 @@ export function buildTerrain(map: GameMap): Group {
   }
   untile(groundMat);
   const groundMesh = ground.mesh(groundMat);
-  const cliffMesh = cliffs.mesh(new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true }));
+  const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
+  weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock
+  const cliffMesh = cliffs.mesh(cliffMat);
   groundMesh.receiveShadow = true;
   cliffMesh.receiveShadow = true;
   cliffMesh.castShadow = true;
