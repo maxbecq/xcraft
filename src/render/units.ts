@@ -144,6 +144,9 @@ interface View {
 export class EntityRenderer {
   private readonly views = new Map<number, View>();
 
+  /** Called when a building first appears (to clear scenery under it). */
+  onBuilding: (e: Entity) => void = () => {};
+
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
   /** All entity roots, for picking; each carries its entity id in userData. */
@@ -186,6 +189,7 @@ export class EntityRenderer {
   }
 
   private create(e: Entity, player: number): View {
+    if (e.def.kind === 'building') this.onBuilding(e);
     const root = new Group();
     root.userData.id = e.id;
     const body = model(e.type, teamMaterials[e.owner] ?? neutral);

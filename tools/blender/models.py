@@ -66,7 +66,7 @@ def palette():
         "purple_glow": mat("purple_glow", 0xB27BFF, emission=0x7A30FF),
         "crystal": mat("crystal", 0x56C8FF, emission=0x0F5A99, rough=0.2),
         "rock": mat("rock", 0x6E655A),
-        "rust": mat("rust", 0x8E4E2C, metallic=0.4, rough=0.9),
+        "rust": mat("rust", 0x7E4A32, metallic=0.3, rough=0.9),
         "scrap": mat("scrap", 0x7D786C, metallic=0.6, rough=0.6),
         "hazard": mat("hazard", 0xD9A420, rough=0.7),
         "khaki": mat("khaki", 0x8F8460),
@@ -75,6 +75,10 @@ def palette():
         "concrete": mat("concrete", 0x8E8a80),
         "glass": mat("glass", 0x9FD8E0, metallic=0.2, rough=0.1),
         "dark_glass": mat("dark_glass", 0x1C2A30, metallic=0.3, rough=0.15),
+        "boulder": mat("boulder", 0x8A6E56, rough=0.95),
+        "deadwood": mat("deadwood", 0x5E4A3A, rough=0.95),
+        "drygrass": mat("drygrass", 0xB59A5C, rough=1.0),
+        "bone": mat("bone", 0xB8AC92, rough=0.95),
     }
 
 
@@ -298,6 +302,91 @@ def puits(p):
         ball(p["rock"], 0.22, (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.12), scale=(1, 0.8, 0.6), seg=6, rings=4)
 
 
+
+# ------------------------------------------------------------------ doodads (scenery, render only)
+
+def rock_mesh(p, seed, size, loc=(0, 0, 0), squash=0.7):
+    """A lumpy boulder: a low-poly sphere with each vertex pushed in or out."""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=size, location=loc)
+    o = bpy.context.active_object
+    for i, v in enumerate(o.data.vertices):
+        k = 0.75 + 0.5 * (((i * 7919 + seed * 104729) % 1000) / 1000)
+        v.co = v.co * k
+        v.co.z *= squash
+    return _finish(o, p["boulder"], "rock")
+
+
+def rocks_a(p):
+    rock_mesh(p, 1, 0.5, (0, 0, 0.15))
+    rock_mesh(p, 2, 0.28, (0.45, 0.2, 0.05))
+
+
+def rocks_b(p):
+    rock_mesh(p, 3, 0.8, (0, 0, 0.25), squash=0.55)
+    rock_mesh(p, 4, 0.35, (-0.6, -0.3, 0.05))
+    rock_mesh(p, 5, 0.22, (0.5, -0.5, 0.0))
+
+
+def pebbles(p):
+    for i, (x, y) in enumerate(((0, 0), (0.3, 0.15), (-0.25, 0.2), (0.1, -0.3), (-0.3, -0.2))):
+        rock_mesh(p, 10 + i, 0.09 + (i % 3) * 0.04, (x, y, 0.02))
+
+
+def dead_tree(p):
+    cyl(p["deadwood"], 0.09, 1.4, (0, 0, 0.7), verts=6, r2=0.05)
+    for k, (rx, rz, h) in enumerate(((0.6, 0.3, 0.9), (-0.7, 1.9, 1.1), (0.5, 3.6, 0.7))):
+        b = cyl(p["deadwood"], 0.04, 0.6, (0, 0, 0), verts=5, r2=0.015)
+        b.rotation_euler = (rx, 0, rz)
+        b.location = (math.sin(rz) * 0.2, -math.cos(rz) * 0.2, h + 0.15)
+
+
+def dry_bush(p):
+    for k in range(7):
+        a = k / 7 * math.tau
+        b = cyl(p["drygrass"], 0.03, 0.4, (0, 0, 0), verts=4, r2=0.005)
+        b.rotation_euler = (0.6, 0, a)
+        b.location = (math.sin(a) * 0.08, -math.cos(a) * 0.08, 0.15)
+
+
+def tire_pile(p):
+    for k, (x, y, z, rx) in enumerate(((0, 0, 0.1, 0), (0.15, 0.1, 0.25, 0.3), (-0.3, 0.25, 0.08, 1.4))):
+        t = cyl(p["rubber"], 0.28, 0.14, (x, y, z), rot=(rx, 0, 0), verts=12)
+
+
+def barrels(p):
+    cyl(p["rust"], 0.17, 0.5, (0, 0, 0.25), verts=10)
+    cyl(p["hazard"], 0.17, 0.5, (0.36, 0.05, 0.25), verts=10)
+    cyl(p["rust"], 0.17, 0.5, (0.15, 0.32, 0.17), rot=(math.radians(90), 0, 0.4), verts=10)
+
+
+def wreck(p):
+    """A burnt-out car hulk."""
+    box(p["rust"], (1.6, 0.8, 0.35), (0, 0, 0.3))
+    box(p["rust"], (0.8, 0.72, 0.3), (-0.1, 0, 0.62))
+    box(p["dark_glass"], (0.75, 0.74, 0.18), (-0.1, 0, 0.62))
+    for x, y in ((-0.55, -0.42), (0.55, -0.42), (0.55, 0.42)):
+        cyl(p["rubber"], 0.2, 0.12, (x, y, 0.18), rot=(math.radians(90), 0, 0), verts=10)
+    box(p["scrap"], (0.3, 0.1, 0.05), (0.7, 0.45, 0.05), rot=(0, 0, 0.6))
+
+
+def bones(p):
+    ball(p["bone"], 0.16, (0, 0, 0.1), scale=(1.3, 1, 0.8), seg=8, rings=5)  # skull
+    for k in range(4):
+        cyl(p["bone"], 0.03, 0.5, (0.3, -0.2 + k * 0.13, 0.04), rot=(0, math.radians(90), 0.3 * k), verts=5)
+
+
+def scrap_pile(p):
+    box(p["scrap"], (0.7, 0.5, 0.25), (0, 0, 0.12), rot=(0.1, 0.05, 0.3))
+    box(p["rust"], (0.5, 0.06, 0.4), (0.15, 0.1, 0.3), rot=(0.4, 0.3, 0.8))
+    cyl(p["scrap"], 0.06, 0.8, (-0.2, 0.1, 0.25), rot=(0.2, 1.3, 0.4), verts=6)
+    box(p["hazard"], (0.3, 0.3, 0.05), (-0.25, -0.2, 0.28), rot=(0.5, 0.2, 0.1))
+
+
+DOODADS = {
+    "rocks_a": rocks_a, "rocks_b": rocks_b, "pebbles": pebbles, "dead_tree": dead_tree, "dry_bush": dry_bush,
+    "tire_pile": tire_pile, "barrels": barrels, "wreck": wreck, "bones": bones, "scrap_pile": scrap_pile,
+}
+
 MODELS = {
     "serf": serf, "auxiliaire": auxiliaire, "legionnaire": legionnaire, "soigneur": soigneur,
     "conseil": conseil, "grenier": grenier, "caserne": caserne, "mine": mine, "minerai": minerai, "puits": puits,
@@ -362,6 +451,29 @@ def icon(model, path):
     bpy.ops.render.render(write_still=True)
 
 
+def export_doodads(path):
+    """All scenery pieces in one file, one named mesh each, laid side by side."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    MATS.clear()
+    p = palette()
+    for i, (name, fn) in enumerate(DOODADS.items()):
+        before = set(bpy.context.scene.objects)
+        fn(p)
+        parts = [o for o in bpy.context.scene.objects if o not in before]
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in parts:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = parts[0]
+        bpy.ops.object.join()
+        o = bpy.context.active_object
+        o.name = name
+        o.data.name = name
+        bpy.ops.object.shade_flat()
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True)
+    print(f"DOODADS {len(DOODADS)}")
+
+
 os.makedirs(OUT, exist_ok=True)
 os.makedirs(ICONS, exist_ok=True)
 for name, fn in MODELS.items():
@@ -371,3 +483,5 @@ for name, fn in MODELS.items():
     export(model, os.path.join(OUT, f"{name}.glb"))
     icon(model, os.path.join(ICONS, f"{name}.png"))
     print(f"MODEL {name}: {len(model.data.polygons)} faces")
+if not ONLY or "doodads" in ONLY:
+    export_doodads(os.path.join(OUT, "doodads.glb"))

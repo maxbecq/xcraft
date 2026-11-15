@@ -14,7 +14,8 @@ import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import type { Command, Entity } from './sim/world';
 import './style.css';
-import { addFog, buildTerrain } from './terrain';
+import { addFog, buildTerrain, createFog, fogMaterial } from './terrain';
+import { Decor } from './render/decor';
 
 const EDGE_PX = 8;
 const params = new URLSearchParams(location.search);
@@ -43,7 +44,9 @@ const scene = new Scene();
 scene.background = new Color(0x0d0f12);
 const terrain = buildTerrain(map);
 scene.add(terrain);
-const fog = addFog(terrain, map);
+const fog = createFog(map);
+addFog(terrain, fog, map);
+const decor = new Decor(map, world);
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.
 scene.add(new HemisphereLight(0xb8c8e8, 0x4a3820, 1.1));
@@ -70,6 +73,7 @@ const minimap = new Minimap(map, rig);
 document.body.appendChild(minimap.canvas);
 
 const units = new EntityRenderer(scene, map);
+units.onBuilding = (e) => decor.hideUnder(e.tx, e.ty, (e.def as { size: number }).size);
 const issue = (c: Command) => pending.push(c);
 const input = new Input(world, map, PLAYER, {
   camera: () => rig.camera,
@@ -157,7 +161,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
 
-const ready = loadModels(Object.keys(DEFS));
+const ready = Promise.all([loadModels(Object.keys(DEFS)), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (SPECTATE || params.has('play')) {
   ready.then(start);
 } else {

@@ -31,7 +31,7 @@ export class Post {
     this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2 });
     this.ao.blendIntensity = 0.85;
     composer.addPass(this.ao);
-    composer.addPass(new UnrealBloomPass(size, 0.55, 0.45, 0.82));
+    composer.addPass(new UnrealBloomPass(size, 0.5, 0.4, 0.9));
     composer.addPass(new OutputPass());
     composer.addPass(new SMAAPass());
     this.composer = composer;

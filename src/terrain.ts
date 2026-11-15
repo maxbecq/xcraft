@@ -1,6 +1,6 @@
 import {
-  BufferGeometry, Color, DataTexture, Float32BufferAttribute, Group, LinearFilter, Mesh, MeshStandardMaterial, RedFormat,
-  Vector2, Vector3,
+  BufferGeometry, Color, DataTexture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshStandardMaterial,
+  type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, tileAt } from './map';
 import { fbm, groundTextures, rockTextures } from './render/textures';
@@ -230,27 +230,44 @@ function untile(m: MeshStandardMaterial): void {
   };
 }
 
-/** Darkens unexplored and out-of-sight ground. Write 0 / 128 / 255 per tile into the texture, then set needsUpdate. */
-export function addFog(terrain: Group, map: GameMap): DataTexture {
+/** Fog-of-war texture: write 0 / 128 / 255 per tile (unseen, explored, visible), then set needsUpdate. */
+export function createFog(map: GameMap): DataTexture {
   const fog = new DataTexture(new Uint8Array(map.width * map.height), map.width, map.height, RedFormat);
   fog.magFilter = LinearFilter;
   fog.minFilter = LinearFilter;
   fog.needsUpdate = true;
-  terrain.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
-    const mat = o.material as MeshStandardMaterial;
-    const prev = mat.onBeforeCompile;
-    mat.onBeforeCompile = (shader, r) => {
-      prev?.call(mat, shader, r);
-      shader.uniforms.fogMap = { value: fog };
-      shader.uniforms.mapSize = { value: new Vector2(map.width, map.height) };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform vec2 mapSize;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFogUv = position.xz / mapSize;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
-        .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.12 + 0.88 * texture2D(fogMap, vFogUv).r;');
-    };
-  });
   return fog;
+}
+
+/** Makes a material darker where the player has no vision (works for instanced meshes too). */
+export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void {
+  if (mat.userData.fogged) return;
+  mat.userData.fogged = true;
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, r) => {
+    prev?.call(mat, shader, r);
+    shader.uniforms.fogMap = { value: fog };
+    shader.uniforms.mapSize = { value: new Vector2(map.width, map.height) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform vec2 mapSize;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vec4 fogWorld = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          fogWorld = instanceMatrix * fogWorld;
+        #endif
+        vFogUv = (modelMatrix * fogWorld).xz / mapSize;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.12 + 0.88 * texture2D(fogMap, vFogUv).r;');
+  };
+}
+
+/** Applies the fog to every material of an object tree. */
+export function addFog(root: Object3D, fog: DataTexture, map: GameMap): void {
+  root.traverse((o) => {
+    if (o instanceof Mesh) fogMaterial(o.material as Material, fog, map);
+  });
 }
