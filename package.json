@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "balance": "REPORT=1 vitest run scripts/balance.test.ts --silent=false"
+    "balance": "REPORT=1 vitest run scripts/balance.test.ts --silent=false",
+    "models": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/models.py -- public/models public/icons"
   },
   "dependencies": {
     "three": "0.187.0"

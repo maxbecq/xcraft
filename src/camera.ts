@@ -33,7 +33,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export class CameraRig {
   readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
   readonly target = new Vector3();
-  viewHeight = 24;
+  viewHeight = 20;
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
 

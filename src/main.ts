@@ -6,7 +6,8 @@ import { Input } from './game/input';
 import { Minimap } from './minimap';
 import { Effects } from './render/effects';
 import { Overlay } from './render/overlay';
-import { EntityRenderer } from './render/units';
+import { EntityRenderer, loadModels } from './render/units';
+import { DEFS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import type { Command, Entity } from './sim/world';
@@ -113,7 +114,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
 let acc = 0;
-renderer.setAnimationLoop(() => {
+loadModels(Object.keys(DEFS)).then(() => renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.25);
   acc += dt * SPEED;
   while (acc >= TICK) {
@@ -134,4 +135,4 @@ renderer.setAnimationLoop(() => {
   overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
   minimap.draw(world, sees);
   renderer.render(scene, rig.camera);
-});
+}));

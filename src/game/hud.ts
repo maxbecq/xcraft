@@ -7,6 +7,8 @@ import type { Input } from './input';
 
 interface Button {
   label: string;
+  /** Entity type whose icon to show. */
+  icon?: string;
   key: string;
   cost?: Cost;
   action: () => void;
@@ -150,12 +152,12 @@ export class Hud {
     if (sel.length > 1) {
       this.panel.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
-        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${e.def.name.slice(0, 3)}</div>`)
+        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}"><img src="${icon(e.type)}" alt="${e.def.name}"></div>`)
         .join('')}</div>`;
       return;
     }
     const e = sel[0];
-    let html = `<div class="name">${e.def.name}</div>`;
+    let html = `<img class="portrait" src="${icon(e.type)}" alt=""><div class="name">${e.def.name}</div>`;
     if (e.def.kind === 'resource') {
       html += `<div class="info">${Number.isFinite(e.amount) ? `${e.amount} restants` : 'Inépuisable'}</div>`;
     } else {
@@ -168,7 +170,7 @@ export class Hud {
       } else if (e.queue.length) {
         const first = DEFS[e.queue[0]] as UnitDef;
         html += progress(first.name, 1 - e.trainLeft / ticks(first.buildTime));
-        html += `<div class="queue">${e.queue.map((t) => `<span>${DEFS[t].name.slice(0, 3)}</span>`).join('')}</div>`;
+        html += `<div class="queue">${e.queue.map((t) => `<span><img src="${icon(t)}" alt="${DEFS[t].name}"></span>`).join('')}</div>`;
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
@@ -193,7 +195,7 @@ export class Hud {
         return [
           ...BUILDABLE.map((t) => {
             const d = DEFS[t] as BuildingDef;
-            return { label: d.name, key: d.hotkey, cost: d.cost, action: () => (this.placing = t) };
+            return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => (this.placing = t) };
           }),
           { label: 'Retour', key: 'Escape', action: () => (this.buildMenu = false) },
         ];
@@ -212,7 +214,7 @@ export class Hud {
       const d = DEFS[t] as UnitDef;
       // Queue in the least busy of the selected buildings.
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      return { label: d.name, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) };
+      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) };
     });
     if (same.some((o) => o.queue.length)) {
       list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
@@ -230,7 +232,8 @@ export class Hud {
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.cost && !afford(p, b.cost) ? ' off' : '';
-        return `<button class="cmd${off}" data-key="${b.key}"><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${b.label}${cost}</button>`;
+        const img = b.icon ? `<img src="${icon(b.icon)}" alt="">` : '';
+        return `<button class="cmd${off}${img ? ' has-icon' : ''}" data-key="${b.key}" title="${b.label}"><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${img}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
   }
@@ -267,6 +270,8 @@ export class Hud {
     this.ghost.position.set(cx, heightAt(this.map, cx, cz) + 0.15, cz);
   }
 }
+
+const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${type}.png`;
 
 function el(tag: string, cls: string): HTMLElement {
   const e = document.createElement(tag);

@@ -2,12 +2,14 @@ import {
   BoxGeometry, CapsuleGeometry, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene,
 } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
+const UNIT_SCALE = 1.35;
 
 const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra });
 const teamMaterials = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6 }));
@@ -23,7 +25,38 @@ const ringMaterial = new MeshBasicMaterial({ color: 0x55ff66, transparent: true,
 const enemyRingMaterial = new MeshBasicMaterial({ color: 0xff5544, transparent: true, opacity: 0.85 });
 const neutralRingMaterial = new MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.85 });
 
-/** Placeholder models, until the Blender pipeline provides real ones. Units face +Z. */
+/** Models built by tools/blender/models.py, by entity type. */
+const templates = new Map<string, Group>();
+
+/** Loads the Blender models; types without one keep their placeholder. */
+export async function loadModels(types: string[]): Promise<void> {
+  const loader = new GLTFLoader();
+  await Promise.all(
+    types.map(async (type) => {
+      try {
+        const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}.glb`);
+        templates.set(type, gltf.scene);
+      } catch {
+        // keep the placeholder
+      }
+    }),
+  );
+}
+
+function model(type: string, team: Material): Group {
+  const t = templates.get(type);
+  if (!t) return placeholder(type, team);
+  const g = t.clone(true);
+  g.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    if ((o.material as Material).name === 'team') o.material = team;
+  });
+  return g;
+}
+
+/** Fallback models, used when a Blender model is missing. Units face +Z. */
 function placeholder(type: string, team: Material): Group {
   const g = new Group();
   const add = (geo: BufferGeometry, m: Material, x: number, y: number, z: number) => {
@@ -138,7 +171,12 @@ export class EntityRenderer {
       if (e.x !== e.px || e.y !== e.py) v.heading = Math.atan2(e.x - e.px, e.y - e.py);
       v.root.position.set(x, heightAt(this.map, x, z), z);
       v.ring.visible = selected.has(e.id);
-      if (e.def.kind === 'unit') v.model.rotation.y = v.heading;
+      if (e.def.kind === 'unit') {
+        v.model.rotation.y = v.heading;
+        // Walking bob.
+        const moving = e.x !== e.px || e.y !== e.py;
+        v.model.position.y = moving ? Math.abs(Math.sin(performance.now() / 90 + e.id)) * 0.05 : 0;
+      }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
@@ -150,16 +188,26 @@ export class EntityRenderer {
   private create(e: Entity, player: number): View {
     const root = new Group();
     root.userData.id = e.id;
-    const model = placeholder(e.type, teamMaterials[e.owner] ?? neutral);
-    root.add(model);
+    const body = model(e.type, teamMaterials[e.owner] ?? neutral);
+    const pivot = new Group(); // animated wrapper, so the model keeps its own transform
+    pivot.add(body);
+    // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
+    if (e.def.kind === 'unit') body.scale.setScalar(UNIT_SCALE);
+    root.add(pivot);
     const r = e.radius / FP;
+    if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
+      const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
+      cargo.name = 'cargo';
+      cargo.position.set(0, 0.62, -0.2);
+      pivot.add(cargo);
+    }
     const ringMat = e.owner === player ? ringMaterial : e.owner < 0 ? neutralRingMaterial : enemyRingMaterial;
     const ring = new Mesh(new RingGeometry(r * 1.1, r * 1.1 + 0.08, 40), ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.05;
     root.add(ring);
     this.scene.add(root);
-    const v: View = { root, model, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: model.getObjectByName('cargo'), seen: false };
+    const v: View = { root, model: pivot, ring, heading: e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75, cargo: pivot.getObjectByName('cargo'), seen: false };
     this.views.set(e.id, v);
     return v;
   }
