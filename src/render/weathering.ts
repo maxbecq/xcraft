@@ -66,47 +66,186 @@ export function weather(m: Material, amount: number): void {
   };
 }
 
-const TAGS = ['XC', 'RUST', 'MAD', 'NO GODS', 'BOOM', 'Z!', '27', 'KRAK', 'FREE', 'SCRAP', 'H8', 'VIVA'];
-const SPRAY = ['#ff3fa4', '#ffd23f', '#f2f2f2', '#3fe0ff', '#ff4a2a', '#7dff5a'];
+const PALETTES: [fill: string, outline: string, shine: string][] = [
+  ['#ff3fa4', '#1a0a14', '#ffc2e4'],
+  ['#ffd23f', '#2a1606', '#fff3b8'],
+  ['#3fe0ff', '#06162a', '#c8f6ff'],
+  ['#7dff5a', '#0a2006', '#d8ffc8'],
+  ['#ff5a2a', '#200806', '#ffd0b8'],
+  ['#f2f2f2', '#141414', '#ffffff'],
+  ['#b06aff', '#14062a', '#e6d0ff'],
+];
+const TAG_COUNT = 14;
 let pool: Texture[] | null = null;
 
-/** Spray-painted tags with drips, drawn once into canvases. */
+/** Small seeded random generator, so every tag is the same from one game to the next. */
+function rng(seed: number): () => number {
+  let s = seed * 2654435761 + 1013904223;
+  return () => {
+    s = Math.imul(s ^ (s >>> 15), 2246822519) ^ Math.imul(s ^ (s >>> 13), 3266489917);
+    return ((s >>> 0) % 100000) / 100000;
+  };
+}
+
+type Stroke = { pts: [number, number][]; arrow: boolean };
+
+/** One alien ideogram: a few strokes (bars, arcs, hooks, chevrons) and dots, in a 100x150 box. */
+function glyph(r: () => number): { strokes: Stroke[]; dots: [number, number][] } {
+  const strokes: Stroke[] = [];
+  const dots: [number, number][] = [];
+  const parts = 2 + Math.floor(r() * 3);
+  // A slanted spine holds most glyphs together.
+  const lean = (r() - 0.5) * 40;
+  strokes.push({ pts: [[50 - lean, 10], [50 + (r() - 0.5) * 30, 75], [50 + lean, 140]], arrow: r() < 0.35 });
+  for (let i = 0; i < parts; i++) {
+    const kind = Math.floor(r() * 5);
+    const y = 25 + r() * 100;
+    if (kind === 0) {
+      // Bar crossing the spine.
+      strokes.push({ pts: [[10 + r() * 20, y], [50, y + (r() - 0.5) * 20], [90 - r() * 15, y + (r() - 0.5) * 30]], arrow: r() < 0.5 });
+    } else if (kind === 1) {
+      // Arc around a point.
+      const cx = 30 + r() * 40;
+      const rad = 18 + r() * 22;
+      const a0 = r() * Math.PI * 2;
+      const pts: [number, number][] = [];
+      for (let k = 0; k <= 8; k++) {
+        const a = a0 + (k / 8) * Math.PI * (1.1 + r() * 0.6);
+        pts.push([cx + Math.cos(a) * rad, y + Math.sin(a) * rad * 1.2]);
+      }
+      strokes.push({ pts, arrow: false });
+    } else if (kind === 2) {
+      // Hook curling off the spine.
+      const s = r() < 0.5 ? -1 : 1;
+      strokes.push({ pts: [[50, y], [50 + s * 35, y - 15], [50 + s * 40, y + 15], [50 + s * 20, y + 20]], arrow: r() < 0.3 });
+    } else if (kind === 3) {
+      // Chevron.
+      const s = r() < 0.5 ? -1 : 1;
+      strokes.push({ pts: [[15, y - 20 * s], [50, y + 15 * s], [85, y - 20 * s]], arrow: false });
+    } else {
+      for (let k = 0; k < 1 + Math.floor(r() * 3); k++) dots.push([15 + r() * 70, y + (r() - 0.5) * 30]);
+    }
+  }
+  return { strokes, dots };
+}
+
+/** Draws a smooth stroke through points (quadratic curves through midpoints). */
+function trace(ctx: CanvasRenderingContext2D, pts: [number, number][]): void {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+    const my = (pts[i][1] + pts[i + 1][1]) / 2;
+    ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+  }
+  const last = pts[pts.length - 1];
+  ctx.lineTo(last[0], last[1]);
+}
+
+function arrowHead(ctx: CanvasRenderingContext2D, pts: [number, number][], size: number): void {
+  const [x, y] = pts[pts.length - 1];
+  const [px, py] = pts[pts.length - 2];
+  const a = Math.atan2(y - py, x - px);
+  ctx.beginPath();
+  ctx.moveTo(x + Math.cos(a) * size, y + Math.sin(a) * size);
+  ctx.lineTo(x + Math.cos(a + 2.5) * size, y + Math.sin(a + 2.5) * size);
+  ctx.lineTo(x + Math.cos(a - 2.5) * size, y + Math.sin(a - 2.5) * size);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Spray-painted tags in an alien script: wild strokes, outlines, drop shadow, arrows, overspray and drips. */
 export function graffiti(): Texture[] {
   if (pool) return pool;
-  pool = TAGS.map((text, i) => {
+  pool = Array.from({ length: TAG_COUNT }, (_, i) => {
+    const r = rng(i + 7);
     const c = document.createElement('canvas');
-    c.width = 256;
-    c.height = 128;
+    c.width = 512;
+    c.height = 256;
     const ctx = c.getContext('2d')!;
-    const color = SPRAY[i % SPRAY.length];
-    ctx.translate(128, 64);
-    ctx.rotate(((i * 37) % 13 - 6) * 0.02);
-    ctx.font = `${text.length > 4 ? 52 : 74}px Impact, 'Arial Black', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    // Overspray halo, dark outline, then the fill.
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 14;
+    const [fill, outline, shine] = PALETTES[i % PALETTES.length];
+    const count = 2 + Math.floor(r() * 3);
+    const glyphs = Array.from({ length: count }, () => glyph(r));
+    const width = 14 + r() * 8;
+    const tilt = glyphs.map(() => (r() - 0.5) * 0.25);
+    ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = 'rgba(15,10,10,0.9)';
-    ctx.strokeText(text, 0, 0);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = color;
-    ctx.fillText(text, 0, 0);
-    // Drips.
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    for (let k = 0; k < 5; k++) {
-      const x = -70 + ((i * 53 + k * 37) % 140);
-      const len = 10 + ((i * 17 + k * 23) % 30);
-      ctx.beginPath();
-      ctx.moveTo(x, 18);
-      ctx.lineTo(x, 18 + len);
-      ctx.stroke();
+    // Lay the glyphs out on a baseline that sags or rises, overlapping a little.
+    const place = (k: number) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const span = 440 / count;
+      ctx.translate(36 + k * span * 0.98, 40 + Math.sin(k * 1.3 + i) * 14);
+      ctx.rotate(tilt[k]);
+      ctx.scale(span / 100, 1.15);
+    };
+    const passes: [string, number, number, number][] = [
+      // colour, extra width, offset x, offset y: shadow, outline, fill, shine
+      ['rgba(0,0,0,0.55)', 10, 7, 8],
+      [outline, 10, 0, 0],
+      [fill, 0, 0, 0],
+    ];
+    for (const [col, extra, ox, oy] of passes) {
+      for (let k = 0; k < count; k++) {
+        place(k);
+        ctx.translate(ox, oy);
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.lineWidth = width + extra;
+        if (col === fill) {
+          ctx.shadowColor = fill;
+          ctx.shadowBlur = 10; // overspray halo
+        }
+        for (const s of glyphs[k].strokes) {
+          trace(ctx, s.pts);
+          ctx.stroke();
+          if (s.arrow) arrowHead(ctx, s.pts, width * 1.6 + extra * 0.6);
+        }
+        for (const [dx, dy] of glyphs[k].dots) {
+          ctx.beginPath();
+          ctx.arc(dx, dy, width * 0.75 + extra / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      }
     }
+    // Shine: a thin light line along the upper side of each stroke.
+    ctx.globalAlpha = 0.7;
+    for (let k = 0; k < count; k++) {
+      place(k);
+      ctx.translate(-width * 0.18, -width * 0.22);
+      ctx.strokeStyle = shine;
+      ctx.lineWidth = Math.max(2, width * 0.22);
+      for (const s of glyphs[k].strokes) {
+        trace(ctx, s.pts);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Drips running down from the bottom of the piece, and loose spray mist.
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = fill;
+    for (let k = 0; k < 6 + r() * 6; k++) {
+      const x = 40 + r() * 430;
+      const y0 = 150 + r() * 50;
+      const len = 15 + r() * 45;
+      ctx.lineWidth = 2 + r() * 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x + (r() - 0.5) * 3, y0 + len);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y0 + len, ctx.lineWidth * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let k = 0; k < 400; k++) {
+      ctx.globalAlpha = 0.25 + r() * 0.4;
+      ctx.fillRect(20 + r() * 470, 20 + r() * 210, 1.5, 1.5);
+    }
+    ctx.globalAlpha = 1;
     const t = new CanvasTexture(c);
     t.colorSpace = SRGBColorSpace;
+    t.anisotropy = 4;
     return t;
   });
   return pool;
