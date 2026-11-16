@@ -172,6 +172,7 @@ export class Hud {
     this.targeting = on;
     this.scanning = on && scan;
     document.body.classList.toggle('targeting', on);
+    document.body.classList.toggle('scanning', on && scan);
   }
 
   notify(events: GameEvent[]): void {
