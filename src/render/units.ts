@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -94,23 +94,53 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
 const timber = new MeshStandardMaterial({ color: 0x7a5636, roughness: 0.9 });
 const canvasCloth = new MeshStandardMaterial({ color: 0x6b6a45, roughness: 1, side: DoubleSide });
-const footing = new MeshStandardMaterial({ color: 0x8a7f6c, roughness: 1 });
+const footing = new MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+
+/**
+ * Low walls of weathered rubble stone along segments [x0, z0, x1, z1]: two or three courses of uneven blocks,
+ * each its own shade of grey-brown, a little askew. Seeded by `seed`, so a site looks the same every time.
+ */
+function rubbleWalls(lines: [number, number, number, number][], seed: number): BufferGeometry {
+  let r = (seed * 9301 + 49297) % 233280;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const stones: BufferGeometry[] = [];
+  const shade = new Color();
+  for (const [x0, z0, x1, z1] of lines) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const yaw = Math.atan2(-(z1 - z0), x1 - x0);
+    const courses = 2 + (rand() < 0.4 ? 1 : 0);
+    for (let c = 0; c < courses; c++) {
+      let t = c % 2 ? 0.07 : 0;
+      while (t < len) {
+        const l = 0.12 + rand() * 0.12;
+        const h = 0.07 + rand() * 0.05;
+        const g = new BoxGeometry(Math.min(l, len - t + 0.02), h, 0.13 + rand() * 0.07);
+        g.rotateX((rand() - 0.5) * 0.25).rotateZ((rand() - 0.5) * 0.3).rotateY(yaw + (rand() - 0.5) * 0.25);
+        const k = (t + l / 2) / len;
+        g.translate(x0 + (x1 - x0) * k, c * 0.085 + h / 2, z0 + (z1 - z0) * k);
+        // Old stone: greys and ochres, darker low down where the damp gets in.
+        shade.setHSL(0.07 + rand() * 0.05, 0.12 + rand() * 0.18, 0.06 + rand() * 0.12 + c * 0.02);
+        const n = g.getAttribute('position').count;
+        g.setAttribute('color', new BufferAttribute(new Float32Array(Array.from({ length: n * 3 }, (_, i) => [shade.r, shade.g, shade.b][i % 3])), 3));
+        stones.push(g);
+        t += l + 0.015;
+      }
+    }
+  }
+  return mergeGeometries(stones);
+}
 
 /**
  * Human building site: a stone footing the size of the footprint, and scaffolding round the model's bounds,
  * one group per storey (poles, ledgers, a plank deck and a few canvas sheets), so storeys can go up and come down.
  */
 function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storeys: Object3D[] } {
-  // Footing: low stone walls along the outline and across the middle, as dug foundations, not a slab.
+  // Footing: low rubble-stone walls along the outline and across the middle, as old dug foundations.
   const half = footprint * 0.46;
-  const wall = 0.2;
-  const high = 0.28;
-  const walls: BufferGeometry[] = [];
-  for (const z of [-half, half]) walls.push(new BoxGeometry(2 * half + wall, high, wall).translate(0, high / 2, z));
-  for (const x of [-half, half]) walls.push(new BoxGeometry(wall, high, 2 * half).translate(x, high / 2, 0));
-  walls.push(new BoxGeometry(2 * half, high * 0.8, wall * 0.8).translate(0, high * 0.4, footprint >= 3 ? -half / 3 : 0));
-  if (footprint >= 3) walls.push(new BoxGeometry(wall * 0.8, high * 0.8, half * 1.3).translate(half / 4, high * 0.4, half / 3));
-  const slab = new Mesh(mergeGeometries(walls), footing);
+  const lines: [number, number, number, number][] = [[-half, -half, half, -half], [-half, half, half, half], [-half, -half, -half, half], [half, -half, half, half]];
+  lines.push(footprint >= 3 ? [-half, -half / 3, half, -half / 3] : [-half, 0, half, 0]);
+  if (footprint >= 3) lines.push([half / 4, -half / 3, half / 4, half]);
+  const slab = new Mesh(rubbleWalls(lines, footprint), footing);
   const w = size.x / 2 + 0.18;
   const d = size.z / 2 + 0.18;
   const count = Math.max(2, Math.min(5, Math.round(size.y / 0.75)));
