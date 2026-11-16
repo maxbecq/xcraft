@@ -1,4 +1,4 @@
-import { type BuildingDef, DEFS, FACTIONS, type FactionDef, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FACTIONS, OBSERVATION, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, ticks } from '../sim/fixed';
 import { EXPANSIONS } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
@@ -36,6 +36,9 @@ export const DIFFICULTY: Record<string, number> = { easy: 70, normal: 100, hard:
 const THINK_EVERY = 10; // ticks
 const DEFEND_RADIUS = 14 * FP;
 const MAX_WAVE = 18;
+/** Forge lines in research order. */
+const RESEARCH = ['ranged', 'armor', 'melee'];
+const MAX_CLOAKED = 3;
 
 /** A computer player. It only acts through commands, like a human. */
 export class AI {
@@ -94,6 +97,14 @@ export class AI {
     const casernes = buildings.filter((b) => b.type === f.barracks);
     if (minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
     if (count(f.barracks) < casernesWanted) wants.push(f.barracks);
+    // Mid-game: a Forge, detection against an enemy that has invisible units, a defence or two.
+    const minute = w.tick / ticks(60);
+    if (f.forge && count(f.forge) === 0 && count(f.barracks) >= 2 && count(f.extractor) > 0) wants.push(f.forge);
+    const enemyCloaks = w.players.some((o) => o.id !== this.player && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
+    const detectors = f.detector && f.detector !== f.defense && enemyCloaks ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
+    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
+    if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
+    if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Expand to the natural once the main is running.
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
     const expand = councils < 2 && serfs.length >= this.plan.serfs && (w.tick > ticks(7 * 60) || this.fieldsLeft(home) < 5);
@@ -121,11 +132,22 @@ export class AI {
       out.push({ player: this.player, kind: 'train', ids: [councilHome.id], type: f.worker });
       minerals -= 100;
     }
+    // Forge upgrades, one line after the other, when there is money to spare.
+    for (const forge of buildings.filter((b) => b.type === f.forge && b.buildLeft === 0 && b.queue.length === 0)) {
+      const next = RESEARCH.map((line) => (DEFS[forge.type] as BuildingDef).researches!.find((t) => (DEFS[t] as UpgradeDef).line === line && w.researchable(this.player, t)))
+        .filter((t): t is string => !!t)
+        .sort((a, b) => (DEFS[a] as UpgradeDef).level - (DEFS[b] as UpgradeDef).level)[0];
+      const cost = next && (DEFS[next] as UpgradeDef).cost;
+      if (cost && minerals >= cost.minerals && p.energy >= cost.energy) {
+        out.push({ player: this.player, kind: 'train', ids: [forge.id], type: next });
+        minerals -= cost.minerals;
+      }
+    }
     const rally = this.rallyPoint(home);
     for (const c of buildings.filter((b) => b.type === f.barracks && b.buildLeft === 0)) {
       if (!c.rally) out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
-      const type = this.nextUnit(p.energy);
+      const type = this.nextUnit(p.energy, army, minerals);
       const def = DEFS[type] as UnitDef;
       if (minerals < def.cost.minerals || p.energy < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [c.id], type });
@@ -146,10 +168,40 @@ export class AI {
       atHome.forEach((u) => this.wave.add(u.id));
       this.waves++;
     }
+    // Abilities: stimulant and charge when engaging, Peau de roc while healing in a fight.
+    const casters = army.filter((u) => {
+      const ab = (u.def as UnitDef).ability;
+      if (!ab || u.abilityCd > 0) return false;
+      if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
+      const d = this.engaged(u);
+      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
+    });
+    if (casters.length) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    // Observation céleste where something we cannot see is hurting us (an invisible unit).
+    const scope = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
+    if (scope && p.energy >= OBSERVATION.energy) {
+      const enemies = [...w.entities.values()].filter((e) => e.owner >= 0 && e.owner !== this.player && 'attack' in e.def && e.def.attack && w.sees(this.player, e));
+      const ambushed = mine.find(
+        (u) =>
+          w.tick - u.lastHit < ticks(1) &&
+          !w.scans.some((s) => s.owner === this.player && dist(s.x, s.y, u.x, u.y) < 5 * FP) &&
+          !enemies.some((e) => dist(e.x, e.y, u.x, u.y) < 9 * FP),
+      );
+      if (ambushed) out.push({ player: this.player, kind: 'ability', ids: [scope.id], x: ambushed.x, y: ambushed.y });
+    }
+
     const target = this.enemyTarget(home);
     const waiting = [...this.wave].map((id) => w.entities.get(id)!).filter((u) => !u.order || u.order.kind === 'move');
     if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
     return out;
+  }
+
+  /** Distance to the enemy the unit is fighting, if it is close. */
+  private engaged(u: Entity): number | undefined {
+    const o = u.order;
+    const t = o && (o.kind === 'attack' || o.kind === 'attackMove') ? this.world.entities.get(o.target) : undefined;
+    const d = t && t.def.kind === 'unit' ? dist(u.x, u.y, t.x, t.y) : undefined;
+    return d !== undefined && d < 7 * FP ? d : undefined;
   }
 
   /** No council left: throw everything at the enemy. */
@@ -160,10 +212,13 @@ export class AI {
     return [{ player: this.player, kind: 'attack', ids: army.map((u) => u.id), x: target.x, y: target.y }];
   }
 
-  private nextUnit(energy: number): string {
+  private nextUnit(energy: number, own: Entity[], minerals: number): string {
     if (this.faction !== FACTIONS.humains) {
-      // Weighted rotation through the faction's army; energy-hungry units only when affordable.
-      const army = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy);
+      // Weighted rotation through the faction's army; energy-hungry units only when affordable, a few invisible ones at most.
+      const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
+      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals);
+      if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
+      const army = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked);
       const total = army.reduce((n, [, wgt]) => n + wgt, 0);
       let k = this.trained % total;
       for (const [t, wgt] of army) {
