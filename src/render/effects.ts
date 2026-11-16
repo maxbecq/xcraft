@@ -187,6 +187,15 @@ export class Effects {
     this.decals.push({ mesh, age: 0, life });
   }
 
+  /** Blue sparks where a jackhammer bites (mining, building); call every frame while it works. */
+  sparks(p: Vector3, dt: number): void {
+    if (Math.random() > dt * 16) return;
+    for (let i = 0; i < 3; i++) {
+      const v = rnd(2.6).setY(1.4 + Math.random() * 1.8);
+      this.spawn(this.tex.glow, Math.random() < 0.5 ? 0x4fc8ff : 0xe0f6ff, p.clone().add(rnd(0.05)), v, 0.22 + Math.random() * 0.14, 0.11, 0.03, 1, 9, true);
+    }
+  }
+
   /** Light, steady smoke from a chimney or fire; call every frame. */
   ambient(p: Vector3, dt: number, dark: boolean): void {
     if (Math.random() < dt * 3) {

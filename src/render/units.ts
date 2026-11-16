@@ -628,7 +628,8 @@ export class EntityRenderer {
       const has = (role: string) => v.clips!.has(role);
       if (moving) {
         const pace = (def.speed * GAME_SPEED) / WALK_STRIDE;
-        if (e.carry > 0 && has(CLIP.carry)) play(v, CLIP.carry, pace);
+        // Serfs keep walking with their jackhammer when loaded (their carry clip has no legs moving).
+        if (e.carry > 0 && has(CLIP.carry) && CHARACTERS[e.type]?.grip !== 'drill') play(v, CLIP.carry, pace);
         else play(v, attacking && has(CLIP.fire) ? CLIP.fire : CLIP.walk, pace);
       } else if (attacking && has(CLIP.attack)) {
         // One swing or cast per attack.
@@ -638,8 +639,9 @@ export class EntityRenderer {
         // Jackhammer: lean on it and shudder fast, rather than the slow hammer swing of the work clip.
         play(v, CLIP.idle, 0.3);
         v.mixer.update(dt);
-        v.model.position.y = 0.02 + Math.abs(Math.sin(t * 38 + e.id)) * 0.035;
-        v.model.children[0].rotation.x = 0.18 + Math.sin(t * 53 + e.id) * 0.025; // leaning forward, whatever the heading
+        // A light judder, not a bounce: the sparks show the work.
+        v.model.position.y = Math.abs(Math.sin(t * 47 + e.id)) * 0.008;
+        v.model.children[0].rotation.x = 0.12 + Math.sin(t * 61 + e.id) * 0.006; // leaning forward, whatever the heading
         return;
       } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && has(CLIP.work)) play(v, CLIP.work, 1.6);
       else play(v, CLIP.idle, attacking ? 1.4 : 0.8);

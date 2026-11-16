@@ -572,6 +572,19 @@ function start(): void {
     hud.update();
     lap('hud');
     for (const e of world.entities.values()) {
+      // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site).
+      const o = e.order;
+      if (e.type === 'serf' && e.x === e.px && e.y === e.py && sees(e) && ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct')) {
+        const t = world.entities.get(o.target);
+        if (t) {
+          const x = e.x / FP;
+          const z = e.y / FP;
+          const d = Math.hypot(t.x / FP - x, t.y / FP - z) || 1;
+          const tx = x + ((t.x / FP - x) / d) * 0.32;
+          const tz = z + ((t.y / FP - z) / d) * 0.32;
+          effects.sparks(new Vector3(tx, heightAt(map, tx, tz) + 0.05, tz), dt);
+        }
+      }
       if (e.type === 'puits') {
         const covered = [...world.entities.values()].some((m) => m.def.kind === 'building' && m.def.energyRate && m.tx === e.tx && m.ty === e.ty);
         if (!covered) effects.ambient(new Vector3(e.x / FP, heightAt(map, e.x / FP, e.y / FP) + 0.2, e.y / FP), dt, false);
