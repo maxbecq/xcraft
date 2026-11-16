@@ -595,7 +595,10 @@ export class EntityRenderer {
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       v.root.position.set(x, heightAt(this.map, x, z), z);
       v.ring.visible = selected.has(e.id);
-      if (v.ring.visible) (v.ring.userData.dial as Object3D).rotation.z += dt * (e.owner === player ? 0.7 : -0.7);
+      if (v.ring.visible) {
+        ((v.ring.userData.dial as Mesh).material as MeshBasicMaterial).map!.rotation += dt * (e.owner === player ? 0.7 : -0.7);
+        this.drape(v.ring, x, z, v.root.position.y);
+      }
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
         this.animate(v, e, dt);
@@ -681,6 +684,19 @@ export class EntityRenderer {
     body.position.z += (-kick - body.position.z) * 0.5;
   }
 
+  /** Lays a selection ring's meshes on the ground around (x, z), over dunes and slopes; only when it moved. */
+  private drape(ring: Object3D, x: number, z: number, baseY: number): void {
+    const at = `${x.toFixed(2)},${z.toFixed(2)}`;
+    if (ring.userData.at === at) return;
+    ring.userData.at = at;
+    for (const m of ring.children as Mesh[]) {
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + pos.getX(i), z + pos.getZ(i)) - baseY + m.userData.lift);
+      pos.needsUpdate = true;
+      m.geometry.computeBoundingSphere();
+    }
+  }
+
   private create(e: Entity, player: number): View {
     if (e.def.kind === 'building') this.onBuilding(e);
     const root = new Group();
@@ -708,19 +724,23 @@ export class EntityRenderer {
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
+    // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
     for (const [inner, outer, m] of [[r, r + 0.09, core], [r + 0.09, r + 0.3, halo]] as const) {
-      const mesh = new Mesh(new RingGeometry(inner, outer, 48), m);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.y = 0.06;
+      const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), m);
+      mesh.userData.lift = 0.06;
       mesh.renderOrder = 2;
       ring.add(mesh);
     }
     // Ticks just outside the ring, turning (see sync).
     // A ring, not a square: a flat quad shows up in the ambient occlusion and ink passes as a pale rectangle.
     // RingGeometry's planar UVs line the round tick texture up with it.
-    const dial = new Mesh(new RingGeometry((r + 0.42) * 0.74, r + 0.42, 64), dialMaterial(core));
-    dial.rotation.x = -Math.PI / 2;
-    dial.position.y = 0.07;
+    // It turns by turning its texture, so the mesh itself can follow the terrain too.
+    const dialMat = dialMaterial(core).clone();
+    dialMat.map = dialMat.map!.clone();
+    dialMat.map.center.set(0.5, 0.5);
+    dialMat.map.needsUpdate = true;
+    const dial = new Mesh(new RingGeometry((r + 0.42) * 0.74, r + 0.42, 64).rotateX(-Math.PI / 2), dialMat);
+    dial.userData.lift = 0.07;
     dial.renderOrder = 2;
     ring.add(dial);
     ring.userData.dial = dial;
