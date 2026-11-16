@@ -9,7 +9,7 @@ import { Effects } from './render/effects';
 import { Post } from './render/post';
 import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
-import { EntityRenderer, MINERAL_VARIANTS, loadModels } from './render/units';
+import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './render/units';
 import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -66,6 +66,7 @@ const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 const ais = REPLAY ? [] : SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
 if (!SPECTATE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
+else if (!REPLAY && !ATTRACT) [0, 1].forEach((i) => (world.players[i].handicap = DIFFICULTY[params.get(`ai${i}`) ?? 'normal'] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
 const record: Replay = { v: 1, factions: [myFaction, foeFaction], biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
@@ -264,54 +265,99 @@ if (!ATTRACT) {
 } else {
   document.body.classList.add('attract');
   ready.then(start);
-  const menu = document.createElement('div');
+  showHome();
+}
+
+/** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */
+interface Setup {
+  sides: { faction: Faction; control: string }[];
+  biome: string;
+  speed: number;
+}
+const CONTROLS: Record<string, string> = { you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile' };
+
+function readSetup(): Setup {
+  const fallback: Setup = {
+    sides: [
+      { faction: myFaction, control: 'you' },
+      { faction: foeFaction, control: 'normal' },
+    ],
+    biome: biome.id,
+    speed: 2,
+  };
+  try {
+    const s = JSON.parse(stored('xcraft.setup') ?? 'null') as Setup | null;
+    if (s?.sides?.length === 2 && BIOMES[s.biome]) return s;
+  } catch {
+    // a broken entry: start over
+  }
+  return fallback;
+}
+
+function showHome(): void {
+  const menu = document.querySelector('.menu') ?? document.body.appendChild(document.createElement('div'));
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris</p>
-    <button data-m="easy">Jouer — IA facile</button>
-    <button data-m="normal">Jouer — IA normale</button>
-    <button data-m="hard">Jouer — IA difficile</button>
-    <div class="row">
-      <button data-m="watch">Regarder : ${FACTIONS[myFaction].name} contre ${FACTIONS[foeFaction].name}</button>
-      <button data-m="watch-isdaris">Regarder : Isdaris contre Isdaris</button>
-    </div>
-    <div class="row">
-      <button data-m="camp">Votre camp : ${FACTIONS[myFaction].name}</button>
-      <button data-m="adversaire">Adversaire : ${FACTIONS[foeFaction].name}</button>
-      <button data-m="biome">Planète : ${biome.name}</button>
-    </div>
+    <button data-m="new">Nouvelle partie</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
     </div>`;
-  document.body.append(menu);
-  menu.addEventListener('click', (e) => {
+  (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
-    const keep = `biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
-    if (m === 'camp' || m === 'adversaire') {
-      const now = m === 'camp' ? myFaction : foeFaction;
-      const next = now === 'humains' ? 'isdaris' : 'humains';
-      try {
-        localStorage.setItem(`xcraft.${m}`, next);
-      } catch {
-        // the URL still carries it
-      }
-      location.search = keep.replace(`${m}=${now}`, `${m}=${next}`);
-    } else if (m === 'biome') {
-      // Cycle planets; the title screen reloads to show the new one.
-      const ids = Object.keys(BIOMES);
-      const next = ids[(ids.indexOf(biome.id) + 1) % ids.length];
-      try {
-        localStorage.setItem('xcraft.biome', next);
-      } catch {
-        // storage unavailable: the URL still carries it
-      }
-      location.search = keep.replace(`biome=${biome.id}`, `biome=${next}`);
-    } else if (m === 'watch') location.search = `?spectate&speed=2&${keep}`;
+    if (m === 'new') showSetup(menu as HTMLElement, readSetup());
     else if (m === 'last-replay') playReplay(readReplay());
     else if (m === 'open-replay') openReplayFile();
-    else if (m === 'watch-isdaris') location.search = `?spectate&speed=2&biome=${biome.id}&camp=isdaris&adversaire=isdaris`;
-    else if (m) location.search = `?play&ai=${m}&${keep}`;
-  });
+  };
+}
+
+/** The match setup screen: picks are toggled in place, then the match loads from the URL. */
+function showSetup(menu: HTMLElement, s: Setup): void {
+  const pick = (key: string, options: Record<string, string>, now: string) =>
+    `<div class="pick">${Object.entries(options)
+      .map(([v, label]) => `<button data-k="${key}" data-v="${v}"${v === now ? ' class="on"' : ''}>${label}</button>`)
+      .join('')}</div>`;
+  const factions = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
+  const side = (i: number) => {
+    const controls = { ...CONTROLS };
+    if (i === 1) delete controls.you; // the local player is always the first side
+    const color = `#${TEAM_COLORS[i].toString(16).padStart(6, '0')}`;
+    return `<fieldset><legend style="color:${color}">Joueur ${i + 1}</legend>${pick(`f${i}`, factions, s.sides[i].faction)}${pick(`c${i}`, controls, s.sides[i].control)}</fieldset>`;
+  };
+  const watching = s.sides[0].control !== 'you';
+  menu.className = 'menu setup';
+  menu.innerHTML = `<h2>Nouvelle partie</h2>
+    ${side(0)}${side(1)}
+    <fieldset><legend>Planète</legend>${pick('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</fieldset>
+    ${watching ? `<fieldset><legend>Vitesse</legend>${pick('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</fieldset>` : ''}
+    <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
+  menu.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('button');
+    if (!b) return;
+    const { k, v, m } = b.dataset;
+    if (k && v) {
+      if (k === 'biome') s.biome = v;
+      else if (k === 'speed') s.speed = Number(v);
+      else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
+      else s.sides[Number(k[1])].control = v;
+      showSetup(menu, s);
+    } else if (m === 'back') showHome();
+    else if (m === 'go') launch(s);
+  };
+}
+
+function launch(s: Setup): void {
+  const [a, b] = s.sides;
+  try {
+    localStorage.setItem('xcraft.setup', JSON.stringify(s));
+    localStorage.setItem('xcraft.camp', a.faction);
+    localStorage.setItem('xcraft.adversaire', b.faction);
+    localStorage.setItem('xcraft.biome', s.biome);
+  } catch {
+    // the URL carries it all
+  }
+  const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}`;
+  location.search = a.control === 'you' ? `?play&ai=${b.control}&${keep}` : `?spectate&speed=${s.speed}&ai0=${a.control}&ai1=${b.control}&${keep}`;
 }
 
 function start(): void {
@@ -385,7 +431,7 @@ function start(): void {
     lap('render');
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
-  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input });
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer });
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.

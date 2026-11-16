@@ -406,3 +406,22 @@ body.isdaris .help kbd { font: 700 12px var(--deco-text); color: var(--gold); ba
   body.isdaris .hud-bar { font-size: 19px; }
   body.isdaris .tool { font-size: 17px; }
 }
+
+/* ---------------------------------------------------------------- match setup */
+
+.menu.setup { gap: 10px; }
+.menu.setup h2 { margin: 0 0 4px; font: 600 54px/1 var(--title); letter-spacing: 0.1em; color: #ffd58a; text-transform: uppercase; filter: drop-shadow(0 4px 10px #000); }
+.menu fieldset { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0; padding: 8px 14px 12px; width: min(640px, 92vw); box-sizing: border-box; border: 1px solid rgba(217, 164, 32, 0.45); border-radius: 4px; background: rgba(0, 0, 0, 0.35); }
+.menu legend { padding: 0 8px; font: 600 18px var(--title); letter-spacing: 0.2em; text-transform: uppercase; color: #c9b896; }
+.menu .pick { display: flex; flex-wrap: wrap; justify-content: center; }
+.menu .pick button { min-width: 0; padding: 6px 14px; font-size: 17px; border-radius: 0; opacity: 0.6; }
+.menu .pick button:first-child { border-radius: 4px 0 0 4px; }
+.menu .pick button:last-child { border-radius: 0 4px 4px 0; }
+.menu .pick button.on { opacity: 1; border-color: var(--amber); color: var(--amber); }
+.menu .row button.go { min-width: 200px; border-color: var(--amber); }
+@media (max-width: 820px), (max-height: 600px) {
+  .menu.setup { gap: 6px; overflow: auto; place-content: start center; padding: 12px 0; }
+  .menu.setup h2 { font-size: 32px; }
+  .menu fieldset { padding: 4px 8px 8px; }
+  .menu .pick button { font-size: 14px; padding: 5px 9px; }
+}
