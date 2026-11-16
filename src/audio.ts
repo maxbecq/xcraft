@@ -1,6 +1,8 @@
 // Sound effects, synthesised with WebAudio: no audio files. Music is handled separately.
 
-export type Sfx = 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click';
+export type Sfx =
+  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click'
+  | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive';
 
 const MAX_PER_FRAME = 4;
 
@@ -94,6 +96,48 @@ export class Audio {
       case 'click':
         env(0.1, 0.05);
         osc('square', 1200, 900, 0.03);
+        break;
+      case 'ray': // Isdaris light rifle: a bright falling chirp with a shimmer
+        env(0.16, 0.18);
+        osc('sine', 2400, 700, 0.16);
+        osc('triangle', 3600, 1800, 0.08);
+        break;
+      case 'plasma': // Orbe plasma: a fat electric zap
+        env(0.28, 0.3);
+        osc('sawtooth', 120, 60, 0.25);
+        noise(1800, 0.7, 0.2);
+        osc('sine', 900, 200, 0.12);
+        break;
+      case 'stimulant': // injection hiss, then the heart races up
+        env(0.2, 0.45);
+        noise(6000, 2, 0.15);
+        osc('square', 180, 420, 0.4);
+        break;
+      case 'charge': // war cry: a rough rising growl
+        env(0.3, 0.5);
+        osc('sawtooth', 90, 200, 0.45);
+        noise(700, 1.2, 0.3);
+        break;
+      case 'peauderoc': // stone skin: a heavy metallic clank and a low ring
+        env(0.25, 0.6);
+        noise(3200, 6, 0.08);
+        osc('triangle', 220, 210, 0.6);
+        break;
+      case 'observation': // the Forge's scan: a sonar ping
+        env(0.22, 0.9);
+        osc('sine', 1320, 1300, 0.9);
+        setTimeout(() => this.ctx && this.tone(1320, 0.5, 'sine'), 380);
+        break;
+      case 'rappel': // Isdaris recall starting: a long rising shimmer
+        env(0.2, 1.6);
+        osc('sine', 220, 880, 1.5);
+        osc('triangle', 330, 1320, 1.5);
+        break;
+      case 'arrive': // arrival: a bright whoosh and a chord
+        env(0.25, 0.7);
+        noise(5000, 0.8, 0.3);
+        osc('sine', 880, 880, 0.6);
+        setTimeout(() => this.ctx && this.tone(1320, 0.5, 'sine'), 60);
         break;
     }
   }

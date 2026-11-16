@@ -3,7 +3,8 @@ import {
   type Scene, Sprite,
   SpriteMaterial, type Texture, Vector3,
 } from 'three';
-import type { Audio } from '../audio';
+import type { Audio, Sfx } from '../audio';
+import { DEFS } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Shot, World } from '../sim/world';
@@ -82,9 +83,13 @@ export class Effects {
   collect(world: World, seen: (x: number, y: number) => boolean): void {
     for (const s of world.shots) {
       if (!seen(s.x1, s.y1) && !seen(s.x2, s.y2)) continue;
-      this.audio.play(s.kind, 0.6);
+      // Isdaris shoot light; the Orbe throws plasma.
+      const faction = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction;
+      this.audio.play(s.type === 'orbe' ? 'plasma' : s.kind === 'ranged' && faction === 'isdaris' ? 'ray' : s.kind, 0.6);
       this.shot(s);
     }
+    for (const c of world.casts) if (c.kind !== 'rappel' && seen(c.x, c.y)) this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
+    for (const tp of world.teleports) if (seen(tp.x1, tp.y1) || seen(tp.x2, tp.y2)) this.audio.play(tp.phase === 'start' ? 'rappel' : 'arrive');
     for (const d of world.deaths) {
       if (!seen(d.x, d.y)) continue;
       const size = BUILDING_SIZES[d.type];

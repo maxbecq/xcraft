@@ -99,6 +99,15 @@ export interface Shot {
   x2: number;
   y2: number;
   kind: 'ranged' | 'melee' | 'heal';
+  /** Shooter's type, for its sound. */
+  type?: string;
+}
+
+/** An ability used this tick (render and sound only). */
+export interface Cast {
+  kind: string;
+  x: number;
+  y: number;
 }
 
 export interface Death {
@@ -144,6 +153,7 @@ export class World {
   deaths: Death[] = [];
   /** Rappels that began or ended this tick. */
   teleports: Teleport[] = [];
+  casts: Cast[] = [];
   /** Rappels channelling, with ticks left. */
   recalls: { owner: number; from: number; x: number; y: number; ids: number[]; left: number }[] = [];
   readonly vision: Vision[];
@@ -204,6 +214,7 @@ export class World {
     this.shots = [];
     this.deaths = [];
     this.teleports = [];
+    this.casts = [];
     this.scans = this.scans.filter((s) => --s.left > 0);
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
@@ -401,6 +412,7 @@ export class World {
         if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
         if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');
         if (kind === 'observation') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration) });
+        this.casts.push({ kind, x: c.x, y: c.y });
         this.players[c.player].energy -= ab.energy!;
         b.abilityCd = ticks(ab.cooldown);
         return;
@@ -496,6 +508,7 @@ export class World {
       e.speed = speedPerTick(def.speed * (def.ability === 'charge' ? 2 : 1.5));
     }
     e.abilityCd = ticks(ab.cooldown);
+    this.casts.push({ kind: def.ability!, x: e.x, y: e.y });
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
@@ -871,7 +884,7 @@ export class World {
       this.lastAlert[t.owner] = this.tick;
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
     }
-    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged' });
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type });
     // Idle soldiers hit from afar fight back.
     const td = t.def as UnitDef;
     if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker) {
