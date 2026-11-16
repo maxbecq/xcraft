@@ -99,6 +99,8 @@ export interface UpgradeDef {
   level: number;
   cost: Cost;
   buildTime: number;
+  /** Finished buildings needed first, by type and count (SC-like tech tree; the mod has none). */
+  requires?: Record<string, number>;
   faction: Faction;
   hotkey: string;
 }
@@ -114,6 +116,8 @@ export interface AbilityDef {
   hotkey: string;
   cooldown: number;
   duration: number;
+  /** Energy taken from the player's stock (building abilities). */
+  energy?: number;
 }
 
 export const ABILITIES: Record<string, AbilityDef> = {
@@ -124,12 +128,22 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
   peauderoc: { name: 'Peau de roc', hotkey: 'R', cooldown: 25, duration: 35 },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
-  observation: { name: 'Observation céleste', hotkey: 'O', cooldown: 30, duration: 10 },
+  observation: { name: 'Observation céleste', hotkey: 'O', cooldown: 30, duration: 10, energy: 50 },
+  /**
+   * Obélisque (mod « Rappel », a Prisme ability): after a 4 s channel, up to 8 army units within 5 tiles of
+   * the target point appear around the Obélisque, then stay dazed 4 s. 100 energy as in the mod; the cooldown
+   * is ours (the Prisme took 100 s to regain its 100 energy). `duration` is the channel.
+   */
+  rappel: { name: 'Rappel', hotkey: 'R', cooldown: 60, duration: 4, energy: 100 },
 };
-export const OBSERVATION = { radius: 8, energy: 50 };
+export const OBSERVATION = { radius: 8 };
+export const RAPPEL = { radius: 5, max: 8, daze: 4 };
 export const SKIN_RANGE = 4;
 export const SKIN_REDUCTION = 5;
 export const STIM_HP = 10;
+
+/** Buildings each level needs, SC-like: level 2 a second Caserne, level 3 also a Tour alchimistique. */
+const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, { caserne: 2 }, { caserne: 2, tour: 1 }];
 
 export const DEFS: Record<string, Def> = {
   serf: {
@@ -196,14 +210,14 @@ export const DEFS: Record<string, Def> = {
     kind: 'unit', name: 'Druide', hp: 70, shield: 140, armor: 0, speed: 2.5, radius: 0.375, sight: 10, supply: 2,
     cost: { minerals: 200, energy: 150 }, buildTime: 35, attack: { damage: 18, range: 6, cooldown: 1.75 }, faction: 'isdaris', hotkey: 'D',
   },
-  // Mod: « Sombre ».
+  // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
   assassin: {
-    kind: 'unit', name: 'Assassin', hp: 70, shield: 210, armor: 0, speed: 2.6, radius: 0.375, sight: 8, supply: 2,
+    kind: 'unit', name: 'Assassin', hp: 70, shield: 70, armor: 0, speed: 2.6, radius: 0.375, sight: 8, supply: 2,
     cost: { minerals: 400, energy: 400 }, buildTime: 50, attack: { damage: 75, range: 0.1, cooldown: 1.25, vsMechanical: -20 }, cloaked: true, faction: 'isdaris', hotkey: 'X',
   },
   obelisque: {
     kind: 'building', name: 'Obélisque', hp: 2000, shield: 2000, armor: 3, size: 5, sight: 13, supply: 15,
-    cost: { minerals: 1000, energy: 0 }, buildTime: 80, trains: ['moissonneur'], dropoff: true, warp: true, power: 9, faction: 'isdaris', hotkey: 'O',
+    cost: { minerals: 1000, energy: 0 }, buildTime: 80, trains: ['moissonneur'], dropoff: true, warp: true, power: 9, ability: 'rappel', faction: 'isdaris', hotkey: 'O',
   },
   emetteur: {
     kind: 'building', name: 'Émetteur', hp: 300, shield: 300, armor: 1, size: 2, sight: 10, supply: 0,
@@ -235,7 +249,7 @@ export const DEFS: Record<string, Def> = {
 function upgrades(line: UpgradeLine, name: string, hotkey: string): Record<string, UpgradeDef> {
   const out: Record<string, UpgradeDef> = {};
   [250, 350, 450].forEach((c, i) => {
-    out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, cost: { minerals: c, energy: c }, buildTime: 80 + 10 * i, faction: 'humains', hotkey };
+    out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, cost: { minerals: c, energy: c }, buildTime: 80 + 10 * i, requires: UPGRADE_REQUIRES[i], faction: 'humains', hotkey };
   });
   return out;
 }

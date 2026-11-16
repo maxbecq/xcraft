@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, type BuildingDef, OBSERVATION, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -13,6 +13,8 @@ interface Button {
   icon?: string;
   key: string;
   cost?: Cost;
+  /** Why the button is disabled (unmet prerequisites), shown in its title. */
+  reason?: string;
   action: () => void;
 }
 
@@ -70,7 +72,7 @@ export class Hud {
     this.card.addEventListener('pointerdown', (e) => {
       const key = (e.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key;
       const b = this.buttons.find((x) => x.key === key);
-      if (b) {
+      if (b && !b.reason) {
         this.audio.play('click');
         b.action();
       }
@@ -99,7 +101,7 @@ export class Hud {
       const b = this.buttons.find((x) => x.key === key);
       if (b) {
         e.preventDefault();
-        b.action();
+        if (!b.reason) b.action();
       }
     });
   }
@@ -271,14 +273,14 @@ export class Hud {
     if (b.def.ability) {
       const a = ABILITIES[b.def.ability];
       const ready = same.some((o) => o.abilityCd === 0);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: OBSERVATION.energy }, action: () => this.setTargeting(true, true) });
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true) });
     }
     // Forge: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {
       if (!this.world.researchable(this.player, t)) continue;
       const d = DEFS[t] as UpgradeDef;
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      list.push({ label: d.name, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+      list.push({ label: d.name, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
     }
     if (same.some((o) => o.queue.length)) {
       list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
@@ -289,15 +291,15 @@ export class Hud {
   private updateCard(): void {
     this.buttons = this.buttonsFor();
     const p = this.world.players[this.player];
-    const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}`).join('|');
+    const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|');
     if (key === this.cardKey) return;
     this.cardKey = key;
     this.card.innerHTML = this.buttons
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-        const off = b.cost && !afford(p, b.cost) ? ' off' : '';
+        const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const pic = b.icon ? img(b.icon, '') : '';
-        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" title="${b.label}"><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" title="${b.reason ? `${b.label} (${b.reason})` : b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
   }

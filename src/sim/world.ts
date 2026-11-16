@@ -1,4 +1,4 @@
-import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -62,6 +62,10 @@ export interface Entity {
   boost: number;
   skin: number;
   abilityCd: number;
+  /** Ticks left during which the unit can neither act nor take orders (Rappel). */
+  held: number;
+  /** Last entity that hit it (lets the AI tell an invisible attacker from a distant one). */
+  lastAttacker: number;
 }
 
 export interface Player {
@@ -104,6 +108,20 @@ export interface Death {
   owner: number;
 }
 
+/**
+ * A Rappel (Isdaris teleport), for effects and sounds: `start` when the channel begins, `end` when the units
+ * jump. (x1, y1): the target zone; (x2, y2): the Obélisque. `ids`: the recalled units.
+ */
+export interface Teleport {
+  phase: 'start' | 'end';
+  owner: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  ids: number[];
+}
+
 export interface GameEvent {
   player: number;
   text: string;
@@ -124,6 +142,10 @@ export class World {
   /** Attacks and deaths of the last tick, for visual effects. */
   shots: Shot[] = [];
   deaths: Death[] = [];
+  /** Rappels that began or ended this tick. */
+  teleports: Teleport[] = [];
+  /** Rappels channelling, with ticks left. */
+  recalls: { owner: number; from: number; x: number; y: number; ids: number[]; left: number }[] = [];
   readonly vision: Vision[];
   /** Invisible enemy units each player currently detects (updated with vision). */
   readonly detected: Set<number>[];
@@ -154,7 +176,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -181,7 +203,10 @@ export class World {
     this.events = [];
     this.shots = [];
     this.deaths = [];
+    this.teleports = [];
     this.scans = this.scans.filter((s) => --s.left > 0);
+    for (const r of this.recalls) if (--r.left === 0) this.land(r);
+    this.recalls = this.recalls.filter((r) => r.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) this.apply(c);
     for (const e of this.entities.values()) {
@@ -189,6 +214,7 @@ export class World {
       e.py = e.y;
       if (e.cooldown > 0) e.cooldown--;
       if (e.abilityCd > 0) e.abilityCd--;
+      if (e.held > 0) e.held--;
       if (e.skin > 0) e.skin--;
       if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
       this.regenerate(e);
@@ -299,7 +325,7 @@ export class World {
     if (!Array.isArray(c.ids) || ('x' in c && !(Number.isSafeInteger(c.x) && Number.isSafeInteger(c.y)))) return;
     if ('tx' in c && !(Number.isSafeInteger(c.tx) && Number.isSafeInteger(c.ty))) return;
     const mine = this.owned(c);
-    const units = mine.filter((e) => e.def.kind === 'unit');
+    const units = mine.filter((e) => e.def.kind === 'unit' && e.held === 0);
     const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);
     switch (c.kind) {
       case 'stop':
@@ -334,6 +360,8 @@ export class World {
           const def = b.def as BuildingDef;
           if (def.researches?.includes(c.type)) {
             if (!this.researchable(c.player, c.type)) return;
+            const lack = this.lacks(c.player, c.type);
+            if (lack) return void this.say(c.player, lack);
             if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
             const up = DEFS[c.type] as UpgradeDef;
             if (!this.pay(c.player, up)) return;
@@ -366,12 +394,15 @@ export class World {
         return;
       case 'ability': {
         for (const e of units) this.cast(e);
-        const b = buildings.find((b) => (b.def as BuildingDef).ability === 'observation' && b.abilityCd === 0);
+        const b = buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
         if (!b || c.x === undefined || c.y === undefined) return;
-        if (this.players[c.player].energy < OBSERVATION.energy) return void this.say(c.player, "Pas assez d'énergie.");
-        this.players[c.player].energy -= OBSERVATION.energy;
-        this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ABILITIES.observation.duration) });
-        b.abilityCd = ticks(ABILITIES.observation.cooldown);
+        const kind = (b.def as BuildingDef).ability!;
+        const ab = ABILITIES[kind];
+        if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
+        if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');
+        if (kind === 'observation') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration) });
+        this.players[c.player].energy -= ab.energy!;
+        b.abilityCd = ticks(ab.cooldown);
         return;
       }
     }
@@ -386,6 +417,59 @@ export class World {
       if (b.owner === player) for (const t of b.queue) if ((DEFS[t] as UpgradeDef).line === up.line) level++;
     }
     return up.level === level + 1;
+  }
+
+  /** Why this upgrade cannot be researched yet (missing buildings), or '' if it can. */
+  lacks(player: number, type: string): string {
+    const req = (DEFS[type] as UpgradeDef).requires ?? {};
+    const missing = Object.entries(req)
+      .filter(([t, n]) => [...this.entities.values()].filter((b) => b.owner === player && b.type === t && b.buildLeft === 0).length < n)
+      .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].name));
+    return missing.length ? `Requiert : ${missing.join(', ')}` : '';
+  }
+
+  /** Rappel: holds the army units around (x, y) for the channel; false if there are none. */
+  private recall(b: Entity, x: number, y: number): boolean {
+    const ids = [...this.entities.values()]
+      .filter((e) => e.owner === b.owner && e.def.kind === 'unit' && !e.def.worker && e.held === 0 && dist(e.x, e.y, x, y) <= RAPPEL.radius * FP)
+      .sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)
+      .slice(0, RAPPEL.max)
+      .map((e) => e.id);
+    if (!ids.length) return false;
+    const left = ticks(ABILITIES.rappel.duration);
+    for (const id of ids) {
+      const e = this.entities.get(id)!;
+      this.setOrder(e, null);
+      e.held = left + 1;
+    }
+    this.recalls.push({ owner: b.owner, from: b.id, x, y, ids, left });
+    this.teleports.push({ phase: 'start', owner: b.owner, x1: x, y1: y, x2: b.x, y2: b.y, ids });
+    return true;
+  }
+
+  /** End of a Rappel's channel: the surviving units appear on the open tiles around the Obélisque, if it still stands. */
+  private land(r: World['recalls'][number]): void {
+    const b = this.entities.get(r.from);
+    const units = r.ids.map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.hp > 0);
+    if (!b || b.hp <= 0) {
+      for (const e of units) e.held = 0;
+      return;
+    }
+    const size = (b.def as BuildingDef).size;
+    const ring: number[] = [];
+    for (let ty = b.ty - 1; ty <= b.ty + size; ty++) {
+      for (let tx = b.tx - 1; tx <= b.tx + size; tx++) {
+        if ((tx === b.tx - 1 || tx === b.tx + size || ty === b.ty - 1 || ty === b.ty + size) && this.grid.open(tx, ty)) ring.push(tx, ty);
+      }
+    }
+    if (!ring.length) ring.push(...this.grid.nearestOpen(b.tx + size, b.ty + size, this.grid.level(b.tx, b.ty)));
+    units.forEach((e, i) => {
+      const k = (i * 2) % ring.length;
+      e.x = e.px = ring[k] * FP + FP / 2;
+      e.y = e.py = ring[k + 1] * FP + FP / 2;
+      e.held = ticks(RAPPEL.daze);
+    });
+    this.teleports.push({ phase: 'end', owner: r.owner, x1: r.x, y1: r.y, x2: b.x, y2: b.y, ids: units.map((e) => e.id) });
   }
 
   /** Uses the unit's active ability if it is ready. */
@@ -566,6 +650,7 @@ export class World {
   private think(e: Entity): void {
     // Caught under a new building (with or without orders): walk out first.
     if (!this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
+    if (e.held > 0) return;
     const o = e.order;
     if (!o) {
       if ((this.tick + e.id) % 4 === 0) this.acquire(e);
@@ -781,6 +866,7 @@ export class World {
     let upgrade = 0;
     if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.players[e.owner].upgrades[a.range < 1 ? 'melee' : 'ranged'] * Math.max(1, Math.round(a.damage / 10));
     this.hurt(t, a.damage + bonus + upgrade);
+    t.lastAttacker = e.id;
     if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
       this.lastAlert[t.owner] = this.tick;
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
@@ -788,7 +874,7 @@ export class World {
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged' });
     // Idle soldiers hit from afar fight back.
     const td = t.def as UnitDef;
-    if (!t.order && t.def.kind === 'unit' && td.attack && !td.worker) {
+    if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker) {
       this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
     }
   }

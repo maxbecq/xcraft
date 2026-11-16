@@ -1,4 +1,4 @@
-import { type BuildingDef, DEFS, FACTIONS, OBSERVATION, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, ticks } from '../sim/fixed';
 import { EXPANSIONS } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
@@ -101,7 +101,8 @@ export class AI {
     const minute = w.tick / ticks(60);
     if (f.forge && count(f.forge) === 0 && count(f.barracks) >= 2 && count(f.extractor) > 0) wants.push(f.forge);
     const enemyCloaks = w.players.some((o) => o.id !== this.player && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
-    const detectors = f.detector && f.detector !== f.defense && enemyCloaks ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
+    // One tower late anyway: level 3 upgrades need it.
+    const detectors = f.detector && f.detector !== f.defense ? (enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
@@ -134,7 +135,7 @@ export class AI {
     }
     // Forge upgrades, one line after the other, when there is money to spare.
     for (const forge of buildings.filter((b) => b.type === f.forge && b.buildLeft === 0 && b.queue.length === 0)) {
-      const next = RESEARCH.map((line) => (DEFS[forge.type] as BuildingDef).researches!.find((t) => (DEFS[t] as UpgradeDef).line === line && w.researchable(this.player, t)))
+      const next = RESEARCH.map((line) => (DEFS[forge.type] as BuildingDef).researches!.find((t) => (DEFS[t] as UpgradeDef).line === line && w.researchable(this.player, t) && !w.lacks(this.player, t)))
         .filter((t): t is string => !!t)
         .sort((a, b) => (DEFS[a] as UpgradeDef).level - (DEFS[b] as UpgradeDef).level)[0];
       const cost = next && (DEFS[next] as UpgradeDef).cost;
@@ -156,7 +157,8 @@ export class AI {
     }
 
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
-    for (const id of this.wave) if (!w.entities.has(id)) this.wave.delete(id);
+    // Dead or being recalled (Rappel): out of the wave.
+    for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
     const atHome = army.filter((u) => !this.wave.has(u.id));
     const intruder = [...w.entities.values()].find(
       (e) => e.owner >= 0 && e.owner !== this.player && e.def.kind === 'unit' && dist(e.x, e.y, home.x, home.y) < DEFEND_RADIUS && w.sees(this.player, e),
@@ -177,23 +179,53 @@ export class AI {
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
-    // Observation céleste where something we cannot see is hurting us (an invisible unit).
-    const scope = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
-    if (scope && p.energy >= OBSERVATION.energy) {
-      const enemies = [...w.entities.values()].filter((e) => e.owner >= 0 && e.owner !== this.player && 'attack' in e.def && e.def.attack && w.sees(this.player, e));
-      const ambushed = mine.find(
-        (u) =>
+    const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
+    const ability = caster && (caster.def as BuildingDef).ability!;
+    if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy!) {
+      // Observation céleste only where an undetected invisible unit just hit us from close by, not on far shooters.
+      const ambushed = mine.find((u) => {
+        const a = w.entities.get(u.lastAttacker);
+        return (
           w.tick - u.lastHit < ticks(1) &&
-          !w.scans.some((s) => s.owner === this.player && dist(s.x, s.y, u.x, u.y) < 5 * FP) &&
-          !enemies.some((e) => dist(e.x, e.y, u.x, u.y) < 9 * FP),
-      );
-      if (ambushed) out.push({ player: this.player, kind: 'ability', ids: [scope.id], x: ambushed.x, y: ambushed.y });
+          !!a &&
+          (a.def as UnitDef).cloaked &&
+          !w.sees(this.player, a) &&
+          dist(a.x, a.y, u.x, u.y) < 3 * FP &&
+          !w.scans.some((s) => s.owner === this.player && dist(s.x, s.y, u.x, u.y) < 5 * FP)
+        );
+      });
+      if (ambushed) out.push({ player: this.player, kind: 'ability', ids: [caster.id], x: ambushed.x, y: ambushed.y });
+    }
+    if (caster && ability === 'rappel' && p.energy >= ABILITIES.rappel.energy!) {
+      // Rappel a wave that is losing its fight far from home.
+      const losing = this.losing([...this.wave].map((id) => w.entities.get(id)!), home);
+      if (losing) out.push({ player: this.player, kind: 'ability', ids: [caster.id], x: losing.x, y: losing.y });
     }
 
     const target = this.enemyTarget(home);
     const waiting = [...this.wave].map((id) => w.entities.get(id)!).filter((u) => !u.order || u.order.kind === 'move');
     if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
     return out;
+  }
+
+  /**
+   * Centre of a group of our wave, far from home, whose hp and shields are less than a third of those of the
+   * visible enemy soldiers around it.
+   */
+  private losing(wave: Entity[], home: Entity): Entity | undefined {
+    const w = this.world;
+    for (const u of wave) {
+      if (dist(u.x, u.y, home.x, home.y) < 25 * FP) continue;
+      const ours = wave.filter((o) => dist(o.x, o.y, u.x, u.y) <= RAPPEL.radius * FP);
+      if (ours.length < 3) continue;
+      let foes = 0;
+      for (const e of w.entities.values()) {
+        const d = e.def as UnitDef;
+        if (e.owner >= 0 && e.owner !== this.player && e.def.kind === 'unit' && d.attack && !d.worker && dist(e.x, e.y, u.x, u.y) < 10 * FP && w.sees(this.player, e)) foes += e.hp + e.shield;
+      }
+      if (3 * ours.reduce((s, o) => s + o.hp + o.shield, 0) < foes) return u;
+    }
+    return undefined;
   }
 
   /** Distance to the enemy the unit is fighting, if it is close. */

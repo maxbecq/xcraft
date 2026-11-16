@@ -97,6 +97,20 @@ export class Effects {
         this.decal(this.at(d.x, d.y, 0.03), 0.8, 0x2a1a12, 15);
       }
     }
+    // Rappel: a column of light at the zone and at the Obélisque, a soft one while channelling, a flash on arrival.
+    for (const t of world.teleports) {
+      for (const [x, y] of [[t.x1, t.y1], [t.x2, t.y2]]) if (seen(x, y)) this.column(this.at(x, y, 0.05), t.phase === 'end');
+    }
+  }
+
+  /** Art Deco beam: stacked gold-white glows rising from a bright disc. */
+  private column(p: Vector3, flash: boolean): void {
+    const life = flash ? 0.9 : 3.8;
+    for (let i = 0; i < 14; i++) {
+      const at = p.clone().add(new Vector3((Math.random() - 0.5) * 0.25, i * 0.32, (Math.random() - 0.5) * 0.25));
+      this.spawn(this.tex.glow, i % 3 ? 0xffe6a0 : 0xfffaf0, at, new Vector3(0, flash ? 2.5 : 0.4, 0), life * (0.7 + Math.random() * 0.3), 0.5, flash ? 0.9 : 0.6, flash ? 1 : 0.5, 0, true);
+    }
+    this.spawn(this.tex.glow, 0xfff4d0, p.clone().setY(p.y + 0.1), new Vector3(), flash ? 0.6 : life, flash ? 1.5 : 1, flash ? 4 : 2.2, flash ? 1 : 0.45, 0, true);
   }
 
   private at(x: number, y: number, lift: number): Vector3 {

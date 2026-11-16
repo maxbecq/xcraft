@@ -85,6 +85,76 @@ describe('Isdaris', () => {
     expect(c.hp).toBeGreaterThan(40);
   });
 
+  it('Rappel brings the army units near the target back beside the Obélisque after a channel', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [ob] = of(w, 0, 'obelisque');
+    const p = w.players[0];
+    p.energy = 250;
+    const army = [w.spawn('archer', 0, ...at(40, 60)), w.spawn('druide', 0, ...at(41, 61)), w.spawn('creature', 0, ...at(44, 60))];
+    const far = w.spawn('archer', 0, ...at(50, 60)); // beyond the 5-tile radius
+    const robot = w.spawn('moissonneur', 0, ...at(40, 61)); // workers stay
+    w.step([{ player: 0, kind: 'ability', ids: [ob.id], x: army[0].x, y: army[0].y }]);
+    expect(p.energy).toBe(150);
+    expect(w.teleports).toEqual([expect.objectContaining({ phase: 'start', owner: 0, ids: army.map((e) => e.id) })]);
+    // Channelling: they cannot move nor take orders.
+    w.step([{ player: 0, kind: 'move', ids: [army[0].id], x: 60 * FP, y: 60 * FP }]);
+    w.step([{ player: 0, kind: 'ability', ids: [ob.id], x: far.x, y: far.y }]); // recharging
+    expect(p.energy).toBe(150);
+    run(w, 3.5);
+    expect(army[0].x).toBe(at(40, 60)[0]);
+    let ended = false;
+    for (let i = 0; i < ticks(1) && !ended; i++) {
+      w.step([]);
+      ended = w.teleports.some((t) => t.phase === 'end');
+    }
+    expect(ended).toBe(true);
+    const beside = (e: Entity) => Math.abs(e.x - ob.x) <= 4 * FP && Math.abs(e.y - ob.y) <= 4 * FP;
+    expect(army.every(beside)).toBe(true);
+    expect(new Set(army.map((e) => `${e.x},${e.y}`)).size).toBe(3); // spread on different tiles
+    expect(beside(far)).toBe(false);
+    expect(beside(robot)).toBe(false);
+    // Dazed a moment, then free.
+    w.step([{ player: 0, kind: 'move', ids: [army[0].id], x: 30 * FP, y: 30 * FP }]);
+    expect(army[0].order).toBeNull();
+    run(w, 4.5);
+    w.step([{ player: 0, kind: 'move', ids: [army[0].id], x: 30 * FP, y: 30 * FP }]);
+    expect(army[0].order?.kind).toBe('move');
+  });
+
+  it('Rappel costs nothing without units in the zone, and needs 100 energy', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [ob] = of(w, 0, 'obelisque');
+    const archer = w.spawn('archer', 0, ...at(40, 60));
+    w.players[0].energy = 99;
+    w.step([{ player: 0, kind: 'ability', ids: [ob.id], x: archer.x, y: archer.y }]);
+    expect(w.recalls).toHaveLength(0);
+    w.players[0].energy = 100;
+    w.step([{ player: 0, kind: 'ability', ids: [ob.id], x: 70 * FP, y: 70 * FP }]);
+    expect(w.recalls).toHaveLength(0);
+    expect(w.players[0].energy).toBe(100);
+    expect(ob.abilityCd).toBe(0);
+  });
+
+  it('the AI recalls a wave that is losing far from home', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ai = new AI(w, 0);
+    w.players[0].energy = 300;
+    while (w.tick < 8) w.step([]);
+    const wave = [0, 1, 2].map((i) => w.spawn('archer', 0, ...at(60 + i, 60)));
+    for (const e of wave) {
+      ai['wave'].add(e.id);
+      e.shield = 0; // battered
+      e.hp = 30;
+    }
+    for (let i = 0; i < 4; i++) w.spawn('legionnaire', 1, ...at(63 + (i % 2), 59 + (i >> 1)));
+    w.step([]); // vision updated
+    w.step([]); // tick 10: the AI's turn
+    const cast = ai.think().find((c) => c.kind === 'ability');
+    expect(cast).toMatchObject({ ids: [of(w, 0, 'obelisque')[0].id] });
+    w.step([cast!]);
+    expect(wave.every((e) => e.held > 0)).toBe(true);
+  });
+
   it('can be played by the AI, and Humans versus Isdaris and Isdaris mirror games end', () => {
     for (const factions of [['isdaris', 'humains'], ['humains', 'isdaris'], ['isdaris', 'isdaris']] as const) {
       const w = createMatch([...factions]);

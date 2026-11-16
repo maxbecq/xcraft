@@ -13,6 +13,8 @@ describe('Forge upgrades', () => {
   it('researches the three levels in order through the queue, paying each', () => {
     const w = new World(createMap());
     const forge = w.spawn('forge', 0, 40 * FP, 60 * FP);
+    w.spawn('caserne', 0, 30 * FP, 60 * FP);
+    w.spawn('caserne', 0, 30 * FP, 64 * FP);
     const p = w.players[0];
     p.minerals = p.energy = 2000;
     // Level 2 cannot be skipped to.
@@ -30,6 +32,31 @@ describe('Forge upgrades', () => {
     w.step([{ player: 0, kind: 'cancel', ids: [forge.id] }]);
     expect(p.minerals).toBe(2000 - 250);
     expect(w.researchable(0, 'ranged2')).toBe(true);
+  });
+
+  it('needs a second Caserne for level 2, and a Tour alchimistique too for level 3', () => {
+    const w = new World(createMap());
+    const forge = w.spawn('forge', 0, 40 * FP, 60 * FP);
+    w.spawn('caserne', 0, 30 * FP, 60 * FP);
+    const p = w.players[0];
+    p.minerals = p.energy = 5000;
+    p.upgrades.armor = 1;
+    expect(w.lacks(0, 'armor1')).toBe('');
+    expect(w.lacks(0, 'armor2')).toBe('Requiert : 2 × Caserne');
+    w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
+    expect(forge.queue).toHaveLength(0);
+    expect(w.events[0].text).toBe('Requiert : 2 × Caserne');
+    const site = w.spawn('caserne', 0, 30 * FP, 64 * FP);
+    site.buildLeft = 10; // unfinished buildings do not count
+    expect(w.lacks(0, 'armor2')).not.toBe('');
+    site.buildLeft = 0;
+    w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
+    expect(forge.queue).toEqual(['armor2']);
+    p.upgrades.armor = 2;
+    forge.queue = [];
+    expect(w.lacks(0, 'armor3')).toBe('Requiert : Tour alchimistique');
+    w.spawn('tour', 0, 36 * FP, 66 * FP);
+    expect(w.lacks(0, 'armor3')).toBe('');
   });
 
   it('adds damage per level to the right weapons, and armour to soldiers', () => {
@@ -140,6 +167,21 @@ describe('invisibility and detection', () => {
     expect(aux.some((a) => w.entities.has(a.id))).toBe(true);
   });
 
+  it('a detected assassin loses to 4 auxiliaires but beats 3', () => {
+    const fight = (n: number) => {
+      const w = new World(createMap());
+      w.players[1].faction = 'isdaris';
+      const aux = Array.from({ length: n }, (_, i) => w.spawn('auxiliaire', 0, ...at(40 + (i % 2), 59 + (i >> 1))));
+      w.spawn('tour', 0, 36 * FP, 60 * FP);
+      const sin = w.spawn('assassin', 1, ...at(42, 60)); // already in contact
+      w.step([{ player: 1, kind: 'attack', ids: [sin.id], x: aux[0].x, y: aux[0].y, target: aux[0].id }]);
+      for (let i = 0; i < ticks(40) && w.entities.has(sin.id) && aux.some((a) => w.entities.has(a.id)); i++) w.step([]);
+      return w.entities.has(sin.id);
+    };
+    expect(fight(4)).toBe(false);
+    expect(fight(3)).toBe(true);
+  });
+
   it('a tower under construction does not detect', () => {
     const w = new World(createMap());
     w.spawn('auxiliaire', 0, ...at(40, 60));
@@ -186,6 +228,17 @@ describe('Orbe plasma', () => {
     expect(far.hp).toBe(far.maxHp);
     expect(house.hp).toBe(house.maxHp);
     expect(orbe.hp).toBeGreaterThan(0);
+  });
+
+  it('beats a lone assassin that attacks it', () => {
+    const w = new World(createMap());
+    w.players[0].faction = w.players[1].faction = 'isdaris';
+    const orbe = w.spawn('orbe', 0, 40 * FP, 60 * FP);
+    const sin = w.spawn('assassin', 1, ...at(52, 61));
+    w.step([{ player: 1, kind: 'attack', ids: [sin.id], x: orbe.x, y: orbe.y, target: orbe.id }]);
+    run(w, 40);
+    expect(w.entities.has(sin.id)).toBe(false);
+    expect(orbe.hp).toBe(orbe.maxHp); // never got through the shield
   });
 
   it('must be beamed down inside a power field', () => {
