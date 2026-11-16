@@ -594,9 +594,15 @@ export class EntityRenderer {
       if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       v.root.position.set(x, heightAt(this.map, x, z), z);
-      v.ring.visible = selected.has(e.id);
+      const picked = selected.has(e.id);
+      if (picked && !v.ring.visible) v.ring.userData.since = performance.now();
+      v.ring.visible = picked;
       if (v.ring.visible) {
-        ((v.ring.userData.dial as Mesh).material as MeshBasicMaterial).map!.rotation += dt * (e.owner === player ? 0.7 : -0.7);
+        // The dial ticks flash on selection, turning, then fade out quickly: only the ring stays.
+        const dialMat = (v.ring.userData.dial as Mesh).material as MeshBasicMaterial;
+        dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
+        dialMat.opacity = 0.6 * Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 600);
+        (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
         this.drape(v.ring, x, z, v.root.position.y);
       }
       if (e.def.kind === 'unit') {
