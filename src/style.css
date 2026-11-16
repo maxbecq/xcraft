@@ -503,3 +503,24 @@ body.spectate .hud-card { visibility: hidden; }
 .edge-glow.edge-s::before { opacity: 1; inset: auto 0 var(--edge-bottom, 0) 0; height: 46px; background: linear-gradient(transparent, rgba(140, 220, 255, 0.45)); }
 .edge-glow.edge-w::after { opacity: 1; inset: 0 auto 0 0; width: 46px; background: linear-gradient(90deg, rgba(140, 220, 255, 0.45), transparent); }
 .edge-glow.edge-e::after { opacity: 1; inset: 0 0 0 auto; width: 46px; background: linear-gradient(-90deg, rgba(140, 220, 255, 0.45), transparent); }
+
+/* ---------------------------------------------------------------- network games */
+
+.net-banner {
+  position: fixed; inset: 0; z-index: 9; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(4, 8, 20, 0.7), rgba(2, 4, 12, 0.92)); color: var(--space-ink); text-align: center;
+}
+.net-banner h2 { margin: 0; font: 700 28px/1.2 var(--space-font); letter-spacing: 0.16em; text-transform: uppercase; text-shadow: 0 0 14px rgba(95, 184, 255, 0.5); }
+.net-banner p { margin: 0; font: 600 16px var(--ui); color: var(--space-dim); }
+.net-code { font: 900 46px/1 var(--space-font); letter-spacing: 0.2em; color: #e9f6ff; text-shadow: 0 0 18px rgba(95, 184, 255, 0.7); user-select: all; }
+.net-link, .net-input {
+  width: min(560px, 86vw); padding: 9px 12px; box-sizing: border-box; font: 600 15px var(--ui); color: var(--space-ink);
+  background: rgba(6, 12, 26, 0.8); border: 1px solid rgba(111, 211, 255, 0.45); border-radius: 0; outline: none; user-select: text;
+}
+.net-input { width: 260px; text-align: center; font: 700 26px var(--space-font); letter-spacing: 0.18em; text-transform: uppercase; }
+.net-banner button {
+  min-width: 220px; padding: 10px 22px; font: 700 14px/1 var(--space-font); letter-spacing: 0.16em; text-transform: uppercase; cursor: pointer;
+  color: var(--space-ink); background: var(--space-panel); border: 1px solid rgba(111, 211, 255, 0.45); clip-path: var(--space-cut);
+}
+.net-banner button:hover { color: #04101e; background: linear-gradient(180deg, #bfeaff, var(--space-glow)); }
+.menu .net-error { margin: 0; font: 600 15px var(--ui); letter-spacing: 0; padding: 0; border: 0; color: #ff9a8a; text-transform: none; }

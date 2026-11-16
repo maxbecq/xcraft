@@ -20,13 +20,16 @@ import { addFog, buildTerrain, createFog, fogMaterial, setBiome } from './terrai
 import { BIOMES, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
+import { Lockstep, matchCode, newRoom, readCode } from './net';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 const EDGE_PX = 40;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
-const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay');
+/** `?net=host|join&room=ABCD`: a two-player game over the network (the host is player 0). */
+const NET_ROLE = params.get('net');
+const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE;
 const REPLAY_KEY = 'xcraft.replay';
 /** The game just played has been kept as the last game. */
 let saved = false;
@@ -35,7 +38,7 @@ const REPLAY = params.has('replay') ? readReplay() : null;
 const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
-const PLAYER = 0;
+const PLAYER = NET_ROLE === 'join' ? 1 : 0;
 
 const renderer = new WebGLRenderer({ antialias: true });
 /** Phones and tablets: touch controls, lighter rendering. */
@@ -58,16 +61,19 @@ const stored = (k: string) => {
   }
 };
 const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 'humains');
-const myFaction = REPLAY ? REPLAY.factions[0] : asFaction(params.get('camp') ?? stored('xcraft.camp'));
-const foeFaction = REPLAY ? REPLAY.factions[1] : asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
-const world = createMatch([myFaction, foeFaction]);
-document.body.classList.toggle('isdaris', myFaction === 'isdaris'); // spectating shows the first side's interface
+/** Player 0's and player 1's factions (`camp` is player 0's, also over the network where the host is player 0). */
+const factions: [Faction, Faction] = REPLAY
+  ? REPLAY.factions
+  : [asFaction(params.get('camp') ?? stored('xcraft.camp')), asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'))];
+const [myFaction, foeFaction] = factions;
+const world = createMatch(factions);
+document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
-const ais = REPLAY ? [] : SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
-if (!SPECTATE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
+const ais = REPLAY || NET_ROLE ? [] : SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
+if (!SPECTATE && !NET_ROLE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
 else if (!REPLAY && !ATTRACT) [0, 1].forEach((i) => (world.players[i].handicap = DIFFICULTY[params.get(`ai${i}`) ?? 'normal'] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
@@ -102,11 +108,57 @@ scene.add(sun, sun.target);
 
 let pending: Command[] = [];
 
+// Network game: a banner while waiting for the other player, or once the link is lost.
+const netBanner = document.createElement('div');
+netBanner.className = 'net-banner';
+netBanner.hidden = true;
+document.body.append(netBanner);
+const ROOM = params.get('room') ?? '';
+const net = NET_ROLE ? new Lockstep(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
+function showNet(status: string, detail?: string): void {
+  if (status === 'connected') {
+    netBanner.hidden = true;
+    return;
+  }
+  netBanner.hidden = false;
+  if (status === 'waiting' && PLAYER === 0) {
+    const code = matchCode(ROOM, factions, biome.id);
+    const link = `${location.origin}${location.pathname}?net=join&room=${ROOM}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}`;
+    netBanner.innerHTML = `<h2>En attente de votre adversaire</h2>
+      <p>Donnez-lui ce code (menu « Rejoindre une partie ») :</p><div class="net-code">${code}</div>
+      <p>ou ce lien :</p><input class="net-link" readonly value="${link}"><button data-n="copy">Copier le lien</button>
+      <button data-n="quit">Annuler</button>`;
+  } else if (status === 'waiting') netBanner.innerHTML = '<h2>Connexion à la partie…</h2><button data-n="quit">Annuler</button>';
+  else netBanner.innerHTML = `<h2>${status === 'lost' ? 'Connexion perdue' : 'Connexion impossible'}</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Menu principal</button>`;
+}
+netBanner.addEventListener('click', (e) => {
+  const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
+  if (n === 'copy') {
+    const field = netBanner.querySelector<HTMLInputElement>('.net-link')!;
+    field.select();
+    navigator.clipboard?.writeText(field.value).catch(() => document.execCommand('copy'));
+  } else if (n === 'quit') {
+    net?.close();
+    location.search = `?biome=${biome.id}`;
+  }
+});
+if (net) showNet('waiting');
+// Leaving the page tells the other side at once, rather than after the silence timeout.
+window.addEventListener('pagehide', () => net?.close());
+let desyncShown = false;
+/** A cheap fingerprint of the game state, compared between the two sides of a network game. */
+const checksum = () => {
+  let h = world.tick;
+  for (const e of world.entities.values()) h = (Math.imul(h, 31) + e.id * 7 + e.x * 3 + e.y * 5 + e.hp) | 0;
+  for (const p of world.players) h = (Math.imul(h, 31) + p.minerals + p.energy * 3) | 0;
+  return h;
+};
+
 
 const rig = new CameraRig(map.width, map.height);
 // Upright phones: zoom out so the narrow view still spans a dozen tiles.
 if (window.innerHeight > window.innerWidth) rig.viewHeight = 26;
-const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === FACTIONS[myFaction].hq)!;
+const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === FACTIONS[factions[PLAYER]].hq)!;
 rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
 if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
@@ -263,9 +315,12 @@ document.addEventListener('click', (e) => {
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
-  else if (p === 'restart') location.reload();
+  else if (p === 'restart' && !net) location.reload();
   else if (p === 'replay') downloadReplay(record);
-  else if (p === 'quit') location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
+  else if (p === 'quit' || p === 'restart') {
+    net?.close();
+    location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
+  }
 });
 // Captured first: while paused, game hotkeys do nothing; F1, F10 and Escape close the menu.
 window.addEventListener(
@@ -296,7 +351,7 @@ interface Setup {
   biome: string;
   speed: number;
 }
-const CONTROLS: Record<string, string> = { you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile' };
+const CONTROLS: Record<string, string> = { you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile', online: 'Ami en ligne' };
 
 function readSetup(): Setup {
   const fallback: Setup = {
@@ -321,6 +376,7 @@ function showHome(): void {
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris</p>
     <button data-m="new">Nouvelle partie</button>
+    <button data-m="join">Rejoindre une partie</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
@@ -328,6 +384,7 @@ function showHome(): void {
   (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
+    else if (m === 'join') showJoin(menu as HTMLElement);
     else if (m === 'last-replay') playReplay(readReplay());
     else if (m === 'open-replay') openReplayFile();
   };
@@ -341,8 +398,10 @@ function showSetup(menu: HTMLElement, s: Setup): void {
       .join('')}</div>`;
   const factions = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
   const side = (i: number) => {
-    const controls = { ...CONTROLS };
+    const controls: Record<string, string> = { ...CONTROLS };
     if (i === 1) delete controls.you; // the local player is always the first side
+    // A friend online plays the second side, against you only.
+    if (i === 0 || s.sides[0].control !== 'you') delete controls.online;
     const color = `#${TEAM_COLORS[i].toString(16).padStart(6, '0')}`;
     return `<fieldset><legend style="color:${color}">Joueur ${i + 1}</legend>${pick(`f${i}`, factions, s.sides[i].faction)}${pick(`c${i}`, controls, s.sides[i].control)}</fieldset>`;
   };
@@ -362,9 +421,40 @@ function showSetup(menu: HTMLElement, s: Setup): void {
       else if (k === 'speed') s.speed = Number(v);
       else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
       else s.sides[Number(k[1])].control = v;
+      if (s.sides[0].control !== 'you' && s.sides[1].control === 'online') s.sides[1].control = 'normal';
       showSetup(menu, s);
     } else if (m === 'back') showHome();
     else if (m === 'go') launch(s);
+  };
+}
+
+/** Joining a friend's network game with the code shown on their screen. */
+function showJoin(menu: HTMLElement): void {
+  menu.className = 'menu setup';
+  menu.innerHTML = `<h2>Rejoindre une partie</h2>
+    <fieldset><legend>Code de la partie</legend><input class="net-input" maxlength="9" placeholder="K7QX-HIL" autocomplete="off" spellcheck="false"></fieldset>
+    <p class="net-error" hidden></p>
+    <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">Rejoindre</button></div>`;
+  const field = menu.querySelector<HTMLInputElement>('.net-input')!;
+  const error = menu.querySelector<HTMLElement>('.net-error')!;
+  field.focus();
+  const go = () => {
+    const c = readCode(field.value, Object.keys(BIOMES));
+    if (!c) {
+      error.hidden = false;
+      error.textContent = 'Code invalide : il ressemble à K7QX-HIL.';
+      return;
+    }
+    location.search = `?net=join&room=${c.room}&camp=${c.factions[0]}&adversaire=${c.factions[1]}&biome=${c.biome}`;
+  };
+  field.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') go();
+  };
+  menu.onclick = (e) => {
+    const m = (e.target as HTMLElement).closest('button')?.dataset.m;
+    if (m === 'back') showHome();
+    else if (m === 'go') go();
   };
 }
 
@@ -379,7 +469,8 @@ function launch(s: Setup): void {
     // the URL carries it all
   }
   const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}`;
-  location.search = a.control === 'you' ? `?play&ai=${b.control}&${keep}` : `?spectate&speed=${s.speed}&ai0=${a.control}&ai1=${b.control}&${keep}`;
+  if (b.control === 'online') location.search = `?net=host&room=${newRoom()}&${keep}`;
+  else location.search = a.control === 'you' ? `?play&ai=${b.control}&${keep}` : `?spectate&speed=${s.speed}&ai0=${a.control}&ai1=${b.control}&${keep}`;
 }
 
 function start(): void {
@@ -397,7 +488,17 @@ function start(): void {
     const dt = Math.min(elapsed, 0.25);
     acc += dt * SPEED;
     while (acc >= TICK) {
-      const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : [...pending, ...ais.flatMap((ai) => ai.think())];
+      // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
+      if (net && !net.ready(world.tick)) {
+        acc = Math.min(acc, TICK);
+        break;
+      }
+      const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : net ? net.step(world.tick, pending) : [...pending, ...ais.flatMap((ai) => ai.think())];
+      if (net && world.tick % 100 === 0) net.check(world.tick, checksum());
+      if (net?.desync && !desyncShown) {
+        desyncShown = true;
+        showNet('lost', 'Les deux parties ne sont plus identiques (désynchronisation).');
+      }
       if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
       world.step(cmds);
       if (world.winner !== null && !REPLAY && !ATTRACT && !saved) saved = saveReplay(record);
@@ -457,7 +558,8 @@ function start(): void {
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.
-    if (paused) post.render();
+    // A network game never pauses: the other player is still playing.
+    if (paused && !net) post.render();
     else frame(dt);
   });
 }
