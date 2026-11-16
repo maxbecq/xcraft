@@ -1,10 +1,11 @@
 import {
-  AdditiveBlending, Box3, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type BuildingDef, DEFS, FLY_HEIGHT, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
@@ -91,6 +92,56 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
   return m;
 }
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
+const timber = new MeshStandardMaterial({ color: 0x7a5636, roughness: 0.9 });
+const canvasCloth = new MeshStandardMaterial({ color: 0x6b6a45, roughness: 1, side: DoubleSide });
+const footing = new MeshStandardMaterial({ color: 0x8a7f6c, roughness: 1 });
+
+/**
+ * Human building site: a stone footing the size of the footprint, and scaffolding round the model's bounds,
+ * one group per storey (poles, ledgers, a plank deck and a few canvas sheets), so storeys can go up and come down.
+ */
+function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storeys: Object3D[] } {
+  const slab = new Mesh(new BoxGeometry(footprint * 0.96, 0.16, footprint * 0.96), footing);
+  slab.position.y = 0.08;
+  const w = size.x / 2 + 0.18;
+  const d = size.z / 2 + 0.18;
+  const count = Math.max(2, Math.min(5, Math.round(size.y / 0.75)));
+  const step = (size.y + 0.15) / count;
+  const bays = (len: number) => Math.max(1, Math.round((2 * len) / 1.1));
+  const storeys: Object3D[] = [];
+  for (let k = 0; k < count; k++) {
+    const parts: BufferGeometry[] = [];
+    const y0 = k * step;
+    const add = (g: BufferGeometry, x: number, y: number, z: number, rotY = 0, rotZ = 0) => parts.push(g.rotateZ(rotZ).rotateY(rotY).translate(x, y, z));
+    // Poles round the outline, one bay apart.
+    const nx = bays(w);
+    const nz = bays(d);
+    for (let i = 0; i <= nx; i++) for (const z of [-d, d]) add(new CylinderGeometry(0.035, 0.035, step, 5), -w + (2 * w * i) / nx, y0 + step / 2, z);
+    for (let i = 1; i < nz; i++) for (const x of [-w, w]) add(new CylinderGeometry(0.035, 0.035, step, 5), x, y0 + step / 2, -d + (2 * d * i) / nz);
+    // Ledgers on top of the storey, a plank deck on each long side, and a cross brace on two faces.
+    add(new BoxGeometry(2 * w, 0.05, 0.05), 0, y0 + step, -d);
+    add(new BoxGeometry(2 * w, 0.05, 0.05), 0, y0 + step, d);
+    add(new BoxGeometry(0.05, 0.05, 2 * d), -w, y0 + step, 0);
+    add(new BoxGeometry(0.05, 0.05, 2 * d), w, y0 + step, 0);
+    add(new BoxGeometry(2 * w, 0.04, 0.32), 0, y0 + step - 0.02, d + 0.12);
+    add(new BoxGeometry(0.32, 0.04, 2 * d), w + 0.12, y0 + step - 0.02, 0);
+    const brace = Math.hypot(2 * w / nx, step);
+    add(new BoxGeometry(brace, 0.04, 0.04), -w + w / nx, y0 + step / 2, d + 0.02, 0, Math.atan2(step, (2 * w) / nx));
+    add(new BoxGeometry(brace, 0.04, 0.04), w + 0.02, y0 + step / 2, -d + d / nz, Math.PI / 2, Math.atan2(step, (2 * d) / nz));
+    const storey = new Group();
+    storey.add(new Mesh(mergeGeometries(parts), timber));
+    // Canvas sheets hang on the camera-facing sides, alternating, so the work behind is half hidden.
+    const sheet = (len: number) => new PlaneGeometry(len * 0.92, step * 0.8);
+    const front = new Mesh(sheet(2 * w), canvasCloth);
+    front.position.set(0, y0 + step * 0.5, d + 0.03);
+    const side = new Mesh(sheet(2 * d), canvasCloth);
+    side.position.set(w + 0.03, y0 + step * 0.5, 0);
+    side.rotation.y = Math.PI / 2;
+    storey.add(k % 2 ? side : front);
+    storeys.push(storey);
+  }
+  return { footing: slab, storeys };
+}
 
 /** Pools of light on the ground around glowing things: [x, z offset, radius, colour]. */
 const POOLS: Record<string, [number, number, number, number][]> = {
@@ -494,6 +545,8 @@ interface View {
   model: Group;
   ring: Object3D;
   scaffold?: Object3D;
+  /** Human building site: the footing, and the scaffolding storeys from the ground up. */
+  site?: { footing: Object3D; storeys: Object3D[] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   heading: number;
@@ -650,7 +703,17 @@ export class EntityRenderer {
       }
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
-        v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
+        const p = e.buildLeft > 0 ? 1 - e.buildLeft / total : 1;
+        if (v.site) {
+          // Footing first, then storeys of scaffolding going up round an empty site; the building appears
+          // inside once they are all up, then the scaffolding comes down storey by storey from the top.
+          const n = v.site.storeys.length;
+          v.site.footing.visible = p < 1;
+          v.site.storeys.forEach((s, i) => (s.visible = p >= 0.08 + (0.42 * i) / n && p < 0.62 + (0.36 * (n - i)) / n && p < 1));
+          v.model.visible = p >= 0.5;
+        } else {
+          v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * p : 1;
+        }
         if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
         if (v.pools) v.pools.visible = e.buildLeft === 0;
       }
@@ -831,8 +894,14 @@ export class EntityRenderer {
       body.position.y += 0.24; // stands on the plaza's upper step
     }
     let scaffold: Object3D | undefined;
-    if (e.def.kind === 'building') {
-      // Scaffolding shown while under construction.
+    let site: View['site'];
+    if (e.def.kind === 'building' && !(e.def as BuildingDef).warp && e.buildLeft > 0) {
+      // Built by workers: a building site (see sync).
+      const made = buildingSite((e.def as BuildingDef).size, new Box3().setFromObject(body).getSize(new Vector3()));
+      site = made;
+      root.add(made.footing, ...made.storeys);
+    } else if (e.def.kind === 'building') {
+      // Warped in (Isdaris): it rises inside a wireframe while it materialises.
       const size = new Box3().setFromObject(body).getSize(new Vector3());
       scaffold = new LineSegments(new EdgesGeometry(new BoxGeometry(size.x * 1.05, size.y * 1.02, size.z * 1.05, 3, 2, 3)), scaffoldMaterial);
       scaffold.position.y = (size.y * 1.02) / 2;
@@ -842,7 +911,7 @@ export class EntityRenderer {
     this.scene.add(root);
     // Buildings and new units face the map centre.
     const facing = Math.atan2(this.map.width / 2 - e.x / FP, this.map.height / 2 - e.y / FP);
-    const v: View = { type: e.type, root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, root, model: pivot, ring, scaffold, site, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
