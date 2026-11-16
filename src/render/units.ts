@@ -601,7 +601,11 @@ export class EntityRenderer {
         // The dial ticks flash on selection, turning, then fade out quickly: only the ring stays.
         const dialMat = (v.ring.userData.dial as Mesh).material as MeshBasicMaterial;
         dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
-        dialMat.opacity = 0.6 * Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 600);
+        const fresh = Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 600);
+        dialMat.opacity = 0.6 * fresh;
+        // The halo goes with the ticks; the ring itself settles a little dimmer.
+        (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh;
+        (v.ring.userData.core as MeshBasicMaterial).opacity = 0.55 + 0.4 * fresh;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
         this.drape(v.ring, x, z, v.root.position.y);
       }
@@ -731,11 +735,13 @@ export class EntityRenderer {
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
     // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
-    for (const [inner, outer, m] of [[r, r + 0.09, core], [r + 0.09, r + 0.3, halo]] as const) {
-      const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), m);
+    // Own copies of the materials: the halo fades and the ring dims after selection (see sync).
+    for (const [inner, outer, m, role] of [[r, r + 0.09, core, 'core'], [r + 0.09, r + 0.3, halo, 'halo']] as const) {
+      const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), m.clone());
       mesh.userData.lift = 0.06;
       mesh.renderOrder = 2;
       ring.add(mesh);
+      ring.userData[role] = mesh.material;
     }
     // Ticks just outside the ring, turning (see sync).
     // A ring, not a square: a flat quad shows up in the ambient occlusion and ink passes as a pale rectangle.
