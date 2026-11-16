@@ -246,7 +246,8 @@ export class AI {
     const fleeing = this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
     if (fleeing.length) {
       fleeing.forEach((u) => this.wave.delete(u.id));
-      out.push({ player: this.player, kind: 'smart', ids: fleeing.map((u) => u.id), x: rally.x, y: rally.y });
+      const refuge = this.haven(buildings, rally) ?? rally;
+      out.push({ player: this.player, kind: 'smart', ids: fleeing.map((u) => u.id), x: refuge.x, y: refuge.y });
     }
 
     out.push(...this.raid(raiders));
@@ -388,7 +389,25 @@ export class AI {
   }
 
   /** Where to put a building: a free well for a mine, else a spot spiralling out from the council, away from minerals. */
-  private spot(type: string, home: Entity): [number, number] | null {
+  /**
+   * Where shields recharge fastest: our finished building with a shield aura (Réserve psy) closest to `near`
+   * (the rally point). `close`: only one whose aura reaches it.
+   */
+  private haven(buildings: Entity[], near: { x: number; y: number }, close = false): Entity | undefined {
+    let best: Entity | undefined;
+    let bestD = Infinity;
+    for (const b of buildings) {
+      const r = (b.def as BuildingDef).shieldAura;
+      if (!r || b.buildLeft > 0) continue;
+      const d = dist(b.x, b.y, near.x, near.y);
+      if (close && d > r * FP) continue;
+      if (d < bestD) [best, bestD] = [b, d];
+    }
+    return best;
+  }
+
+  /** Where to put a building: a free well for a mine, else a spot spiralling out from the council (or from `near`), away from minerals. */
+  private spot(type: string, home: Entity, near?: { x: number; y: number }): [number, number] | null {
     const w = this.world;
     const def = DEFS[type] as BuildingDef;
     if (def.energyRate) {
@@ -399,12 +418,12 @@ export class AI {
       const [tx, ty] = expansion(w, this.player);
       return w.canPlace(type, tx, ty, this.player) ? [tx, ty] : null;
     }
-    const cx = Math.floor(home.x / FP);
-    const cy = Math.floor(home.y / FP);
+    const cx = Math.floor((near ?? home).x / FP);
+    const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.
     const sx = cx < w.map.width / 2 ? 1 : -1;
     const sy = cy < w.map.height / 2 ? 1 : -1;
-    for (let r = 4; r < 14; r++) {
+    for (let r = near ? 1 : 4; r < 14; r++) {
       for (let i = -r; i <= r; i++) {
         for (const [dx, dy] of [[i, r], [r, i], [i, -r], [-r, i]]) {
           const tx = cx + dx * sx - Math.floor(def.size / 2);

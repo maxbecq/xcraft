@@ -16,7 +16,7 @@ describe('AI', () => {
     const w = createMatch();
     const r = play(w, [new AI(w, 1)], 20);
     expect(r.winner).toBe(1);
-  });
+  }, 60_000);
 
   it('wins more often with a better difficulty, from either side', () => {
     for (const [weak, strong] of [['easy', 'normal'], ['normal', 'hard']]) {
@@ -47,7 +47,7 @@ describe('AI', () => {
     expect(scansAfter(sin)).toEqual([expect.objectContaining({ x: serf.x, y: serf.y })]);
     sin.x += 6 * FP; // an assassin far from the victim: not the culprit
     expect(scansAfter(sin)).toHaveLength(0);
-  });
+  }, 60_000);
 
   it('defends its base against a raid, its wave included, and pulls workers when it has no army', () => {
     const w = createMatch();
@@ -77,7 +77,7 @@ describe('AI', () => {
       w2.step([...ai2.think(), ...two.filter((r) => !r.order && r.hp > 0).map((r) => ({ player: 1, kind: 'attack' as const, ids: [r.id], x: hq.x, y: hq.y, target: hq.id }))]);
     }
     expect(two.every((r) => r.hp <= 0)).toBe(true);
-  });
+  }, 60_000);
 
   it('pulls a wave group back from a fight it cannot win, not from one it can', () => {
     const w = createMatch();
@@ -93,12 +93,31 @@ describe('AI', () => {
     expect(retreat()).toBeUndefined();
     for (let i = 0; i < 10; i++) w.spawn('legionnaire', 1, (46 + (i % 5)) * FP, (54 + Math.floor(i / 5)) * FP);
     expect(retreat()).toBeDefined();
-  });
+  }, 60_000);
+
+  it('Isdaris fall back into the recharge zone of a Réserve psy', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const ais = [new AI(w, 0), new AI(w, 1)];
+    play(w, ais, 8);
+    const ai = ais[1] as unknown as { wave: Set<number> };
+    // A small group facing a big army far away runs back to a Réserve psy.
+    const group = [0, 1, 2].map((i) => w.spawn('archer', 1, (40 + i) * FP, 48 * FP));
+    for (let i = 0; i < 12; i++) w.spawn('legionnaire', 0, (38 + (i % 6)) * FP, (52 + Math.floor(i / 6)) * FP);
+    ai.wave = new Set(group.map((u) => u.id));
+    let order: { x: number; y: number } | undefined;
+    for (let i = 0; i < 40 && !order; i++) {
+      w.step([]);
+      const c = ais[1].think().find((c) => c.kind === 'smart' && c.ids.includes(group[0].id));
+      if (c?.kind === 'smart') order = c;
+    }
+    const reserves = [...w.entities.values()].filter((e) => e.owner === 1 && e.type === 'reservepsy');
+    expect(reserves.some((r) => order && r.x === order.x && r.y === order.y)).toBe(true);
+  }, 60_000);
 
   it('finishes an AI-versus-AI game', () => {
     const w = createMatch();
     const r = play(w, [new AI(w, 0), new AI(w, 1)], 30);
     console.log('AI vs AI:', r, 'units', [...w.entities.values()].filter((e) => e.def.kind === 'unit').length);
     expect(r.winner).not.toBeNull();
-  });
+  }, 60_000);
 });

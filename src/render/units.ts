@@ -219,7 +219,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   };
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
-  if (unit) rimLight(m, 1.1, team.clone().lerp(new Color(1, 1, 1), 0.2).toArray());
+  if (unit) rimLight(m, 0.5, team.toArray());
   else rimLight(m, rim);
   return m;
 }
@@ -593,8 +593,17 @@ export class EntityRenderer {
         // One swing or cast per attack.
         const clip = v.clips!.get(CLIP.attack)!.getClip();
         play(v, CLIP.attack, def.attack ? clip.duration / (def.attack.cooldown / GAME_SPEED) : 1);
-      } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && has(CLIP.work)) play(v, CLIP.work);
+      } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && CHARACTERS[e.type]?.grip === 'drill') {
+        // Jackhammer: lean on it and shudder fast, rather than the slow hammer swing of the work clip.
+        play(v, CLIP.idle, 0.3);
+        v.mixer.update(dt);
+        v.model.position.y = 0.02 + Math.abs(Math.sin(t * 38 + e.id)) * 0.035;
+        v.model.children[0].rotation.x = 0.18 + Math.sin(t * 53 + e.id) * 0.025; // leaning forward, whatever the heading
+        return;
+      } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && has(CLIP.work)) play(v, CLIP.work, 1.6);
       else play(v, CLIP.idle, attacking ? 1.4 : 0.8);
+      v.model.position.y = 0;
+      v.model.children[0].rotation.x = 0;
       v.mixer.update(dt);
       return;
     }
