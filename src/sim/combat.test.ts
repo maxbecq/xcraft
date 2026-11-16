@@ -26,6 +26,21 @@ describe('combat', () => {
     expect(alive(w, 0).length).toBeGreaterThan(0);
   });
 
+  it('leaves a building for a worker, and a worker for a soldier, that come into sight', () => {
+    const w = new World(createMap());
+    const [aux] = army(w, 0, 'auxiliaire', 40, 60, 1);
+    const depot = w.spawn('grenier', 1, ...at(42, 60));
+    w.step([{ player: 0, kind: 'attack', ids: [aux.id], x: depot.x, y: depot.y }]);
+    run(w, 3);
+    expect(aux.order).toMatchObject({ target: depot.id });
+    const [serf] = army(w, 1, 'serf', 39, 63, 1);
+    run(w, 1);
+    expect(aux.order).toMatchObject({ target: serf.id });
+    const [soldier] = army(w, 1, 'auxiliaire', 38, 64, 1);
+    run(w, 1);
+    expect(aux.order).toMatchObject({ target: soldier.id });
+  });
+
   it('attack-moves into an enemy base and razes a building', () => {
     const w = new World(createMap());
     const squad = army(w, 0, 'legionnaire', 40, 60, 6);

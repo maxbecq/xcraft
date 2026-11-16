@@ -842,6 +842,15 @@ export class World {
         }
       }
       let t = this.entities.get(o.target);
+      // Hitting a building or a worker: switch to a more urgent enemy that comes into sight.
+      if (t && t.hp > 0 && this.rank(t) > 0 && (this.tick + e.id) % 4 === 0) {
+        const better = this.enemyNear(e, def.sight * FP);
+        if (better && this.rank(better) < this.rank(t)) {
+          o.target = better.id;
+          t = better;
+          e.goal = null;
+        }
+      }
       if (!t || t.hp <= 0 || !this.sees(e.owner, t) || this.gap(e, t) > (def.sight + 2) * FP) {
         t = (this.tick + e.id) % 4 === 0 ? this.enemyNear(e, def.sight * FP) : undefined;
         o.target = t?.id ?? 0;
@@ -856,6 +865,10 @@ export class World {
     if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
       // Chased too far: walk back.
       return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
+    }
+    if (o.auto && this.rank(t) > 0 && (this.tick + e.id) % 4 === 0) {
+      const better = this.enemyNear(e, def.sight * FP);
+      if (better && this.rank(better) < this.rank(t)) o.target = better.id;
     }
     this.strike(e, t);
   }
@@ -907,7 +920,13 @@ export class World {
     return dist(e.x, e.y, nx, ny) - e.radius;
   }
 
-  /** Most threatening visible enemy within range: armed units first, then others, then buildings. */
+  /** How urgent an enemy is to hit: 0 what shoots back (soldiers, defences), 1 other units (workers), 2 buildings. */
+  private rank(t: Entity): number {
+    const armed = !!(t.def as UnitDef | BuildingDef).attack && !(t.def as UnitDef).worker;
+    return armed ? 0 : t.def.kind === 'unit' ? 1 : 2;
+  }
+
+  /** Most threatening visible enemy within range: armed units and defences first, then workers, then buildings. */
   private enemyNear(e: Entity, range: number, unitsOnly = false): Entity | undefined {
     let best: Entity | undefined;
     let bestScore = Infinity;
@@ -915,8 +934,7 @@ export class World {
       if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
-      const armed = t.def.kind === 'unit' && !!(t.def as UnitDef).attack && !(t.def as UnitDef).worker;
-      const score = d + (t.def.kind === 'building' ? 8 * FP : armed ? 0 : 3 * FP);
+      const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];
       if (score < bestScore) [best, bestScore] = [t, score];
     }
     return best;

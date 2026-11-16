@@ -49,6 +49,36 @@ describe('AI', () => {
     expect(scansAfter(sin)).toHaveLength(0);
   });
 
+  it('defends its base against a raid, its wave included, and pulls workers when it has no army', () => {
+    const w = createMatch();
+    const ai = new AI(w, 0);
+    play(w, [ai], 6);
+    // The idle opponent may be dead by now: keep it in the game with a building out of the way.
+    w.winner = null;
+    w.spawn('grenier', 1, 90 * FP, 4 * FP);
+    const council = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const army = () => [...w.entities.values()].filter((e) => e.owner === 0 && e.def.kind === 'unit' && !(e.def as { worker?: boolean }).worker);
+    expect(army().length).toBeGreaterThan(3);
+    // Everyone away, as if a wave had left: a raid on the council must bring them back.
+    w.step([{ player: 0, kind: 'smart', ids: army().map((u) => u.id), x: 80 * FP, y: 80 * FP }]);
+    (ai as unknown as { wave: Set<number> }).wave = new Set(army().map((u) => u.id));
+    const raid = [0, 1, 2, 3, 4, 5].map((i) => w.spawn('legionnaire', 1, council.x + (4 + (i % 3)) * FP, council.y + (4 + Math.floor(i / 3)) * FP));
+    const step = () => w.step([...ai.think(), ...raid.filter((r) => !r.order && r.hp > 0).map((r) => ({ player: 1, kind: 'attack' as const, ids: [r.id], x: council.x, y: council.y, target: council.id }))]);
+    for (let i = 0; i < ticks(60) && raid.some((r) => r.hp > 0); i++) step();
+    expect(raid.every((r) => r.hp <= 0)).toBe(true);
+    expect(council.hp).toBeGreaterThan(0);
+
+    // No army at all: the serfs fight two raiders.
+    const w2 = createMatch();
+    const ai2 = new AI(w2, 0);
+    const hq = [...w2.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const two = [0, 1].map((i) => w2.spawn('auxiliaire', 1, hq.x + (5 + i) * FP, hq.y + 5 * FP));
+    for (let i = 0; i < ticks(40) && two.some((r) => r.hp > 0); i++) {
+      w2.step([...ai2.think(), ...two.filter((r) => !r.order && r.hp > 0).map((r) => ({ player: 1, kind: 'attack' as const, ids: [r.id], x: hq.x, y: hq.y, target: hq.id }))]);
+    }
+    expect(two.every((r) => r.hp <= 0)).toBe(true);
+  });
+
   it('finishes an AI-versus-AI game', () => {
     const w = createMatch();
     const r = play(w, [new AI(w, 0), new AI(w, 1)], 30);

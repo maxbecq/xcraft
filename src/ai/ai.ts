@@ -159,13 +159,37 @@ export class AI {
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
     // Dead or being recalled (Rappel): out of the wave.
     for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
-    const atHome = army.filter((u) => !this.wave.has(u.id));
-    const intruder = [...w.entities.values()].find(
-      (e) => e.owner >= 0 && e.owner !== this.player && e.def.kind === 'unit' && dist(e.x, e.y, home.x, home.y) < DEFEND_RADIUS && w.sees(this.player, e),
-    );
-    if (intruder) {
-      const ids = atHome.filter((u) => u.order?.kind !== 'attack' && u.order?.kind !== 'attackMove').map((u) => u.id);
-      if (ids.length) out.push({ player: this.player, kind: 'attack', ids, x: intruder.x, y: intruder.y });
+    let atHome = army.filter((u) => !this.wave.has(u.id));
+    const threat = this.threat(buildings);
+    if (threat) {
+      const near = (u: Entity) => dist(u.x, u.y, threat.x, threat.y) < 12 * FP;
+      // Outnumbered at home: the wave comes back, unless it is already fighting next to the threat.
+      const strength = (us: Entity[]) => us.reduce((s, u) => s + u.hp + u.shield, 0);
+      if (strength(atHome) < threat.strength && this.wave.size) {
+        for (const id of this.wave) {
+          const u = w.entities.get(id)!;
+          if (!near(u)) this.wave.delete(id);
+        }
+        atHome = army.filter((u) => !this.wave.has(u.id));
+      }
+      // Every defender not already fighting near the threat goes there.
+      const ids = atHome
+        .filter((u) => {
+          const o = u.order;
+          if (!o || o.kind === 'move') return true;
+          if (o.kind !== 'attack' && o.kind !== 'attackMove') return false;
+          // Already heading there, or fighting there: leave it be (a new order would reset its fight).
+          const target = w.entities.get(o.target);
+          if (target) return !near(target);
+          return o.kind === 'attackMove' && dist(o.x, o.y, threat.x, threat.y) > 12 * FP;
+        })
+        .map((u) => u.id);
+      if (ids.length) out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
+      // No soldiers to speak of against a small raid: the workers next to it fight.
+      if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4) {
+        const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
+        if (pulled.length) out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
+      }
     } else if (atHome.length >= Math.min(MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= supply.max - 2)) {
       atHome.forEach((u) => this.wave.add(u.id));
       this.waves++;
@@ -346,8 +370,37 @@ export class AI {
     return { x: home.x + Math.trunc(((mx - home.x) * 6 * FP) / d), y: home.y + Math.trunc(((my - home.y) * 6 * FP) / d) };
   }
 
-  /** Closest enemy building to our base (the AI knows where the enemy starts). */
+  /**
+   * Visible enemy units near any of our buildings (or hitting them from range): where to send defenders, the
+   * enemy unit to hit, how many there are and their hp and shields.
+   */
+  private threat(buildings: Entity[]): { x: number; y: number; target: number; count: number; strength: number } | undefined {
+    const w = this.world;
+    const foes: Entity[] = [];
+    for (const e of w.entities.values()) {
+      if (e.owner < 0 || e.owner === this.player || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
+      const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
+      if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + ((b.def as BuildingDef).size * FP) / 2)) foes.push(e);
+    }
+    if (!foes.length) return undefined;
+    // Soldiers before workers: a scout alone is not worth pulling the army back for.
+    const armed = foes.filter((e) => (e.def as UnitDef).attack && !(e.def as UnitDef).worker);
+    const lead = armed[0] ?? foes[0];
+    return {
+      x: lead.x,
+      y: lead.y,
+      target: lead.id,
+      count: foes.length,
+      strength: armed.reduce((s, e) => s + e.hp + e.shield, 0) || 1,
+    };
+  }
+
+  /**
+   * Where the wave goes: the enemy headquarters closest to us (its workers mine there), then whatever building
+   * is closest. On the way and there, units pick soldiers first, then workers, then buildings.
+   */
   private enemyTarget(home: Entity): Entity | undefined {
-    return this.nearest(home, (e) => e.owner >= 0 && e.owner !== this.player && e.def.kind === 'building');
+    const enemy = (e: Entity) => e.owner >= 0 && e.owner !== this.player;
+    return this.nearest(home, (e) => enemy(e) && e.type === FACTIONS[this.world.players[e.owner].faction].hq) ?? this.nearest(home, (e) => enemy(e) && e.def.kind === 'building');
   }
 }
