@@ -144,35 +144,66 @@ def ball(m, r, loc, scale=(1, 1, 1), seg=10, rings=6, name="ball"):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=rings, radius=r, location=loc)
     o = bpy.context.active_object
     o.scale = scale
-    return _finish(o, m, name)
+    _finish(o, m, name)
+    for poly in o.data.polygons:
+        poly.use_smooth = True
+    return o
+
+
+def soften(o, level=1):
+    """Rounds a part (subdivision) and shades it smooth: organic, sculpted shapes instead of blocks."""
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    mod = o.modifiers.new("soft", "SUBSURF")
+    mod.levels = level
+    mod.render_levels = level
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    for poly in o.data.polygons:
+        poly.use_smooth = True
+    return o
+
+
+def limb(m, top, bottom, r_top, r_bottom, name="limb"):
+    """A tapered, rounded limb between two points."""
+    a, b = Vector(top), Vector(bottom)
+    d = b - a
+    o = cyl(m, r_top, d.length, (a + b) / 2, verts=8, r2=r_bottom, name=name)
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = (-d).to_track_quat("Z", "Y")
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    return soften(o)
 
 
 # ------------------------------------------------------------------ Humans: low tech, scavenged, Mad Max meets Terrans
 
 def humanoid(p, outfit, height=1.0, bulk=1.0, armor=None):
-    """A chunky, heroic figure: tapered limbs, broad shoulders, hands and boots. Returns the head height.
-    Legs and arms are separate parts pivoting at hip and shoulder, so the game can animate them."""
+    """A sculpted heroic figure: rounded chest and pelvis, tapered limbs, shoulder balls, gloves and boots.
+    Returns the head height. Legs and arms are separate parts pivoting at hip and shoulder, for animation."""
     h = height
     armor = armor or outfit
-    for side, x in (("l", -0.075), ("r", 0.075)):
-        cyl(outfit, 0.06 * bulk, 0.26 * h, (x * bulk, 0, 0.2 * h), verts=6, r2=0.045 * bulk, name=f"leg_{side}")
-        box(p["rubber"], (0.11 * bulk, 0.16, 0.08), (x * bulk, -0.025, 0.045), name=f"leg_{side}")  # boot
-        box(armor, (0.08 * bulk, 0.05, 0.09), (x * bulk, -0.055, 0.2 * h), name=f"leg_{side}")  # knee pad
-        JOINTS[f"leg_{side}"] = (x * bulk, 0, 0.33 * h)
-    # Torso: narrow waist, broad chest.
-    cyl(outfit, 0.15 * bulk, 0.16 * h, (0, 0, 0.4 * h), verts=8, r2=0.17 * bulk)
-    box(outfit, (0.32 * bulk, 0.19 * bulk, 0.16 * h), (0, 0, 0.54 * h))
-    box(p["leather"], (0.3 * bulk, 0.2 * bulk, 0.045), (0, 0, 0.33 * h))  # belt
-    box(p["leather"], (0.05, 0.21 * bulk, 0.2 * h), (0.07, 0, 0.5 * h), rot=(0, 0.5, 0))  # harness strap
+    for side, x in (("l", -0.08), ("r", 0.08)):
+        xb = x * bulk
+        limb(outfit, (xb, 0, 0.34 * h), (xb, -0.01, 0.2 * h), 0.065 * bulk, 0.05 * bulk, name=f"leg_{side}")  # thigh
+        limb(outfit, (xb, -0.01, 0.2 * h), (xb, 0.0, 0.07), 0.05 * bulk, 0.04 * bulk, name=f"leg_{side}")  # shin
+        soften(box(p["rubber"], (0.1 * bulk, 0.17, 0.09), (xb, -0.03, 0.05), name=f"leg_{side}"))  # boot
+        ball(armor, 0.045 * bulk, (xb, -0.045, 0.2 * h), scale=(1, 0.7, 1.1), seg=8, rings=5, name=f"leg_{side}")  # knee
+        JOINTS[f"leg_{side}"] = (xb, 0, 0.34 * h)
+    ball(outfit, 0.15 * bulk, (0, 0, 0.36 * h), scale=(1.05, 0.75, 0.55), seg=12, rings=6)  # pelvis
+    soften(box(outfit, (0.3 * bulk, 0.2 * bulk, 0.22 * h), (0, 0, 0.53 * h)))  # chest
+    soften(box(p["leather"], (0.3 * bulk, 0.21 * bulk, 0.05), (0, 0, 0.38 * h)))  # belt
+    box(p["leather"], (0.05, 0.22 * bulk, 0.22 * h), (0.07, 0, 0.52 * h), rot=(0, 0.5, 0))  # harness strap
     for x in (-0.09, 0.09):
-        box(p["leather"], (0.06, 0.05, 0.06), (x * bulk, -0.11 * bulk, 0.34 * h))  # pouches
-    cyl(p["skin"], 0.04, 0.06, (0, 0, 0.64 * h), verts=6)  # neck
+        soften(box(p["leather"], (0.06, 0.05, 0.06), (x * bulk, -0.11 * bulk, 0.38 * h)))  # pouches
+    cyl(p["skin"], 0.042, 0.06, (0, 0, 0.66 * h), verts=8)  # neck
     for side, x in (("l", -0.2), ("r", 0.2)):
-        cyl(outfit, 0.05 * bulk, 0.26 * h, (x * bulk, -0.02, 0.48 * h), rot=(0.3, 0, 0), verts=6, r2=0.04 * bulk, name=f"arm_{side}")
-        box(p["leather"], (0.07, 0.07, 0.07), (x * bulk, -0.06, 0.36 * h), name=f"arm_{side}")  # glove
-        JOINTS[f"arm_{side}"] = (x * bulk, 0, 0.6 * h)
-    ball(p["skin"], 0.09, (0, -0.01, 0.73 * h), scale=(0.95, 1, 1.05), seg=10, rings=6)
-    return 0.73 * h
+        xb = x * bulk
+        ball(armor, 0.07 * bulk, (xb, 0, 0.6 * h), seg=10, rings=6, name=f"arm_{side}")  # shoulder
+        limb(outfit, (xb, 0, 0.6 * h), (xb * 1.05, -0.06, 0.4 * h), 0.05 * bulk, 0.042 * bulk, name=f"arm_{side}")
+        ball(p["leather"], 0.045, (xb * 1.05, -0.075, 0.37 * h), scale=(1, 1, 1.15), seg=8, rings=5, name=f"arm_{side}")  # glove
+        JOINTS[f"arm_{side}"] = (xb, 0, 0.6 * h)
+    ball(p["skin"], 0.088, (0, -0.01, 0.75 * h), scale=(0.92, 1, 1.08), seg=12, rings=8)
+    return 0.75 * h
 
 
 def goggles(p, z, glass="glass"):
@@ -192,8 +223,8 @@ def serf(p):
     ball(p["hazard"], 0.1, (0, 0, head + 0.05), scale=(1.05, 1.05, 0.6), seg=10, rings=5)  # hard hat
     box(p["hazard"], (0.24, 0.24, 0.02), (0, 0, head + 0.03))
     cyl(p["lamp_glow"], 0.025, 0.03, (0, -0.1, head + 0.07), rot=(math.radians(90), 0, 0), verts=8)
-    box(p["team"], (0.33, 0.2, 0.05), (0, 0, 0.6))  # team shoulder band
-    box(p["scrap"], (0.24, 0.14, 0.26), (0, 0.16, 0.52))  # pack
+    soften(box(p["team"], (0.33, 0.2, 0.05), (0, 0, 0.6)))  # team shoulder band
+    soften(box(p["scrap"], (0.24, 0.14, 0.26), (0, 0.16, 0.52)))  # pack
     cyl(p["rust"], 0.07, 0.24, (0.08, 0.22, 0.66), verts=8)
     box(p["hazard"], (0.25, 0.02, 0.04), (0, 0.235, 0.46))
     pipe(p["steel"], (-0.08, 0.2, 0.62), (-0.12, 0.25, 0.95), r=0.008, verts=4)  # antenna
@@ -205,12 +236,12 @@ def serf(p):
 def auxiliaire(p):
     """Rifleman: painted chest plate, team pauldrons, gas mask piped to a back tank, scoped pipe rifle."""
     head = humanoid(p, p["khaki"], armor=p["scrap"])
-    box(p["team"], (0.3, 0.06, 0.2), (0, -0.1, 0.54))  # chest plate
+    soften(box(p["team"], (0.3, 0.06, 0.2), (0, -0.1, 0.54)))  # chest plate
     box(p["hazard"], (0.3, 0.065, 0.03), (0, -0.1, 0.45))
     pauldron(p, p["team"], -0.2, 0.64)
     pauldron(p, p["scrap"], 0.2, 0.64)
     ball(p["scrap"], 0.105, (0, 0.01, head + 0.03), scale=(1, 1.05, 0.8), seg=10, rings=5)  # helmet
-    box(p["rubber"], (0.13, 0.07, 0.1), (0, -0.08, head - 0.03))  # gas mask
+    soften(box(p["rubber"], (0.13, 0.07, 0.1), (0, -0.08, head - 0.03)))  # gas mask
     cyl(p["scrap"], 0.032, 0.06, (0, -0.14, head - 0.06), rot=(math.radians(90), 0, 0), verts=8)
     cyl(p["green_glow"], 0.06, 0.24, (0, 0.16, 0.54), verts=8)  # back tank
     pipe(p["rubber"], (0.03, -0.12, head - 0.07), (0.1, 0.12, 0.6), r=0.015, verts=4)
@@ -225,7 +256,7 @@ def auxiliaire(p):
 def legionnaire(p):
     """Brute in welded scrap armour: spiked pauldrons, bucket helmet with a glowing slit, buzz saw, exhausts."""
     head = humanoid(p, p["rubber"], height=1.08, bulk=1.3, armor=p["scrap"])
-    box(p["scrap"], (0.4, 0.09, 0.28), (0, -0.13, 0.58))
+    soften(box(p["scrap"], (0.4, 0.09, 0.28), (0, -0.13, 0.58)))
     box(p["hazard"], (0.4, 0.095, 0.04), (0, -0.13, 0.45))
     for x in (-0.3, 0.3):
         pauldron(p, p["team"], x, 0.72, size=0.15)
@@ -248,7 +279,7 @@ def legionnaire(p):
 def soigneur(p):
     """Field medic: long coat, goggles, team armband, tank pack with tubes, injector crossbow."""
     head = humanoid(p, p["coat"])
-    box(p["coat"], (0.3, 0.2, 0.22), (0, 0.01, 0.24))  # coat skirt
+    soften(box(p["coat"], (0.3, 0.2, 0.22), (0, 0.01, 0.24)))  # coat skirt
     goggles(p, head + 0.01, glass="cyan_glow")
     cone(p["coat"], 0.12, 0.2, (0, 0.01, head + 0.08), verts=8)  # hood
     box(p["team"], (0.08, 0.09, 0.07), (-0.2, -0.03, 0.55))  # armband
@@ -625,7 +656,7 @@ def moissonneur(p):
 def archer(p):
     """Slender warrior in ivory armour with gold trims, a crested helmet with a glowing visor, a long plasma rifle."""
     head = humanoid(p, p["ivory"], height=1.12, bulk=0.88, armor=p["gold"])
-    box(p["gold"], (0.28, 0.05, 0.03), (0, -0.09, 0.62))  # collar trim
+    soften(box(p["gold"], (0.28, 0.05, 0.03), (0, -0.09, 0.62)))  # collar trim
     for s in (-1, 1):
         box(p["team"], (0.04, 0.22, 0.2), (s * 0.2, 0.02, 0.72), rot=(0.3, 0, 0))  # shoulder fins
     ball(p["ivory"], 0.1, (0, 0, head + 0.03), scale=(0.9, 1.1, 1.15), seg=12, rings=6)  # helmet
@@ -865,8 +896,7 @@ def join(objs, name):
     bpy.ops.object.join()
     o = bpy.context.active_object
     o.name = name
-    bpy.ops.object.shade_flat()
-    paint(o)
+    paint(o)  # parts keep their own flat or smooth shading
     return o
 
 
