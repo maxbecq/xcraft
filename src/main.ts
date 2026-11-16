@@ -7,9 +7,10 @@ import { Input } from './game/input';
 import { Minimap } from './minimap';
 import { Effects } from './render/effects';
 import { Post } from './render/post';
+import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, MINERAL_VARIANTS, loadModels } from './render/units';
-import { DEFS, FACTIONS, type Faction } from './data';
+import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import { heightAt } from './map';
@@ -130,6 +131,7 @@ minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 const overlay = new Overlay(map);
+const power = new PowerNet(scene, map);
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
@@ -370,6 +372,8 @@ function start(): void {
     }
     effects.update(dt);
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
+    const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
+    power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power));
     audio.frame();
     lap('fx+overlay');
     minimap.draw(world, sees);

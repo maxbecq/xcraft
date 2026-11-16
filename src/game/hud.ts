@@ -37,6 +37,10 @@ export class Hud {
   private cardKey = '';
   private buildMenu = false;
   private placing: string | null = null;
+  /** The building type being placed, if any. */
+  get placingType(): string | null {
+    return this.placing;
+  }
   /** Waiting for a click to attack or attack-move. */
   private targeting = false;
   /** The click aims a Forge's Observation céleste instead of an attack. */
