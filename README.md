@@ -27,7 +27,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Groupes | `Ctrl`+`1`…`9`, rappel `1`…`9` (deux fois : centrer) |
 | Caméra | flèches, bords de l'écran, minimap, glisser avec le clic molette, deux doigts sur le trackpad ; molette ou pincer pour zoomer |
 | Toute l'armée | `F2` ou bouton ⚔ Armée |
-| Aide | `F1` |
+| Menu et pause | `F1`, `F10` ou bouton ≡ Menu (reprendre, contrôles, recommencer, quitter) |
 
 **Sur téléphone ou tablette** (en portrait ou en paysage) : tap pour sélectionner puis tap pour donner l'ordre, double tap pour toutes les unités du même type à l'écran, glisser un doigt pour déplacer la vue, pincer pour zoomer, appui long puis glisser pour un rectangle de sélection.
 

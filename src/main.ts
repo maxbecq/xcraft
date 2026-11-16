@@ -180,38 +180,64 @@ const VENTS: Record<string, [number, number, number, boolean]> = {
 const TICK = 1 / TICK_RATE;
 const clock = new Clock();
 let acc = 0;
-// Title screen and help.
+// Pause menu (with the controls) and tool buttons.
+let paused = false;
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="help">? Aide</button><button class="tool" data-t="army">⚔ Armée</button>';
-const help = document.createElement('div');
-help.className = 'help';
-help.hidden = true;
-help.innerHTML = `<h3>Contrôles</h3>
+tools.innerHTML = '<button class="tool" data-t="menu">≡ Menu</button><button class="tool" data-t="army">⚔ Armée</button>';
+const pause = document.createElement('div');
+pause.className = 'pause';
+pause.hidden = true;
+pause.innerHTML = `<div class="pause-box">
+<h2>Pause</h2>
+<button data-p="resume">Reprendre</button>
+<button data-p="help">Contrôles</button>
+<button data-p="restart">Recommencer</button>
+<button data-p="quit">Quitter la partie</button>
+<div class="help" hidden><h3>Contrôles</h3>
 Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
 Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
 Flèches, bords d'écran, minimap, clic molette glissé, deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
-<kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd> : cette aide
+<kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
-Appui long puis glisser : rectangle de sélection`;
-document.body.append(tools, help);
+Appui long puis glisser : rectangle de sélection</div></div>`;
+document.body.append(tools, pause);
+const helpText = pause.querySelector<HTMLElement>('.help')!;
+const setPaused = (on: boolean) => {
+  paused = on;
+  pause.hidden = !on;
+  if (!on) helpText.hidden = true;
+};
 tools.addEventListener('click', (e) => {
-  const t = (e.target as HTMLElement).dataset.t;
-  if (t === 'help') help.hidden = !help.hidden;
+  const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
+  if (t === 'menu') setPaused(!paused);
   if (t === 'army') input.selectArmy();
 });
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'F1') {
-    e.preventDefault();
-    help.hidden = !help.hidden;
-  }
+pause.addEventListener('click', (e) => {
+  const p = (e.target as HTMLElement).closest<HTMLElement>('[data-p]')?.dataset.p;
+  if (p === 'resume') setPaused(false);
+  else if (p === 'help') helpText.hidden = !helpText.hidden;
+  else if (p === 'restart') location.reload();
+  else if (p === 'quit') location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
 });
+// Captured first: while paused, game hotkeys do nothing; F1, F10 and Escape close the menu.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key === 'F1' || e.key === 'F10' || (paused && e.key === 'Escape')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!ATTRACT) setPaused(!paused);
+    } else if (paused) e.stopImmediatePropagation();
+  },
+  { capture: true },
+);
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
 
 const ready = Promise.all([loadModels([...Object.keys(DEFS), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
@@ -327,5 +353,10 @@ function start(): void {
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
   if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene });
-  renderer.setAnimationLoop(() => frame(clock.getDelta()));
+  renderer.setAnimationLoop(() => {
+    const dt = clock.getDelta();
+    // Paused: the world, units and effects stand still; the picture is still drawn under the menu.
+    if (paused) post.render();
+    else frame(dt);
+  });
 }
