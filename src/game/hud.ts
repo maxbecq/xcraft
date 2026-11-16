@@ -13,8 +13,10 @@ interface Button {
   icon?: string;
   key: string;
   cost?: Cost;
-  /** Why the button is disabled (unmet prerequisites), shown in its title. */
+  /** Why the button is disabled (unmet prerequisites), shown in its tooltip. */
   reason?: string;
+  /** What it makes or researches, for the tooltip's details (defaults to the icon). */
+  type?: string;
   action: () => void;
 }
 
@@ -48,6 +50,7 @@ export class Hud {
   /** The click aims a Forge's Observation céleste instead of an attack. */
   private scanning = false;
   private readonly banner = el('div', 'hud-banner');
+  private readonly tip = el('div', 'cmd-tip');
   private readonly ghost: Mesh;
 
   constructor(
@@ -69,6 +72,21 @@ export class Hud {
     this.ghost.visible = false;
     scene.add(this.ghost);
 
+    // Tooltip: shown almost at once (80 ms) over a command, with its cost, what it is and what it still needs.
+    this.tip.hidden = true;
+    document.body.append(this.tip);
+    let tipTimer = 0;
+    this.card.addEventListener('pointerover', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.cmd');
+      if (!el || e.pointerType === 'touch') return;
+      clearTimeout(tipTimer);
+      tipTimer = window.setTimeout(() => this.showTip(el), 80);
+    });
+    this.card.addEventListener('pointerout', (e) => {
+      if ((e.relatedTarget as HTMLElement | null)?.closest('.cmd') === (e.target as HTMLElement).closest('.cmd')) return;
+      clearTimeout(tipTimer);
+      this.tip.hidden = true;
+    });
     this.card.addEventListener('pointerdown', (e) => {
       const key = (e.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key;
       const b = this.buttons.find((x) => x.key === key);
@@ -292,7 +310,7 @@ export class Hud {
       if (!this.world.researchable(this.player, t)) continue;
       const d = DEFS[t] as UpgradeDef;
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      list.push({ label: d.name, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+      list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
     }
     if (same.some((o) => o.queue.length)) {
       list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
@@ -306,14 +324,47 @@ export class Hud {
     const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|');
     if (key === this.cardKey) return;
     this.cardKey = key;
+    this.tip.hidden = true; // its button may be gone
     this.card.innerHTML = this.buttons
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const pic = b.icon ? img(b.icon, '') : '';
-        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" title="${b.reason ? `${b.label} (${b.reason})` : b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
+  }
+
+  /** Fills and places the tooltip above a command button. */
+  private showTip(button: HTMLElement): void {
+    const b = this.buttons.find((x) => x.key === button.dataset.key);
+    if (!b) return;
+    const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
+    const p = this.world.players[this.player];
+    const lines: string[] = [`<b>${b.label}</b> <kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>`];
+    if (b.cost) {
+      const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
+      if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
+      if (d && 'buildTime' in d) parts.push(`⏱ ${d.buildTime} s`);
+      lines.push(parts.filter(Boolean).join(' · '));
+    }
+    if (d?.kind === 'unit' || d?.kind === 'building') {
+      const stats = [`${d.hp} PV`];
+      if (d.shield) stats.push(`${d.shield} bouclier`);
+      if (d.attack) stats.push(`${d.attack.damage} dégâts${d.attack.range > 1 ? `, portée ${d.attack.range}` : ', mêlée'}`);
+      if ((d as UnitDef).heal) stats.push('soigne');
+      if ((d as BuildingDef).bunker) stats.push(`abrite ${(d as BuildingDef).bunker} soldats`);
+      if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
+      lines.push(stats.join(' · '));
+    }
+    if (b.reason) lines.push(`<span class="need">${b.reason}</span>`);
+    else if (b.cost && !afford(p, b.cost)) lines.push('<span class="need">Ressources insuffisantes</span>');
+    this.tip.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+    this.tip.hidden = false;
+    const r = button.getBoundingClientRect();
+    const w = this.tip.offsetWidth;
+    this.tip.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
+    this.tip.style.top = `${r.top - this.tip.offsetHeight - 8}px`;
   }
 
   // ---------------------------------------------------------------- placement
