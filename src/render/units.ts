@@ -731,11 +731,16 @@ export class EntityRenderer {
         // The dial ticks flash on selection, turning, then fade out quickly: only the ring stays.
         const dialMat = (v.ring.userData.dial as Mesh).material as MeshBasicMaterial;
         dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
-        const fresh = Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 1200);
-        dialMat.opacity = 0.6 * fresh;
+        const age = performance.now() - v.ring.userData.since;
+        const fresh = Math.max(0, 1 - age / 1200);
+        // Buildings: the ring fades in, then gives a short flash of light before settling.
+        const building = e.def.kind === 'building';
+        const fadeIn = building ? Math.min(1, age / 220) : 1;
+        const flash = building ? Math.max(0, 1 - Math.abs(age - 330) / 130) : 0;
+        dialMat.opacity = 0.6 * fresh * fadeIn;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
-        (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh;
-        (v.ring.userData.core as MeshBasicMaterial).opacity = 0.55 + 0.4 * fresh;
+        (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
+        (v.ring.userData.core as MeshBasicMaterial).opacity = (0.55 + 0.4 * fresh) * fadeIn + 0.6 * flash;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
         this.drape(v.ring, x, z, v.root.position.y);
       }
