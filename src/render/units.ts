@@ -131,7 +131,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 paint = diffuseColor.rgb;
         float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
-        ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.5) * 1.55 + 0.015, 1.0);' : ''}
+        ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.35) * 1.3 + 0.01, 1.0);' : ''}
         diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};`);
