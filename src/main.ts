@@ -85,7 +85,7 @@ const terrain = buildTerrain(map);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint);
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones);
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.

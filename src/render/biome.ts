@@ -19,6 +19,10 @@ export interface Biome {
   exposure: number;
   /** Multiplies the colours of scenery (rocks, wrecks…). */
   decorTint: Color;
+  /** Height of sand dunes over the open ground, if any. */
+  dunes?: number;
+  /** Scattered stones in plain grey. */
+  greyStones?: boolean;
 }
 
 export const BIOMES: Record<string, Biome> = {
@@ -42,18 +46,20 @@ export const BIOMES: Record<string, Biome> = {
   lune: {
     id: 'lune',
     name: 'Lune',
-    levels: [new Color(0x8c8a86), new Color(0x7c7a77), new Color(0xa9a7a2)],
-    patch: new Color(0x4a4a4d),
-    sand: new Color(0xb9b6ae),
-    ramp: new Color(0x9d9a94),
-    rock: new Color(0x76736e),
-    rockDark: new Color(0x2c2c2f),
+    levels: [new Color(0x8d8f93), new Color(0x7f8185), new Color(0xa6a8ac)],
+    patch: new Color(0x4d525c),
+    sand: new Color(0xb9bbbf),
+    ramp: new Color(0x96989c),
+    rock: new Color(0x7a7c80),
+    rockDark: new Color(0x2c2d31),
     veins: null,
-    sun: { color: 0xf4f6ff, intensity: 3.6 },
-    sky: { color: 0x8e9ab8, ground: 0x18181c, intensity: 0.7 },
+    sun: { color: 0xf2f4ff, intensity: 3.6 },
+    sky: { color: 0x9aa4bc, ground: 0x1a1b1f, intensity: 0.7 },
     background: 0x030306,
     exposure: 1.0,
-    decorTint: new Color(0.5, 0.56, 0.72),
+    decorTint: new Color(0.8, 0.82, 0.88),
+    dunes: 1.0,
+    greyStones: true,
   },
   alien: {
     id: 'alien',

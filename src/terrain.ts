@@ -2,7 +2,7 @@ import {
   BufferGeometry, Color, DataTexture, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshStandardMaterial,
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
-import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, tileAt } from './map';
+import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
 import { crackMask, fbm, groundTextures, rockTextures } from './render/textures';
@@ -12,6 +12,17 @@ import { crackMask, fbm, groundTextures, rockTextures } from './render/textures'
 let B: Biome = BIOMES.desert;
 export function setBiome(b: Biome): void {
   B = b;
+  // Dunes: long asymmetric ridges across the wind, bent by noise, with smaller ripples on top.
+  const a = b.dunes ?? 0;
+  setRelief(
+    a
+      ? (x, z) => {
+          const phase = ((x * 0.8 + z * 0.6) / 7) * Math.PI * 2 + noise(x, z, 11, 13) * 5;
+          const ridge = Math.pow(0.5 + 0.5 * Math.sin(phase), 2.2);
+          return a * (ridge + noise(x, z, 3, 17) * 0.35 - 0.3);
+        }
+      : null,
+  );
 }
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
@@ -67,7 +78,10 @@ export function buildTerrain(map: GameMap): Group {
     const bump = edge ? 0 : (noise(vx, vz, 3, 7) - 0.5) * 0.14;
     const c = B.levels[Math.min(2, level)].clone().lerp(B.patch, Math.max(0, noise(vx, vz, 9, 3) - 0.3) * 1.6).lerp(B.sand, Math.max(0, noise(vx, vz, 14, 9) - 0.55) * 1.8);
     c.multiplyScalar(rim * (0.94 + noise(vx, vz, 2, 5) * 0.12));
-    return [new Vector3(vx, h + bump, vz), c];
+    // Dune crests a little paler than the hollows.
+    const dune = reliefAt(map, vx, vz);
+    if (dune) c.multiplyScalar(1 + (dune / (B.dunes ?? 1)) * 0.25);
+    return [new Vector3(vx, h + bump + dune, vz), c];
   };
 
   for (let y = 0; y < map.height; y++) {
@@ -123,7 +137,7 @@ export function buildTerrain(map: GameMap): Group {
     groundMat.emissive = B.veins;
     groundMat.emissiveIntensity = 2.2;
   }
-  untile(groundMat, rMap, B.rock.clone().lerp(new Color(0x8a8378), 0.55));
+  untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones ? 0x86888d : 0x8a8378), 0.55));
   const groundMesh = ground.mesh(groundMat);
   const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
   weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock

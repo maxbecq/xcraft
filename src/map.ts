@@ -141,6 +141,34 @@ export function inCut(corner: number, u: number, v: number): boolean {
 }
 
 /** Ground height under a world point (in tiles), for rendering. */
+/** Rendering only: extra ground relief (dunes) at a tile corner, set with the planet's look. */
+let relief: ((vx: number, vz: number) => number) | null = null;
+/** Relief per tile corner, computed once per map (heightAt asks for it every frame for every unit). */
+const reliefCache = new WeakMap<GameMap, Float32Array>();
+export function setRelief(f: ((vx: number, vz: number) => number) | null): void {
+  relief = f;
+}
+
+/** The relief at a tile corner: none along cliffs and on ramps, so they keep their shape. */
+export function reliefAt(map: GameMap, vx: number, vz: number): number {
+  if (!relief) return 0;
+  let cache = reliefCache.get(map);
+  if (!cache) {
+    cache = new Float32Array((map.width + 1) * (map.height + 1));
+    for (let z = 0; z <= map.height; z++) for (let x = 0; x <= map.width; x++) cache[z * (map.width + 1) + x] = computeRelief(map, x, z);
+    reliefCache.set(map, cache);
+  }
+  return cache[Math.min(map.height, Math.max(0, vz)) * (map.width + 1) + Math.min(map.width, Math.max(0, vx))];
+}
+
+function computeRelief(map: GameMap, vx: number, vz: number): number {
+  for (const [dx, dy] of [[0, 0], [-1, 0], [0, -1], [-1, -1], [1, 0], [0, 1], [1, 1], [-1, 1], [1, -1]]) {
+    const t = tileAt(map, Math.min(map.width - 1, Math.max(0, vx + dx)), Math.min(map.height - 1, Math.max(0, vz + dy)));
+    if (!t || t.ramp || t.level !== tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))?.level) return 0;
+  }
+  return relief!(vx, vz);
+}
+
 export function heightAt(map: GameMap, x: number, y: number): number {
   const tx = Math.min(map.width - 1, Math.max(0, Math.floor(x)));
   const ty = Math.min(map.height - 1, Math.max(0, Math.floor(y)));
@@ -149,5 +177,6 @@ export function heightAt(map: GameMap, x: number, y: number): number {
   const cut = cutCorner(map, tx, ty);
   if (cut >= 0 && inCut(cut, u, v)) return cutLevel(map, tx, ty, cut) * LEVEL_HEIGHT;
   const [nw, ne, se, sw] = cornerHeights(map, tx, ty);
-  return (nw * (1 - u) + ne * u) * (1 - v) + (sw * (1 - u) + se * u) * v;
+  const r = relief ? [reliefAt(map, tx, ty), reliefAt(map, tx + 1, ty), reliefAt(map, tx + 1, ty + 1), reliefAt(map, tx, ty + 1)] : [0, 0, 0, 0];
+  return ((nw + r[0]) * (1 - u) + (ne + r[1]) * u) * (1 - v) + ((sw + r[3]) * (1 - u) + (se + r[2]) * u) * v;
 }

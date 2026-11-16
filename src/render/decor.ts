@@ -6,6 +6,8 @@ import { weather } from './weathering';
 import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
+/** Doodads that are plain stone. */
+const STONES = ['rocks_a', 'rocks_b', 'pebbles'];
 const CLIFF_FOOT: [string, number][] = [['rocks_a', 0.22], ['rocks_b', 0.1], ['pebbles', 0.18]];
 /** Rocks along the top edge of cliffs, as on SC maps. */
 const CLIFF_TOP: [string, number][] = [['rocks_a', 0.14], ['pebbles', 0.16], ['rocks_b', 0.04]];
@@ -34,7 +36,7 @@ export class Decor {
   private readonly meshes = new Map<string, InstancedMesh[]>();
   readonly root = new Object3D();
 
-  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1)) {
+  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false) {
     const keepClear = new Set<number>();
     const clear = (cx: number, cy: number, r: number) => {
       for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) keepClear.add(y * map.width + x);
@@ -86,7 +88,8 @@ export class Decor {
     for (const p of this.placed) byType.set(p.type, [...(byType.get(p.type) ?? []), p]);
     for (const [type, list] of byType) {
       const node = gltf.scene.getObjectByName(type);
-      if (!node) continue;
+      // The Moon (grey stones): nothing but stones, no plants, wrecks or scrap.
+      if (!node || (this.greyStones && !STONES.includes(type))) continue;
       const parts: Mesh[] = [];
       node.traverse((o) => o instanceof Mesh && parts.push(o));
       const ims = parts.map((part) => {
@@ -94,7 +97,20 @@ export class Decor {
         const m = (part.material as MeshStandardMaterial).clone();
         m.color.multiply(this.tint);
         part.material = m;
-        weather(m, 1);
+        if (this.greyStones && STONES.includes(type)) {
+          // Grey rock (the Moon): no hue left in the colour nor the painted vertices, and no rust.
+          const grey = (r: number, g: number, b: number) => 0.3 * r + 0.59 * g + 0.11 * b;
+          m.color.setScalar(grey(m.color.r, m.color.g, m.color.b) * 1.15);
+          const col = part.geometry.getAttribute('color');
+          if (col) {
+            part.geometry = part.geometry.clone();
+            const c = part.geometry.getAttribute('color');
+            for (let i = 0; i < c.count; i++) {
+              const v = grey(c.getX(i), c.getY(i), c.getZ(i));
+              c.setXYZ(i, v, v, v);
+            }
+          }
+        } else weather(m, 1);
         fog(m);
         const im = new InstancedMesh(part.geometry, part.material, list.length);
         // Parts keep their offset inside the doodad.
