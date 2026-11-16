@@ -3,6 +3,7 @@ import {
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
@@ -149,7 +150,7 @@ const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefine
 
 /** Loads the Blender models; types without one keep their placeholder. */
 export async function loadModels(types: string[]): Promise<void> {
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // Meshy models are meshopt-compressed
   await Promise.all(
     types.map(async (type) => {
       const character = CHARACTERS[type];
