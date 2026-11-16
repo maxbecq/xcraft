@@ -7,9 +7,11 @@ import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
 const CLIFF_FOOT: [string, number][] = [['rocks_a', 0.22], ['rocks_b', 0.1], ['pebbles', 0.18]];
+/** Rocks along the top edge of cliffs, as on SC maps. */
+const CLIFF_TOP: [string, number][] = [['rocks_a', 0.14], ['pebbles', 0.16], ['rocks_b', 0.04]];
 const BORDER: [string, number][] = [['rocks_b', 0.12], ['dead_tree', 0.06], ['wreck', 0.03], ['rocks_a', 0.08]];
 const OPEN: [string, number][] = [
-  ['pebbles', 0.05], ['dry_bush', 0.05], ['bones', 0.008], ['tire_pile', 0.006], ['barrels', 0.006],
+  ['pebbles', 0.08], ['dry_bush', 0.06], ['bones', 0.008], ['tire_pile', 0.006], ['barrels', 0.006],
   ['scrap_pile', 0.01], ['dead_tree', 0.008], ['wreck', 0.003], ['rocks_a', 0.01],
 ];
 
@@ -49,8 +51,9 @@ export class Decor {
         if (keepClear.has(y * map.width + x) || cutCorner(map, x, y) >= 0) continue;
         const level = tileAt(map, x, y)!.level;
         const higher = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? -1) > level);
+        const lower = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? 99) < level);
         const border = x < 3 || y < 3 || x >= map.width - 3 || y >= map.height - 3;
-        const table = higher ? CLIFF_FOOT : border ? BORDER : OPEN;
+        const table = higher ? CLIFF_FOOT : lower ? CLIFF_TOP : border ? BORDER : OPEN;
         let r = rand(x, y, 1);
         for (const [type, p] of table) {
           if (r < p) {

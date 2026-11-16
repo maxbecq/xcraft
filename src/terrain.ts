@@ -1,5 +1,5 @@
 import {
-  BufferGeometry, Color, DataTexture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshStandardMaterial,
+  BufferGeometry, Color, DataTexture, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshStandardMaterial,
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, tileAt } from './map';
@@ -123,7 +123,7 @@ export function buildTerrain(map: GameMap): Group {
     groundMat.emissive = B.veins;
     groundMat.emissiveIntensity = 2.2;
   }
-  untile(groundMat);
+  untile(groundMat, rMap, B.rock.clone().lerp(new Color(0x8a8378), 0.55));
   const groundMesh = ground.mesh(groundMat);
   const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
   weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock
@@ -225,16 +225,43 @@ class Builder {
 }
 
 /** Blends the colour texture with a second, rotated and larger sample of itself, so its repetition does not show. */
-function untile(m: MeshStandardMaterial): void {
+function untile(m: MeshStandardMaterial, rock: Texture, slab: Color): void {
   m.customProgramCacheKey = () => 'untile';
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
+    shader.uniforms.rockMap = { value: rock };
+    shader.uniforms.slabColor = { value: slab };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGround;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGround = position.xz;');
     shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec2 vGround;
+      uniform sampler2D rockMap;
+      uniform vec3 slabColor;
+      float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float gNoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(gHash(i), gHash(i + vec2(1, 0)), f.x), mix(gHash(i + vec2(0, 1)), gHash(i + vec2(1, 1)), f.x), f.y);
+      }
+      float gFbm(vec2 p) { return gNoise(p) * 0.55 + gNoise(p * 2.03) * 0.3 + gNoise(p * 4.1) * 0.15; }`,
+    ).replace(
       '#include <map_fragment>',
       `#ifdef USE_MAP
         vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.37 + 0.31;
         vec4 texelColor = mix(texture2D(map, vMapUv), texture2D(map, uv2), 0.45);
+        // Second material: flat slabs of bedrock breaking through the dirt, outlined like a painting.
+        float n = gFbm(vGround * 0.16);
+        float slab = smoothstep(0.6, 0.62, n);
+        float rim = smoothstep(0.585, 0.6, n) - slab;
+        vec4 rockTex = texture2D(rockMap, vGround * 0.33);
+        texelColor.rgb = mix(texelColor.rgb, rockTex.rgb * slabColor * 1.6, slab);
+        texelColor.rgb *= 1.0 - rim * 0.55;
+        // Small scattered gravel.
+        texelColor.rgb *= 1.0 - smoothstep(0.82, 0.86, gNoise(vGround * 3.7)) * 0.25;
         diffuseColor *= texelColor;
       #endif`,
     ).replace(

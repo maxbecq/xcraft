@@ -250,3 +250,31 @@ export function graffiti(): Texture[] {
   });
   return pool;
 }
+
+/**
+ * Rim light: a soft bright edge on silhouettes, as in SC2, so units and buildings pop off the ground.
+ * Works with the orthographic camera (view direction is then constant).
+ */
+export function rimLight(m: Material, strength = 0.35, color = [1.0, 0.95, 0.85]): void {
+  const mat = m as MeshStandardMaterial;
+  if (mat.userData.rim) return;
+  mat.userData.rim = true;
+  const key = mat.customProgramCacheKey?.() ?? '';
+  mat.customProgramCacheKey = () => `${key}rim${strength}`;
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, r) => {
+    prev?.call(mat, shader, r);
+    shader.uniforms.rimColor = { value: color.map((c) => c * strength) };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 rimColor;')
+      .replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+        {
+          vec3 viewDir = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vViewPosition);
+          float rim = pow(1.0 - clamp(abs(dot(normalize(vNormal), viewDir)), 0.0, 1.0), 2.5);
+          gl_FragColor.rgb += rimColor * rim;
+        }`,
+      );
+  };
+}

@@ -1,10 +1,10 @@
 import {
-  AdditiveBlending, Box3, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, CanvasTexture, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type BuildingDef, DEFS, type UnitDef } from '../data';
-import { graffiti, weather } from './weathering';
+import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
@@ -20,13 +20,17 @@ function turnToward(from: number, to: number, max: number): number {
 }
 /** Blender models for mineral fields; the renderer picks one per field. */
 export const MINERAL_VARIANTS = ['minerai', 'minerai_1', 'minerai_2', 'minerai_3'];
-const UNIT_SCALE = 1.35;
+const UNIT_SCALE = 1.65;
 
 const mat = (color: number, extra: MeshStandardMaterialParameters = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra });
 const teamMaterials = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6 }));
 /** Team colour for Blender models, keeping their hand-painted vertex colours. */
-const teamPainted = TEAM_COLORS.map((c) => mat(c, { roughness: 0.6, vertexColors: true }));
-teamPainted.forEach((m) => weather(m, 0.8));
+// Team colour glows a little, so armies read at a glance.
+const teamPainted = TEAM_COLORS.map((c) => mat(c, { roughness: 0.5, vertexColors: true, emissive: new Color(c).multiplyScalar(0.18) }));
+teamPainted.forEach((m) => {
+  weather(m, 0.8);
+  rimLight(m, 0.4);
+});
 
 const tagMaterials = new Map<Texture, MeshStandardMaterial>();
 /** Graffiti on a wall: transparent, drawn just in front of it. */
@@ -54,6 +58,42 @@ const RINGS = {
 };
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
 
+/** Pools of light on the ground around glowing things: [x, z offset, radius, colour]. */
+const POOLS: Record<string, [number, number, number, number][]> = {
+  conseil: [[0.2, 1.9, 1.7, 0xffa040], [-1.4, 2.0, 0.9, 0xff7020]],
+  caserne: [[0, 1.6, 1.3, 0xffb050]],
+  grenier: [[0, 1.0, 0.8, 0xffc070]],
+  mine: [[1.0, -0.9, 1.0, 0xff8030], [0.3, 0.6, 1.0, 0xb060ff]],
+  obelisque: [[0, 0, 3.2, 0x40d8ff]],
+  emetteur: [[0, 0, 1.6, 0x40d8ff]],
+  reservepsy: [[0, 0, 1.5, 0xb070ff]],
+  portail: [[0, 0.4, 1.8, 0x40d8ff]],
+  recepteur: [[0, 0, 1.6, 0xb070ff]],
+  minerai: [[0, 0, 1.0, 0x3aa8ff]],
+  puits: [[0, 0, 2.4, 0xb060ff]],
+};
+let poolTexture: Texture | null = null;
+function pool(radius: number, color: number): Mesh {
+  if (!poolTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    poolTexture = new CanvasTexture(c);
+  }
+  const m = new Mesh(
+    new PlaneGeometry(radius * 2, radius * 2).rotateX(-Math.PI / 2),
+    new MeshBasicMaterial({ map: poolTexture, color, transparent: true, opacity: 0.45, blending: AdditiveBlending, depthWrite: false }),
+  );
+  m.renderOrder = 1;
+  return m;
+}
+
 /** Models built by tools/blender/models.py, by entity type. */
 const templates = new Map<string, Group>();
 
@@ -70,6 +110,8 @@ export async function loadModels(types: string[]): Promise<void> {
         const isdaris = !!d && 'faction' in d && d.faction === 'isdaris';
         const amount = type.startsWith('minerai') || type === 'puits' ? 0 : (d?.kind === 'unit' ? 0.35 : 1) * (isdaris ? 0.15 : 1);
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
+        // Bright silhouette edges on everything but crystals, stronger on units.
+        if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
         templates.set(type, gltf.scene);
       } catch {
         // keep the placeholder
@@ -178,6 +220,8 @@ interface View {
   model: Group;
   ring: Object3D;
   scaffold?: Object3D;
+  /** Light pools on the ground, lit once the building stands. */
+  pools?: Object3D;
   heading: number;
   /** Direction the unit wants to face; `heading` turns towards it. */
   target: number;
@@ -256,6 +300,7 @@ export class EntityRenderer {
         const total = ticks((e.def as BuildingDef).buildTime);
         v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * (1 - e.buildLeft / total) : 1;
         if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
+        if (v.pools) v.pools.visible = e.buildLeft === 0;
       }
     }
   }
@@ -314,7 +359,7 @@ export class EntityRenderer {
     if (e.def.kind === 'unit') body.scale.setScalar(UNIT_SCALE);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
-    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.25 : 0.95);
+    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 0.95);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
       const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
       cargo.name = 'cargo';
@@ -331,6 +376,16 @@ export class EntityRenderer {
       ring.add(mesh);
     }
     root.add(ring);
+    let pools: Object3D | undefined;
+    if (POOLS[e.type]) {
+      pools = new Group();
+      for (const [x, z, r, c] of POOLS[e.type]) {
+        const p = pool(r, c);
+        p.position.set(x, 0.05, z);
+        pools.add(p);
+      }
+      root.add(pools);
+    }
     let scaffold: Object3D | undefined;
     if (e.def.kind === 'building') {
       // Scaffolding shown while under construction.
@@ -341,7 +396,7 @@ export class EntityRenderer {
     }
     this.scene.add(root);
     const facing = e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75;
-    const v: View = { root, model: pivot, ring, scaffold, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     this.views.set(e.id, v);
     return v;
