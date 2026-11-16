@@ -352,7 +352,7 @@ function start(): void {
     lap('render');
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
-  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene });
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input });
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.
