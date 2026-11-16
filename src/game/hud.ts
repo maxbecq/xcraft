@@ -5,6 +5,7 @@ import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
 import type { Audio } from '../audio';
 import type { Input } from './input';
+import { Portrait } from '../render/portrait';
 
 interface Button {
   label: string;
@@ -27,6 +28,9 @@ export class Hud {
   private readonly console = el('div', 'console');
   readonly mapSlot = el('div', 'slot map-slot');
   private readonly panel = el('div', 'hud-panel');
+  /** Selection text, beside the live portrait. */
+  private readonly details = el('div', 'details');
+  private readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
   private buttons: Button[] = [];
@@ -48,6 +52,7 @@ export class Hud {
     private readonly audio: Audio,
   ) {
     this.panel.classList.add('slot');
+    this.panel.append(this.portrait.canvas, this.details);
     this.card.classList.add('slot');
     this.console.append(this.mapSlot, this.panel, this.card);
     document.body.append(this.bar, this.console, this.toasts, this.banner);
@@ -156,19 +161,21 @@ export class Hud {
 
   private updatePanel(): void {
     const sel = [...this.input.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e);
+    this.portrait.show(sel.length === 1 ? sel[0].type : null, sel[0]?.owner);
+    this.portrait.canvas.hidden = sel.length !== 1;
     if (sel.length === 0) {
-      this.panel.innerHTML = '';
+      this.details.innerHTML = '';
       return;
     }
     if (sel.length > 1) {
-      this.panel.innerHTML = `<div class="grid">${sel
+      this.details.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
         .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}"><img src="${icon(e.type)}" alt="${e.def.name}"></div>`)
         .join('')}</div>`;
       return;
     }
     const e = sel[0];
-    let html = `<img class="portrait" src="${icon(e.type)}" alt=""><div class="name">${e.def.name}</div>`;
+    let html = `<div class="name">${e.def.name}</div>`;
     if (e.def.kind === 'resource') {
       html += `<div class="info">${Number.isFinite(e.amount) ? `${e.amount} restants` : 'Inépuisable'}</div>`;
     } else {
@@ -186,7 +193,8 @@ export class Hud {
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
-    this.panel.innerHTML = html;
+    this.details.innerHTML = html;
+    this.portrait.render();
   }
 
   // ---------------------------------------------------------------- command card

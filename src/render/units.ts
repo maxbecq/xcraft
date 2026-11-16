@@ -233,6 +233,12 @@ function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: Grip
   mixer.stopAllAction();
 }
 
+/** A fresh copy of a type's model in a team's colours, with its clips when rigged (HUD portrait). */
+export function preview(type: string, owner: number): { object: Group; clips: AnimationClip[] } {
+  const object = model(type, teamMaterials[owner] ?? teamMaterials[0]);
+  return { object, clips: (object.userData.clips as AnimationClip[] | undefined) ?? [] };
+}
+
 /** A copy of a Blender model; `seed` picks its graffiti. */
 function model(type: string, team: Material, seed = 0): Group {
   const r = rigged.get(type);
