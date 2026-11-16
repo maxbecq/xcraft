@@ -131,3 +131,23 @@ describe('World', () => {
 function xy([x, y]: readonly [number, number]) {
   return { x, y };
 }
+
+describe('inertia', () => {
+  it('speeds a Moissonneur up from a standstill and brakes it to stop on the spot', () => {
+    const w = new World(map);
+    const m = w.spawn('moissonneur', 0, ...at(40, 60));
+    const s = w.spawn('serf', 0, ...at(40, 62));
+    const steps: number[] = [];
+    w.step([{ player: 0, kind: 'move', ids: [m.id, s.id], x: 48 * FP + FP / 2, y: 60 * FP + FP / 2 }]);
+    for (let i = 0; i < 200 && m.order; i++) {
+      const x = m.x;
+      w.step([]);
+      steps.push(m.x - x);
+    }
+    const top = Math.max(...steps);
+    expect(steps[0]).toBeLessThan(top / 2); // starts slowly
+    expect(steps.at(-2)!).toBeLessThan(top / 2); // brakes before arriving
+    expect(Math.abs(m.x - (48 * FP + FP / 2))).toBeLessThan(FP / 4);
+    expect(s.vel).toBe(0); // no inertia: the Serf never uses it
+  });
+});

@@ -51,6 +51,8 @@ export interface UnitDef {
   shield?: number;
   /** HP regained per second. */
   regen?: number;
+  /** Inertia: acceleration at the start and braking at the end of a move, in tiles per second squared (none: full speed at once). */
+  accel?: number;
   /** Permanently invisible: enemies only see it within range of one of their detectors. */
   cloaked?: boolean;
   /** Flies: straight over cliffs and buildings, out of reach of melee and ground-only weapons. */

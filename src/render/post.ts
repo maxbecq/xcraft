@@ -1,4 +1,4 @@
-import { type Camera, type OrthographicCamera, PMREMGenerator, type Scene, Vector2, type WebGLRenderer } from 'three';
+import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, Vector2, type WebGLRenderer } from 'three';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { inkPass } from './ink';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -38,6 +38,20 @@ export class Post {
     this.ao = new GTAOPass(scene, camera, size.x, size.y);
     this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2, samples: light ? 8 : 16 });
     this.ao.blendIntensity = 0.85;
+    // Its depth-and-normal render also skips see-through overlays (selection rings, halos, effects): drawn
+    // there as solid, a ring floating over the ground came out as a pale shaded disc, inked too.
+    const ao = this.ao as unknown as { _overrideVisibility(): void; _visibilityCache: Object3D[] };
+    const hideLines = ao._overrideVisibility.bind(ao);
+    ao._overrideVisibility = () => {
+      hideLines();
+      scene.traverse((o) => {
+        const m = (o as Mesh).material as Material | undefined;
+        if (o.visible && (o as Mesh).isMesh && m && !Array.isArray(m) && m.transparent && !m.depthWrite) {
+          o.visible = false;
+          ao._visibilityCache.push(o);
+        }
+      });
+    };
     composer.addPass(this.ao);
     // `?noink` keeps the plain 3D look.
     if (!new URLSearchParams(location.search).has('noink')) {

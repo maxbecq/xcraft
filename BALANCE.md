@@ -27,6 +27,7 @@ Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2
 | `shield` | bouclier psychique (Isdaris), absorbé avant les PV, se recharge hors combat |
 | `armor` | retiré à chaque coup reçu |
 | `speed` | cases par seconde |
+| `accel` | inertie : accélération au départ et freinage à l'arrivée, en cases par seconde² (absent : pleine vitesse d'un coup) |
 | `sight` | vision, en cases |
 | `supply` | nourriture utilisée (unité) ou fournie (bâtiment ; négatif : en utilise) |
 | `cost` | `minerals` et `energy` |

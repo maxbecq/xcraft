@@ -221,7 +221,7 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
 };
 const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
-const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: Math.PI / 2, pegase: Math.PI / 2 };
+const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI / 2 };
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
@@ -630,7 +630,7 @@ export class EntityRenderer {
         // The dial ticks flash on selection, turning, then fade out quickly: only the ring stays.
         const dialMat = (v.ring.userData.dial as Mesh).material as MeshBasicMaterial;
         dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
-        const fresh = Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 600);
+        const fresh = Math.max(0, 1 - (performance.now() - v.ring.userData.since) / 1200);
         dialMat.opacity = 0.6 * fresh;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh;
@@ -780,7 +780,7 @@ export class EntityRenderer {
     if ((e.def as UnitDef).cloaked) ghost(body);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
-    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 0.95);
+    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
       const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
       cargo.name = 'cargo';

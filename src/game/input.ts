@@ -28,6 +28,47 @@ export interface InputHooks {
 
 const LONG_PRESS_MS = 400;
 const TAP_SLOP_PX = 12;
+
+/** Cursor image from SVG strokes on a 32 px box: a soft halo of the colour, a dark outline, then the colour. */
+function cursorOf(color: string, shape: string): string {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, pointer`;
+}
+
+/** Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner. */
+function isoCorners(w: number): string {
+  const h = w / 2;
+  const arm = 0.26; // bracket arm, as a share of the diamond's side
+  const corner = (cx: number, cy: number, ax: number, ay: number, bx: number, by: number) =>
+    `M${cx + (ax - cx) * arm} ${cy + (ay - cy) * arm}L${cx} ${cy}L${cx + (bx - cx) * arm} ${cy + (by - cy) * arm}`;
+  const [t, r, b, l] = [[16, 16 - h], [16 + w, 16], [16, 16 + h], [16 - w, 16]];
+  return `<path d='${corner(t[0], t[1], l[0], l[1], r[0], r[1]) + corner(r[0], r[1], t[0], t[1], b[0], b[1]) + corner(b[0], b[1], r[0], r[1], l[0], l[1]) + corner(l[0], l[1], b[0], b[1], t[0], t[1])}'/>`;
+}
+
+const cursorCache = new Map<string, string[]>();
+const cached = (key: string, make: () => string[]) => cursorCache.get(key) ?? cursorCache.set(key, make()).get(key)!;
+
+/** Over something selectable (SC1 lens): corner brackets closing in step by step round a flat ring. */
+const hoverFrames = (color: string) =>
+  cached(`hover${color}`, () => [15, 13.5, 12, 10.5].map((w) => cursorOf(color, `${isoCorners(w)}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>`)));
+
+/** Aiming an attack or an ability: a reticle lying on the ground, its four ticks turning round it. */
+const aimFrames = (color: string) =>
+  cached(`aim${color}`, () =>
+    Array.from({ length: 8 }, (_, f) => {
+      let ticks = '';
+      for (let k = 0; k < 4; k++) {
+        const a = ((f / 8 + k) * Math.PI) / 2;
+        const [c, s] = [Math.cos(a), Math.sin(a)];
+        ticks += `M${(16 + 13 * c).toFixed(2)} ${(16 + 6.5 * s).toFixed(2)}L${(16 + 7.5 * c).toFixed(2)} ${(16 + 3.75 * s).toFixed(2)}`;
+      }
+      return cursorOf(color, `<ellipse cx='16' cy='16' rx='10' ry='5'/><path d='${ticks}'/><ellipse cx='16' cy='16' rx='1.2' ry='0.6'/>`);
+    }),
+  );
+
+/** Right-click order given: green brackets snapping shut on the spot. */
+const orderFrames = () => cached('order', () => [14, 10.5, 7, 4].map((w) => cursorOf('#4dff6a', isoCorners(w))));
+const ORDER_FRAME_MS = 70;
 type TouchMode = 'pending' | 'pan' | 'box' | 'pinch';
 
 /** Mouse and keyboard: selection, control groups and right-click orders for the local player. */
@@ -46,8 +87,9 @@ export class Input {
     private readonly map: GameMap,
     private readonly player: number,
     private readonly hooks: InputHooks,
-    canvas: HTMLCanvasElement,
+    private readonly canvas: HTMLCanvasElement,
   ) {
+    window.setInterval(() => this.animateCursor(), 60);
     this.box.className = 'selection-box';
     this.box.hidden = true;
     document.body.appendChild(this.box);
@@ -69,11 +111,13 @@ export class Input {
         canvas.setPointerCapture(e.pointerId);
       } else if (e.button === 2 && ground) {
         this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY));
+        this.orderedAt = performance.now();
       }
     });
     canvas.addEventListener('pointermove', (e) => {
       this.hover = this.groundAt(e.clientX, e.clientY);
       if (e.pointerType === 'touch') return this.touchMove(e);
+      this.hoverCursor(e.clientX, e.clientY);
       if (this.grab) {
         this.hooks.pan(e.clientX - this.grab.x, e.clientY - this.grab.y);
         this.grab = { x: e.clientX, y: e.clientY };
@@ -283,6 +327,35 @@ export class Input {
 
   private ndc(x: number, y: number): Vector2 {
     return new Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
+  }
+
+  private lastHoverPick = 0;
+  private hoverColor = '';
+  private orderedAt = -Infinity;
+  private cursorFrame = 0;
+
+  /** Owner colour of what is under the cursor (SC1 lens), checked at most every 50 ms. */
+  private hoverCursor(x: number, y: number): void {
+    const now = performance.now();
+    if (now - this.lastHoverPick < 50) return;
+    this.lastHoverPick = now;
+    const e = this.dragStart || this.grab ? undefined : this.entityAt(x, y);
+    this.hoverColor = !e ? '' : e.owner === this.player ? '#4dff6a' : e.owner < 0 ? '#ffe27a' : this.world.hostile(e.owner, this.player) ? '#ff4a3a' : '#5ad8ff';
+  }
+
+  /** Animated cursors, by priority: aiming (red, gold for an ability), a right-click order just given, hovering. */
+  private animateCursor(): void {
+    const f = this.cursorFrame++;
+    const body = document.body.classList;
+    const since = performance.now() - this.orderedAt;
+    const cursor = body.contains('targeting')
+      ? aimFrames(body.contains('scanning') ? '#ffd860' : '#ff4a3a')[f % 8]
+      : since < 4 * ORDER_FRAME_MS
+        ? orderFrames()[Math.floor(since / ORDER_FRAME_MS)]
+        : this.hoverColor
+          ? hoverFrames(this.hoverColor)[Math.floor(f / 2) % 4]
+          : '';
+    if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
   }
 
   /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels, else the closest resource. */

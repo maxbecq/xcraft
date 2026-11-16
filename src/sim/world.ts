@@ -1,6 +1,6 @@
 import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
-import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
+import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
 import { Vision } from './vision';
 
@@ -31,6 +31,9 @@ export interface Entity {
   py: number;
   radius: number;
   speed: number;
+  /** Units with inertia (UnitDef.accel): current speed per tick, and the last tick it moved. */
+  vel: number;
+  movedTick: number;
   hp: number;
   maxHp: number;
   order: Order | null;
@@ -206,7 +209,7 @@ export class World {
     const e: Entity = {
       id: this.nextId++, owner, type, def, x, y, px: x, py: y,
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
-      speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0,
+      speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1,
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
@@ -1258,15 +1261,32 @@ export class World {
     const tx = e.path[0];
     const ty = e.path[1];
     const d = dist(e.x, e.y, tx, ty);
-    const step = Math.min(e.speed, d);
+    const step = Math.min(this.pace(e), d);
     const nx = d === 0 ? tx : e.x + idiv((tx - e.x) * step, d);
     const ny = d === 0 ? ty : e.y + idiv((ty - e.y) * step, d);
     if (!this.tryMove(e, nx, ny)) {
+      e.vel = 0;
       if (++e.blockedTicks > 10 && e.goal) this.plan(e, e.goal.x, e.goal.y); // replan around the obstacle
       return false;
     }
     if (step === d) e.path.splice(0, 2);
     return e.path.length === 0;
+  }
+
+  /**
+   * Step length this tick. Units with inertia (UnitDef.accel) speed up from a standstill and brake so as to
+   * stop on the last waypoint; the others walk at full speed at once.
+   */
+  private pace(e: Entity): number {
+    const accel = (e.def as UnitDef).accel;
+    if (!accel) return e.speed;
+    const a = Math.max(1, Math.round((accel * GAME_SPEED * GAME_SPEED * FP) / (TICK_RATE * TICK_RATE)));
+    if (e.movedTick !== this.tick - 1) e.vel = 0;
+    let left = 0;
+    for (let i = 0, x = e.x, y = e.y; i < e.path.length; x = e.path[i], y = e.path[i + 1], i += 2) left += dist(x, y, e.path[i], e.path[i + 1]);
+    e.vel = Math.min(e.speed, e.vel + a, Math.max(a, isqrt(2 * a * left)));
+    e.movedTick = this.tick;
+    return e.vel;
   }
 
   /** Idle units standing on a blocked tile walk off it. */
