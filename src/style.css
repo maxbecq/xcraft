@@ -226,7 +226,7 @@ body:not(.isdaris) {
   --phos-dark: #173a1d;
   --screen: radial-gradient(ellipse at 50% 45%, #0f2914 0%, #07150a 70%, #030a05 100%);
   --scan: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px);
-  --lcd: 'Share Tech Mono', 'Courier New', monospace;
+  --lcd: 'Doto', 'Share Tech Mono', 'Courier New', monospace;
   --glow: 0 0 4px rgba(141, 255, 138, 0.55), 0 0 10px rgba(141, 255, 138, 0.18);
 }
 
