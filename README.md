@@ -4,6 +4,7 @@ RTS jouable dans le navigateur, en 3D isométrique façon StarCraft 1, d'après 
 
 **Jouer :** https://maxbecq.github.io/xcraft/
 **Regarder deux IA s'affronter :** https://maxbecq.github.io/xcraft/?spectate&speed=2
+**Isdaris contre Isdaris :** https://maxbecq.github.io/xcraft/?spectate&speed=2&camp=isdaris&adversaire=isdaris
 
 ## Camps jouables
 
@@ -31,7 +32,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 
 **Sur téléphone ou tablette** (en portrait ou en paysage) : tap pour sélectionner puis tap pour donner l'ordre, double tap pour toutes les unités du même type à l'écran, glisser un doigt pour déplacer la vue, pincer pour zoomer, appui long puis glisser pour un rectangle de sélection.
 
-Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard, avec l'interface du camp `camp`), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
 
 ## Développement
 

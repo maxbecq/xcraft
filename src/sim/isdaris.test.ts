@@ -68,15 +68,15 @@ describe('Isdaris', () => {
     expect(c.hp).toBeGreaterThan(40);
   });
 
-  it('can be played by the AI, and Humans versus Isdaris games end', () => {
-    for (const factions of [['isdaris', 'humains'], ['humains', 'isdaris']] as const) {
+  it('can be played by the AI, and Humans versus Isdaris and Isdaris mirror games end', () => {
+    for (const factions of [['isdaris', 'humains'], ['humains', 'isdaris'], ['isdaris', 'isdaris']] as const) {
       const w = createMatch([...factions]);
       const ais = [new AI(w, 0), new AI(w, 1)];
       while (w.winner === null && w.tick < ticks(35 * 60)) w.step(ais.flatMap((a) => a.think()));
       console.log(`${factions.join(' vs ')}: winner ${w.winner} at ${(w.tick / ticks(60)).toFixed(1)} min`);
       expect(w.winner).not.toBeNull();
     }
-  }, 60_000);
+  }, 90_000);
 
   it('beats an idle opponent as Isdaris', () => {
     const w = createMatch(['humains', 'isdaris']);

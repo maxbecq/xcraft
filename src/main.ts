@@ -54,7 +54,7 @@ const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 
 const myFaction = asFaction(params.get('camp') ?? stored('xcraft.camp'));
 const foeFaction = asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
 const world = createMatch([myFaction, foeFaction]);
-document.body.classList.toggle('isdaris', myFaction === 'isdaris' && !params.has('spectate'));
+document.body.classList.toggle('isdaris', myFaction === 'isdaris'); // spectating shows the first side's interface
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
@@ -252,7 +252,10 @@ if (!ATTRACT) {
     <button data-m="easy">Jouer — IA facile</button>
     <button data-m="normal">Jouer — IA normale</button>
     <button data-m="hard">Jouer — IA difficile</button>
-    <button data-m="watch">Regarder IA contre IA</button>
+    <div class="row">
+      <button data-m="watch">Regarder : ${FACTIONS[myFaction].name} contre ${FACTIONS[foeFaction].name}</button>
+      <button data-m="watch-isdaris">Regarder : Isdaris contre Isdaris</button>
+    </div>
     <div class="row">
       <button data-m="camp">Votre camp : ${FACTIONS[myFaction].name}</button>
       <button data-m="adversaire">Adversaire : ${FACTIONS[foeFaction].name}</button>
@@ -282,6 +285,7 @@ if (!ATTRACT) {
       }
       location.search = keep.replace(`biome=${biome.id}`, `biome=${next}`);
     } else if (m === 'watch') location.search = `?spectate&speed=2&${keep}`;
+    else if (m === 'watch-isdaris') location.search = `?spectate&speed=2&biome=${biome.id}&camp=isdaris&adversaire=isdaris`;
     else if (m) location.search = `?play&ai=${m}&${keep}`;
   });
 }
