@@ -122,7 +122,7 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
  * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
  * dull rust-and-dust textures (Humans): more saturation and light, so units read on the ground.
  */
-function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false): MeshStandardMaterial {
+function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
   m.onBeforeCompile = (shader) => {
@@ -134,10 +134,12 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.5) * 1.55 + 0.015, 1.0);' : ''}
         diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += teamColor * teamMask * 0.3;`);
+        totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};`);
   };
-  m.customProgramCacheKey = () => `team-${color}-${vivid}`;
-  rimLight(m, rim);
+  m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}`;
+  // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
+  if (unit) rimLight(m, 1.1, team.clone().lerp(new Color(1, 1, 1), 0.2).toArray());
+  else rimLight(m, rim);
   return m;
 }
 
@@ -154,7 +156,7 @@ export async function loadModels(types: string[]): Promise<void> {
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type))));
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit')));
           });
           templates.set(type, gltf.scene);
           return;
@@ -177,7 +179,7 @@ export async function loadModels(types: string[]): Promise<void> {
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (skin) {
-            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, isHuman(type))) });
+            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, isHuman(type), true)) });
             return;
           }
         } catch {
