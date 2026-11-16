@@ -3,11 +3,11 @@ import { AI } from '../src/ai/ai';
 import type { Faction } from '../src/data';
 import { ticks } from '../src/sim/fixed';
 import { createMatch } from '../src/sim/setup';
-// Faction balance on 50 games (harvest handicaps 90 to 110 on both sides). Run: BIG=1 npx vitest run scripts/big.test.ts --silent=false --reporter=verbose
+// Faction balance on 98 games (harvest handicaps 88 to 112 on both sides). Run: BIG=1 npx vitest run scripts/big.test.ts --silent=false --reporter=verbose
 it.skipIf(!process.env.BIG)('big', () => {
   const wins: Record<string, number> = { humains: 0, isdaris: 0, draw: 0 };
   for (const order of [['humains', 'isdaris'], ['isdaris', 'humains']] as [Faction, Faction][]) {
-    for (const h0 of [90, 95, 100, 105, 110]) for (const h1 of [90, 95, 100, 105, 110]) {
+    for (const h0 of [88, 92, 96, 100, 104, 108, 112]) for (const h1 of [88, 92, 96, 100, 104, 108, 112]) {
       const w = createMatch(order);
       w.players[0].handicap = h0;
       w.players[1].handicap = h1;

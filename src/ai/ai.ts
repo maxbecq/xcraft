@@ -337,6 +337,8 @@ export class AI {
       const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals);
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
       const army = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked);
+      // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones.
+      if (energy >= 300) return army.reduce((a, b) => ((DEFS[b[0]] as UnitDef).cost.energy > (DEFS[a[0]] as UnitDef).cost.energy ? b : a))[0];
       const total = army.reduce((n, [, wgt]) => n + wgt, 0);
       let k = this.trained % total;
       for (const [t, wgt] of army) {

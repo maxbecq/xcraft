@@ -45,7 +45,7 @@ npx -y npm@11.6.2 install   # npm 10 plante sur l'installation de vitest
 npm run dev                 # http://localhost:5173/xcraft/
 npm test                    # simulation, pathfinding, économie, combat, IA
 npm run balance             # rapport minute par minute d'une partie IA contre IA
-BIG=1 npx vitest run scripts/big.test.ts --silent=false --reporter=verbose   # équilibre des factions sur 50 parties
+BIG=1 npx vitest run scripts/big.test.ts --silent=false --reporter=verbose   # équilibre des factions sur 98 parties
 npm run models              # régénère les modèles .glb et les icônes avec Blender
 ```
 
