@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, OBSERVATION, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -39,6 +39,8 @@ export class Hud {
   private placing: string | null = null;
   /** Waiting for a click to attack or attack-move. */
   private targeting = false;
+  /** The click aims a Forge's Observation céleste instead of an attack. */
+  private scanning = false;
   private readonly banner = el('div', 'hud-banner');
   private readonly ghost: Mesh;
 
@@ -101,7 +103,7 @@ export class Hud {
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
   click(button: number, ground: Vector3 | null, shift: boolean, target?: Entity): boolean {
     if (this.targeting) {
-      if (button === 0 && ground) this.attack(ground.x, ground.z, target);
+      if (button === 0 && ground) this.aim(ground.x, ground.z, target);
       if (!shift || button === 2) this.setTargeting(false);
       return true;
     }
@@ -125,7 +127,7 @@ export class Hud {
   /** Left-click on the minimap: attack-move when targeting. */
   minimapClick(x: number, y: number): boolean {
     if (!this.targeting) return false;
-    this.attack(x, y);
+    this.aim(x, y);
     this.setTargeting(false);
     return true;
   }
@@ -136,8 +138,15 @@ export class Hud {
     this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy });
   }
 
-  private setTargeting(on: boolean): void {
+  private aim(x: number, z: number, target?: Entity): void {
+    if (!this.scanning) return this.attack(x, z, target);
+    const ids = this.input.own().map((e) => e.id);
+    this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP) });
+  }
+
+  private setTargeting(on: boolean, scan = false): void {
     this.targeting = on;
+    this.scanning = on && scan;
     document.body.classList.toggle('targeting', on);
   }
 
@@ -255,6 +264,11 @@ export class Hud {
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) };
     });
+    if (b.def.ability) {
+      const a = ABILITIES[b.def.ability];
+      const ready = same.some((o) => o.abilityCd === 0);
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: OBSERVATION.energy }, action: () => this.setTargeting(true, true) });
+    }
     // Forge: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {
       if (!this.world.researchable(this.player, t)) continue;

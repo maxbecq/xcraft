@@ -1,4 +1,4 @@
-import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -83,8 +83,8 @@ export type Command =
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number }
   | { player: number; kind: 'train'; ids: number[]; type: string }
   | { player: number; kind: 'cancel'; ids: number[] }
-  /** Each selected unit uses its active ability, if ready. */
-  | { player: number; kind: 'ability'; ids: number[] }
+  /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */
+  | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number }
   /** Attack a target, or attack-move to a point when there is none. */
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number };
 
@@ -127,6 +127,8 @@ export class World {
   readonly vision: Vision[];
   /** Invisible enemy units each player currently detects (updated with vision). */
   readonly detected: Set<number>[];
+  /** Zones revealed by a Forge's Observation céleste, with ticks left. */
+  scans: { owner: number; x: number; y: number; left: number }[] = [];
   /** Winning player once the game is over. */
   winner: number | null = null;
   private nextId = 1;
@@ -179,6 +181,7 @@ export class World {
     this.events = [];
     this.shots = [];
     this.deaths = [];
+    this.scans = this.scans.filter((s) => --s.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) this.apply(c);
     for (const e of this.entities.values()) {
@@ -210,9 +213,11 @@ export class World {
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
       this.vision[e.owner].reveal(tileOf(e.x), tileOf(e.y), r);
     }
+    for (const s of this.scans) this.vision[s.owner].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
     for (const d of this.detected) d.clear();
     for (const e of this.entities.values()) {
       if (!(e.def as UnitDef).cloaked) continue;
+      for (const s of this.scans) if (s.owner !== e.owner && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) this.detected[s.owner].add(e.id);
       for (const s of this.entities.values()) {
         const r = (s.def as UnitDef | BuildingDef).detector;
         if (r && s.owner >= 0 && s.owner !== e.owner && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) this.detected[s.owner].add(e.id);
@@ -359,9 +364,16 @@ export class World {
           }
         }
         return;
-      case 'ability':
+      case 'ability': {
         for (const e of units) this.cast(e);
+        const b = buildings.find((b) => (b.def as BuildingDef).ability === 'observation' && b.abilityCd === 0);
+        if (!b || c.x === undefined || c.y === undefined) return;
+        if (this.players[c.player].energy < OBSERVATION.energy) return void this.say(c.player, "Pas assez d'énergie.");
+        this.players[c.player].energy -= OBSERVATION.energy;
+        this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ABILITIES.observation.duration) });
+        b.abilityCd = ticks(ABILITIES.observation.cooldown);
         return;
+      }
     }
   }
 

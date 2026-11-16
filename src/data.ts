@@ -78,6 +78,8 @@ export interface BuildingDef {
   detector?: number;
   /** Upgrades researched here (keys of DEFS, kind 'upgrade'), through the production queue. */
   researches?: string[];
+  /** Active ability (key of ABILITIES), aimed at a point of the map. */
+  ability?: string;
   faction: Faction;
   hotkey: string;
 }
@@ -121,7 +123,10 @@ export const ABILITIES: Record<string, AbilityDef> = {
   charge: { name: 'Charge', hotkey: 'C', cooldown: 20, duration: 3 },
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
   peauderoc: { name: 'Peau de roc', hotkey: 'R', cooldown: 25, duration: 35 },
+  /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
+  observation: { name: 'Observation céleste', hotkey: 'O', cooldown: 30, duration: 10 },
 };
+export const OBSERVATION = { radius: 8, energy: 50 };
 export const SKIN_RANGE = 4;
 export const SKIN_REDUCTION = 5;
 export const STIM_HP = 10;
@@ -162,7 +167,7 @@ export const DEFS: Record<string, Def> = {
   // Mod: « Guilde métallurgique » (the notice's Forge).
   forge: {
     kind: 'building', name: 'Forge', hp: 2800, armor: 2, size: 3, sight: 10, supply: 0,
-    cost: { minerals: 400, energy: 0 }, buildTime: 50, faction: 'humains', hotkey: 'F',
+    cost: { minerals: 400, energy: 0 }, buildTime: 50, ability: 'observation', faction: 'humains', hotkey: 'F',
     researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3'],
   },
   // Mod: « Tour anti-air » (detector); no air units yet, so it only detects.
