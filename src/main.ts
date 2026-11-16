@@ -606,7 +606,7 @@ function start(): void {
       const size = e.def.size;
       const x = e.x / FP;
       const z = e.y / FP;
-      effects.burn(new Vector3(x, heightAt(map, x, z) + size * 0.4, z), e.hp / e.maxHp, size, dt);
+      effects.burn(new Vector3(x, heightAt(map, x, z) + size * 0.4, z), e.hp / e.maxHp, size, dt, e.id);
     }
     effects.update(dt);
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);

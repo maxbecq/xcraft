@@ -10,7 +10,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Shot, World } from '../sim/world';
 
-const MAX_PARTICLES = 600;
+const MAX_PARTICLES = 1200;
 const BUILDING_SIZES: Record<string, number> = { conseil: 5, caserne: 3, grenier: 2, mine: 3 };
 
 /** Soft round sprite textures, drawn once. */
@@ -33,6 +33,24 @@ function blob(inner: string, outer: string, size = 64, noisy = false): Texture {
       ctx.fill();
     }
   }
+  return new CanvasTexture(c);
+}
+
+/** A tongue of flame: bright at the bottom, tapering upwards, soft edged. */
+function flame(size = 64): Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.translate(size / 2, size * 0.68);
+  ctx.scale(0.55, 1); // narrower than tall
+  const g = ctx.createRadialGradient(0, 0, 0, 0, -size * 0.12, size * 0.6);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.75)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(0, -size * 0.12, size * 0.5, size * 0.56, 0, 0, Math.PI * 2);
+  ctx.fill();
   return new CanvasTexture(c);
 }
 
@@ -73,6 +91,7 @@ export class Effects {
   private readonly tex = {
     glow: blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'),
     smoke: blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true),
+    flame: flame(),
   };
   private readonly debrisGeo = new BoxGeometry(0.12, 0.12, 0.12);
   private readonly debrisMat = new MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 });
@@ -203,14 +222,45 @@ export class Effects {
     }
   }
 
-  /** Smoke (and fire when badly hurt) rising from a damaged building; call every frame with its hp fraction. */
-  burn(p: Vector3, hp: number, size: number, dt: number): void {
+  /**
+   * A damaged building on fire; call every frame with its hp fraction. Below half its hp it smokes and burns
+   * in one spot, more spots as it gets worse (fixed per building, from `seed`): layered flames (white-yellow
+   * core, orange body, red tips), embers flying off, thick smoke rising from above the flames and drifting
+   * with the wind, and a flickering glow on the ground.
+   */
+  burn(p: Vector3, hp: number, size: number, dt: number, seed = 0): void {
     if (hp > 0.5) return;
-    if (Math.random() < dt * (hp < 0.25 ? 10 : 5)) {
-      this.spawn(this.tex.smoke, 0x3a3430, p.clone().add(rnd(size * 0.3)), new Vector3(0.3, 1.2, 0.1), 2.2, 0.3, 1.4, 0.55, 0, false);
-    }
-    if (hp < 0.25 && Math.random() < dt * 14) {
-      this.spawn(this.tex.glow, 0xff8a30, p.clone().add(rnd(size * 0.3)), new Vector3(0, 1.4, 0), 0.5, 0.35, 0.1, 0.9, 0, true);
+    const spots = hp < 0.15 ? 3 : hp < 0.3 ? 2 : 1;
+    const strength = Math.min(1, (0.5 - hp) * 3 + 0.35);
+    for (let s = 0; s < spots; s++) {
+      const a = ((seed * 2654435761 + s * 40503) % 1000) / 1000 * Math.PI * 2;
+      const d = size * (0.12 + ((seed * 7 + s * 13) % 10) / 40);
+      const at = p.clone().add(new Vector3(Math.cos(a) * d, ((seed + s * 3) % 5) * 0.08 * size, Math.sin(a) * d));
+      // Flames: many short-lived licks rising fast, each layer smaller and hotter towards the base.
+      // Flame sizes follow the building's: a Council burns bigger than a Grenier.
+      const big = 0.5 + size * 0.22;
+      if (Math.random() < dt * 40 * strength) {
+        const w = rnd(0.12 * size);
+        // Normal blending for the body and tips (additive washes out on bright sand), additive for the hot core.
+        this.spawn(this.tex.flame, Math.random() < 0.5 ? 0xff6a10 : 0xff8c1a, at.clone().add(w), new Vector3(0, 1.3 + Math.random() * 0.6, 0).add(rnd(0.25)), 0.6, big * (0.5 + 0.4 * strength), big * 0.15, 0.95, -0.6, false);
+        this.spawn(this.tex.flame, 0xffd27a, at.clone().add(w).setY(at.y - 0.05), new Vector3(0, 1.0 + Math.random() * 0.5, 0), 0.35, big * (0.3 + 0.25 * strength), big * 0.08, 1, -0.4, true);
+      }
+      if (Math.random() < dt * 16 * strength) {
+        this.spawn(this.tex.flame, 0xc8261a, at.clone().add(rnd(0.15 * size)).setY(at.y + 0.3 * big), new Vector3(0, 1.6, 0).add(rnd(0.3)), 0.5, big * 0.35, big * 0.05, 0.85, -0.5, false);
+      }
+      // Embers: tiny sparks carried up and away by the heat.
+      if (Math.random() < dt * 7 * strength) {
+        this.spawn(this.tex.glow, Math.random() < 0.5 ? 0xffb347 : 0xff7a2a, at.clone().add(rnd(0.1)), rnd(0.7).setY(1.6 + Math.random() * 1.4), 1.2 + Math.random() * 0.8, 0.06, 0.02, 1, 0.15, true);
+      }
+      // Smoke: dark, thick, from above the flames, widening as it drifts downwind.
+      if (Math.random() < dt * (4 + 6 * strength)) {
+        const grey = Math.random() < 0.5 ? 0x2a2522 : 0x3d3631;
+        this.spawn(this.tex.smoke, grey, at.clone().add(rnd(0.15)).setY(at.y + 0.5 + 0.5 * big), new Vector3(0.35 + Math.random() * 0.2, 0.9 + Math.random() * 0.5, 0.12), 3.2, 0.45, 1.8 + strength, 0.5 + 0.2 * strength, -0.05, false);
+      }
+      // A flickering warm glow where it burns.
+      if (Math.random() < dt * 20) {
+        this.spawn(this.tex.glow, 0xff6a1f, at.clone().setY(at.y - 0.1), new Vector3(), 0.12, size * 0.55 * strength * (0.8 + Math.random() * 0.4), size * 0.5 * strength, 0.22, 0, true);
+      }
     }
   }
 
