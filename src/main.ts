@@ -237,8 +237,10 @@ tools.addEventListener('click', (e) => {
   if (t === 'menu') setPaused(!paused);
   if (t === 'army') input.selectArmy();
 });
-pause.addEventListener('click', (e) => {
-  const p = (e.target as HTMLElement).closest<HTMLElement>('[data-p]')?.dataset.p;
+// The pause menu and the end-of-game banner share these actions.
+document.addEventListener('click', (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLElement>('.pause [data-p], .hud-banner [data-p]');
+  const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'restart') location.reload();

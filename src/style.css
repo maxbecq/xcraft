@@ -104,6 +104,8 @@ body.targeting canvas { cursor: crosshair; }
 .hud-banner { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 16px; background: radial-gradient(ellipse, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8)); z-index: 5; }
 .hud-banner h1 { margin: 0; font: 600 110px/0.9 var(--title); letter-spacing: 0.08em; color: #ff7a6a; text-shadow: 0 4px 18px #000; text-transform: uppercase; }
 .hud-banner.won h1 { color: var(--amber); }
+.hud-banner .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.hud-banner .row button { min-width: 0; }
 
 /* ---------------------------------------------------------------- menu, tools, help */
 
