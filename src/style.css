@@ -49,6 +49,7 @@ body.targeting canvas { cursor: crosshair; }
 .hud-panel .info { opacity: 0.9; margin: 2px 0; }
 .hud-panel .hp, .hud-panel .bar { height: 7px; background: #2b261c; border: 1px solid #000; overflow: hidden; margin: 5px 0; max-width: 340px; }
 .hud-panel .hp > div { height: 100%; background: linear-gradient(#8cf08c, #3fae3f); }
+.hud-panel .hp.shield > div { background: linear-gradient(#bfe8ff, #3a9ae0); }
 .hud-panel .bar > div { height: 100%; background: linear-gradient(#ffd977, #c98f22); }
 .hud-panel .queue { display: flex; gap: 4px; margin-top: 6px; }
 .hud-panel .queue span, .hud-panel .tile { display: inline-grid; place-items: center; width: 38px; height: 38px; overflow: hidden; background: radial-gradient(circle at 50% 40%, #4a5a62, #161b1f 80%); border: 1px solid #6d5e40; border-radius: 3px; }
@@ -134,3 +135,22 @@ body.targeting canvas { cursor: crosshair; }
 body.attract .console, body.attract .hud-bar, body.attract .tools, body.attract .hud-toasts, body.attract .overlay, body.attract .hud-banner { display: none !important; }
 
 .menu button.biome { min-width: 0; margin-top: 10px; font-size: 18px; padding: 6px 18px; opacity: 0.9; }
+
+.menu .row { display: flex; gap: 10px; }
+.menu .row button { min-width: 0; font-size: 18px; padding: 6px 16px; }
+
+/* Isdaris interface: ivory, gold and light, Art Deco lines instead of rusty steel. */
+body.isdaris {
+  --plate: linear-gradient(180deg, #e9e2d2 0%, #b9b09c 50%, #8e8676 100%);
+  --edge: #c9a94a;
+  --well: #0c1620;
+  --ink: #1e1a14;
+  --amber: #3fd8ff;
+  --rivets: radial-gradient(circle at 50% 0, rgba(201, 169, 74, 0.6) 0 1px, transparent 2px);
+}
+body.isdaris .console::before { background: repeating-linear-gradient(90deg, #c9a94a 0 2px, transparent 2px 14px), linear-gradient(#1c2a36, #0c1620); }
+body.isdaris .hud-panel, body.isdaris .hud-card { color: #e8f6ff; }
+body.isdaris .cmd { background: linear-gradient(#24384a, #12202c); color: #e8f6ff; border-color: #c9a94a; }
+body.isdaris .cmd:hover { border-color: #3fd8ff; }
+body.isdaris .hud-bar { color: #1e1a14; }
+body.isdaris .slot { border-color: #c9a94a; border-radius: 10px; }

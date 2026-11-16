@@ -97,6 +97,11 @@ def palette():
         "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
         "purple_deep": mat("purple_deep", 0xE0C0FF, emission=0xB060FF),
         "crystal_vein": mat("crystal_vein", 0x8FE6FF, emission=0x2AA8FF),
+        "ivory": mat("ivory", 0xEDE6D6, rough=0.35),
+        "chrome": mat("chrome", 0xC8CCD2, metallic=1.0, rough=0.18),
+        "gold": mat("gold", 0xD4AF37, metallic=1.0, rough=0.25),
+        "flesh": mat("flesh", 0x8A3A5A, rough=0.55),
+        "violet_glow": mat("violet_glow", 0xC890FF, emission=0x9040FF),
         "deadwood": mat("deadwood", 0x5E4A3A, rough=0.95),
         "drygrass": mat("drygrass", 0xB59A5C, rough=1.0),
         "bone": mat("bone", 0xB8AC92, rough=0.95),
@@ -590,6 +595,142 @@ def puits(p):
         crystal(p, "purple_glow", (math.cos(a) * 1.0, math.sin(a) * 1.0, 0.0), (0.6, a + math.pi / 2), 0.25 + (i % 2) * 0.15, 0.06)
 
 
+# ------------------------------------------------------------------ Isdaris: 1930s-50s science fiction, Art Deco, light
+
+def ring(m, major, minor, loc, rot=(0, 0, 0), seg=24, name="ring"):
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=seg, minor_segments=6, location=loc, rotation=rot)
+    return _finish(bpy.context.active_object, m, name)
+
+
+def fins(p, m, n, radius, z, height, depth=0.04, width=0.25, tilt=0.0):
+    """Art Deco fins radiating around an axis."""
+    for i in range(n):
+        a = i / n * math.tau
+        box(m, (depth, width, height), (math.cos(a) * radius, math.sin(a) * radius, z), rot=(0, tilt, a))
+
+
+def moissonneur(p):
+    """Harvester robot: a hovering chrome disc with a glowing ring, two collector arms and an antigravity glow."""
+    ball(p["ivory"], 0.22, (0, 0, 0.42), scale=(1.2, 1.2, 0.55), seg=16, rings=8)
+    ring(p["cyan_glow"], 0.25, 0.025, (0, 0, 0.4))
+    ball(p["chrome"], 0.11, (0, -0.05, 0.52), scale=(1, 1, 0.8), seg=12, rings=6)  # sensor dome
+    cyl(p["cyan_glow"], 0.04, 0.02, (0, -0.15, 0.53), rot=(math.radians(90), 0, 0), verts=10)  # eye
+    for s in (-1, 1):
+        pipe(p["chrome"], (s * 0.2, -0.05, 0.38), (s * 0.28, -0.25, 0.22), r=0.025, verts=6)
+        cone(p["gold"], 0.04, 0.12, (s * 0.28, -0.27, 0.18), rot=(math.radians(160), 0, 0), verts=6)
+    box(p["team"], (0.06, 0.18, 0.04), (0, 0.18, 0.46))  # tail fin
+    cyl(p["cyan_glow"], 0.12, 0.03, (0, 0, 0.18), verts=14)  # antigravity glow
+
+
+def archer(p):
+    """Slender warrior in ivory armour with gold trims, a crested helmet with a glowing visor, a long plasma rifle."""
+    head = humanoid(p, p["ivory"], height=1.12, bulk=0.88, armor=p["gold"])
+    box(p["gold"], (0.28, 0.05, 0.03), (0, -0.09, 0.62))  # collar trim
+    for s in (-1, 1):
+        box(p["team"], (0.04, 0.22, 0.2), (s * 0.2, 0.02, 0.72), rot=(0.3, 0, 0))  # shoulder fins
+    ball(p["ivory"], 0.1, (0, 0, head + 0.03), scale=(0.9, 1.1, 1.15), seg=12, rings=6)  # helmet
+    box(p["gold"], (0.02, 0.2, 0.12), (0, 0.02, head + 0.12))  # crest
+    box(p["cyan_glow"], (0.14, 0.02, 0.03), (0, -0.095, head + 0.02))  # visor
+    cyl(p["chrome"], 0.028, 0.7, (0.13, -0.32, 0.55), rot=(math.radians(90), 0, 0), verts=8)  # rifle
+    for k in range(3):
+        ring(p["cyan_glow"], 0.045, 0.012, (0.13, -0.42 - k * 0.09, 0.55), rot=(math.radians(90), 0, 0), seg=12)
+    box(p["gold"], (0.05, 0.14, 0.08), (0.13, -0.06, 0.52))
+    cone(p["team"], 0.14, 0.5, (0, 0.1, 0.42), rot=(math.radians(-8), 0, 0), verts=4)  # cape
+
+
+def creature(p):
+    """Vat-grown horror: a lump of muscle with a random number of blade-tipped arms, glowing veins."""
+    ball(p["flesh"], 0.26, (0, 0, 0.3), scale=(1.1, 1.2, 0.85), seg=12, rings=8)
+    ball(p["flesh"], 0.14, (0, -0.2, 0.34), scale=(1, 1, 0.8), seg=10, rings=6)
+    for k in range(5):
+        a = -0.6 + k * 0.3
+        s = -1 if k % 2 else 1
+        base = (s * 0.18, -0.05 + a * 0.2, 0.32)
+        tip = (s * 0.42, -0.25 + a * 0.3, 0.12 + (k % 3) * 0.08)
+        pipe(p["flesh"], base, tip, r=0.04, verts=5)
+        cone(p["bone"], 0.03, 0.18, tip, rot=(math.radians(150), 0, s * 0.6), verts=4)
+    for k in range(4):
+        pipe(p["violet_glow"], (0.05 * k - 0.08, 0.1, 0.5), (0.1 * k - 0.15, -0.15, 0.4), r=0.012, verts=4)
+    box(p["team"], (0.12, 0.06, 0.04), (0, 0.24, 0.45))  # implant tag
+
+
+def druide(p):
+    """Psychic master: a flared robe, a tall crested headpiece, gold bands and an orb of energy above the hand."""
+    head = humanoid(p, p["ivory"], height=1.1, bulk=0.9, armor=p["gold"])
+    cone(p["team"], 0.3, 0.55, (0, 0, 0.27), verts=10)  # flared robe
+    for z in (0.12, 0.3):
+        ring(p["gold"], 0.3 - z * 0.45, 0.015, (0, 0, z))
+    cone(p["gold"], 0.09, 0.32, (0, 0.02, head + 0.18), verts=8)  # headpiece
+    ring(p["cyan_glow"], 0.12, 0.012, (0, 0.02, head + 0.12), rot=(math.radians(90), 0, 0))  # halo
+    ball(p["violet_glow"], 0.07, (0.24, -0.18, 0.75), seg=10, rings=6)  # energy orb
+    ring(p["violet_glow"], 0.1, 0.01, (0.24, -0.18, 0.75), rot=(0.6, 0.3, 0))
+
+
+def obelisque(p):
+    """Command obelisk: stepped plinth, a tapering spire with light strips, a floating beam ring at the top."""
+    for i, (sz, z) in enumerate(((4.8, 0.15), (4.0, 0.45), (3.0, 0.75))):
+        box(p["ivory"] if i % 2 == 0 else p["chrome"], (sz, sz, 0.3), (0, 0, z))
+        box(p["gold"], (sz + 0.04, sz + 0.04, 0.05), (0, 0, z + 0.15))
+    cyl(p["ivory"], 0.95, 3.6, (0, 0, 2.7), verts=4, r2=0.35).rotation_euler = (0, 0, 0)
+    for k in range(4):  # vertical light strips on each face
+        a = k / 4 * math.tau + math.pi / 4
+        box(p["cyan_glow"], (0.06, 0.08, 3.0), (math.cos(a) * 0.5, math.sin(a) * 0.5, 2.5), rot=(0, -0.16 * math.cos(a - math.pi / 4) * 0, a))
+    fins(p, p["team"], 4, 1.2, 1.5, 1.2, width=0.6)
+    ring(p["gold"], 0.6, 0.06, (0, 0, 4.7))
+    ring(p["cyan_glow"], 0.45, 0.035, (0, 0, 5.05))
+    ball(p["cyan_glow"], 0.16, (0, 0, 4.7), seg=12, rings=6)
+    for x, y in ((-2.1, -2.1), (2.1, -2.1), (2.1, 2.1), (-2.1, 2.1)):  # corner lamps
+        cyl(p["chrome"], 0.08, 0.6, (x, y, 0.6), verts=8)
+        ball(p["cyan_glow"], 0.1, (x, y, 0.95), seg=8, rings=4)
+
+
+def emetteur(p):
+    """Emitter pylon: a slender gold-and-ivory mast with fins and a glowing halo that projects the power field."""
+    cyl(p["ivory"], 0.7, 0.25, (0, 0, 0.12), verts=8)
+    cyl(p["chrome"], 0.16, 1.9, (0, 0, 1.1), verts=8, r2=0.08)
+    fins(p, p["gold"], 3, 0.18, 0.8, 1.1, width=0.4)
+    fins(p, p["team"], 3, 0.32, 0.45, 0.5, width=0.35)
+    ring(p["cyan_glow"], 0.45, 0.04, (0, 0, 2.0))
+    ball(p["cyan_glow"], 0.12, (0, 0, 2.15), seg=10, rings=5)
+
+
+def reservepsy(p):
+    """Psy reserve: a glowing dome on an Art Deco pedestal, banded in gold."""
+    cyl(p["ivory"], 0.9, 0.3, (0, 0, 0.15), verts=12)
+    cyl(p["chrome"], 0.75, 0.55, (0, 0, 0.55), verts=12, r2=0.65)
+    ring(p["gold"], 0.7, 0.04, (0, 0, 0.8))
+    ball(p["violet_glow"], 0.62, (0, 0, 0.82), scale=(1, 1, 0.7), seg=16, rings=8)
+    fins(p, p["team"], 6, 0.8, 0.5, 0.6, width=0.22)
+    cone(p["gold"], 0.08, 0.5, (0, 0, 1.45), verts=8)
+
+
+def portail(p):
+    """Gate: a great gold arch on a stepped base, filled with a sheet of light where warriors arrive."""
+    for sz, z in ((2.9, 0.12), (2.3, 0.35)):
+        box(p["ivory"], (sz, sz, 0.24), (0, 0, z))
+    ring(p["gold"], 1.05, 0.14, (0, 0, 1.4), rot=(math.radians(90), 0, 0), seg=28)
+    ring(p["chrome"], 0.88, 0.05, (0, 0, 1.4), rot=(math.radians(90), 0, 0), seg=28)
+    cyl(p["cyan_glow"], 0.85, 0.04, (0, 0, 1.4), rot=(math.radians(90), 0, 0), verts=24)  # energy sheet
+    for s in (-1, 1):
+        box(p["ivory"], (0.35, 0.5, 1.3), (s * 1.0, 0, 0.95))
+        box(p["team"], (0.06, 0.52, 1.0), (s * 1.18, 0, 1.0))
+        box(p["cyan_glow"], (0.06, 0.06, 0.9), (s * 0.82, -0.26, 0.95))
+    cone(p["gold"], 0.12, 0.5, (0, 0, 2.7), verts=8)
+
+
+def recepteur(p):
+    """Receptor on an energy well: three curved chrome arms converging over the well, a beam of light rising."""
+    cyl(p["ivory"], 1.4, 0.25, (0, 0, 0.12), verts=18)
+    ring(p["gold"], 1.35, 0.05, (0, 0, 0.26))
+    for k in range(3):
+        a = k / 3 * math.tau
+        pipe(p["chrome"], (math.cos(a) * 1.1, math.sin(a) * 1.1, 0.25), (math.cos(a) * 0.5, math.sin(a) * 0.5, 1.6), r=0.09, verts=8)
+        box(p["team"], (0.05, 0.3, 0.5), (math.cos(a) * 0.95, math.sin(a) * 0.95, 0.65), rot=(0, 0.5, a))
+    ring(p["chrome"], 0.5, 0.07, (0, 0, 1.6))
+    cyl(p["violet_glow"], 0.18, 1.6, (0, 0, 1.0), verts=10)  # beam
+    ball(p["violet_glow"], 0.25, (0, 0, 1.75), seg=12, rings=6)
+
+
 # ------------------------------------------------------------------ doodads (scenery, render only)
 
 def rock_mesh(p, seed, size, loc=(0, 0, 0), squash=0.7):
@@ -678,6 +819,8 @@ MODELS = {
     "serf": serf, "auxiliaire": auxiliaire, "legionnaire": legionnaire, "soigneur": soigneur,
     "conseil": conseil, "grenier": grenier, "caserne": caserne, "mine": mine, "minerai": minerai, "puits": puits,
     "minerai_1": minerai_1, "minerai_2": minerai_2, "minerai_3": minerai_3,
+    "moissonneur": moissonneur, "archer": archer, "creature": creature, "druide": druide,
+    "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
 }
 
 

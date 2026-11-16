@@ -65,7 +65,10 @@ export async function loadModels(types: string[]): Promise<void> {
       try {
         const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}.glb`);
         // Rust, damp and grime: heavy on buildings, light on soldiers, none on crystals.
-        const amount = type.startsWith('minerai') || type === 'puits' ? 0 : DEFS[type]?.kind === 'unit' ? 0.35 : 1;
+        // Isdaris technology stays almost pristine.
+        const d = DEFS[type];
+        const isdaris = !!d && 'faction' in d && d.faction === 'isdaris';
+        const amount = type.startsWith('minerai') || type === 'puits' ? 0 : (d?.kind === 'unit' ? 0.35 : 1) * (isdaris ? 0.15 : 1);
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
         templates.set(type, gltf.scene);
       } catch {
@@ -181,6 +184,7 @@ interface View {
   cargo?: Object3D;
   /** Enemy buildings stay on screen once spotted. */
   seen: boolean;
+  unit: boolean;
   /** Animated parts from the Blender model, if any. */
   limbs: { legL?: Object3D; legR?: Object3D; armL?: Object3D; armR?: Object3D };
 }
@@ -209,7 +213,7 @@ export class EntityRenderer {
       if (!world.entities.has(id)) {
         this.views.delete(id);
         // Fallen soldiers topple over and sink into the ground; buildings just go (they explode).
-        if (v.limbs.legL && v.root.visible) {
+        if (v.unit && v.root.visible) {
           v.ring.visible = false;
           this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
         } else this.scene.remove(v.root);
@@ -282,7 +286,9 @@ export class EntityRenderer {
     ease(v.limbs.armR, 'x', armR, melee ? 0.45 : 0.25);
     const body = v.model.children[0];
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
-    const bob = moving ? Math.abs(Math.sin(phase)) * 0.045 : Math.sin(t * 2 + e.id) * 0.008;
+    // Hovering robots float; walkers bounce with their stride.
+    const hover = e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
+    const bob = hover + (hover ? 0 : moving ? Math.abs(Math.sin(phase)) * 0.045 : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
     ease(body, 'x', moving ? 0.14 : fighting && !melee ? 0.06 : 0, 0.15);
     ease(body, 'z', moving ? Math.sin(phase) * 0.05 : 0, 0.2);
@@ -335,7 +341,7 @@ export class EntityRenderer {
     }
     this.scene.add(root);
     const facing = e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75;
-    const v: View = { root, model: pivot, ring, scaffold, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false,
+    const v: View = { root, model: pivot, ring, scaffold, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     this.views.set(e.id, v);
     return v;

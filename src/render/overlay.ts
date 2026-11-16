@@ -28,7 +28,7 @@ export class Overlay {
     ctx.clearRect(0, 0, w, h);
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp) continue;
-      if (!selected.has(e.id) && e.hp >= e.maxHp) continue;
+      if (!selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
       if (!sees(e)) continue;
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
@@ -44,6 +44,13 @@ export class Overlay {
       ctx.fillRect(sx - bw / 2 - 1, sy - 1, bw + 2, 5);
       ctx.fillStyle = f > 0.6 ? '#5fd35f' : f > 0.3 ? '#e0c04f' : '#e0503f';
       ctx.fillRect(sx - bw / 2, sy, bw * f, 3);
+      if (e.maxShield) {
+        // Psychic shield: a blue bar above the hp bar.
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(sx - bw / 2 - 1, sy - 5, bw + 2, 4);
+        ctx.fillStyle = '#6ac8ff';
+        ctx.fillRect(sx - bw / 2, sy - 4, (bw * e.shield) / e.maxShield, 2);
+      }
     }
   }
 }

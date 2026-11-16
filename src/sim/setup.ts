@@ -1,4 +1,4 @@
-import { DEFS, START } from '../data';
+import { type BuildingDef, DEFS, FACTIONS, type Faction, START } from '../data';
 import { createMap } from '../map';
 import { FP } from './fixed';
 import { World } from './world';
@@ -17,8 +17,8 @@ const NATURAL: [number, number] = [27, 26];
 /** Natural expansion council spot (top-left tile) for each player. */
 export const EXPANSIONS: [number, number][] = [NATURAL, [96 - NATURAL[0] - 5, 96 - NATURAL[1] - 5]];
 
-/** A new two-player match on the V1 map. */
-export function createMatch(): World {
+/** A new two-player match on the V1 map, each player with its faction's headquarters and workers. */
+export function createMatch(factions: [Faction, Faction] = ['humains', 'humains']): World {
   const world = new World(createMap());
   const { width: w, height: h } = world.map;
   const mirror = (owner: number, tx: number, ty: number, size: number): [number, number] =>
@@ -27,10 +27,13 @@ export function createMatch(): World {
   for (const owner of [0, 1]) {
     for (const [tx, ty] of FIELDS) world.spawn('minerai', -1, ...px(mirror(owner, tx, ty, 1)));
     for (const [tx, ty] of WELLS) world.spawn('puits', -1, ...px(mirror(owner, tx, ty, 3)));
-    world.spawn('conseil', owner, ...px(mirror(owner, ...MAIN.conseil, DEFS.conseil.kind === 'building' ? DEFS.conseil.size : 5)));
+    const f = FACTIONS[factions[owner]];
+    world.players[owner].faction = factions[owner];
+    const hq = DEFS[f.hq] as BuildingDef;
+    world.spawn(f.hq, owner, ...px(mirror(owner, ...MAIN.conseil, hq.size)));
     for (let i = 0; i < START.serfs; i++) {
       const [tx, ty] = mirror(owner, MAIN.serfs[0] + (i % 2), MAIN.serfs[1] + Math.floor(i / 2), 1);
-      world.spawn('serf', owner, tx * FP + FP / 2, ty * FP + FP / 2);
+      world.spawn(f.worker, owner, tx * FP + FP / 2, ty * FP + FP / 2);
     }
     world.players[owner].minerals = START.minerals;
     world.players[owner].energy = START.energy;

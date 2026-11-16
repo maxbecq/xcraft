@@ -68,6 +68,8 @@ Faits en plus pendant la nuit du 15 au 16/11 :
 - Passe visuelle vers StarCraft II : post-traitement, terrain texturé à falaises rocheuses, décors, membres animés, particules, console d'interface en tôle.
 - Modèles Humains refaits dans la DA Mad Max / Terran.
 
+V2 en cours (17/11/2026) : **Isdaris jouables** (boucliers, matérialisation, champ d'énergie, IA, modèles Art déco). Équilibre IA contre IA : 7-7 sur 14 parties. Reste : Assassin (invisible, exige des détecteurs côté Humains), capacités actives, unités aériennes, Orbe plasma (défense).
+
 **M0 — Socle (½ j)** ✅
 Vite + TS + Three.js + Vitest, déploiement auto sur Pages, `Old_Project/` exclu de git.
 *Fini quand* : page vide déployée en ligne.

@@ -5,10 +5,10 @@ RTS jouable dans le navigateur, en 3D isométrique façon StarCraft 1, d'après 
 **Jouer :** https://maxbecq.github.io/xcraft/
 **Regarder deux IA s'affronter :** https://maxbecq.github.io/xcraft/?spectate&speed=2
 
-## V1 : les Humains
+## Camps jouables
 
-- Unités : Serf, Auxiliaire, Légionnaire-scieur, Soigneur.
-- Bâtiments : Conseil des Échevins, Grenier, Caserne, Mine (sur puits énergétique, produit l'énergie, coûte 4 de logistique).
+- **Humains** (récup', Mad Max / Terran) : Serf, Auxiliaire, Légionnaire-scieur, Soigneur ; Conseil des Échevins, Grenier, Caserne, Mine (sur puits énergétique, produit l'énergie, coûte 4 de logistique).
+- **Isdaris** (SF Art déco) : Robot moissonneur, Archer, Créature (régénère), Druide ; Obélisque, Émetteur, Réserve psy, Portail, Récepteur. Boucliers psy (absorbent les dégâts, se rechargent hors combat, vite près d'une Réserve psy). Bâtiments matérialisés depuis l'orbite : le robot est libre aussitôt, le bâtiment se construit seul, et doit être dans un champ d'énergie (Obélisque, Émetteur) sauf l'Obélisque et le Récepteur.
 - Ressources : minerai (récolté par les serfs) et énergie (produite par les mines).
 - Brouillard de guerre : on ne voit pas en haut d'une falaise depuis le bas.
 - Victoire : détruire tous les bâtiments adverses.
@@ -28,7 +28,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Caméra | flèches, bords de l'écran, minimap ; molette pour zoomer |
 | Aide | `F1` |
 
-Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète ; aussi au choix dans le menu).
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
 
 ## Développement
 

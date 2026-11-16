@@ -9,7 +9,7 @@ import { Effects } from './render/effects';
 import { Post } from './render/post';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, MINERAL_VARIANTS, loadModels } from './render/units';
-import { DEFS } from './data';
+import { DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import { heightAt } from './map';
@@ -39,7 +39,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const world = createMatch();
+/** Factions: the player's and the AI's, from the URL or the last menu choice. */
+const stored = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 'humains');
+const myFaction = asFaction(params.get('camp') ?? stored('xcraft.camp'));
+const foeFaction = asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
+const world = createMatch([myFaction, foeFaction]);
+document.body.classList.toggle('isdaris', myFaction === 'isdaris' && !params.has('spectate'));
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
@@ -72,7 +84,7 @@ let pending: Command[] = [];
 
 
 const rig = new CameraRig(map.width, map.height);
-const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === 'conseil')!;
+const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === FACTIONS[myFaction].hq)!;
 rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
 if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
@@ -185,16 +197,30 @@ if (!ATTRACT) {
   ready.then(start);
   const menu = document.createElement('div');
   menu.className = 'menu';
-  menu.innerHTML = `<h1>XCRAFT</h1><p>Les Humains — V1</p>
+  menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris</p>
     <button data-m="easy">Jouer — IA facile</button>
     <button data-m="normal">Jouer — IA normale</button>
     <button data-m="hard">Jouer — IA difficile</button>
     <button data-m="watch">Regarder IA contre IA</button>
-    <button data-m="biome" class="biome">Planète : ${biome.name}</button>`;
+    <div class="row">
+      <button data-m="camp">Votre camp : ${FACTIONS[myFaction].name}</button>
+      <button data-m="adversaire">Adversaire : ${FACTIONS[foeFaction].name}</button>
+      <button data-m="biome">Planète : ${biome.name}</button>
+    </div>`;
   document.body.append(menu);
   menu.addEventListener('click', (e) => {
     const m = (e.target as HTMLElement).dataset.m;
-    if (m === 'biome') {
+    const keep = `biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
+    if (m === 'camp' || m === 'adversaire') {
+      const now = m === 'camp' ? myFaction : foeFaction;
+      const next = now === 'humains' ? 'isdaris' : 'humains';
+      try {
+        localStorage.setItem(`xcraft.${m}`, next);
+      } catch {
+        // the URL still carries it
+      }
+      location.search = keep.replace(`${m}=${now}`, `${m}=${next}`);
+    } else if (m === 'biome') {
       // Cycle planets; the title screen reloads to show the new one.
       const ids = Object.keys(BIOMES);
       const next = ids[(ids.indexOf(biome.id) + 1) % ids.length];
@@ -203,9 +229,9 @@ if (!ATTRACT) {
       } catch {
         // storage unavailable: the URL still carries it
       }
-      location.search = `?biome=${next}`;
-    } else if (m === 'watch') location.search = `?spectate&speed=2&biome=${biome.id}`;
-    else if (m) location.search = `?play&ai=${m}&biome=${biome.id}`;
+      location.search = keep.replace(`biome=${biome.id}`, `biome=${next}`);
+    } else if (m === 'watch') location.search = `?spectate&speed=2&${keep}`;
+    else if (m) location.search = `?play&ai=${m}&${keep}`;
   });
 }
 
@@ -246,7 +272,7 @@ function start(): void {
     lap('hud');
     for (const e of world.entities.values()) {
       if (e.type === 'puits') {
-        const covered = [...world.entities.values()].some((m) => m.type === 'mine' && m.tx === e.tx && m.ty === e.ty);
+        const covered = [...world.entities.values()].some((m) => m.def.kind === 'building' && m.def.energyRate && m.tx === e.tx && m.ty === e.ty);
         if (!covered) effects.ambient(new Vector3(e.x / FP, heightAt(map, e.x / FP, e.y / FP) + 0.2, e.y / FP), dt, false);
         continue;
       }

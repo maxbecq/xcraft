@@ -39,7 +39,7 @@ export class Decor {
     };
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource') clear(e.tx + 1, e.ty + 1, 3);
-      if (e.type === 'conseil') clear(e.tx + 2, e.ty + 2, 6);
+      if (e.def.kind === 'building' && e.def.dropoff) clear(e.tx + 2, e.ty + 2, 6);
     }
     for (const [tx, ty] of EXPANSIONS) clear(tx + 2, ty + 2, 5);
     for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) if (map.ramp[y * map.width + x]) clear(x, y, 2);

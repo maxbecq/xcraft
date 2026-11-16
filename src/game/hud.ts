@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { type BuildingDef, type Cost, DEFS, type UnitDef } from '../data';
+import { type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -15,7 +15,6 @@ interface Button {
   action: () => void;
 }
 
-const BUILDABLE = ['conseil', 'grenier', 'caserne', 'mine'];
 /** A command without its player field. */
 type Order<C = Command> = C extends unknown ? Omit<C, 'player'> : never;
 
@@ -173,7 +172,8 @@ export class Hud {
     if (e.def.kind === 'resource') {
       html += `<div class="info">${Number.isFinite(e.amount) ? `${e.amount} restants` : 'Inépuisable'}</div>`;
     } else {
-      html += `<div class="hp"><div style="width:${(100 * e.hp) / e.maxHp}%"></div></div><div class="info">${e.hp} / ${e.maxHp}</div>`;
+      if (e.maxShield) html += `<div class="hp shield"><div style="width:${(100 * e.shield) / e.maxShield}%"></div></div>`;
+      html += `<div class="hp"><div style="width:${(100 * e.hp) / e.maxHp}%"></div></div><div class="info">${e.hp} / ${e.maxHp}${e.maxShield ? ` · bouclier ${e.shield} / ${e.maxShield}` : ''}</div>`;
     }
     if (e.def.kind === 'building') {
       const def = e.def as BuildingDef;
@@ -205,7 +205,7 @@ export class Hud {
     if (units.length) {
       if (this.buildMenu && this.workers().length) {
         return [
-          ...BUILDABLE.map((t) => {
+          ...FACTIONS[this.world.players[this.player].faction].buildable.map((t) => {
             const d = DEFS[t] as BuildingDef;
             return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => (this.placing = t) };
           }),
@@ -274,7 +274,7 @@ export class Hud {
     this.ghost.visible = !!spot;
     if (!spot || !this.placing) return;
     const size = (DEFS[this.placing] as BuildingDef).size;
-    const ok = this.world.canPlace(this.placing, spot[0], spot[1]);
+    const ok = this.world.canPlace(this.placing, spot[0], spot[1], this.player);
     (this.ghost.material as MeshBasicMaterial).color.set(ok ? 0x55ff66 : 0xff4444);
     this.ghost.scale.set(size, 1, size);
     const cx = spot[0] + size / 2;

@@ -1,4 +1,4 @@
-import { type BuildingDef, DEFS, type Def, HARVEST, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, type Def, type Faction, HARVEST, type UnitDef } from '../data';
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -52,10 +52,17 @@ export interface Entity {
   timer: number;
   /** Ticks before the next attack or heal. */
   cooldown: number;
+  /** Psychic shield (Isdaris), absorbed before hp; recharges a while after the last hit. */
+  shield: number;
+  maxShield: number;
+  lastHit: number;
+  /** Ticks counting towards the next shield or hp point regained. */
+  regenTimer: number;
 }
 
 export interface Player {
   id: number;
+  faction: Faction;
   minerals: number;
   energy: number;
   /** Percentage of harvested minerals actually banked (AI difficulty). */
@@ -96,6 +103,8 @@ export interface GameEvent {
 }
 
 const REACH = FP / 4;
+/** How close (tiles) an Isdaris worker must be to beam a building down. */
+const WARP_RANGE = 6;
 
 export class World {
   tick = 0;
@@ -115,7 +124,7 @@ export class World {
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
-    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, minerals: 0, energy: 0, handicap: 100 }));
+    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, faction: 'humains' as Faction, minerals: 0, energy: 0, handicap: 100 }));
     this.vision = this.players.map(() => new Vision(this.grid));
   }
 
@@ -131,6 +140,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -163,6 +173,7 @@ export class World {
       e.px = e.x;
       e.py = e.y;
       if (e.cooldown > 0) e.cooldown--;
+      this.regenerate(e);
     }
     for (const e of [...this.entities.values()]) {
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
@@ -284,8 +295,9 @@ export class World {
       }
       case 'build': {
         const worker = units.find((e) => (e.def as UnitDef).worker);
-        if (!worker || DEFS[c.type]?.kind !== 'building') return;
-        if (!this.canPlace(c.type, c.tx, c.ty)) return void this.say(c.player, 'Emplacement invalide.');
+        const bdef = DEFS[c.type];
+        if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
+        if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, bdef.needsPower ? "Hors d'un champ d'énergie." : 'Emplacement invalide.');
         this.setOrder(worker, { kind: 'build', type: c.type, tx: c.tx, ty: c.ty });
         return;
       }
@@ -334,7 +346,7 @@ export class World {
         this.setOrder(e, { kind: 'heal', target: t.id });
       } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
-      } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0) {
+      } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp) {
         this.setOrder(e, { kind: 'construct', target: t.id });
       } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).dropoff && e.carry > 0) {
         this.setOrder(e, { kind: 'gather', target: this.nearestField(e)?.id ?? 0, phase: 'return', timer: 0 });
@@ -377,18 +389,20 @@ export class World {
 
   // ---------------------------------------------------------------- placement
 
-  canPlace(type: string, tx: number, ty: number): boolean {
+  /** Can `player` put this building here? (Without a player, the power field is not checked.) */
+  canPlace(type: string, tx: number, ty: number, player = -1): boolean {
     const def = DEFS[type] as BuildingDef;
     const g = this.grid;
     if (def.energyRate) {
-      // Mines go exactly on a free energy well.
+      // Extractors go exactly on a free energy well.
       for (const w of this.entities.values()) {
         if (w.type === 'puits' && w.tx === tx && w.ty === ty) {
-          return ![...this.entities.values()].some((m) => m.type === 'mine' && m.tx === tx && m.ty === ty);
+          return ![...this.entities.values()].some((m) => (m.def as BuildingDef).energyRate && m.def.kind === 'building' && m.tx === tx && m.ty === ty);
         }
       }
       return false;
     }
+    if (def.needsPower && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
     let level = -2;
     for (let y = ty; y < ty + def.size; y++) {
       for (let x = tx; x < tx + def.size; x++) {
@@ -399,6 +413,49 @@ export class World {
       }
     }
     return true;
+  }
+
+  /** Is a point inside one of the player's power fields (Isdaris)? */
+  powered(player: number, x: number, y: number): boolean {
+    for (const b of this.entities.values()) {
+      const r = (b.def as BuildingDef).power;
+      if (b.owner === player && r && b.buildLeft === 0 && dist(b.x, b.y, x, y) <= r * FP) return true;
+    }
+    return false;
+  }
+
+  /** Damage that goes through shields first; armour only protects hp. */
+  private hurt(t: Entity, damage: number): void {
+    t.lastHit = this.tick;
+    const absorbed = Math.min(t.shield, damage);
+    t.shield -= absorbed;
+    if (damage > absorbed) {
+      const armor = 'armor' in t.def ? t.def.armor : 0;
+      t.hp -= Math.max(1, damage - absorbed - (absorbed > 0 ? 0 : armor));
+    }
+  }
+
+  /** Shields recharge a few seconds after the last hit (at once, and faster, near a psy reserve); some units heal. */
+  private regenerate(e: Entity): void {
+    if (e.hp <= 0) return;
+    const regen = 'regen' in e.def ? e.def.regen : undefined;
+    const shielding = e.shield < e.maxShield && (e.def.kind !== 'building' || e.buildLeft === 0);
+    if (!shielding && !(regen && e.hp < e.maxHp)) return;
+    const aura = shielding && this.nearShieldAura(e);
+    if (shielding && !aura && this.tick - e.lastHit < ticks(7)) return;
+    const rate = regen && e.hp < e.maxHp ? regen : aura ? 8 : 2;
+    if (++e.regenTimer < ticks(1 / rate)) return;
+    e.regenTimer = 0;
+    if (shielding) e.shield++;
+    else e.hp++;
+  }
+
+  private nearShieldAura(e: Entity): boolean {
+    for (const b of this.entities.values()) {
+      const r = (b.def as BuildingDef).shieldAura;
+      if (b.owner === e.owner && r && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r * FP) return true;
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------- unit behaviour
@@ -427,19 +484,26 @@ export class World {
           this.say(e.owner, 'Emplacement inaccessible.');
           return this.setOrder(e, null);
         }
-        if (!this.reachRect(e, o.tx, o.ty, def.size)) {
-          this.goNear(e, o.tx, o.ty, def.size);
+        // Isdaris workers only need to see the site: the building is beamed down from orbit.
+        const cx = o.tx * FP + (def.size * FP) / 2;
+        const cy = o.ty * FP + (def.size * FP) / 2;
+        const there = def.warp ? dist(e.x, e.y, cx, cy) <= WARP_RANGE * FP : this.reachRect(e, o.tx, o.ty, def.size);
+        if (!there) {
+          if (def.warp) {
+            if (this.goTo(e, cx, cy)) this.setOrder(e, null);
+          } else this.goNear(e, o.tx, o.ty, def.size);
           return;
         }
-        if (!this.canPlace(o.type, o.tx, o.ty)) {
-          this.say(e.owner, 'Emplacement invalide.');
+        if (!this.canPlace(o.type, o.tx, o.ty, e.owner)) {
+          this.say(e.owner, def.needsPower ? "Hors d'un champ d'énergie." : 'Emplacement invalide.');
           return this.setOrder(e, null);
         }
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);
         const b = this.spawn(o.type, e.owner, o.tx * FP, o.ty * FP);
         b.buildLeft = ticks(def.buildTime);
         b.hp = Math.max(1, idiv(b.maxHp, 10));
-        this.setOrder(e, { kind: 'construct', target: b.id });
+        b.shield = 0;
+        this.setOrder(e, def.warp ? null : { kind: 'construct', target: b.id });
         return;
       }
       case 'construct': {
@@ -604,9 +668,8 @@ export class World {
     e.path = [];
     if (e.cooldown > 0) return;
     e.cooldown = ticks(a.cooldown);
-    const armor = 'armor' in t.def ? t.def.armor : 0;
     const bonus = t.def.kind === 'building' ? (a.vsMechanical ?? 0) : 0;
-    t.hp -= Math.max(1, a.damage + bonus - armor);
+    this.hurt(t, a.damage + bonus);
     if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
       this.lastAlert[t.owner] = this.tick;
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
@@ -666,7 +729,18 @@ export class World {
   // ---------------------------------------------------------------- buildings
 
   private operate(b: Entity): void {
-    if (b.buildLeft > 0) return;
+    if (b.buildLeft > 0) {
+      if (!(b.def as BuildingDef).warp) return;
+      // Materialising: builds itself, hp and shield filling up.
+      const total = ticks((b.def as BuildingDef).buildTime);
+      b.buildLeft--;
+      b.hp = Math.min(b.maxHp, b.hp + Math.max(1, idiv(b.maxHp * 9, total * 10)));
+      if (b.buildLeft === 0) {
+        b.shield = b.maxShield;
+        this.say(b.owner, `Matérialisation terminée : ${b.def.name}.`, 'done');
+      }
+      return;
+    }
     const def = b.def as BuildingDef;
     if (def.energyRate && ++b.timer >= ticks(1 / def.energyRate)) {
       b.timer = 0;
@@ -867,6 +941,7 @@ export class World {
       mix(e.x);
       mix(e.y);
       mix(e.hp);
+      mix(e.shield);
     }
     for (const p of this.players) {
       mix(p.minerals);
