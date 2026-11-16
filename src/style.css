@@ -206,7 +206,9 @@ body.touch { -webkit-tap-highlight-color: transparent; }
   .cmd img { width: 30px; height: 30px; }
   .hud-toasts { bottom: calc(220px + env(safe-area-inset-bottom)); width: 90vw; }
   .hud-bar { font-size: 15px; gap: 8px; padding: 3px 8px 5px; right: 6px; }
-  .tools { top: calc(36px + env(safe-area-inset-top)); left: 6px; }
+  /* Icons only, so the tools and the resources share the top line. */
+  .tools { top: calc(4px + env(safe-area-inset-top)); left: 6px; gap: 2px; }
+  .tool span { display: none; }
   .tool { font-size: 13px; padding: 3px 7px; }
   .menu h1 { font-size: 56px; }
 }

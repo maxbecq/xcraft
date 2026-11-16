@@ -184,7 +184,7 @@ let acc = 0;
 let paused = false;
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="menu">≡ Menu</button><button class="tool" data-t="army">⚔ Armée</button>';
+tools.innerHTML = '<button class="tool" data-t="menu" title="Menu">≡<span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée">⚔<span> Armée</span></button>';
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;

@@ -17,6 +17,7 @@ export class Portrait {
 
   constructor() {
     this.canvas.className = 'portrait';
+    this.canvas.hidden = true; // until something is selected
     this.scene.add(this.holder, new AmbientLight(0xffffff, 1.4));
     const sun = new DirectionalLight(0xffffff, 2.6);
     sun.position.set(2, 4, 3);
