@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, CanvasTexture, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -75,6 +75,73 @@ const POOLS: Record<string, [number, number, number, number][]> = {
   puits: [[0, 0, 2.4, 0xb060ff]],
 };
 let poolTexture: Texture | null = null;
+/** Buildings standing on a paved plaza wider than their model: [plaza width, raised inner step width]. */
+const PLAZAS: Record<string, [number, number]> = { obelisque: [4.7, 3.1] };
+let plazaMaterials: [MeshStandardMaterial, MeshStandardMaterial] | null = null;
+
+/** An Art Deco forecourt: ivory slabs with gold inlays, a sunburst and blue enamel corners, in two low steps. */
+function plaza(width: number, inner: number): Group {
+  if (!plazaMaterials) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#e4d9c1';
+    g.fillRect(0, 0, 512, 512);
+    // Slab joints.
+    g.strokeStyle = 'rgba(120, 100, 70, 0.35)';
+    g.lineWidth = 2;
+    for (let i = 64; i < 512; i += 64) {
+      g.beginPath();
+      g.moveTo(i, 0);
+      g.lineTo(i, 512);
+      g.moveTo(0, i);
+      g.lineTo(512, i);
+      g.stroke();
+    }
+    // Sunburst from the centre, then concentric gold frames.
+    g.strokeStyle = '#c9a23e';
+    g.lineWidth = 5;
+    for (let a = 0; a < 16; a++) {
+      const ang = (a / 16) * Math.PI * 2;
+      g.beginPath();
+      g.moveTo(256 + Math.cos(ang) * 70, 256 + Math.sin(ang) * 70);
+      g.lineTo(256 + Math.cos(ang) * 230, 256 + Math.sin(ang) * 230);
+      g.stroke();
+    }
+    for (const [m, w] of [[14, 10], [40, 5], [150, 6]] as const) {
+      g.lineWidth = w;
+      g.strokeRect(m, m, 512 - 2 * m, 512 - 2 * m);
+    }
+    // Blue enamel corners.
+    g.fillStyle = '#2a4ea8';
+    for (const [x, y, dx, dy] of [[0, 0, 1, 1], [512, 0, -1, 1], [0, 512, 1, -1], [512, 512, -1, -1]] as const) {
+      g.beginPath();
+      g.moveTo(x + dx * 22, y + dy * 22);
+      g.lineTo(x + dx * 110, y + dy * 22);
+      g.lineTo(x + dx * 22, y + dy * 110);
+      g.closePath();
+      g.fill();
+    }
+    const map = new CanvasTexture(c);
+    map.colorSpace = SRGBColorSpace;
+    map.anisotropy = 4;
+    plazaMaterials = [
+      new MeshStandardMaterial({ map, color: 0x9a927f, roughness: 0.8 }),
+      new MeshStandardMaterial({ color: 0x8e8572, roughness: 0.85 }),
+    ];
+  }
+  const [top, side] = plazaMaterials;
+  const group = new Group();
+  for (const [w, y, h] of [[width, 0, 0.14], [inner, 0.14, 0.1]] as const) {
+    // Top face textured, sides plain stone.
+    const slab = new Mesh(new BoxGeometry(w, h, w), [side, side, top, side, side, side]);
+    slab.position.y = y + h / 2;
+    slab.receiveShadow = true;
+    group.add(slab);
+  }
+  return group;
+}
+
 function pool(radius: number, color: number): Mesh {
   if (!poolTexture) {
     const c = document.createElement('canvas');
@@ -597,6 +664,10 @@ export class EntityRenderer {
         pools.add(p);
       }
       root.add(pools);
+    }
+    if (PLAZAS[e.type]) {
+      root.add(plaza(...PLAZAS[e.type]));
+      body.position.y += 0.24; // stands on the plaza's upper step
     }
     let scaffold: Object3D | undefined;
     if (e.def.kind === 'building') {
