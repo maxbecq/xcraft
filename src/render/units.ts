@@ -216,9 +216,10 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
   discobole: { height: 1.0 },
+  creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant'];
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant'];
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
@@ -678,17 +679,6 @@ export class EntityRenderer {
     ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
-    if (e.type === 'creature') {
-      // Créature (one rigid model, no skeleton): it bounds along like a hound — leaps, rocks nose to tail,
-      // stretches in the air and squashes on landing; a lunge forward on each bite.
-      const leap = moving ? Math.abs(Math.sin(phase * 0.75)) : 0;
-      v.model.position.y += (leap * 0.2 - v.model.position.y) * 0.5;
-      ease(body, 'x', moving ? Math.cos(phase * 0.75) * 0.28 : fighting ? -0.25 * fired : 0, 0.35);
-      const stretch = moving ? 1 + (leap - 0.5) * 0.16 : 1 + Math.sin(t * 3 + e.id) * 0.02;
-      const base = body.userData.scale ?? (body.userData.scale = body.scale.x);
-      body.scale.set(base / Math.sqrt(stretch), base * stretch, base / Math.sqrt(stretch));
-      body.position.z += ((fighting ? 0.25 * fired : 0) - body.position.z) * 0.5;
-    }
   }
 
   private create(e: Entity, player: number): View {
