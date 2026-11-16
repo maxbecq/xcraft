@@ -21,7 +21,8 @@ import { BIOMES, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 
-const EDGE_PX = 16;
+/** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
+const EDGE_PX = 40;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -61,6 +62,7 @@ const myFaction = REPLAY ? REPLAY.factions[0] : asFaction(params.get('camp') ?? 
 const foeFaction = REPLAY ? REPLAY.factions[1] : asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
 const world = createMatch([myFaction, foeFaction]);
 document.body.classList.toggle('isdaris', myFaction === 'isdaris'); // spectating shows the first side's interface
+document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
@@ -113,7 +115,10 @@ const minimap = new Minimap(map, rig, 164);
 
 const units = new EntityRenderer(scene, map);
 units.onBuilding = (e) => decor.hideUnder(e.tx, e.ty, (e.def as { size: number }).size);
-const issue = (c: Command) => pending.push(c);
+// Spectating (or a replay): every side is played by the computer, nobody else gives orders.
+const issue = (c: Command) => {
+  if (!SPECTATE) pending.push(c);
+};
 const input = new Input(world, map, PLAYER, {
   camera: () => rig.camera,
   terrain,
@@ -168,14 +173,29 @@ window.addEventListener('wheel', (e) => {
   else rig.zoomBy(Math.exp(e.deltaY * 0.001));
 }, { passive: false });
 
+// Glowing edge and arrow cursor while the mouse scrolls the map.
+const edgeGlow = document.createElement('div');
+edgeGlow.className = 'edge-glow';
+document.body.append(edgeGlow);
+let edgeShown = '';
 function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
-  if (mouse) {
-    if (mouse.x < EDGE_PX) dx = -1;
-    if (mouse.x > window.innerWidth - EDGE_PX) dx = 1;
-    if (mouse.y < EDGE_PX) dy = 1;
-    if (mouse.y > window.innerHeight - EDGE_PX) dy = -1;
+  let edge = '';
+  if (mouse && !paused && !ATTRACT) {
+    const ex = mouse.x < EDGE_PX ? -1 : mouse.x > window.innerWidth - EDGE_PX ? 1 : 0;
+    // The bottom band sits just above the console, so its buttons never scroll the map.
+    const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
+    edgeGlow.style.setProperty('--edge-bottom', `${window.innerHeight - bottom}px`);
+    const ey = mouse.y < EDGE_PX ? 1 : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -1 : 0;
+    if (ex) dx = ex;
+    if (ey) dy = ey;
+    edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
+  }
+  if (edge !== edgeShown) {
+    edgeShown = edge;
+    edgeGlow.className = `edge-glow ${[...edge].map((d) => `edge-${d}`).join(' ')}`;
+    document.body.style.cursor = edge ? `${edge}-resize` : '';
   }
   return [dx, dy];
 }

@@ -38,6 +38,23 @@ export const BIOMES: Record<string, Biome> = {
     exposure: 1.05,
     decorTint: new Color(1, 1, 1),
   },
+  // The desert's shapes under a black sky: grey regolith, dark maria, a hard white sun.
+  lune: {
+    id: 'lune',
+    name: 'Lune',
+    levels: [new Color(0x8c8a86), new Color(0x7c7a77), new Color(0xa9a7a2)],
+    patch: new Color(0x4a4a4d),
+    sand: new Color(0xb9b6ae),
+    ramp: new Color(0x9d9a94),
+    rock: new Color(0x76736e),
+    rockDark: new Color(0x2c2c2f),
+    veins: null,
+    sun: { color: 0xf4f6ff, intensity: 3.6 },
+    sky: { color: 0x8e9ab8, ground: 0x18181c, intensity: 0.7 },
+    background: 0x030306,
+    exposure: 1.0,
+    decorTint: new Color(0.5, 0.56, 0.72),
+  },
   alien: {
     id: 'alien',
     name: 'Monde étrange',
