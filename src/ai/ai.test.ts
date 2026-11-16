@@ -79,6 +79,22 @@ describe('AI', () => {
     expect(two.every((r) => r.hp <= 0)).toBe(true);
   });
 
+  it('pulls a wave group back from a fight it cannot win, not from one it can', () => {
+    const w = createMatch();
+    const ai = new AI(w, 0);
+    const wave = [0, 1, 2, 3].map((i) => w.spawn('auxiliaire', 0, (48 + i) * FP, 48 * FP));
+    (ai as unknown as { wave: Set<number> }).wave = new Set(wave.map((u) => u.id));
+    const retreat = () => {
+      do w.step([]);
+      while (w.tick % 10 !== 0);
+      return ai.think().find((c) => c.kind === 'smart' && c.ids.includes(wave[0].id));
+    };
+    w.spawn('auxiliaire', 1, 48 * FP, 54 * FP);
+    expect(retreat()).toBeUndefined();
+    for (let i = 0; i < 10; i++) w.spawn('legionnaire', 1, (46 + (i % 5)) * FP, (54 + Math.floor(i / 5)) * FP);
+    expect(retreat()).toBeDefined();
+  });
+
   it('finishes an AI-versus-AI game', () => {
     const w = createMatch();
     const r = play(w, [new AI(w, 0), new AI(w, 1)], 30);

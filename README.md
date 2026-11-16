@@ -16,7 +16,8 @@ RTS jouable dans le navigateur, en 3D isométrique façon StarCraft 1, d'après 
 - Brouillard de guerre : on ne voit pas en haut d'une falaise depuis le bas.
 - Invisibilité : une unité invisible n'est vue ni ciblée par l'adversaire que près d'un de ses détecteurs (Tour alchimistique, Orbe plasma, Observation céleste). Ses propres unités invisibles sont dessinées translucides.
 - Victoire : détruire tous les bâtiments adverses.
-- IA : trois difficultés (facile, normale, difficile) par handicap de récolte (70 %, 100 %, 130 %).
+- IA : trois difficultés (facile, normale, difficile) par handicap de récolte (70 %, 100 %, 130 %). Elle défend toute sa base (sa vague revient si elle est en infériorité chez elle, les ouvriers repoussent un petit raid sans armée), vise d'abord le QG ennemi et ses ouvriers, et replie un groupe qui se ferait massacrer (les Isdaris plus tôt : leurs boucliers se rechargent). Les Assassins vont seuls chasser les ouvriers. Les unités qui frappent un bâtiment se tournent vers un ouvrier puis un soldat qui arrive. En spectateur, aucun ordre n'est possible.
+- Planètes : Désert, Lune (régolithe gris, dunes, rien que des pierres), Monde étrange.
 
 Stats issues du mod SC2 « XC Mod 1.53 ».
 
@@ -44,6 +45,7 @@ npx -y npm@11.6.2 install   # npm 10 plante sur l'installation de vitest
 npm run dev                 # http://localhost:5173/xcraft/
 npm test                    # simulation, pathfinding, économie, combat, IA
 npm run balance             # rapport minute par minute d'une partie IA contre IA
+BIG=1 npx vitest run scripts/big.test.ts --silent=false --reporter=verbose   # équilibre des factions sur 50 parties
 npm run models              # régénère les modèles .glb et les icônes avec Blender
 ```
 

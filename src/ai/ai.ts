@@ -62,7 +62,9 @@ export class AI {
     const home = mine.find((e) => e.type === f.hq);
     if (!home) return this.lastStand(mine);
     const serfs = mine.filter((e) => e.type === f.worker);
-    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker);
+    // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
+    const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
+    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked);
     const buildings = mine.filter((e) => e.def.kind === 'building');
     const count = (type: string) => buildings.filter((b) => b.type === type).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
     const p = w.players[this.player];
@@ -223,9 +225,19 @@ export class AI {
     if (caster && ability === 'rappel' && p.energy >= ABILITIES.rappel.energy!) {
       // Rappel a wave that is losing its fight far from home.
       const losing = this.losing([...this.wave].map((id) => w.entities.get(id)!), home);
-      if (losing) out.push({ player: this.player, kind: 'ability', ids: [caster.id], x: losing.x, y: losing.y });
+      if (losing) {
+        out.push({ player: this.player, kind: 'ability', ids: [caster.id], x: losing.x, y: losing.y });
+        for (const id of this.wave) if (dist(w.entities.get(id)!.x, w.entities.get(id)!.y, losing.x, losing.y) <= RAPPEL.radius * FP) this.wave.delete(id);
+      }
+    }
+    // A wave group that would be massacred falls back to the rally point, to join the next, bigger wave.
+    const fleeing = this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
+    if (fleeing.length) {
+      fleeing.forEach((u) => this.wave.delete(u.id));
+      out.push({ player: this.player, kind: 'smart', ids: fleeing.map((u) => u.id), x: rally.x, y: rally.y });
     }
 
+    out.push(...this.raid(raiders));
     const target = this.enemyTarget(home);
     const waiting = [...this.wave].map((id) => w.entities.get(id)!).filter((u) => !u.order || u.order.kind === 'move');
     if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
@@ -250,6 +262,56 @@ export class AI {
       if (3 * ours.reduce((s, o) => s + o.hp + o.shield, 0) < foes) return u;
     }
     return undefined;
+  }
+
+  /**
+   * Wave units in a fight they cannot win: around each one, our soldiers against the visible enemy soldiers and
+   * defences, each side weighed by hp and shields times damage per second (a group's strength grows with both).
+   */
+  private outmatched(wave: Entity[]): Entity[] {
+    const w = this.world;
+    const foes = [...w.entities.values()].filter((e) => {
+      const a = (e.def as UnitDef | BuildingDef).attack;
+      return e.owner >= 0 && e.owner !== this.player && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
+    });
+    const power = (group: Entity[]) => {
+      let hp = 0;
+      let dps = 0;
+      for (const e of group) {
+        const a = (e.def as UnitDef | BuildingDef).attack!;
+        hp += e.hp + e.shield;
+        dps += a.damage / a.cooldown;
+      }
+      return hp * dps;
+    };
+    const out = new Set<Entity>();
+    for (const u of wave) {
+      if (out.has(u)) continue;
+      const near = foes.filter((e) => dist(e.x, e.y, u.x, u.y) < 9 * FP);
+      if (!near.length) continue;
+      const ours = wave.filter((o) => (o.def as UnitDef).attack && dist(o.x, o.y, u.x, u.y) < 7 * FP);
+      // Isdaris fall back sooner: their shields recharge out of combat, so a group pulled out early comes back whole.
+      if (power(ours) * (this.faction === FACTIONS.isdaris ? 1.2 : 2) < power(near)) ours.forEach((o) => out.add(o));
+    }
+    return [...out];
+  }
+
+  /**
+   * Raiders go after the enemy worker closest to them, which leads them to the mineral line; a raider already
+   * on a worker keeps at it. With no worker known, they wait at home.
+   */
+  private raid(raiders: Entity[]): Command[] {
+    const w = this.world;
+    const out: Command[] = [];
+    for (const r of raiders) {
+      const o = r.order;
+      const current = o && (o.kind === 'attack' || o.kind === 'attackMove') ? w.entities.get(o.target) : undefined;
+      if (current && (current.def as UnitDef).worker && current.hp > 0) continue;
+      // Workers are where the enemy headquarters are: the AI knows the start spots, like a player who scouted.
+      const prey = this.nearest(r, (e) => e.owner >= 0 && e.owner !== this.player && !!(e.def as UnitDef).worker && e.hp > 0);
+      if (prey) out.push({ player: this.player, kind: 'attack', ids: [r.id], x: prey.x, y: prey.y, target: prey.id });
+    }
+    return out;
   }
 
   /** Distance to the enemy the unit is fighting, if it is close. */
