@@ -186,7 +186,9 @@ function computeRelief(map: GameMap, vx: number, vz: number): number {
     const t = tileAt(map, Math.min(map.width - 1, Math.max(0, vx + dx)), Math.min(map.height - 1, Math.max(0, vz + dy)));
     if (!t || t.ramp || t.level !== tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))?.level) return 0;
   }
-  return relief!(vx, vz);
+  // Plateaus are where bases go (main base on level 2, expansions on level 1): only a gentle swell there.
+  const level = tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))!.level;
+  return relief!(vx, vz) * [1, 0.35, 0.2][Math.min(2, level)];
 }
 
 export function heightAt(map: GameMap, x: number, y: number): number {
