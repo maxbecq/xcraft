@@ -34,18 +34,19 @@ for extra in extras:
     for o in set(bpy.context.scene.objects) - keep:
         bpy.data.objects.remove(o, do_unlink=True)
 
-# One NLA track per action so the exporter writes each as its own clip.
+# Blender 4.4+ layered actions: an action imported with another armature keeps that armature's
+# slot ("OBArmature.001"); renamed to this armature, the exporter writes every action as a clip.
+# (NLA_TRACKS export wrote each clip as the rest pose.)
 arm.animation_data_create()
 arm.animation_data.action = None
 for action in bpy.data.actions:
-    track = arm.animation_data.nla_tracks.new()
-    track.name = action.name
-    track.strips.new(action.name, int(action.frame_range[0]), action)
+    for slot in action.slots:
+        slot.name_display = arm.name
 
 for img in bpy.data.images:
     if img.size[0] > tex_px:
         img.scale(tex_px, tex_px)
         img.pack()
 bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_image_format="JPEG", export_jpeg_quality=85,
-                          export_animation_mode="NLA_TRACKS")
+                          export_animation_mode="ACTIONS")
 print("packed", dst, [a.name for a in bpy.data.actions])

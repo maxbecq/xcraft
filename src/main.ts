@@ -326,6 +326,6 @@ function start(): void {
     lap('render');
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
-  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene });
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene });
   renderer.setAnimationLoop(() => frame(clock.getDelta()));
 }
