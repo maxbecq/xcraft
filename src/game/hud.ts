@@ -242,7 +242,7 @@ export class Hud {
         return [
           ...FACTIONS[this.world.players[this.player].faction].buildable.map((t) => {
             const d = DEFS[t] as BuildingDef;
-            return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => (this.placing = t) };
+            return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => (this.placing = t) };
           }),
           { label: 'Retour', key: 'Escape', action: () => (this.buildMenu = false) },
         ];
@@ -268,7 +268,7 @@ export class Hud {
       const d = DEFS[t] as UnitDef;
       // Queue in the least busy of the selected buildings.
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) };
+      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) };
     });
     if (b.def.ability) {
       const a = ABILITIES[b.def.ability];

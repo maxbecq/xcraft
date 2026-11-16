@@ -390,6 +390,8 @@ export class World {
         const worker = units.find((e) => (e.def as UnitDef).worker);
         const bdef = DEFS[c.type];
         if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
+        const lack = this.lacks(c.player, c.type);
+        if (lack) return void this.say(c.player, lack);
         if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, bdef.needsPower ? "Hors d'un champ d'énergie." : 'Emplacement invalide.');
         this.setOrder(worker, { kind: 'build', type: c.type, tx: c.tx, ty: c.ty });
         return;
@@ -409,6 +411,8 @@ export class World {
             return;
           }
           if (!def.trains?.includes(c.type)) continue;
+          const missing = this.lacks(c.player, c.type);
+          if (missing) return void this.say(c.player, missing);
           if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
           const unit = DEFS[c.type] as UnitDef;
           const s = this.supply(c.player);
@@ -461,7 +465,7 @@ export class World {
 
   /** Why this upgrade cannot be researched yet (missing buildings), or '' if it can. */
   lacks(player: number, type: string): string {
-    const req = (DEFS[type] as UpgradeDef).requires ?? {};
+    const req = (DEFS[type] as UpgradeDef | UnitDef | BuildingDef).requires ?? {};
     const missing = Object.entries(req)
       .filter(([t, n]) => [...this.entities.values()].filter((b) => b.owner === player && b.type === t && b.buildLeft === 0).length < n)
       .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].name));

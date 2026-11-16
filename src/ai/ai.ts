@@ -107,6 +107,8 @@ export class AI {
     const detectors = f.detector && f.detector !== f.defense ? (enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
+    // Mid-game: the second production building, for heavier units.
+    if (f.tech && count(f.tech) === 0 && count(f.barracks) >= 2 && minute > 7 && !w.lacks(this.player, f.tech)) wants.push(f.tech);
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Expand to the natural once the main is running.
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
@@ -145,6 +147,15 @@ export class AI {
         out.push({ player: this.player, kind: 'train', ids: [forge.id], type: next });
         minerals -= cost.minerals;
       }
+    }
+    // Heavier units from the second production building, one at a time, when affordable.
+    for (const t of buildings.filter((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0)) {
+      const type = (t.def as BuildingDef).trains?.[0];
+      const def = type && (DEFS[type] as UnitDef);
+      if (!def || saving || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
+      if (minerals < def.cost.minerals || p.energy < def.cost.energy) continue;
+      out.push({ player: this.player, kind: 'train', ids: [t.id], type });
+      minerals -= def.cost.minerals;
     }
     const rally = this.rallyPoint(home);
     for (const c of buildings.filter((b) => b.type === f.barracks && b.buildLeft === 0)) {
@@ -347,6 +358,8 @@ export class AI {
       }
       return army[0][0];
     }
+    // Phalangistes (grenades, long range) once a Forge stands, one in five.
+    if (energy >= 150 && minerals >= 225 && this.trained % 5 === 2 && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
     if (energy >= 100 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
     return (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';

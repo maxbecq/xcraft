@@ -20,6 +20,8 @@ export interface Attack {
 export interface UnitDef {
   kind: 'unit';
   name: string;
+  /** Buildings needed (finished, by count) before it can be trained. */
+  requires?: Record<string, number>;
   hp: number;
   armor: number;
   speed: number;
@@ -49,6 +51,8 @@ export interface UnitDef {
 export interface BuildingDef {
   kind: 'building';
   name: string;
+  /** Buildings needed (finished, by count) before it can be built. */
+  requires?: Record<string, number>;
   hp: number;
   armor: number;
   /** Footprint, in tiles (square). */
@@ -162,6 +166,11 @@ export const DEFS: Record<string, Def> = {
     kind: 'unit', name: 'Soigneur', hp: 80, armor: 0, speed: 2.5, radius: 0.375, sight: 9, supply: 1,
     cost: { minerals: 125, energy: 100 }, buildTime: 25, attack: { damage: 12, range: 5, cooldown: 1.25, vsMechanical: -6 }, heal: 9, ability: 'peauderoc', faction: 'humains', hotkey: 'O',
   },
+  // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
+  phalangiste: {
+    kind: 'unit', name: 'Phalangiste', hp: 110, armor: 0, speed: 2.5, radius: 0.4, sight: 9, supply: 1, requires: { forge: 1 },
+    cost: { minerals: 225, energy: 150 }, buildTime: 30, attack: { damage: 20, range: 6, cooldown: 1.3, vsMechanical: 10 }, faction: 'humains', hotkey: 'P',
+  },
   conseil: {
     kind: 'building', name: 'Conseil des Échevins', hp: 4000, armor: 3, size: 5, sight: 13, supply: 10,
     cost: { minerals: 1000, energy: 0 }, buildTime: 80, trains: ['serf'], dropoff: true, faction: 'humains', hotkey: 'C',
@@ -172,7 +181,7 @@ export const DEFS: Record<string, Def> = {
   },
   caserne: {
     kind: 'building', name: 'Caserne', hp: 2600, armor: 1, size: 3, sight: 10, supply: 0,
-    cost: { minerals: 350, energy: 0 }, buildTime: 45, trains: ['auxiliaire', 'legionnaire', 'soigneur'], faction: 'humains', hotkey: 'K',
+    cost: { minerals: 350, energy: 0 }, buildTime: 45, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste'], faction: 'humains', hotkey: 'K',
   },
   mine: {
     kind: 'building', name: 'Mine', hp: 1000, armor: 1, size: 3, sight: 5, supply: -4,
@@ -240,6 +249,16 @@ export const DEFS: Record<string, Def> = {
     kind: 'building', name: 'Orbe plasma', hp: 200, shield: 300, armor: 1, size: 2, sight: 8, supply: 0,
     cost: { minerals: 375, energy: 0 }, buildTime: 35, attack: { damage: 22, range: 7, cooldown: 1 }, detector: 8, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'B',
   },
+  // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
+  nanoassembleur: {
+    kind: 'building', name: 'Nano-assembleur', hp: 1600, shield: 1600, armor: 1, size: 3, sight: 10, supply: 0, requires: { portail: 1 },
+    cost: { minerals: 400, energy: 200 }, buildTime: 75, trains: ['discobole'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N',
+  },
+  // Mod: disque de plasma, 40 (30 against massive targets and buildings).
+  discobole: {
+    kind: 'unit', name: 'Chasseur Discobole', hp: 200, shield: 250, armor: 0, speed: 2.6, radius: 0.5, sight: 9, supply: 2,
+    cost: { minerals: 500, energy: 250 }, buildTime: 22.5, attack: { damage: 40, range: 6, cooldown: 1.5, vsMechanical: -10 }, faction: 'isdaris', hotkey: 'D',
+  },
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1, amount: 1500 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
@@ -275,6 +294,8 @@ export interface FactionDef {
   defense?: string;
   /** Power-field building (Isdaris), if any. */
   pylon?: string;
+  /** Second production building, for its heavier units, if any. */
+  tech?: string;
   /** Buildings in the build menu, in order. */
   buildable: string[];
   /** Army composition for the AI: [unit, weight]; units costing energy are only made when affordable. */
@@ -289,8 +310,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
     army: [['auxiliaire', 5], ['legionnaire', 2], ['soigneur', 2]],
   },
   isdaris: {
-    name: 'Isdaris', worker: 'moissonneur', hq: 'obelisque', supply: 'reservepsy', barracks: 'portail', extractor: 'recepteur', pylon: 'emetteur', defense: 'orbe', detector: 'orbe',
-    buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'orbe'],
+    name: 'Isdaris', worker: 'moissonneur', hq: 'obelisque', supply: 'reservepsy', barracks: 'portail', extractor: 'recepteur', pylon: 'emetteur', defense: 'orbe', detector: 'orbe', tech: 'nanoassembleur',
+    buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'orbe', 'nanoassembleur'],
     army: [['archer', 4], ['creature', 4], ['druide', 2], ['assassin', 1]],
   },
 };

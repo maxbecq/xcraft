@@ -184,9 +184,11 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
+  phalangiste: { height: 0.92 },
+  discobole: { height: 1.0 },
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe'];
+const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur'];
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
