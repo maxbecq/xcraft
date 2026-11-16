@@ -102,12 +102,14 @@ const templates = new Map<string, Group>();
  * Models made with Meshy (tools/meshy), `<type>-meshy.glb`, preferred over the Blender ones
  * (`?proc` keeps the Blender ones). Rigged characters carry their animation clips, named by role,
  * and a weapon prop (`<weapon>-meshy.glb`, along +Z, grip at the origin) in the right hand:
- * a `rifle` points at the left hand, a `pole` (hammer, axe, staff) stands up and forward.
+ * a `rifle` points at the left hand, a `pole` (hammer, axe, staff) stands up and forward, a `drill`
+ * (jackhammer) points down and forward.
  * Static ones (robots, beasts) are plain textured meshes, already sized by normalize.py.
  */
-const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: 'rifle' | 'pole' }> = {
+type Grip = 'rifle' | 'pole' | 'drill';
+const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip }> = {
   auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
-  serf: { height: 0.8, weapon: 'masse', grip: 'pole' },
+  serf: { height: 0.72, weapon: 'piqueur', grip: 'drill' }, // puny next to the soldiers
   legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole' },
   soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
@@ -120,7 +122,7 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
 
 /**
  * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
- * dull rust-and-dust textures (Humans): more saturation and light, so units read on the ground.
+ * dull rust-and-dust textures (Human buildings): more saturation and light, so they read on the ground.
  */
 function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false): MeshStandardMaterial {
   const m = source.clone();
@@ -179,7 +181,7 @@ export async function loadModels(types: string[]): Promise<void> {
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (skin) {
-            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, isHuman(type), true)) });
+            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true)) });
             return;
           }
         } catch {
@@ -206,9 +208,9 @@ export async function loadModels(types: string[]): Promise<void> {
 
 /**
  * Puts the weapon in the character's right hand, posed as in the idle clip: a rifle's barrel points at
- * the left hand, a pole stands up and forward. Parented to the hand bone, it follows every animation.
+ * the left hand, a pole stands up and forward, a drill points down. Parented to the hand bone, it follows every animation.
  */
-function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: 'rifle' | 'pole'): void {
+function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: Grip): void {
   const stance = clips.find((c) => c.name === 'idle');
   const right = character.getObjectByName('RightHand');
   const left = character.getObjectByName('LeftHand');
@@ -219,7 +221,8 @@ function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: 'rif
   character.updateMatrixWorld(true);
   weapon.position.copy(right.getWorldPosition(new Vector3()));
   weapon.scale.setScalar(character.scale.x);
-  weapon.lookAt(grip === 'rifle' ? left.getWorldPosition(new Vector3()) : weapon.position.clone().add(new Vector3(0, 1, 0.45)));
+  const aim = { rifle: left.getWorldPosition(new Vector3()), pole: weapon.position.clone().add(new Vector3(0, 1, 0.45)), drill: weapon.position.clone().add(new Vector3(0, -1, 0.35)) };
+  weapon.lookAt(aim[grip]);
   weapon.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
