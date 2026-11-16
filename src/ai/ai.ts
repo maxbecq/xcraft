@@ -107,8 +107,9 @@ export class AI {
     const detectors = f.detector && f.detector !== f.defense ? (enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
-    // Mid-game: the second production building, for heavier units.
-    if (f.tech && count(f.tech) === 0 && count(f.barracks) >= 2 && minute > 7 && !w.lacks(this.player, f.tech)) wants.push(f.tech);
+    // The second production building, for heavier units, only with resources to spare: its units cost
+    // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
+    if (f.tech && count(f.tech) === 0 && count(f.barracks) >= 3 && minerals > 900 && p.energy > 400 && !w.lacks(this.player, f.tech)) wants.push(f.tech);
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Expand to the natural once the main is running.
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
