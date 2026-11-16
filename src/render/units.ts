@@ -99,15 +99,24 @@ function pool(radius: number, color: number): Mesh {
 const templates = new Map<string, Group>();
 
 /**
- * Rigged, animated characters made with Meshy (tools/meshy): `<type>-meshy.glb` for the types in RIGGED,
- * preferred over the Blender model (`?proc` keeps the Blender ones). Height in tiles, before UNIT_SCALE.
+ * Models made with Meshy (tools/meshy), `<type>-meshy.glb`, preferred over the Blender ones
+ * (`?proc` keeps the Blender ones). Rigged characters carry their animation clips, named by role,
+ * and a weapon prop (`<weapon>-meshy.glb`, along +Z, grip at the origin) in the right hand:
+ * a `rifle` points at the left hand, a `pole` (hammer, axe, staff) stands up and forward.
+ * Static ones (robots, beasts) are plain textured meshes, already sized by normalize.py.
  */
-const RIGGED_HEIGHT = 0.86;
-/** Weapon prop (`<name>-meshy.glb`, muzzle along +Z, grip at the origin) held by each character. */
-const WEAPONS: Record<string, string> = { auxiliaire: 'fusil' };
-/** Unit types that have a Meshy character. */
-const RIGGED = ['auxiliaire'];
+const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: 'rifle' | 'pole' }> = {
+  auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
+  serf: { height: 0.8, weapon: 'masse', grip: 'pole' },
+  legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole' },
+  soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
+  archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
+  druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
+};
+const STATIC_MESHY = ['moissonneur', 'creature'];
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
+/** Team-coloured materials of the static Meshy models, by type. */
+const meshySkins = new Map<string, MeshStandardMaterial[]>();
 
 /** Repaints the texture's blue team stripes in the team colour, with a faint glow. */
 function teamSkin(source: MeshStandardMaterial, color: number): MeshStandardMaterial {
@@ -133,17 +142,33 @@ export async function loadModels(types: string[]): Promise<void> {
   const loader = new GLTFLoader();
   await Promise.all(
     types.map(async (type) => {
-      if (RIGGED.includes(type) && !new URLSearchParams(location.search).has('proc')) {
+      const character = CHARACTERS[type];
+      const meshy = !new URLSearchParams(location.search).has('proc');
+      if (meshy && STATIC_MESHY.includes(type)) {
+        try {
+          const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
+          gltf.scene.traverse((o) => {
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c)));
+          });
+          templates.set(type, gltf.scene);
+          return;
+        } catch {
+          // no Meshy model: use the Blender one
+        }
+      }
+      if (meshy && character) {
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           const size = new Box3().setFromObject(gltf.scene).getSize(new Vector3());
-          gltf.scene.scale.setScalar(RIGGED_HEIGHT / size.y);
+          gltf.scene.scale.setScalar(character.height / size.y);
           let skin: MeshStandardMaterial | undefined;
           gltf.scene.traverse((o) => {
             if (o instanceof SkinnedMesh) skin = o.material as MeshStandardMaterial;
           });
-          const weapon = WEAPONS[type];
-          if (skin && weapon) await arm(gltf.scene, gltf.animations, (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${weapon}-meshy.glb`)).scene);
+          if (skin && character.weapon) {
+            const weapon = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${character.weapon}-meshy.glb`)).scene;
+            arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
+          }
           if (skin) {
             rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c)) });
             return;
@@ -171,11 +196,11 @@ export async function loadModels(types: string[]): Promise<void> {
 }
 
 /**
- * Puts the weapon in the character's right hand, its barrel pointing at the left hand as posed in
- * the combat stance; parented to the hand bone, it then follows every animation.
+ * Puts the weapon in the character's right hand, posed as in the idle clip: a rifle's barrel points at
+ * the left hand, a pole stands up and forward. Parented to the hand bone, it follows every animation.
  */
-function arm(character: Group, clips: AnimationClip[], weapon: Group): void {
-  const stance = clips.find((c) => c.name === CLIP.idle);
+function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: 'rifle' | 'pole'): void {
+  const stance = clips.find((c) => c.name === 'idle');
   const right = character.getObjectByName('RightHand');
   const left = character.getObjectByName('LeftHand');
   if (!stance || !right || !left) return;
@@ -183,10 +208,9 @@ function arm(character: Group, clips: AnimationClip[], weapon: Group): void {
   mixer.clipAction(stance).play();
   mixer.update(0);
   character.updateMatrixWorld(true);
-  const grip = right.getWorldPosition(new Vector3());
-  weapon.position.copy(grip);
+  weapon.position.copy(right.getWorldPosition(new Vector3()));
   weapon.scale.setScalar(character.scale.x);
-  weapon.lookAt(left.getWorldPosition(new Vector3()));
+  weapon.lookAt(grip === 'rifle' ? left.getWorldPosition(new Vector3()) : weapon.position.clone().add(new Vector3(0, 1, 0.45)));
   weapon.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
@@ -223,6 +247,7 @@ function model(type: string, team: Material, seed = 0): Group {
     o.castShadow = true;
     o.receiveShadow = true;
     const name = (o.material as Material).name;
+    if (name === 'meshy') o.material = meshySkins.get(type)?.[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? o.material;
     if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
     if (name === 'tag') {
       const tags = graffiti();
@@ -329,8 +354,8 @@ interface View {
   playing?: AnimationAction;
 }
 
-/** Clip names baked by tools/meshy/rig.mjs and pack.py. */
-const CLIP = { idle: 'Combat_Stance', walk: 'walk', fire: 'Walk_Forward_While_Shooting', die: 'Shot_and_Fall_Forward' };
+/** Clip roles baked by tools/meshy/pack.py; only idle, walk and die are always there. */
+const CLIP = { idle: 'idle', walk: 'walk', attack: 'attack', fire: 'fire', work: 'work', carry: 'carry', die: 'die' };
 /** Ground covered by one second of the walk clip at its natural pace, in tiles. */
 const WALK_STRIDE = 1.1;
 
@@ -434,8 +459,19 @@ export class EntityRenderer {
     const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py;
     if (v.mixer) {
-      const attacking = e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
-      if (moving) play(v, attacking ? CLIP.fire : CLIP.walk, ((e.def as UnitDef).speed * GAME_SPEED) / WALK_STRIDE);
+      const kind = e.order?.kind;
+      const def = e.def as UnitDef;
+      const attacking = e.cooldown > 0 && (kind === 'attack' || kind === 'attackMove' || kind === 'heal');
+      const has = (role: string) => v.clips!.has(role);
+      if (moving) {
+        const pace = (def.speed * GAME_SPEED) / WALK_STRIDE;
+        if (e.carry > 0 && has(CLIP.carry)) play(v, CLIP.carry, pace);
+        else play(v, attacking && has(CLIP.fire) ? CLIP.fire : CLIP.walk, pace);
+      } else if (attacking && has(CLIP.attack)) {
+        // One swing or cast per attack.
+        const clip = v.clips!.get(CLIP.attack)!.getClip();
+        play(v, CLIP.attack, def.attack ? clip.duration / (def.attack.cooldown / GAME_SPEED) : 1);
+      } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && has(CLIP.work)) play(v, CLIP.work);
       else play(v, CLIP.idle, attacking ? 1.4 : 0.8);
       v.mixer.update(dt);
       return;

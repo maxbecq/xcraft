@@ -15,7 +15,7 @@ const r = await fetch(API, {
     image_url: `data:image/png;base64,${(await readFile(image)).toString('base64')}`,
     ai_model: 'latest', should_texture: true, texture_resolution: '2k',
     should_remesh: true, topology: 'triangle', target_polycount: Number(poly),
-    pose_mode: 'a-pose', target_formats: ['glb'], multi_view_thumbnails: true,
+    ...(process.env.PROP ? {} : { pose_mode: 'a-pose' }), target_formats: ['glb'], multi_view_thumbnails: true,
   }),
 });
 if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);

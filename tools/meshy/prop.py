@@ -1,6 +1,7 @@
-"""Normalise a Meshy weapon: longest axis along +Z with the thin (muzzle) end forward, grip at
-the origin (a third of the way from the stock), given length, texture shrunk.
-Usage: Blender -b --factory-startup -P tools/meshy/prop.py -- in.glb out.glb length [texture_px]
+"""Normalise a Meshy weapon: longest axis along +Z, grip at the origin, given length, texture shrunk.
+`rifle`: the thin (muzzle) end forward, grip a third of the way from the stock.
+`pole` (hammer, axe, staff): the thick end (head) forward, grip near the thin end of the handle.
+Usage: Blender -b --factory-startup -P tools/meshy/prop.py -- in.glb out.glb length [texture_px] [rifle|pole]
 """
 import sys
 
@@ -9,6 +10,7 @@ from mathutils import Matrix, Vector
 
 src, dst, length, *rest = sys.argv[sys.argv.index("--") + 1:]
 tex_px = int(rest[0]) if rest else 512
+pole = len(rest) > 1 and rest[1] == "pole"
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
@@ -31,6 +33,8 @@ def thickness(end):
     return sum(max(p[i] for p in sel) - min(p[i] for p in sel) for i in range(3) if i != axis)
 
 forward = 1 if thickness(1) < thickness(0) else -1  # the muzzle is thinner than the stock
+if pole:
+    forward = -forward  # the head is thicker than the handle
 # Rotate so that `axis * forward` becomes +Z (Blender Z up is glTF Y, so build it in glTF terms after).
 d = Vector((0, 0, 0))
 d[axis] = forward
@@ -40,7 +44,9 @@ pts = [v.co.copy() for v in o.data.vertices]
 lo = Vector([min(p[i] for p in pts) for i in range(3)])
 hi = Vector([max(p[i] for p in pts) for i in range(3)])
 s = float(length) / (hi.y - lo.y)
-grip = Vector(((lo.x + hi.x) / 2, hi.y - (hi.y - lo.y) / 3, (lo.z + hi.z) / 2))
+# Blender -Y is forward: the back end is at hi.y.
+back = (hi.y - lo.y) * (0.12 if pole else 1 / 3)
+grip = Vector(((lo.x + hi.x) / 2, hi.y - back, (lo.z + hi.z) / 2))
 o.data.transform(Matrix.Scale(s, 4) @ Matrix.Translation(-grip))
 for img in bpy.data.images:
     if img.size[0] > tex_px:

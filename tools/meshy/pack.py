@@ -1,17 +1,28 @@
 """Pack a rigged Meshy character for the game: the animated .glb plus clips taken from other
-.glb files with the same skeleton, texture shrunk, one file out.
-Usage: Blender -b --factory-startup -P tools/meshy/pack.py -- out.glb texture_px main.glb [clip=extra.glb ...]
+.glb files with the same skeleton, texture shrunk, one file out. Clips are renamed to the roles the
+game plays (idle, walk, attack, fire, work, carry, die).
+Usage: Blender -b --factory-startup -P tools/meshy/pack.py -- out.glb texture_px main.glb
+       [role:Meshy_Clip_Name ...] [role=extra.glb ...]
 """
 import sys
 
 import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:]
-dst, tex_px, main, extras = args[0], int(args[1]), args[2], args[3:]
+dst, tex_px, main = args[0], int(args[1]), args[2]
+renames = dict(a.split(":", 1) for a in args[3:] if ":" in a)
+extras = [a for a in args[3:] if "=" in a]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=main)
 arm = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
+for role, name in renames.items():
+    action = next(a for a in bpy.data.actions if a.name.startswith(name))
+    action.name = role
+    action.use_fake_user = True
+# The rig's own clip (bind pose) is not a role: drop it.
+for action in [a for a in bpy.data.actions if a.name not in renames]:
+    bpy.data.actions.remove(action)
 keep = set(bpy.context.scene.objects)
 for extra in extras:
     clip, path = extra.split("=")
