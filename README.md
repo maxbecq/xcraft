@@ -32,7 +32,7 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 
 **Sur téléphone ou tablette** (en portrait ou en paysage) : tap pour sélectionner puis tap pour donner l'ordre, double tap pour toutes les unités du même type à l'écran, glisser un doigt pour déplacer la vue, pincer pour zoomer, appui long puis glisser pour un rectangle de sélection.
 
-Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard, avec l'interface du camp `camp`), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
+Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard, avec l'interface du camp `camp`), `?speed=4` (vitesse ×4), `?replay` (revoit la dernière partie ; le menu propose aussi « Revoir la dernière partie » et « Ouvrir un replay… », et le menu pause « Enregistrer le replay »), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
 
 ## Développement
 

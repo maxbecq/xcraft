@@ -24,8 +24,13 @@ const EDGE_PX = 16;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
-const ATTRACT = !params.has('spectate') && !params.has('play');
-const SPECTATE = params.has('spectate') || ATTRACT;
+const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay');
+const REPLAY_KEY = 'xcraft.replay';
+/** The game just played has been kept as the last game. */
+let saved = false;
+/** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
+const REPLAY = params.has('replay') ? readReplay() : null;
+const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 const PLAYER = 0;
@@ -51,15 +56,23 @@ const stored = (k: string) => {
   }
 };
 const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 'humains');
-const myFaction = asFaction(params.get('camp') ?? stored('xcraft.camp'));
-const foeFaction = asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
+const myFaction = REPLAY ? REPLAY.factions[0] : asFaction(params.get('camp') ?? stored('xcraft.camp'));
+const foeFaction = REPLAY ? REPLAY.factions[1] : asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'));
 const world = createMatch([myFaction, foeFaction]);
 document.body.classList.toggle('isdaris', myFaction === 'isdaris'); // spectating shows the first side's interface
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
-const ais = SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
+const ais = REPLAY ? [] : SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
 if (!SPECTATE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
+if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
+/** Every command the simulation took, by tick: the whole game, since it is deterministic. */
+const record: Replay = { v: 1, factions: [myFaction, foeFaction], biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+const replayed = new Map(REPLAY?.ticks ?? []);
+// A game left before its end is kept too.
+window.addEventListener('pagehide', () => {
+  if (!saved && !REPLAY && !ATTRACT && record.ticks.length) saved = saveReplay(record);
+});
 const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
@@ -193,6 +206,7 @@ pause.innerHTML = `<div class="pause-box">
 <button data-p="resume">Reprendre</button>
 <button data-p="help">Contrôles</button>
 <button data-p="restart">Recommencer</button>
+<button data-p="replay">Enregistrer le replay</button>
 <button data-p="quit">Quitter la partie</button>
 <div class="help" hidden><h3>Contrôles</h3>
 Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
@@ -224,6 +238,7 @@ pause.addEventListener('click', (e) => {
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'restart') location.reload();
+  else if (p === 'replay') downloadReplay(record);
   else if (p === 'quit') location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
 });
 // Captured first: while paused, game hotkeys do nothing; F1, F10 and Escape close the menu.
@@ -260,6 +275,10 @@ if (!ATTRACT) {
       <button data-m="camp">Votre camp : ${FACTIONS[myFaction].name}</button>
       <button data-m="adversaire">Adversaire : ${FACTIONS[foeFaction].name}</button>
       <button data-m="biome">Planète : ${biome.name}</button>
+    </div>
+    <div class="row">
+      ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
+      <button data-m="open-replay">Ouvrir un replay…</button>
     </div>`;
   document.body.append(menu);
   menu.addEventListener('click', (e) => {
@@ -285,6 +304,8 @@ if (!ATTRACT) {
       }
       location.search = keep.replace(`biome=${biome.id}`, `biome=${next}`);
     } else if (m === 'watch') location.search = `?spectate&speed=2&${keep}`;
+    else if (m === 'last-replay') playReplay(readReplay());
+    else if (m === 'open-replay') openReplayFile();
     else if (m === 'watch-isdaris') location.search = `?spectate&speed=2&biome=${biome.id}&camp=isdaris&adversaire=isdaris`;
     else if (m) location.search = `?play&ai=${m}&${keep}`;
   });
@@ -305,7 +326,10 @@ function start(): void {
     const dt = Math.min(elapsed, 0.25);
     acc += dt * SPEED;
     while (acc >= TICK) {
-      world.step([...pending, ...ais.flatMap((ai) => ai.think())]);
+      const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : [...pending, ...ais.flatMap((ai) => ai.think())];
+      if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
+      world.step(cmds);
+      if (world.winner !== null && !REPLAY && !ATTRACT && !saved) saved = saveReplay(record);
       pending = [];
       hud.notify(world.events);
       effects.collect(world, seenAt);
@@ -363,4 +387,70 @@ function start(): void {
     if (paused) post.render();
     else frame(dt);
   });
+}
+
+// ---------------------------------------------------------------- replays
+
+/** A game as the commands the simulation took, tick by tick; replaying them rebuilds it exactly. */
+interface Replay {
+  v: 1;
+  factions: [Faction, Faction];
+  biome: string;
+  handicap: number[];
+  ticks: [number, Command[]][];
+}
+
+/** The replay to play: one opened from a file this session, else the last saved game. */
+function readReplay(): Replay | null {
+  for (const read of [() => sessionStorage.getItem(REPLAY_KEY), () => localStorage.getItem(REPLAY_KEY)]) {
+    try {
+      const r = JSON.parse(read() ?? 'null') as Replay | null;
+      if (r?.v === 1 && Array.isArray(r.ticks)) return r;
+    } catch {
+      // unavailable or not a replay: try the next place
+    }
+  }
+  return null;
+}
+
+/** Keeps the game as the "last game" (games that do not fit in storage are just not kept). */
+function saveReplay(r: Replay): boolean {
+  try {
+    localStorage.setItem(REPLAY_KEY, JSON.stringify(r));
+  } catch {
+    // storage full or blocked
+  }
+  return true;
+}
+
+function playReplay(r: Replay | null): void {
+  if (r) location.search = `?replay&speed=2&biome=${r.biome}`;
+}
+
+function downloadReplay(r: Replay): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(r)], { type: 'application/json' }));
+  a.download = `xcraft-${r.factions.join('-')}-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** Lets the player pick a replay file, then plays it. */
+function openReplayFile(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const text = await input.files?.[0]?.text();
+    if (!text) return;
+    try {
+      const r = JSON.parse(text) as Replay;
+      if (r.v !== 1 || !Array.isArray(r.ticks)) throw new Error('not a replay');
+      sessionStorage.setItem(REPLAY_KEY, text);
+      playReplay(r);
+    } catch {
+      alert('Ce fichier n’est pas un replay Xcraft.');
+    }
+  };
+  input.click();
 }
