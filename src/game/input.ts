@@ -16,6 +16,8 @@ export interface InputHooks {
   focus: (x: number, z: number) => void;
   /** Lets the HUD take a click first (e.g. to place a building); true if consumed. */
   click?: (button: number, ground: Vector3 | null, shift: boolean, target?: Entity) => boolean;
+  /** An order was given at a ground point (tiles), maybe on an entity: show it. */
+  ordered?: (x: number, z: number, target?: Entity) => void;
   /** Touch: move the camera by a finger drag (pixels) and zoom by a pinch factor. */
   pan: (dx: number, dy: number) => void;
   zoom: (factor: number) => void;
@@ -233,6 +235,7 @@ export class Input {
     const ids = this.own().map((e) => e.id);
     if (!ids.length) return;
     this.hooks.issue({ player: this.player, kind: 'smart', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id });
+    this.hooks.ordered?.(x, z, target);
   }
 
   /** Drops dead entities from the selection. */

@@ -120,6 +120,7 @@ const input = new Input(world, map, PLAYER, {
   issue,
   focus: (x, z) => rig.lookAt(x, z),
   click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
+  ordered: (x, z, target) => overlay.mark(PLAYER, x, z, target),
   pan: (dx, dy) => rig.panPixels(dx, dy),
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);

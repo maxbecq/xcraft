@@ -4,11 +4,13 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
-/** 2D layer over the 3D view: health bars of selected and wounded entities. */
+/** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 export class Overlay {
   readonly canvas = document.createElement('canvas');
   private readonly ctx: CanvasRenderingContext2D;
   private readonly v = new Vector3();
+  /** Order feedback: where the last right-clicks / taps landed, fading out. */
+  private marks: { x: number; z: number; color: string; label: string; t0: number }[] = [];
 
   constructor(private readonly map: GameMap) {
     this.canvas.className = 'overlay';
@@ -51,6 +53,72 @@ export class Overlay {
         ctx.fillStyle = '#6ac8ff';
         ctx.fillRect(sx - bw / 2, sy - 4, (bw * e.shield) / e.maxShield, 2);
       }
+    }
+    this.drawMarks(camera, w, h);
+  }
+
+  /**
+   * Shows that an order was taken: a ring that tightens on the spot (green: move, gold: harvest,
+   * red: attack) and, on a resource, how much is left in it.
+   */
+  mark(player: number, x: number, z: number, target?: Entity): void {
+    let color = '#8dff8a';
+    let label = '';
+    if (target?.def.kind === 'resource') {
+      color = '#ffd860';
+      label = Number.isFinite(target.amount) ? `${target.def.name} : ${target.amount}` : `${target.def.name} : inépuisable`;
+      x = target.x / FP;
+      z = target.y / FP;
+    } else if (target && target.owner !== player && target.owner >= 0) {
+      color = '#ff6a4a';
+      x = target.x / FP;
+      z = target.y / FP;
+    } else if (target) {
+      x = target.x / FP;
+      z = target.y / FP;
+    }
+    this.marks.push({ x, z, color, label, t0: performance.now() });
+    if (this.marks.length > 6) this.marks.shift();
+  }
+
+  private drawMarks(camera: Camera, w: number, h: number): void {
+    const ctx = this.ctx;
+    const now = performance.now();
+    this.marks = this.marks.filter((m) => now - m.t0 < 1200);
+    for (const m of this.marks) {
+      const k = (now - m.t0) / 1200; // 0 → 1
+      const y = heightAt(this.map, m.x, m.z) + 0.05;
+      const r = 0.9 * (1 - k * 0.6);
+      ctx.globalAlpha = 1 - k;
+      ctx.strokeStyle = m.color;
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = m.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (let i = 0; i <= 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        this.v.set(m.x + Math.cos(a) * r, y, m.z + Math.sin(a) * r).project(camera);
+        const sx = ((this.v.x + 1) / 2) * w;
+        const sy = ((1 - this.v.y) / 2) * h;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+      if (m.label) {
+        this.v.set(m.x, y + 1.4 + k * 0.4, m.z).project(camera);
+        ctx.font = '700 17px Rajdhani, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.shadowBlur = 0;
+        const sx = ((this.v.x + 1) / 2) * w;
+        const sy = ((1 - this.v.y) / 2) * h;
+        ctx.strokeText(m.label, sx, sy);
+        ctx.fillStyle = m.color;
+        ctx.fillText(m.label, sx, sy);
+      }
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
     }
   }
 }
