@@ -126,7 +126,7 @@ export class PowerNet {
         const to = at(b, 0.3);
         const length = from.distanceTo(to);
         // A wide soft shaft around a bright core, from the Obelisk's tip down onto the site.
-        for (const [radius, material] of [[0.4, this.warpCore], [1.2, this.warpGlow]] as const) {
+        for (const [radius, material] of [[0.5, this.warpCore], [1.6, this.warpGlow]] as const) {
           const m = new Mesh(this.unitBeam, material);
           m.scale.set(radius, length, radius);
           m.position.copy(from).add(to).multiplyScalar(0.5);
@@ -150,8 +150,8 @@ export class PowerNet {
       this.warps.delete(id);
     }
     // Light enough to see the units around and behind it.
-    this.warpCore.uniforms.opacity.value = 0.3 + 0.1 * Math.sin(t * 9);
-    this.warpGlow.uniforms.opacity.value = 0.14 + 0.06 * Math.sin(t * 5.3);
+    this.warpCore.uniforms.opacity.value = 0.38 + 0.12 * Math.sin(t * 9);
+    this.warpGlow.uniforms.opacity.value = 0.2 + 0.07 * Math.sin(t * 5.3);
   }
 
   private rebuild(nodes: Entity[]): void {
