@@ -229,10 +229,11 @@ window.addEventListener('keydown', (e) => keys.add(e.key));
 window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
 
-let mouse: { x: number; y: number } | null = null;
-// Edge scrolling follows the mouse only: fingers drag the map instead.
+let mouse: { x: number; y: number; onButton: boolean } | null = null;
+// Edge scrolling follows the mouse only: fingers drag the map instead. Not over a button (the Menu sits
+// in the top edge band): reaching for it must not move the view.
 window.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
+  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: !!(e.target as HTMLElement).closest?.('button, .tools, input') };
 });
 document.addEventListener('mouseleave', () => (mouse = null));
 // Wheel zooms. A trackpad's two-finger scroll (sideways or fractional pixel deltas) pans,
@@ -255,7 +256,7 @@ function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
   let edge = '';
-  if (mouse && !paused && !ATTRACT) {
+  if (mouse && !mouse.onButton && !paused && !ATTRACT) {
     let ex = mouse.x < EDGE_PX ? -1 : mouse.x > window.innerWidth - EDGE_PX ? 1 : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
