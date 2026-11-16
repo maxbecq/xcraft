@@ -126,7 +126,7 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
  * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
  * dull rust-and-dust textures (Human buildings): more saturation and light, so they read on the ground.
  */
-function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false): MeshStandardMaterial {
+function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
   m.onBeforeCompile = (shader) => {
@@ -136,11 +136,17 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         vec3 paint = diffuseColor.rgb;
         float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
         ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.35) * 1.3 + 0.01, 1.0);' : ''}
-        diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);`)
+        diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);
+        ${ivory ? `// Isdaris armour is mostly ivory: tint the pale, unsaturated plates too, or sides blur in a melee.
+        float lum = dot(paint, vec3(0.3, 0.59, 0.11));
+        float chroma = 1.0 - min(paint.r, min(paint.g, paint.b)) / max(max(paint.r, max(paint.g, paint.b)), 0.001);
+        float ivoryMask = smoothstep(0.2, 0.4, lum) * (1.0 - smoothstep(0.5, 0.7, chroma)) * (1.0 - teamMask);
+        diffuseColor.rgb = mix(diffuseColor.rgb, teamColor * (lum * 1.5 + 0.1), ivoryMask * 0.6);
+        teamMask = max(teamMask, ivoryMask * 0.35);` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};`);
   };
-  m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}`;
+  m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
   if (unit) rimLight(m, 1.1, team.clone().lerp(new Color(1, 1, 1), 0.2).toArray());
   else rimLight(m, rim);
@@ -160,7 +166,7 @@ export async function loadModels(types: string[]): Promise<void> {
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit')));
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type))));
           });
           templates.set(type, gltf.scene);
           return;
@@ -183,7 +189,7 @@ export async function loadModels(types: string[]): Promise<void> {
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (skin) {
-            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true)) });
+            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type))) });
             return;
           }
         } catch {
