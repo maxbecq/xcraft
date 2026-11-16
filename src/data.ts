@@ -55,6 +55,10 @@ export interface UnitDef {
   accel?: number;
   /** Permanently invisible: enemies only see it within range of one of their detectors. */
   cloaked?: boolean;
+  /** A machine (vehicle, robot): takes `vsMechanical` bonuses like buildings, armoured by Blindage véhicules. */
+  mechanical?: boolean;
+  /** A tamed saurian, armoured by Peau épaisse. */
+  beast?: boolean;
   /** Flies: straight over cliffs and buildings, out of reach of melee and ground-only weapons. */
   flying?: boolean;
   /** Reveals invisible enemies within this radius (tiles). */
@@ -128,12 +132,17 @@ export interface UpgradeDef {
   buildTime: number;
   /** Finished buildings needed first, by type and count (SC-like tech tree; the mod has none). */
   requires?: Record<string, number>;
+  /** What it does, for the tooltip (one-off research). */
+  effect?: string;
   faction: Faction;
   hotkey: string;
 }
 
-/** melee and ranged: +10 % of the weapon's base damage per level (at least +1); armor: +1 per level. */
-export type UpgradeLine = 'melee' | 'ranged' | 'armor';
+/**
+ * melee and ranged: +10 % of the weapon's base damage per level (at least +1); armor: +1 per level for foot
+ * soldiers, vehicles: for machines, skin: for saurians. Any other line is a one-off research named like its line.
+ */
+export type UpgradeLine = string;
 
 export type Def = UnitDef | BuildingDef | ResourceDef | UpgradeDef;
 
@@ -145,6 +154,8 @@ export interface AbilityDef {
   duration: number;
   /** Energy taken from the player's stock (building abilities). */
   energy?: number;
+  /** Research needed before it can be used. */
+  research?: string;
 }
 
 export const ABILITIES: Record<string, AbilityDef> = {
@@ -155,7 +166,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
   peauderoc: { name: 'Peau de roc', hotkey: 'R', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
-  observation: { name: 'Observation céleste', hotkey: 'O', ...BALANCE.abilities.observation },
+  observation: { name: 'Observation céleste', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
   /**
    * Obélisque (mod « Rappel », a Prisme ability): after a 4 s channel, up to 8 army units within 5 tiles of
    * the target point appear around the Obélisque, then stay dazed 4 s. 100 energy as in the mod; the cooldown
@@ -185,39 +196,59 @@ const BASE: Record<string, object> = {
   caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], faction: 'humains', hotkey: 'K' },
   mine: { kind: 'building', name: 'Mine', size: 3, faction: 'humains', hotkey: 'M' },
   // Mod: « Guilde métallurgique » (the notice's Forge).
-  forge: { kind: 'building', name: 'Forge', size: 3, ability: 'observation', faction: 'humains', hotkey: 'F', researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3'] },
+  forge: {
+    kind: 'building', name: 'Forge', size: 3, ability: 'observation', faction: 'humains', hotkey: 'F',
+    researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3', 'vehicles1', 'vehicles2', 'vehicles3', 'skin1', 'skin2', 'skin3', 'canonsscies', 'cuirasse', 'scieassaut', 'lamesempoisonnees', 'observation'],
+  },
+  // Notice: « Marché », trade one resource for the other at a poor rate, and economic research (mod: « Guilde des dresseurs-marchands »).
+  marche: { kind: 'building', name: 'Marché', size: 3, requires: { caserne: 1 }, researches: ['croissance', 'pillage', 'entrainementgroupe'], faction: 'humains', hotkey: 'R' },
   // Mod: « Fortin », a bunker for four: soldiers inside are out of reach and shoot one tile farther.
   fortin: { kind: 'building', name: 'Fortin', size: 2, requires: { caserne: 1 }, faction: 'humains', hotkey: 'B' },
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
   tour: { kind: 'building', name: 'Tour alchimistique', size: 2, faction: 'humains', hotkey: 'T' },
   // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
-  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'pegase'], faction: 'humains', hotkey: 'M' },
+  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'pegase'], researches: ['charlourd'], faction: 'humains', hotkey: 'M' },
   // Notice: « Bourdon », a propeller airship: detector, short-range anti-vehicle grenades, good against buildings and flyers
   // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
-  bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, faction: 'humains', hotkey: 'B' },
+  bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
-  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, faction: 'humains', hotkey: 'P' },
+  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
-  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], faction: 'humains', hotkey: 'A' },
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
   alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, faction: 'humains', hotkey: 'A' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
-  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], faction: 'humains', hotkey: 'C' },
+  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures'], faction: 'humains', hotkey: 'C' },
   // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
-  plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, faction: 'humains', hotkey: 'P' },
+  plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, beast: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
-  ankylosaure: { kind: 'unit', name: 'Ankylosaure', radius: 0.9, faction: 'humains', hotkey: 'A' },
+  ankylosaure: { kind: 'unit', name: 'Ankylosaure', radius: 0.9, beast: true, faction: 'humains', hotkey: 'A' },
   // Notice: « Allosaure », a huge flesh-eater that devours infantry (mod « Carnosaurus »: 60, -30 mechanical).
-  allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, faction: 'humains', hotkey: 'L' },
+  allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
   // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
   // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
   belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, faction: 'humains', hotkey: 'B' },
   ...upgrades('melee', 'Attaque corps à corps', 'C'),
   ...upgrades('ranged', 'Attaque à distance', 'D'),
   ...upgrades('armor', 'Armure infanterie', 'A'),
+  ...upgrades('vehicles', 'Blindage véhicules', 'V', { metallurgie: 1 }),
+  ...upgrades('skin', 'Peau épaisse', 'P', { creaturium: 1 }),
+  // One-off research from the notice (costs and times in balance.json; the mod's where it has them).
+  canonsscies: research('Canons sciés', 'N', 'Auxiliaires : +1 de portée.', { caserne: 1 }),
+  cuirasse: research('Cuirasse', 'U', 'Légionnaires-scieurs : +1 d\'armure.', { caserne: 1 }),
+  scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : bonus contre les machines et les bâtiments.', { caserne: 1 }),
+  lamesempoisonnees: research('Lames empoisonnées', 'L', 'Belluaires : leurs coups empoisonnent les unités organiques.', { creaturium: 1 }),
+  observation: research('Observation céleste', 'B', 'Les Forges peuvent observer une zone de la carte.'),
+  croissance: research('Croissance économique', 'C', 'Serfs et unités de la Caserne : +10 % de points de vie.'),
+  pillage: research('Pillage', 'P', 'Chaque bâtiment ennemi détruit rapporte une part de son coût.'),
+  entrainementgroupe: research('Entraînement groupé', 'E', 'Unités de la Caserne formées 25 % plus vite.'),
+  armeschimiques: research('Armes chimiques', 'C', 'Les cocktails des Alchimistes touchent une zone.'),
+  oeilpercant: research('Œil perçant', 'O', 'Les Plésiosaures détectent les unités invisibles.'),
+  dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures."),
+  charlourd: research('Char lourd', 'L', 'Chars Pégase : +15 dégâts, +2 armure.'),
 
   // ---------------------------------------------------------------- Isdaris
-  moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, worker: true, faction: 'isdaris', hotkey: 'S' },
+  moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },
   archer: { kind: 'unit', name: 'Archer', radius: 0.375, faction: 'isdaris', hotkey: 'A' },
   creature: { kind: 'unit', name: 'Créature', radius: 0.3, faction: 'isdaris', hotkey: 'C' },
   druide: { kind: 'unit', name: 'Druide', radius: 0.375, faction: 'isdaris', hotkey: 'D' },
@@ -238,24 +269,31 @@ const BASE: Record<string, object> = {
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: { kind: 'building', name: 'Nano-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'chimere'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N' },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).
-  discobole: { kind: 'unit', name: 'Chasseur Discobole', radius: 0.5, faction: 'isdaris', hotkey: 'D' },
+  discobole: { kind: 'unit', name: 'Chasseur Discobole', radius: 0.5, mechanical: true, faction: 'isdaris', hotkey: 'D' },
 
   // Mod: « Chimère » (green Nano-assembleur), a flying hunter: ion blaster, 21 a second, air and ground.
-  chimere: { kind: 'unit', name: 'Chimère', radius: 0.45, flying: true, faction: 'isdaris', hotkey: 'C' },
+  chimere: { kind: 'unit', name: 'Chimère', radius: 0.45, flying: true, mechanical: true, faction: 'isdaris', hotkey: 'C' },
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
 };
 
-/** The three levels of a Forge line (costs and times in balance.json). */
-function upgrades(line: UpgradeLine, name: string, hotkey: string): Record<string, object> {
+/** The three levels of a Forge line (costs and times in balance.json); `base`: buildings the line needs from level 1. */
+function upgrades(line: UpgradeLine, name: string, hotkey: string, base?: Record<string, number>): Record<string, object> {
   const out: Record<string, object> = {};
-  for (const i of [0, 1, 2]) out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, requires: UPGRADE_REQUIRES[i], faction: 'humains', hotkey };
+  for (const i of [0, 1, 2]) out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, requires: { ...base, ...UPGRADE_REQUIRES[i] }, faction: 'humains', hotkey };
   return out;
 }
 
+/** A one-off research: a line of its own, with one level. */
+function research(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
+  return { kind: 'upgrade', name, effect, line: '', level: 1, requires, faction: 'humains', hotkey };
+}
+
 const STATS: Record<string, object> = BALANCE.units;
-export const DEFS = Object.fromEntries(Object.entries(BASE).map(([type, d]) => [type, { ...d, ...STATS[type] }])) as Record<string, Def>;
+export const DEFS = Object.fromEntries(
+  Object.entries(BASE).map(([type, d]) => [type, { ...d, ...STATS[type], ...((d as { line?: string }).line === '' ? { line: type } : {}) }]),
+) as Record<string, Def>;
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
@@ -295,8 +333,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   humains: {
     name: 'Humains', worker: 'serf', hq: 'conseil', supply: 'grenier', barracks: 'caserne', extractor: 'mine',
     forge: 'forge', detector: 'tour', tech: 'creaturium',
-    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'fortin', 'tour', 'forge', 'metallurgie', 'alchimisterie', 'creaturium'],
-    advanced: ['forge', 'metallurgie', 'alchimisterie', 'creaturium'],
+    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'fortin', 'tour', 'marche', 'forge', 'metallurgie', 'alchimisterie', 'creaturium'],
+    advanced: ['marche', 'forge', 'metallurgie', 'alchimisterie', 'creaturium'],
     army: Object.entries(BALANCE.ai.army.humains),
   },
   isdaris: {

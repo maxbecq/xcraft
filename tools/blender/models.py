@@ -846,7 +846,44 @@ DOODADS = {
     "tire_pile": tire_pile, "barrels": barrels, "wreck": wreck, "bones": bones, "scrap_pile": scrap_pile,
 }
 
+def marche(p):
+    """Market (notice: trade and the economy): a stone floor under a team-striped awning on timber posts,
+    a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still."""
+    box(p["stone_dark"], (2.8, 2.8, 0.16), (0, 0, 0.08))
+    box(p["stone"], (2.5, 2.5, 0.06), (0, 0, 0.19))
+    for x, y in ((-1.05, -1.05), (1.05, -1.05), (1.05, 1.05), (-1.05, 1.05), (0, -1.05), (0, 1.05)):
+        cyl(p["wood"], 0.07, 1.5, (x, y, 0.95), verts=8)
+    # Striped awning: alternating team and linen slats, sloping to the front.
+    for i in range(7):
+        x = -1.15 + i * 0.383
+        box(p["team"] if i % 2 == 0 else p["linen"], (0.385, 2.5, 0.05), (x, 0, 1.75), rot=(math.radians(-9), 0, 0))
+    box(p["wood"], (2.7, 0.08, 0.08), (0, -1.1, 1.62))
+    box(p["wood"], (2.7, 0.08, 0.08), (0, 1.1, 1.85))
+    # Stone counter with a brass balance.
+    box(p["stone"], (1.4, 0.45, 0.6), (0, -0.55, 0.52))
+    box(p["wood"], (1.5, 0.5, 0.05), (0, -0.55, 0.84))
+    cyl(p["bronze"], 0.03, 0.4, (0, -0.55, 1.07), verts=8)
+    box(p["bronze"], (0.5, 0.03, 0.03), (0, -0.55, 1.27))
+    for x in (-0.24, 0.24):
+        cyl(p["bronze"], 0.09, 0.03, (x, -0.55, 1.12), verts=12)
+    # Goods: crates, sacks, amphorae.
+    for x, y, s in ((-0.85, 0.6, 0.38), (-0.45, 0.75, 0.3), (-0.8, 0.2, 0.3)):
+        box(p["wood"], (s, s, s), (x, y, 0.22 + s / 2))
+    for x, y in ((0.5, 0.6), (0.75, 0.35), (0.85, 0.75)):
+        ball(p["cloth"], 0.2, (x, y, 0.38), scale=(1, 1, 1.2))
+    for x, y in ((0.3, 0.95), (0.95, -0.2)):
+        ball(p["rust"], 0.14, (x, y, 0.42), scale=(1, 1, 1.6))
+        cyl(p["rust"], 0.05, 0.16, (x, y, 0.72), verts=8)
+    # A small still: a copper pot with a glowing flask.
+    cyl(p["bronze"], 0.16, 0.3, (-0.7, -0.55, 0.37), verts=12)
+    ball(p["green_glow"], 0.1, (-0.7, -0.55, 0.6))
+    pipe(p["bronze"], (-0.7, -0.55, 0.65), (-0.95, -0.2, 0.9), r=0.025)
+    lamp(p, (1.0, -1.1, 1.45))
+    tag(p, (0.0, -0.785, 0.55), (0.5, 0.25))
+
+
 MODELS = {
+    "marche": marche,
     "serf": serf, "auxiliaire": auxiliaire, "legionnaire": legionnaire, "soigneur": soigneur,
     "conseil": conseil, "grenier": grenier, "caserne": caserne, "mine": mine, "minerai": minerai, "puits": puits,
     "minerai_1": minerai_1, "minerai_2": minerai_2, "minerai_3": minerai_3,

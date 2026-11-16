@@ -92,7 +92,7 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
   return m;
 }
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
-const timber = new MeshStandardMaterial({ color: 0x7a5636, roughness: 0.9 });
+const timber = new MeshStandardMaterial({ vertexColors: true, roughness: 1 });
 const canvasCloth = new MeshStandardMaterial({ color: 0x6b6a45, roughness: 1, side: DoubleSide });
 const footing = new MeshStandardMaterial({ vertexColors: true, roughness: 1 });
 
@@ -147,10 +147,20 @@ function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storey
   const step = (size.y + 0.15) / count;
   const bays = (len: number) => Math.max(1, Math.round((2 * len) / 1.1));
   const storeys: Object3D[] = [];
+  let r = (Math.round(size.x * 1000) * 7919 + Math.round(size.y * 1000)) % 233280;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const shade = new Color();
   for (let k = 0; k < count; k++) {
     const parts: BufferGeometry[] = [];
     const y0 = k * step;
-    const add = (g: BufferGeometry, x: number, y: number, z: number, rotY = 0, rotZ = 0) => parts.push(g.rotateZ(rotZ).rotateY(rotY).translate(x, y, z));
+    // Old timber: each piece its own weathered shade (grey-brown, sun-bleached or dark with damp), a little out of true.
+    const add = (g: BufferGeometry, x: number, y: number, z: number, rotY = 0, rotZ = 0) => {
+      g.rotateX((rand() - 0.5) * 0.05).rotateZ(rotZ + (rand() - 0.5) * 0.05).rotateY(rotY).translate(x, y, z);
+      shade.setHSL(0.06 + rand() * 0.03, 0.3 + rand() * 0.18, 0.045 + rand() * 0.07);
+      const n = g.getAttribute('position').count;
+      g.setAttribute('color', new BufferAttribute(new Float32Array(Array.from({ length: n * 3 }, (_, i) => [shade.r, shade.g, shade.b][i % 3])), 3));
+      parts.push(g);
+    };
     // Poles round the outline, one bay apart.
     const nx = bays(w);
     const nz = bays(d);

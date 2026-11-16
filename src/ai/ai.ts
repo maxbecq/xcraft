@@ -191,7 +191,7 @@ export class AI {
     // Heavier units from the second production building, one at a time, when affordable.
     for (const t of buildings.filter((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0)) {
       // The kind it has fewest of (Discobole and Chimère take turns); against flyers, only what can shoot them.
-      const trains = (t.def as BuildingDef).trains ?? [];
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u));
       const antiAirTrains = trains.filter((u) => reaches((DEFS[u] as UnitDef).attack!, true));
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains).slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
       const def = type && (DEFS[type] as UnitDef);

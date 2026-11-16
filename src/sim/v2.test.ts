@@ -198,6 +198,9 @@ describe('invisibility and detection', () => {
     const sin = w.spawn('assassin', 1, ...at(44, 60));
     w.players[0].energy = 60;
     w.step([{ player: 0, kind: 'ability', ids: [forge.id], x: sin.x, y: sin.y }]);
+    expect(w.scans).toHaveLength(0); // not researched yet
+    w.players[0].upgrades.observation = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [forge.id], x: sin.x, y: sin.y }]);
     run(w, 0.5);
     expect(w.sees(0, sin)).toBe(true);
     expect(w.players[0].energy).toBe(10);

@@ -1,3 +1,4 @@
+import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
 import { ABILITIES, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
 import { type GameMap, heightAt } from '../map';
@@ -311,7 +312,13 @@ export class Hud {
       if (!idle) continue;
       list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
     }
-    // Forge: the next level of each upgrade line not yet researched nor queued.
+    // Marché: trade one resource for the other.
+    if (b.type === 'marche') {
+      const { give, get } = BALANCE.rules.trade;
+      list.push({ label: `Minerai → ${get} énergie`, key: 'M', cost: { minerals: give, energy: 0 }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'minerals' }) });
+      list.push({ label: `Énergie → ${get} minerai`, key: 'N', cost: { minerals: 0, energy: give }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'energy' }) });
+    }
+    // Research: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {
       if (!this.world.researchable(this.player, t)) continue;
       const d = DEFS[t] as UpgradeDef;
@@ -363,6 +370,7 @@ export class Hud {
       if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
       lines.push(stats.join(' · '));
     }
+    if (d?.kind === 'upgrade' && d.effect) lines.push(d.effect);
     if (b.reason) lines.push(`<span class="need">${b.reason}</span>`);
     else if (b.cost && !afford(p, b.cost)) lines.push('<span class="need">Ressources insuffisantes</span>');
     this.tip.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
