@@ -24,6 +24,9 @@ export class Overlay {
     if (this.canvas.width !== w * dpr || this.canvas.height !== h * dpr) {
       this.canvas.width = w * dpr;
       this.canvas.height = h * dpr;
+      // Sized like the 3D view, in pixels: on phones 100vh is taller than the visible window.
+      this.canvas.style.width = `${w}px`;
+      this.canvas.style.height = `${h}px`;
     }
     const ctx = this.ctx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

@@ -19,7 +19,7 @@ canvas { display: block; }
 [hidden] { display: none !important; }
 
 .selection-box { position: fixed; border: 1px solid #5f6; background: rgba(85, 255, 102, 0.08); pointer-events: none; }
-.overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+.overlay { position: fixed; top: 0; left: 0; pointer-events: none; }
 body.targeting canvas { cursor: crosshair; }
 
 /* ---------------------------------------------------------------- console */
