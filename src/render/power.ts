@@ -45,6 +45,11 @@ export class PowerNet {
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
+  /** Materialising buildings: a big pulsing beam from the nearest Obelisk to each, by building id. */
+  private readonly warps = new Map<number, Group>();
+  private readonly warpCore = new MeshBasicMaterial({ color: 0xfff6d8, transparent: true, depthWrite: false, blending: AdditiveBlending });
+  private readonly warpGlow = new MeshBasicMaterial({ color: 0xffcf6a, transparent: true, depthWrite: false, blending: AdditiveBlending });
+  private readonly unitBeam = new CylinderGeometry(1, 1, 1, 10, 1, true);
 
   constructor(scene: Object3D, private readonly map: GameMap) {
     scene.add(this.root);
@@ -59,6 +64,55 @@ export class PowerNet {
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
+    this.updateWarps(world, sees, t);
+  }
+
+  private updateWarps(world: World, sees: (e: Entity) => boolean, t: number): void {
+    const at = (e: Entity, up: number) => new Vector3(e.x / FP, heightAt(this.map, e.x / FP, e.y / FP) + up, e.y / FP);
+    const live = new Set<number>();
+    for (const b of world.entities.values()) {
+      if (b.def.kind !== 'building' || !(b.def as BuildingDef).warp || b.buildLeft <= 0 || !sees(b)) continue;
+      let source: Entity | undefined;
+      let best = Infinity;
+      for (const o of world.entities.values()) {
+        if (o === b || o.owner !== b.owner || o.type !== 'obelisque' || o.buildLeft > 0) continue;
+        const d = Math.hypot(o.x - b.x, o.y - b.y);
+        if (d < best) [source, best] = [o, d];
+      }
+      if (!source) continue;
+      live.add(b.id);
+      let g = this.warps.get(b.id);
+      if (!g) {
+        g = new Group();
+        const from = at(source, BEAM_TOP.obelisque);
+        const to = at(b, 0.3);
+        const length = from.distanceTo(to);
+        // A wide soft shaft around a bright core, from the Obelisk's tip down onto the site.
+        for (const [radius, material] of [[0.12, this.warpCore], [0.45, this.warpGlow]] as const) {
+          const m = new Mesh(this.unitBeam, material);
+          m.scale.set(radius, length, radius);
+          m.position.copy(from).add(to).multiplyScalar(0.5);
+          m.lookAt(to);
+          m.rotateX(Math.PI / 2);
+          g.add(m);
+        }
+        // Where it lands: a column of light the size of the building.
+        const size = (b.def as BuildingDef).size;
+        const column = new Mesh(this.unitBeam, this.warpGlow);
+        column.scale.set(size * 0.45, 3, size * 0.45);
+        column.position.copy(at(b, 1.5));
+        g.add(column);
+        this.root.parent?.add(g);
+        this.warps.set(b.id, g);
+      }
+    }
+    for (const [id, g] of this.warps) {
+      if (live.has(id)) continue;
+      g.removeFromParent();
+      this.warps.delete(id);
+    }
+    this.warpCore.opacity = 0.75 + 0.25 * Math.sin(t * 9);
+    this.warpGlow.opacity = 0.22 + 0.1 * Math.sin(t * 5.3);
   }
 
   private rebuild(nodes: Entity[]): void {
