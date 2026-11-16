@@ -18,7 +18,6 @@ export const RAMP_LENGTH = 4;
 /** Corner heights are integers in 1/SUB of a level (so ramps can climb in steps). */
 export const SUB = 12;
 
-const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };
 export const STEP: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 
 /** Square with cut corners, centred on (0,0). */
@@ -26,23 +25,32 @@ function octagon(dx: number, dy: number, half: number, cut: number): boolean {
   return Math.abs(dx) <= half && Math.abs(dy) <= half && Math.abs(dx) + Math.abs(dy) <= 2 * half - cut;
 }
 
-/** The V1 two-player map, symmetric by 180° rotation. */
-export function createMap(): GameMap {
+/** Quarter turns clockwise of a direction. */
+const TURN: Record<Dir, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' };
+
+/**
+ * The V1 map: one base in the top-left corner, copied by rotation for every player — by 180° for two
+ * players (the original map), by quarter turns for four (bases in all four corners).
+ */
+export function createMap(players = 2): GameMap {
   const width = 96;
   const height = 96;
   const map: GameMap = {
     width, height, level: new Uint8Array(width * height), ramp: new Array(width * height).fill(null), rampStep: new Uint8Array(width * height),
   };
+  const turns = players > 2 ? [0, 1, 2, 3] : [0, 2];
 
-  // Paints a tile and its mirror for the opposite player.
+  // Paints a tile and its rotated copies for the other players.
   const set = (x: number, y: number, level: number, ramp: Dir | null = null, step = 0) => {
-    map.level[y * width + x] = level;
-    map.ramp[y * width + x] = ramp;
-    map.rampStep[y * width + x] = step;
-    const i = (height - 1 - y) * width + (width - 1 - x);
-    map.level[i] = level;
-    map.ramp[i] = ramp && OPPOSITE[ramp];
-    map.rampStep[i] = step;
+    for (const q of turns) {
+      const [rx, ry] = rotateTile(width, x, y, q);
+      let r = ramp;
+      for (let k = 0; k < q && r; k++) r = TURN[r];
+      const i = ry * width + rx;
+      map.level[i] = level;
+      map.ramp[i] = r;
+      map.rampStep[i] = step;
+    }
   };
   /** A ramp RAMP_LENGTH tiles long, starting at (x, y) next to the higher ground on side `up`, `width` tiles wide. */
   const ramp = (x: number, y: number, up: Dir, across: number, level: number) => {
@@ -69,6 +77,18 @@ export function createMap(): GameMap {
   ramp(46, 41, 'S', 4, 0); // low ground -> centre hill
 
   return map;
+}
+
+/** A tile turned `q` quarter turns clockwise around the centre of a square map `size` tiles wide. */
+export function rotateTile(size: number, x: number, y: number, q: number): [number, number] {
+  for (let k = 0; k < q % 4; k++) [x, y] = [size - 1 - y, x];
+  return [x, y];
+}
+
+/** The top-left tile of a `s`×`s` footprint turned `q` quarter turns clockwise. */
+export function rotateFootprint(size: number, tx: number, ty: number, s: number, q: number): [number, number] {
+  for (let k = 0; k < q % 4; k++) [tx, ty] = [size - ty - s, tx];
+  return [tx, ty];
 }
 
 export function tileAt(map: GameMap, x: number, y: number): { level: number; ramp: Dir | null } | null {

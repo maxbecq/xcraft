@@ -1,7 +1,7 @@
 import { Color, InstancedMesh, Matrix4, Mesh, type MeshStandardMaterial, Object3D, Quaternion, type Scene, Vector3, type Material } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type GameMap, cutCorner, heightAt, tileAt } from '../map';
-import { EXPANSIONS } from '../sim/setup';
+import { expansion } from '../sim/setup';
 import { weather } from './weathering';
 import type { World } from '../sim/world';
 
@@ -45,7 +45,10 @@ export class Decor {
       if (e.def.kind === 'resource') clear(e.tx + 1, e.ty + 1, 3);
       if (e.def.kind === 'building' && e.def.dropoff) clear(e.tx + 2, e.ty + 2, 6);
     }
-    for (const [tx, ty] of EXPANSIONS) clear(tx + 2, ty + 2, 5);
+    for (const p of world.players) {
+      const [tx, ty] = expansion(world, p.id);
+      clear(tx + 2, ty + 2, 5);
+    }
     for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) if (map.ramp[y * map.width + x]) clear(x, y, 2);
 
     for (let y = 0; y < map.height; y++) {

@@ -1,6 +1,6 @@
 import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, ticks } from '../sim/fixed';
-import { EXPANSIONS } from '../sim/setup';
+import { expansion } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -382,7 +382,7 @@ export class AI {
       return well && dist(well.x, well.y, home.x, home.y) < 20 * FP ? [well.tx, well.ty] : null;
     }
     if (type === this.faction.hq) {
-      const [tx, ty] = EXPANSIONS[this.player];
+      const [tx, ty] = expansion(w, this.player);
       return w.canPlace(type, tx, ty, this.player) ? [tx, ty] : null;
     }
     const cx = Math.floor(home.x / FP);

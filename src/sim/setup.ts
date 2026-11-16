@@ -1,5 +1,5 @@
 import { type BuildingDef, DEFS, FACTIONS, type Faction, START } from '../data';
-import { createMap } from '../map';
+import { createMap, rotateFootprint } from '../map';
 import { FP } from './fixed';
 import { World } from './world';
 
@@ -14,30 +14,38 @@ const FIELDS: [number, number][] = [
 const WELLS: [number, number][] = [[17, 6], [26, 33]];
 /** Council spot at the natural expansion. */
 const NATURAL: [number, number] = [27, 26];
-/** Natural expansion council spot (top-left tile) for each player. */
-export const EXPANSIONS: [number, number][] = [NATURAL, [96 - NATURAL[0] - 5, 96 - NATURAL[1] - 5]];
+/** Which corner each player starts in, as quarter turns from the top-left: 1 v 1 stays across the map. */
+export const CORNERS = [0, 2, 1, 3];
 
-/** A new two-player match on the V1 map, each player with its faction's headquarters and workers. */
-export function createMatch(factions: [Faction, Faction] = ['humains', 'humains']): World {
-  const world = new World(createMap());
-  const { width: w, height: h } = world.map;
-  const mirror = (owner: number, tx: number, ty: number, size: number): [number, number] =>
-    owner === 0 ? [tx, ty] : [w - tx - size, h - ty - size];
+/** Natural expansion council spot (top-left tile) for a player. */
+export function expansion(world: World, owner: number): [number, number] {
+  return rotateFootprint(world.map.width, ...NATURAL, 5, CORNERS[owner]);
+}
 
-  for (const owner of [0, 1]) {
-    for (const [tx, ty] of FIELDS) world.spawn('minerai', -1, ...px(mirror(owner, tx, ty, 1)));
-    for (const [tx, ty] of WELLS) world.spawn('puits', -1, ...px(mirror(owner, tx, ty, 3)));
+/**
+ * A new match on the V1 map, two to four players (each its faction's headquarters and workers in its own
+ * corner); `teams[i]` puts player i in a team (default: everyone alone).
+ */
+export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[]): World {
+  const world = new World(createMap(factions.length), factions.length);
+  const w = world.map.width;
+  const corner = (owner: number, tx: number, ty: number, size: number): [number, number] => rotateFootprint(w, tx, ty, size, CORNERS[owner]);
+
+  for (let owner = 0; owner < factions.length; owner++) {
+    for (const [tx, ty] of FIELDS) world.spawn('minerai', -1, ...px(corner(owner, tx, ty, 1)));
+    for (const [tx, ty] of WELLS) world.spawn('puits', -1, ...px(corner(owner, tx, ty, 3)));
     const f = FACTIONS[factions[owner]];
     world.players[owner].faction = factions[owner];
     const hq = DEFS[f.hq] as BuildingDef;
-    world.spawn(f.hq, owner, ...px(mirror(owner, ...MAIN.conseil, hq.size)));
+    world.spawn(f.hq, owner, ...px(corner(owner, ...MAIN.conseil, hq.size)));
     for (let i = 0; i < START.serfs; i++) {
-      const [tx, ty] = mirror(owner, MAIN.serfs[0] + (i % 2), MAIN.serfs[1] + Math.floor(i / 2), 1);
+      const [tx, ty] = corner(owner, MAIN.serfs[0] + (i % 2), MAIN.serfs[1] + Math.floor(i / 2), 1);
       world.spawn(f.worker, owner, tx * FP + FP / 2, ty * FP + FP / 2);
     }
     world.players[owner].minerals = START.minerals;
     world.players[owner].energy = START.energy;
   }
+  if (teams) world.setTeams(teams);
   return world;
 }
 

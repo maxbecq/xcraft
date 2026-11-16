@@ -77,6 +77,8 @@ export interface Player {
   handicap: number;
   /** Forge upgrade levels researched. */
   upgrades: Record<UpgradeLine, number>;
+  /** Players on the same team share their sight and never fight each other. */
+  team: number;
 }
 
 export type Command =
@@ -157,6 +159,8 @@ export class World {
   /** Rappels channelling, with ticks left. */
   recalls: { owner: number; from: number; x: number; y: number; ids: number[]; left: number }[] = [];
   readonly vision: Vision[];
+  /** For each player, the ids of its team (itself included); set with setTeams. */
+  private team: number[][];
   /** Invisible enemy units each player currently detects (updated with vision). */
   readonly detected: Set<number>[];
   /** Zones revealed by a Forge's Observation céleste, with ticks left. */
@@ -168,8 +172,9 @@ export class World {
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
-    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, faction: 'humains' as Faction, minerals: 0, energy: 0, handicap: 100, upgrades: { melee: 0, ranged: 0, armor: 0 } }));
+    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, faction: 'humains' as Faction, minerals: 0, energy: 0, handicap: 100, upgrades: { melee: 0, ranged: 0, armor: 0 }, team: id }));
     this.vision = this.players.map(() => new Vision(this.grid));
+    this.team = this.players.map((p) => [p.id]);
     this.detected = this.players.map(() => new Set());
   }
 
@@ -248,23 +253,23 @@ export class World {
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
-      this.vision[e.owner].reveal(tileOf(e.x), tileOf(e.y), r);
+      for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r);
     }
-    for (const s of this.scans) this.vision[s.owner].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
+    for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
     for (const d of this.detected) d.clear();
     for (const e of this.entities.values()) {
       if (!(e.def as UnitDef).cloaked) continue;
-      for (const s of this.scans) if (s.owner !== e.owner && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) this.detected[s.owner].add(e.id);
+      for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       for (const s of this.entities.values()) {
         const r = (s.def as UnitDef | BuildingDef).detector;
-        if (r && s.owner >= 0 && s.owner !== e.owner && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) this.detected[s.owner].add(e.id);
+        if (r && this.hostile(s.owner, e.owner) && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       }
     }
   }
 
   /** Can this player currently see the entity? */
   sees(player: number, e: Entity): boolean {
-    if (e.owner === player) return true;
+    if (e.owner === player || (e.owner >= 0 && !this.hostile(e.owner, player))) return true;
     if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!e.def.cloaked || this.detected[player].has(e.id));
     const size = (e.def as BuildingDef).size ?? 1;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
@@ -280,12 +285,28 @@ export class World {
     }
   }
 
-  /** A player with no building left is defeated. */
+  /** Two players (owners) at war: neither neutral, and on different teams. */
+  hostile(a: number, b: number): boolean {
+    return a >= 0 && b >= 0 && this.players[a].team !== this.players[b].team;
+  }
+
+  /** Puts players in teams (by default each plays alone): `teams[i]` is player i's team. */
+  setTeams(teams: number[]): void {
+    this.players.forEach((p, i) => (p.team = teams[i] ?? i));
+    this.team = this.players.map((p) => this.players.filter((q) => q.team === p.team).map((q) => q.id));
+  }
+
+  /** The players sharing `player`'s team, itself included. */
+  allies(player: number): Player[] {
+    return this.players.filter((p) => p.team === this.players[player].team);
+  }
+
+  /** A player with no building left is defeated; the last team standing wins (`winner` is one of its players). */
   private judge(): void {
     if (this.winner !== null) return;
     const alive = this.players.filter((p) => [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
-    if (alive.length === 1) this.winner = alive[0].id;
-    else if (alive.length === 0) this.winner = -1;
+    if (alive.length === 0) this.winner = -1;
+    else if (alive.every((p) => p.team === alive[0].team)) this.winner = alive[0].id;
   }
 
   // ---------------------------------------------------------------- players
@@ -351,7 +372,7 @@ export class World {
       case 'attack': {
         const t = this.target(c);
         const fighters = units.filter((e) => 'attack' in e.def && e.def.attack);
-        if (t && t.owner >= 0 && t.owner !== c.player) {
+        if (t && this.hostile(t.owner, c.player)) {
           for (const e of fighters) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
         } else {
           for (const e of fighters) this.setOrder(e, { kind: 'attackMove', x: c.x, y: c.y, target: 0 });
@@ -521,7 +542,7 @@ export class World {
     const movers: Entity[] = [];
     for (const e of units) {
       const worker = (e.def as UnitDef).worker;
-      if (t && t.owner >= 0 && t.owner !== e.owner && (e.def as UnitDef).attack) {
+      if (t && this.hostile(t.owner, e.owner) && (e.def as UnitDef).attack) {
         this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
       } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
         this.setOrder(e, { kind: 'heal', target: t.id });
@@ -931,7 +952,7 @@ export class World {
     let best: Entity | undefined;
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
-      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
+      if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];
