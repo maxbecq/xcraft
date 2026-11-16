@@ -26,7 +26,10 @@ Stats issues du mod SC2 « XC Mod 1.53 ».
 | Stop / Construire (serf) / Annuler | `S` / `B` / `Échap` |
 | Groupes | `Ctrl`+`1`…`9`, rappel `1`…`9` (deux fois : centrer) |
 | Caméra | flèches, bords de l'écran, minimap ; molette pour zoomer |
+| Toute l'armée | `F2` ou bouton ⚔ Armée |
 | Aide | `F1` |
+
+**Sur téléphone ou tablette** (en paysage) : tap pour sélectionner puis tap pour donner l'ordre, double tap pour toutes les unités du même type à l'écran, glisser un doigt pour déplacer la vue, pincer pour zoomer, appui long puis glisser pour un rectangle de sélection.
 
 Paramètres d'URL : `?play` (sans écran titre), `?ai=easy|normal|hard` (difficulté), `?spectate` (IA contre IA, sans brouillard), `?speed=4` (vitesse ×4), `?lowfx` (sans post-traitement, pour les petites machines), `?noink` (sans le trait encré façon BD), `?biome=desert|alien` (planète), `?camp=humains|isdaris` et `?adversaire=humains|isdaris` (factions) — aussi au choix dans le menu.
 

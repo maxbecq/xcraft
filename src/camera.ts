@@ -50,6 +50,13 @@ export class CameraRig {
     this.lookAt(this.target.x + g.x * s, this.target.z + g.z * s);
   }
 
+  /** Drags the view by a finger movement, in screen pixels (the ground follows the finger). */
+  panPixels(dx: number, dy: number): void {
+    const perUnit = window.innerHeight / this.viewHeight;
+    const g = screenToGround(-dx / perUnit, dy / perUnit);
+    this.lookAt(this.target.x + g.x, this.target.z + g.z);
+  }
+
   zoomBy(factor: number): void {
     this.viewHeight = clamp(this.viewHeight * factor, MIN_VIEW, MAX_VIEW);
   }

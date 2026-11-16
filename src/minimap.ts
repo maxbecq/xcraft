@@ -55,7 +55,8 @@ export class Minimap {
     this.toCanvas = new DOMMatrix().translate(size / 2, size / 2).rotate(45).scale(this.scale).translate(-map.width / 2, -map.height / 2);
     this.toMap = this.toCanvas.inverse();
 
-    const point = (e: PointerEvent) => this.toMap.transformPoint(new DOMPoint(e.offsetX, e.offsetY));
+    // The canvas may be drawn smaller than its pixel size (phones): scale the click back.
+    const point = (e: PointerEvent) => this.toMap.transformPoint(new DOMPoint((e.offsetX * this.canvas.width) / this.canvas.clientWidth, (e.offsetY * this.canvas.height) / this.canvas.clientHeight));
     const move = (e: PointerEvent) => {
       const p = point(e);
       this.rig.lookAt(p.x, p.y);

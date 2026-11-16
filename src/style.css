@@ -159,3 +159,39 @@ body.isdaris .res.nrg { color: #5a2a9a; }
 body.isdaris .res.sup, body.isdaris .res.clock { color: #3a3024; }
 body.isdaris .hud-panel .tile, body.isdaris .hud-panel .queue span, body.isdaris .hud-panel .portrait { background: radial-gradient(circle at 50% 40%, #e8eef4, #8a9aa8 85%); }
 body.isdaris .cmd img { filter: brightness(1.4); }
+
+/* ---------------------------------------------------------------- phones and small screens */
+
+canvas { touch-action: none; }
+body.touch { -webkit-tap-highlight-color: transparent; }
+.rotate-hint { display: none; }
+
+@media (max-height: 560px), (max-width: 820px) {
+  .console { height: 94px; grid-template-columns: 90px minmax(110px, 1fr) minmax(200px, 36vw); gap: 6px; padding: 8px 8px calc(4px + env(safe-area-inset-bottom)); }
+  .minimap { width: 80px; height: 80px; }
+  .hud-panel { padding: 6px 8px; font-size: 12px; }
+  .hud-panel .portrait { display: none; }
+  .hud-panel .name { font-size: 18px; margin: 0 0 2px; }
+  .hud-panel .queue span, .hud-panel .tile { width: 30px; height: 30px; }
+  .hud-panel .queue img, .hud-panel .tile img { width: 28px; height: 28px; }
+  .hud-card { grid-auto-rows: 36px; gap: 3px; padding: 3px; }
+  .cmd img { width: 26px; height: 26px; }
+  .cmd kbd { display: none; }
+  .hud-bar { font-size: 16px; gap: 10px; padding: 4px 10px 6px; right: 8px; }
+  .hud-toasts { bottom: 104px; }
+  .tool { font-size: 15px; padding: 4px 9px; }
+  .help { width: min(320px, 70vw); max-height: 60vh; overflow: auto; font-size: 12px; }
+  .menu h1 { font-size: 72px; }
+  .menu button { min-width: 220px; font-size: 18px; padding: 8px 18px; }
+  .menu .row { flex-wrap: wrap; justify-content: center; }
+  .hud-banner h1 { font-size: 60px; }
+}
+
+/* Phones held upright: the battlefield needs landscape. */
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint {
+    display: grid; position: fixed; inset: 0; z-index: 20; place-content: center; text-align: center; gap: 12px;
+    background: rgba(8, 6, 4, 0.92); color: #efe6cf; font: 600 24px/1.2 'Teko', sans-serif; letter-spacing: 0.06em;
+  }
+  .rotate-hint b { font-size: 64px; }
+}

@@ -31,7 +31,10 @@ const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 const PLAYER = 0;
 
 const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+/** Phones and tablets: touch controls, lighter rendering. */
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+renderer.setPixelRatio(Math.min(TOUCH ? 1.25 : 2, window.devicePixelRatio));
+document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(params);
 renderer.toneMappingExposure = biome.exposure;
@@ -101,6 +104,8 @@ const input = new Input(world, map, PLAYER, {
   issue,
   focus: (x, z) => rig.lookAt(x, z),
   click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
+  pan: (dx, dy) => rig.panPixels(dx, dy),
+  zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
 const audio = new Audio();
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
@@ -128,7 +133,10 @@ window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
 
 let mouse: { x: number; y: number } | null = null;
-window.addEventListener('mousemove', (e) => (mouse = { x: e.clientX, y: e.clientY }));
+// Edge scrolling follows the mouse only: fingers drag the map instead.
+window.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
+});
 document.addEventListener('mouseleave', () => (mouse = null));
 window.addEventListener('wheel', (e) => rig.zoomBy(Math.exp(e.deltaY * 0.001)));
 
@@ -164,7 +172,7 @@ let acc = 0;
 // Title screen and help.
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="help">? Aide</button>';
+tools.innerHTML = '<button class="tool" data-t="help">? Aide</button><button class="tool" data-t="army">⚔ Armée</button>';
 const help = document.createElement('div');
 help.className = 'help';
 help.hidden = true;
@@ -175,11 +183,20 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
 Flèches, bords d'écran, minimap : caméra · molette : zoom<br>
-<kbd>F1</kbd> : cette aide`;
-document.body.append(tools, help);
+<kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd> : cette aide
+<h3>Écran tactile</h3>
+Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
+Double tap : toutes les unités de ce type à l'écran<br>
+Glisser : déplacer la vue · pincer : zoomer<br>
+Appui long puis glisser : rectangle de sélection`;
+const rotate = document.createElement('div');
+rotate.className = 'rotate-hint';
+rotate.innerHTML = '<b>⟳</b>TOURNEZ VOTRE TÉLÉPHONE<br>EN MODE PAYSAGE';
+document.body.append(tools, help, rotate);
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).dataset.t;
   if (t === 'help') help.hidden = !help.hidden;
+  if (t === 'army') input.selectArmy();
 });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'F1') {

@@ -16,7 +16,14 @@ export interface InputHooks {
   focus: (x: number, z: number) => void;
   /** Lets the HUD take a click first (e.g. to place a building); true if consumed. */
   click?: (button: number, ground: Vector3 | null, shift: boolean, target?: Entity) => boolean;
+  /** Touch: move the camera by a finger drag (pixels) and zoom by a pinch factor. */
+  pan: (dx: number, dy: number) => void;
+  zoom: (factor: number) => void;
 }
+
+const LONG_PRESS_MS = 400;
+const TAP_SLOP_PX = 12;
+type TouchMode = 'pending' | 'pan' | 'box' | 'pinch';
 
 /** Mouse and keyboard: selection, control groups and right-click orders for the local player. */
 export class Input {
@@ -42,6 +49,7 @@ export class Input {
 
     window.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return this.touchDown(e, canvas);
       const ground = this.groundAt(e.clientX, e.clientY);
       if (this.hooks.click?.(e.button, ground, e.shiftKey, this.entityAt(e.clientX, e.clientY))) return;
       if (e.button === 0) {
@@ -53,12 +61,15 @@ export class Input {
     });
     canvas.addEventListener('pointermove', (e) => {
       this.hover = this.groundAt(e.clientX, e.clientY);
+      if (e.pointerType === 'touch') return this.touchMove(e);
       if (!this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.box.hidden = r.w < DRAG_PX && r.h < DRAG_PX;
       Object.assign(this.box.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
     });
+    canvas.addEventListener('pointercancel', (e) => this.touches.delete(e.pointerId));
     canvas.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'touch') return this.touchUp(e);
       if (e.button !== 0 || !this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.dragStart = null;
@@ -73,6 +84,128 @@ export class Input {
       }
     });
     window.addEventListener('keydown', (e) => this.groupKey(e));
+  }
+
+  // ---------------------------------------------------------------- touch
+
+  private readonly touches = new Map<number, { x: number; y: number; sx: number; sy: number }>();
+  private touchMode: TouchMode | null = null;
+  private longPress = 0;
+  private lastTap = { time: 0, type: '' };
+
+  private touchDown(e: PointerEvent, canvas: HTMLCanvasElement): void {
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // capture is a convenience: the touch still works without it
+    }
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    clearTimeout(this.longPress);
+    if (this.touches.size === 1) {
+      this.touchMode = 'pending';
+      // Hold still a moment, then drag: selection box.
+      this.longPress = window.setTimeout(() => {
+        if (this.touchMode !== 'pending') return;
+        this.touchMode = 'box';
+        this.dragStart = { x: e.clientX, y: e.clientY };
+        this.box.hidden = false;
+        navigator.vibrate?.(15);
+      }, LONG_PRESS_MS);
+    } else {
+      this.touchMode = 'pinch';
+      this.box.hidden = true;
+      this.dragStart = null;
+    }
+  }
+
+  private touchMove(e: PointerEvent): void {
+    const t = this.touches.get(e.pointerId);
+    if (!t) return;
+    const pts = [...this.touches.values()];
+    if (this.touchMode === 'pinch' && pts.length >= 2) {
+      // Pinch: zoom by the change in finger spread, pan with the midpoint.
+      const [a, b] = pts;
+      const before = Math.hypot(a.x - b.x, a.y - b.y);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      t.x = e.clientX;
+      t.y = e.clientY;
+      const after = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (before > 0 && after > 0) this.hooks.zoom(before / after);
+      this.hooks.pan((pts[0].x + pts[1].x) / 2 - mx, (pts[0].y + pts[1].y) / 2 - my);
+      return;
+    }
+    const dx = e.clientX - t.x;
+    const dy = e.clientY - t.y;
+    t.x = e.clientX;
+    t.y = e.clientY;
+    if (this.touchMode === 'pending' && Math.hypot(e.clientX - t.sx, e.clientY - t.sy) > TAP_SLOP_PX) {
+      this.touchMode = 'pan';
+      clearTimeout(this.longPress);
+    }
+    if (this.touchMode === 'pan') this.hooks.pan(dx, dy);
+    if (this.touchMode === 'box' && this.dragStart) {
+      const r = this.rect(this.dragStart, e);
+      Object.assign(this.box.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+    }
+  }
+
+  private touchUp(e: PointerEvent): void {
+    clearTimeout(this.longPress);
+    const mode = this.touchMode;
+    this.touches.delete(e.pointerId);
+    if (this.touches.size > 0) return;
+    this.touchMode = null;
+    if (mode === 'box' && this.dragStart) {
+      const r = this.rect(this.dragStart, e);
+      this.dragStart = null;
+      this.box.hidden = true;
+      const ids = this.inBox(r);
+      if (ids.length) {
+        this.selected.clear();
+        ids.forEach((id) => this.selected.add(id));
+      }
+      return;
+    }
+    if (mode === 'pending') this.tap(e.clientX, e.clientY);
+  }
+
+  /** A tap: select own things; with a selection, order on anything else; double tap selects all of a kind. */
+  private tap(x: number, y: number): void {
+    const ground = this.groundAt(x, y);
+    const target = this.entityAt(x, y);
+    if (this.hooks.click?.(0, ground, false, target)) return;
+    const now = performance.now();
+    if (target && target.owner === this.player) {
+      if (this.lastTap.type === target.type && now - this.lastTap.time < DOUBLE_TAP_MS) {
+        const same = [...this.world.entities.values()].filter((e) => e.owner === this.player && e.type === target.type && this.onScreen(e));
+        same.forEach((e) => this.selected.add(e.id));
+      } else {
+        this.selected.clear();
+        this.selected.add(target.id);
+      }
+      this.lastTap = { time: now, type: target.type };
+      return;
+    }
+    if (this.own().length && ground) {
+      this.orderAt(ground.x, ground.z, target);
+      return;
+    }
+    this.selected.clear();
+    if (target) this.selected.add(target.id); // inspect an enemy or a resource
+  }
+
+  private onScreen(e: Entity): boolean {
+    const s = this.screenOf(e);
+    return s.x >= 0 && s.y >= 0 && s.x <= window.innerWidth && s.y <= window.innerHeight;
+  }
+
+  /** Selects every own combat unit (F2, or the Army button). */
+  selectArmy(): void {
+    this.selected.clear();
+    for (const e of this.world.entities.values()) {
+      if (e.owner === this.player && e.def.kind === 'unit' && !(e.def as { worker?: boolean }).worker) this.selected.add(e.id);
+    }
   }
 
   /** Own selected entities. */
@@ -93,6 +226,10 @@ export class Input {
   }
 
   private groupKey(e: KeyboardEvent): void {
+    if (e.key === 'F2') {
+      e.preventDefault();
+      return this.selectArmy();
+    }
     if (!/^Digit[0-9]$/.test(e.code)) return;
     const k = e.code;
     if (e.ctrlKey || e.metaKey) {
