@@ -101,8 +101,16 @@ const footing = new MeshStandardMaterial({ color: 0x8a7f6c, roughness: 1 });
  * one group per storey (poles, ledgers, a plank deck and a few canvas sheets), so storeys can go up and come down.
  */
 function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storeys: Object3D[] } {
-  const slab = new Mesh(new BoxGeometry(footprint * 0.96, 0.16, footprint * 0.96), footing);
-  slab.position.y = 0.08;
+  // Footing: low stone walls along the outline and across the middle, as dug foundations, not a slab.
+  const half = footprint * 0.46;
+  const wall = 0.2;
+  const high = 0.28;
+  const walls: BufferGeometry[] = [];
+  for (const z of [-half, half]) walls.push(new BoxGeometry(2 * half + wall, high, wall).translate(0, high / 2, z));
+  for (const x of [-half, half]) walls.push(new BoxGeometry(wall, high, 2 * half).translate(x, high / 2, 0));
+  walls.push(new BoxGeometry(2 * half, high * 0.8, wall * 0.8).translate(0, high * 0.4, footprint >= 3 ? -half / 3 : 0));
+  if (footprint >= 3) walls.push(new BoxGeometry(wall * 0.8, high * 0.8, half * 1.3).translate(half / 4, high * 0.4, half / 3));
+  const slab = new Mesh(mergeGeometries(walls), footing);
   const w = size.x / 2 + 0.18;
   const d = size.z / 2 + 0.18;
   const count = Math.max(2, Math.min(5, Math.round(size.y / 0.75)));
