@@ -172,10 +172,18 @@ canvas { touch-action: none; }
 body.touch { -webkit-tap-highlight-color: transparent; }
 
 @media (max-height: 560px), (max-width: 820px) {
-  .console { height: 94px; grid-template-columns: 90px minmax(110px, 1fr) minmax(200px, 36vw); gap: 6px; padding: 8px 8px calc(4px + env(safe-area-inset-bottom)); }
+  .console { height: auto; min-height: 94px; grid-template-columns: 90px minmax(110px, 1fr) minmax(200px, 36vw); gap: 6px; padding: 8px 8px calc(4px + env(safe-area-inset-bottom)); }
   .minimap { width: 80px; height: 80px; }
   .hud-panel { padding: 6px 8px; font-size: 12px; }
   .hud-panel .portrait { display: none; }
+  /* Phones on their side: room is short, so health shows as its bar only and production packs tight. */
+  .hud-panel .hp + .info { display: none; }
+  .hud-panel .hp, .hud-panel .bar { margin: 3px 0; }
+  .hud-panel .info { margin: 1px 0; }
+  .hud-panel .queue { position: absolute; top: 6px; right: 8px; margin: 0; }
+  .hud-panel .hp { max-width: calc(100% - 96px); } /* clear of the queue */
+  .hud-panel .queue span { width: 22px; height: 22px; }
+  .hud-panel .queue img { width: 20px; height: 20px; }
   .hud-panel .name { font-size: 18px; margin: 0 0 2px; }
   .hud-panel .queue span, .hud-panel .tile { width: 30px; height: 30px; }
   .hud-panel .queue img, .hud-panel .tile img { width: 28px; height: 28px; }
