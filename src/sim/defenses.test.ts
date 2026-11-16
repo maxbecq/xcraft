@@ -49,3 +49,22 @@ describe('Fortin', () => {
     expect(inside.every((u) => !u.inside)).toBe(true);
   });
 });
+
+describe('construction', () => {
+  it('finishes a building at full health (Humans built by a worker, Isdaris materialised)', () => {
+    for (const [faction, type] of [['humains', 'grenier'], ['isdaris', 'reservepsy']] as const) {
+      const w = createMatch([faction, 'humains']);
+      const worker = [...w.entities.values()].find((e) => e.owner === 0 && (e.def as { worker?: boolean }).worker)!;
+      w.players[0].minerals = 1000;
+      const [tx, ty] = faction === 'isdaris' ? [17, 18] : [20, 20];
+      w.step([{ player: 0, kind: 'build', ids: [worker.id], type, tx, ty }]);
+      let b;
+      for (let i = 0; i < ticks(60) && !(b && b.buildLeft === 0); i++) {
+        w.step([]);
+        b = [...w.entities.values()].find((e) => e.type === type && e.owner === 0);
+      }
+      expect(b?.buildLeft).toBe(0);
+      expect(b!.hp).toBe(b!.maxHp);
+    }
+  });
+});

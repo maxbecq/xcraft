@@ -36,6 +36,12 @@ function blob(inner: string, outer: string, size = 64, noisy = false): Texture {
   return new CanvasTexture(c);
 }
 
+/** Fire colours: Human scrap burns orange with black smoke, Isdaris plasma blue with pale smoke. */
+const FIRE = {
+  human: { body: [0xff6a10, 0xff8c1a], core: 0xffd27a, tips: 0xc8261a, embers: [0xffb347, 0xff7a2a], smoke: [0x2a2522, 0x3d3631], glow: 0xff6a1f },
+  isdaris: { body: [0x2a7cff, 0x4fa8ff], core: 0xd8f4ff, tips: 0x6a40ff, embers: [0x9fdcff, 0x5ab8ff], smoke: [0x4a5260, 0x5d6573], glow: 0x3f8cff },
+};
+
 /** A tongue of flame: bright at the bottom, tapering upwards, soft edged. */
 function flame(size = 64): Texture {
   const c = document.createElement('canvas');
@@ -228,8 +234,10 @@ export class Effects {
    * core, orange body, red tips), embers flying off, thick smoke rising from above the flames and drifting
    * with the wind, and a flickering glow on the ground.
    */
-  burn(p: Vector3, hp: number, size: number, dt: number, seed = 0): void {
+  burn(p: Vector3, hp: number, size: number, dt: number, seed = 0, isdaris = false): void {
     if (hp > 0.5) return;
+    // Isdaris technology burns blue (plasma), with paler smoke.
+    const c = isdaris ? FIRE.isdaris : FIRE.human;
     const spots = hp < 0.15 ? 3 : hp < 0.3 ? 2 : 1;
     const strength = Math.min(1, (0.5 - hp) * 3 + 0.35);
     for (let s = 0; s < spots; s++) {
@@ -242,24 +250,24 @@ export class Effects {
       if (Math.random() < dt * 40 * strength) {
         const w = rnd(0.12 * size);
         // Normal blending for the body and tips (additive washes out on bright sand), additive for the hot core.
-        this.spawn(this.tex.flame, Math.random() < 0.5 ? 0xff6a10 : 0xff8c1a, at.clone().add(w), new Vector3(0, 1.3 + Math.random() * 0.6, 0).add(rnd(0.25)), 0.6, big * (0.5 + 0.4 * strength), big * 0.15, 0.95, -0.6, false);
-        this.spawn(this.tex.flame, 0xffd27a, at.clone().add(w).setY(at.y - 0.05), new Vector3(0, 1.0 + Math.random() * 0.5, 0), 0.35, big * (0.3 + 0.25 * strength), big * 0.08, 1, -0.4, true);
+        this.spawn(this.tex.flame, Math.random() < 0.5 ? c.body[0] : c.body[1], at.clone().add(w), new Vector3(0, 1.3 + Math.random() * 0.6, 0).add(rnd(0.25)), 0.6, big * (0.5 + 0.4 * strength), big * 0.15, 0.95, -0.6, false);
+        this.spawn(this.tex.flame, c.core, at.clone().add(w).setY(at.y - 0.05), new Vector3(0, 1.0 + Math.random() * 0.5, 0), 0.35, big * (0.3 + 0.25 * strength), big * 0.08, 1, -0.4, true);
       }
       if (Math.random() < dt * 16 * strength) {
-        this.spawn(this.tex.flame, 0xc8261a, at.clone().add(rnd(0.15 * size)).setY(at.y + 0.3 * big), new Vector3(0, 1.6, 0).add(rnd(0.3)), 0.5, big * 0.35, big * 0.05, 0.85, -0.5, false);
+        this.spawn(this.tex.flame, c.tips, at.clone().add(rnd(0.15 * size)).setY(at.y + 0.3 * big), new Vector3(0, 1.6, 0).add(rnd(0.3)), 0.5, big * 0.35, big * 0.05, 0.85, -0.5, false);
       }
       // Embers: tiny sparks carried up and away by the heat.
       if (Math.random() < dt * 7 * strength) {
-        this.spawn(this.tex.glow, Math.random() < 0.5 ? 0xffb347 : 0xff7a2a, at.clone().add(rnd(0.1)), rnd(0.7).setY(1.6 + Math.random() * 1.4), 1.2 + Math.random() * 0.8, 0.06, 0.02, 1, 0.15, true);
+        this.spawn(this.tex.glow, Math.random() < 0.5 ? c.embers[0] : c.embers[1], at.clone().add(rnd(0.1)), rnd(0.7).setY(1.6 + Math.random() * 1.4), 1.2 + Math.random() * 0.8, 0.06, 0.02, 1, 0.15, true);
       }
       // Smoke: dark, thick, from above the flames, widening as it drifts downwind.
       if (Math.random() < dt * (4 + 6 * strength)) {
-        const grey = Math.random() < 0.5 ? 0x2a2522 : 0x3d3631;
+        const grey = Math.random() < 0.5 ? c.smoke[0] : c.smoke[1];
         this.spawn(this.tex.smoke, grey, at.clone().add(rnd(0.15)).setY(at.y + 0.5 + 0.5 * big), new Vector3(0.35 + Math.random() * 0.2, 0.9 + Math.random() * 0.5, 0.12), 3.2, 0.45, 1.8 + strength, 0.5 + 0.2 * strength, -0.05, false);
       }
       // A flickering warm glow where it burns.
       if (Math.random() < dt * 20) {
-        this.spawn(this.tex.glow, 0xff6a1f, at.clone().setY(at.y - 0.1), new Vector3(), 0.12, size * 0.55 * strength * (0.8 + Math.random() * 0.4), size * 0.5 * strength, 0.22, 0, true);
+        this.spawn(this.tex.glow, c.glow, at.clone().setY(at.y - 0.1), new Vector3(), 0.12, size * 0.55 * strength * (0.8 + Math.random() * 0.4), size * 0.5 * strength, 0.22, 0, true);
       }
     }
   }

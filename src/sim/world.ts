@@ -791,7 +791,7 @@ export class World {
         // Each worker on site adds one tick of progress: groups build faster.
         const total = ticks((b.def as BuildingDef).buildTime);
         b.buildLeft--;
-        b.hp = Math.min(b.maxHp, b.hp + Math.max(1, idiv(b.maxHp * 9, total * 10)));
+        this.grow(b, total);
         if (b.buildLeft === 0) this.say(b.owner, `Construction terminée : ${b.def.name}.`, 'done');
         return;
       }
@@ -1051,7 +1051,7 @@ export class World {
       // Materialising: builds itself, hp and shield filling up.
       const total = ticks((b.def as BuildingDef).buildTime);
       b.buildLeft--;
-      b.hp = Math.min(b.maxHp, b.hp + Math.max(1, idiv(b.maxHp * 9, total * 10)));
+      this.grow(b, total);
       if (b.buildLeft === 0) {
         b.shield = b.maxShield;
         this.say(b.owner, `Matérialisation terminée : ${b.def.name}.`, 'done');
@@ -1113,6 +1113,16 @@ export class World {
     const [x, y] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y), b ? this.grid.level(b.tx, b.ty) : -1);
     e.x = e.px = x * FP + FP / 2;
     e.y = e.py = y * FP + FP / 2;
+  }
+
+  /**
+   * A building site gains its hit points as it goes up: from a tenth to all of them over the build, in exact
+   * steps (rounding each tick down used to leave finished buildings short), minus any damage taken meanwhile.
+   */
+  private grow(b: Entity, total: number): void {
+    const done = total - b.buildLeft;
+    const gain = idiv(b.maxHp * 9 * done, total * 10) - idiv(b.maxHp * 9 * (done - 1), total * 10);
+    b.hp = Math.min(b.maxHp, b.hp + gain);
   }
 
   /** A building turned into another, in place, keeping its share of hit points and shields. */
