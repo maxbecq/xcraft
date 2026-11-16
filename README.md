@@ -8,10 +8,13 @@ RTS jouable dans le navigateur, en 3D isométrique façon StarCraft 1, d'après 
 
 ## Camps jouables
 
-- **Humains** (récup', Mad Max / Terran) : Serf, Auxiliaire, Légionnaire-scieur, Soigneur ; Conseil des Échevins, Grenier, Caserne, Mine (sur puits énergétique, produit l'énergie, coûte 4 de logistique).
-- **Isdaris** (SF Art déco) : Robot moissonneur, Archer, Créature (régénère), Druide ; Obélisque, Émetteur, Réserve psy, Portail, Récepteur. Boucliers psy (absorbent les dégâts, se rechargent hors combat, vite près d'une Réserve psy). Bâtiments matérialisés depuis l'orbite : le robot est libre aussitôt, le bâtiment se construit seul, et doit être dans un champ d'énergie (Obélisque, Émetteur) sauf l'Obélisque et le Récepteur.
+- **Humains** (récup', Mad Max / Terran) : Serf, Auxiliaire, Légionnaire-scieur, Soigneur ; Conseil des Échevins, Grenier, Caserne, Mine (sur puits énergétique, produit l'énergie, coûte 4 de logistique), Forge, Tour alchimistique (détecte les unités invisibles).
+  - **Forge** : améliorations en 3 niveaux (attaque corps à corps, attaque à distance : +10 % des dégâts de base par niveau, au moins +1 ; armure infanterie : +1 par niveau), 250/350/450 minerai et autant d'énergie, recherchées dans sa file comme des unités. **Observation céleste** (`O`, 50 énergie) : révèle une zone et y détecte les invisibles pendant 10 s.
+  - Capacités : Auxiliaire **Stimulant** (`T`, −10 PV, attaque et marche 50 % plus vite 8 s), Légionnaire **Charge** (`C`, vitesse doublée 3 s), Soigneur **Peau de roc** (`R`, l'allié le plus blessé à 4 cases subit 5 dégâts de moins par coup pendant 35 s).
+- **Isdaris** (SF Art déco) : Robot moissonneur, Archer, Créature (régénère), Druide, Assassin (invisible en permanence) ; Obélisque, Émetteur, Réserve psy, Portail, Récepteur, Orbe plasma (défense contre les unités au sol, détecte les invisibles). Boucliers psy (absorbent les dégâts, se rechargent hors combat, vite près d'une Réserve psy). Bâtiments matérialisés depuis l'orbite : le robot est libre aussitôt, le bâtiment se construit seul, et doit être dans un champ d'énergie (Obélisque, Émetteur) sauf l'Obélisque et le Récepteur.
 - Ressources : minerai (récolté par les serfs) et énergie (produite par les mines).
 - Brouillard de guerre : on ne voit pas en haut d'une falaise depuis le bas.
+- Invisibilité : une unité invisible n'est vue ni ciblée par l'adversaire que près d'un de ses détecteurs (Tour alchimistique, Orbe plasma, Observation céleste). Ses propres unités invisibles sont dessinées translucides.
 - Victoire : détruire tous les bâtiments adverses.
 - IA : trois difficultés (facile, normale, difficile) par handicap de récolte (70 %, 100 %, 130 %).
 
