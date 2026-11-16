@@ -36,6 +36,23 @@ describe('Isdaris', () => {
     expect(gate.shield).toBe(gate.maxShield);
   });
 
+  it('power only through emitters linked to the obelisk', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [ob] = of(w, 0, 'obelisque');
+    const otx = Math.floor(ob.x / FP);
+    const oty = Math.floor(ob.y / FP);
+    const far = (dx: number) => w.canPlace('emetteur', otx + dx, oty, 0);
+    // Zones of 9 (obelisk) and 7 (emitter) touch up to 16 tiles apart; further, it cannot be placed.
+    expect(far(19)).toBe(false);
+    const a = w.spawn('emetteur', 0, (otx + 14) * FP + FP, oty * FP + FP);
+    const b = w.spawn('emetteur', 0, (otx + 27) * FP + FP, oty * FP + FP);
+    expect(w.powerNetwork(0)).toContain(b);
+    expect(w.powered(0, b.x + 3 * FP, b.y)).toBe(true);
+    w.remove(a); // the link in the middle goes: the far emitter is cut off
+    expect(w.powerNetwork(0)).not.toContain(b);
+    expect(w.powered(0, b.x + 3 * FP, b.y)).toBe(false);
+  });
+
   it('cannot build the other faction’s buildings', () => {
     const w = createMatch(['isdaris', 'humains']);
     w.players[0].minerals = 2000;

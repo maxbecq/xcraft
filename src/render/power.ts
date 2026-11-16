@@ -1,4 +1,4 @@
-import { AdditiveBlending, CanvasTexture, CircleGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -41,7 +41,7 @@ function fieldMap(): CanvasTexture {
  */
 export class PowerNet {
   private readonly root = new Group();
-  private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0 });
+  private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -52,7 +52,8 @@ export class PowerNet {
 
   /** `highlight`: an Isdaris building is being placed, or a power building is selected. */
   update(world: World, sees: (e: Entity) => boolean, highlight: boolean): void {
-    const nodes = [...world.entities.values()].filter((e) => (e.def as BuildingDef).power && e.buildLeft === 0 && sees(e));
+    // Only the linked network powers anything; a cut-off emitter shows no zone and no beam.
+    const nodes = world.players.flatMap((p) => world.powerNetwork(p.id)).filter(sees);
     const key = nodes.map((e) => e.id).join(',');
     if (key !== this.key) this.rebuild(nodes);
     const t = performance.now() / 1000;
@@ -66,9 +67,19 @@ export class PowerNet {
     const at = (e: Entity) => new Vector3(e.x / FP, heightAt(this.map, e.x / FP, e.y / FP), e.y / FP);
     for (const e of nodes) {
       const r = (e.def as BuildingDef).power!;
-      const disc = new Mesh(new CircleGeometry(r, 48), this.fieldMaterial);
-      disc.rotation.x = -Math.PI / 2;
-      disc.position.copy(at(e)).add(new Vector3(0, 0.07, 0));
+      // Draped over the ground, so it runs down cliffs and ramps instead of hanging in the air.
+      const segments = Math.ceil(r * 4);
+      const geo = new PlaneGeometry(r * 2, r * 2, segments, segments);
+      const pos = geo.getAttribute('position');
+      const cx = e.x / FP;
+      const cz = e.y / FP;
+      for (let i = 0; i < pos.count; i++) {
+        const x = cx + pos.getX(i);
+        const z = cz - pos.getY(i);
+        pos.setXYZ(i, x, heightAt(this.map, x, z) + 0.08, z);
+      }
+      geo.computeBoundingSphere();
+      const disc = new Mesh(geo, this.fieldMaterial);
       disc.renderOrder = 1;
       this.root.add(disc);
     }

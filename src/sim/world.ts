@@ -486,7 +486,11 @@ export class World {
       }
       return false;
     }
-    if (def.needsPower && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
+    const cx = tx * FP + (def.size * FP) / 2;
+    const cy = ty * FP + (def.size * FP) / 2;
+    if (def.needsPower && player >= 0 && !this.powered(player, cx, cy)) return false;
+    // An emitter must join the network: its zone has to touch the zone of a linked power building.
+    if (def.power && !def.dropoff && player >= 0 && !this.powerNetwork(player).some((b) => dist(b.x, b.y, cx, cy) <= (def.power! + (b.def as BuildingDef).power!) * FP)) return false;
     let level = -2;
     for (let y = ty; y < ty + def.size; y++) {
       for (let x = tx; x < tx + def.size; x++) {
@@ -499,13 +503,27 @@ export class World {
     return true;
   }
 
-  /** Is a point inside one of the player's power fields (Isdaris)? */
+  /** Is a point inside one of the player's linked power fields (Isdaris)? */
   powered(player: number, x: number, y: number): boolean {
-    for (const b of this.entities.values()) {
-      const r = (b.def as BuildingDef).power;
-      if (b.owner === player && r && b.buildLeft === 0 && dist(b.x, b.y, x, y) <= r * FP) return true;
+    return this.powerNetwork(player).some((b) => dist(b.x, b.y, x, y) <= (b.def as BuildingDef).power! * FP);
+  }
+
+  /**
+   * The player's power buildings that are linked to a main building (Obelisk): finished ones whose
+   * zones touch, step by step. An emitter cut off from it powers nothing.
+   */
+  powerNetwork(player: number): Entity[] {
+    const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0);
+    const linked = nodes.filter((b) => (b.def as BuildingDef).dropoff);
+    const rest = nodes.filter((b) => !(b.def as BuildingDef).dropoff);
+    for (let i = 0; i < linked.length; i++) {
+      const a = linked[i];
+      for (let j = rest.length - 1; j >= 0; j--) {
+        const b = rest[j];
+        if (dist(a.x, a.y, b.x, b.y) <= ((a.def as BuildingDef).power! + (b.def as BuildingDef).power!) * FP) linked.push(...rest.splice(j, 1));
+      }
     }
-    return false;
+    return linked;
   }
 
   /** Damage that goes through shields first; armour only protects hp. */
