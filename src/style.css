@@ -226,7 +226,7 @@ body:not(.isdaris) {
   --phos-dark: #173a1d;
   --screen: radial-gradient(ellipse at 50% 45%, #0f2914 0%, #07150a 70%, #030a05 100%);
   --scan: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px);
-  --lcd: 'VT323', 'Courier New', monospace;
+  --lcd: 'Share Tech Mono', 'Courier New', monospace;
   --glow: 0 0 4px rgba(141, 255, 138, 0.55), 0 0 10px rgba(141, 255, 138, 0.18);
 }
 
@@ -240,8 +240,8 @@ body:not(.isdaris) .slot::after {
 @keyframes lcd-flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.75; } 98% { opacity: 0.95; } }
 @media (prefers-reduced-motion: reduce) { body:not(.isdaris) .slot::after { animation: none; } }
 
-body:not(.isdaris) .hud-panel { font: 20px/1.05 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
-body:not(.isdaris) .hud-panel .name { font: 28px/1 var(--lcd); letter-spacing: 0.06em; color: var(--phos); }
+body:not(.isdaris) .hud-panel { font: 16px/1.05 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
+body:not(.isdaris) .hud-panel .name { font: 22px/1 var(--lcd); letter-spacing: 0.06em; color: var(--phos); }
 body:not(.isdaris) .hud-panel .name::before { content: '> '; color: var(--phos-dim); }
 body:not(.isdaris) .hud-panel .info { opacity: 1; color: var(--phos); }
 /* Bars become rows of LCD segments. */
@@ -258,19 +258,19 @@ body:not(.isdaris) .hud-panel .tile:hover { border-color: var(--phos); }
 /* Commands: cells of the terminal, inverted when pointed at. */
 body:not(.isdaris) .cmd {
   background: rgba(141, 255, 138, 0.04); color: var(--phos); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none;
-  font: 18px/1 var(--lcd); text-shadow: var(--glow);
+  font: 14px/1 var(--lcd); text-shadow: var(--glow);
 }
 body:not(.isdaris) .cmd:hover { background: var(--phos); color: #04120a; border-color: var(--phos); text-shadow: none; }
 body:not(.isdaris) .cmd:hover img { filter: grayscale(1) brightness(0.15); }
 body:not(.isdaris) .cmd.off { filter: none; opacity: 0.38; }
-body:not(.isdaris) .cmd kbd { font: 16px/1 var(--lcd); color: var(--phos); }
+body:not(.isdaris) .cmd kbd { font: 12px/1 var(--lcd); color: var(--phos); }
 body:not(.isdaris) .cmd kbd::before { content: '['; }
 body:not(.isdaris) .cmd kbd::after { content: ']'; }
 body:not(.isdaris) .cmd:hover kbd, body:not(.isdaris) .cmd:hover small { color: #04120a; }
-body:not(.isdaris) .cmd small { font: 15px/1 var(--lcd); color: var(--phos); }
+body:not(.isdaris) .cmd small { font: 12px/1 var(--lcd); color: var(--phos); }
 
 /* Top displays: an LCD strip set in the steel plate. */
-body:not(.isdaris) .hud-bar { gap: 0; padding: 6px 10px 8px; font: 26px/1 var(--lcd); letter-spacing: 0.04em; }
+body:not(.isdaris) .hud-bar { gap: 0; padding: 6px 10px 8px; font: 20px/1 var(--lcd); letter-spacing: 0.04em; }
 body:not(.isdaris) .hud-bar .res {
   padding: 2px 10px; color: var(--phos); text-shadow: var(--glow);
   background: var(--scan), var(--screen); border: 2px solid #1d1b16; box-shadow: inset 0 0 8px #000;
@@ -282,25 +282,25 @@ body:not(.isdaris) .res.sup.full i { background: #ffb347 !important; }
 @keyframes lcd-blink { 50% { opacity: 0.35; } }
 
 body:not(.isdaris) .tool {
-  font: 22px/1 var(--lcd); letter-spacing: 0.04em; color: var(--phos); text-shadow: var(--glow);
+  font: 17px/1 var(--lcd); letter-spacing: 0.04em; color: var(--phos); text-shadow: var(--glow);
   background: var(--scan), var(--screen); border: 2px solid #4a4436; border-radius: 3px; box-shadow: inset 0 0 8px #000, 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 body:not(.isdaris) .tool:hover { background: var(--phos); color: #04120a; text-shadow: none; }
 
 /* Messages print like terminal lines. */
-body:not(.isdaris) .hud-toast { font: 22px/1.1 var(--lcd); color: var(--phos); text-shadow: var(--glow); background: var(--scan), rgba(4, 14, 6, 0.9); border: 1px solid var(--phos-dim); border-radius: 0; }
+body:not(.isdaris) .hud-toast { font: 17px/1.1 var(--lcd); color: var(--phos); text-shadow: var(--glow); background: var(--scan), rgba(4, 14, 6, 0.9); border: 1px solid var(--phos-dim); border-radius: 0; }
 body:not(.isdaris) .hud-toast::before { content: '> '; }
 body:not(.isdaris) .hud-toast.alert { color: #ffb347; border-color: #a86a1e; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); font-size: 24px; }
-body:not(.isdaris) .help { font: 19px/1.25 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
+body:not(.isdaris) .help { font: 15px/1.25 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
 body:not(.isdaris) .pause-box { background: var(--scan), var(--screen); border: 3px solid #4a4436; border-radius: 10px / 14px; box-shadow: inset 0 0 30px #000, 0 8px 30px rgba(0, 0, 0, 0.7); }
-body:not(.isdaris) .pause-box h2 { font: 64px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow); animation: lcd-blink 1.6s steps(1) infinite; }
+body:not(.isdaris) .pause-box h2 { font: 50px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow); animation: lcd-blink 1.6s steps(1) infinite; }
 body:not(.isdaris) .pause-box button {
-  min-width: 280px; padding: 6px 20px; font: 30px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow);
+  min-width: 280px; padding: 6px 20px; font: 23px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow);
   background: rgba(141, 255, 138, 0.04); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none;
 }
 body:not(.isdaris) .pause-box button:hover { background: var(--phos); color: #04120a; text-shadow: none; }
-body:not(.isdaris) .help h3 { font: 28px/1 var(--lcd); color: var(--phos); }
-body:not(.isdaris) .help kbd { font: 17px var(--lcd); color: var(--phos); background: var(--phos-dark); border-color: var(--phos-dim); border-radius: 0; }
+body:not(.isdaris) .help h3 { font: 22px/1 var(--lcd); color: var(--phos); }
+body:not(.isdaris) .help kbd { font: 13px var(--lcd); color: var(--phos); background: var(--phos-dark); border-color: var(--phos-dim); border-radius: 0; }
 
 @media (max-height: 560px), (max-width: 820px) {
   body:not(.isdaris) .hud-panel { font-size: 16px; }

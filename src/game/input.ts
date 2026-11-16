@@ -286,6 +286,8 @@ export class Input {
   private entityAt(x: number, y: number): Entity | undefined {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
+      // Scaffolding, selection rings and light pools are see-through for clicks.
+      if (hit.object.userData.noPick) continue;
       let o: Object3D | null = hit.object;
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);

@@ -184,7 +184,7 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
-  phalangiste: { height: 0.92 },
+  phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
   discobole: { height: 1.0 },
   assassin: { height: 0.9 },
 };
@@ -626,6 +626,17 @@ export class EntityRenderer {
     ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
+    if (e.type === 'creature') {
+      // Créature (one rigid model, no skeleton): it bounds along like a hound — leaps, rocks nose to tail,
+      // stretches in the air and squashes on landing; a lunge forward on each bite.
+      const leap = moving ? Math.abs(Math.sin(phase * 0.75)) : 0;
+      v.model.position.y += (leap * 0.2 - v.model.position.y) * 0.5;
+      ease(body, 'x', moving ? Math.cos(phase * 0.75) * 0.28 : fighting ? -0.25 * fired : 0, 0.35);
+      const stretch = moving ? 1 + (leap - 0.5) * 0.16 : 1 + Math.sin(t * 3 + e.id) * 0.02;
+      const base = body.userData.scale ?? (body.userData.scale = body.scale.x);
+      body.scale.set(base / Math.sqrt(stretch), base * stretch, base / Math.sqrt(stretch));
+      body.position.z += ((fighting ? 0.25 * fired : 0) - body.position.z) * 0.5;
+    }
   }
 
   private create(e: Entity, player: number): View {
@@ -662,12 +673,14 @@ export class EntityRenderer {
       mesh.renderOrder = 2;
       ring.add(mesh);
     }
+    ring.traverse((o) => (o.userData.noPick = true));
     root.add(ring);
     let pools: Object3D | undefined;
     if (POOLS[e.type]) {
       pools = new Group();
       for (const [x, z, r, c] of POOLS[e.type]) {
         const p = pool(r, c);
+        p.userData.noPick = true;
         p.position.set(x, 0.05, z);
         pools.add(p);
       }
@@ -683,6 +696,7 @@ export class EntityRenderer {
       const size = new Box3().setFromObject(body).getSize(new Vector3());
       scaffold = new LineSegments(new EdgesGeometry(new BoxGeometry(size.x * 1.05, size.y * 1.02, size.z * 1.05, 3, 2, 3)), scaffoldMaterial);
       scaffold.position.y = (size.y * 1.02) / 2;
+      scaffold.userData.noPick = true;
       root.add(scaffold);
     }
     this.scene.add(root);
