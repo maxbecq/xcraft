@@ -218,7 +218,7 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   discobole: { height: 1.0 },
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur'];
+const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant'];
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
@@ -481,6 +481,8 @@ function ghost(body: Object3D): void {
 }
 
 interface View {
+  /** Entity type it was built for: a building turned into another gets a new view. */
+  type: string;
   root: Object3D;
   model: Group;
   ring: Object3D;
@@ -571,7 +573,15 @@ export class EntityRenderer {
     });
     this.hostile = (a, b) => world.hostile(a, b);
     for (const e of world.entities.values()) {
+      const old = this.views.get(e.id);
+      if (old && old.type !== e.type) {
+        this.scene.remove(old.root);
+        this.views.delete(e.id);
+      }
       const v = this.views.get(e.id) ?? this.create(e, player);
+      // In a bunker: not drawn (the Fortin shows its occupants in its command card).
+      v.root.visible = !e.inside;
+      if (e.inside) continue;
       if (e.owner >= 0 && e.owner !== player) {
         const now = sees(e);
         v.seen ||= now;
@@ -749,7 +759,7 @@ export class EntityRenderer {
     this.scene.add(root);
     // Buildings and new units face the map centre.
     const facing = Math.atan2(this.map.width / 2 - e.x / FP, this.map.height / 2 - e.y / FP);
-    const v: View = { root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {

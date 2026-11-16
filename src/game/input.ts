@@ -291,7 +291,7 @@ export class Input {
       let o: Object3D | null = hit.object;
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);
-      if (e && hit.object.visible) return e;
+      if (e && hit.object.visible && !e.inside) return e;
     }
     let best: Entity | undefined;
     let bestD = PICK_PX;
@@ -307,7 +307,7 @@ export class Input {
   /** Own units inside a screen rectangle. */
   private inBox(r: { x: number; y: number; w: number; h: number }): number[] {
     return [...this.world.entities.values()]
-      .filter((e) => e.owner === this.player && e.def.kind === 'unit')
+      .filter((e) => e.owner === this.player && e.def.kind === 'unit' && !e.inside)
       .filter((e) => {
         const s = this.screenOf(e);
         return s.x >= r.x && s.x <= r.x + r.w && s.y >= r.y && s.y <= r.y + r.h;

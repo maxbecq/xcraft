@@ -11,6 +11,29 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Teko:wght@500;600&family=Share+Tech+Mono&family=VT323&family=Poiret+One&family=Josefin+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <script>
+      // No silent white screen: any error (a script that fails to load after a deploy, a crash) is shown, with a reload.
+      (function () {
+        function show(text) {
+          if (document.getElementById('crash')) return;
+          var d = document.createElement('div');
+          d.id = 'crash';
+          d.style.cssText = 'position:fixed;inset:0;z-index:99;display:grid;place-content:center;gap:12px;padding:24px;background:#05070d;color:#dceaff;font:16px system-ui;text-align:center';
+          d.innerHTML = '<b style="font-size:22px">Le jeu a rencontré une erreur.</b><div style="opacity:.7;max-width:640px;word-break:break-word"></div><button style="justify-self:center;padding:10px 22px;font:600 16px system-ui;cursor:pointer" onclick="location.reload()">Recharger</button>';
+          d.children[1].textContent = text;
+          document.body.appendChild(d);
+        }
+        window.addEventListener('error', function (e) {
+          var t = e.target;
+          if (t && t !== window) {
+            // Only a missing script stops the game (a missing icon or sound does not).
+            if (t.tagName === 'SCRIPT') show('Fichier introuvable : ' + t.src + ' (mise à jour en cours ? rechargez la page)');
+            return;
+          }
+          if (e.error || e.message) show(String(e.error && e.error.stack || e.message));
+        }, true);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

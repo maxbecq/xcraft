@@ -270,10 +270,22 @@ export class Hud {
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) };
     });
+    if (b.def.bunker) {
+      const ids = same.map((o) => o.id);
+      const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
+      list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
+    }
     if (b.def.ability) {
       const a = ABILITIES[b.def.ability];
       const ready = same.some((o) => o.abilityCd === 0);
       list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true) });
+    }
+    // Isdaris: turning into a stronger building, in place.
+    for (const t of b.def.morphs ?? []) {
+      const d = DEFS[t] as BuildingDef;
+      const idle = same.find((o) => o.queue.length === 0);
+      if (!idle) continue;
+      list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
     }
     // Forge: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {

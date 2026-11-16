@@ -64,9 +64,10 @@ export class AI {
     const serfs = mine.filter((e) => e.type === f.worker);
     // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
     const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
-    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked);
+    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !e.inside);
     const buildings = mine.filter((e) => e.def.kind === 'building');
-    const count = (type: string) => buildings.filter((b) => b.type === type).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
+    // A building turned into another (Récepteur armé…) still counts as what it was.
+    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
     const p = w.players[this.player];
     // Minerals promised to serfs walking to a construction site are already spent.
     let minerals = p.minerals;
@@ -111,6 +112,9 @@ export class AI {
     // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
     if (f.tech && count(f.tech) === 0 && count(f.barracks) >= 3 && minerals > 900 && p.energy > 400 && !w.lacks(this.player, f.tech)) wants.push(f.tech);
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
+    // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
+    const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker);
+    if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running.
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
     const expand = councils < 2 && serfs.length >= this.plan.serfs && (w.tick > ticks(7 * 60) || this.fieldsLeft(home) < 5);
@@ -123,7 +127,7 @@ export class AI {
         if (type === f.hq) continue;
         break; // save up for the most urgent one
       }
-      const spot = this.spot(type, home);
+      const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
       const builder = this.builder(serfs, spot);
       if (!spot || !builder) continue;
       out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1] });
@@ -148,6 +152,24 @@ export class AI {
         out.push({ player: this.player, kind: 'train', ids: [forge.id], type: next });
         minerals -= cost.minerals;
       }
+    }
+    // Isdaris turn buildings into defences: a Récepteur armé from mid-game, Pylônes sanglants when the tech allows.
+    for (const b of buildings) {
+      const into = (b.def as BuildingDef).morphs?.find((m) => {
+        const d = DEFS[m] as BuildingDef;
+        if (b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || p.energy < d.cost.energy) return false;
+        const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
+        return d.energyRate ? minute > 6 && have === 0 : minute > 9 && have < 2;
+      });
+      if (!into || saving) continue;
+      out.push({ player: this.player, kind: 'train', ids: [b.id], type: into });
+      minerals -= (DEFS[into] as BuildingDef).cost.minerals;
+    }
+    // Man the Fortins with soldiers waiting at home.
+    for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && o.buildLeft === 0)) {
+      const room = (b.def as BuildingDef).bunker! - mine.filter((u) => u.inside === b.id || (u.order?.kind === 'enter' && u.order.target === b.id)).length;
+      const crew = army.filter((u) => !this.wave.has(u.id) && (u.def as UnitDef).attack && (u.def as UnitDef).attack!.range > 1 && u.order?.kind !== 'enter').slice(0, Math.max(0, room));
+      if (crew.length) out.push({ player: this.player, kind: 'smart', ids: crew.map((u) => u.id), x: b.x, y: b.y, target: b.id });
     }
     // Heavier units from the second production building, one at a time, when affordable.
     for (const t of buildings.filter((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0)) {

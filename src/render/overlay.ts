@@ -32,7 +32,7 @@ export class Overlay {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     for (const e of world.entities.values()) {
-      if (e.def.kind === 'resource' || !e.maxHp) continue;
+      if (e.def.kind === 'resource' || !e.maxHp || e.inside) continue;
       if (!selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
       if (!sees(e)) continue;
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;

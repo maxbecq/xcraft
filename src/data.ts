@@ -80,6 +80,12 @@ export interface BuildingDef {
   attack?: Attack;
   /** Reveals invisible enemies within this radius (tiles). */
   detector?: number;
+  /** Bunker: how many units can shelter inside. */
+  bunker?: number;
+  /** Buildings this one can turn into, in place, through its production queue (paying the new one's cost). */
+  morphs?: string[];
+  /** Not placed by workers: only reached by turning another building into it. */
+  morphOnly?: boolean;
   /** Upgrades researched here (keys of DEFS, kind 'upgrade'), through the production queue. */
   researches?: string[];
   /** Active ability (key of ABILITIES), aimed at a point of the map. */
@@ -194,6 +200,11 @@ export const DEFS: Record<string, Def> = {
     researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3'],
   },
   // Mod: « Tour anti-air » (detector); no air units yet, so it only detects.
+  // Mod: « Fortin », a bunker for four: soldiers inside are out of reach and shoot one tile farther.
+  fortin: {
+    kind: 'building', name: 'Fortin', hp: 600, armor: 2, size: 2, sight: 8, supply: 0, requires: { caserne: 1 },
+    cost: { minerals: 200, energy: 0 }, buildTime: 30, bunker: 4, faction: 'humains', hotkey: 'B',
+  },
   tour: {
     kind: 'building', name: 'Tour alchimistique', hp: 420, armor: 1, size: 2, sight: 10, supply: 0,
     cost: { minerals: 200, energy: 0 }, buildTime: 25, detector: 10, faction: 'humains', hotkey: 'T',
@@ -230,7 +241,13 @@ export const DEFS: Record<string, Def> = {
   },
   emetteur: {
     kind: 'building', name: 'Émetteur', hp: 300, shield: 300, armor: 1, size: 2, sight: 10, supply: 0,
-    cost: { minerals: 150, energy: 0 }, buildTime: 20, warp: true, power: 7, faction: 'isdaris', hotkey: 'E',
+    cost: { minerals: 150, energy: 0 }, buildTime: 20, warp: true, power: 7, morphs: ['pylonesanglant'], faction: 'isdaris', hotkey: 'E',
+  },
+  // Mod: an Émetteur turned into a « Pylône sanglant » (annihilateur de matière: 200 every 6.6 s, range 10, ground only).
+  // The mod asks for an Orbe de commandement, not in the game yet: a Nano-assembleur stands in.
+  pylonesanglant: {
+    kind: 'building', name: 'Pylône sanglant', hp: 300, shield: 300, armor: 1, size: 2, sight: 10, supply: 0, requires: { nanoassembleur: 1 },
+    cost: { minerals: 500, energy: 350 }, buildTime: 40, attack: { damage: 200, range: 10, cooldown: 6.6 }, warp: true, power: 7, morphOnly: true, faction: 'isdaris', hotkey: 'P',
   },
   reservepsy: {
     kind: 'building', name: 'Réserve psy', hp: 500, shield: 500, armor: 1, size: 2, sight: 8, supply: 12,
@@ -242,7 +259,12 @@ export const DEFS: Record<string, Def> = {
   },
   recepteur: {
     kind: 'building', name: 'Récepteur', hp: 600, shield: 600, armor: 1, size: 3, sight: 5, supply: -4,
-    cost: { minerals: 600, energy: 0 }, buildTime: 30, energyRate: 2.5, warp: true, faction: 'isdaris', hotkey: 'R',
+    cost: { minerals: 600, energy: 0 }, buildTime: 30, energyRate: 2.5, warp: true, morphs: ['recepteurarme'], faction: 'isdaris', hotkey: 'R',
+  },
+  // Mod: « Récepteur armé », the Récepteur with a plasma arc (as the Orbe's), still drawing energy.
+  recepteurarme: {
+    kind: 'building', name: 'Récepteur armé', hp: 700, shield: 700, armor: 1, size: 3, sight: 7, supply: -4,
+    cost: { minerals: 600, energy: 0 }, buildTime: 30, energyRate: 2.5, attack: { damage: 22, range: 7, cooldown: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'A',
   },
   // Mod: « Orbe plasmique ».
   orbe: {
@@ -306,7 +328,7 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   humains: {
     name: 'Humains', worker: 'serf', hq: 'conseil', supply: 'grenier', barracks: 'caserne', extractor: 'mine',
     forge: 'forge', detector: 'tour',
-    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'forge', 'tour'],
+    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'forge', 'tour', 'fortin'],
     army: [['auxiliaire', 5], ['legionnaire', 2], ['soigneur', 2]],
   },
   isdaris: {

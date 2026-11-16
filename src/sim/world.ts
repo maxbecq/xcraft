@@ -12,7 +12,9 @@ export type Order =
   /** `auto`: picked by the unit itself; it gives up beyond its leash point (lx, ly). */
   | { kind: 'attack'; target: number; auto: boolean; lx: number; ly: number }
   | { kind: 'attackMove'; x: number; y: number; target: number }
-  | { kind: 'heal'; target: number };
+  | { kind: 'heal'; target: number }
+  /** Walk into a bunker (Fortin) and take cover there. */
+  | { kind: 'enter'; target: number };
 
 export interface Entity {
   id: number;
@@ -33,6 +35,8 @@ export interface Entity {
   goal: { x: number; y: number } | null;
   path: number[];
   blockedTicks: number;
+  /** The bunker (Fortin) this unit shelters in, or 0. */
+  inside: number;
   /** A target found out of reach (under a cliff, say), left alone until `ignoreUntil`. */
   ignore: number;
   ignoreUntil: number;
@@ -96,6 +100,8 @@ export type Command =
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number }
   | { player: number; kind: 'train'; ids: number[]; type: string }
   | { player: number; kind: 'cancel'; ids: number[] }
+  /** Every unit in the given bunkers walks out. */
+  | { player: number; kind: 'unload'; ids: number[] }
   /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */
   | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number }
   /** Attack a target, or attack-move to a point when there is none. */
@@ -195,7 +201,7 @@ export class World {
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0,
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
-      order: null, goal: null, path: [], blockedTicks: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
+      order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0,
@@ -277,6 +283,7 @@ export class World {
   /** Can this player currently see the entity? */
   sees(player: number, e: Entity): boolean {
     if (e.owner === player || (e.owner >= 0 && !this.hostile(e.owner, player))) return true;
+    if (e.inside) return false;
     if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!e.def.cloaked || this.detected[player].has(e.id));
     const size = (e.def as BuildingDef).size ?? 1;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
@@ -364,11 +371,14 @@ export class World {
     if (!Array.isArray(c.ids) || ('x' in c && !(Number.isSafeInteger(c.x) && Number.isSafeInteger(c.y)))) return;
     if ('tx' in c && !(Number.isSafeInteger(c.tx) && Number.isSafeInteger(c.ty))) return;
     const mine = this.owned(c);
-    const units = mine.filter((e) => e.def.kind === 'unit' && e.held === 0);
+    const units = mine.filter((e) => e.def.kind === 'unit' && e.held === 0 && !e.inside);
     const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);
     switch (c.kind) {
       case 'stop':
         units.forEach((e) => this.setOrder(e, null));
+        return;
+      case 'unload':
+        for (const b of buildings) for (const u of this.entities.values()) if (u.inside === b.id) this.leave(u);
         return;
       case 'move':
         this.moveGroup(units, c.x, c.y);
@@ -408,6 +418,17 @@ export class World {
             if (!this.pay(c.player, up)) return;
             b.queue.push(c.type);
             if (b.queue.length === 1) b.trainLeft = ticks(up.buildTime);
+            return;
+          }
+          if (def.morphs?.includes(c.type)) {
+            // Turning into another building (Isdaris): one at a time, nothing else queued.
+            if (b.queue.length) continue;
+            const lack = this.lacks(c.player, c.type);
+            if (lack) return void this.say(c.player, lack);
+            const into = DEFS[c.type] as BuildingDef;
+            if (!this.pay(c.player, into)) return;
+            b.queue.push(c.type);
+            b.trainLeft = ticks(into.buildTime);
             return;
           }
           if (!def.trains?.includes(c.type)) continue;
@@ -561,6 +582,8 @@ export class World {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
       } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp) {
         this.setOrder(e, { kind: 'construct', target: t.id });
+      } else if (!worker && t && t.owner === e.owner && (t.def as BuildingDef).bunker && t.buildLeft === 0 && (e.def as UnitDef).attack) {
+        this.setOrder(e, { kind: 'enter', target: t.id });
       } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).dropoff && e.carry > 0) {
         this.setOrder(e, { kind: 'gather', target: this.nearestField(e)?.id ?? 0, phase: 'return', timer: 0 });
       } else {
@@ -693,6 +716,7 @@ export class World {
   // ---------------------------------------------------------------- unit behaviour
 
   private think(e: Entity): void {
+    if (e.inside) return this.shelter(e);
     // Caught under a new building (with or without orders): walk out first.
     if (!this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
@@ -707,6 +731,24 @@ export class World {
       case 'attackMove':
       case 'heal':
         return this.fight(e, o);
+      case 'enter': {
+        const b = this.entities.get(o.target);
+        const room = b && (b.def as BuildingDef).bunker;
+        if (!b || !room || b.hp <= 0 || b.owner !== e.owner) return this.setOrder(e, null);
+        const size = (b.def as BuildingDef).size;
+        if (!this.reachRect(e, b.tx, b.ty, size)) return void this.goNear(e, b.tx, b.ty, size);
+        if ([...this.entities.values()].filter((u) => u.inside === b.id).length >= room) {
+          this.say(e.owner, 'Le Fortin est plein.');
+          return this.setOrder(e, null);
+        }
+        this.setOrder(e, null);
+        e.inside = b.id;
+        e.x = e.px = b.x;
+        e.y = e.py = b.y;
+        e.path = [];
+        e.goal = null;
+        return;
+      }
       case 'move':
         if (dist(e.x, e.y, o.x, o.y) <= o.arrive && this.touchesIdleFriend(e)) return this.setOrder(e, null);
         if (this.goTo(e, o.x, o.y)) this.setOrder(e, null);
@@ -893,7 +935,7 @@ export class World {
       return this.strike(e, t);
     }
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || (!this.sees(e.owner, t) && (o.auto || (t.def as UnitDef).cloaked))) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || t.inside || (!this.sees(e.owner, t) && (o.auto || (t.def as UnitDef).cloaked))) return this.setOrder(e, null);
     if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
       // Chased too far: walk back.
       return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
@@ -978,6 +1020,7 @@ export class World {
     for (const t of this.entities.values()) {
       if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
       if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
+      if (t.inside) continue; // sheltering in a bunker: hit the bunker
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];
@@ -1031,6 +1074,7 @@ export class World {
     if (b.queue.length && --b.trainLeft <= 0) {
       const type = b.queue.shift()!;
       const up = DEFS[type];
+      if (up.kind === 'building') return this.morph(b, type);
       if (up.kind === 'upgrade') {
         this.players[b.owner].upgrades[up.line] = up.level;
         this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');
@@ -1044,6 +1088,46 @@ export class World {
       else if (b.rally) this.setOrder(u, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
       if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UnitDef | UpgradeDef).buildTime);
     }
+  }
+
+  /**
+   * A unit sheltering in a bunker: out of reach, it shoots from inside with one more tile of range
+   * (mod: « Bonus 1 portée »); thrown out if the bunker falls.
+   */
+  private shelter(e: Entity): void {
+    const b = this.entities.get(e.inside);
+    if (!b || b.hp <= 0) return this.leave(e);
+    const a = (e.def as UnitDef).attack;
+    if (e.cooldown > 0 || !a) return;
+    const range = toFp(a.range + 1) + (b.def as BuildingDef).size * FP / 2;
+    const t = this.enemyNear(b, range);
+    if (!t) return;
+    e.cooldown = ticks(a.cooldown);
+    this.hit({ ...e, x: b.x, y: b.y } as Entity, t, a);
+  }
+
+  /** Out of a bunker, on the nearest open tile beside it. */
+  private leave(e: Entity): void {
+    const b = this.entities.get(e.inside);
+    e.inside = 0;
+    const [x, y] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y), b ? this.grid.level(b.tx, b.ty) : -1);
+    e.x = e.px = x * FP + FP / 2;
+    e.y = e.py = y * FP + FP / 2;
+  }
+
+  /** A building turned into another, in place, keeping its share of hit points and shields. */
+  private morph(b: Entity, type: string): void {
+    const def = DEFS[type] as BuildingDef;
+    const hp = b.hp / b.maxHp;
+    const shield = b.maxShield ? b.shield / b.maxShield : 1;
+    b.type = type;
+    b.def = def;
+    b.maxHp = def.hp;
+    b.hp = Math.max(1, Math.round(def.hp * hp));
+    b.maxShield = def.shield ?? 0;
+    b.shield = Math.round(b.maxShield * shield);
+    b.cooldown = 0;
+    this.say(b.owner, `Transformation terminée : ${def.name}.`, 'done');
   }
 
   /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
@@ -1182,7 +1266,7 @@ export class World {
   private separate(): void {
     const buckets = new Map<number, Entity[]>();
     const key = (x: number, y: number) => y * 1024 + x;
-    const units = [...this.entities.values()].filter((e) => e.def.kind === 'unit' && e.order?.kind !== 'gather');
+    const units = [...this.entities.values()].filter((e) => e.def.kind === 'unit' && e.order?.kind !== 'gather' && !e.inside);
     for (const e of units) {
       const k = key(tileOf(e.x) >> 1, tileOf(e.y) >> 1);
       let b = buckets.get(k);
