@@ -66,7 +66,7 @@ const POOLS: Record<string, [number, number, number, number][]> = {
   caserne: [[0, 1.6, 1.3, 0xffb050]],
   grenier: [[0, 1.0, 0.8, 0xffc070]],
   mine: [[1.0, -0.9, 1.0, 0xff8030], [0.3, 0.6, 1.0, 0xb060ff]],
-  obelisque: [[0, 0, 3.2, 0x40d8ff]],
+  obelisque: [[0, 0, 2.6, 0xffd070]],
   emetteur: [[0, 0, 1.6, 0x40d8ff]],
   reservepsy: [[0, 0, 1.5, 0xb070ff]],
   portail: [[0, 0.4, 1.8, 0x40d8ff]],

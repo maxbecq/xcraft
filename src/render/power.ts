@@ -1,11 +1,47 @@
-import { AdditiveBlending, CanvasTexture, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
+/**
+ * Additive light with soft edges: fades where the surface turns away from the eye (the silhouette of the
+ * cone) and towards both ends.
+ */
+function softLight(color: number): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { color: { value: new Color(color) }, opacity: { value: 1 } },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying float vAlong;
+      void main() {
+        vec4 p = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView = normalize(-p.xyz);
+        vAlong = uv.y;
+        gl_Position = projectionMatrix * p;
+      }`,
+    fragmentShader: `
+      uniform vec3 color;
+      uniform float opacity;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      varying float vAlong;
+      void main() {
+        float facing = pow(abs(dot(normalize(vNormal), normalize(vView))), 1.6);
+        float ends = smoothstep(0.0, 0.08, vAlong) * smoothstep(1.0, 0.96, vAlong);
+        gl_FragColor = vec4(color, opacity * facing * ends);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+}
+
 /** Where the beam leaves each power building, above its ground (model heights). */
-const BEAM_TOP: Record<string, number> = { obelisque: 5.6, emetteur: 3.1 };
+const BEAM_TOP: Record<string, number> = { obelisque: 6.9, emetteur: 3.1 };
 
 let fieldTexture: CanvasTexture | null = null;
 /** A soft disc with a bright rim and faint Art Deco rays: the emission zone seen from above. */
@@ -47,9 +83,11 @@ export class PowerNet {
   private key = '';
   /** Materialising buildings: a big pulsing beam from the nearest Obelisk to each, by building id. */
   private readonly warps = new Map<number, Group>();
-  private readonly warpCore = new MeshBasicMaterial({ color: 0xfff6d8, transparent: true, depthWrite: false, blending: AdditiveBlending });
-  private readonly warpGlow = new MeshBasicMaterial({ color: 0xffcf6a, transparent: true, depthWrite: false, blending: AdditiveBlending });
-  private readonly unitBeam = new CylinderGeometry(1, 1, 1, 10, 1, true);
+  private readonly warpCore = softLight(0xfff6d8);
+  private readonly warpGlow = softLight(0xffcf6a);
+  /** A cone along Y; aimed with lookAt, its top (wide) lands on the building site, its narrow bottom at the Obelisk. */
+  private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
+  private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
   constructor(scene: Object3D, private readonly map: GameMap) {
     scene.add(this.root);
@@ -88,7 +126,7 @@ export class PowerNet {
         const to = at(b, 0.3);
         const length = from.distanceTo(to);
         // A wide soft shaft around a bright core, from the Obelisk's tip down onto the site.
-        for (const [radius, material] of [[0.12, this.warpCore], [0.45, this.warpGlow]] as const) {
+        for (const [radius, material] of [[0.5, this.warpCore], [1.6, this.warpGlow]] as const) {
           const m = new Mesh(this.unitBeam, material);
           m.scale.set(radius, length, radius);
           m.position.copy(from).add(to).multiplyScalar(0.5);
@@ -98,7 +136,7 @@ export class PowerNet {
         }
         // Where it lands: a column of light the size of the building.
         const size = (b.def as BuildingDef).size;
-        const column = new Mesh(this.unitBeam, this.warpGlow);
+        const column = new Mesh(this.unitColumn, this.warpGlow);
         column.scale.set(size * 0.45, 3, size * 0.45);
         column.position.copy(at(b, 1.5));
         g.add(column);
@@ -111,8 +149,8 @@ export class PowerNet {
       g.removeFromParent();
       this.warps.delete(id);
     }
-    this.warpCore.opacity = 0.75 + 0.25 * Math.sin(t * 9);
-    this.warpGlow.opacity = 0.22 + 0.1 * Math.sin(t * 5.3);
+    this.warpCore.uniforms.opacity.value = 0.55 + 0.2 * Math.sin(t * 9);
+    this.warpGlow.uniforms.opacity.value = 0.3 + 0.12 * Math.sin(t * 5.3);
   }
 
   private rebuild(nodes: Entity[]): void {
