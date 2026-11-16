@@ -193,6 +193,7 @@ body.touch { -webkit-tap-highlight-color: transparent; }
     padding: 8px 8px calc(6px + env(safe-area-inset-bottom));
   }
   .minimap { width: 76px; height: 76px; }
+  .hud-panel .portrait { display: block; width: 64px; height: 64px; margin: 0 8px 0 0; }
   .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 46px; min-height: 98px; }
   .cmd img { width: 30px; height: 30px; }
   .hud-toasts { bottom: calc(220px + env(safe-area-inset-bottom)); width: 90vw; }
