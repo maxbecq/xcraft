@@ -716,7 +716,9 @@ export class EntityRenderer {
       ring.add(mesh);
     }
     // Ticks just outside the ring, turning (see sync).
-    const dial = new Mesh(new PlaneGeometry((r + 0.42) * 2, (r + 0.42) * 2), dialMaterial(core));
+    // A ring, not a square: a flat quad shows up in the ambient occlusion and ink passes as a pale rectangle.
+    // RingGeometry's planar UVs line the round tick texture up with it.
+    const dial = new Mesh(new RingGeometry((r + 0.42) * 0.74, r + 0.42, 64), dialMaterial(core));
     dial.rotation.x = -Math.PI / 2;
     dial.position.y = 0.07;
     dial.renderOrder = 2;
