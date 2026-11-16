@@ -140,7 +140,7 @@ export class Hud {
 
   private attack(x: number, z: number, target?: Entity): void {
     const ids = this.input.own().map((e) => e.id);
-    const enemy = target && target.owner >= 0 && target.owner !== this.player ? target.id : undefined;
+    const enemy = target && this.world.hostile(target.owner, this.player) ? target.id : undefined;
     this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy });
   }
 

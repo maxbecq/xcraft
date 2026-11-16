@@ -60,6 +60,9 @@ export class Overlay {
     this.drawMarks(camera, w, h);
   }
 
+  /** Whether two players are at war; set by the game (teams). */
+  hostile = (a: number, b: number) => a >= 0 && b >= 0 && a !== b;
+
   /**
    * Shows that an order was taken: a ring that tightens on the spot (green: move, gold: harvest,
    * red: attack) and, on a resource, how much is left in it.
@@ -72,7 +75,7 @@ export class Overlay {
       label = Number.isFinite(target.amount) ? `${target.def.name} : ${target.amount}` : `${target.def.name} : inépuisable`;
       x = target.x / FP;
       z = target.y / FP;
-    } else if (target && target.owner !== player && target.owner >= 0) {
+    } else if (target && this.hostile(target.owner, player)) {
       color = '#ff6a4a';
       x = target.x / FP;
       z = target.y / FP;

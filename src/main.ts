@@ -38,7 +38,8 @@ const REPLAY = params.has('replay') ? readReplay() : null;
 const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
-const PLAYER = NET_ROLE === 'join' ? 1 : 0;
+const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
+const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
 
 const renderer = new WebGLRenderer({ antialias: true });
 /** Phones and tablets: touch controls, lighter rendering. */
@@ -61,23 +62,42 @@ const stored = (k: string) => {
   }
 };
 const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 'humains');
-/** Player 0's and player 1's factions (`camp` is player 0's, also over the network where the host is player 0). */
-const factions: [Faction, Faction] = REPLAY
-  ? REPLAY.factions
-  : [asFaction(params.get('camp') ?? stored('xcraft.camp')), asFaction(params.get('adversaire') ?? stored('xcraft.adversaire'))];
+/** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
+interface Slot {
+  control: string;
+  faction: Faction;
+  team: number;
+}
+/**
+ * The players: `?p=you.humains.0,hard.isdaris.1,…` (controller, faction, team for each), else the two-player
+ * parameters (`camp` and `adversaire` are player 0's and player 1's factions, also over the network).
+ */
+const slots: Slot[] = REPLAY
+  ? REPLAY.factions.map((faction, i) => ({ control: 'replay', faction, team: REPLAY.teams?.[i] ?? i }))
+  : params.has('p')
+    ? params.get('p')!.split(',').slice(0, 4).map((s, i) => {
+        const [control, faction, team] = s.split('.');
+        return { control: control || 'normal', faction: asFaction(faction), team: Number(team) || i };
+      })
+    : [
+        { control: NET_ROLE ? 'net' : SPECTATE ? (params.get('ai0') ?? 'normal') : 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 },
+        { control: NET_ROLE ? 'net' : (params.get(SPECTATE ? 'ai1' : 'ai') ?? 'normal'), faction: asFaction(params.get('adversaire') ?? stored('xcraft.adversaire')), team: 1 },
+      ];
+if (slots.length < 2) slots.push({ control: 'normal', faction: 'humains', team: 1 });
+const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction] = factions;
-const world = createMatch(factions);
+const world = createMatch(factions, slots.map((s) => s.team));
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
-const ais = REPLAY || NET_ROLE ? [] : SPECTATE ? [new AI(world, 0), new AI(world, 1)] : [new AI(world, 1)];
-if (!SPECTATE && !NET_ROLE) world.players[1].handicap = DIFFICULTY[params.get('ai') ?? 'normal'] ?? 100;
-else if (!REPLAY && !ATTRACT) [0, 1].forEach((i) => (world.players[i].handicap = DIFFICULTY[params.get(`ai${i}`) ?? 'normal'] ?? 100));
+// Every player not played by someone is an AI, its difficulty a harvesting handicap.
+const ais = REPLAY || NET_ROLE ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i)]));
+if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
-const record: Replay = { v: 1, factions: [myFaction, foeFaction], biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+const record: Replay = { v: 1, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
 const replayed = new Map(REPLAY?.ticks ?? []);
 // A game left before its end is kept too.
 window.addEventListener('pagehide', () => {
@@ -122,7 +142,7 @@ function showNet(status: string, detail?: string): void {
   }
   netBanner.hidden = false;
   if (status === 'waiting' && PLAYER === 0) {
-    const code = matchCode(ROOM, factions, biome.id);
+    const code = matchCode(ROOM, [factions[0], factions[1]], biome.id);
     const link = `${location.origin}${location.pathname}?net=join&room=${ROOM}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}`;
     netBanner.innerHTML = `<h2>En attente de votre adversaire</h2>
       <p>Donnez-lui ce code (menu « Rejoindre une partie ») :</p><div class="net-code">${code}</div>
@@ -190,6 +210,7 @@ minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 const overlay = new Overlay(map);
+overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map);
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
@@ -347,24 +368,32 @@ if (!ATTRACT) {
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */
 interface Setup {
-  sides: { faction: Faction; control: string }[];
+  /** Four seats; `control` 'none' leaves a seat empty (the third and fourth by default). */
+  sides: { faction: Faction; control: string; team: number }[];
   biome: string;
   speed: number;
 }
-const CONTROLS: Record<string, string> = { you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile', online: 'Ami en ligne' };
+const CONTROLS: Record<string, string> = { none: 'Fermé', you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile', online: 'Ami en ligne' };
 
 function readSetup(): Setup {
   const fallback: Setup = {
     sides: [
-      { faction: myFaction, control: 'you' },
-      { faction: foeFaction, control: 'normal' },
+      { faction: myFaction, control: 'you', team: 0 },
+      { faction: foeFaction, control: 'normal', team: 1 },
+      { faction: 'humains', control: 'none', team: 2 },
+      { faction: 'isdaris', control: 'none', team: 3 },
     ],
     biome: biome.id,
     speed: 2,
   };
   try {
     const s = JSON.parse(stored('xcraft.setup') ?? 'null') as Setup | null;
-    if (s?.sides?.length === 2 && BIOMES[s.biome]) return s;
+    if (s && Array.isArray(s.sides) && s.sides.length >= 2 && BIOMES[s.biome]) {
+      // Older saves had two seats and no teams.
+      const old = s.sides;
+      s.sides = [0, 1, 2, 3].map((i) => ({ ...fallback.sides[i], ...old[i], team: old[i]?.team ?? i }));
+      return s;
+    }
   } catch {
     // a broken entry: start over
   }
@@ -397,18 +426,22 @@ function showSetup(menu: HTMLElement, s: Setup): void {
       .map(([v, label]) => `<button data-k="${key}" data-v="${v}"${v === now ? ' class="on"' : ''}>${label}</button>`)
       .join('')}</div>`;
   const factions = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
+  const seated = s.sides.filter((x) => x.control !== 'none').length;
   const side = (i: number) => {
     const controls: Record<string, string> = { ...CONTROLS };
-    if (i === 1) delete controls.you; // the local player is always the first side
-    // A friend online plays the second side, against you only.
-    if (i === 0 || s.sides[0].control !== 'you') delete controls.online;
+    if (i > 0) delete controls.you; // the local player is always the first side
+    if (i < 2) delete controls.none; // at least two players
+    // A friend online plays the second side, one against one only (for now).
+    if (i !== 1 || s.sides[0].control !== 'you' || s.sides[2].control !== 'none' || s.sides[3].control !== 'none') delete controls.online;
     const color = `#${TEAM_COLORS[i].toString(16).padStart(6, '0')}`;
-    return `<fieldset><legend style="color:${color}">Joueur ${i + 1}</legend>${pick(`f${i}`, factions, s.sides[i].faction)}${pick(`c${i}`, controls, s.sides[i].control)}</fieldset>`;
+    const open = s.sides[i].control !== 'none';
+    const teams = seated > 2 && open ? pick(`t${i}`, { 0: 'Équipe 1', 1: 'Équipe 2', 2: 'Équipe 3', 3: 'Équipe 4' }, String(s.sides[i].team)) : '';
+    return `<fieldset><legend style="color:${color}">Joueur ${i + 1}</legend>${open ? pick(`f${i}`, factions, s.sides[i].faction) : ''}${pick(`c${i}`, controls, s.sides[i].control)}${teams}</fieldset>`;
   };
   const watching = s.sides[0].control !== 'you';
   menu.className = 'menu setup';
   menu.innerHTML = `<h2>Nouvelle partie</h2>
-    ${side(0)}${side(1)}
+    ${side(0)}${side(1)}${side(2)}${side(3)}
     <fieldset><legend>Planète</legend>${pick('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</fieldset>
     ${watching ? `<fieldset><legend>Vitesse</legend>${pick('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</fieldset>` : ''}
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
@@ -420,8 +453,10 @@ function showSetup(menu: HTMLElement, s: Setup): void {
       if (k === 'biome') s.biome = v;
       else if (k === 'speed') s.speed = Number(v);
       else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
+      else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
       else s.sides[Number(k[1])].control = v;
-      if (s.sides[0].control !== 'you' && s.sides[1].control === 'online') s.sides[1].control = 'normal';
+      const crowd = s.sides[2].control !== 'none' || s.sides[3].control !== 'none';
+      if ((s.sides[0].control !== 'you' || crowd) && s.sides[1].control === 'online') s.sides[1].control = 'normal';
       showSetup(menu, s);
     } else if (m === 'back') showHome();
     else if (m === 'go') launch(s);
@@ -469,8 +504,12 @@ function launch(s: Setup): void {
     // the URL carries it all
   }
   const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}`;
+  const seated = s.sides.filter((x) => x.control !== 'none');
+  // With two players, each is its own team whatever was picked; with more, teams as chosen.
+  const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);
+  const p = seated.map((x, i) => `${x.control}.${x.faction}.${teams ? x.team : i}`).join(',');
   if (b.control === 'online') location.search = `?net=host&room=${newRoom()}&${keep}`;
-  else location.search = a.control === 'you' ? `?play&ai=${b.control}&${keep}` : `?spectate&speed=${s.speed}&ai0=${a.control}&ai1=${b.control}&${keep}`;
+  else location.search = a.control === 'you' ? `?play&p=${p}&${keep}` : `?spectate&speed=${s.speed}&p=${p}&${keep}`;
 }
 
 function start(): void {
@@ -569,7 +608,9 @@ function start(): void {
 /** A game as the commands the simulation took, tick by tick; replaying them rebuilds it exactly. */
 interface Replay {
   v: 1;
-  factions: [Faction, Faction];
+  factions: Faction[];
+  /** Each player's team; missing in replays from before teams (everyone alone). */
+  teams?: number[];
   biome: string;
   handicap: number[];
   ticks: [number, Command[]][];

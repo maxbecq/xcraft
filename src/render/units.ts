@@ -11,7 +11,8 @@ import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
-export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
+/** Player colours: blue, red, green, purple. */
+export const TEAM_COLORS = [0x3a7bd5, 0xc8402f, 0x38b04c, 0x9a52d8];
 /** Turning speed of units, in radians per second. */
 const TURN_SPEED = 9;
 
@@ -56,6 +57,7 @@ const ring = (color: number, opacity: number) => new MeshBasicMaterial({ color, 
 const RINGS = {
   own: [ring(0x4dff6a, 0.95), ring(0x4dff6a, 0.22)],
   enemy: [ring(0xff4a3a, 0.95), ring(0xff4a3a, 0.22)],
+  ally: [ring(0x5ad8ff, 0.95), ring(0x5ad8ff, 0.22)],
   neutral: [ring(0xffe27a, 0.95), ring(0xffe27a, 0.22)],
 };
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
@@ -493,6 +495,9 @@ export class EntityRenderer {
   /** Called when a building first appears (to clear scenery under it). */
   onBuilding: (e: Entity) => void = () => {};
 
+  /** Whether two players are at war (set from the world at each sync). */
+  private hostile = (a: number, b: number) => a !== b;
+
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
   /** All entity roots, for picking; each carries its entity id in userData. */
@@ -532,6 +537,7 @@ export class EntityRenderer {
       this.scene.remove(d.v.root);
       return false;
     });
+    this.hostile = (a, b) => world.hostile(a, b);
     for (const e of world.entities.values()) {
       const v = this.views.get(e.id) ?? this.create(e, player);
       if (e.owner >= 0 && e.owner !== player) {
@@ -645,7 +651,7 @@ export class EntityRenderer {
       cargo.position.set(0, 0.62, -0.2);
       pivot.add(cargo);
     }
-    const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : RINGS.enemy;
+    const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
     for (const [inner, outer, m] of [[r, r + 0.09, core], [r + 0.09, r + 0.3, halo]] as const) {
       const mesh = new Mesh(new RingGeometry(inner, outer, 48), m);
@@ -678,7 +684,8 @@ export class EntityRenderer {
       root.add(scaffold);
     }
     this.scene.add(root);
-    const facing = e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75;
+    // Buildings and new units face the map centre.
+    const facing = Math.atan2(this.map.width / 2 - e.x / FP, this.map.height / 2 - e.y / FP);
     const v: View = { root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     const clips = body.userData.clips as AnimationClip[] | undefined;

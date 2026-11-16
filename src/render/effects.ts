@@ -1,3 +1,4 @@
+import { TEAM_COLORS } from './units';
 import {
   AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Color, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
   type Scene, Sprite,
@@ -152,7 +153,7 @@ export class Effects {
       this.spawn(this.tex.smoke, 0x8a7a62, p.clone().add(rnd(0.2)), rnd(0.8).setY(0.3 + Math.random() * 0.4), 0.8, 0.3, 0.9, 0.7, 0, false);
     }
     // A splash of the fallen unit's colour.
-    this.spawn(this.tex.glow, owner === 0 ? 0x3a7bd5 : 0xc8402f, p, new Vector3(0, 0.4, 0), 0.3, 0.2, 0.5, 0.8, 0, true);
+    this.spawn(this.tex.glow, TEAM_COLORS[owner] ?? 0xffffff, p, new Vector3(0, 0.4, 0), 0.3, 0.2, 0.5, 0.8, 0, true);
   }
 
   private explosion(p: Vector3, size: number): void {
