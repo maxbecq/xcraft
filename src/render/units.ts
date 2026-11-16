@@ -113,13 +113,16 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: 'rifl
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
 };
-const STATIC_MESHY = ['moissonneur', 'creature'];
+const STATIC_MESHY = ['moissonneur', 'creature', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur'];
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
 
-/** Repaints the texture's blue team stripes in the team colour, with a faint glow. */
-function teamSkin(source: MeshStandardMaterial, color: number): MeshStandardMaterial {
+/**
+ * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
+ * dull rust-and-dust textures (Humans): more saturation and light, so units read on the ground.
+ */
+function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
   m.onBeforeCompile = (shader) => {
@@ -127,15 +130,18 @@ function teamSkin(source: MeshStandardMaterial, color: number): MeshStandardMate
     shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 paint = diffuseColor.rgb;
-        float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r, paint.g));
+        float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
+        ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.5) * 1.55 + 0.015, 1.0);' : ''}
         diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += teamColor * teamMask * 0.3;`);
   };
-  m.customProgramCacheKey = () => `team-${color}`;
-  rimLight(m, 0.45);
+  m.customProgramCacheKey = () => `team-${color}-${vivid}`;
+  rimLight(m, rim);
   return m;
 }
+
+const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'humains';
 
 /** Loads the Blender models; types without one keep their placeholder. */
 export async function loadModels(types: string[]): Promise<void> {
@@ -148,7 +154,7 @@ export async function loadModels(types: string[]): Promise<void> {
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c)));
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type))));
           });
           templates.set(type, gltf.scene);
           return;
@@ -167,10 +173,11 @@ export async function loadModels(types: string[]): Promise<void> {
           });
           if (skin && character.weapon) {
             const weapon = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${character.weapon}-meshy.glb`)).scene;
+            if (isHuman(type)) weapon.traverse((o) => o instanceof Mesh && (o.material as MeshStandardMaterial).color.multiplyScalar(1.4));
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (skin) {
-            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c)) });
+            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, isHuman(type))) });
             return;
           }
         } catch {

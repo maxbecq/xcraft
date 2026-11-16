@@ -1,7 +1,10 @@
 """Normalise a Meshy .glb for the game: one mesh, feet on the ground at the origin, facing the
 game's forward, scaled to a target height, texture shrunk for the web.
 Usage: Blender -b --factory-startup -P tools/meshy/normalize.py -- in.glb out.glb height [texture_px] [faces]
+With FOOTPRINT=<width> in the environment (buildings), the model is scaled to fit that square footprint,
+and height is only a maximum.
 """
+import os
 import sys
 
 import bpy
@@ -29,6 +32,8 @@ xs = [v.co.x for v in o.data.vertices]
 ys = [v.co.y for v in o.data.vertices]
 zs = [v.co.z for v in o.data.vertices]
 s = height / (max(zs) - min(zs))
+if os.environ.get("FOOTPRINT"):
+    s = min(s, float(os.environ["FOOTPRINT"]) / max(max(xs) - min(xs), max(ys) - min(ys)))
 cx, cy, z0 = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2, min(zs)
 for v in o.data.vertices:
     v.co.x = (v.co.x - cx) * s
