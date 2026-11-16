@@ -33,6 +33,13 @@ export interface Entity {
   goal: { x: number; y: number } | null;
   path: number[];
   blockedTicks: number;
+  /** A target found out of reach (under a cliff, say), left alone until `ignoreUntil`. */
+  ignore: number;
+  ignoreUntil: number;
+  /** No new fight picked on the way until this tick (after giving up on an unreachable target). */
+  calmUntil: number;
+  /** Ticks spent at the end of its path without being able to strike its target. */
+  shortTicks: number;
   /** Replans in a row that went nowhere; build orders give up after a few. */
   stuck: number;
   /** Buildings: top-left tile, ticks of construction left (0 = complete), training queue. */
@@ -188,7 +195,7 @@ export class World {
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0,
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
-      order: null, goal: null, path: [], blockedTicks: 0, stuck: 0,
+      order: null, goal: null, path: [], blockedTicks: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0,
@@ -873,7 +880,7 @@ export class World {
         }
       }
       if (!t || t.hp <= 0 || !this.sees(e.owner, t) || this.gap(e, t) > (def.sight + 2) * FP) {
-        t = (this.tick + e.id) % 4 === 0 ? this.enemyNear(e, def.sight * FP) : undefined;
+        t = (this.tick + e.id) % 4 === 0 && this.tick >= e.calmUntil ? this.enemyNear(e, def.sight * FP) : undefined;
         o.target = t?.id ?? 0;
         if (!t && this.goTo(e, o.x, o.y)) this.setOrder(e, null);
         if (!t) return;
@@ -899,6 +906,7 @@ export class World {
     const a = (e.def as UnitDef).attack;
     if (!a) return;
     if (this.gap(e, t) > toFp(a.range) + FP / 8) return this.chase(e, t);
+    e.shortTicks = 0;
     e.goal = null;
     e.path = [];
     if (e.cooldown > 0) return;
@@ -929,7 +937,19 @@ export class World {
   private chase(e: Entity, t: Entity): void {
     if (t.def.kind === 'building') return this.goNear(e, t.tx, t.ty, (t.def as BuildingDef).size);
     if (!e.goal || dist(e.goal.x, e.goal.y, t.x, t.y) > FP) this.plan(e, t.x, t.y);
-    this.follow(e);
+    if (!this.follow(e)) return void (e.shortTicks = 0);
+    // At the end of its path and still out of reach (the target stands below a cliff): after two seconds,
+    // leave it be for a while and pick another fight, rather than standing there for ever.
+    if (++e.shortTicks < ticks(2)) return;
+    e.shortTicks = 0;
+    e.ignore = t.id;
+    e.ignoreUntil = this.tick + ticks(10);
+    // Walk on without picking a fight for a few seconds: others nearby are likely out of reach too.
+    e.calmUntil = this.tick + ticks(5);
+    e.goal = null;
+    const o = e.order;
+    if (o?.kind === 'attackMove') o.target = 0;
+    else if (o?.kind === 'attack') this.setOrder(e, o.auto ? null : { kind: 'attackMove', x: o.lx, y: o.ly, target: 0 });
   }
 
   /** Edge-to-edge distance. */
@@ -953,6 +973,7 @@ export class World {
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
       if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
+      if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];

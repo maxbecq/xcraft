@@ -102,7 +102,7 @@ export class AI {
     // Mid-game: a Forge, detection against an enemy that has invisible units, a defence or two.
     const minute = w.tick / ticks(60);
     if (f.forge && count(f.forge) === 0 && count(f.barracks) >= 2 && count(f.extractor) > 0) wants.push(f.forge);
-    const enemyCloaks = w.players.some((o) => o.id !== this.player && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
+    const enemyCloaks = w.players.some((o) => w.hostile(o.id, this.player) && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
     // One tower late anyway: level 3 upgrades need it.
     const detectors = f.detector && f.detector !== f.defense ? (enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
     const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
@@ -257,7 +257,7 @@ export class AI {
       let foes = 0;
       for (const e of w.entities.values()) {
         const d = e.def as UnitDef;
-        if (e.owner >= 0 && e.owner !== this.player && e.def.kind === 'unit' && d.attack && !d.worker && dist(e.x, e.y, u.x, u.y) < 10 * FP && w.sees(this.player, e)) foes += e.hp + e.shield;
+        if (this.world.hostile(e.owner, this.player) && e.def.kind === 'unit' && d.attack && !d.worker && dist(e.x, e.y, u.x, u.y) < 10 * FP && w.sees(this.player, e)) foes += e.hp + e.shield;
       }
       if (3 * ours.reduce((s, o) => s + o.hp + o.shield, 0) < foes) return u;
     }
@@ -272,7 +272,7 @@ export class AI {
     const w = this.world;
     const foes = [...w.entities.values()].filter((e) => {
       const a = (e.def as UnitDef | BuildingDef).attack;
-      return e.owner >= 0 && e.owner !== this.player && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
+      return this.world.hostile(e.owner, this.player) && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
     });
     const power = (group: Entity[]) => {
       let hp = 0;
@@ -308,7 +308,7 @@ export class AI {
       const current = o && (o.kind === 'attack' || o.kind === 'attackMove') ? w.entities.get(o.target) : undefined;
       if (current && (current.def as UnitDef).worker && current.hp > 0) continue;
       // Workers are where the enemy headquarters are: the AI knows the start spots, like a player who scouted.
-      const prey = this.nearest(r, (e) => e.owner >= 0 && e.owner !== this.player && !!(e.def as UnitDef).worker && e.hp > 0);
+      const prey = this.nearest(r, (e) => this.world.hostile(e.owner, this.player) && !!(e.def as UnitDef).worker && e.hp > 0);
       if (prey) out.push({ player: this.player, kind: 'attack', ids: [r.id], x: prey.x, y: prey.y, target: prey.id });
     }
     return out;
@@ -325,7 +325,7 @@ export class AI {
   /** No council left: throw everything at the enemy. */
   private lastStand(mine: Entity[]): Command[] {
     const army = mine.filter((e) => e.def.kind === 'unit' && !e.order);
-    const target = [...this.world.entities.values()].find((e) => e.owner >= 0 && e.owner !== this.player && e.def.kind === 'building');
+    const target = [...this.world.entities.values()].find((e) => this.world.hostile(e.owner, this.player) && e.def.kind === 'building');
     if (!army.length || !target) return [];
     return [{ player: this.player, kind: 'attack', ids: army.map((u) => u.id), x: target.x, y: target.y }];
   }
@@ -397,7 +397,7 @@ export class AI {
           const ty = cy + dy * sy - Math.floor(def.size / 2);
           // Leave a one-tile corridor around every building.
           if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player)) continue;
-          if (this.closeToResources(tx, ty, def.size)) continue;
+          if (this.closeToResources(tx, ty, def.size) || this.closeToRamp(tx, ty, def.size)) continue;
           return [tx, ty];
         }
       }
@@ -409,6 +409,17 @@ export class AI {
     const g = this.world.grid;
     for (let y = ty; y < ty + size; y++) for (let x = tx; x < tx + size; x++) if (!g.open(x, y)) return false;
     return true;
+  }
+
+  /** Buildings keep two tiles away from ramps, or they can wall the army in its own base. */
+  private closeToRamp(tx: number, ty: number, size: number): boolean {
+    const map = this.world.map;
+    for (let y = ty - 2; y < ty + size + 2; y++) {
+      for (let x = tx - 2; x < tx + size + 2; x++) {
+        if (x >= 0 && y >= 0 && x < map.width && y < map.height && map.ramp[y * map.width + x]) return true;
+      }
+    }
+    return false;
   }
 
   private closeToResources(tx: number, ty: number, size: number): boolean {
@@ -442,7 +453,7 @@ export class AI {
     const w = this.world;
     const foes: Entity[] = [];
     for (const e of w.entities.values()) {
-      if (e.owner < 0 || e.owner === this.player || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
+      if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + ((b.def as BuildingDef).size * FP) / 2)) foes.push(e);
     }
@@ -464,7 +475,7 @@ export class AI {
    * is closest. On the way and there, units pick soldiers first, then workers, then buildings.
    */
   private enemyTarget(home: Entity): Entity | undefined {
-    const enemy = (e: Entity) => e.owner >= 0 && e.owner !== this.player;
+    const enemy = (e: Entity) => this.world.hostile(e.owner, this.player);
     return this.nearest(home, (e) => enemy(e) && e.type === FACTIONS[this.world.players[e.owner].faction].hq) ?? this.nearest(home, (e) => enemy(e) && e.def.kind === 'building');
   }
 }
