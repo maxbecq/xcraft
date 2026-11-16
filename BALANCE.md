@@ -13,7 +13,11 @@ Tous les chiffres d'équilibrage du jeu sont dans [`src/balance.json`](src/balan
 
 Plusieurs changements d'un coup rendent le résultat difficile à lire : mieux vaut une idée par PR.
 
-Les parties IA contre IA mesurent l'équilibre entre IA, pas entre joueurs. Elles se terminent vers 10 à 14 minutes : les unités de fin de partie (Toptère, Chimère, Discobole) y apparaissent peu. Il faut aussi les essayer en jeu.
+Les parties IA contre IA mesurent l'équilibre entre IA, pas entre joueurs. Elles se terminent vers 10 à 14 minutes : les unités de fin de partie (sauriens, Char Pégase, Chimère, Discobole) y apparaissent peu. Il faut aussi les essayer en jeu.
+
+## Valeurs provisoires
+
+Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2, adaptées au jeu par le programmeur ; elles attendent l'équilibrage : `metallurgie`, `bourdon` (le mod ne lui donnait pas d'arme), `pegase`, `alchimisterie`, `alchimiste`, `creaturium`, `plesiosaure`, `ankylosaure`, `allosaure`, `belluaire`. Le bonus du mod contre l'infanterie légère ou biologique n'existe pas encore dans le jeu : il est intégré aux dégâts de base, et `vsMechanical` ne joue que contre les bâtiments.
 
 ## Unités et bâtiments (`units`)
 
@@ -72,6 +76,6 @@ Les parties IA contre IA mesurent l'équilibre entre IA, pas entre joueurs. Elle
 | `difficulty` | minerai encaissé par l'IA, en % (facile, normal, difficile) |
 | `maxCloaked` | Assassins au plus en même temps |
 | `antiAir` | une défense anti-air en plus par `per` volants ennemis vus, `max` au plus |
-| `tech.humains` | Machinerie à partir de `minute` avec `barracks` casernes |
+| `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
 | `tech.isdaris` | Nano-assembleur avec `barracks` portails, plus de `minerals` minerai et `energy` énergie |
 | `army` | poids de chaque unité dans l'armée de l'IA |

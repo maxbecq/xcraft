@@ -219,9 +219,9 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'toptere', 'chimere', 'machinerie'];
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
-const STATIC_YAW: Record<string, number> = { toptere: Math.PI / 2, chimere: Math.PI / 2 };
+const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: Math.PI / 2, pegase: Math.PI / 2 };
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
@@ -529,6 +529,21 @@ function play(v: View, name: string, timeScale = 1): void {
   v.playing = next;
 }
 
+/** Rally point marker: a pole with a green pennant, its cloth hinged on the pole. */
+function rallyFlag(): Group {
+  const flag = new Group();
+  const pole = new Mesh(new CylinderGeometry(0.03, 0.04, 1.5, 6), new MeshBasicMaterial({ color: 0x5a4630 }));
+  pole.position.y = 0.75;
+  const cloth = new Group();
+  cloth.position.y = 1.28;
+  const pennant = new Mesh(new BoxGeometry(0.6, 0.38, 0.02), new MeshBasicMaterial({ color: 0x4dff6a }));
+  pennant.position.x = 0.3;
+  cloth.add(pennant);
+  flag.add(pole, cloth);
+  flag.traverse((o) => (o.userData.noPick = true));
+  return flag;
+}
+
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
   private readonly views = new Map<number, View>();
@@ -552,6 +567,7 @@ export class EntityRenderer {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
+    this.syncRallyFlags(world, selected, player, now);
     for (const [id, v] of this.views) {
       if (!world.entities.has(id)) {
         this.views.delete(id);
@@ -711,6 +727,29 @@ export class EntityRenderer {
   }
 
   /** Lays a selection ring's meshes on the ground around (x, z), over dunes and slopes; only when it moved. */
+  /** A small flag planted on the rally point of each selected building of ours that has one. */
+  private readonly rallyFlags: Group[] = [];
+
+  private syncRallyFlags(world: World, selected: ReadonlySet<number>, player: number, now: number): void {
+    const points = [...selected]
+      .map((id) => world.entities.get(id))
+      .filter((e): e is Entity => !!e && e.owner === player && e.def.kind === 'building' && !!e.rally)
+      .map((e) => e.rally!);
+    while (this.rallyFlags.length < points.length) {
+      const flag = rallyFlag();
+      this.scene.add(flag);
+      this.rallyFlags.push(flag);
+    }
+    this.rallyFlags.forEach((flag, i) => {
+      flag.visible = i < points.length;
+      if (!flag.visible) return;
+      const x = points[i].x / FP;
+      const z = points[i].y / FP;
+      flag.position.set(x, heightAt(this.map, x, z), z);
+      flag.children[1].rotation.y = Math.sin(now / 260 + i) * 0.25; // the cloth flutters
+    });
+  }
+
   private drape(ring: Object3D, x: number, z: number, baseY: number): void {
     const at = `${x.toFixed(2)},${z.toFixed(2)}`;
     if (ring.userData.at === at) return;
@@ -750,11 +789,13 @@ export class EntityRenderer {
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
+    // Floats a little above the ground, higher round buildings, so their plinths do not hide it.
+    const lift = e.def.kind === 'building' ? 0.3 : 0.12;
     // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
     // Own copies of the materials: the halo fades and the ring dims after selection (see sync).
     for (const [inner, outer, m, role] of [[r, r + 0.09, core, 'core'], [r + 0.09, r + 0.3, halo, 'halo']] as const) {
       const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), m.clone());
-      mesh.userData.lift = 0.06;
+      mesh.userData.lift = lift;
       mesh.renderOrder = 2;
       ring.add(mesh);
       ring.userData[role] = mesh.material;
@@ -768,7 +809,7 @@ export class EntityRenderer {
     dialMat.map.center.set(0.5, 0.5);
     dialMat.map.needsUpdate = true;
     const dial = new Mesh(new RingGeometry((r + 0.42) * 0.74, r + 0.42, 64).rotateX(-Math.PI / 2), dialMat);
-    dial.userData.lift = 0.07;
+    dial.userData.lift = lift + 0.01;
     dial.renderOrder = 2;
     ring.add(dial);
     ring.userData.dial = dial;

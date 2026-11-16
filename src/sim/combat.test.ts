@@ -50,6 +50,16 @@ describe('combat', () => {
     expect(w.entities.has(target.id)).toBe(false);
   });
 
+  it('fights back when shot while attack-moving, even when walking on past an unreachable target', () => {
+    const w = new World(createMap());
+    const aux = w.spawn('auxiliaire', 0, ...at(40, 60));
+    const archer = w.spawn('archer', 1, ...at(44, 60));
+    w.step([{ player: 0, kind: 'attack', ids: [aux.id], x: 40 * FP, y: 30 * FP }]);
+    aux.calmUntil = w.tick + ticks(60); // as after giving up on a target out of reach
+    run(w, 2);
+    expect(aux.order).toMatchObject({ kind: 'attackMove', target: archer.id });
+  });
+
   it('heals wounded allies with a soigneur', () => {
     const w = new World(createMap());
     const [hurt] = army(w, 0, 'auxiliaire', 40, 60, 1);

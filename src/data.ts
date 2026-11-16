@@ -180,7 +180,7 @@ const BASE: Record<string, object> = {
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, faction: 'humains', hotkey: 'P' },
   conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, faction: 'humains', hotkey: 'C' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
-  caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste'], faction: 'humains', hotkey: 'K' },
+  caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], faction: 'humains', hotkey: 'K' },
   mine: { kind: 'building', name: 'Mine', size: 3, faction: 'humains', hotkey: 'M' },
   // Mod: « Guilde métallurgique » (the notice's Forge).
   forge: { kind: 'building', name: 'Forge', size: 3, ability: 'observation', faction: 'humains', hotkey: 'F', researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3'] },
@@ -188,10 +188,28 @@ const BASE: Record<string, object> = {
   fortin: { kind: 'building', name: 'Fortin', size: 2, requires: { caserne: 1 }, faction: 'humains', hotkey: 'B' },
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
   tour: { kind: 'building', name: 'Tour alchimistique', size: 2, faction: 'humains', hotkey: 'T' },
-  // Mod: « Machinerie » (needs the Guilde métallurgique, here the Forge): the vehicle workshop.
-  machinerie: { kind: 'building', name: 'Machinerie', size: 3, requires: { forge: 1 }, trains: ['toptere'], faction: 'humains', hotkey: 'V' },
-  // Mod: « Toptère », a flying gunship: anti-armour rockets, 55 in a small area, air and ground.
-  toptere: { kind: 'unit', name: 'Toptère', radius: 0.45, flying: true, faction: 'humains', hotkey: 'T' },
+  // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
+  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'pegase'], faction: 'humains', hotkey: 'M' },
+  // Notice: « Bourdon », a propeller airship: detector, short-range anti-vehicle grenades, good against buildings and flyers
+  // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
+  bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, faction: 'humains', hotkey: 'B' },
+  // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
+  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, faction: 'humains', hotkey: 'P' },
+  // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], faction: 'humains', hotkey: 'A' },
+  // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
+  alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, faction: 'humains', hotkey: 'A' },
+  // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
+  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], faction: 'humains', hotkey: 'C' },
+  // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
+  plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, faction: 'humains', hotkey: 'P' },
+  // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
+  ankylosaure: { kind: 'unit', name: 'Ankylosaure', radius: 0.9, faction: 'humains', hotkey: 'A' },
+  // Notice: « Allosaure », a huge flesh-eater that devours infantry (mod « Carnosaurus »: 60, -30 mechanical).
+  allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, faction: 'humains', hotkey: 'L' },
+  // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
+  // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
+  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, faction: 'humains', hotkey: 'B' },
   ...upgrades('melee', 'Attaque corps à corps', 'C'),
   ...upgrades('ranged', 'Attaque à distance', 'D'),
   ...upgrades('armor', 'Armure infanterie', 'A'),
@@ -265,6 +283,8 @@ export interface FactionDef {
   tech?: string;
   /** Buildings in the build menu, in order. */
   buildable: string[];
+  /** Those of them in the advanced build menu (tech buildings). */
+  advanced: string[];
   /** Army composition for the AI: [unit, weight]; units costing energy are only made when affordable. */
   army: [string, number][];
 }
@@ -272,13 +292,15 @@ export interface FactionDef {
 export const FACTIONS: Record<Faction, FactionDef> = {
   humains: {
     name: 'Humains', worker: 'serf', hq: 'conseil', supply: 'grenier', barracks: 'caserne', extractor: 'mine',
-    forge: 'forge', detector: 'tour', tech: 'machinerie',
-    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'forge', 'tour', 'fortin', 'machinerie'],
+    forge: 'forge', detector: 'tour', tech: 'creaturium',
+    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'fortin', 'tour', 'forge', 'metallurgie', 'alchimisterie', 'creaturium'],
+    advanced: ['forge', 'metallurgie', 'alchimisterie', 'creaturium'],
     army: Object.entries(BALANCE.ai.army.humains),
   },
   isdaris: {
     name: 'Isdaris', worker: 'moissonneur', hq: 'obelisque', supply: 'reservepsy', barracks: 'portail', extractor: 'recepteur', pylon: 'emetteur', defense: 'orbe', detector: 'orbe', tech: 'nanoassembleur',
     buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'orbe', 'nanoassembleur'],
+    advanced: ['nanoassembleur'],
     army: Object.entries(BALANCE.ai.army.isdaris),
   },
 };

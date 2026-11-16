@@ -12,7 +12,7 @@ function run(w: World, seconds: number): void {
 describe('flying units', () => {
   it('fly in a straight line over cliffs and buildings', () => {
     const w = new World(createMap());
-    const t = w.spawn('toptere', 0, ...at(8, 8));
+    const t = w.spawn('bourdon', 0, ...at(8, 8));
     w.spawn('caserne', 0, ...at(20, 20));
     w.step([{ player: 0, kind: 'move', ids: [t.id], x: 60 * FP, y: 60 * FP }]);
     for (let i = 0; i < ticks(30) && t.order; i++) {
@@ -53,7 +53,7 @@ describe('flying units', () => {
   it('see over cliffs', () => {
     const w = new World(createMap());
     w.spawn('auxiliaire', 0, ...at(8, 8));
-    w.spawn('toptere', 1, ...at(8, 8));
+    w.spawn('bourdon', 1, ...at(8, 8));
     run(w, 1);
     const seen = (p: number) => [...Array(64 * 64).keys()].filter((i) => w.vision[p].visible(i % 64, Math.floor(i / 64))).length;
     expect(seen(1)).toBeGreaterThanOrEqual(seen(0));

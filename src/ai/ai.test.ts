@@ -100,6 +100,8 @@ describe('AI', () => {
     const ais = [new AI(w, 0), new AI(w, 1)];
     play(w, ais, 8);
     const ai = ais[1] as unknown as { wave: Set<number> };
+    // No Human army raiding the Isdaris base, or the group would go and defend it instead.
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.def.kind === 'unit' && !e.def.worker) w.entities.delete(e.id);
     // A small group facing a big army far away runs back to a Réserve psy.
     const group = [0, 1, 2].map((i) => w.spawn('archer', 1, (40 + i) * FP, 48 * FP));
     for (let i = 0; i < 12; i++) w.spawn('legionnaire', 0, (38 + (i % 6)) * FP, (52 + Math.floor(i / 6)) * FP);

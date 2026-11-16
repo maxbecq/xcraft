@@ -39,7 +39,8 @@ export class Hud {
   private readonly toasts = el('div', 'hud-toasts');
   private buttons: Button[] = [];
   private cardKey = '';
-  private buildMenu = false;
+  /** Open build menu: basic buildings, or the advanced (tech) ones. */
+  private buildMenu: false | 'basic' | 'advanced' = false;
   private placing: string | null = null;
   /** The building type being placed, if any. */
   get placingType(): string | null {
@@ -258,8 +259,9 @@ export class Hud {
     const units = own.filter((e) => e.def.kind === 'unit');
     if (units.length) {
       if (this.buildMenu && this.workers().length) {
+        const f = FACTIONS[this.world.players[this.player].faction];
         return [
-          ...FACTIONS[this.world.players[this.player].faction].buildable.map((t) => {
+          ...f.buildable.filter((t) => f.advanced.includes(t) === (this.buildMenu === 'advanced')).map((t) => {
             const d = DEFS[t] as BuildingDef;
             return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => (this.placing = t) };
           }),
@@ -268,7 +270,10 @@ export class Hud {
       }
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
       if (units.some((u) => (u.def as UnitDef).attack)) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
-      if (this.workers().length) list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = true) });
+      if (this.workers().length) {
+        list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = 'basic') });
+        list.push({ label: 'Avancé', key: 'V', action: () => (this.buildMenu = 'advanced') });
+      }
       // One button per active ability among the selected units; each ready unit uses it.
       for (const ab of new Set(units.map((u) => (u.def as UnitDef).ability).filter((a): a is string => !!a))) {
         const casters = units.filter((u) => (u.def as UnitDef).ability === ab);

@@ -990,6 +990,17 @@ export class World {
     if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
       this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
     }
+    // So do soldiers attack-moving that are not already fighting a soldier, even while walking on past an
+    // unreachable target (calmUntil), unless the shooter is the very one they just gave up on.
+    const o = t.order;
+    if (o?.kind === 'attackMove' && !t.held && td.attack && reaches(td.attack, flies(e)) && !(e.id === t.ignore && this.tick < t.ignoreUntil)) {
+      const current = this.entities.get(o.target);
+      if (!current || current.hp <= 0 || this.rank(current) > this.rank(e)) {
+        o.target = e.id;
+        t.calmUntil = 0;
+        t.goal = null;
+      }
+    }
   }
 
   private chase(e: Entity, t: Entity): void {
