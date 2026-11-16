@@ -497,10 +497,10 @@ body.spectate .hud-card { visibility: hidden; }
 }
 
 /* Edge scrolling: the side the map is moving towards glows. */
-.edge-glow { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.edge-glow { position: fixed; inset: 0 0 var(--edge-bottom, 0) 0; pointer-events: none; z-index: 4; } /* stops at the command console */
 .edge-glow::before, .edge-glow::after { content: ''; position: absolute; opacity: 0; transition: opacity 0.12s; }
 .edge-glow.edge-n::before { opacity: 1; inset: 0 0 auto 0; height: 46px; background: linear-gradient(rgba(140, 220, 255, 0.45), transparent); }
-.edge-glow.edge-s::before { opacity: 1; inset: auto 0 var(--edge-bottom, 0) 0; height: 46px; background: linear-gradient(transparent, rgba(140, 220, 255, 0.45)); }
+.edge-glow.edge-s::before { opacity: 1; inset: auto 0 0 0; height: 46px; background: linear-gradient(transparent, rgba(140, 220, 255, 0.45)); }
 .edge-glow.edge-w::after { opacity: 1; inset: 0 auto 0 0; width: 46px; background: linear-gradient(90deg, rgba(140, 220, 255, 0.45), transparent); }
 .edge-glow.edge-e::after { opacity: 1; inset: 0 0 0 auto; width: 46px; background: linear-gradient(-90deg, rgba(140, 220, 255, 0.45), transparent); }
 
@@ -524,3 +524,5 @@ body.spectate .hud-card { visibility: hidden; }
 }
 .net-banner button:hover { color: #04101e; background: linear-gradient(180deg, #bfeaff, var(--space-glow)); }
 .menu .net-error { margin: 0; font: 600 15px var(--ui); letter-spacing: 0; padding: 0; border: 0; color: #ff9a8a; text-transform: none; }
+/* Version and build time, at the foot of the title screen. */
+.menu .build { position: fixed; left: 0; right: 0; bottom: calc(10px + env(safe-area-inset-bottom)); text-align: center; font: 500 11px var(--space-font); letter-spacing: 0.2em; color: var(--space-dim); opacity: 0.7; pointer-events: none; }

@@ -60,6 +60,36 @@ const RINGS = {
   ally: [ring(0x5ad8ff, 0.95), ring(0x5ad8ff, 0.22)],
   neutral: [ring(0xffe27a, 0.95), ring(0xffe27a, 0.22)],
 };
+/** Graduation ticks around the selection ring (a compass dial), turning slowly. */
+let tickTexture: CanvasTexture | null = null;
+const tickMaterials = new Map<MeshBasicMaterial, MeshBasicMaterial>();
+function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
+  if (!tickTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    g.strokeStyle = '#fff';
+    g.lineCap = 'round';
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      const long = i % 6 === 0;
+      g.lineWidth = long ? 5 : 3;
+      g.globalAlpha = long ? 1 : 0.7;
+      const r0 = long ? 100 : 108;
+      g.beginPath();
+      g.moveTo(128 + Math.cos(a) * r0, 128 + Math.sin(a) * r0);
+      g.lineTo(128 + Math.cos(a) * 122, 128 + Math.sin(a) * 122);
+      g.stroke();
+    }
+    tickTexture = new CanvasTexture(c);
+  }
+  let m = tickMaterials.get(core);
+  if (!m) {
+    m = new MeshBasicMaterial({ map: tickTexture, color: core.color, transparent: true, opacity: 0.5, depthWrite: false, blending: AdditiveBlending });
+    tickMaterials.set(core, m);
+  }
+  return m;
+}
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
 
 /** Pools of light on the ground around glowing things: [x, z offset, radius, colour]. */
@@ -554,6 +584,7 @@ export class EntityRenderer {
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       v.root.position.set(x, heightAt(this.map, x, z), z);
       v.ring.visible = selected.has(e.id);
+      if (v.ring.visible) (v.ring.userData.dial as Object3D).rotation.z += dt * (e.owner === player ? 0.7 : -0.7);
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
         this.animate(v, e, dt);
@@ -682,6 +713,13 @@ export class EntityRenderer {
       mesh.renderOrder = 2;
       ring.add(mesh);
     }
+    // Ticks just outside the ring, turning (see sync).
+    const dial = new Mesh(new PlaneGeometry((r + 0.42) * 2, (r + 0.42) * 2), dialMaterial(core));
+    dial.rotation.x = -Math.PI / 2;
+    dial.position.y = 0.07;
+    dial.renderOrder = 2;
+    ring.add(dial);
+    ring.userData.dial = dial;
     ring.traverse((o) => (o.userData.noPick = true));
     root.add(ring);
     let pools: Object3D | undefined;

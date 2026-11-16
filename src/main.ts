@@ -292,6 +292,9 @@ const clock = new Clock();
 let acc = 0;
 // Pause menu (with the controls) and tool buttons.
 let paused = false;
+/** Edge and arrow-key scrolling, eased: current speed per axis (-1..1), and how fast it changes per second. */
+const scroll = { x: 0, y: 0 };
+const SCROLL_ACCEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu">≡<span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée">⚔<span> Armée</span></button>';
@@ -409,7 +412,8 @@ function showHome(): void {
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
-    </div>`;
+    </div>
+    <div class="build">v${__VERSION__} · ${__COMMIT__} · ${new Date(__BUILT__).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>`;
   (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
@@ -553,7 +557,14 @@ function start(): void {
       // Slow orbit over the battlefield.
       const t = performance.now() / 1000 / 40;
       rig.lookAt(map.width / 2 + Math.cos(t) * 26, map.height / 2 + Math.sin(t) * 26);
-    } else rig.pan(dx, dy, dt);
+    } else {
+      // Eased scrolling: the view speeds up over a quarter second, then glides to a stop (slow, fast, slow).
+      const step = SCROLL_ACCEL * dt;
+      scroll.x += Math.max(-step, Math.min(step, dx - scroll.x));
+      scroll.y += Math.max(-step, Math.min(step, dy - scroll.y));
+      const ease = (v: number) => Math.sign(v) * Math.abs(v) * Math.abs(v) * (3 - 2 * Math.abs(v)); // smoothstep
+      if (scroll.x || scroll.y) rig.pan(ease(scroll.x), ease(scroll.y), dt);
+    }
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
