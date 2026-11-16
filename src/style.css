@@ -154,3 +154,8 @@ body.isdaris .cmd { background: linear-gradient(#24384a, #12202c); color: #e8f6f
 body.isdaris .cmd:hover { border-color: #3fd8ff; }
 body.isdaris .hud-bar { color: #1e1a14; }
 body.isdaris .slot { border-color: #c9a94a; border-radius: 10px; }
+body.isdaris .res.min { color: #0a5a8a; }
+body.isdaris .res.nrg { color: #5a2a9a; }
+body.isdaris .res.sup, body.isdaris .res.clock { color: #3a3024; }
+body.isdaris .hud-panel .tile, body.isdaris .hud-panel .queue span, body.isdaris .hud-panel .portrait { background: radial-gradient(circle at 50% 40%, #e8eef4, #8a9aa8 85%); }
+body.isdaris .cmd img { filter: brightness(1.4); }
