@@ -19,7 +19,7 @@
 
 Base commune : vue isométrique 3D façon SC1, low-poly lisible, couleur d'équipe sur les grandes surfaces.
 
-- **Humains** : low tech et débrouillards, mélange de Mad Max et des Terrans. Tôle rouillée, plaques soudées, récup', bidons, tuyaux, fumées. L'alchimie de la notice devient de la chimie bricolée : fioles, réservoirs, flammes de napalm.
+- **Humains** (notice 1.2-1) : Cités-États d'inspiration antique, médiévale ou Renaissance, jamais au-delà du XVIe siècle, avec une alchimie très avancée et aucune magie. Tubes de liquides, objets perpétuellement enflammés, transmutation de la matière. Design simple et rectiligne, peu d'ornements : pierre taillée, bois sombre, plaques de fer, cuivre, cuir ; un ou deux grands éléments alchimiques lisibles (cuves et alambics de liquide vert ou ambre lumineux). Larges bandes et bannières bleues pour la couleur d'équipe. Pas de rouille ni de récup'.
 - **Isdaris** : science-fiction classique des années 1930 à 1950, design épuré et Art déco. Lignes courbes élégantes, chromes, grande place à la lumière et aux rayons.
 - **Dieux** : entités magiques, mythologie et fantasy façon Warcraft III. Matériaux nobles, runes, auras, couleurs saturées.
 - **Z** : robotique très sophistiquée et technologique. Insectes métalliques, carbone et néons, articulations précises, creep de câbles.
