@@ -1,4 +1,4 @@
-import { type BuildingDef, DEFS, type Def, type Faction, HARVEST, type UnitDef } from '../data';
+import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -58,6 +58,10 @@ export interface Entity {
   lastHit: number;
   /** Ticks counting towards the next shield or hp point regained. */
   regenTimer: number;
+  /** Ticks left of the unit's own ability effect (stimulant, charge), of a Peau de roc on it, and before its ability is ready. */
+  boost: number;
+  skin: number;
+  abilityCd: number;
 }
 
 export interface Player {
@@ -67,6 +71,8 @@ export interface Player {
   energy: number;
   /** Percentage of harvested minerals actually banked (AI difficulty). */
   handicap: number;
+  /** Forge upgrade levels researched. */
+  upgrades: Record<UpgradeLine, number>;
 }
 
 export type Command =
@@ -77,6 +83,8 @@ export type Command =
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number }
   | { player: number; kind: 'train'; ids: number[]; type: string }
   | { player: number; kind: 'cancel'; ids: number[] }
+  /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */
+  | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number }
   /** Attack a target, or attack-move to a point when there is none. */
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number };
 
@@ -117,6 +125,10 @@ export class World {
   shots: Shot[] = [];
   deaths: Death[] = [];
   readonly vision: Vision[];
+  /** Invisible enemy units each player currently detects (updated with vision). */
+  readonly detected: Set<number>[];
+  /** Zones revealed by a Forge's Observation céleste, with ticks left. */
+  scans: { owner: number; x: number; y: number; left: number }[] = [];
   /** Winning player once the game is over. */
   winner: number | null = null;
   private nextId = 1;
@@ -124,13 +136,15 @@ export class World {
 
   constructor(readonly map: GameMap, playerCount = 2) {
     this.grid = new Grid(map);
-    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, faction: 'humains' as Faction, minerals: 0, energy: 0, handicap: 100 }));
+    this.players = Array.from({ length: playerCount }, (_, id) => ({ id, faction: 'humains' as Faction, minerals: 0, energy: 0, handicap: 100, upgrades: { melee: 0, ranged: 0, armor: 0 } }));
     this.vision = this.players.map(() => new Vision(this.grid));
+    this.detected = this.players.map(() => new Set());
   }
 
   /** Units spawn centred on (x, y); buildings and resources at top-left tile (tx, ty). */
   spawn(type: string, owner: number, x: number, y: number): Entity {
     const def = DEFS[type];
+    if (def.kind === 'upgrade') throw new Error(`not an entity: ${type}`);
     const size = def.kind === 'unit' ? 0 : def.size;
     const e: Entity = {
       id: this.nextId++, owner, type, def, x, y, px: x, py: y,
@@ -140,7 +154,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -167,12 +181,16 @@ export class World {
     this.events = [];
     this.shots = [];
     this.deaths = [];
+    this.scans = this.scans.filter((s) => --s.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) this.apply(c);
     for (const e of this.entities.values()) {
       e.px = e.x;
       e.py = e.y;
       if (e.cooldown > 0) e.cooldown--;
+      if (e.abilityCd > 0) e.abilityCd--;
+      if (e.skin > 0) e.skin--;
+      if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
       this.regenerate(e);
     }
     for (const e of [...this.entities.values()]) {
@@ -195,12 +213,22 @@ export class World {
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
       this.vision[e.owner].reveal(tileOf(e.x), tileOf(e.y), r);
     }
+    for (const s of this.scans) this.vision[s.owner].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
+    for (const d of this.detected) d.clear();
+    for (const e of this.entities.values()) {
+      if (!(e.def as UnitDef).cloaked) continue;
+      for (const s of this.scans) if (s.owner !== e.owner && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) this.detected[s.owner].add(e.id);
+      for (const s of this.entities.values()) {
+        const r = (s.def as UnitDef | BuildingDef).detector;
+        if (r && s.owner >= 0 && s.owner !== e.owner && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) this.detected[s.owner].add(e.id);
+      }
+    }
   }
 
   /** Can this player currently see the entity? */
   sees(player: number, e: Entity): boolean {
     if (e.owner === player) return true;
-    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y));
+    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!e.def.cloaked || this.detected[player].has(e.id));
     const size = (e.def as BuildingDef).size ?? 1;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
     return false;
@@ -234,13 +262,13 @@ export class World {
       else if (e.def.kind === 'building') {
         if (e.def.supply < 0) used -= e.def.supply;
         else if (e.buildLeft === 0) max += e.def.supply;
-        for (const t of e.queue) used += (DEFS[t] as UnitDef).supply;
+        for (const t of e.queue) if (DEFS[t].kind === 'unit') used += (DEFS[t] as UnitDef).supply;
       }
     }
     return { used, max: Math.min(200, max) };
   }
 
-  private pay(player: number, def: UnitDef | BuildingDef): boolean {
+  private pay(player: number, def: { cost: Cost }): boolean {
     const p = this.players[player];
     if (p.minerals < def.cost.minerals) return this.say(player, 'Pas assez de minerai.');
     if (p.energy < def.cost.energy) return this.say(player, "Pas assez d'énergie.");
@@ -249,7 +277,7 @@ export class World {
     return true;
   }
 
-  private refund(player: number, def: UnitDef | BuildingDef): void {
+  private refund(player: number, def: { cost: Cost }): void {
     this.players[player].minerals += def.cost.minerals;
     this.players[player].energy += def.cost.energy;
   }
@@ -304,6 +332,15 @@ export class World {
       case 'train':
         for (const b of buildings) {
           const def = b.def as BuildingDef;
+          if (def.researches?.includes(c.type)) {
+            if (!this.researchable(c.player, c.type)) return;
+            if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
+            const up = DEFS[c.type] as UpgradeDef;
+            if (!this.pay(c.player, up)) return;
+            b.queue.push(c.type);
+            if (b.queue.length === 1) b.trainLeft = ticks(up.buildTime);
+            return;
+          }
           if (!def.trains?.includes(c.type)) continue;
           if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
           const unit = DEFS[c.type] as UnitDef;
@@ -322,12 +359,59 @@ export class World {
             this.refund(c.player, b.def);
             this.remove(b);
           } else if (b.queue.length) {
-            this.refund(c.player, DEFS[b.queue.pop()!] as UnitDef);
+            this.refund(c.player, DEFS[b.queue.pop()!] as UnitDef | UpgradeDef);
             if (b.queue.length) b.trainLeft = Math.max(b.trainLeft, 1);
           }
         }
         return;
+      case 'ability': {
+        for (const e of units) this.cast(e);
+        const b = buildings.find((b) => (b.def as BuildingDef).ability === 'observation' && b.abilityCd === 0);
+        if (!b || c.x === undefined || c.y === undefined) return;
+        if (this.players[c.player].energy < OBSERVATION.energy) return void this.say(c.player, "Pas assez d'énergie.");
+        this.players[c.player].energy -= OBSERVATION.energy;
+        this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ABILITIES.observation.duration) });
+        b.abilityCd = ticks(ABILITIES.observation.cooldown);
+        return;
+      }
     }
+  }
+
+  /** Is this upgrade the next level of its line, counting the levels already queued? */
+  researchable(player: number, type: string): boolean {
+    const up = DEFS[type];
+    if (up?.kind !== 'upgrade' || up.faction !== this.players[player].faction) return false;
+    let level = this.players[player].upgrades[up.line];
+    for (const b of this.entities.values()) {
+      if (b.owner === player) for (const t of b.queue) if ((DEFS[t] as UpgradeDef).line === up.line) level++;
+    }
+    return up.level === level + 1;
+  }
+
+  /** Uses the unit's active ability if it is ready. */
+  private cast(e: Entity): void {
+    const def = e.def as UnitDef;
+    const ab = def.ability && ABILITIES[def.ability];
+    if (!ab || e.abilityCd > 0) return;
+    if (def.ability === 'peauderoc') {
+      // The most wounded ally in range (itself included) not already protected.
+      let best: Entity | undefined;
+      for (const t of this.entities.values()) {
+        if (t.owner !== e.owner || t.def.kind !== 'unit' || t.skin > 0 || t.hp <= 0 || this.gap(e, t) > SKIN_RANGE * FP) continue;
+        if (!best || t.hp * best.maxHp < best.hp * t.maxHp) best = t;
+      }
+      if (!best) return;
+      best.skin = ticks(ab.duration);
+      this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
+    } else {
+      if (def.ability === 'stimulant') {
+        if (e.hp <= STIM_HP) return;
+        e.hp -= STIM_HP;
+      }
+      e.boost = ticks(ab.duration);
+      e.speed = speedPerTick(def.speed * (def.ability === 'charge' ? 2 : 1.5));
+    }
+    e.abilityCd = ticks(ab.cooldown);
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
@@ -427,10 +511,11 @@ export class World {
   /** Damage that goes through shields first; armour only protects hp. */
   private hurt(t: Entity, damage: number): void {
     t.lastHit = this.tick;
+    if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
     const absorbed = Math.min(t.shield, damage);
     t.shield -= absorbed;
     if (damage > absorbed) {
-      const armor = 'armor' in t.def ? t.def.armor : 0;
+      const armor = ('armor' in t.def ? t.def.armor : 0) + (t.def.kind === 'unit' && t.owner >= 0 ? this.players[t.owner].upgrades.armor : 0);
       t.hp -= Math.max(1, damage - absorbed - (absorbed > 0 ? 0 : armor));
     }
   }
@@ -651,7 +736,7 @@ export class World {
       return this.strike(e, t);
     }
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || (!this.sees(e.owner, t) && o.auto)) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || (!this.sees(e.owner, t) && (o.auto || (t.def as UnitDef).cloaked))) return this.setOrder(e, null);
     if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
       // Chased too far: walk back.
       return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
@@ -667,9 +752,17 @@ export class World {
     e.goal = null;
     e.path = [];
     if (e.cooldown > 0) return;
-    e.cooldown = ticks(a.cooldown);
+    // Stimulant: attacks 50 % faster.
+    e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
+    this.hit(e, t, a);
+  }
+
+  /** Deals one attack's damage (with the attacker's Forge upgrades), alerts the victim and lets it fight back. */
+  private hit(e: Entity, t: Entity, a: Attack): void {
     const bonus = t.def.kind === 'building' ? (a.vsMechanical ?? 0) : 0;
-    this.hurt(t, a.damage + bonus);
+    let upgrade = 0;
+    if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.players[e.owner].upgrades[a.range < 1 ? 'melee' : 'ranged'] * Math.max(1, Math.round(a.damage / 10));
+    this.hurt(t, a.damage + bonus + upgrade);
     if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
       this.lastAlert[t.owner] = this.tick;
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
@@ -698,11 +791,11 @@ export class World {
   }
 
   /** Most threatening visible enemy within range: armed units first, then others, then buildings. */
-  private enemyNear(e: Entity, range: number): Entity | undefined {
+  private enemyNear(e: Entity, range: number, unitsOnly = false): Entity | undefined {
     let best: Entity | undefined;
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
-      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource' || t.hp <= 0) continue;
+      if (t.owner < 0 || t.owner === e.owner || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const armed = t.def.kind === 'unit' && !!(t.def as UnitDef).attack && !(t.def as UnitDef).worker;
@@ -742,18 +835,33 @@ export class World {
       return;
     }
     const def = b.def as BuildingDef;
+    // Defences (Orbe plasma) shoot the closest enemy unit in range.
+    if (def.attack && b.cooldown === 0) {
+      const t = this.enemyNear(b, toFp(def.attack.range), true);
+      if (t) {
+        b.cooldown = ticks(def.attack.cooldown);
+        this.hit(b, t, def.attack);
+      }
+    }
     if (def.energyRate && ++b.timer >= ticks(1 / def.energyRate)) {
       b.timer = 0;
       this.players[b.owner].energy++;
     }
     if (b.queue.length && --b.trainLeft <= 0) {
       const type = b.queue.shift()!;
+      const up = DEFS[type];
+      if (up.kind === 'upgrade') {
+        this.players[b.owner].upgrades[up.line] = up.level;
+        this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');
+        if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UpgradeDef).buildTime);
+        return;
+      }
       const u = this.spawnBeside(type, b);
       const field = (u.def as UnitDef).worker && (!b.rally || b.rallyTarget) ? (this.entities.get(b.rallyTarget) ?? this.nearestField(u)) : undefined;
       // Workers go mining by default (or on the rallied field); others walk to the rally point.
       if (field) this.setOrder(u, { kind: 'gather', target: field.id, phase: 'go', timer: 0 });
       else if (b.rally) this.setOrder(u, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
-      if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UnitDef).buildTime);
+      if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UnitDef | UpgradeDef).buildTime);
     }
   }
 
@@ -946,6 +1054,7 @@ export class World {
     for (const p of this.players) {
       mix(p.minerals);
       mix(p.energy);
+      mix(p.upgrades.melee * 16 + p.upgrades.ranged * 4 + p.upgrades.armor);
     }
     return h >>> 0;
   }

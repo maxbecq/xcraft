@@ -36,6 +36,12 @@ export interface UnitDef {
   shield?: number;
   /** HP regained per second. */
   regen?: number;
+  /** Permanently invisible: enemies only see it within range of one of their detectors. */
+  cloaked?: boolean;
+  /** Reveals invisible enemies within this radius (tiles). */
+  detector?: number;
+  /** Active ability (key of ABILITIES). */
+  ability?: string;
   faction: Faction;
   hotkey: string;
 }
@@ -66,6 +72,14 @@ export interface BuildingDef {
   needsPower?: boolean;
   /** Recharges the shields of friendly units within this radius (tiles), fast. */
   shieldAura?: number;
+  /** Defensive building: shoots enemy units in range. */
+  attack?: Attack;
+  /** Reveals invisible enemies within this radius (tiles). */
+  detector?: number;
+  /** Upgrades researched here (keys of DEFS, kind 'upgrade'), through the production queue. */
+  researches?: string[];
+  /** Active ability (key of ABILITIES), aimed at a point of the map. */
+  ability?: string;
   faction: Faction;
   hotkey: string;
 }
@@ -77,7 +91,45 @@ export interface ResourceDef {
   amount: number;
 }
 
-export type Def = UnitDef | BuildingDef | ResourceDef;
+/** One level of a Forge upgrade line, researched in the building's queue. */
+export interface UpgradeDef {
+  kind: 'upgrade';
+  name: string;
+  line: UpgradeLine;
+  level: number;
+  cost: Cost;
+  buildTime: number;
+  faction: Faction;
+  hotkey: string;
+}
+
+/** melee and ranged: +10 % of the weapon's base damage per level (at least +1); armor: +1 per level. */
+export type UpgradeLine = 'melee' | 'ranged' | 'armor';
+
+export type Def = UnitDef | BuildingDef | ResourceDef | UpgradeDef;
+
+/** Active abilities: one per Human soldier. Times in "Normal" seconds. */
+export interface AbilityDef {
+  name: string;
+  hotkey: string;
+  cooldown: number;
+  duration: number;
+}
+
+export const ABILITIES: Record<string, AbilityDef> = {
+  /** Auxiliaire: costs 10 hp, attacks and moves 50 % faster. */
+  stimulant: { name: 'Stimulant', hotkey: 'T', cooldown: 15, duration: 8 },
+  /** Légionnaire: runs twice as fast to close in. */
+  charge: { name: 'Charge', hotkey: 'C', cooldown: 20, duration: 3 },
+  /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
+  peauderoc: { name: 'Peau de roc', hotkey: 'R', cooldown: 25, duration: 35 },
+  /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
+  observation: { name: 'Observation céleste', hotkey: 'O', cooldown: 30, duration: 10 },
+};
+export const OBSERVATION = { radius: 8, energy: 50 };
+export const SKIN_RANGE = 4;
+export const SKIN_REDUCTION = 5;
+export const STIM_HP = 10;
 
 export const DEFS: Record<string, Def> = {
   serf: {
@@ -86,15 +138,15 @@ export const DEFS: Record<string, Def> = {
   },
   auxiliaire: {
     kind: 'unit', name: 'Auxiliaire', hp: 80, armor: 0, speed: 2.4, radius: 0.375, sight: 8, supply: 1,
-    cost: { minerals: 100, energy: 0 }, buildTime: 18, attack: { damage: 6, range: 4, cooldown: 1 }, faction: 'humains', hotkey: 'A',
+    cost: { minerals: 100, energy: 0 }, buildTime: 18, attack: { damage: 6, range: 4, cooldown: 1 }, ability: 'stimulant', faction: 'humains', hotkey: 'A',
   },
   legionnaire: {
     kind: 'unit', name: 'Légionnaire-scieur', hp: 105, armor: 1, speed: 2.5, radius: 0.375, sight: 8, supply: 1,
-    cost: { minerals: 100, energy: 0 }, buildTime: 20, attack: { damage: 20, range: 0.1, cooldown: 1 }, faction: 'humains', hotkey: 'L',
+    cost: { minerals: 100, energy: 0 }, buildTime: 20, attack: { damage: 20, range: 0.1, cooldown: 1 }, ability: 'charge', faction: 'humains', hotkey: 'L',
   },
   soigneur: {
     kind: 'unit', name: 'Soigneur', hp: 80, armor: 0, speed: 2.5, radius: 0.375, sight: 9, supply: 1,
-    cost: { minerals: 125, energy: 100 }, buildTime: 25, attack: { damage: 12, range: 5, cooldown: 1.25, vsMechanical: -6 }, heal: 9, faction: 'humains', hotkey: 'O',
+    cost: { minerals: 125, energy: 100 }, buildTime: 25, attack: { damage: 12, range: 5, cooldown: 1.25, vsMechanical: -6 }, heal: 9, ability: 'peauderoc', faction: 'humains', hotkey: 'O',
   },
   conseil: {
     kind: 'building', name: 'Conseil des Échevins', hp: 4000, armor: 3, size: 5, sight: 13, supply: 10,
@@ -112,6 +164,20 @@ export const DEFS: Record<string, Def> = {
     kind: 'building', name: 'Mine', hp: 1000, armor: 1, size: 3, sight: 5, supply: -4,
     cost: { minerals: 600, energy: 0 }, buildTime: 30, energyRate: 2.5, faction: 'humains', hotkey: 'M',
   },
+  // Mod: « Guilde métallurgique » (the notice's Forge).
+  forge: {
+    kind: 'building', name: 'Forge', hp: 2800, armor: 2, size: 3, sight: 10, supply: 0,
+    cost: { minerals: 400, energy: 0 }, buildTime: 50, ability: 'observation', faction: 'humains', hotkey: 'F',
+    researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3'],
+  },
+  // Mod: « Tour anti-air » (detector); no air units yet, so it only detects.
+  tour: {
+    kind: 'building', name: 'Tour alchimistique', hp: 420, armor: 1, size: 2, sight: 10, supply: 0,
+    cost: { minerals: 200, energy: 0 }, buildTime: 25, detector: 10, faction: 'humains', hotkey: 'T',
+  },
+  ...upgrades('melee', 'Attaque corps à corps', 'C'),
+  ...upgrades('ranged', 'Attaque à distance', 'D'),
+  ...upgrades('armor', 'Armure infanterie', 'A'),
 
   // ---------------------------------------------------------------- Isdaris
   moissonneur: {
@@ -130,6 +196,11 @@ export const DEFS: Record<string, Def> = {
     kind: 'unit', name: 'Druide', hp: 70, shield: 140, armor: 0, speed: 2.5, radius: 0.375, sight: 10, supply: 2,
     cost: { minerals: 200, energy: 150 }, buildTime: 35, attack: { damage: 18, range: 6, cooldown: 1.75 }, faction: 'isdaris', hotkey: 'D',
   },
+  // Mod: « Sombre ».
+  assassin: {
+    kind: 'unit', name: 'Assassin', hp: 70, shield: 210, armor: 0, speed: 2.6, radius: 0.375, sight: 8, supply: 2,
+    cost: { minerals: 400, energy: 400 }, buildTime: 50, attack: { damage: 75, range: 0.1, cooldown: 1.25, vsMechanical: -20 }, cloaked: true, faction: 'isdaris', hotkey: 'X',
+  },
   obelisque: {
     kind: 'building', name: 'Obélisque', hp: 2000, shield: 2000, armor: 3, size: 5, sight: 13, supply: 15,
     cost: { minerals: 1000, energy: 0 }, buildTime: 80, trains: ['moissonneur'], dropoff: true, warp: true, power: 9, faction: 'isdaris', hotkey: 'O',
@@ -144,16 +215,30 @@ export const DEFS: Record<string, Def> = {
   },
   portail: {
     kind: 'building', name: 'Portail', hp: 1600, shield: 1600, armor: 1, size: 3, sight: 10, supply: 0,
-    cost: { minerals: 400, energy: 0 }, buildTime: 50, trains: ['archer', 'creature', 'druide'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'T',
+    cost: { minerals: 400, energy: 0 }, buildTime: 50, trains: ['archer', 'creature', 'druide', 'assassin'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'T',
   },
   recepteur: {
     kind: 'building', name: 'Récepteur', hp: 600, shield: 600, armor: 1, size: 3, sight: 5, supply: -4,
     cost: { minerals: 600, energy: 0 }, buildTime: 30, energyRate: 2.5, warp: true, faction: 'isdaris', hotkey: 'R',
   },
+  // Mod: « Orbe plasmique ».
+  orbe: {
+    kind: 'building', name: 'Orbe plasma', hp: 200, shield: 300, armor: 1, size: 2, sight: 8, supply: 0,
+    cost: { minerals: 375, energy: 0 }, buildTime: 35, attack: { damage: 22, range: 7, cooldown: 1 }, detector: 8, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'B',
+  },
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1, amount: 1500 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
 };
+
+/** The three levels of a Forge line; mod XC 1.53 costs and times. */
+function upgrades(line: UpgradeLine, name: string, hotkey: string): Record<string, UpgradeDef> {
+  const out: Record<string, UpgradeDef> = {};
+  [250, 350, 450].forEach((c, i) => {
+    out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, cost: { minerals: c, energy: c }, buildTime: 80 + 10 * i, faction: 'humains', hotkey };
+  });
+  return out;
+}
 
 export const unitDef = (type: string) => DEFS[type] as UnitDef;
 export const buildingDef = (type: string) => DEFS[type] as BuildingDef;
@@ -170,6 +255,10 @@ export interface FactionDef {
   supply: string;
   barracks: string;
   extractor: string;
+  /** Upgrade building, detector building and defensive building, if any. */
+  forge?: string;
+  detector?: string;
+  defense?: string;
   /** Power-field building (Isdaris), if any. */
   pylon?: string;
   /** Buildings in the build menu, in order. */
@@ -181,12 +270,13 @@ export interface FactionDef {
 export const FACTIONS: Record<Faction, FactionDef> = {
   humains: {
     name: 'Humains', worker: 'serf', hq: 'conseil', supply: 'grenier', barracks: 'caserne', extractor: 'mine',
-    buildable: ['conseil', 'grenier', 'caserne', 'mine'],
+    forge: 'forge', detector: 'tour',
+    buildable: ['conseil', 'grenier', 'caserne', 'mine', 'forge', 'tour'],
     army: [['auxiliaire', 5], ['legionnaire', 2], ['soigneur', 2]],
   },
   isdaris: {
-    name: 'Isdaris', worker: 'moissonneur', hq: 'obelisque', supply: 'reservepsy', barracks: 'portail', extractor: 'recepteur', pylon: 'emetteur',
-    buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur'],
-    army: [['archer', 4], ['creature', 4], ['druide', 2]],
+    name: 'Isdaris', worker: 'moissonneur', hq: 'obelisque', supply: 'reservepsy', barracks: 'portail', extractor: 'recepteur', pylon: 'emetteur', defense: 'orbe', detector: 'orbe',
+    buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'orbe'],
+    army: [['archer', 4], ['creature', 4], ['druide', 2], ['assassin', 1]],
   },
 };

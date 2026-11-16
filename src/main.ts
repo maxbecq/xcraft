@@ -255,7 +255,7 @@ window.addEventListener(
 );
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
 
-const ready = Promise.all([loadModels([...Object.keys(DEFS), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
+const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (!ATTRACT) {
   ready.then(start);
 } else {

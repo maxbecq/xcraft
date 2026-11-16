@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, OBSERVATION, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -39,6 +39,8 @@ export class Hud {
   private placing: string | null = null;
   /** Waiting for a click to attack or attack-move. */
   private targeting = false;
+  /** The click aims a Forge's Observation céleste instead of an attack. */
+  private scanning = false;
   private readonly banner = el('div', 'hud-banner');
   private readonly ghost: Mesh;
 
@@ -75,6 +77,18 @@ export class Hud {
       this.input.selected.clear();
       this.input.selected.add(id);
     });
+    // Types without an icon yet (placeholder models): drop the broken image and stop asking for it.
+    document.addEventListener(
+      'error',
+      (e) => {
+        const img = e.target;
+        if (img instanceof HTMLImageElement && img.dataset.icon) {
+          noIcon.add(img.dataset.icon);
+          img.remove();
+        }
+      },
+      true,
+    );
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key === 'Escape' ? 'Escape' : e.key.toUpperCase();
@@ -89,7 +103,7 @@ export class Hud {
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
   click(button: number, ground: Vector3 | null, shift: boolean, target?: Entity): boolean {
     if (this.targeting) {
-      if (button === 0 && ground) this.attack(ground.x, ground.z, target);
+      if (button === 0 && ground) this.aim(ground.x, ground.z, target);
       if (!shift || button === 2) this.setTargeting(false);
       return true;
     }
@@ -113,7 +127,7 @@ export class Hud {
   /** Left-click on the minimap: attack-move when targeting. */
   minimapClick(x: number, y: number): boolean {
     if (!this.targeting) return false;
-    this.attack(x, y);
+    this.aim(x, y);
     this.setTargeting(false);
     return true;
   }
@@ -124,8 +138,15 @@ export class Hud {
     this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy });
   }
 
-  private setTargeting(on: boolean): void {
+  private aim(x: number, z: number, target?: Entity): void {
+    if (!this.scanning) return this.attack(x, z, target);
+    const ids = this.input.own().map((e) => e.id);
+    this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP) });
+  }
+
+  private setTargeting(on: boolean, scan = false): void {
     this.targeting = on;
+    this.scanning = on && scan;
     document.body.classList.toggle('targeting', on);
   }
 
@@ -170,7 +191,7 @@ export class Hud {
     if (sel.length > 1) {
       this.details.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
-        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}"><img src="${icon(e.type)}" alt="${e.def.name}"></div>`)
+        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
         .join('')}</div>`;
       return;
     }
@@ -187,9 +208,9 @@ export class Hud {
       if (e.buildLeft > 0) {
         html += progress('Construction', 1 - e.buildLeft / ticks(def.buildTime));
       } else if (e.queue.length) {
-        const first = DEFS[e.queue[0]] as UnitDef;
+        const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
         html += progress(first.name, 1 - e.trainLeft / ticks(first.buildTime));
-        html += `<div class="queue">${e.queue.map((t) => `<span><img src="${icon(t)}" alt="${DEFS[t].name}"></span>`).join('')}</div>`;
+        html += `<div class="queue">${e.queue.map((t) => `<span>${img(t, DEFS[t].name)}</span>`).join('')}</div>`;
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
@@ -223,6 +244,13 @@ export class Hud {
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
       if (units.some((u) => (u.def as UnitDef).attack)) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
       if (this.workers().length) list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = true) });
+      // One button per active ability among the selected units; each ready unit uses it.
+      for (const ab of new Set(units.map((u) => (u.def as UnitDef).ability).filter((a): a is string => !!a))) {
+        const casters = units.filter((u) => (u.def as UnitDef).ability === ab);
+        const ready = casters.filter((u) => u.abilityCd === 0).length;
+        const a = ABILITIES[ab];
+        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, action: () => cmd({ kind: 'ability', ids: casters.map((u) => u.id) }) });
+      }
       return list;
     }
     this.buildMenu = false;
@@ -236,6 +264,18 @@ export class Hud {
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) };
     });
+    if (b.def.ability) {
+      const a = ABILITIES[b.def.ability];
+      const ready = same.some((o) => o.abilityCd === 0);
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: OBSERVATION.energy }, action: () => this.setTargeting(true, true) });
+    }
+    // Forge: the next level of each upgrade line not yet researched nor queued.
+    for (const t of b.def.researches ?? []) {
+      if (!this.world.researchable(this.player, t)) continue;
+      const d = DEFS[t] as UpgradeDef;
+      const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
+      list.push({ label: d.name, key: d.hotkey, cost: d.cost, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+    }
     if (same.some((o) => o.queue.length)) {
       list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
     }
@@ -252,8 +292,8 @@ export class Hud {
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.cost && !afford(p, b.cost) ? ' off' : '';
-        const img = b.icon ? `<img src="${icon(b.icon)}" alt="">` : '';
-        return `<button class="cmd${off}${img ? ' has-icon' : ''}" data-key="${b.key}" title="${b.label}"><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${img}<span>${b.label}</span>${cost}</button>`;
+        const pic = b.icon ? img(b.icon, '') : '';
+        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" title="${b.label}"><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
   }
@@ -292,6 +332,8 @@ export class Hud {
 }
 
 const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${type}.png`;
+const noIcon = new Set<string>();
+const img = (type: string, alt: string) => (noIcon.has(type) ? '' : `<img src="${icon(type)}" alt="${alt}" data-icon="${type}">`);
 
 function el(tag: string, cls: string): HTMLElement {
   const e = document.createElement(tag);
