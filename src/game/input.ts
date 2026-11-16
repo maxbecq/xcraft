@@ -5,6 +5,8 @@ import type { Command, Entity, World } from '../sim/world';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
+/** Mineral fields and geysers are small on screen: a wider catch, so a worker order lands on them. */
+const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
 
 export interface InputHooks {
@@ -282,7 +284,7 @@ export class Input {
     return new Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
   }
 
-  /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels. */
+  /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels, else the closest resource. */
   private entityAt(x: number, y: number): Entity | undefined {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
@@ -297,6 +299,14 @@ export class Input {
     let bestD = PICK_PX;
     for (const e of this.world.entities.values()) {
       if (e.def.kind !== 'unit' || !this.world.sees(this.player, e)) continue;
+      const s = this.screenOf(e);
+      const d = Math.hypot(s.x - x, s.y - y);
+      if (d < bestD) [best, bestD] = [e, d];
+    }
+    if (best) return best;
+    bestD = RESOURCE_PICK_PX;
+    for (const e of this.world.entities.values()) {
+      if (e.def.kind !== 'resource') continue;
       const s = this.screenOf(e);
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < bestD) [best, bestD] = [e, d];
