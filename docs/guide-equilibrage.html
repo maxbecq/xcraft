@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Xcraft : guide de l'équilibreur</title>
+<style>
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+  :root { --ink: #1d232b; --muted: #5d6773; --line: #d9dee4; --accent: #b4532a; --soft: #f6f2ee; --green: #1f883d; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.5 "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 26pt; line-height: 1.1; margin: 0 0 4mm; letter-spacing: -0.02em; }
+  h2 { font-size: 15pt; margin: 0 0 3mm; display: flex; align-items: baseline; gap: 3mm; }
+  h2 .n { color: #fff; background: var(--accent); border-radius: 50%; width: 8.5mm; height: 8.5mm; display: inline-flex; align-items: center; justify-content: center; font-size: 12pt; flex: none; }
+  h3 { font-size: 11pt; margin: 5mm 0 1.5mm; }
+  p { margin: 0 0 2.5mm; }
+  section { margin-bottom: 8mm; }
+  h2, h3 { break-after: avoid; }
+  pre, table, .note, .card, ol.steps li, .flow { break-inside: avoid; }
+  .page { break-before: page; }
+  .lead { font-size: 12pt; color: var(--muted); max-width: 150mm; }
+  .cover { border-bottom: 2px solid var(--ink); padding-bottom: 6mm; margin-bottom: 8mm; }
+  .kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 8.5pt; color: var(--accent); font-weight: 600; margin-bottom: 3mm; }
+  ol.steps { padding-left: 6mm; margin: 0 0 3mm; }
+  ol.steps li { margin-bottom: 1.8mm; padding-left: 1mm; }
+  .btn { display: inline-block; font: 600 9pt/1 -apple-system, "Helvetica Neue", Arial, sans-serif; padding: 1.2mm 2.4mm; border-radius: 1.5mm; border: 1px solid rgba(31,35,40,.15); background: #f6f8fa; color: #24292f; white-space: nowrap; }
+  .btn.green { background: var(--green); color: #fff; border-color: rgba(31,35,40,.15); }
+  .btn.red { background: #fff; color: #cf222e; }
+  code, .mono { font: 9pt/1.45 "SF Mono", Menlo, Consolas, monospace; }
+  code { background: #eef1f4; padding: 0.3mm 1.2mm; border-radius: 1mm; }
+  pre { font: 8.6pt/1.55 "SF Mono", Menlo, Consolas, monospace; background: #f4f6f8; border: 1px solid var(--line); border-radius: 2mm; padding: 3mm 4mm; margin: 2mm 0 3mm; white-space: pre-wrap; }
+  pre .hl { background: #ffe9a8; border-radius: 0.8mm; padding: 0 0.6mm; }
+  pre .bad { background: #ffd7d5; border-radius: 0.8mm; padding: 0 0.6mm; }
+  .note { border-left: 3px solid var(--accent); background: var(--soft); padding: 2.5mm 4mm; margin: 3mm 0; border-radius: 0 2mm 2mm 0; }
+  .note.warn { border-color: #cf222e; background: #fff1f0; }
+  .note b:first-child { display: block; margin-bottom: 0.5mm; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 9.5pt; }
+  th, td { text-align: left; vertical-align: top; padding: 1.4mm 2mm; border-bottom: 1px solid var(--line); }
+  th { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1.5px solid var(--ink); }
+  td:first-child { white-space: nowrap; }
+  .toc { columns: 2; column-gap: 10mm; padding-left: 5mm; margin: 0; }
+  .toc li { margin-bottom: 1mm; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .card { border: 1px solid var(--line); border-radius: 2mm; padding: 3mm 4mm; }
+  .card h3 { margin-top: 0; }
+  .ok { color: var(--green); font-weight: 700; }
+  .ko { color: #cf222e; font-weight: 700; }
+  .wait { color: #9a6700; font-weight: 700; }
+  .flow { display: flex; align-items: center; gap: 1.5mm; flex-wrap: wrap; font-size: 8.8pt !important; margin: 4mm 0 2mm; font-size: 9.5pt; }
+  .flow span.box { border: 1.5px solid var(--ink); border-radius: 2mm; padding: 1.3mm 2.2mm; background: #fff; white-space: nowrap; }
+  .flow span.box.me { border-color: var(--accent); background: var(--soft); }
+  .flow .arrow { color: var(--muted); }
+  .small { font-size: 9pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">Xcraft · équilibrage</div>
+  <h1>Guide de l'équilibreur</h1>
+  <p class="lead">Créer un compte GitHub, modifier les statistiques des unités et lancer les 98 parties de test, sans rien installer et sans écrire de code.</p>
+</div>
+
+<section>
+  <h3 style="margin-top:0">Le principe en une ligne</h3>
+  <div class="flow">
+    <span class="box me">Tu modifies les chiffres</span><span class="arrow">→</span>
+    <span class="box me">Tu proposes le changement</span><span class="arrow">→</span>
+    <span class="box">Un robot joue 98 parties</span>
+    <span class="arrow">→</span><span class="box">Il commente le résultat</span><span class="arrow">→</span>
+    <span class="box">Max valide et publie</span>
+  </div>
+  <p>Tout se passe dans le navigateur, sur le site GitHub. Tous les chiffres du jeu (PV, coûts, dégâts, portées, temps de production, comportement de l'IA) sont dans un seul fichier : <code>balance.json</code>. Tu ne peux rien casser : tant que Max n'a pas validé, le jeu en ligne ne change pas.</p>
+  <h3>Sommaire</h3>
+  <ol class="toc">
+    <li>Créer ton compte GitHub</li>
+    <li>Accepter l'invitation de Max</li>
+    <li>Modifier les statistiques</li>
+    <li>Proposer le changement</li>
+    <li>Lire le résultat des 98 parties</li>
+    <li>Corriger ou compléter ta proposition</li>
+    <li>Après validation : tester en jeu</li>
+    <li>Ce que veut dire chaque chiffre</li>
+  </ol>
+</section>
+
+<section>
+  <h2><span class="n">1</span>Créer ton compte GitHub</h2>
+  <p>GitHub est le site où est rangé le code du jeu. Le compte est gratuit.</p>
+  <ol class="steps">
+    <li>Va sur <b>github.com/signup</b>.</li>
+    <li>Saisis ton adresse e-mail, choisis un mot de passe, puis un nom d'utilisateur (par exemple <code>jean-equilibre</code>). Ce nom sera visible des autres.</li>
+    <li>Réponds au petit test anti-robot, puis clique sur <span class="btn green">Create account</span>.</li>
+    <li>GitHub t'envoie un code à 8 chiffres par e-mail : recopie-le sur la page.</li>
+    <li>Les questions qui suivent (équipe, centres d’intérêt) sont facultatives : tu peux les passer avec le lien <i>Skip</i> en bas de page.</li>
+  </ol>
+  <div class="note"><b>À faire ensuite</b>Envoie ton nom d'utilisateur GitHub à Max : il en a besoin pour t'inviter sur le projet.</div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Accepter l'invitation de Max</h2>
+  <ol class="steps">
+    <li>Tu reçois un e-mail de GitHub : « <i>maxbecq invited you to collaborate on maxbecq/xcraft</i> ».</li>
+    <li>Clique sur <span class="btn green">View invitation</span>, puis sur <span class="btn green">Accept invitation</span>.</li>
+  </ol>
+  <p class="small">E-mail introuvable ? Connecte-toi et ouvre directement <b>github.com/maxbecq/xcraft/invitations</b>. L'invitation expire au bout de 7 jours : passé ce délai, demande à Max de la renvoyer.</p>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Modifier les statistiques</h2>
+  <ol class="steps">
+    <li>Ouvre <b>github.com/maxbecq/xcraft/blob/main/src/balance.json</b>.<br><span class="small">Garde ce lien dans tes favoris : c'est ton point d'entrée à chaque fois.</span></li>
+    <li>En haut à droite du fichier, clique sur le <b>crayon</b> ✎ (bulle d'aide : <i>Edit this file</i>).</li>
+    <li>Le fichier devient modifiable. Trouve l'unité : chaque ligne commence par son nom (<code>"archer"</code>, <code>"toptere"</code>…). Pour chercher, clique dans le texte puis utilise <b>Ctrl+F</b> (<b>⌘+F</b> sur Mac).</li>
+    <li>Change <b>seulement les nombres</b>.</li>
+  </ol>
+
+  <p>Exemple : l'Archer passe de 70 à 80 PV et sa portée de 5 à 5,5.</p>
+<pre>Avant :
+"archer": { "hp": <span class="hl">70</span>, "shield": 70, "armor": 1, "speed": 2.4, "sight": 9, "supply": 2, "cost": { "minerals": 150, "energy": 50 }, "buildTime": 24, "attack": { "damage": 10, "range": <span class="hl">5</span>, "cooldown": 1.2 } },
+
+Après :
+"archer": { "hp": <span class="hl">80</span>, "shield": 70, "armor": 1, "speed": 2.4, "sight": 9, "supply": 2, "cost": { "minerals": 150, "energy": 50 }, "buildTime": 24, "attack": { "damage": 10, "range": <span class="hl">5.5</span>, "cooldown": 1.2 } },</pre>
+
+  <div class="note warn"><b>Les 4 règles pour ne pas casser le fichier</b>
+    1. Un <b>point</b> pour les décimales : <code>5.5</code>, jamais <code>5,5</code>.<br>
+    2. Ne touche pas aux guillemets <code>"</code>, aux accolades <code>{ }</code>, aux crochets <code>[ ]</code>, aux deux-points ni aux virgules.<br>
+    3. Ne renomme rien : <code>"hp"</code> reste <code>"hp"</code>, <code>"archer"</code> reste <code>"archer"</code>.<br>
+    4. Un nombre sans guillemets : <code>80</code>, pas <code>"80"</code>.
+  </div>
+<pre>Erreurs fréquentes :
+"hp": <span class="bad">80,5</span>        ← virgule au lieu du point
+"hp": <span class="bad">"80"</span>        ← guillemets autour du nombre
+"range": 5.5 <span class="bad">}</span> }  ← virgule effacée avant l'accolade suivante</pre>
+  <p class="small">Si tu te trompes, pas de panique : le robot le détecte (étape 5), et tu peux corriger (étape 6). Pour tout annuler avant de valider, clique sur <span class="btn">Cancel changes</span>.</p>
+</section>
+
+<section>
+  <h2><span class="n">4</span>Proposer le changement</h2>
+  <ol class="steps">
+    <li>En haut à droite, clique sur <span class="btn green">Commit changes…</span>. Une fenêtre s'ouvre.</li>
+    <li><b>Commit message</b> : décris ton changement en une phrase, par exemple <code>Archer : 80 PV, portée 5.5</code>.</li>
+    <li>En bas de la fenêtre, coche <b>Create a new branch for this commit and start a pull request</b>.<br>
+      <span class="small">GitHub propose un nom de branche (<code>jean-equilibre-patch-1</code>) : tu peux le garder ou le remplacer, par exemple <code>archer-plus-solide</code>.</span></li>
+    <li>Clique sur <span class="btn green">Propose changes</span>.</li>
+    <li>Sur la page suivante, relis le titre, ajoute si tu veux une explication (pourquoi ce changement, ce que tu as observé en jeu), puis clique sur <span class="btn green">Create pull request</span>.</li>
+  </ol>
+  <div class="note warn"><b>Ne choisis pas « Commit directly to the main branch »</b>Cette option publie ton changement sans test ni validation. Choisis toujours la nouvelle branche.</div>
+  <p>Une <b>pull request</b> (« PR ») est une proposition de changement : elle reste en attente jusqu'à ce que Max la valide. C'est elle qui lance automatiquement les 98 parties de test.</p>
+</section>
+
+<section>
+  <h2><span class="n">5</span>Lire le résultat des 98 parties</h2>
+  <p>Juste après l'ouverture de la pull request, le test démarre tout seul. En bas de la page de la PR, une case indique où il en est :</p>
+  <table>
+    <tr><th>Tu vois</th><th>Ça veut dire</th></tr>
+    <tr><td><span class="wait">● jaune</span> <i>Some checks haven't completed yet</i></td><td>Les parties sont en cours. Compte une dizaine de minutes ; tu peux fermer la page et revenir plus tard.</td></tr>
+    <tr><td><span class="ok">✓ vert</span> <i>All checks have passed</i></td><td>Terminé. Le résultat est en commentaire, plus haut dans la PR.</td></tr>
+    <tr><td><span class="ko">✕ rouge</span> <i>Some checks were not successful</i></td><td>Le fichier a une erreur (souvent une virgule ou un guillemet), ou un chiffre manque. Clique sur <span class="btn">Details</span> : le message nomme l'unité et le champ fautifs, par exemple <code>archer.hp</code>. Corrige comme à l'étape 6.</td></tr>
+  </table>
+
+  <h3>Le commentaire du robot</h3>
+  <p>Le robot joue 98 parties IA contre IA <b>avec les chiffres actuels</b> (colonne « Avant »), puis 98 <b>avec les tiens</b> (colonne « Après »), et compare :</p>
+  <table>
+    <tr><th>Victoires</th><th>Avant</th><th>Après</th></tr>
+    <tr><td>humains</td><td>52</td><td>48 (-4)</td></tr>
+    <tr><td>isdaris</td><td>46</td><td>50 (+4)</td></tr>
+    <tr><td>draw</td><td>0</td><td>0</td></tr>
+    <tr><td>durée moyenne (min)</td><td>14</td><td>14</td></tr>
+  </table>
+  <p class="small">Valeurs d'exemple. « draw » = parties nulles.</p>
+  <p>Sous ce tableau, <b>Unités produites</b> (clique pour déplier) indique combien de chaque unité les IA ont fabriquées : pratique pour voir si une unité est devenue trop chère pour que l'IA la produise, ou si elle en abuse.</p>
+  <div class="grid">
+    <div class="card"><h3>L'objectif</h3>Environ 49 victoires de chaque côté. Un écart de ±5 reste du hasard : il faut un vrai décalage pour conclure.</div>
+    <div class="card"><h3>Les limites</h3>Ce sont des IA, pas des joueurs. Les parties durent 10 à 14 minutes : les unités de fin de partie (Toptère, Chimère, Discobole) y sont rares. Teste-les aussi en jeu.</div>
+  </div>
+  <div class="note"><b>Une idée par PR</b>Si tu changes cinq unités d'un coup, tu ne sauras pas laquelle a fait bouger le résultat. Plusieurs PR peuvent être ouvertes en même temps.</div>
+</section>
+
+<section>
+  <h2><span class="n">6</span>Corriger ou compléter ta proposition</h2>
+  <ol class="steps">
+    <li>Dans ta pull request, ouvre l'onglet <b>Files changed</b>.</li>
+    <li>À droite du nom du fichier, clique sur <b>⋯</b> puis <b>Edit file</b>.</li>
+    <li>Modifie, puis <span class="btn green">Commit changes…</span>. Cette fois, garde le choix proposé : <b>Commit directly to the <i>ta-branche</i> branch</b> (ta branche, pas <code>main</code>).</li>
+  </ol>
+  <p>Le test repart tout seul, et le robot met à jour son commentaire avec les nouveaux chiffres.</p>
+  <p class="small">Pour abandonner une proposition : bouton <span class="btn red">Close pull request</span> en bas de la PR. Rien n'est publié.</p>
+</section>
+
+<section>
+  <h2><span class="n">7</span>Après validation : tester en jeu</h2>
+  <p>Quand ta proposition convient, préviens Max : c'est lui qui la valide (bouton <i>Merge pull request</i>). <b>Ne clique pas sur ce bouton toi-même</b>, même s'il apparaît.</p>
+  <p>Quelques minutes après la validation, le jeu en ligne utilise tes chiffres : <b>maxbecq.github.io/xcraft</b>. Recharge la page pour être sûr d'avoir la dernière version.</p>
+  <p>Pour suivre l'historique des changements : <b>github.com/maxbecq/xcraft/pulls</b> (onglet <i>Closed</i> pour les PR terminées).</p>
+</section>
+
+<section>
+  <h2><span class="n">8</span>Ce que veut dire chaque chiffre</h2>
+  <h3>Unités et bâtiments (<code>units</code>)</h3>
+  <table>
+    <tr><th>Champ</th><th>Sens</th></tr>
+    <tr><td><code>hp</code></td><td>points de vie</td></tr>
+    <tr><td><code>shield</code></td><td>bouclier psychique (Isdaris) : encaisse avant les PV, se recharge hors combat</td></tr>
+    <tr><td><code>armor</code></td><td>retiré des dégâts de chaque coup reçu</td></tr>
+    <tr><td><code>speed</code></td><td>vitesse, en cases par seconde</td></tr>
+    <tr><td><code>sight</code></td><td>vision, en cases</td></tr>
+    <tr><td><code>supply</code></td><td>nourriture utilisée (unité) ou fournie (bâtiment ; négatif : en consomme)</td></tr>
+    <tr><td><code>cost</code></td><td><code>minerals</code> (minerai) et <code>energy</code> (énergie)</td></tr>
+    <tr><td><code>buildTime</code></td><td>temps de production en secondes (vitesse « Normal » de StarCraft 2 ; le jeu tourne plus vite, en « Faster »)</td></tr>
+    <tr><td><code>attack.damage</code></td><td>dégâts par coup</td></tr>
+    <tr><td><code>attack.range</code></td><td>portée en cases, au-delà du contact (corps à corps : 0.1)</td></tr>
+    <tr><td><code>attack.cooldown</code></td><td>secondes entre deux coups</td></tr>
+    <tr><td><code>attack.vsMechanical</code></td><td>bonus ou malus de dégâts contre les cibles mécaniques et les bâtiments</td></tr>
+    <tr><td><code>attack.air</code> / <code>attack.ground</code></td><td><code>false</code> : ne touche pas les volants / pas le sol</td></tr>
+    <tr><td><code>heal</code></td><td>PV rendus par seconde à un allié proche</td></tr>
+    <tr><td><code>regen</code></td><td>PV régénérés par seconde</td></tr>
+    <tr><td><code>detector</code></td><td>rayon de détection des unités invisibles, en cases</td></tr>
+    <tr><td><code>energyRate</code></td><td>énergie produite par seconde</td></tr>
+    <tr><td><code>power</code></td><td>rayon du champ d'énergie Isdaris, en cases</td></tr>
+    <tr><td><code>shieldAura</code></td><td>rayon de recharge rapide des boucliers alliés</td></tr>
+    <tr><td><code>bunker</code></td><td>places dans le bunker</td></tr>
+    <tr><td><code>amount</code></td><td>minerai par champ</td></tr>
+  </table>
+  <p class="small"><code>melee1</code> à <code>armor3</code> : améliorations de la Forge (coût et durée de chaque niveau).</p>
+</section>
+
+<section>
+  <h3>Capacités (<code>abilities</code>)</h3>
+  <p><code>cooldown</code> : secondes avant de pouvoir la réutiliser · <code>duration</code> : secondes d'effet (pour Rappel : le temps de canalisation) · <code>energy</code> : énergie dépensée.</p>
+
+  <h3>Règles générales (<code>rules</code>)</h3>
+  <table>
+    <tr><th>Champ</th><th>Sens</th></tr>
+    <tr><td><code>start</code></td><td>minerai, énergie et ouvriers au début de la partie</td></tr>
+    <tr><td><code>harvest</code></td><td>minerai rapporté par voyage, secondes de minage par voyage</td></tr>
+    <tr><td><code>observation.radius</code></td><td>rayon révélé par l'Observation céleste</td></tr>
+    <tr><td><code>rappel</code></td><td>rayon de ramassage, nombre maximal d'unités rappelées, secondes d'étourdissement à l'arrivée</td></tr>
+    <tr><td><code>peauDeRoc</code></td><td>portée et réduction de dégâts de Peau de roc</td></tr>
+    <tr><td><code>stimulantHp</code></td><td>PV coûtés par le Stimulant</td></tr>
+  </table>
+</section>
+
+<section>
+  <h3>Comportement de l'IA (<code>ai</code>)</h3>
+  <table>
+    <tr><th>Champ</th><th>Sens</th></tr>
+    <tr><td><code>plan.serfs</code></td><td>ouvriers visés par base</td></tr>
+    <tr><td><code>plan.casernes</code></td><td>paires <code>[ouvriers, casernes]</code> : nombre de casernes voulu une fois ce nombre d'ouvriers atteint</td></tr>
+    <tr><td><code>plan.mineAfter</code></td><td>casernes à avoir avant la première Mine ou le premier Récepteur</td></tr>
+    <tr><td><code>plan.wave</code>, <code>plan.waveGrowth</code></td><td>taille de la première vague d'attaque, puis unités ajoutées à chaque vague</td></tr>
+    <tr><td><code>maxWave</code></td><td>taille maximale d'une vague</td></tr>
+    <tr><td><code>plan.healerEvery</code></td><td>une unité produite sur N est un Soigneur</td></tr>
+    <tr><td><code>plan.legionShare</code></td><td>part de Légionnaires parmi les unités de base des Humains (de 0 à 1)</td></tr>
+    <tr><td><code>difficulty</code></td><td>minerai encaissé par l'IA, en % (facile, normal, difficile)</td></tr>
+    <tr><td><code>maxCloaked</code></td><td>nombre maximal d'Assassins en même temps</td></tr>
+    <tr><td><code>antiAir</code></td><td>une défense anti-air de plus par <code>per</code> volants ennemis vus, <code>max</code> au plus</td></tr>
+    <tr><td><code>tech.humains</code></td><td>Machinerie construite à partir de la minute <code>minute</code>, avec <code>barracks</code> casernes</td></tr>
+    <tr><td><code>tech.isdaris</code></td><td>Nano-assembleur construit avec <code>barracks</code> portails, plus de <code>minerals</code> minerai et <code>energy</code> énergie</td></tr>
+    <tr><td><code>army</code></td><td>poids de chaque unité dans l'armée de l'IA (plus le nombre est grand, plus elle en produit)</td></tr>
+  </table>
+  <p class="small">Une question, un doute sur un champ ? Demande à Max avant de toucher aux réglages de l'IA : ils changent sa façon de jouer, pas les unités.</p>
+</section>
+
+</body>
+</html>

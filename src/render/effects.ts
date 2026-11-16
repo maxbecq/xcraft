@@ -5,7 +5,7 @@ import {
   SpriteMaterial, type Texture, Vector3,
 } from 'three';
 import type { Audio, Sfx } from '../audio';
-import { DEFS } from '../data';
+import { DEFS, FLY_HEIGHT } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Shot, World } from '../sim/world';
@@ -123,6 +123,9 @@ export class Effects {
       if (size) {
         this.explosion(this.at(d.x, d.y, 0.5), size);
         this.decal(this.at(d.x, d.y, 0.04), size * 1.1, 0x1a1410, 40);
+      } else if (d.air) {
+        // A flyer blows up in the air; its wreck falls with the unit's body.
+        this.explosion(this.at(d.x, d.y, FLY_HEIGHT), 0.8);
       } else if (d.type !== 'minerai') {
         this.dust(this.at(d.x, d.y, 0.3), d.owner);
         this.decal(this.at(d.x, d.y, 0.03), 0.8, 0x2a1a12, 15);
@@ -151,8 +154,8 @@ export class Effects {
   }
 
   private shot(s: Shot): void {
-    const from = this.at(s.x1, s.y1, 0.55);
-    const to = this.at(s.x2, s.y2, 0.5);
+    const from = this.at(s.x1, s.y1, 0.55 + (s.air1 ? FLY_HEIGHT : 0));
+    const to = this.at(s.x2, s.y2, 0.5 + (s.air2 ? FLY_HEIGHT : 0));
     const dir = to.clone().sub(from);
     if (s.kind === 'heal') {
       for (let i = 0; i < 4; i++) {

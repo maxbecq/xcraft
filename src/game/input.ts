@@ -1,7 +1,8 @@
 import { Raycaster, Vector2, Vector3, type Camera, type Object3D } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import type { Command, Entity, World } from '../sim/world';
+import { type Command, type Entity, type World, flies } from '../sim/world';
+import { FLY_HEIGHT } from '../data';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
@@ -276,7 +277,7 @@ export class Input {
   private screenOf(e: Entity): { x: number; y: number } {
     const x = e.x / FP;
     const z = e.y / FP;
-    const v = new Vector3(x, heightAt(this.map, x, z) + 0.4, z).project(this.hooks.camera());
+    const v = new Vector3(x, heightAt(this.map, x, z) + 0.4 + (flies(e) ? FLY_HEIGHT : 0), z).project(this.hooks.camera());
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
   }
 

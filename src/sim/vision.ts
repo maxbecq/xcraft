@@ -19,9 +19,10 @@ export class Vision {
   }
 
   /** Reveals a disc of `radius` tiles around tile (cx, cy), seen from that tile's level. */
-  reveal(cx: number, cy: number, radius: number): void {
+  /** `high`: seen from the air, over every cliff. */
+  reveal(cx: number, cy: number, radius: number, high = false): void {
     const g = this.grid;
-    const eye = g.inside(cx, cy) ? g.level(cx, cy) : 0;
+    const eye = high ? Infinity : g.inside(cx, cy) ? g.level(cx, cy) : 0;
     const r2 = radius * radius;
     for (let y = Math.max(0, cy - radius); y <= Math.min(g.height - 1, cy + radius); y++) {
       for (let x = Math.max(0, cx - radius); x <= Math.min(g.width - 1, cx + radius); x++) {

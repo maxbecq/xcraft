@@ -1,7 +1,8 @@
-import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
+import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansion } from '../sim/setup';
-import type { Command, Entity, World } from '../sim/world';
+import { type Command, type Entity, type World, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
 export interface Plan {
@@ -20,30 +21,24 @@ export interface Plan {
 }
 
 /** "Bioball auxiliaire" from the Human openings, simplified (normal difficulty). */
-export const BIOBALL: Plan = {
-  serfs: 16,
-  casernes: [[9, 1], [12, 2], [15, 3]],
-  mineAfter: 2,
-  wave: 8,
-  waveGrowth: 4,
-  healerEvery: 4,
-  legionShare: 0.3,
-};
+export const BIOBALL = BALANCE.ai.plan as Plan;
 
 /** Difficulty: the AI plays the same plan, with a harvesting handicap (percent of minerals banked). */
-export const DIFFICULTY: Record<string, number> = { easy: 70, normal: 100, hard: 130 };
+export const DIFFICULTY: Record<string, number> = BALANCE.ai.difficulty;
 
 const THINK_EVERY = 10; // ticks
 const DEFEND_RADIUS = 14 * FP;
-const MAX_WAVE = 18;
+const MAX_WAVE = BALANCE.ai.maxWave;
 /** Forge lines in research order. */
 const RESEARCH = ['ranged', 'armor', 'melee'];
-const MAX_CLOAKED = 3;
+const MAX_CLOAKED = BALANCE.ai.maxCloaked;
 
 /** A computer player. It only acts through commands, like a human. */
 export class AI {
   private waves = 0;
   private trained = 0;
+  /** Most enemy flying units seen at once: calls for anti-air. */
+  private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
   private wave = new Set<number>();
 
@@ -73,6 +68,9 @@ export class AI {
     let minerals = p.minerals;
     for (const s of serfs) if (s.order?.kind === 'build') minerals -= (DEFS[s.order.type] as BuildingDef).cost.minerals;
     const supply = w.supply(this.player);
+    const flyersSeen = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && flies(e) && w.sees(this.player, e)).length;
+    this.enemyAir = Math.max(this.enemyAir, flyersSeen);
+    const antiAir = Math.min(BALANCE.ai.antiAir.max, Math.ceil(this.enemyAir / BALANCE.ai.antiAir.per));
 
     // Idle serfs go mining.
     for (const s of serfs) {
@@ -105,12 +103,22 @@ export class AI {
     if (f.forge && count(f.forge) === 0 && count(f.barracks) >= 2 && count(f.extractor) > 0) wants.push(f.forge);
     const enemyCloaks = w.players.some((o) => w.hostile(o.id, this.player) && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
     // One tower late anyway: level 3 upgrades need it.
-    const detectors = f.detector && f.detector !== f.defense ? (enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
-    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) : 0;
+    // Flying enemies: a few more of the defence that shoots them down (Tour alchimistique, Orbe plasma).
+    const detectors = f.detector && f.detector !== f.defense ? Math.max((enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0), antiAir) : 0;
+    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) + antiAir : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
     // The second production building, for heavier units, only with resources to spare: its units cost
     // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
-    if (f.tech && count(f.tech) === 0 && count(f.barracks) >= 3 && minerals > 900 && p.energy > 400 && !w.lacks(this.player, f.tech)) wants.push(f.tech);
+    // Humans: the Machinerie mid-game (energy is kept for it), Toptères being out of reach of most Isdaris units.
+    const { humains: th, isdaris: ti } = BALANCE.ai.tech;
+    const techTime = f === FACTIONS.humains ? minute >= th.minute && count(f.barracks) >= th.barracks : count(f.barracks) >= ti.barracks && minerals > ti.minerals && p.energy > ti.energy;
+    const techWanted = !!f.tech && count(f.tech) === 0 && techTime && !w.lacks(this.player, f.tech);
+    if (techWanted) wants.push(f.tech!);
+    // Energy kept back for the tech building, then for its units, so cheaper units do not eat it all.
+    const techDef = f.tech ? (DEFS[f.tech] as BuildingDef) : undefined;
+    const techUp = buildings.some((b) => b.type === f.tech && b.buildLeft === 0);
+    const reserve = !techDef ? 0 : techUp ? Math.min(...techDef.trains!.map((t) => (DEFS[t] as UnitDef).cost.energy)) : techWanted ? techDef.cost.energy : 0;
+    let energy = p.energy;
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
     const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker);
@@ -127,6 +135,7 @@ export class AI {
         if (type === f.hq) continue;
         break; // save up for the most urgent one
       }
+      if (energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
       const builder = this.builder(serfs, spot);
       if (!spot || !builder) continue;
@@ -148,22 +157,24 @@ export class AI {
         .filter((t): t is string => !!t)
         .sort((a, b) => (DEFS[a] as UpgradeDef).level - (DEFS[b] as UpgradeDef).level)[0];
       const cost = next && (DEFS[next] as UpgradeDef).cost;
-      if (cost && minerals >= cost.minerals && p.energy >= cost.energy) {
+      if (cost && minerals >= cost.minerals && energy - reserve >= cost.energy) {
         out.push({ player: this.player, kind: 'train', ids: [forge.id], type: next });
         minerals -= cost.minerals;
+        energy -= cost.energy;
       }
     }
     // Isdaris turn buildings into defences: a Récepteur armé from mid-game, Pylônes sanglants when the tech allows.
     for (const b of buildings) {
       const into = (b.def as BuildingDef).morphs?.find((m) => {
         const d = DEFS[m] as BuildingDef;
-        if (b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || p.energy < d.cost.energy) return false;
+        if (b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || energy - reserve < d.cost.energy) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
         return d.energyRate ? minute > 6 && have === 0 : minute > 9 && have < 2;
       });
       if (!into || saving) continue;
       out.push({ player: this.player, kind: 'train', ids: [b.id], type: into });
       minerals -= (DEFS[into] as BuildingDef).cost.minerals;
+      energy -= (DEFS[into] as BuildingDef).cost.energy;
     }
     // Man the Fortins with soldiers waiting at home.
     for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && o.buildLeft === 0)) {
@@ -173,22 +184,25 @@ export class AI {
     }
     // Heavier units from the second production building, one at a time, when affordable.
     for (const t of buildings.filter((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0)) {
-      const type = (t.def as BuildingDef).trains?.[0];
+      // The kind it has fewest of (Discobole and Chimère take turns).
+      const type = (t.def as BuildingDef).trains?.slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
       const def = type && (DEFS[type] as UnitDef);
       if (!def || saving || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
-      if (minerals < def.cost.minerals || p.energy < def.cost.energy) continue;
+      if (minerals < def.cost.minerals || energy < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [t.id], type });
       minerals -= def.cost.minerals;
+      energy -= def.cost.energy;
     }
     const rally = this.rallyPoint(home);
     for (const c of buildings.filter((b) => b.type === f.barracks && b.buildLeft === 0)) {
       if (!c.rally) out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
-      const type = this.nextUnit(p.energy, army, minerals);
+      const type = this.nextUnit(Math.max(0, energy - reserve), army, minerals);
       const def = DEFS[type] as UnitDef;
-      if (minerals < def.cost.minerals || p.energy < def.cost.energy) continue;
+      if (minerals < def.cost.minerals || energy - reserve < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [c.id], type });
       minerals -= def.cost.minerals;
+      energy -= def.cost.energy;
       this.trained++;
     }
 
@@ -371,7 +385,10 @@ export class AI {
       const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
       const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals);
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
-      const army = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked);
+      // Against flying enemies, only what can shoot them.
+      const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked);
+      const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
+      const army = this.enemyAir && antiAir.length ? antiAir : affordable;
       // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones.
       if (energy >= 300) return army.reduce((a, b) => ((DEFS[b[0]] as UnitDef).cost.energy > (DEFS[a[0]] as UnitDef).cost.energy ? b : a))[0];
       const total = army.reduce((n, [, wgt]) => n + wgt, 0);
@@ -383,10 +400,10 @@ export class AI {
       return army[0][0];
     }
     // Phalangistes (grenades, long range) once a Forge stands, one in five.
-    if (energy >= 150 && minerals >= 225 && this.trained % 5 === 2 && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
+    if (energy >= 150 && minerals >= 225 && this.trained % 5 === 2 && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
     if (energy >= 100 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
-    return (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
+    return !this.enemyAir && (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
   }
 
   private nearest(from: Entity, test: (e: Entity) => boolean): Entity | undefined {

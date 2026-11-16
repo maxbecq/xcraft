@@ -1,8 +1,8 @@
 import { Vector3, type Camera } from 'three';
-import type { BuildingDef } from '../data';
+import { type BuildingDef, FLY_HEIGHT } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import type { Entity, World } from '../sim/world';
+import { type Entity, type World, flies } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 export class Overlay {
@@ -38,7 +38,7 @@ export class Overlay {
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
-      this.v.set(x, heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05), z).project(camera);
+      this.v.set(x, heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (flies(e) ? FLY_HEIGHT : 0), z).project(camera);
       if (this.v.z > 1) continue;
       const sx = ((this.v.x + 1) / 2) * w;
       const sy = ((1 - this.v.y) / 2) * h;

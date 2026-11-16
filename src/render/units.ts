@@ -5,11 +5,11 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FLY_HEIGHT, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
-import type { Entity, World } from '../sim/world';
+import { type Entity, type World, flies } from '../sim/world';
 
 /** Player colours: blue, red, green, purple. */
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f, 0x38b04c, 0x9a52d8];
@@ -219,7 +219,9 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant'];
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'toptere', 'chimere', 'machinerie'];
+/** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
+const STATIC_YAW: Record<string, number> = { toptere: Math.PI / 2, chimere: Math.PI / 2 };
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
@@ -270,7 +272,11 @@ export async function loadModels(types: string[]): Promise<void> {
           gltf.scene.traverse((o) => {
             if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type))));
           });
-          templates.set(type, gltf.scene);
+          // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
+          const holder = new Group();
+          gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
+          holder.add(gltf.scene);
+          templates.set(type, STATIC_YAW[type] ? holder : gltf.scene);
           return;
         } catch {
           // no Meshy model: use the Blender one
@@ -491,6 +497,8 @@ interface View {
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   heading: number;
+  /** Flyers: ground height under them, eased so they glide over cliffs instead of jumping. */
+  ground?: number;
   /** Direction the unit wants to face; `heading` turns towards it. */
   target: number;
   cargo?: Object3D;
@@ -567,7 +575,10 @@ export class EntityRenderer {
       }
       const f = Math.min(1, d.age / 0.45);
       d.v.model.rotation.z = d.side * (Math.PI / 2) * f * f;
-      d.v.model.position.y = 0.12 * f - Math.max(0, d.age - 2.5) * 0.4;
+      // Flyers drop out of the sky first.
+      const alt: number = (d.v.model.userData.alt ??= d.v.model.position.y);
+      const air = alt > 0.5 ? Math.max(0, alt - 5 * d.age * d.age) : 0.12 * f;
+      d.v.model.position.y = air - Math.max(0, d.age - 2.5) * 0.4;
       if (d.age < 4) return true;
       this.scene.remove(d.v.root);
       return false;
@@ -593,7 +604,9 @@ export class EntityRenderer {
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
-      v.root.position.set(x, heightAt(this.map, x, z), z);
+      const ground = heightAt(this.map, x, z);
+      v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
+      v.root.position.set(x, v.ground, z);
       const picked = selected.has(e.id);
       if (picked && !v.ring.visible) v.ring.userData.since = performance.now();
       v.ring.visible = picked;
@@ -684,11 +697,14 @@ export class EntityRenderer {
     const body = v.model.children[0];
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
     // Hovering robots float; walkers bounce with their stride.
-    const hover = e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
+    const flying = flies(e);
+    const hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
     const bob = hover + (hover ? 0 : moving ? Math.abs(Math.sin(phase)) * 0.045 : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
     ease(body, 'x', moving ? 0.14 : fighting && !melee ? 0.06 : 0, 0.15);
-    ease(body, 'z', moving ? Math.sin(phase) * 0.05 : 0, 0.2);
+    // Flyers bank into their turns instead of swaying.
+    const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
+    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;

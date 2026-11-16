@@ -1,4 +1,4 @@
-import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -15,6 +15,9 @@ export type Order =
   | { kind: 'heal'; target: number }
   /** Walk into a bunker (Fortin) and take cover there. */
   | { kind: 'enter'; target: number };
+
+/** Flying units go straight over cliffs and buildings. */
+export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying;
 
 export interface Entity {
   id: number;
@@ -116,6 +119,9 @@ export interface Shot {
   kind: 'ranged' | 'melee' | 'heal';
   /** Shooter's type, for its sound. */
   type?: string;
+  /** Shooter and target fly. */
+  air1?: boolean;
+  air2?: boolean;
 }
 
 /** An ability used this tick (render and sound only). */
@@ -130,6 +136,7 @@ export interface Death {
   y: number;
   type: string;
   owner: number;
+  air?: boolean;
 }
 
 /**
@@ -266,7 +273,7 @@ export class World {
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
-      for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r);
+      for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r, flies(e));
     }
     for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
     for (const d of this.detected) d.clear();
@@ -293,7 +300,7 @@ export class World {
   private bury(): void {
     for (const e of [...this.entities.values()]) {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
-      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner });
+      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner, air: flies(e) });
       if (e.order?.kind === 'gather') this.release(e, e.order.target);
       this.remove(e);
     }
@@ -390,7 +397,11 @@ export class World {
         const t = this.target(c);
         const fighters = units.filter((e) => 'attack' in e.def && e.def.attack);
         if (t && this.hostile(t.owner, c.player)) {
-          for (const e of fighters) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
+          // Those that cannot hit it (a flyer, for melee) attack-move to where it is.
+          for (const e of fighters) {
+            if (reaches((e.def as UnitDef).attack!, t.def.kind === 'unit' && flies(t))) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
+            else this.setOrder(e, { kind: 'attackMove', x: t.x, y: t.y, target: 0 });
+          }
         } else {
           for (const e of fighters) this.setOrder(e, { kind: 'attackMove', x: c.x, y: c.y, target: 0 });
         }
@@ -574,7 +585,7 @@ export class World {
     const movers: Entity[] = [];
     for (const e of units) {
       const worker = (e.def as UnitDef).worker;
-      if (t && this.hostile(t.owner, e.owner) && (e.def as UnitDef).attack) {
+      if (t && this.hostile(t.owner, e.owner) && (e.def as UnitDef).attack && reaches((e.def as UnitDef).attack!, t.def.kind === 'unit' && flies(t))) {
         this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
       } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
         this.setOrder(e, { kind: 'heal', target: t.id });
@@ -582,7 +593,7 @@ export class World {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
       } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp) {
         this.setOrder(e, { kind: 'construct', target: t.id });
-      } else if (!worker && t && t.owner === e.owner && (t.def as BuildingDef).bunker && t.buildLeft === 0 && (e.def as UnitDef).attack) {
+      } else if (!worker && t && t.owner === e.owner && (t.def as BuildingDef).bunker && t.buildLeft === 0 && (e.def as UnitDef).attack && !flies(e)) {
         this.setOrder(e, { kind: 'enter', target: t.id });
       } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).dropoff && e.carry > 0) {
         this.setOrder(e, { kind: 'gather', target: this.nearestField(e)?.id ?? 0, phase: 'return', timer: 0 });
@@ -718,12 +729,12 @@ export class World {
   private think(e: Entity): void {
     if (e.inside) return this.shelter(e);
     // Caught under a new building (with or without orders): walk out first.
-    if (!this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
+    if (!flies(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
     const o = e.order;
     if (!o) {
       if ((this.tick + e.id) % 4 === 0) this.acquire(e);
-      if (!e.order) this.evict(e);
+      if (!e.order && !flies(e)) this.evict(e);
       return;
     }
     switch (o.kind) {
@@ -951,6 +962,7 @@ export class World {
   private strike(e: Entity, t: Entity): void {
     const a = (e.def as UnitDef).attack;
     if (!a) return;
+    if (!reaches(a, flies(t))) return this.setOrder(e, null);
     if (this.gap(e, t) > toFp(a.range) + FP / 8) return this.chase(e, t);
     e.shortTicks = 0;
     e.goal = null;
@@ -972,10 +984,10 @@ export class World {
       this.lastAlert[t.owner] = this.tick;
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
     }
-    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type });
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, air1: flies(e), air2: flies(t) });
     // Idle soldiers hit from afar fight back.
     const td = t.def as UnitDef;
-    if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker) {
+    if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
       this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
     }
   }
@@ -983,7 +995,7 @@ export class World {
   private chase(e: Entity, t: Entity): void {
     if (t.def.kind === 'building') return this.goNear(e, t.tx, t.ty, (t.def as BuildingDef).size);
     if (!e.goal || dist(e.goal.x, e.goal.y, t.x, t.y) > FP) this.plan(e, t.x, t.y);
-    if (!this.follow(e)) return void (e.shortTicks = 0);
+    if (!this.follow(e) || flies(e)) return void (e.shortTicks = 0);
     // At the end of its path and still out of reach (the target stands below a cliff): after two seconds,
     // leave it be for a while and pick another fight, rather than standing there for ever.
     if (++e.shortTicks < ticks(2)) return;
@@ -1014,11 +1026,12 @@ export class World {
   }
 
   /** Most threatening visible enemy within range: armed units and defences first, then workers, then buildings. */
-  private enemyNear(e: Entity, range: number, unitsOnly = false): Entity | undefined {
+  private enemyNear(e: Entity, range: number, unitsOnly = false, a = (e.def as UnitDef | BuildingDef).attack): Entity | undefined {
     let best: Entity | undefined;
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
       if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
+      if (a && !reaches(a, flies(t))) continue;
       if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
       if (t.inside) continue; // sheltering in a bunker: hit the bunker
       const d = this.gap(e, t);
@@ -1100,7 +1113,7 @@ export class World {
     const a = (e.def as UnitDef).attack;
     if (e.cooldown > 0 || !a) return;
     const range = toFp(a.range + 1) + (b.def as BuildingDef).size * FP / 2;
-    const t = this.enemyNear(b, range);
+    const t = this.enemyNear(b, range, false, a);
     if (!t) return;
     e.cooldown = ticks(a.cooldown);
     this.hit({ ...e, x: b.x, y: b.y } as Entity, t, a);
@@ -1193,6 +1206,10 @@ export class World {
     const g = this.grid;
     e.goal = { x, y };
     e.blockedTicks = 0;
+    if (flies(e)) {
+      e.path = [Math.max(0, Math.min(g.width * FP - 1, x)), Math.max(0, Math.min(g.height * FP - 1, y))];
+      return;
+    }
     let gx = Math.min(g.width - 1, Math.max(0, tileOf(x)));
     let gy = Math.min(g.height - 1, Math.max(0, tileOf(y)));
     const exact = g.open(gx, gy);
@@ -1262,6 +1279,12 @@ export class World {
 
   /** Moves if the step crosses no cliff or obstacle (`throughBuildings`: cliffs only). */
   private tryMove(e: Entity, nx: number, ny: number, throughBuildings = false): boolean {
+    if (flies(e)) {
+      if (nx < 0 || ny < 0 || nx >= this.grid.width * FP || ny >= this.grid.height * FP) return false;
+      e.x = nx;
+      e.y = ny;
+      return true;
+    }
     const ax = tileOf(e.x);
     const ay = tileOf(e.y);
     const bx = tileOf(nx);
@@ -1272,7 +1295,7 @@ export class World {
     return true;
   }
 
-  /** Pushes overlapping ground units apart; moving units shove idle ones. Harvesters pass through each other. */
+  /** Pushes overlapping units apart (flying ones among themselves); moving units shove idle ones. Harvesters pass through each other. */
   private separate(): void {
     const buckets = new Map<number, Entity[]>();
     const key = (x: number, y: number) => y * 1024 + x;
@@ -1288,7 +1311,7 @@ export class World {
       const by = tileOf(e.y) >> 1;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          for (const f of buckets.get(key(bx + dx, by + dy)) ?? []) if (f.id > e.id) this.pushApart(e, f);
+          for (const f of buckets.get(key(bx + dx, by + dy)) ?? []) if (f.id > e.id && flies(f) === flies(e)) this.pushApart(e, f);
         }
       }
     }
