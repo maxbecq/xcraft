@@ -290,3 +290,23 @@ body:not(.isdaris) .help kbd { font: 17px var(--lcd); color: var(--phos); backgr
   body:not(.isdaris) .tool { font-size: 17px; }
   body:not(.isdaris) .cmd { font-size: 15px; }
 }
+
+/* Top displays and messages float over the battlefield, printed on the glass: no plates or boxes,
+   just phosphor text with a dark halo so it reads on bright sand. Messages type themselves in. */
+body:not(.isdaris) {
+  --float: 0 0 2px #000, 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(141, 255, 138, 0.35);
+}
+body:not(.isdaris) .hud-bar, body:not(.isdaris) .hud-bar .res, body:not(.isdaris) .tool, body:not(.isdaris) .hud-toast {
+  background: none; border: 0; box-shadow: none; text-shadow: var(--float);
+}
+body:not(.isdaris) .hud-bar { gap: 18px; padding: 6px 4px; }
+body:not(.isdaris) .hud-bar .res { padding: 0; }
+body:not(.isdaris) .res i { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 4px rgba(141, 255, 138, 0.7)); }
+body:not(.isdaris) .tool { padding: 2px 4px; }
+body:not(.isdaris) .tool::before { content: '['; color: var(--phos-dim); }
+body:not(.isdaris) .tool::after { content: ']'; color: var(--phos-dim); }
+body:not(.isdaris) .tool:hover { background: none; color: #d6ffd2; text-shadow: var(--float), 0 0 8px var(--phos); }
+body:not(.isdaris) .hud-toast { padding: 0; animation: lcd-type 0.5s steps(24, end) both; }
+body:not(.isdaris) .hud-toast.alert { text-shadow: 0 0 2px #000, 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 179, 71, 0.5); }
+@keyframes lcd-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { body:not(.isdaris) .hud-toast { animation: none; } }
