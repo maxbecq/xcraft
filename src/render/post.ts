@@ -19,7 +19,8 @@ export class Post {
   private readonly ink: ShaderPass | null = null;
 
   /** `fx` holds particles: drawn after ambient occlusion, which would otherwise shade their quads. */
-  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean) {
+  /** `light` (phones and tablets): fewer occlusion samples, half-size bloom, no SMAA (the ink line already hides most jaggies). */
+  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean, light = false) {
     // Soft image-based light so metal and glass pick up reflections.
     const pmrem = new PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -32,7 +33,7 @@ export class Post {
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     this.ao = new GTAOPass(scene, camera, size.x, size.y);
-    this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2 });
+    this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2, samples: light ? 8 : 16 });
     this.ao.blendIntensity = 0.85;
     composer.addPass(this.ao);
     // `?noink` keeps the plain 3D look.
@@ -44,9 +45,9 @@ export class Post {
     const fxPass = new RenderPass(fx, camera);
     fxPass.clear = false;
     composer.addPass(fxPass);
-    composer.addPass(new UnrealBloomPass(size, 0.5, 0.4, 0.9));
+    composer.addPass(new UnrealBloomPass(light ? size.clone().multiplyScalar(0.5) : size, 0.5, 0.4, 0.9));
     composer.addPass(new OutputPass());
-    composer.addPass(new SMAAPass());
+    if (!light) composer.addPass(new SMAAPass());
     this.composer = composer;
   }
 

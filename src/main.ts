@@ -90,7 +90,7 @@ scene.add(new HemisphereLight(biome.sky.color, biome.sky.ground, biome.sky.inten
 const sun = new DirectionalLight(biome.sun.color, biome.sun.intensity);
 const SUN_OFFSET = new Vector3(-22, 40, -12);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(TOUCH ? 2048 : 4096, TOUCH ? 2048 : 4096);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 // The shadow box follows the camera, so shadows stay crisp.
@@ -180,7 +180,7 @@ function scrollDirection(): [number, number] {
 }
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-const post = new Post(renderer, scene, fxScene, rig.camera, !params.has('lowfx'));
+const post = new Post(renderer, scene, fxScene, rig.camera, !params.has('lowfx'), TOUCH);
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   post.setSize(window.innerWidth, window.innerHeight);
