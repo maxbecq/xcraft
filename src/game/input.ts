@@ -50,6 +50,13 @@ export class Input {
     window.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return this.touchDown(e, canvas);
+      if (e.button === 1) {
+        // Middle button: grab and drag the map.
+        e.preventDefault();
+        this.grab = { x: e.clientX, y: e.clientY };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       const ground = this.groundAt(e.clientX, e.clientY);
       if (this.hooks.click?.(e.button, ground, e.shiftKey, this.entityAt(e.clientX, e.clientY))) return;
       if (e.button === 0) {
@@ -62,6 +69,11 @@ export class Input {
     canvas.addEventListener('pointermove', (e) => {
       this.hover = this.groundAt(e.clientX, e.clientY);
       if (e.pointerType === 'touch') return this.touchMove(e);
+      if (this.grab) {
+        this.hooks.pan(e.clientX - this.grab.x, e.clientY - this.grab.y);
+        this.grab = { x: e.clientX, y: e.clientY };
+        return;
+      }
       if (!this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.box.hidden = r.w < DRAG_PX && r.h < DRAG_PX;
@@ -70,6 +82,7 @@ export class Input {
     canvas.addEventListener('pointercancel', (e) => this.touches.delete(e.pointerId));
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'touch') return this.touchUp(e);
+      if (e.button === 1) this.grab = null;
       if (e.button !== 0 || !this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.dragStart = null;
@@ -88,6 +101,8 @@ export class Input {
 
   // ---------------------------------------------------------------- touch
 
+  /** Last pointer position while the middle button drags the map. */
+  private grab: { x: number; y: number } | null = null;
   private readonly touches = new Map<number, { x: number; y: number; sx: number; sy: number }>();
   private touchMode: TouchMode | null = null;
   private longPress = 0;

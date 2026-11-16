@@ -1,12 +1,13 @@
 import {
   AdditiveBlending, Box3, CanvasTexture, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
-import { FP, ticks } from '../sim/fixed';
+import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f];
@@ -97,11 +98,60 @@ function pool(radius: number, color: number): Mesh {
 /** Models built by tools/blender/models.py, by entity type. */
 const templates = new Map<string, Group>();
 
+/**
+ * Rigged, animated characters made with Meshy (tools/meshy): `<type>-meshy.glb` for the types in RIGGED,
+ * preferred over the Blender model (`?proc` keeps the Blender ones). Height in tiles, before UNIT_SCALE.
+ */
+const RIGGED_HEIGHT = 0.86;
+/** Weapon prop (`<name>-meshy.glb`, muzzle along +Z, grip at the origin) held by each character. */
+const WEAPONS: Record<string, string> = { auxiliaire: 'fusil' };
+/** Unit types that have a Meshy character. */
+const RIGGED = ['auxiliaire'];
+const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
+
+/** Repaints the texture's blue team stripes in the team colour, with a faint glow. */
+function teamSkin(source: MeshStandardMaterial, color: number): MeshStandardMaterial {
+  const m = source.clone();
+  const team = new Color(color);
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.teamColor = { value: team };
+    shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        vec3 paint = diffuseColor.rgb;
+        float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r, paint.g));
+        diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += teamColor * teamMask * 0.3;`);
+  };
+  m.customProgramCacheKey = () => `team-${color}`;
+  rimLight(m, 0.45);
+  return m;
+}
+
 /** Loads the Blender models; types without one keep their placeholder. */
 export async function loadModels(types: string[]): Promise<void> {
   const loader = new GLTFLoader();
   await Promise.all(
     types.map(async (type) => {
+      if (RIGGED.includes(type) && !new URLSearchParams(location.search).has('proc')) {
+        try {
+          const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
+          const size = new Box3().setFromObject(gltf.scene).getSize(new Vector3());
+          gltf.scene.scale.setScalar(RIGGED_HEIGHT / size.y);
+          let skin: MeshStandardMaterial | undefined;
+          gltf.scene.traverse((o) => {
+            if (o instanceof SkinnedMesh) skin = o.material as MeshStandardMaterial;
+          });
+          const weapon = WEAPONS[type];
+          if (skin && weapon) await arm(gltf.scene, gltf.animations, (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${weapon}-meshy.glb`)).scene);
+          if (skin) {
+            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c)) });
+            return;
+          }
+        } catch {
+          // no Meshy model: use the Blender one
+        }
+      }
       try {
         const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}.glb`);
         // Rust, damp and grime: heavy on buildings, light on soldiers, none on crystals.
@@ -120,8 +170,50 @@ export async function loadModels(types: string[]): Promise<void> {
   );
 }
 
+/**
+ * Puts the weapon in the character's right hand, its barrel pointing at the left hand as posed in
+ * the combat stance; parented to the hand bone, it then follows every animation.
+ */
+function arm(character: Group, clips: AnimationClip[], weapon: Group): void {
+  const stance = clips.find((c) => c.name === CLIP.idle);
+  const right = character.getObjectByName('RightHand');
+  const left = character.getObjectByName('LeftHand');
+  if (!stance || !right || !left) return;
+  const mixer = new AnimationMixer(character);
+  mixer.clipAction(stance).play();
+  mixer.update(0);
+  character.updateMatrixWorld(true);
+  const grip = right.getWorldPosition(new Vector3());
+  weapon.position.copy(grip);
+  weapon.scale.setScalar(character.scale.x);
+  weapon.lookAt(left.getWorldPosition(new Vector3()));
+  weapon.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    o.castShadow = true;
+    rimLight(o.material as Material, 0.45);
+  });
+  weapon.updateMatrixWorld();
+  right.attach(weapon);
+  mixer.stopAllAction();
+}
+
 /** A copy of a Blender model; `seed` picks its graffiti. */
 function model(type: string, team: Material, seed = 0): Group {
+  const r = rigged.get(type);
+  if (r) {
+    const g = new Group();
+    const character = cloneSkinned(r.scene);
+    character.traverse((o) => {
+      if (!(o instanceof SkinnedMesh)) return;
+      o.material = r.skins[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? r.skins[0];
+      o.castShadow = true;
+      o.receiveShadow = true;
+      o.frustumCulled = false; // the bind-pose bounds do not follow the animation
+    });
+    g.add(character);
+    g.userData.clips = r.clips;
+    return g;
+  }
   const t = templates.get(type);
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
@@ -231,6 +323,26 @@ interface View {
   unit: boolean;
   /** Animated parts from the Blender model, if any. */
   limbs: { legL?: Object3D; legR?: Object3D; armL?: Object3D; armR?: Object3D };
+  /** Skeletal animation of Meshy characters. */
+  mixer?: AnimationMixer;
+  clips?: Map<string, AnimationAction>;
+  playing?: AnimationAction;
+}
+
+/** Clip names baked by tools/meshy/rig.mjs and pack.py. */
+const CLIP = { idle: 'Combat_Stance', walk: 'walk', fire: 'Walk_Forward_While_Shooting', die: 'Shot_and_Fall_Forward' };
+/** Ground covered by one second of the walk clip at its natural pace, in tiles. */
+const WALK_STRIDE = 1.1;
+
+/** Cross-fades a character to clip `name`, if it has it. */
+function play(v: View, name: string, timeScale = 1): void {
+  const next = v.clips?.get(name);
+  if (!next) return;
+  next.timeScale = timeScale;
+  if (v.playing === next) return;
+  next.reset().play();
+  if (v.playing) next.crossFadeFrom(v.playing, 0.2, false);
+  v.playing = next;
 }
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
@@ -259,12 +371,21 @@ export class EntityRenderer {
         // Fallen soldiers topple over and sink into the ground; buildings just go (they explode).
         if (v.unit && v.root.visible) {
           v.ring.visible = false;
+          if (v.mixer) play(v, CLIP.die);
           this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
         } else this.scene.remove(v.root);
       }
     }
     this.dying = this.dying.filter((d) => {
       d.age += dt;
+      if (d.v.mixer) {
+        // Animated characters play their own fall, then sink.
+        d.v.mixer.update(dt);
+        d.v.model.position.y = -Math.max(0, d.age - 2.5) * 0.4;
+        if (d.age < 4) return true;
+        this.scene.remove(d.v.root);
+        return false;
+      }
       const f = Math.min(1, d.age / 0.45);
       d.v.model.rotation.z = d.side * (Math.PI / 2) * f * f;
       d.v.model.position.y = 0.12 * f - Math.max(0, d.age - 2.5) * 0.4;
@@ -288,7 +409,7 @@ export class EntityRenderer {
       v.ring.visible = selected.has(e.id);
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
-        this.animate(v, e);
+        this.animate(v, e, dt);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       if (e.type === 'minerai') {
@@ -309,9 +430,16 @@ export class EntityRenderer {
    * Walk cycle (legs, counter-swinging arms, bob, forward lean, sway), breathing when idle,
    * aiming and recoil for gunners, a full-body swing for melee. Everything is eased so poses never snap.
    */
-  private animate(v: View, e: Entity): void {
+  private animate(v: View, e: Entity, dt: number): void {
     const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py;
+    if (v.mixer) {
+      const attacking = e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
+      if (moving) play(v, attacking ? CLIP.fire : CLIP.walk, ((e.def as UnitDef).speed * GAME_SPEED) / WALK_STRIDE);
+      else play(v, CLIP.idle, attacking ? 1.4 : 0.8);
+      v.mixer.update(dt);
+      return;
+    }
     const speed = (e.def as UnitDef).speed;
     const phase = t * speed * 4.2 + e.id;
     const a = (e.def as UnitDef).attack;
@@ -398,6 +526,18 @@ export class EntityRenderer {
     const facing = e.owner === 0 ? Math.PI * 0.25 : -Math.PI * 0.75;
     const v: View = { root, model: pivot, ring, scaffold, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
+    const clips = body.userData.clips as AnimationClip[] | undefined;
+    if (clips) {
+      v.mixer = new AnimationMixer(body);
+      v.clips = new Map(clips.map((c) => [c.name, v.mixer!.clipAction(c)]));
+      const die = v.clips.get(CLIP.die);
+      if (die) {
+        die.setLoop(LoopOnce, 1);
+        die.clampWhenFinished = true;
+      }
+      play(v, CLIP.idle, 0.8);
+      v.mixer.setTime((e.id % 17) / 7); // out of step with each other
+    }
     this.views.set(e.id, v);
     return v;
   }

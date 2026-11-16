@@ -20,7 +20,7 @@ import { BIOMES, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 
-const EDGE_PX = 8;
+const EDGE_PX = 16;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -87,6 +87,8 @@ let pending: Command[] = [];
 
 
 const rig = new CameraRig(map.width, map.height);
+// Upright phones: zoom out so the narrow view still spans a dozen tiles.
+if (window.innerHeight > window.innerWidth) rig.viewHeight = 26;
 const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === FACTIONS[myFaction].hq)!;
 rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
@@ -138,7 +140,16 @@ window.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
 });
 document.addEventListener('mouseleave', () => (mouse = null));
-window.addEventListener('wheel', (e) => rig.zoomBy(Math.exp(e.deltaY * 0.001)));
+// Wheel zooms. A trackpad's two-finger scroll (sideways or fractional pixel deltas) pans,
+// and its pinch (sent as ctrl+wheel) zooms.
+window.addEventListener('wheel', (e) => {
+  if (!(e.target instanceof HTMLCanvasElement)) return;
+  e.preventDefault();
+  const trackpad = e.deltaMode === 0 && (e.deltaX !== 0 || !Number.isInteger(e.deltaY));
+  if (e.ctrlKey) rig.zoomBy(Math.exp(e.deltaY * 0.01));
+  else if (trackpad) rig.panPixels(-e.deltaX, -e.deltaY);
+  else rig.zoomBy(Math.exp(e.deltaY * 0.001));
+}, { passive: false });
 
 function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
@@ -182,17 +193,14 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
-Flèches, bords d'écran, minimap : caméra · molette : zoom<br>
+Flèches, bords d'écran, minimap, clic molette glissé, deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd> : cette aide
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
 Appui long puis glisser : rectangle de sélection`;
-const rotate = document.createElement('div');
-rotate.className = 'rotate-hint';
-rotate.innerHTML = '<b>⟳</b>TOURNEZ VOTRE TÉLÉPHONE<br>EN MODE PAYSAGE';
-document.body.append(tools, help, rotate);
+document.body.append(tools, help);
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).dataset.t;
   if (t === 'help') help.hidden = !help.hidden;
