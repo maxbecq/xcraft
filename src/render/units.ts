@@ -345,10 +345,31 @@ function placeholder(type: string, team: Material): Group {
       add(new CylinderGeometry(1.4, 1.5, 0.12, 20), darkStone, 0, 0.06, 0);
       add(new CylinderGeometry(0.8, 0.8, 0.14, 20), wellGlow, 0, 0.08, 0);
       break;
-    default:
-      body(0.3);
+    default: {
+      // New buildings without a model: a block of their footprint, team-coloured on top.
+      const d = DEFS[type];
+      if (d?.kind !== 'building') {
+        body(0.3);
+        break;
+      }
+      add(new BoxGeometry(d.size * 0.85, 0.9, d.size * 0.85), stone, 0, 0.45, 0);
+      add(new SphereGeometry(d.size * 0.25, 12, 8), team, 0, 1.1, 0);
+    }
   }
   return g;
+}
+
+/** Invisible units are drawn see-through (only their owner, or a detecting enemy, sees them at all). */
+function ghost(body: Object3D): void {
+  body.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const m = (o.material as Material).clone();
+    m.transparent = true;
+    m.opacity = 0.3;
+    m.depthWrite = false;
+    o.material = m;
+    o.castShadow = false;
+  });
 }
 
 interface View {
@@ -540,6 +561,7 @@ export class EntityRenderer {
     pivot.add(body);
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
     if (e.def.kind === 'unit') body.scale.setScalar(UNIT_SCALE);
+    if ((e.def as UnitDef).cloaked) ghost(body);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
     const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 0.95);
