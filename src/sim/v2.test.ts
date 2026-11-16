@@ -148,6 +148,22 @@ describe('invisibility and detection', () => {
     run(w, 0.5);
     expect(w.sees(0, sin)).toBe(false);
   });
+
+  it('the Forge’s Observation céleste detects a zone for a while, for 50 energy', () => {
+    const w = new World(createMap());
+    const forge = w.spawn('forge', 0, 20 * FP, 60 * FP);
+    w.spawn('auxiliaire', 0, ...at(40, 60));
+    const sin = w.spawn('assassin', 1, ...at(44, 60));
+    w.players[0].energy = 60;
+    w.step([{ player: 0, kind: 'ability', ids: [forge.id], x: sin.x, y: sin.y }]);
+    run(w, 0.5);
+    expect(w.sees(0, sin)).toBe(true);
+    expect(w.players[0].energy).toBe(10);
+    w.step([{ player: 0, kind: 'ability', ids: [forge.id], x: sin.x, y: sin.y }]); // recharging
+    expect(w.scans).toHaveLength(1);
+    run(w, 11);
+    expect(w.sees(0, sin)).toBe(false);
+  });
 });
 
 describe('Orbe plasma', () => {
