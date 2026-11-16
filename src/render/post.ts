@@ -25,6 +25,9 @@ export class Post {
     const pmrem = new PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environmentIntensity = 0.35;
+    // Shadows are drawn once per frame, in render(): the ambient occlusion pass renders the scene again
+    // and would otherwise redraw the whole shadow map, every skinned unit included.
+    renderer.shadowMap.autoUpdate = false;
     if (!enabled) {
       this.composer = null;
       return;
@@ -57,6 +60,7 @@ export class Post {
   }
 
   render(): void {
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.composer) this.composer.render();
     else {
       this.renderer.render(this.scene, this.camera);
