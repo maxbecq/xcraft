@@ -139,30 +139,37 @@ function pcbTextures(): NonNullable<typeof pcb> {
   tg.strokeStyle = tg.fillStyle = '#fff';
   let seed = 23;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const MIN_OFF = 22; // degrees away from the screen's horizontal and vertical
-  // A heading near `from`, turned by up to `turn`, that does not run along the screen's axes.
-  const heading = (from: number, turn: number) => {
-    for (let k = 0; k < 40; k++) {
-      const a = from + (rnd() * 2 - 1) * turn;
-      if (offAxis(a) >= MIN_OFF) return a;
-    }
-    return Math.PI / 12; // 15° off the texture's x axis: about 45° on screen
-  };
+  // Routed like a circuit board along three directions only: the texture's two axes, which lie on screen
+  // as the two diagonals of the iso grid, and a jog at JOG; never along the screen's horizontal or vertical.
+  const G = 16;
+  const JOG = (27 * Math.PI) / 180;
+  const AXES = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
   type Trace = { pts: [number, number][]; w: number; glow: number };
   const traces: Trace[] = [];
   const walk = (x: number, y: number, a: number, steps: number, w: number) => {
     const pts: [number, number][] = [[x, y]];
+    let jogged = false;
     for (let k = 0; k < steps; k++) {
-      a = heading(a, 0.6);
-      const len = 12 + rnd() * 34;
+      const len = jogged ? G * (1 + Math.floor(rnd() * 2)) : G * (2 + Math.floor(rnd() * 5));
       x += Math.cos(a) * len;
       y += Math.sin(a) * len;
       pts.push([x, y]);
-      if (w > 1.6 && rnd() < 0.18 && traces.length < 160) walk(x, y, a + (rnd() < 0.5 ? 1 : -1) * (0.7 + rnd() * 0.6), 2 + Math.floor(rnd() * 4), w * 0.6);
+      if (w > 1.6 && !jogged && rnd() < 0.15 && traces.length < 140) walk(x, y, a + (rnd() < 0.5 ? 1 : -1) * (Math.PI / 2), 2 + Math.floor(rnd() * 3), w * 0.6);
+      // Next: after a jog, back onto an axis going the same way; otherwise a right-angle turn or a jog.
+      const along = (b: number) => Math.cos(b - a) > 0.1;
+      if (jogged || rnd() < 0.7) {
+        const options = AXES.filter((b) => (jogged ? along(b) : Math.abs(Math.cos(b - a)) < 0.1));
+        a = options[Math.floor(rnd() * options.length)];
+        jogged = false;
+      } else {
+        a = [JOG, JOG + Math.PI].find(along) ?? a;
+        jogged = a === JOG || a === JOG + Math.PI;
+      }
     }
     traces.push({ pts, w, glow: 0.35 + rnd() * 0.65 });
   };
-  for (let i = 0; i < 46; i++) walk(rnd() * S, rnd() * S, heading(rnd() * Math.PI * 2, Math.PI), 4 + Math.floor(rnd() * 6), rnd() < 0.2 ? 4 : 1.6 + rnd() * 1.6);
+  for (let i = 0; i < 52; i++) walk(Math.floor(rnd() * (S / G)) * G, Math.floor(rnd() * (S / G)) * G, AXES[Math.floor(rnd() * 4)], 4 + Math.floor(rnd() * 5), rnd() < 0.2 ? 4 : 1.8 + rnd() * 1.4);
+  const chips = Array.from({ length: 7 }, () => ({ x: Math.floor(rnd() * (S / G)) * G, y: Math.floor(rnd() * (S / G)) * G, w: G * (2 + Math.floor(rnd() * 2)), h: G * (1 + Math.floor(rnd() * 2)) }));
   const lights = Array.from({ length: 34 }, () => ({ x: rnd() * S, y: rnd() * S, r: 1.5 + rnd() * 2.5 }));
   // Drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
   for (const ox of [-S, 0, S])
@@ -209,6 +216,16 @@ function pcbTextures(): NonNullable<typeof pcb> {
           eg.arc(x, y, r * 0.75, 0, Math.PI * 2);
           eg.stroke();
         }
+      }
+      for (const ch of chips) {
+        g.fillStyle = '#2f6a34';
+        for (let px = ch.x + 4; px < ch.x + ch.w - 2; px += 6) g.fillRect(px, ch.y - 4, 3, ch.h + 8); // pins
+        g.fillStyle = 'rgba(2,8,3,0.7)';
+        g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
+        g.fillStyle = '#0c140d';
+        g.fillRect(ch.x, ch.y, ch.w, ch.h);
+        eg.fillStyle = 'rgba(150,255,150,0.9)';
+        eg.fillRect(ch.x + ch.w - 7, ch.y + ch.h - 7, 3, 3); // status LED
       }
       for (const l of lights) {
         const f = eg.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 3);
@@ -403,7 +420,8 @@ export class PowerNet {
           const d = Math.hypot(x - cx, z - cz) / r;
           const ragged = 0.12 * Math.sin(x * 1.7 + z * 0.6) * Math.sin(z * 1.3 - x * 0.4);
           // Not on cliff walls: there the world-space pattern smears into streaks running up the screen.
-          const slope = Math.hypot(heightAt(this.map, x + 0.3, z) - heightAt(this.map, x - 0.3, z), heightAt(this.map, x, z + 0.3) - heightAt(this.map, x, z - 0.3)) / 0.6;
+          // Sampled as far as the next vertex, so a face spanning a cliff edge counts as steep at both ends.
+          const slope = Math.max(...[[0.55, 0], [-0.55, 0], [0, 0.55], [0, -0.55]].map(([dx, dz]) => Math.abs(heightAt(this.map, x + dx, z + dz) - heightAt(this.map, x, z)) / 0.55));
           const flat = 1 - Math.min(1, Math.max(0, (slope - 0.5) / 0.4));
           rim[i] = Math.min(1, Math.max(0, (1 - d + ragged) / 0.35)) * flat;
           dist[i] = d * r;

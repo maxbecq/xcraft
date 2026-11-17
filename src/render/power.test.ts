@@ -7,5 +7,6 @@ describe('creep trace angles', () => {
     expect(offAxis(-Math.PI / 4)).toBeCloseTo(0); // canvas (1, -1): straight across
     expect(offAxis(0)).toBeCloseTo(29.9, 0); // the texture's own axes land on screen diagonals
     expect(offAxis(Math.PI / 2)).toBeCloseTo(29.9, 0);
+    expect(offAxis((27 * Math.PI) / 180)).toBeGreaterThan(22); // the jog direction of the routing
   });
 });
