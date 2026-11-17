@@ -422,7 +422,8 @@ const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefine
 export async function loadModels(types: string[]): Promise<void> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // Meshy models are meshopt-compressed
   await Promise.all(
-    types.map(async (type) => {
+    // Types drawn with another's model (LOOKS) have no file of their own.
+    types.filter((type) => !LOOKS[type]).map(async (type) => {
       const character = CHARACTERS[type];
       const meshy = !new URLSearchParams(location.search).has('proc');
       if (meshy && STATIC_MESHY.includes(type)) {
