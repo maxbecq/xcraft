@@ -25,6 +25,7 @@ import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pi
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
+import { countMatch, countTitle } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 const EDGE_PX = 100;
@@ -161,6 +162,7 @@ const ROOM = params.get('room') ?? '';
 const net = NET_ROLE ? new Lockstep(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
 function showNet(status: string, detail?: string): void {
   if (status === 'connected') {
+    if (netBanner.hidden === false) countMatch('en-ligne', MAP.id, factions[PLAYER]); // once: the banner shows until then
     netBanner.hidden = true;
     return;
   }
@@ -460,7 +462,9 @@ document.addEventListener('change', (e) => {
 const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (!ATTRACT) {
   ready.then(start);
+  if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
+  countTitle();
   document.body.classList.add('attract');
   ready.then(start);
   showHome();
@@ -584,6 +588,7 @@ function showOptions(menu: HTMLElement): void {
         .join('')}</select></label>
       ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
+    <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.onchange = (e) => {
     const field = e.target as HTMLSelectElement | HTMLInputElement;
