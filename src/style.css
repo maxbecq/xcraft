@@ -557,7 +557,8 @@ body.spectate .hud-card { visibility: hidden; }
   .menu .seat select, .menu .seat .closed { grid-column: span 3; }
 }
 @media (max-width: 820px), (max-height: 600px) {
-  .menu.setup { gap: 6px; overflow: auto; place-content: start center; padding: 12px 0; }
+  /* Centred while it fits, from the top once it scrolls ('safe'); browsers without it keep it at the top. */
+  .menu.setup { gap: 6px; overflow: auto; place-content: start center; place-content: safe center center; padding: 12px 0; }
   .menu.setup h2 { font-size: 32px; }
   .menu fieldset { padding: 4px 8px 8px; }
   .menu .pick button { font-size: 14px; padding: 5px 9px; }
