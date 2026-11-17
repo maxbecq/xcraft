@@ -714,7 +714,7 @@ body.z .cmd-tip .need { color: #ffb070; }
 .hud-toast { animation: toast-in 0.22s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
 /* An animation, not a transition: each faction's own entrance animation holds the opacity (fill both). */
-body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
+body .hud-toasts .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; } /* same weight as .bump, later: a grouped (×N) toast fades too */
 @keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .cmd.pressed, .cmd.denied, .res.gain, .res.spend, .res.sup.full { animation: none; } }
 /* Icons in the top bar: idle workers (flashing when one more stops) and control groups (flashing when set). */
