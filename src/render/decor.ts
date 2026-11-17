@@ -2,6 +2,7 @@ import { Color, InstancedMesh, Matrix4, Mesh, type MeshStandardMaterial, Object3
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type GameMap, cutCorner, heightAt, tileAt } from '../map';
 import { weather } from './weathering';
+import { outskirtHeight } from '../terrain';
 import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
@@ -89,6 +90,23 @@ export class Decor {
           }
           r -= p;
         }
+      }
+    }
+    this.outskirts();
+  }
+
+  /** A few rocks and dead trees on the land beyond the map's edges, near it (further out, the haze hides them). */
+  private outskirts(): void {
+    const { width: W, height: H } = this.map;
+    const R = 14;
+    for (let y = -R; y < H + R; y += 2) {
+      for (let x = -R; x < W + R; x += 2) {
+        if (x >= -1 && y >= -1 && x <= W && y <= H) continue;
+        const r = rand(x + 500, y + 500, 31);
+        if (r > 0.16) continue;
+        const px = x + rand(x + 500, y + 500, 33) * 2;
+        const pz = y + rand(x + 500, y + 500, 35) * 2;
+        this.place(r < 0.07 ? 'rocks_b' : r < 0.12 ? 'rocks_a' : 'dead_tree', x, y, px, pz, undefined, outskirtHeight(this.map, px, pz));
       }
     }
   }
