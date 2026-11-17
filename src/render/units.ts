@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -632,15 +632,17 @@ interface View {
   /** Entity type it was built for: a building turned into another gets a new view. */
   type: string;
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
-  gait?: { x: number; z: number; phase: number; cycle: number };
+  gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
   root: Object3D;
   model: Group;
   ring: Object3D;
   scaffold?: Object3D;
   /** Human building site: the footing, and the scaffolding storeys from the ground up. */
   site?: { footing: Object3D; storeys: Object3D[] };
-  /** Z building being assembled: a ring of cyan light on the ground round it. */
+  /** Z building being fabricated: a ring of cyan light at the height being laid. */
   seam?: Mesh;
+  /** Z building being fabricated: its own materials cut by a plane rising from `bottom` to `top`. */
+  print?: { plane: Plane; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   /** Energy well: its living pool (see wellFx). */
@@ -665,13 +667,16 @@ interface View {
 /** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip; legs of one group step together. */
 interface InsectLeg {
   o: Object3D;
+  /** Pair index, from the front. */
+  pair: number;
   group: number;
   side: number;
 }
 
-/** Seconds a Z drone takes to fold and merge into the building it raised. */
-const MERGE_TIME = 0.9;
-const fract = (x: number) => x - Math.floor(x);
+/** Seconds a Z drone takes to scuttle to the centre of the site it raised. */
+const DEPLOY_WALK = 0.6;
+/** Seconds it takes to settle and spread its legs into a base. */
+const DEPLOY_SPREAD = 1.2;
 const smoothstep = (x: number) => {
   const c = Math.min(1, Math.max(0, x));
   return c * c * (3 - 2 * c);
@@ -701,7 +706,7 @@ function insectLegs(body: Object3D): InsectLeg[] | undefined {
   const legs: InsectLeg[] = [];
   body.traverse((o) => {
     const m = /^zleg_(\d+)_([lr])$/.exec(o.name);
-    if (m) legs.push({ o, group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
+    if (m) legs.push({ o, pair: Number(m[1]), group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
   });
   return legs.length ? legs : undefined;
 }
@@ -855,7 +860,7 @@ export class EntityRenderer {
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
   /** Z drones merging into the building they raised. */
-  private merging: { v: View; age: number; from: Vector3; to: Vector3 }[] = [];
+  private merging: { v: View; age: number; building: number; size: number; from: Vector3; to: Vector3 }[] = [];
   private last = performance.now();
 
   /** Called when a building first appears (to clear scenery under it). */
@@ -884,7 +889,7 @@ export class EntityRenderer {
         if (into && v.root.visible) {
           // A Z drone merging into the building it raised: it folds and sinks into it, it does not die.
           v.ring.visible = false;
-          this.merging.push({ v, age: 0, to: new Vector3(into.x / FP, v.root.position.y, into.y / FP), from: v.root.position.clone() });
+          this.merging.push({ v, age: 0, building: into.id, size: (into.def as BuildingDef).size, to: new Vector3(into.x / FP, heightAt(this.map, into.x / FP, into.y / FP), into.y / FP), from: v.root.position.clone() });
         } else if (v.unit && v.root.visible) {
           v.ring.visible = false;
           if (v.mixer) play(v, CLIP.die);
@@ -893,21 +898,42 @@ export class EntityRenderer {
       }
     }
     this.merging = this.merging.filter((m) => {
+      // A Z drone becomes the base of the building it raised: it scuttles to the site's centre, settles on
+      // the ground and stretches its legs out flat to the footprint's corners as anchoring struts, and
+      // stays there under the machine being fabricated until it is done (or destroyed).
       m.age += dt;
-      const f = Math.min(1, m.age / MERGE_TIME);
-      const k = f * f * (3 - 2 * f);
-      // Legs fold up under the body, then it slides into the site's centre, shrinking and sinking.
-      for (const l of m.v.limbs.insect ?? []) {
-        l.o.rotation.y *= 0.8;
-        l.o.rotation.z = l.side * Math.min(1, f * 2) * 1.1;
+      const b = world.entities.get(m.building);
+      if (!b || b.buildLeft === 0) {
+        this.scene.remove(m.v.root);
+        return false;
       }
-      const slide = Math.max(0, (f - 0.3) / 0.7);
-      m.v.root.position.lerpVectors(m.from, m.to, slide * slide);
-      m.v.model.scale.setScalar(1 - 0.9 * Math.max(0, (k - 0.35) / 0.65));
-      m.v.model.position.y = -0.4 * slide * slide;
-      if (f < 1) return true;
-      this.scene.remove(m.v.root);
-      return false;
+      const walk = Math.min(1, m.age / DEPLOY_WALK);
+      m.v.root.position.lerpVectors(m.from, m.to, walk * walk * (3 - 2 * walk));
+      const legs = m.v.limbs.insect ?? [];
+      if (walk < 1) {
+        const ph = this.stepGait(m.v);
+        for (const l of legs) {
+          const q = ph + l.group * Math.PI;
+          l.o.rotation.y = -l.side * Math.sin(q) * GAIT_SWING;
+          l.o.rotation.z = l.side * Math.max(0, Math.cos(q)) * 0.4;
+        }
+        return true;
+      }
+      const k = smoothstep((m.age - DEPLOY_WALK) / DEPLOY_SPREAD);
+      const g = m.v.gait!;
+      // Legs reach the footprint's corners: stretched along their length, spread to the diagonals, flattened.
+      const reach = g.cycle / (4 * Math.sin(GAIT_SWING));
+      const stretch = Math.min(2.5, Math.max(1, (m.size * 0.62) / Math.max(0.1, reach)));
+      const pairs = Math.max(...legs.map((l) => l.pair)) + 1;
+      for (const l of legs) {
+        const along = pairs > 1 ? l.pair / (pairs - 1) - 0.5 : 0;
+        l.o.rotation.y = -l.side * along * 1.4 * k;
+        l.o.rotation.z = l.side * 0.55 * k;
+        l.o.scale.x = 1 + (stretch - 1) * k;
+      }
+      // The body settles onto the ground, a light judder as it locks in.
+      m.v.model.position.y = -g.hip * 0.8 * k + (k < 1 ? 0 : Math.sin(m.age * 40) * 0.004);
+      return true;
     });
     this.dying = this.dying.filter((d) => {
       d.age += dt;
@@ -990,17 +1016,22 @@ export class EntityRenderer {
         const total = ticks((e.def as BuildingDef).buildTime);
         const p = e.buildLeft > 0 ? 1 - e.buildLeft / total : 1;
         if ((e.def as BuildingDef).absorbs) {
-          // Z: the machine unfolds out of a compact core in mechanical steps, each a quick move then a
-          // pause: it widens, rises and turns into place, with a cyan seam of light at its base.
-          const STEPS = 6;
-          const step = Math.min(STEPS, Math.floor(p * STEPS));
-          const u = p >= 1 ? 1 : (step + smoothstep(fract(p * STEPS) / 0.35)) / STEPS;
-          v.model.scale.set(0.3 + 0.7 * u, 0.12 + 0.88 * u, 0.3 + 0.7 * u);
-          v.model.rotation.y = (1 - u) * 0.9;
-          if (v.seam) {
-            v.seam.visible = p < 1;
-            v.seam.scale.setScalar(0.35 + 0.65 * u);
-            (v.seam.material as MeshBasicMaterial).opacity = 0.35 + 0.35 * Math.abs(Math.sin(now / 90)) * (1 - fract(p * STEPS));
+          // Z: the drone deployed on the site fabricates the machine layer by layer from the ground up; a
+          // cyan line of light runs round it at the height being laid.
+          if (v.print) {
+            const h = v.print.bottom + (v.print.top - v.print.bottom) * p;
+            v.print.plane.constant = v.root.position.y + h;
+            if (v.seam) {
+              v.seam.position.y = h + 0.02;
+              (v.seam.material as MeshBasicMaterial).opacity = 0.55 + 0.3 * Math.abs(Math.sin(now / 120));
+            }
+            if (p >= 1) {
+              // Done: back to the shared materials, no cut.
+              for (const [mesh, material] of v.print.originals) mesh.material = material;
+              v.seam?.removeFromParent();
+              v.print = undefined;
+              v.seam = undefined;
+            }
           }
         } else if (v.site) {
           // Footing first, then storeys of scaffolding going up round an empty site; the building appears
@@ -1215,13 +1246,33 @@ export class EntityRenderer {
     let scaffold: Object3D | undefined;
     let site: View['site'];
     let seam: Mesh | undefined;
+    let print: View['print'];
     if (e.def.kind === 'building' && (e.def as BuildingDef).absorbs) {
       // Z: assembled by the drone merged into it, it unfolds by itself (see sync); no site, no frame.
       if (e.buildLeft > 0) {
-        const r = ((e.def as BuildingDef).size / 2) * 1.05;
-        seam = new Mesh(new RingGeometry(r * 0.94, r, 40), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
-        seam.rotation.x = -Math.PI / 2;
-        seam.position.y = 0.06;
+        const box = new Box3().setFromObject(body);
+        const plane = new Plane(new Vector3(0, -1, 0), 0);
+        const originals: [Mesh, Material | Material[]][] = [];
+        body.traverse((o) => {
+          const mesh = o as Mesh;
+          if (!mesh.isMesh) return;
+          originals.push([mesh, mesh.material]);
+          // Its own copies, cut by the plane; inner faces drawn so the cut reads as solid, not hollow.
+          const cut = (m: Material) => {
+            const c = m.clone();
+            c.clippingPlanes = [plane];
+            c.clipShadows = true;
+            c.side = DoubleSide;
+            return c;
+          };
+          mesh.material = Array.isArray(mesh.material) ? mesh.material.map(cut) : cut(mesh.material);
+        });
+        print = { plane, bottom: box.min.y, top: box.max.y, originals };
+        const half = (e.def as BuildingDef).size / 2;
+        // A square outline round the footprint (a four-sided ring turned by 45°).
+        seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+        seam.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
+        seam.scale.setScalar(Math.SQRT2);
         seam.userData.noPick = true;
         root.add(seam);
       }
@@ -1249,8 +1300,8 @@ export class EntityRenderer {
     }
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
-    const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect) };
-    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, seam, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y };
+    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {

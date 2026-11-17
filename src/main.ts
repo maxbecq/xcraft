@@ -42,6 +42,7 @@ const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('
 const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
 
 const renderer = new WebGLRenderer({ antialias: true });
+renderer.localClippingEnabled = true; // Z buildings are fabricated layer by layer (render/units.ts)
 /** Phones and tablets: touch controls, lighter rendering. */
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 renderer.setPixelRatio(Math.min(TOUCH ? 1.25 : 2, window.devicePixelRatio));
