@@ -32,6 +32,9 @@ const MAX_WAVE = BALANCE.ai.maxWave;
 /** Forge lines in research order. */
 const RESEARCH = ['ranged', 'armor', 'melee'];
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
+/** Each team's target base, shared by its AIs (by world). */
+const focuses = new WeakMap<World, Map<number, number>>();
+const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
 /** Isdaris extensions the AI researches, in order: druides, then ground vehicles, then flyers. */
 const EXTENSIONS = ['laboratoire', 'assembleur', 'balise'];
 
@@ -99,7 +102,11 @@ export class AI {
     if (supply.max < 200 && supply.max - supply.used <= 2 + count(f.barracks) * 2 && !building(f.supply)) wants.push(f.supply);
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
-    if (count(f.barracks) >= this.plan.mineAfter && count(f.extractor) === 0) wants.push(f.extractor);
+    // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
+    const bases = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length;
+    const firstExtractor = count(f.extractor) === 0;
+    if (count(f.barracks) >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
+    // The second one, later and only with a free well by a base: never ahead of supply or production.
     let casernesWanted = this.plan.casernes.filter(([at]) => serfs.length >= at).reduce((m, [, n]) => Math.max(m, n), 0);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
@@ -139,6 +146,7 @@ export class AI {
     if (expand) wants.push(f.hq);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
+    if (!firstExtractor && count(f.extractor) < bases && !building(f.extractor) && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200 && this.spot(f.extractor, home)) wants.push(f.extractor);
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (minerals < def.cost.minerals) {
@@ -233,7 +241,9 @@ export class AI {
     // Dead or being recalled (Rappel): out of the wave.
     for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
     let atHome = army.filter((u) => !this.wave.has(u.id));
-    const threat = this.threat(buildings);
+    // Our base first; else a teammate's base under attack, which the army at home goes to help.
+    const allied = [...w.entities.values()].filter((b) => b.def.kind === 'building' && b.owner !== this.player && b.owner >= 0 && !w.hostile(b.owner, this.player));
+    const threat = this.threat(buildings) ?? (allied.length ? this.threat(allied) : undefined);
     if (threat) {
       const near = (u: Entity) => dist(u.x, u.y, threat.x, threat.y) < 12 * FP;
       // Outnumbered at home: the wave comes back, unless it is already fighting next to the threat.
@@ -311,7 +321,31 @@ export class AI {
 
     out.push(...this.raid(raiders));
     const target = this.enemyTarget(home);
-    const waiting = [...this.wave].map((id) => w.entities.get(id)!).filter((u) => !u.order || u.order.kind === 'move');
+    const waveUnits = [...this.wave].map((id) => w.entities.get(id)!);
+    // Ranged units kite: a melee enemy at their throat while their weapon reloads, they step back.
+    const kiters = new Set<number>();
+    for (const u of waveUnits) {
+      const a = w.weapon(u);
+      if (!a || a.range < 5 || u.cooldown < ticks(a.cooldown) / 3) continue;
+      const biter = this.nearest(u, (e) => w.hostile(e.owner, this.player) && e.def.kind === 'unit' && !!(e.def as UnitDef).attack && (e.def as UnitDef).attack!.range < 1 && !(e.def as UnitDef).worker && w.sees(this.player, e));
+      if (!biter || dist(biter.x, biter.y, u.x, u.y) > 2 * FP) continue;
+      const d = dist(biter.x, biter.y, u.x, u.y) || 1;
+      out.push({ player: this.player, kind: 'move', ids: [u.id], x: u.x + Math.trunc(((u.x - biter.x) * 2 * FP) / d), y: u.y + Math.trunc(((u.y - biter.y) * 2 * FP) / d) });
+      kiters.add(u.id);
+    }
+    // Supports (healers, casters, fragile artillery) keep a few tiles behind the front instead of leading the charge.
+    const support = (u: Entity) => !!(u.def as UnitDef).heal || ['druide', 'alchimiste', 'cuve'].includes(u.type);
+    const front = waveUnits.filter((u) => !support(u));
+    if (target && front.length) {
+      const cx = front.reduce((s, u) => s + u.x, 0) / front.length;
+      const cy = front.reduce((s, u) => s + u.y, 0) / front.length;
+      const d = dist(cx, cy, target.x, target.y) || 1;
+      const back = { x: Math.trunc(cx - ((target.x - cx) * 3 * FP) / d), y: Math.trunc(cy - ((target.y - cy) * 3 * FP) / d) };
+      const leading = waveUnits.filter((u) => support(u) && !kiters.has(u.id) && u.order?.kind !== 'heal' && dist(u.x, u.y, target.x, target.y) < d - 1.5 * FP);
+      if (leading.length) out.push({ player: this.player, kind: 'attack', ids: leading.map((u) => u.id), x: back.x, y: back.y });
+      for (const u of leading) kiters.add(u.id);
+    }
+    const waiting = waveUnits.filter((u) => !kiters.has(u.id) && (!u.order || u.order.kind === 'move'));
     if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
     return out;
   }
@@ -475,8 +509,18 @@ export class AI {
     const w = this.world;
     const def = DEFS[type] as BuildingDef;
     if (def.energyRate) {
-      const well = this.nearest(home, (e) => e.type === 'puits' && w.canPlace(type, e.tx, e.ty, this.player));
-      return well && dist(well.x, well.y, home.x, home.y) < 20 * FP ? [well.tx, well.ty] : null;
+      // The free well nearest one of our bases.
+      const bases = [...w.entities.values()].filter((b) => b.owner === this.player && b.type === this.faction.hq && b.buildLeft === 0);
+      let best: Entity | undefined;
+      let bestD = 14 * FP;
+      for (const e of w.entities.values()) {
+        if (e.type !== 'puits' || !w.canPlace(type, e.tx, e.ty, this.player)) continue;
+        for (const b of bases) {
+          const d = dist(e.x, e.y, b.x, b.y);
+          if (d < bestD) [best, bestD] = [e, d];
+        }
+      }
+      return best ? [best.tx, best.ty] : null;
     }
     if (type === this.faction.hq) {
       const [tx, ty] = expansion(w, this.player);
@@ -487,6 +531,7 @@ export class AI {
     // Prefer the side facing the map centre, where the minerals are not.
     const sx = cx < w.map.width / 2 ? 1 : -1;
     const sy = cy < w.map.height / 2 ? 1 : -1;
+    let first: [number, number] | undefined; // fallback when no spread-out spot is left
     for (let r = near ? 1 : 4; r < 14; r++) {
       for (let i = -r; i <= r; i++) {
         for (const [dx, dy] of [[i, r], [r, i], [i, -r], [-r, i]]) {
@@ -495,11 +540,24 @@ export class AI {
           // Leave a one-tile corridor around every building.
           if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player)) continue;
           if (this.closeToResources(tx, ty, def.size) || this.closeToRamp(tx, ty, def.size)) continue;
+          // Power-field buildings spread out to cover more ground: none closer to another field than most of its radius.
+          if (def.power && !def.morphOnly && first === undefined) first = [tx, ty];
+          if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
           return [tx, ty];
         }
       }
     }
-    return null;
+    return first ?? null;
+  }
+
+  /** Would a new power field centred on (x, y) tiles mostly overlap one of ours? */
+  private crowdsField(x: number, y: number, radius: number): boolean {
+    for (const b of this.world.entities.values()) {
+      const p = (b.def as BuildingDef).power;
+      if (b.owner !== this.player || !p) continue;
+      if (Math.hypot(b.x / FP - x, b.y / FP - y) < Math.max(p, radius) * 0.9) return true;
+    }
+    return false;
   }
 
   private clear(tx: number, ty: number, size: number): boolean {
@@ -572,7 +630,15 @@ export class AI {
    * is closest. On the way and there, units pick soldiers first, then workers, then buildings.
    */
   private enemyTarget(home: Entity): Entity | undefined {
-    const enemy = (e: Entity) => this.world.hostile(e.owner, this.player);
-    return this.nearest(home, (e) => enemy(e) && e.type === FACTIONS[this.world.players[e.owner].faction].hq) ?? this.nearest(home, (e) => enemy(e) && e.def.kind === 'building');
+    const w = this.world;
+    // Teammates hit the same base: the first to choose sets the team's focus, the others follow while it stands.
+    const team = w.players[this.player].team;
+    const focus = teamFocus(w);
+    const held = w.entities.get(focus.get(team) ?? 0);
+    if (held && held.hp > 0 && w.hostile(held.owner, this.player)) return held;
+    const enemy = (e: Entity) => w.hostile(e.owner, this.player);
+    const pick = this.nearest(home, (e) => enemy(e) && e.type === FACTIONS[w.players[e.owner].faction].hq) ?? this.nearest(home, (e) => enemy(e) && e.def.kind === 'building');
+    if (pick) focus.set(team, pick.id);
+    return pick;
   }
 }
