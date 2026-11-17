@@ -34,6 +34,8 @@ export interface Entity {
   py: number;
   radius: number;
   speed: number;
+  /** Orders given with shift, to carry out one after the other once the current one is done. */
+  next: Order[];
   /** Units with inertia (UnitDef.accel): current speed per tick, and the last tick it moved. */
   vel: number;
   movedTick: number;
@@ -117,11 +119,11 @@ export interface Player {
 }
 
 export type Command =
-  | { player: number; kind: 'move'; ids: number[]; x: number; y: number }
+  | { player: number; kind: 'move'; ids: number[]; x: number; y: number; queue?: boolean }
   /** Right-click: move, gather, construct, return cargo or set a rally point, depending on the target. */
-  | { player: number; kind: 'smart'; ids: number[]; x: number; y: number; target?: number }
+  | { player: number; kind: 'smart'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
   | { player: number; kind: 'stop'; ids: number[] }
-  | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number }
+  | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number; queue?: boolean }
   | { player: number; kind: 'train'; ids: number[]; type: string }
   | { player: number; kind: 'cancel'; ids: number[] }
   /** Every unit in the given bunkers walks out. */
@@ -131,7 +133,7 @@ export type Command =
   /** Marché: sells some of one resource for some of the other. */
   | { player: number; kind: 'trade'; ids: number[]; sell: 'minerals' | 'energy' }
   /** Attack a target, or attack-move to a point when there is none. */
-  | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number };
+  | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean };
 
 export interface Shot {
   /** Shooter and target centres (fixed-point). */
@@ -233,7 +235,7 @@ export class World {
     const e: Entity = {
       id: this.nextId++, owner, type, def, x, y, px: x, py: y,
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
-      speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1,
+      speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
@@ -273,7 +275,13 @@ export class World {
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
     if (this.tick % 4 === 0) this.see();
-    for (const c of commands) this.apply(c);
+    for (const c of commands) {
+      // Shift: orders go after what the units are already doing; otherwise they replace it all.
+      this.queueing = 'queue' in c && !!c.queue;
+      if (!this.queueing && 'ids' in c && Array.isArray(c.ids)) for (const id of c.ids) this.entities.get(id)?.next.splice(0);
+      this.apply(c);
+      this.queueing = false;
+    }
     for (const e of this.entities.values()) {
       e.px = e.x;
       e.py = e.y;
@@ -436,7 +444,10 @@ export class World {
     const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);
     switch (c.kind) {
       case 'stop':
-        units.forEach((e) => this.setOrder(e, null));
+        units.forEach((e) => {
+          e.next = [];
+          this.setOrder(e, null);
+        });
         return;
       case 'unload':
         for (const b of [...buildings, ...units]) for (const u of [...this.entities.values()]) if (u.inside === b.id) this.leave(u);
@@ -837,7 +848,16 @@ export class World {
     }
   }
 
+  /** While applying a shift-command: new orders go to the end of each unit's list. */
+  private queueing = false;
+
   private setOrder(e: Entity, order: Order | null): void {
+    if (order && this.queueing && (e.order || e.next.length)) {
+      e.next.push(order);
+      return;
+    }
+    // An order done (or dropped): the next one in the list, if any.
+    if (!order && e.next.length) order = e.next.shift()!;
     const old = e.order;
     if (old?.kind === 'gather') this.release(e, old.target);
     e.order = order;

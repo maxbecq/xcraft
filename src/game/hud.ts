@@ -131,7 +131,7 @@ export class Hud {
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
   click(button: number, ground: Vector3 | null, shift: boolean, target?: Entity): boolean {
     if (this.targeting) {
-      if (button === 0 && ground) this.aim(ground.x, ground.z, target);
+      if (button === 0 && ground) this.aim(ground.x, ground.z, target, shift);
       if (!shift || button === 2) this.setTargeting(false);
       return true;
     }
@@ -143,7 +143,7 @@ export class Hud {
     const spot = ground && this.spot(this.placing, ground);
     const worker = this.workers()[0];
     if (spot && worker) {
-      this.issue({ player: this.player, kind: 'build', ids: [worker.id], type: this.placing, tx: spot[0], ty: spot[1] });
+      this.issue({ player: this.player, kind: 'build', ids: [worker.id], type: this.placing, tx: spot[0], ty: spot[1], queue: shift });
       if (!shift) {
         this.placing = null;
         this.buildMenu = false;
@@ -160,14 +160,14 @@ export class Hud {
     return true;
   }
 
-  private attack(x: number, z: number, target?: Entity): void {
+  private attack(x: number, z: number, target?: Entity, queue = false): void {
     const ids = this.input.own().map((e) => e.id);
     const enemy = target && this.world.hostile(target.owner, this.player) ? target.id : undefined;
-    this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy });
+    this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy, queue });
   }
 
-  private aim(x: number, z: number, target?: Entity): void {
-    if (!this.scanning) return this.attack(x, z, target);
+  private aim(x: number, z: number, target?: Entity, queue = false): void {
+    if (!this.scanning) return this.attack(x, z, target, queue);
     const ids = this.input.own().map((e) => e.id);
     this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP), name: this.aimed });
   }

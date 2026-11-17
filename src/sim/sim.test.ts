@@ -151,3 +151,22 @@ describe('inertia', () => {
     expect(s.vel).toBe(0); // no inertia: the Serf never uses it
   });
 });
+
+describe('shift-queued orders', () => {
+  it('a worker builds one thing after another, then goes mining', () => {
+    const w = new World(map);
+    w.spawn('conseil', 0, 10 * FP, 10 * FP);
+    const field = w.spawn('minerai', -1, 18 * FP, 10 * FP);
+    const serf = w.spawn('serf', 0, ...at(16, 16));
+    w.players[0].minerals = 1000;
+    w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx: 18, ty: 16 }]);
+    w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx: 21, ty: 16, queue: true }]);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: field.x, y: field.y, target: field.id, queue: true }]);
+    expect(serf.next).toHaveLength(2);
+    for (let i = 0; i < 20 * 120 && serf.order?.kind !== 'gather'; i++) w.step([]);
+    expect([...w.entities.values()].filter((e) => e.type === 'grenier')).toHaveLength(2);
+    expect(serf.order?.kind).toBe('gather');
+    w.step([{ player: 0, kind: 'move', ids: [serf.id], x: 30 * FP, y: 30 * FP }]);
+    expect(serf.next).toHaveLength(0);
+  });
+});

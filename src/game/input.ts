@@ -110,7 +110,7 @@ export class Input {
         this.dragStart = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
       } else if (e.button === 2 && ground) {
-        this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY));
+        this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY), e.shiftKey);
         this.orderedAt = performance.now();
       }
     });
@@ -278,10 +278,11 @@ export class Input {
   }
 
   /** Right-click at a ground point (in tiles), optionally on an entity. */
-  orderAt(x: number, z: number, target?: Entity): void {
+  /** Right-click order; with shift, it comes after what the units are doing. */
+  orderAt(x: number, z: number, target?: Entity, queue = false): void {
     const ids = this.own().map((e) => e.id);
     if (!ids.length) return;
-    this.hooks.issue({ player: this.player, kind: 'smart', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id });
+    this.hooks.issue({ player: this.player, kind: 'smart', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
     this.hooks.ordered?.(x, z, target);
   }
 
