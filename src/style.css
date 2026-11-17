@@ -726,6 +726,7 @@ body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
 .chip b { right: 3px; bottom: 2px; }
 .chip kbd { left: 3px; top: 2px; font: inherit; color: #ffe08a; }
 .chip.idle-workers { border-color: rgba(255, 210, 120, 0.95); margin-right: 6px; }
+.chip.idle-prod { border-color: rgba(255, 140, 90, 0.95); margin-right: 6px; }
 .chip.flash { animation: chip-flash 0.9s ease-out; }
 @keyframes chip-flash { 0%, 30% { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255, 230, 150, 0.95)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .chip.flash { animation: none; } }
