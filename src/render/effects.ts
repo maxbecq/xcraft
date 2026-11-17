@@ -114,7 +114,11 @@ export class Effects {
       this.audio.play(s.type === 'orbe' ? 'plasma' : s.kind === 'ranged' && faction === 'isdaris' ? 'ray' : s.kind, 0.6);
       this.shot(s);
     }
-    for (const c of world.casts) if (c.kind !== 'rappel' && seen(c.x, c.y)) this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
+    for (const c of world.casts) {
+      if (!seen(c.x, c.y)) continue;
+      if (c.kind !== 'rappel') this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
+      this.ability(c.kind, this.at(c.x, c.y, 0.1));
+    }
     for (const tp of world.teleports) if (seen(tp.x1, tp.y1) || seen(tp.x2, tp.y2)) this.audio.play(tp.phase === 'start' ? 'rappel' : 'arrive');
     for (const d of world.deaths) {
       if (!seen(d.x, d.y)) continue;
@@ -134,6 +138,86 @@ export class Effects {
     // Rappel: a column of light at the zone and at the Obélisque, a soft one while channelling, a flash on arrival.
     for (const t of world.teleports) {
       for (const [x, y] of [[t.x1, t.y1], [t.x2, t.y2]]) if (seen(x, y)) this.column(this.at(x, y, 0.05), t.phase === 'end');
+    }
+  }
+
+  /** A cloud of glows round p: n of them, spread wide, drifting up, each living about `life` seconds. */
+  private cloud(p: Vector3, color: number, n: number, spread: number, rise: number, life: number, size: number): void {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * spread;
+      const at = p.clone().add(new Vector3(Math.cos(a) * d, Math.random() * 0.3, Math.sin(a) * d));
+      this.spawn(this.tex.glow, color, at, new Vector3((Math.random() - 0.5) * 0.3, rise * (0.5 + Math.random()), (Math.random() - 0.5) * 0.3), life * (0.6 + Math.random() * 0.6), size * 0.5, size, 0.7, 0, true);
+    }
+  }
+
+  /** A ring of glows of the given radius round p, flaring outwards. */
+  private ring(p: Vector3, color: number, radius: number, life: number): void {
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const at = p.clone().add(new Vector3(Math.cos(a) * radius, 0.15, Math.sin(a) * radius));
+      this.spawn(this.tex.glow, color, at, new Vector3(Math.cos(a) * 0.8, 0.3, Math.sin(a) * 0.8), life, 0.35, 0.15, 0.9, 0, true);
+    }
+  }
+
+  /** What each ability looks like where it is used. */
+  private ability(kind: string, p: Vector3): void {
+    switch (kind) {
+      case 'explosiftoxique': // a sickly green cloud spreading over the zone
+        this.explosion(p, 0.5);
+        this.cloud(p, 0x8aff4a, 40, 2.4, 0.25, 3.5, 1.1);
+        break;
+      case 'silence': // a dome of cold blue sparks, then a ring at its edge
+        this.cloud(p, 0x6ab8ff, 30, 4, 0.6, 2.5, 0.5);
+        this.ring(p, 0x9ad0ff, 4, 1.2);
+        break;
+      case 'canonorbital': // a beam from orbit, then the blast
+        this.column(p, true);
+        this.column(p, false);
+        this.explosion(p, 2.5);
+        this.ring(p, 0xbfe6ff, 2.5, 0.8);
+        break;
+      case 'teleport':
+      case 'teleportgroupe':
+      case 'couloir':
+        this.column(p, true);
+        break;
+      case 'deflagration': // a bolt of plasma striking down
+        for (let i = 0; i < 10; i++) this.spawn(this.tex.glow, 0xd89cff, p.clone().setY(p.y + i * 0.5 + Math.random() * 0.2).add(rnd(0.15)), new Vector3(0, -3, 0), 0.25, 0.5, 0.2, 1, 0, true);
+        this.explosion(p, 0.8);
+        break;
+      case 'chocmental':
+        this.ring(p, 0xc08aff, 0.8, 0.8);
+        break;
+      case 'coupcirculaire':
+      case 'feucirculaire':
+        this.ring(p, 0xffc46a, kind === 'feucirculaire' ? 3 : 1.5, 0.5);
+        break;
+      case 'regenerant':
+      case 'renvoi':
+      case 'double':
+        this.cloud(p, kind === 'renvoi' ? 0xffe08a : 0x7dffb0, 18, 1, 1.2, 1.2, 0.3);
+        break;
+      case 'reanimation': // a body stirring: green motes rising from the ground
+        this.cloud(p, 0x5aff8a, 24, 0.8, 1.6, 1.6, 0.35);
+        break;
+      case 'napalm':
+        this.explosion(p, 0.7);
+        this.cloud(p, 0xff7a2a, 16, 0.8, 0.8, 1, 0.5);
+        break;
+      case 'manteau':
+      case 'camouflage':
+      case 'dephasage':
+      case 'portedephasage':
+      case 'enfouissement':
+        this.cloud(p, kind === 'enfouissement' ? 0xb08a60 : 0xe8f0ff, 20, kind === 'portedephasage' ? 4 : kind === 'manteau' ? 5 : 0.8, 0.5, 1.4, 0.4);
+        break;
+      case 'observatoire':
+        this.ring(p, 0xfff4d0, 6, 1.6);
+        break;
+      case 'decollage':
+        this.cloud(p, 0xb0a090, 16, 1, 0.4, 1.2, 0.6);
+        break;
     }
   }
 
