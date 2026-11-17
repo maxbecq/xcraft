@@ -366,6 +366,10 @@ window.addEventListener(
   { capture: true },
 );
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
+// Menus: a discreet tick on every button and choice.
+document.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('.menu button, .menu select, .menu .switch, .tool')) audio.play('click');
+});
 
 const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (!ATTRACT) {
