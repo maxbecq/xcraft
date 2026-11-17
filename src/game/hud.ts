@@ -38,6 +38,12 @@ export class Hud {
   private readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
+  /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
+  readonly idle = el('button', 'chip idle-workers');
+  private idleCount = 0;
+  /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
+  readonly groups = el('div', 'groups');
+  private groupsKey = '';
   private buttons: Button[] = [];
   private cardKey = '';
   /** Last button pressed and how it reacted, so the card rebuilt by that press keeps the animation. */
@@ -74,6 +80,13 @@ export class Hud {
     this.console.append(this.mapSlot, this.panel, this.card);
     document.body.append(this.bar, this.console, this.toasts, this.banner);
     this.banner.hidden = true;
+    this.idle.hidden = true;
+    this.idle.title = 'Ouvriers inactifs : les sélectionner';
+    this.idle.addEventListener('click', () => this.input.selectIdleWorkers());
+    this.groups.addEventListener('click', (e) => {
+      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-g]')?.dataset.g;
+      if (k) this.input.recallGroup(k);
+    });
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
@@ -125,6 +138,37 @@ export class Hud {
         if (!e.repeat) this.press(b);
       }
     });
+  }
+
+  private updateGroups(): void {
+    const list = this.input.groupList().map(([k, es]) => {
+      const count = new Map<string, number>();
+      for (const e of es) count.set(e.type, (count.get(e.type) ?? 0) + 1);
+      const type = [...count].sort((a, b) => b[1] - a[1])[0][0];
+      return { k, type, n: es.length };
+    });
+    const set = this.input.groupSet;
+    const key = list.map((g) => `${g.k}${g.type}${g.n}`).join('|') + set.time;
+    if (key === this.groupsKey) return;
+    this.groupsKey = key;
+    const fresh = performance.now() - set.time < 500 ? set.key : '';
+    this.groups.innerHTML = list
+      .map((g) => `<button class="chip${g.k === fresh ? ' flash' : ''}" data-g="${g.k}" title="Groupe ${g.k.slice(5)} : ${DEFS[g.type].name}"><kbd>${g.k.slice(5)}</kbd>${img(g.type, '')}<b>${g.n}</b></button>`)
+      .join('');
+  }
+
+  private updateIdle(): void {
+    const n = this.input.idleWorkers().length;
+    if (n === this.idleCount) return;
+    if (!this.idle.firstChild) this.idle.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].worker, '')}<b></b>`;
+    this.idle.lastChild!.textContent = String(n);
+    this.idle.hidden = n === 0;
+    if (n > this.idleCount) {
+      this.idle.classList.remove('flash');
+      void this.idle.offsetWidth;
+      this.idle.classList.add('flash');
+    }
+    this.idleCount = n;
   }
 
   /** Sets a resource's count; it flashes as it goes up (income) or down (spending). */
@@ -239,6 +283,8 @@ export class Hud {
     sup.lastChild!.textContent = `${s.used}/${s.max}`;
     sup.classList.toggle('full', s.used >= s.max);
     this.updatePanel();
+    this.updateIdle();
+    this.updateGroups();
     this.updateCard();
     this.updateGhost();
     if (this.world.winner !== null && this.banner.hidden) {

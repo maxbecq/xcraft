@@ -299,6 +299,23 @@ export class Input {
     }
   }
 
+  /** Own workers with nothing to do (those sheltering in a bunker are busy). */
+  idleWorkers(): Entity[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === this.player && (e.def as { worker?: boolean }).worker && !e.order && !e.inside);
+  }
+
+  private idleTurn = 0;
+
+  /** Selects every idle worker and centres the view on the next one in turn (the idle-workers button). */
+  selectIdleWorkers(): void {
+    const idle = this.idleWorkers();
+    if (!idle.length) return;
+    this.selected.clear();
+    for (const e of idle) this.selected.add(e.id);
+    const e = idle[this.idleTurn++ % idle.length];
+    this.hooks.focus(e.x / FP, e.y / FP);
+  }
+
   /** Own selected entities. */
   own(): Entity[] {
     return [...this.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e && e.owner === this.player);
@@ -325,11 +342,31 @@ export class Input {
     }
     if (!/^Digit[0-9]$/.test(e.code)) return;
     const k = e.code;
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
       e.preventDefault();
-      this.groups.set(k, this.own().map((u) => u.id));
+      const ids = this.own().map((u) => u.id);
+      // Ctrl: the group becomes the selection; Shift: the selection joins it.
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) this.groups.set(k, [...new Set([...(this.groups.get(k) ?? []), ...ids])]);
+      else this.groups.set(k, ids);
+      if (ids.length) this.groupSet = { key: k, time: performance.now() };
       return;
     }
+    this.recallGroup(k);
+  }
+
+  /** Last group assigned (Ctrl or Shift + digit), so its icon can flash. */
+  groupSet = { key: '', time: -Infinity };
+
+  /** Control groups with someone left in them, by key (`Digit1`…`Digit0`), in keyboard order. */
+  groupList(): [string, Entity[]][] {
+    return [...this.groups.keys()]
+      .sort((a, b) => ((Number(a.slice(5)) + 9) % 10) - ((Number(b.slice(5)) + 9) % 10))
+      .map((k): [string, Entity[]] => [k, this.groups.get(k)!.map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e)])
+      .filter(([, es]) => es.length > 0);
+  }
+
+  /** Selects a control group (its digit key, or its icon); twice in a row centres the view on it. */
+  recallGroup(k: string): void {
     const ids = (this.groups.get(k) ?? []).filter((id) => this.world.entities.has(id));
     if (!ids.length) return;
     this.selected.clear();

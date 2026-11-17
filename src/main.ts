@@ -327,7 +327,8 @@ Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
 Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
-<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
+<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
+Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé, deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
@@ -335,6 +336,7 @@ Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
 Appui long puis glisser : rectangle de sélection</div></div>`;
+tools.append(hud.idle, hud.groups);
 document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
 const setPaused = (on: boolean) => {

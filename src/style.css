@@ -130,7 +130,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .menu button:hover, .hud-banner button:hover, .pause-box button:hover { border-color: var(--amber); color: var(--amber); }
-.tools { position: fixed; top: 8px; left: 12px; display: flex; gap: 6px; }
+.tools { position: fixed; top: 8px; left: 12px; display: flex; align-items: center; gap: 6px; }
 .tool { min-width: 0; padding: 5px 12px; font-size: 18px; }
 .pause { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }
 .pause-box {
@@ -686,3 +686,16 @@ body.z .cmd-tip .need { color: #ffb070; }
 body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
 @keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .cmd.pressed, .cmd.denied, .res.gain, .res.spend, .res.sup.full { animation: none; } }
+/* Icons in the top bar: idle workers (flashing when one more stops) and control groups (flashing when set). */
+.groups { display: flex; gap: 4px; }
+.chip { position: relative; width: 38px; height: 38px; padding: 0; overflow: hidden; cursor: pointer; background: radial-gradient(circle at 50% 35%, #2a3240, #0b0e14); border: 1px solid rgba(217, 164, 32, 0.7); border-radius: 4px; box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8), 0 1px 3px rgba(0, 0, 0, 0.6); color: #fff; font: 700 12px/1 system-ui, sans-serif; }
+.chip:hover { border-color: #ffd970; filter: brightness(1.25); }
+.chip img { position: absolute; inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); object-fit: cover; }
+.chip b, .chip kbd { position: absolute; text-shadow: 0 0 2px #000, 0 0 3px #000, 0 0 4px #000; }
+.chip b { right: 3px; bottom: 2px; }
+.chip kbd { left: 3px; top: 2px; font: inherit; color: #ffe08a; }
+.chip.idle-workers { border-color: rgba(255, 210, 120, 0.95); margin-right: 6px; }
+.chip.flash { animation: chip-flash 0.9s ease-out; }
+@keyframes chip-flash { 0%, 30% { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255, 230, 150, 0.95)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chip.flash { animation: none; } }
+@media (max-width: 700px) { .chip { width: 30px; height: 30px; font-size: 10px; } }
