@@ -187,6 +187,11 @@ export class Input {
       if (e.button === 0) {
         this.dragStart = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
+        // A click on something selects it at once, on the press (ring, portrait and card in this very frame); a drag
+        // that follows turns into a box, which replaces it on release. Shift (add or take out) waits for the release.
+        const hit = e.shiftKey ? undefined : this.entityAt(e.clientX, e.clientY);
+        this.pressPicked = !!hit;
+        if (hit) this.pick(hit, e.ctrlKey || e.metaKey, false);
       } else if (e.button === 2 && ground) {
         this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY), e.shiftKey);
         this.orderedAt = performance.now();
@@ -215,18 +220,11 @@ export class Input {
       this.dragStart = null;
       this.box.hidden = true;
       const click = r.w < DRAG_PX && r.h < DRAG_PX;
+      if (click && this.pressPicked) return; // already picked on the press
       const hit = click ? this.entityAt(e.clientX, e.clientY) : undefined;
-      // Double-click, or Ctrl/Cmd+click, on one of ours: all of its kind on screen.
-      const kind = hit && hit.owner === this.player ? hit.type : '';
-      const now = performance.now();
-      const all = !!kind && (e.ctrlKey || e.metaKey || (kind === this.lastClick.type && now - this.lastClick.time < DOUBLE_TAP_MS));
-      this.lastClick = { time: all ? 0 : now, type: kind };
-      const picked = all ? this.sameOnScreen(kind) : click ? (hit ? [hit.id] : []) : this.inBox(r, e.shiftKey);
+      if (hit) return this.pick(hit, e.ctrlKey || e.metaKey, e.shiftKey);
       if (!e.shiftKey) this.selected.clear();
-      for (const id of picked) {
-        if (e.shiftKey && click && !all && this.selected.has(id)) this.selected.delete(id);
-        else this.selected.add(id);
-      }
+      if (!click) for (const id of this.inBox(r, e.shiftKey)) this.selected.add(id);
     });
     window.addEventListener('keydown', (e) => this.groupKey(e));
   }
@@ -240,6 +238,21 @@ export class Input {
   private longPress = 0;
   private lastTap = { time: 0, type: '' };
   private lastClick = { time: 0, type: '' };
+  /** The last left press picked something (so its release, if it stays a click, has nothing more to do). */
+  private pressPicked = false;
+
+  /** A click on `hit`: it alone, or all of its kind on screen (Ctrl/Cmd, or a second click); Shift adds or takes out. */
+  private pick(hit: Entity, ctrl: boolean, shift: boolean): void {
+    const kind = hit.owner === this.player ? hit.type : '';
+    const now = performance.now();
+    const all = !!kind && (ctrl || (kind === this.lastClick.type && now - this.lastClick.time < DOUBLE_TAP_MS));
+    this.lastClick = { time: all ? 0 : now, type: kind };
+    if (!shift) this.selected.clear();
+    for (const id of all ? this.sameOnScreen(kind) : [hit.id]) {
+      if (shift && !all && this.selected.has(id)) this.selected.delete(id);
+      else this.selected.add(id);
+    }
+  }
   /** A dragging finger's speed (pixels per second) and the time of its last move. */
   private panVel = { x: 0, y: 0, t: 0 };
 

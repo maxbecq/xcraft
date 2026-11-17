@@ -1201,6 +1201,9 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   };
 }
 
+/** How far a ground ring may rise above its unit's feet to clear a ramp or a dune round it (world units). */
+const RING_RISE = 0.35;
+
 /** A struck unit shows white this long (s): who is under fire reads at a glance in a melee. */
 const HIT_FLASH = new MeshBasicMaterial({ color: 0xfff2e6 });
 const FLASH_S = 0.09;
@@ -1507,21 +1510,19 @@ export class EntityRenderer {
         dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
         const age = performance.now() - v.ring.userData.since;
         const fresh = Math.max(0, 1 - age / 1200);
-        // The ring fades in, then gives a short flash of light before settling: slow and bright round a
-        // building, quick and soft round a unit.
-        const [fadeMs, flashAt, flashWidth, flashPower, grow] = e.def.kind === 'building' ? [450, 560, 170, 1, 0.18] : [150, 230, 110, 0.4, 0.08];
-        const fadeIn = Math.min(1, age / fadeMs) ** 2;
-        const flash = flashPower * Math.max(0, 1 - Math.abs(age - flashAt) / flashWidth) ** 1.5;
-        // It also closes in a little as it fades in.
+        // The ring is there at full strength in the very frame of the click (a fade-in read as lag), then gives a
+        // short flash of light: bright round a building, soft round a unit.
+        const [flashWidth, flashPower] = e.def.kind === 'building' ? [170, 1] : [110, 0.4];
+        const flash = flashPower * Math.max(0, 1 - Math.abs(age - flashWidth) / flashWidth) ** 1.5;
         // Round a human building site it widens to take in the scaffolding while it stands.
         const wide = v.site?.storeys.some((s) => s.visible) ? (v.ring.userData.site as number) : 1;
         v.ring.userData.wide = v.ring.userData.wide === undefined ? wide : v.ring.userData.wide + (wide - v.ring.userData.wide) * Math.min(1, dt * 5);
-        const k = (1 + grow - grow * Math.min(1, age / fadeMs)) * v.ring.userData.wide;
+        const k = v.ring.userData.wide;
         v.ring.scale.set(k, 1, k);
-        dialMat.opacity = 0.6 * fresh * fadeIn;
+        dialMat.opacity = 0.6 * fresh;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
-        (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
-        (v.ring.userData.core as MeshBasicMaterial).opacity = (0.55 + 0.4 * fresh) * fadeIn + 0.6 * flash;
+        (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh + 0.45 * flash;
+        (v.ring.userData.core as MeshBasicMaterial).opacity = 0.55 + 0.4 * fresh + 0.6 * flash;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
         const air = flies(e);
         if (air !== !!v.ring.userData.air) this.airRing(v.ring, air);
@@ -1843,22 +1844,37 @@ export class EntityRenderer {
       const pos = m.geometry.getAttribute('position');
       for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
       pos.needsUpdate = true;
+      m.userData.flat = false; // lifted again on landing (see drape)
     }
     ring.userData.at = undefined; // lays itself over the ground again on landing
     if (!on) ring.position.y = 0;
   }
 
+  /**
+   * Lays a ground ring flat at the unit's height, never bent over the relief (by a cliff it would stretch up the
+   * wall). It rises a little, up to RING_RISE, where the ground round it is higher (a ramp, a dune), so it does not
+   * sink into it; beside a real cliff it stays at the unit's level and the wall simply hides what is behind it.
+   */
   private drape(ring: Object3D, x: number, z: number, baseY: number): void {
     const k = ring.scale.x;
     const at = `${x.toFixed(2)},${z.toFixed(2)},${k.toFixed(2)}`;
     if (ring.userData.at === at) return;
     ring.userData.at = at;
+    const core = (ring.children as Mesh[]).find((m) => m.material === ring.userData.core)!;
+    const r = k * (core.geometry as RingGeometry).parameters.outerRadius;
+    let top = 0;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      top = Math.max(top, heightAt(this.map, x + r * Math.cos(a), z + r * Math.sin(a)) - baseY);
+    }
+    ring.position.y = Math.min(top, RING_RISE);
     for (const m of ring.children as Mesh[]) {
-      if (m.userData.air) continue; // the flyer's thread and ground spot
+      if (m.userData.air || m.userData.flat) continue; // the flyer's thread and ground spot; already flat
       const pos = m.geometry.getAttribute('position');
-      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + k * pos.getX(i), z + k * pos.getZ(i)) - baseY + m.userData.lift);
+      for (let i = 0; i < pos.count; i++) pos.setY(i, m.userData.lift);
       pos.needsUpdate = true;
       m.geometry.computeBoundingSphere();
+      m.userData.flat = true;
     }
   }
 
