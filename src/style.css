@@ -526,7 +526,10 @@ body.spectate .hud-card { visibility: hidden; }
 
 /* ---------------------------------------------------------------- match setup */
 
-.menu.setup { gap: 10px; }
+.menu.setup { gap: 16px; }
+/* Air round the options: the title stands off above them, the buttons below. */
+.menu.setup h2 { margin-bottom: 14px; }
+.menu.setup > .row { margin-top: 14px; }
 .menu.setup h2 { margin: 0 0 4px; font: 600 54px/1 var(--title); letter-spacing: 0.1em; color: #ffd58a; text-transform: uppercase; filter: drop-shadow(0 4px 10px #000); }
 .menu fieldset { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0; padding: 8px 14px 12px; width: min(640px, 92vw); box-sizing: border-box; border: 1px solid rgba(217, 164, 32, 0.45); border-radius: 4px; background: rgba(0, 0, 0, 0.35); }
 .menu legend { padding: 0 8px; font: 600 18px var(--title); letter-spacing: 0.2em; text-transform: uppercase; color: #c9b896; }
@@ -562,7 +565,7 @@ body.spectate .hud-card { visibility: hidden; }
 }
 @media (max-width: 820px), (max-height: 600px) {
   /* Centred while it fits, from the top once it scrolls ('safe'); browsers without it keep it at the top. */
-  .menu.setup { gap: 6px; overflow: auto; place-content: start center; place-content: safe center center; padding: 12px 0; }
+  .menu.setup { gap: 12px; overflow: auto; place-content: start center; place-content: safe center center; padding: 20px 0; }
   .menu.setup h2 { font-size: 32px; }
   .menu fieldset { padding: 4px 8px 8px; }
   .menu .pick button { font-size: 14px; padding: 5px 9px; }
