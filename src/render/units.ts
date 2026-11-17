@@ -1,11 +1,11 @@
 import {
   AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
@@ -37,7 +37,59 @@ teamPainted.forEach((m) => {
 });
 
 /** Team-coloured light (veins, cores): `team_glow` in Blender models. */
-const teamGlow = TEAM_COLORS.map((c) => mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.1 }));
+const teamGlow = TEAM_COLORS.map((c) => {
+  const m = mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.6 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.veinTime = veinTime;
+    shader.vertexShader = `varying float vVein;\nuniform float veinTime;\n${shader.vertexShader}`.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      vVein = veinPulse(modelMatrix, position, veinTime);`).replace('void main() {', `${VEIN_PULSE}\nvoid main() {`);
+    shader.fragmentShader = `varying float vVein;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance *= vVein;`);
+  };
+  m.customProgramCacheKey = () => 'team-vein';
+  return m;
+});
+/** Seconds, shared by every vein so one uniform drives them all. */
+const veinTime = { value: 0 };
+/**
+ * Alchemical light breathing in the veins: a slow wave climbing them, a second slower swell and a little
+ * flicker, phased by the mesh's place on the map so no two buildings beat together.
+ */
+const VEIN_PULSE = `float veinPulse(mat4 model, vec3 p, float t) {
+  vec3 o = model[3].xyz;
+  float h = fract(sin(dot(floor(o.xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+  float y = (model * vec4(p, 1.0)).y;
+  return 0.78 + 0.22 * sin(t * (1.1 + h * 0.8) - y * 5.0 + h * 6.28) + 0.12 * sin(t * 0.37 + h * 17.0) + 0.05 * sin(t * 9.0 + h * 40.0);
+}`;
+/** Soft halo around a vein: a shell pushed out along the normals, densest where it faces the eye, added to the scene's light. */
+const veinHalo = TEAM_COLORS.map(
+  (c) =>
+    new ShaderMaterial({
+      uniforms: { color: { value: new Color(c) }, veinTime },
+      vertexShader: `uniform float veinTime;
+        varying float vEdge;
+        varying float vVein;
+        ${VEIN_PULSE}
+        void main() {
+          vec3 p = position + normal * 0.13;
+          vec4 world = modelMatrix * vec4(p, 1.0);
+          vec3 n = normalize(mat3(modelMatrix) * normal);
+          vEdge = abs(dot(n, normalize(cameraPosition - world.xyz)));
+          vVein = veinPulse(modelMatrix, position, veinTime);
+          gl_Position = projectionMatrix * viewMatrix * world;
+        }`,
+      fragmentShader: `uniform vec3 color;
+        varying float vEdge;
+        varying float vVein;
+        void main() {
+          // Thick in the middle of the tube, fading to nothing at its rim: reads as light bleeding into the air.
+          gl_FragColor = vec4(color * 1.8 * vVein, pow(vEdge, 1.5) * 0.65 * vVein);
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    }),
+);
 const teamCanvas = new Map<Texture, MeshStandardMaterial[]>();
 /** Team colour over a woven texture (`team_canvas`: the market's awning), with its hand-painted vertex colours. */
 function teamCloth(map: Texture, team: number): MeshStandardMaterial {
@@ -544,6 +596,7 @@ function model(type: string, team: Material, seed = 0): Group {
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
   let tagIndex = 0;
+  const veins: [Mesh, ShaderMaterial][] = [];
   g.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
@@ -554,14 +607,37 @@ function model(type: string, team: Material, seed = 0): Group {
     if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[ti] ?? team) : team;
     const map = (o.material as MeshStandardMaterial).map;
     if (name === 'team_canvas' && map) o.material = teamCloth(map, ti);
-    if (name === 'team_glow') o.material = teamGlow[ti] ?? o.material;
+    if (name === 'team_glow' && teamGlow[ti]) {
+      o.material = teamGlow[ti];
+      veins.push([o, veinHalo[ti]]);
+    }
     if (name === 'tag') {
       const tags = graffiti();
       o.material = tagMaterial(tags[(seed * 7 + tagIndex++) % tags.length]);
       o.castShadow = false;
     }
   });
+  // Halos added after the walk, so it does not give them shadows.
+  for (const [o, m] of veins) {
+    const halo = new Mesh(haloShape(o.geometry), m);
+    halo.userData.noPick = true;
+    o.add(halo);
+  }
   return g;
+}
+
+const haloShapes = new WeakMap<BufferGeometry, BufferGeometry>();
+/** A vein's shape with its seams welded and normals smoothed, so the halo swells as one soft tube instead of splitting at hard edges. */
+function haloShape(geo: BufferGeometry): BufferGeometry {
+  let shape = haloShapes.get(geo);
+  if (!shape) {
+    const bare = new BufferGeometry().setAttribute('position', geo.getAttribute('position'));
+    bare.setIndex(geo.getIndex());
+    shape = mergeVertices(bare, 1e-3);
+    shape.computeVertexNormals();
+    haloShapes.set(geo, shape);
+  }
+  return shape;
 }
 
 /** Fallback models, used when a Blender model is missing. Units face +Z. */
@@ -954,6 +1030,7 @@ export class EntityRenderer {
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
     const now = performance.now();
+    veinTime.value = now / 1000;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.syncRallyFlags(world, selected, player, now);
