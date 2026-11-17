@@ -318,6 +318,11 @@ const POOLS: Record<string, [number, number, number, number][]> = {
 let poolTexture: Texture | null = null;
 /** Buildings standing on a paved plaza wider than their model: [plaza width, raised inner step width]. */
 const PLAZAS: Record<string, [number, number]> = { obelisque: [4.7, 3.1] };
+/**
+ * Selection ring radius (tiles) for squat buildings that fill their footprint: from the camera's low pitch the body
+ * hides the back of a ring drawn hugging it, so the ring looks pushed toward the viewer; a wider one shows all round.
+ */
+const RING_RADIUS: Record<string, number> = { reservepsy: 1.4, trone: 2.5 };
 let plazaMaterials: [MeshStandardMaterial, MeshStandardMaterial] | null = null;
 
 /** An Art Deco forecourt: ivory slabs with gold inlays, a sunburst and blue enamel corners, in two low steps. */
@@ -1474,7 +1479,7 @@ export class EntityRenderer {
     if ((e.def as UnitDef).cloaked) ghost(body);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
-    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
+    const r = RING_RADIUS[e.type] ?? (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
       const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
       cargo.name = 'cargo';
@@ -1483,6 +1488,7 @@ export class EntityRenderer {
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
+    ring.visible = false; // shown by sync, which starts its fade-in clock then (a view made while selected kept a NaN scale)
     // Floats a little above the ground, higher round buildings, so their plinths do not hide it.
     const lift = e.def.kind === 'building' ? 0.3 : 0.12;
     // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
