@@ -629,7 +629,7 @@ def puits(p):
     for i in range(11):  # rim of slabs leaning outwards
         a = i / 11 * math.tau + 0.2
         size = 0.32 + (i % 3) * 0.08
-        o = rock_mesh(p, 60 + i, 1.0, (0, 0, 0), squash=1.0)
+        o = boulder(p, 60 + i, 1.0, (0, 0, 0), squash=1.0)
         o.scale = (size, size * 0.7, size * 0.9)
         o.rotation_euler = (0.5 * math.cos(a), 0.5 * math.sin(a), a)
         o.location = (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.1)
@@ -791,6 +791,24 @@ def rock_mesh(p, seed, size, loc=(0, 0, 0), squash=0.7):
         k = 0.75 + 0.5 * (((i * 7919 + seed * 104729) % 1000) / 1000)
         v.co = v.co * k
         v.co.z *= squash
+    return _finish(o, p["boulder"], "rock")
+
+
+def boulder(p, seed, size, loc=(0, 0, 0), squash=0.8):
+    """A weathered boulder: a finer sphere warped by a few smooth waves and a little grit, then rounded and
+    shaded smooth, so it reads as worn stone rather than a cut gem."""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=size, location=loc)
+    o = bpy.context.active_object
+    s1, s2, s3 = seed * 1.7, seed * 2.3, seed * 3.1
+    for i, v in enumerate(o.data.vertices):
+        c = v.co / max(size, 1e-3)
+        k = 1 + 0.24 * math.sin(3.1 * c.x + s1) + 0.18 * math.sin(4.7 * c.y + s2) + 0.14 * math.sin(6.3 * c.z + s3) + 0.06 * math.sin(11 * (c.x + c.z) + s1)
+        k += 0.05 * ((((i * 7919 + seed * 104729) % 1000) / 1000) - 0.5)
+        v.co = v.co * k
+        v.co.z *= squash
+        if v.co.z < -size * 0.25:
+            v.co.z = -size * 0.25  # flat underside, sitting in the ground
+    soften(o, 1)
     return _finish(o, p["boulder"], "rock")
 
 
@@ -975,10 +993,16 @@ def paint(o):
         rnd = ((poly.index * 7919) % 1000) / 1000
         stroke = 0.94 + rnd * 0.12
         warm = (rnd - 0.5) * 0.06
+        stone = poly.material_index < len(o.material_slots) and o.material_slots[poly.material_index].name.startswith(("boulder", "rock"))
         for li in poly.loop_indices:
-            z = me.vertices[me.loops[li].vertex_index].co.z
+            vi = me.loops[li].vertex_index
+            z = me.vertices[vi].co.z
             h = (z - z0) / span
             shade = (0.72 + 0.34 * h) * stroke
+            if stone:
+                # Stone: strata, speckled grit, and darker hollows.
+                co = me.vertices[vi].co
+                shade *= 0.6 + 0.14 * math.sin(co.z * 22 + co.x * 3) + 0.28 * (((vi * 2654435761) % 1000) / 1000)
             if n.z > 0.7:
                 shade += 0.1
             if bevel:
