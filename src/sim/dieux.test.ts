@@ -112,6 +112,15 @@ describe('Dieux', () => {
     expect(seth.hp).toBe(hp);
   });
 
+  it('two gods standing close do not overlap, even a few tiles apart', () => {
+    const w = new World(createMatch(['dieux', 'humains']).map);
+    // 2.2 tiles apart, closer than their radii add up (2.5), in separation buckets two apart.
+    const thor = w.spawn('thor', 0, Math.round(31.9 * FP), 40 * FP);
+    const gaia = w.spawn('gaia', 0, Math.round(34.1 * FP), 40 * FP);
+    run(w, 3);
+    expect(Math.hypot(thor.x - gaia.x, thor.y - gaia.y)).toBeGreaterThanOrEqual(thor.radius + gaia.radius - FP / 16);
+  });
+
   it('the AI plays the Dieux: Esprits, gods, an army', () => {
     const w = createMatch(['dieux', 'humains']);
     const ai = new AI(w, 0);

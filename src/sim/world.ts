@@ -2038,11 +2038,13 @@ export class World {
       if (!b) buckets.set(k, (b = []));
       b.push(e);
     }
+    // Buckets two tiles wide: look far enough that the two widest bodies (gods, 1.3 tiles) still meet.
+    const reach = idiv(2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + 2 * FP - 1, 2 * FP);
     for (const e of units) {
       const bx = tileOf(e.x) >> 1;
       const by = tileOf(e.y) >> 1;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
           for (const f of buckets.get(key(bx + dx, by + dy)) ?? []) if (f.id > e.id && flies(f) === flies(e)) this.pushApart(e, f);
         }
       }
