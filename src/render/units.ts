@@ -377,6 +377,8 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   assassin: { height: 0.9 },
 };
 const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire'];
+/** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
+const DRESSED = ['conseil', 'caserne'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
 const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI / 2 };
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
@@ -430,6 +432,13 @@ export async function loadModels(types: string[]): Promise<void> {
             if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
+          if (DRESSED.includes(type)) {
+            try {
+              gltf.scene.add((await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-dress.glb`)).scene);
+            } catch {
+              // not built yet: the bare Meshy model
+            }
+          }
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
           holder.add(gltf.scene);

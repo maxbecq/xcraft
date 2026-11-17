@@ -1307,7 +1307,7 @@ def awning(team, linen, front=-1.1, rear=1.1, zf=1.67, zr=1.9, half=1.35, posts=
             poly.use_smooth = True
 
 
-def vein(p, glow, pts, r=0.02, into=(0, 1, 0)):
+def glow_vein(p, glow, pts, r=0.02, into=(0, 1, 0)):
     """A thin glass vein of team light in a dark iron gutter (set back into the wall along `into`), brass clamps
     at the ends and about every 40 cm."""
     back = lambda q: (q[0] + into[0] * r, q[1] + into[1] * r, q[2] + into[2] * r)
@@ -1345,6 +1345,108 @@ def gear(p, loc, r=0.17, teeth=10):
         box(p["bronze"], (0.06, 0.05, 0.06), (x + math.cos(a) * r, y, z + math.sin(a) * r), rot=(0, -a, 0))
 
 
+def ray(origin, d):
+    """First hit of a ray in the scene: (location, normal) or None."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    hit, loc, nor, *_ = bpy.context.scene.ray_cast(dg, Vector(origin), Vector(d))
+    return (loc, nor) if hit else None
+
+
+def roof(x, y):
+    h = ray((x, y, 20), (0, 0, -1))
+    return h[0].z if h else 0.0
+
+
+def wall(x, z, d=(0, 1, 0)):
+    """Where a ray along d (from outside) meets the wall at height z: its depth along d."""
+    d = Vector(d)
+    o = Vector((x, 0, z)) if d.y else Vector((0, x, z))
+    h = ray(o - d * 20, d)
+    return h[0].dot(d) if h else 0.0
+
+
+def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02):
+    """A glow vein that hugs a wall: rays cast along d from points on the line a-b. Small bumps in the masonry
+    are ignored; where the wall really steps in or out (over 6 cm) the vein turns a right angle round the edge,
+    like pipework clamped to the stone. Collinear points merge."""
+    a, b, d = Vector(a), Vector(b), Vector(d).normalized()
+    n = max(2, int((b - a).length / step))
+    runs, pts, prev = [], [], None
+    for i in range(n + 1):
+        o = a + (b - a) * (i / n) - d * 20
+        h = ray(o, d)
+        if not h:
+            if len(pts) > 1:
+                runs.append(pts)
+            pts, prev = [], None
+            continue
+        depth = h[0].dot(d) - pad
+        if prev is not None and abs(depth - prev[1]) <= 0.06:
+            depth = prev[1]
+        q = o + d * (depth - o.dot(d))
+        if prev is not None and abs(depth - prev[1]) > 0.06:
+            if abs(depth - prev[1]) > 0.7:  # off the building: start a new run
+                if len(pts) > 1:
+                    runs.append(pts)
+                pts = []
+            else:
+                m = (prev[0] + q) / 2
+                pts.append(m + d * (prev[1] - m.dot(d)))
+                pts.append(m + d * (depth - m.dot(d)))
+        pts.append(q)
+        prev = (q, depth)
+    if len(pts) > 1:
+        runs.append(pts)
+    for pts in runs:
+        out = [pts[0]]
+        for j in range(1, len(pts) - 1):
+            u, v = pts[j] - out[-1], pts[j + 1] - pts[j]
+            if u.length < 1e-4 or v.length < 1e-4 or u.normalized().dot(v.normalized()) < 0.999:
+                out.append(pts[j])
+        out.append(pts[-1])
+        glow_vein(p, glow, [tuple(q) for q in out], r=r, into=tuple(d))
+
+
+def dress_conseil(p, glow):
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-1.9, 0, 1.02), (1.9, 0, 1.02), Y)
+    for x in (-1.9, 1.9):
+        traced_vein(p, glow, (x, 0, 0.1), (x, 0, 1.02), Y)
+    traced_vein(p, glow, (0, -1.7, 1.02), (0, 1.7, 1.02), X)
+    traced_vein(p, glow, (0, -1.7, 1.02), (0, 1.7, 1.02), NX)
+    gear(p, (1.3, wall(1.3, 1.5) - 0.03, 1.5), r=0.3, teeth=14)
+    armillary(p, glow, (-0.4, -0.3, roof(-0.4, -0.3)), 1.6)
+
+
+def dress_caserne(p, glow):
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-1.25, 0, 0.98), (1.25, 0, 0.98), Y)
+    for x in (-1.2, 1.2):
+        traced_vein(p, glow, (x, 0, 0.35), (x, 0, 0.98), Y)
+    traced_vein(p, glow, (0, -1.15, 0.98), (0, 1.15, 0.98), X)
+    traced_vein(p, glow, (0, -1.15, 0.98), (0, 1.15, 0.98), NX)
+    gear(p, (0.75, wall(0.75, 1.3) - 0.03, 1.3), r=0.2, teeth=12)
+    armillary(p, glow, (-0.6, 0.0, roof(-0.6, 0.0)), 1.2)
+
+
+#: Meshy buildings dressed with Blender parts: veins of team light fitted to their walls by ray casts and a
+#: little brass mechanism. Only the parts are exported (`<type>-dress.glb`); the game adds them to the model.
+DRESS = {"conseil": dress_conseil, "caserne": dress_caserne}
+
+
+def dress(name, fn):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    MATS.clear()
+    p = palette()
+    bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{name}-meshy.glb"))
+    shell = set(bpy.context.scene.objects)
+    bpy.context.view_layer.update()
+    fn(p, mat("team_glow", 0x3A7BD5, emission=0x3A7BD5))
+    for o in shell:
+        bpy.data.objects.remove(o)
+    return [join([o for o in bpy.context.scene.objects if o.type == "MESH"], f"{name}-dress")]
+
+
 def marche(p):
     """Market (notice: trade and the economy): a stone floor under a team-striped canvas awning on timber posts,
     a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still. A touch of the
@@ -1361,10 +1463,10 @@ def marche(p):
     box(p["wood"], (2.7, 0.08, 0.08), (0, 1.1, 1.85))
     # "team_glow" lights up in the player's colour in game.
     glow = mat("team_glow", 0x3A7BD5, emission=0x3A7BD5)
-    vein(p, glow, [(-1.3, -1.165, 1.6), (1.3, -1.165, 1.6)])
+    glow_vein(p, glow, [(-1.3, -1.165, 1.6), (1.3, -1.165, 1.6)])
     for x in (-1.05, 1.05):
-        vein(p, glow, [(x, -1.14, 1.56), (x, -1.14, 0.24)])
-    vein(p, glow, [(-0.68, -0.795, 0.76), (0.68, -0.795, 0.76)], r=0.016)
+        glow_vein(p, glow, [(x, -1.14, 1.56), (x, -1.14, 0.24)])
+    glow_vein(p, glow, [(-0.68, -0.795, 0.76), (0.68, -0.795, 0.76)], r=0.016)
     gear(p, (-0.52, -0.79, 0.5))
     cyl(p["bronze"], 0.035, 0.6, (1.05, 1.05, 1.98), verts=8)
     armillary(p, glow, (1.05, 1.05, 2.22), 0.75)
@@ -2020,5 +2122,11 @@ for name, fn in MODELS.items():
     export(objs, os.path.join(OUT, f"{name}.glb"))
     icon(objs, os.path.join(ICONS, f"{name}.png"))
     print(f"MODEL {name}: {sum(len(o.data.polygons) for o in objs)} faces, parts {[o.name for o in objs[1:]]}")
+for name, fn in DRESS.items():
+    if ONLY and f"{name}-dress" not in ONLY:
+        continue
+    objs = dress(name, fn)
+    export(objs, os.path.join(OUT, f"{name}-dress.glb"))
+    print(f"DRESS {name}: {sum(len(o.data.polygons) for o in objs)} faces")
 if not ONLY or "doodads" in ONLY:
     export_doodads(os.path.join(OUT, "doodads.glb"))
