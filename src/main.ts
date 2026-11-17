@@ -1,6 +1,6 @@
 import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
-import { Audio } from './audio';
+import { Audio, type Sfx } from './audio';
 import { CameraRig } from './camera';
 import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
@@ -228,12 +228,21 @@ const input = new Input(world, map, PLAYER, {
   ordered: (x, z, target) => {
     overlay.mark(PLAYER, x, z, target);
     audio.play(target && target.owner >= 0 && world.hostile(PLAYER, target.owner) ? 'target' : 'order');
+    answer('go');
   },
   pan: (dx, dy) => rig.panPixels(dx, dy),
   fling: (vx, vy) => rig.fling(vx, vy),
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
 const audio = new Audio();
+/** Our units' wordless answer, at most every 0.3 s so a burst of clicks does not chatter. */
+let lastAnswer = 0;
+let lastPicked = new Set<number>();
+function answer(kind: 'ack' | 'go'): void {
+  if (SPECTATE || performance.now() - lastAnswer < 300) return;
+  lastAnswer = performance.now();
+  audio.play(`${kind}${factions[PLAYER]}` as Sfx, 0.8);
+}
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
@@ -826,6 +835,10 @@ function start(): void {
     }
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
+    // Our units answer when picked: once per selection that gains one of them (not when one dies out of it).
+    const picked = input.own().filter((u) => u.def.kind === 'unit').map((u) => u.id);
+    if (picked.some((id) => !lastPicked.has(id))) answer('ack');
+    lastPicked = new Set(picked);
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
     lap('units');
     hud.update();

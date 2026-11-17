@@ -3,7 +3,9 @@
 
 export type Sfx =
   | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'menu' | 'order' | 'target'
-  | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive';
+  | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive'
+  /** Units answering, without words: `ack` when selected, `go` when given an order, one voice per faction. */
+  | 'ackhumains' | 'gohumains' | 'ackz' | 'goz' | 'ackisdaris' | 'goisdaris';
 
 const MAX_PER_FRAME = 4;
 
@@ -111,7 +113,50 @@ export class Audio {
       o.start(t);
       o.stop(t + decay + 0.02);
     };
+    /** A short tone with its own envelope, `delay` seconds in: the syllables of the units' answers. */
+    const blip = (type: OscillatorType, f0: number, f1: number, peak: number, dur: number, delay = 0) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + delay);
+      g.gain.exponentialRampToValueAtTime(peak * volume, t + delay + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + delay + dur);
+      g.connect(this.master);
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t + delay);
+      o.frequency.exponentialRampToValueAtTime(f1, t + delay + dur);
+      o.connect(g);
+      o.start(t + delay);
+      o.stop(t + delay + dur + 0.02);
+    };
     switch (sfx) {
+      case 'ackhumains': // armour shifting, a low brass note: "ready"
+        burst('bandpass', 2400, 0.06, 0.05);
+        blip('sawtooth', 220, 220, 0.05, 0.16, 0.02);
+        blip('sine', 330, 330, 0.07, 0.18, 0.02);
+        break;
+      case 'gohumains': // a clank and two firm notes going up: "on it"
+        burst('bandpass', 2000, 0.07, 0.05);
+        blip('sawtooth', 247, 247, 0.05, 0.09, 0.01);
+        blip('sawtooth', 330, 330, 0.05, 0.12, 0.1);
+        break;
+      case 'ackz': // a machine waking: a square chirp and a bleep
+        blip('square', 700, 1100, 0.035, 0.06);
+        blip('square', 1650, 1650, 0.03, 0.05, 0.08);
+        break;
+      case 'goz': // relays clicking, a falling double bleep: "executing"
+        burst('highpass', 5000, 0.05, 0.02);
+        blip('square', 1300, 1300, 0.03, 0.04, 0.02);
+        blip('square', 900, 900, 0.03, 0.05, 0.08);
+        break;
+      case 'ackisdaris': // a soft bell with its fifth
+        blip('sine', 784, 784, 0.07, 0.45);
+        blip('sine', 1175, 1175, 0.035, 0.4, 0.01);
+        break;
+      case 'goisdaris': // two bells rising a fifth, a shimmer
+        blip('sine', 659, 659, 0.06, 0.28);
+        blip('sine', 988, 988, 0.06, 0.35, 0.08);
+        blip('triangle', 1976, 1976, 0.015, 0.3, 0.08);
+        break;
       case 'ranged': // a chemical rifle shot: a sharp crack, a low punch, a short rolling tail
         burst('highpass', 3000, 0.22, 0.05);
         thump(160, 55, 0.22, 0.09);
