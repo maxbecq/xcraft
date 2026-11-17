@@ -525,10 +525,11 @@ def mine(p):
 
 
 # Mineral fields: outcrops where crystal veins break through slabs of rock, not crystals sitting on the ground.
-def crystal(p, mat, base, tilt, length, radius):
-    """A hexagonal crystal with a pointed tip, growing from `base` along `tilt` (x, z rotation in radians)."""
-    body = cyl(p[mat], radius, length, (0, 0, length / 2), verts=6)
-    tip = cone(p[mat], radius, radius * 2.2, (0, 0, length + radius * 1.1), verts=6)
+def crystal(p, mat, base, tilt, length, radius, tip_mat=None):
+    """A hexagonal crystal tapering to a faceted point, growing from `base` along `tilt` (x, z rotation in radians);
+    the point can be of a paler crystal, as light gathers there."""
+    body = cyl(p[mat], radius, length, (0, 0, length / 2), verts=6, r2=radius * 0.78)
+    tip = cone(p[tip_mat or mat], radius * 0.78, radius * 2.4, (0, 0, length + radius * 1.2), verts=6)
     for o in (body, tip):
         # Bake the offset into the mesh so both pieces pivot around the crystal's base.
         bpy.ops.object.select_all(action="DESELECT")
@@ -566,9 +567,23 @@ def outcrop(p, seed, slabs, clusters, shards):
             ang = r(k) * math.tau
             length = 0.2 + r(k + 50) * 0.5 * (1.2 if j == 0 else 0.8)
             rad = 0.05 + r(k + 90) * 0.07
-            mat = ("crystal", "crystal_pale", "crystal_deep")[int(r(k + 130) * 3) % 3]
+            mat = ("crystal", "crystal_deep", "crystal_deep")[int(r(k + 130) * 3) % 3]
             base = (cx + math.cos(ang) * spread * r(k + 7), cy + math.sin(ang) * spread * r(k + 11), cz - 0.08)
-            crystal(p, mat, base, (lean * (0.4 + r(k + 3)), ang + math.pi / 2), length, rad)
+            crystal(p, mat, base, (lean * (0.4 + r(k + 3)), ang + math.pi / 2), length, rad, tip_mat="crystal_pale")
+            # A few small crystals huddle at the foot of each big one.
+            if j < 3:
+                for q in range(2):
+                    a2 = ang + (q - 0.5) * 1.1
+                    crystal(p, "crystal_pale", (base[0] + math.cos(a2) * rad * 1.6, base[1] + math.sin(a2) * rad * 1.6, base[2]), (lean + 0.5, a2 + math.pi / 2), length * 0.35, rad * 0.45)
+    # Rubble and grit round the outcrop.
+    for j in range(9):
+        k += 1
+        ang = r(k) * math.tau
+        d = 0.35 + r(k + 17) * 0.45
+        o = rock_mesh(p, seed * 31 + j, 1.0, (0, 0, 0), squash=0.6)
+        sz = 0.05 + r(k + 23) * 0.08
+        o.scale = (sz, sz * 0.8, sz * 0.6)
+        o.location = (math.cos(ang) * d, math.sin(ang) * d, 0.0)
     for j in range(shards):
         k += 1
         ang = r(k) * math.tau
@@ -607,23 +622,33 @@ def minerai_3(p):
 
 
 def puits(p):
-    """An energy well: a crater with a raised, broken rim, glowing fissures and a sunken pool of light."""
-    cyl(p["rock"], 1.3, 0.1, (0, 0, -0.02), verts=18)  # basin floor
-    cyl(p["purple_glow"], 0.75, 0.08, (0, 0, 0.03), verts=16)
-    cyl(p["purple_deep"], 0.38, 0.1, (0, 0, 0.05), verts=12)
-    for i in range(11):  # rim of slabs leaning outwards
-        a = i / 11 * math.tau + 0.2
-        size = 0.32 + (i % 3) * 0.08
-        o = rock_mesh(p, 60 + i, 1.0, (0, 0, 0), squash=1.0)
-        o.scale = (size, size * 0.7, size * 0.9)
-        o.rotation_euler = (0.5 * math.cos(a), 0.5 * math.sin(a), a)
-        o.location = (math.cos(a) * 1.25, math.sin(a) * 1.25, 0.1)
-    for i in range(7):  # fissures running out from the pool
-        a = i / 7 * math.tau + 0.4
-        pipe(p["purple_glow"], (math.cos(a) * 0.7, math.sin(a) * 0.7, 0.04), (math.cos(a + 0.15) * 1.45, math.sin(a + 0.15) * 1.45, 0.02), r=0.035, verts=4)
-    for i in range(5):  # crystal growths around the rim
-        a = i / 5 * math.tau
-        crystal(p, "purple_glow", (math.cos(a) * 1.0, math.sin(a) * 1.0, 0.0), (0.6, a + math.pi / 2), 0.25 + (i % 2) * 0.15, 0.06)
+    """An energy well: a stepped crater ringed by two crowns of broken rock, a pool of light with concentric
+    ripples, a column of energy rising from its heart, and glowing fissures and crystals round the rim."""
+    cyl(p["dark"], 1.5, 0.04, (0, 0, -0.03), verts=24)  # scorched ground
+    ring(p["rock"], 1.12, 0.13, (0, 0, 0.04), seg=28)  # outer step of the crater
+    ring(p["rock"], 0.93, 0.08, (0, 0, 0.02), seg=28)  # inner step, lower
+    cyl(p["purple_glow"], 0.86, 0.04, (0, 0, 0.0), verts=24)  # the pool
+    for rad, w in ((0.62, 0.025), (0.45, 0.02), (0.28, 0.018)):
+        ring(p["purple_deep"], rad, w, (0, 0, 0.04), seg=28)  # ripples
+    cyl(p["purple_deep"], 0.16, 0.1, (0, 0, 0.05), verts=12)
+    cyl(p["purple_glow"], 0.06, 1.1, (0, 0, 0.6), verts=8, r2=0.015)  # rising column
+    ball(p["purple_deep"], 0.09, (0, 0, 0.32), seg=10, rings=6)
+    for crown, count, dist, base, lean in ((0, 13, 1.32, 0.3, 0.55), (1, 9, 1.55, 0.2, 0.3)):
+        for i in range(count):
+            a = i / count * math.tau + 0.2 + crown * 0.17
+            size = base + ((i * 7 + crown * 3) % 4) * 0.05
+            o = rock_mesh(p, 60 + crown * 20 + i, 1.0, (0, 0, 0), squash=1.0)
+            o.scale = (size, size * 0.7, size * (0.9 if crown == 0 else 0.6))
+            o.rotation_euler = (lean * math.cos(a), lean * math.sin(a), a)
+            o.location = (math.cos(a) * dist, math.sin(a) * dist, 0.08 - crown * 0.04)
+    for i in range(9):  # fissures running out from the pool, forking
+        a = i / 9 * math.tau + 0.4
+        mid = (math.cos(a + 0.08) * 1.15, math.sin(a + 0.08) * 1.15, 0.06)
+        pipe(p["purple_glow"], (math.cos(a) * 0.82, math.sin(a) * 0.82, 0.03), mid, r=0.03, verts=4)
+        pipe(p["purple_glow"], mid, (math.cos(a + 0.2) * 1.7, math.sin(a + 0.2) * 1.7, 0.0), r=0.02, verts=4)
+    for i in range(7):  # crystal growths on the rim
+        a = i / 7 * math.tau + 0.1
+        crystal(p, "purple_glow", (math.cos(a) * 1.05, math.sin(a) * 1.05, 0.02), (0.55 + (i % 3) * 0.12, a + math.pi / 2), 0.22 + (i % 3) * 0.1, 0.05, tip_mat="purple_deep")
 
 
 # ------------------------------------------------------------------ Isdaris: 1930s-50s science fiction, Art Deco, light
