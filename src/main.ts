@@ -309,13 +309,17 @@ let edgeSince = 0;
 /** A pointer settled in a band this long starts scrolling; touching the screen's very edge scrolls at once. */
 const EDGE_DWELL_MS = 200;
 const EDGE_TOUCH_PX = 3;
-/** No edge scrolling this close to a button of the interface: the corners holding buttons stay calm. */
+/** No edge scrolling this close to a button up top (the menu in its corner): reaching it must not move the view.
+ * Buttons down by the console are left out: their calm zone would swallow the bottom band. */
 const UI_CALM_PX = 40;
 const nearButton = (x: number, y: number) =>
-  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip, .hud-toast.alert[title]')].some((b) => {
+  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip')].some((b) => {
     const r = b.getBoundingClientRect();
-    return r.width > 0 && x > r.left - UI_CALM_PX && x < r.right + UI_CALM_PX && y > r.top - UI_CALM_PX && y < r.bottom + UI_CALM_PX;
+    return r.width > 0 && r.top < window.innerHeight / 2 && x > r.left - UI_CALM_PX && x < r.right + UI_CALM_PX && y > r.top - UI_CALM_PX && y < r.bottom + UI_CALM_PX;
   });
+/** The console's top edge, this deep, scrolls down at once, like the screen's very bottom: a pointer thrown down at
+ * the console lands on it (it crosses the band above in a frame or two). Deeper in, the console is for clicking. */
+const EDGE_LINE_PX = 14;
 function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
@@ -329,11 +333,12 @@ function scrollDirection(): [number, number] {
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
     edgeGlow.style.setProperty('--edge-bottom', `${window.innerHeight - bottom}px`);
-    let ey = mouse.y < EDGE_PX ? depth(mouse.y) : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -depth(bottom - mouse.y) : 0;
+    const floor = mouse.y >= window.innerHeight - 1 - EDGE_TOUCH_PX || (mouse.y >= bottom && mouse.y < bottom + EDGE_LINE_PX);
+    let ey = mouse.y < EDGE_PX ? depth(mouse.y) : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -depth(bottom - mouse.y) : floor ? -1 : 0;
     // Near a corner along an edge (the outer fifth): scroll diagonally, as fast as along the edge.
     const cornerX = window.innerWidth * 0.2;
     const cornerY = bottom * 0.2;
-    if (ex && !ey) ey = Math.abs(ex) * (mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom ? -1 : 0);
+    if (ex && !ey) ey = Math.abs(ex) * (mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom + EDGE_LINE_PX ? -1 : 0);
     if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
     // The glow along the edge brightens with the speed.
     edgeGlow.style.opacity = String(0.35 + 0.65 * Math.max(Math.abs(ex), Math.abs(ey)));
@@ -341,7 +346,7 @@ function scrollDirection(): [number, number] {
     const inBand = !!(ex || ey);
     if (!inBand) edgeSince = 0;
     else if (!edgeSince) edgeSince = performance.now();
-    const touching = mouse.x <= EDGE_TOUCH_PX || mouse.y <= EDGE_TOUCH_PX || mouse.x >= window.innerWidth - 1 - EDGE_TOUCH_PX;
+    const touching = floor || mouse.x <= EDGE_TOUCH_PX || mouse.y <= EDGE_TOUCH_PX || mouse.x >= window.innerWidth - 1 - EDGE_TOUCH_PX;
     if (inBand && (nearButton(mouse.x, mouse.y) || (!touching && performance.now() - edgeSince < EDGE_DWELL_MS))) ex = ey = 0;
     if (ex) dx = ex;
     if (ey) dy = ey;
