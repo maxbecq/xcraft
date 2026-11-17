@@ -206,6 +206,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   reanimation: { name: 'Réanimation', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
   /** Phalangiste (notice): a napalm charge on a vehicle near the point: an enemy one is burnt and stopped, an ally one repaired. */
   napalm: { name: 'Charge de napalm', hotkey: 'N', target: 'point', research: 'chargenapalm', ...BALANCE.abilities.napalm },
+  /** Char Pégase (notice): takes off (shooting only at flyers) or lands. */
+  decollage: { name: 'Décollage / atterrissage', hotkey: 'D', research: 'decollage', ...BALANCE.abilities.decollage },
 };
 export const OBSERVATION = BALANCE.rules.observation;
 export const RAPPEL = BALANCE.rules.rappel;
@@ -242,12 +244,15 @@ const BASE: Record<string, object> = {
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
   tour: { kind: 'building', name: 'Tour alchimistique', size: 2, faction: 'humains', hotkey: 'T' },
   // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
-  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'pegase'], researches: ['charlourd'], faction: 'humains', hotkey: 'M' },
+  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'scarabee', 'pegase'], researches: ['charlourd', 'decollage', 'chargement', 'scarabeassaut'], faction: 'humains', hotkey: 'M' },
+  // Notice: « Scarabée », a slow amphibious armoured wagon: up to four Auxiliaires, Soigneurs, Phalangistes or Alchimistes
+  // shelter and shoot from inside (mod « Transport scarabée »); with Scarabée d'assaut it has a gun of its own.
+  scarabee: { kind: 'unit', name: 'Scarabée', radius: 0.8, mechanical: true, faction: 'humains', hotkey: 'S' },
   // Notice: « Bourdon », a propeller airship: detector, short-range anti-vehicle grenades, good against buildings and flyers
   // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
   bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
-  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, faction: 'humains', hotkey: 'P' },
+  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
   alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
@@ -261,7 +266,7 @@ const BASE: Record<string, object> = {
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
-  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures'], faction: 'humains', hotkey: 'C' },
+  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures', 'trebuchet'], faction: 'humains', hotkey: 'C' },
   // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
   plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, beast: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
@@ -293,6 +298,10 @@ const BASE: Record<string, object> = {
   regenerant: research('Régénérant chimique', 'R', 'Les Alchimistes lancent le Régénérant sur leurs alliés.'),
   acide: research('Acide anti-structure', 'Q', 'Réservoirs de substances : gros bonus contre les bâtiments et les machines.'),
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
+  decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.'),
+  chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins."),
+  scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon.'),
+  trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),
 
   // ---------------------------------------------------------------- Isdaris
   moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },

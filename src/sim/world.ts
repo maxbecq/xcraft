@@ -20,7 +20,7 @@ export type Order =
   | { kind: 'cast'; ability: string; x: number; y: number };
 
 /** Flying units go straight over cliffs and buildings. */
-export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying;
+export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying || e.airborne;
 
 export interface Entity {
   id: number;
@@ -94,6 +94,8 @@ export interface Entity {
   camo: number;
   invuln: number;
   ttl: number;
+  /** Char Pégase in the air (Décollage). */
+  airborne: boolean;
 }
 
 export interface Player {
@@ -227,7 +229,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -418,7 +420,7 @@ export class World {
         units.forEach((e) => this.setOrder(e, null));
         return;
       case 'unload':
-        for (const b of buildings) for (const u of this.entities.values()) if (u.inside === b.id) this.leave(u);
+        for (const b of [...buildings, ...units]) for (const u of [...this.entities.values()]) if (u.inside === b.id) this.leave(u);
         return;
       case 'move':
         this.moveGroup(units, c.x, c.y);
@@ -428,11 +430,11 @@ export class World {
         return;
       case 'attack': {
         const t = this.target(c);
-        const fighters = units.filter((e) => 'attack' in e.def && e.def.attack);
+        const fighters = units.filter((e) => this.weapon(e));
         if (t && this.hostile(t.owner, c.player)) {
           // Those that cannot hit it (a flyer, for melee) attack-move to where it is.
           for (const e of fighters) {
-            if (reaches((e.def as UnitDef).attack!, t.def.kind === 'unit' && flies(t))) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
+            if (reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
             else this.setOrder(e, { kind: 'attackMove', x: t.x, y: t.y, target: 0 });
           }
         } else {
@@ -619,8 +621,15 @@ export class World {
   private cast(e: Entity, name = (e.def as UnitDef).ability): void {
     const def = e.def as UnitDef;
     const ab = name && ABILITIES[name];
-    if (!ab || ab.target === 'point' || e.abilityCd > 0) return;
-    if (name === 'coupcirculaire') {
+    if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research))) return;
+    if (name === 'decollage') {
+      // Take off, or land where the ground is open; either takes a moment.
+      if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
+      e.airborne = !e.airborne;
+      e.held = ticks(ab.duration);
+      e.path = [];
+      e.goal = null;
+    } else if (name === 'coupcirculaire') {
       // A sweeping blow: every enemy on the ground within reach (poisoned too, with Lames empoisonnées).
       for (const t of [...this.entities.values()]) {
         if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || flies(t) || !this.hostile(t.owner, e.owner) || this.gap(e, t) > toFp(ab.radius!)) continue;
@@ -697,7 +706,7 @@ export class World {
     const movers: Entity[] = [];
     for (const e of units) {
       const worker = (e.def as UnitDef).worker;
-      if (t && this.hostile(t.owner, e.owner) && (e.def as UnitDef).attack && reaches((e.def as UnitDef).attack!, t.def.kind === 'unit' && flies(t))) {
+      if (t && this.hostile(t.owner, e.owner) && this.weapon(e) && reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) {
         this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
       } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
         this.setOrder(e, { kind: 'heal', target: t.id });
@@ -705,7 +714,7 @@ export class World {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
       } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp) {
         this.setOrder(e, { kind: 'construct', target: t.id });
-      } else if (!worker && t && t.owner === e.owner && (t.def as BuildingDef).bunker && t.buildLeft === 0 && (e.def as UnitDef).attack && !flies(e)) {
+      } else if (!worker && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
         this.setOrder(e, { kind: 'enter', target: t.id });
       } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).dropoff && e.carry > 0) {
         this.setOrder(e, { kind: 'gather', target: this.nearestField(e)?.id ?? 0, phase: 'return', timer: 0 });
@@ -817,9 +826,29 @@ export class World {
     return bonus;
   }
 
-  /** Extra range from research (Canons sciés: Auxiliaires). */
-  private rangeBonus(e: Entity): number {
+  /** Extra range from research (Canons sciés: Auxiliaires; Trébuchet intégré: Ankylosaures against buildings). */
+  private rangeBonus(e: Entity, t?: Entity): number {
+    if (e.type === 'ankylosaure' && t?.def.kind === 'building' && this.level(e.owner, 'trebuchet')) return BALANCE.rules.upgrades.trebuchetRange;
     return e.type === 'auxiliaire' ? this.level(e.owner, 'canonsscies') : 0;
+  }
+
+  /** The weapon a unit fights with now: Scarabées get one by research, a Char Pégase in the air shoots only at flyers. */
+  weapon(e: Entity): Attack | undefined {
+    if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
+    const a = (e.def as UnitDef | BuildingDef).attack;
+    return a && e.airborne ? { ...a, air: true, ground: false } : a;
+  }
+
+  /** Room in a bunker or carrier: Fortin, Scarabée, and Bourdons with Chargement. */
+  room(b: Entity): number {
+    return (b.def as BuildingDef | UnitDef).bunker ?? (b.type === 'bourdon' && this.level(b.owner, 'chargement') ? BALANCE.rules.upgrades.chargement : 0);
+  }
+
+  /** Who may get in: soldiers that shoot into a Fortin or a Scarabée, any foot soldier into a Bourdon. */
+  private boards(e: Entity, b: Entity): boolean {
+    const d = e.def as UnitDef;
+    if (d.worker || d.mechanical || d.beast) return false;
+    return b.type === 'bourdon' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
   }
 
   /** Croissance économique: serfs and the Caserne's soldiers. */
@@ -911,12 +940,14 @@ export class World {
         return this.fight(e, o);
       case 'enter': {
         const b = this.entities.get(o.target);
-        const room = b && (b.def as BuildingDef).bunker;
+        const room = b && this.room(b);
         if (!b || !room || b.hp <= 0 || b.owner !== e.owner) return this.setOrder(e, null);
-        const size = (b.def as BuildingDef).size;
-        if (!this.reachRect(e, b.tx, b.ty, size)) return void this.goNear(e, b.tx, b.ty, size);
+        if (b.def.kind === 'unit') {
+          // A carrier (Scarabée, Bourdon): walk up to it, wherever it goes.
+          if (this.gap(e, b) > FP / 2) return this.chase(e, b);
+        } else if (!this.reachRect(e, b.tx, b.ty, (b.def as BuildingDef).size)) return void this.goNear(e, b.tx, b.ty, (b.def as BuildingDef).size);
         if ([...this.entities.values()].filter((u) => u.inside === b.id).length >= room) {
-          this.say(e.owner, 'Le Fortin est plein.');
+          this.say(e.owner, `${b.def.name} : plein.`);
           return this.setOrder(e, null);
         }
         this.setOrder(e, null);
@@ -1127,10 +1158,10 @@ export class World {
 
   /** Attacks if in range, otherwise closes in. */
   private strike(e: Entity, t: Entity): void {
-    const a = (e.def as UnitDef).attack;
+    const a = this.weapon(e);
     if (!a) return;
     if (!reaches(a, flies(t))) return this.setOrder(e, null);
-    if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e)) + FP / 8) return this.chase(e, t);
+    if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e, t)) + FP / 8) return this.chase(e, t);
     e.shortTicks = 0;
     e.goal = null;
     e.path = [];
@@ -1222,7 +1253,7 @@ export class World {
   }
 
   /** Most threatening visible enemy within range: armed units and defences first, then workers, then buildings. */
-  private enemyNear(e: Entity, range: number, unitsOnly = false, a = (e.def as UnitDef | BuildingDef).attack): Entity | undefined {
+  private enemyNear(e: Entity, range: number, unitsOnly = false, a = this.weapon(e)): Entity | undefined {
     let best: Entity | undefined;
     let bestScore = Infinity;
     for (const t of this.entities.values()) {
@@ -1307,9 +1338,12 @@ export class World {
   private shelter(e: Entity): void {
     const b = this.entities.get(e.inside);
     if (!b || b.hp <= 0) return this.leave(e);
-    const a = (e.def as UnitDef).attack;
-    if (e.cooldown > 0 || !a) return;
-    const range = toFp(a.range + 1 + this.rangeBonus(e)) + (b.def as BuildingDef).size * FP / 2;
+    // Carried along; nobody shoots out of a flying transport.
+    e.x = e.px = b.x;
+    e.y = e.py = b.y;
+    const a = this.weapon(e);
+    if (e.cooldown > 0 || !a || flies(b)) return;
+    const range = toFp(a.range + 1 + this.rangeBonus(e)) + (b.def.kind === 'building' ? b.def.size : 1) * FP / 2;
     const t = this.enemyNear(b, range, false, a);
     if (!t) return;
     e.cooldown = ticks(a.cooldown);
@@ -1320,7 +1354,7 @@ export class World {
   private leave(e: Entity): void {
     const b = this.entities.get(e.inside);
     e.inside = 0;
-    const [x, y] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y), b ? this.grid.level(b.tx, b.ty) : -1);
+    const [x, y] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y), b?.def.kind === 'building' ? this.grid.level(b.tx, b.ty) : -1);
     e.x = e.px = x * FP + FP / 2;
     e.y = e.py = y * FP + FP / 2;
   }

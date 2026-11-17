@@ -99,3 +99,36 @@ describe('Human abilities (notice 1.2-1)', () => {
     expect(g.trainLeft).toBeLessThan(ticks((DEFS.serf as UnitDef).buildTime));
   });
 });
+
+describe('Human carriers and machines (notice 1.2-1)', () => {
+  it('soldiers board a Scarabée, ride along, shoot from inside and get out', () => {
+    const w = new World(createMap());
+    const s = w.spawn('scarabee', 0, ...at(40, 60));
+    const aux = w.spawn('auxiliaire', 0, ...at(42, 60));
+    const leg = w.spawn('legionnaire', 0, ...at(42, 61));
+    w.step([{ player: 0, kind: 'smart', ids: [aux.id, leg.id], x: s.x, y: s.y, target: s.id }]);
+    run(w, 2);
+    expect(aux.inside).toBe(s.id);
+    expect(leg.inside).toBe(0); // melee: not a shooter
+    w.step([{ player: 0, kind: 'move', ids: [s.id], x: 50 * FP, y: 60 * FP }]);
+    run(w, 6);
+    expect(Math.abs(aux.x - s.x)).toBeLessThan(FP / 10);
+    const foe = w.spawn('creature', 1, ...at(54, 60));
+    foe.order = { kind: 'move', x: foe.x, y: foe.y, arrive: 0 };
+    run(w, 2);
+    expect(foe.hp).toBeLessThan(foe.maxHp);
+    w.step([{ player: 0, kind: 'unload', ids: [s.id] }]);
+    expect(aux.inside).toBe(0);
+  });
+
+  it('a Char Pégase takes off once researched, then shoots only at flyers', () => {
+    const w = new World(createMap());
+    const p = w.spawn('pegase', 0, ...at(40, 60));
+    w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'decollage' }]);
+    expect(p.airborne).toBe(false);
+    w.players[0].upgrades.decollage = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'decollage' }]);
+    expect(p.airborne).toBe(true);
+    expect(w.weapon(p)).toMatchObject({ air: true, ground: false });
+  });
+});

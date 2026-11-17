@@ -273,7 +273,14 @@ export class Hud {
         ];
       }
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
-      if (units.some((u) => (u.def as UnitDef).attack)) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
+      if (units.some((u) => this.world.weapon(u))) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
+      // Carriers (Scarabée, Bourdon with Chargement): let everyone out.
+      const carriers = units.filter((u) => this.world.room(u));
+      if (carriers.length) {
+        const ids = carriers.map((u) => u.id);
+        const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
+        list.push({ label: `Débarquer (${inside})`, key: 'D', reason: inside ? undefined : "Personne à l'intérieur", action: () => cmd({ kind: 'unload', ids }) });
+      }
       if (this.workers().length) {
         list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = 'basic') });
         list.push({ label: 'Avancé', key: 'V', action: () => (this.buildMenu = 'advanced') });
