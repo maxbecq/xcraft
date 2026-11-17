@@ -461,11 +461,12 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         ${shiny ? `// Human soldiers: livelier colours, and polished steel that catches the light.
         float lum0 = dot(paint, vec3(0.3, 0.59, 0.11));
         float steel = (1.0 - smoothstep(0.04, 0.1, max(paint.r, max(paint.g, paint.b)) - min(paint.r, min(paint.g, paint.b)))) * smoothstep(0.12, 0.3, lum0) * (1.0 - smoothstep(0.45, 0.6, lum0));
-        // Pale cloth (the Soigneur's robe) keeps its ivory instead of turning yellow.
-        // Brighter team paint and steel; warm tones (leather, ivory cloth) are left alone, or they go orange and yellow.
-        paint *= 1.0 + 0.3 * teamMask + 0.15 * steel;` : ''}
+        // Steel brighter; dark warm tones (leather, straps) pushed back, so steel and team colour stand out.
+        // Pale cloth (the Soigneur's ivory robe) is left alone: saturated, it turned yellow.
+        float leather = smoothstep(0.04, 0.12, paint.r - paint.b) * (1.0 - smoothstep(0.35, 0.5, lum0)) * (1.0 - teamMask);
+        paint = mix(paint, vec3(0.72, 0.74, 0.78), steel * 0.7) * (1.0 - 0.45 * leather);` : ''}
         ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.35) * 1.3 + 0.01, 1.0);' : ''}
-        diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);
+        diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * ${shiny ? '2.2 + 0.04' : '2.4 + 0.08'}), teamMask);
         ${living ? 'vec4 life = lifeGlow(paint, vLife, vSeed, veinTime);\n        diffuseColor.rgb *= life.a;' : ''}
         ${ivory ? `// Isdaris armour is mostly ivory: tint the pale, unsaturated plates too, or sides blur in a melee.
         float lum = dot(paint, vec3(0.3, 0.59, 0.11));
@@ -474,7 +475,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         diffuseColor.rgb = mix(diffuseColor.rgb, teamColor * (lum * 1.5 + 0.1), ivoryMask * 0.6);
         teamMask = max(teamMask, ivoryMask * 0.35);` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};${living ? '\n        totalEmissiveRadiance += life.rgb;' : ''}`);
+        totalEmissiveRadiance += teamColor * teamMask * ${shiny ? '0.2' : unit ? '0.7' : '0.3'};${living ? '\n        totalEmissiveRadiance += life.rgb;' : ''}`);
     if (living) {
       // Human buildings come alive: windows and vats (render/life.ts).
       shader.uniforms.veinTime = veinTime;
@@ -485,22 +486,23 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
     }
   };
   if (shiny) {
-    m.envMapIntensity = 2.4;
+    m.envMapIntensity = 3.5;
     const compile = m.onBeforeCompile;
     m.onBeforeCompile = (shader, r) => {
       compile.call(m, shader, r);
       // Bare steel polished, team paint glossy, leather and cloth left rough.
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.15, steel);
-        roughnessFactor = mix(roughnessFactor, 0.35, teamMask);`)
+        roughnessFactor = mix(roughnessFactor, 0.18, steel);
+        roughnessFactor = mix(roughnessFactor, 0.2, teamMask);`)
         .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
-        metalnessFactor = mix(metalnessFactor, 0.3, steel);`);
+        metalnessFactor = mix(metalnessFactor, 0.85, steel);
+        metalnessFactor = mix(metalnessFactor, 0.35, teamMask);`);
     };
   }
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
-  if (unit) rimLight(m, shiny ? 0.8 : 0.5, team.toArray());
+  if (unit) rimLight(m, shiny ? 1.0 : 0.5, team.toArray());
   else rimLight(m, rim);
   return m;
 }
