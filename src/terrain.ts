@@ -26,8 +26,8 @@ export function setBiome(b: Biome): void {
 }
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
-const WALL_SEGMENTS = 4;
-const WALL_ROWS = 5;
+const WALL_SEGMENTS = 7;
+const WALL_ROWS = 6;
 
 /** Smooth noise over world positions (not tileable), 0..1. */
 const noise = (x: number, z: number, scale: number, seed: number) => fbm((x / scale) % 1024 / 1024, (z / scale) % 1024 / 1024, 3, 1024, seed);
@@ -81,7 +81,9 @@ export function buildTerrain(map: GameMap): Group {
     // Dune crests a little paler than the hollows.
     const dune = reliefAt(map, vx, vz);
     if (dune) c.multiplyScalar(1 + (dune / (B.dunes ?? 1)) * 0.25);
-    return [new Vector3(vx, h + bump + dune, vz), c];
+    // On a cliff top, the corner is pushed out or in a little, so the plateau's edge is not a ruled line.
+    const shift = edge && level >= Math.max(...ls) ? rimShift(vx, vz) : null;
+    return [new Vector3(vx + (shift?.x ?? 0), h + bump + dune, vz + (shift?.y ?? 0)), c];
   };
 
   for (let y = 0; y < map.height; y++) {
@@ -152,6 +154,16 @@ export function buildTerrain(map: GameMap): Group {
 
 let leanMap: GameMap;
 
+/**
+ * How far a cliff-top corner moves (outwards mostly, along the downhill direction): the ground's rim and the
+ * cliff's top use the same shift, so they still meet. Zero at the map's edge.
+ */
+function rimShift(vx: number, vz: number): Vector2 {
+  if (!Number.isInteger(vx) || !Number.isInteger(vz) || vx <= 0 || vz <= 0 || vx >= leanMap.width || vz >= leanMap.height) return new Vector2();
+  const amount = (noise(vx * 1.9, vz * 1.9, 1, 47) - 0.3) * 0.55;
+  return downhill(vx, vz, new Vector2()).multiplyScalar(amount);
+}
+
 /** Downhill direction at a grid vertex, from the levels of the four tiles around it: where cliffs lean. */
 function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
   const m = leanMap;
@@ -168,6 +180,10 @@ function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
  * Shared end points lean along the terrain's downhill direction, so neighbouring faces always meet.
  */
 function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2): void {
+  // The top follows the ground's rim, pushed in and out like the plateau's edge (see rimShift).
+  const [c0, c1] = [p0, p1];
+  p0 = p0.clone().add(rimShift(p0.x, p0.y));
+  p1 = p1.clone().add(rimShift(p1.x, p1.y));
   const grid: Vector3[][] = [];
   const cols: Color[][] = [];
   for (let i = 0; i <= WALL_SEGMENTS; i++) {
@@ -177,7 +193,9 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
     const pz = p0.y + (p1.y - p0.y) * t;
     const top = t0 + (t1 - t0) * t;
     const bottom = b0 + (b1 - b0) * t - 0.08;
-    const dir = ends && Number.isInteger(px) && Number.isInteger(pz) ? downhill(px, pz, out) : out;
+    // Shared end points lean along the downhill direction of their (unshifted) grid corner.
+    const corner = i === 0 ? c0 : c1;
+    const dir = ends && Number.isInteger(corner.x) && Number.isInteger(corner.y) ? downhill(corner.x, corner.y, out) : out;
     const row: Vector3[] = [];
     const crow: Color[] = [];
     for (let j = 0; j <= WALL_ROWS; j++) {
@@ -186,8 +204,10 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       // Position-only noise: two faces sharing a point displace it the same way.
       const n = noise(px * 2.3 + y * 1.1, pz * 2.3 - y * 1.1, 1, 13) - 0.5 + (noise(px * 5 + y * 3, pz * 5 - y * 3, 1, 29) - 0.5) * 0.6;
       const m = noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5;
-      const lean = j === 0 ? 0 : SLANT * Math.pow(s, 0.8) + n * 0.42;
-      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.3;
+      // Broad bulges and hollows along the cliff, so its foot meanders instead of following the tile edge.
+      const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4);
+      const lean = j === 0 ? 0 : SLANT * Math.pow(s, 0.8) + n * 0.6 + bulge * Math.pow(s, 0.6);
+      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
       row.push(new Vector3(px + dir.x * lean, y + lift, pz + dir.y * lean));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
     }
