@@ -135,6 +135,12 @@ export class Input {
       }
       const ground = this.groundAt(e.clientX, e.clientY);
       if (this.hooks.click?.(e.button, ground, e.shiftKey, this.entityAt(e.clientX, e.clientY))) return;
+      if (e.button === 2 && !this.own().length) {
+        // Right button with none of ours selected (no order to give): it grabs and drags the map instead.
+        this.grab = { x: e.clientX, y: e.clientY };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       if (e.button === 0) {
         this.dragStart = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
@@ -160,7 +166,7 @@ export class Input {
     canvas.addEventListener('pointercancel', (e) => this.touches.delete(e.pointerId));
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'touch') return this.touchUp(e);
-      if (e.button === 1) this.grab = null;
+      if (e.button === 1 || e.button === 2) this.grab = null;
       if (e.button !== 0 || !this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.dragStart = null;

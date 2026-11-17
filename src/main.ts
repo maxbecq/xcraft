@@ -24,7 +24,7 @@ import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-const EDGE_PX = 40;
+const EDGE_PX = 72;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -268,16 +268,21 @@ function scrollDirection(): [number, number] {
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
   let edge = '';
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
-    let ex = mouse.x < EDGE_PX ? -1 : mouse.x > window.innerWidth - EDGE_PX ? 1 : 0;
+    // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
+    // screen's edge (eased, so the inner half stays slow and easy to control).
+    const depth = (d: number) => 0.12 + 0.88 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
+    let ex = mouse.x < EDGE_PX ? -depth(mouse.x) : mouse.x > window.innerWidth - EDGE_PX ? depth(window.innerWidth - mouse.x) : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
     edgeGlow.style.setProperty('--edge-bottom', `${window.innerHeight - bottom}px`);
-    let ey = mouse.y < EDGE_PX ? 1 : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -1 : 0;
-    // Near a corner along an edge (the outer fifth): scroll diagonally, no need to aim for the corner itself.
+    let ey = mouse.y < EDGE_PX ? depth(mouse.y) : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -depth(bottom - mouse.y) : 0;
+    // Near a corner along an edge (the outer fifth): scroll diagonally, as fast as along the edge.
     const cornerX = window.innerWidth * 0.2;
     const cornerY = bottom * 0.2;
-    if (ex && !ey) ey = mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom ? -1 : 0;
-    if (ey && !ex) ex = mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0;
+    if (ex && !ey) ey = Math.abs(ex) * (mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom ? -1 : 0);
+    if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
+    // The glow along the edge brightens with the speed.
+    edgeGlow.style.opacity = String(0.35 + 0.65 * Math.max(Math.abs(ex), Math.abs(ey)));
     if (ex) dx = ex;
     if (ey) dy = ey;
     edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
@@ -332,7 +337,7 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
-Flèches, bords d'écran, minimap, clic molette glissé, deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
+Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
