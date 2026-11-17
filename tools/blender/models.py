@@ -1365,9 +1365,9 @@ def wall(x, z, d=(0, 1, 0)):
     return h[0].dot(d) if h else 0.0
 
 
-def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02):
+def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02, tol=0.06):
     """A glow vein that hugs a wall: rays cast along d from points on the line a-b. Small bumps in the masonry
-    are ignored; where the wall really steps in or out (over 6 cm) the vein turns a right angle round the edge,
+    are ignored; where the wall really steps in or out (over `tol`) the vein turns a right angle round the edge,
     like pipework clamped to the stone. Collinear points merge."""
     a, b, d = Vector(a), Vector(b), Vector(d).normalized()
     n = max(2, int((b - a).length / step))
@@ -1381,10 +1381,10 @@ def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02):
             pts, prev = [], None
             continue
         depth = h[0].dot(d) - pad
-        if prev is not None and abs(depth - prev[1]) <= 0.06:
+        if prev is not None and abs(depth - prev[1]) <= tol:
             depth = prev[1]
         q = o + d * (depth - o.dot(d))
-        if prev is not None and abs(depth - prev[1]) > 0.06:
+        if prev is not None and abs(depth - prev[1]) > tol:
             if abs(depth - prev[1]) > 0.7:  # off the building: start a new run
                 if len(pts) > 1:
                     runs.append(pts)
@@ -1398,6 +1398,8 @@ def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02):
     if len(pts) > 1:
         runs.append(pts)
     for pts in runs:
+        if (pts[-1] - pts[0]).length < 0.3:
+            continue  # a scrap of wall between gaps: a stub of vein there reads as noise
         out = [pts[0]]
         for j in range(1, len(pts) - 1):
             u, v = pts[j] - out[-1], pts[j + 1] - pts[j]
@@ -1429,9 +1431,70 @@ def dress_caserne(p, glow):
     armillary(p, glow, (-0.6, 0.0, roof(-0.6, 0.0)), 1.2)
 
 
+def band(p, glow, z, hx, hy, z0=0.15, corners=True, tol=0.06):
+    """The usual dressing: a vein round the front and both sides at height z (the building spans +-hx, +-hy),
+    and down the two front corners to the ground."""
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-hx, 0, z), (hx, 0, z), Y, tol=tol)
+    traced_vein(p, glow, (0, -hy, z), (0, hy, z), X, tol=tol)
+    traced_vein(p, glow, (0, -hy, z), (0, hy, z), NX, tol=tol)
+    if corners:
+        for x in (-hx + 0.08, hx - 0.08):
+            traced_vein(p, glow, (x, 0, z0), (x, 0, z), Y, tol=tol)
+
+
+def front_gear(p, x, z, r=0.17, teeth=10):
+    gear(p, (x, wall(x, z) - 0.03, z), r=r, teeth=teeth)
+
+
+def dress_grenier(p, glow):
+    band(p, glow, 0.62, 0.9, 0.86)
+    front_gear(p, 0.55, 0.95, 0.13, 9)
+
+
+def dress_mine(p, glow):
+    band(p, glow, 0.72, 1.05, 1.15)
+    front_gear(p, -0.6, 1.0, 0.16)
+
+
+def dress_forge(p, glow):
+    band(p, glow, 0.95, 1.3, 1.0)
+    front_gear(p, 0.75, 1.4, 0.18, 11)
+    armillary(p, glow, (-0.2, 0.2, roof(-0.2, 0.2)), 1.0)
+
+
+def dress_fortin(p, glow):
+    band(p, glow, 0.62, 0.9, 0.8)
+    front_gear(p, 0.55, 1.15, 0.13, 9)
+
+
+def dress_tour(p, glow):
+    band(p, glow, 1.15, 0.88, 0.9)
+    front_gear(p, 0.45, 1.75, 0.13, 9)
+
+
+def dress_metallurgie(p, glow):
+    band(p, glow, 0.62, 1.35, 0.92)
+    front_gear(p, -0.85, 1.05, 0.16)
+
+
+def dress_alchimisterie(p, glow):
+    band(p, glow, 0.8, 1.25, 1.18, tol=0.14)
+    front_gear(p, 0.8, 1.25, 0.16)
+
+
+def dress_creaturium(p, glow):
+    band(p, glow, 0.5, 1.38, 1.26, corners=False, tol=0.3)
+    armillary(p, glow, (0.0, 0.0, roof(0.0, 0.0)), 1.1)
+
+
 #: Meshy buildings dressed with Blender parts: veins of team light fitted to their walls by ray casts and a
 #: little brass mechanism. Only the parts are exported (`<type>-dress.glb`); the game adds them to the model.
-DRESS = {"conseil": dress_conseil, "caserne": dress_caserne}
+DRESS = {
+    "conseil": dress_conseil, "caserne": dress_caserne, "grenier": dress_grenier, "mine": dress_mine, "forge": dress_forge,
+    "fortin": dress_fortin, "tour": dress_tour, "metallurgie": dress_metallurgie, "alchimisterie": dress_alchimisterie,
+    "creaturium": dress_creaturium,
+}
 
 
 def dress(name, fn):
