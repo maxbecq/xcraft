@@ -1,4 +1,4 @@
-import { AdditiveBlending, CanvasTexture, Color, Mesh, MeshBasicMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
+import { AdditiveBlending, BoxGeometry, CanvasTexture, Color, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
 
 /** Look of a planet: ground and cliff palette, light, sky and glowing ground veins. Rendering only. */
 export interface Biome {
@@ -166,4 +166,109 @@ export function cityAbyss(width: number, height: number): Mesh {
   abyss.position.set(width / 2, -30, height / 2);
   abyss.userData.noPick = true;
   return abyss;
+}
+
+/** Facade of an abandoned tower: rows of dark windows, a few still lit, some broken, stains running down. */
+function facade(seed: number): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  let r = seed * 7919 + 13;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  g.fillStyle = '#2a2d34';
+  g.fillRect(0, 0, 64, 256);
+  for (let y = 4; y < 256; y += 10) {
+    for (let x = 3; x < 64; x += 8) {
+      const v = rand();
+      g.fillStyle = v > 0.94 ? '#ffd27a' : v > 0.9 ? '#7ae8ff' : v > 0.75 ? '#0a0b0e' : '#15171c';
+      g.fillRect(x, y, 5, 6);
+    }
+  }
+  g.globalAlpha = 0.35;
+  for (let i = 0; i < 12; i++) {
+    g.fillStyle = '#0c0d10';
+    g.fillRect(rand() * 64, rand() * 128, 2 + rand() * 4, 40 + rand() * 120);
+  }
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/**
+ * The dead city round the battlefield: towers rising out of the void beyond the map's edges, broken at the top,
+ * with antennas and a few lit windows, and walkways reaching from the platforms' edge across the void to them.
+ */
+export function cityScape(width: number, height: number, deck: number): Group {
+  const city = new Group();
+  city.userData.noPick = true;
+  let r = 4242;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const steel = new MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.7, metalness: 0.6 });
+  const rail = new MeshStandardMaterial({ color: 0x5a606a, roughness: 0.6, metalness: 0.7 });
+  const neon = [0x2ee8ff, 0xff4fd8, 0xffb04a].map((c) => new MeshBasicMaterial({ color: c }));
+  const facades = [1, 2, 3, 4, 5].map((k) => new MeshStandardMaterial({ map: facade(k), emissiveMap: facade(k), emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.8 }));
+  const add = (m: Mesh) => (city.add(m), m);
+  // Spots round the map, beyond its edges.
+  const spots: [number, number, number, number][] = []; // x, z, edge x, edge z (where a walkway may start)
+  for (let t = 6; t < width; t += 9 + rand() * 6) {
+    spots.push([t, -5 - rand() * 8, t, 0], [t, height + 5 + rand() * 8, t, height]);
+  }
+  for (let t = 6; t < height; t += 9 + rand() * 6) {
+    spots.push([-5 - rand() * 8, t, 0, t], [width + 5 + rand() * 8, t, width, t]);
+  }
+  for (const [x, z, ex, ez] of spots) {
+    const w = 2.5 + rand() * 3;
+    const d = 2.5 + rand() * 3;
+    // Towers between the camera and the map (south and east) stop below the decks, so they never hide the game.
+    const front = x > width || z > height;
+    const top = front ? -1.5 - rand() * 4 : 4 + rand() * 18;
+    const base = -30;
+    const tower = add(new Mesh(new BoxGeometry(w, top - base, d), facades[Math.floor(rand() * facades.length)]));
+    tower.position.set(x, (top + base) / 2, z);
+    // Broken crown: a stub of floors and bare girders at a slant, an antenna, a dead neon sign.
+    const stub = add(new Mesh(new BoxGeometry(w * (0.4 + rand() * 0.4), 1 + rand() * 2, d * (0.4 + rand() * 0.4)), steel));
+    stub.position.set(x + (rand() - 0.5) * w * 0.4, top + 0.6, z + (rand() - 0.5) * d * 0.4);
+    stub.rotation.z = (rand() - 0.5) * 0.3;
+    for (let k = 0; k < (front ? 0 : 3); k++) {
+      const girder = add(new Mesh(new BoxGeometry(0.12, 1.5 + rand() * 2.5, 0.12), rail));
+      girder.position.set(x + (rand() - 0.5) * w, top + 1, z + (rand() - 0.5) * d);
+      girder.rotation.set((rand() - 0.5) * 0.6, 0, (rand() - 0.5) * 0.6);
+    }
+    if (!front && rand() > 0.4) {
+      const antenna = add(new Mesh(new CylinderGeometry(0.04, 0.06, 3 + rand() * 4, 5), rail));
+      antenna.position.set(x, top + 2.5, z);
+    }
+    if (!front && rand() > 0.5) {
+      const sign = add(new Mesh(new BoxGeometry(0.12, 1.5 + rand(), 0.5 + rand() * 0.8), neon[Math.floor(rand() * neon.length)]));
+      sign.position.set(x + (x < 0 ? w / 2 + 0.1 : x > width ? -w / 2 - 0.1 : 0), top - 2 - rand() * 4, z + (z < 0 ? d / 2 + 0.1 : z > height ? -d / 2 - 0.1 : 0));
+    }
+    // Some towers are still linked to the platforms by a walkway, a few of them broken off halfway.
+    if (rand() > 0.45) {
+      const len = Math.hypot(x - ex, z - ez);
+      const reach = rand() > 0.75 ? len * (0.4 + rand() * 0.3) : len;
+      const yaw = Math.atan2(x - ex, z - ez);
+      const walk = new Group();
+      const plank = new Mesh(new BoxGeometry(1.2, 0.12, reach), steel);
+      plank.position.z = reach / 2;
+      walk.add(plank);
+      for (const side of [-0.6, 0.6]) {
+        const bar = new Mesh(new BoxGeometry(0.05, 0.05, reach), rail);
+        bar.position.set(side, 0.55, reach / 2);
+        walk.add(bar);
+        for (let k = 0; k < reach; k += 1.5) {
+          const post = new Mesh(new BoxGeometry(0.05, 0.55, 0.05), rail);
+          post.position.set(side, 0.3, k);
+          walk.add(post);
+        }
+      }
+      const strip = new Mesh(new BoxGeometry(0.06, 0.02, reach), neon[0]);
+      strip.position.set(0, 0.07, reach / 2);
+      walk.add(strip);
+      walk.position.set(ex, deck, ez);
+      walk.rotation.y = yaw;
+      city.add(walk);
+    }
+  }
+  return city;
 }
