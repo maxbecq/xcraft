@@ -1,7 +1,7 @@
 // Sound effects, synthesised with WebAudio: no audio files. Music is handled separately.
 
 export type Sfx =
-  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click'
+  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'order' | 'target'
   | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive';
 
 const MAX_PER_FRAME = 4;
@@ -127,6 +127,17 @@ export class Audio {
         env(0.035, 0.03);
         osc('sine', 2400, 1700, 0.02);
         burst('highpass', 6000, 0.012, 0.015);
+        break;
+      case 'order': // a right-click order: a short, low double tick, under the HUD click
+        env(0.05, 0.05);
+        osc('triangle', 900, 600, 0.04);
+        burst('highpass', 3000, 0.01, 0.012);
+        burst('highpass', 3600, 0.007, 0.012, 0.035);
+        break;
+      case 'target': // an attack order: a sharper, falling metallic tick
+        env(0.07, 0.07);
+        osc('square', 1400, 500, 0.05);
+        burst('bandpass', 2500, 0.02, 0.02);
         break;
       case 'ray': // Isdaris light rifle: a bright falling chirp with a shimmer
         env(0.16, 0.18);

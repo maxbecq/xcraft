@@ -668,3 +668,21 @@ body.spectate .hud-card { visibility: hidden; }
 body.z .cmd-tip { font: 15px/1.3 var(--lcd); color: var(--phos); background: rgba(3, 12, 6, 0.95); border-color: var(--phos-dim); text-shadow: var(--glow); }
 body.z .cmd-tip b { font-size: 17px; }
 body.z .cmd-tip .need { color: #ffb070; }
+
+/* Feedback on the HUD, every faction: buttons sink or shake, counts flash, messages fade. */
+.cmd.pressed { animation: cmd-press 0.16s ease-out; }
+@keyframes cmd-press { 0% { transform: translateY(2px) scale(0.95); filter: brightness(1.6); } 100% { transform: none; filter: none; } }
+.cmd.denied { animation: cmd-deny 0.3s ease-in-out; }
+@keyframes cmd-deny { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.res.gain { animation: res-gain 0.5s ease-out; }
+@keyframes res-gain { 0% { filter: brightness(1.7) drop-shadow(0 0 4px rgba(160, 255, 170, 0.8)); } 100% { filter: none; } }
+.res.spend { animation: res-spend 0.6s ease-out; }
+@keyframes res-spend { 0% { transform: scale(1.12); filter: drop-shadow(0 0 5px rgba(255, 110, 80, 0.95)); } 100% { transform: none; filter: none; } }
+.res.sup.full { animation: res-full 1.2s ease-in-out infinite; }
+@keyframes res-full { 50% { opacity: 0.55; } }
+.hud-toast { animation: toast-in 0.22s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+/* An animation, not a transition: each faction's own entrance animation holds the opacity (fill both). */
+body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
+@keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .cmd.pressed, .cmd.denied, .res.gain, .res.spend, .res.sup.full { animation: none; } }
