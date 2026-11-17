@@ -119,3 +119,22 @@ describe('production across several buildings', () => {
     expect(w.events.some((e) => e.text === "File d'attente pleine.")).toBe(true);
   });
 });
+
+describe('not enough supply', () => {
+  it('says so at every click, for each faction', async () => {
+    const { createMatch } = await import('./setup');
+    const { FACTIONS } = await import('../data');
+    for (const faction of ['humains', 'isdaris', 'z', 'dieux'] as const) {
+      const w = createMatch([faction, 'humains']);
+      w.players[0].minerals = 99999;
+      const f = FACTIONS[faction];
+      const home = [...w.entities.values()].find((e) => e.owner === 0 && e.type === (f.workerFrom ?? f.hq))!;
+      // A full supply: workers until no room is left, then two clicks.
+      while (w.supply(0).used < w.supply(0).max) w.spawn(f.worker, 0, home.x, home.y + 6 * FP);
+      for (let i = 0; i < 2; i++) {
+        w.step([{ player: 0, kind: 'train', ids: [home.id], type: f.worker }]);
+        expect(w.events.map((e) => e.text).join()).toMatch(/Logistique insuffisante : construisez des /);
+      }
+    }
+  });
+});
