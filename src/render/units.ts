@@ -451,12 +451,19 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   const m = source.clone();
   const team = new Color(color);
   const living = vivid && !unit;
+  const shiny = unit && !ivory;
   m.onBeforeCompile = (shader) => {
     shader.uniforms.teamColor = { value: team };
     shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 paint = diffuseColor.rgb;
         float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
+        ${shiny ? `// Human soldiers: livelier colours, and polished steel that catches the light.
+        float lum0 = dot(paint, vec3(0.3, 0.59, 0.11));
+        float steel = (1.0 - smoothstep(0.04, 0.1, max(paint.r, max(paint.g, paint.b)) - min(paint.r, min(paint.g, paint.b)))) * smoothstep(0.12, 0.3, lum0) * (1.0 - smoothstep(0.45, 0.6, lum0));
+        // Pale cloth (the Soigneur's robe) keeps its ivory instead of turning yellow.
+        // Brighter team paint and steel; warm tones (leather, ivory cloth) are left alone, or they go orange and yellow.
+        paint *= 1.0 + 0.3 * teamMask + 0.15 * steel;` : ''}
         ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.35) * 1.3 + 0.01, 1.0);' : ''}
         diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);
         ${living ? 'vec4 life = lifeGlow(paint, vLife, vSeed, veinTime);\n        diffuseColor.rgb *= life.a;' : ''}
@@ -477,9 +484,23 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
       shader.fragmentShader = `varying vec3 vLife;\nvarying float vSeed;\nuniform float veinTime;\n${LIFE_GLSL}\n${shader.fragmentShader}`;
     }
   };
+  if (shiny) {
+    m.envMapIntensity = 2.4;
+    const compile = m.onBeforeCompile;
+    m.onBeforeCompile = (shader, r) => {
+      compile.call(m, shader, r);
+      // Bare steel polished, team paint glossy, leather and cloth left rough.
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.15, steel);
+        roughnessFactor = mix(roughnessFactor, 0.35, teamMask);`)
+        .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+        metalnessFactor = mix(metalnessFactor, 0.3, steel);`);
+    };
+  }
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
-  if (unit) rimLight(m, 0.5, team.toArray());
+  if (unit) rimLight(m, shiny ? 0.8 : 0.5, team.toArray());
   else rimLight(m, rim);
   return m;
 }
