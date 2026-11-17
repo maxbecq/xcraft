@@ -900,6 +900,25 @@ function play(v: View, name: string, timeScale = 1): void {
   v.playing = next;
 }
 
+/** A drop for death bursts: deep red ringed with near black, so it shows on pale sand, ice and dark rock alike. */
+let dropTex: CanvasTexture | undefined;
+function dropTexture(): CanvasTexture {
+  if (dropTex) return dropTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d')!;
+  g.beginPath();
+  g.arc(16, 16, 11, 0, Math.PI * 2);
+  g.fillStyle = '#a3170f';
+  g.fill();
+  g.lineWidth = 5;
+  g.strokeStyle = '#1c0402';
+  g.stroke();
+  dropTex = new CanvasTexture(c);
+  dropTex.colorSpace = SRGBColorSpace;
+  return dropTex;
+}
+
 /** A soft round spark, for the well's stars and geysers. */
 let sparkTexture: CanvasTexture | undefined;
 function spark(): CanvasTexture {
@@ -1055,6 +1074,8 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   };
 }
 
+/** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
+const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', -1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** How long a unit takes to fall when it dies, and its death burst lasts (s). */
 const DIE_S = 0.3;
 const BURST_S = 0.4;
@@ -1137,7 +1158,11 @@ function toCorpse(root: Object3D): void {
       };
       c.customProgramCacheKey = () => m.customProgramCacheKey(); // the living unit's key, whatever it is made of
       const k = c as MeshStandardMaterial;
-      k.color?.multiplyScalar(0.16); // linear: about 40 % brightness on screen
+      // Grey (Z machines carry their team colour as plain paint), at about a third of the brightness on screen.
+      if (k.color) {
+        const l = 0.12 * (k.color.r * 0.3 + k.color.g * 0.59 + k.color.b * 0.11);
+        k.color.setRGB(l, l * 0.95, l * 0.9);
+      }
       k.emissive?.setRGB(0, 0, 0);
       c.userData.corpse = true;
       return c;
@@ -1268,6 +1293,9 @@ export class EntityRenderer {
         const air = alt > 0.5 ? Math.max(0, alt - 14 * d.age * d.age) : 0;
         d.v.model.position.y = air - sink;
       }
+      // Those whose own fall ends kneeling or hunched go on over, onto their face or their back.
+      const flat = FALL_FLAT.get(d.v.type);
+      if (flat) d.v.model.rotation.x = flat * (Math.PI / 2) * 0.8 * (1 - (1 - Math.min(1, d.age / DIE_S)) ** 2);
       if (d.age < 4) return true;
       this.scene.remove(d.v.root);
       dropCorpse(d.v.model);
@@ -1596,7 +1624,7 @@ export class EntityRenderer {
     // Sizes in pixels: the camera is orthographic, where point sizes do not follow the zoom anyway.
     const pts = new Points(geom, mechanical
       ? new PointsMaterial({ map: spark(), size: 9, sizeAttenuation: false, color: 0xffc070, transparent: true, depthWrite: false, blending: AdditiveBlending })
-      : new PointsMaterial({ map: spark(), size: 7, sizeAttenuation: false, color: 0x5a0d0a, transparent: true, depthWrite: false, alphaTest: 0.05 }));
+      : new PointsMaterial({ map: dropTexture(), size: 8, sizeAttenuation: false, transparent: true, depthWrite: false, alphaTest: 0.3 }));
     pts.userData.noPick = true;
     this.scene.add(pts);
     this.bursts.push({ pts, vel, age: 0 });
