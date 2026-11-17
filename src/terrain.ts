@@ -28,6 +28,8 @@ export function setBiome(b: Biome): void {
 const SLANT = 0.32;
 /** City map: height of the lower city's deck, seen through the chasms. */
 export const UNDER_DECK = -6;
+/** City map: thickness of the playable deck's slab, seen at the edge of the chasms. */
+export const DECK_SLAB = 0.45;
 const WALL_SEGMENTS = 7;
 const WALL_ROWS = 6;
 
@@ -126,8 +128,8 @@ export function buildTerrain(map: GameMap): Group {
         const [ta, tb] = drawnEdge(map, x, y, e);
         let ba: number;
         let bb: number;
-        // A chasm: the platform's edge drops a long way into the void.
-        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [UNDER_DECK, UNDER_DECK];
+        // A chasm: only the deck's slab edge; the parking levels below are drawn by cityUnderdeck.
+        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [-DECK_SLAB, -DECK_SLAB];
         else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
         else [ba, bb] = [-2.5, -2.5]; // skirt around the map
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
@@ -145,9 +147,9 @@ export function buildTerrain(map: GameMap): Group {
     // Strange worlds: light glows up through the cracks.
     groundMat.emissiveMap = crackMask(B.style);
     groundMat.emissive = B.veins;
-    groundMat.emissiveIntensity = 2.2;
+    groundMat.emissiveIntensity = B.style === 'city' ? 1.2 : 2.2;
   }
-  untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones ? 0x86888d : 0x8a8378), 0.55));
+  untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones || B.style ? 0x86888d : 0x8a8378), 0.55), B.style === 'city');
   const groundMesh = ground.mesh(groundMat);
   const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
   weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock
@@ -167,7 +169,7 @@ let leanMap: GameMap;
  * cliff's top use the same shift, so they still meet. Zero at the map's edge.
  */
 function rimShift(vx: number, vz: number): Vector2 {
-  if (!Number.isInteger(vx) || !Number.isInteger(vz) || vx <= 0 || vz <= 0 || vx >= leanMap.width || vz >= leanMap.height) return new Vector2();
+  if (B.style === 'city' || !Number.isInteger(vx) || !Number.isInteger(vz) || vx <= 0 || vz <= 0 || vx >= leanMap.width || vz >= leanMap.height) return new Vector2();
   const amount = (noise(vx * 1.9, vz * 1.9, 1, 47) - 0.3) * 0.55;
   return downhill(vx, vz, new Vector2()).multiplyScalar(amount);
 }
@@ -210,11 +212,13 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       const s = j / WALL_ROWS;
       const y = top + (bottom - top) * s;
       // Position-only noise: two faces sharing a point displace it the same way.
-      const n = noise(px * 2.3 + y * 1.1, pz * 2.3 - y * 1.1, 1, 13) - 0.5 + (noise(px * 5 + y * 3, pz * 5 - y * 3, 1, 29) - 0.5) * 0.6;
-      const m = noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5;
+      // The city's walls are built: straight and plumb, no rock noise.
+      const built = B.style === 'city' ? 0 : 1;
+      const n = (noise(px * 2.3 + y * 1.1, pz * 2.3 - y * 1.1, 1, 13) - 0.5 + (noise(px * 5 + y * 3, pz * 5 - y * 3, 1, 29) - 0.5) * 0.6) * built;
+      const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
       // Broad bulges and hollows along the cliff, so its foot meanders instead of following the tile edge.
-      const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4);
-      const lean = j === 0 ? 0 : SLANT * Math.pow(s, 0.8) + n * 0.6 + bulge * Math.pow(s, 0.6);
+      const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4) * built;
+      const lean = j === 0 ? 0 : (built ? SLANT * Math.pow(s, 0.8) : 0.04 * s) + n * 0.6 + bulge * Math.pow(s, 0.6);
       const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
       row.push(new Vector3(px + dir.x * lean, y + lift, pz + dir.y * lean));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
@@ -267,8 +271,9 @@ class Builder {
 }
 
 /** Blends the colour texture with a second, rotated and larger sample of itself, so its repetition does not show. */
-function untile(m: MeshStandardMaterial, rock: Texture, slab: Color): void {
-  m.customProgramCacheKey = () => 'untile';
+function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = false): void {
+  // grid: deck plates, kept aligned (no rotated second sample, no bedrock slabs, only darker grimy plates).
+  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile');
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
@@ -294,13 +299,13 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color): void {
       '#include <map_fragment>',
       `#ifdef USE_MAP
         vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.37 + 0.31;
-        vec4 texelColor = mix(texture2D(map, vMapUv), texture2D(map, uv2), 0.45);
+        vec4 texelColor = mix(texture2D(map, vMapUv), texture2D(map, uv2), ${grid ? '0.0' : '0.45'});
         // Second material: flat slabs of bedrock breaking through the dirt, outlined like a painting.
         float n = gFbm(vGround * 0.16);
         float slab = smoothstep(0.6, 0.62, n);
         float rim = smoothstep(0.585, 0.6, n) - slab;
         vec4 rockTex = texture2D(rockMap, vGround * 0.33);
-        texelColor.rgb = mix(texelColor.rgb, rockTex.rgb * slabColor * 1.6, slab);
+        texelColor.rgb = ${grid ? 'texelColor.rgb * (1.0 - slab * 0.3)' : 'mix(texelColor.rgb, rockTex.rgb * slabColor * 1.6, slab)'};
         texelColor.rgb *= 1.0 - rim * 0.55;
         // Small scattered gravel.
         texelColor.rgb *= 1.0 - smoothstep(0.82, 0.86, gNoise(vGround * 3.7)) * 0.25;

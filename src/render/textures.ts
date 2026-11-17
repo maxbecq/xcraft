@@ -117,8 +117,10 @@ export function crackMask(style?: string): Texture {
         const fx = ((x / size) * 8) % 1;
         const fy = ((y / size) * 8) % 1;
         const seam = Math.min(fx, 1 - fx, fy, 1 - fy) < 0.012 ? 1 : 0;
-        const lit = fbm(x / size, y / size, 3, 3, 71) > 0.5 ? 1 : 0;
-        img.data[i] = img.data[i + 1] = img.data[i + 2] = seam * lit * 255;
+        // Red: the seams. Green: broad patches where they are still lit (the shader samples it at another scale).
+        img.data[i] = seam * 255;
+        img.data[i + 1] = Math.min(1, Math.max(0, (fbm(x / size, y / size, 4, 2, 71) - 0.5) * 3)) * 255;
+        img.data[i + 2] = 0;
         img.data[i + 3] = 255;
         continue;
       }

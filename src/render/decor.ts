@@ -6,8 +6,15 @@ import { weather } from './weathering';
 import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
-/** Doodads that belong in a dead city: junk, wrecks, drums. */
-const URBAN = ['barrels', 'wreck', 'scrap_pile', 'tire_pile'];
+/** Dead city: street clutter instead of rocks and plants (low, so it never hides a unit). */
+const CITY_FOOT: [string, number][] = [['crates', 0.05], ['trash', 0.04], ['cables', 0.03], ['barrier', 0.03], ['vent', 0.02]];
+const CITY_TOP: [string, number][] = [['barrier', 0.05], ['crates', 0.03], ['trash', 0.02]];
+const CITY_BORDER: [string, number][] = [['rubble', 0.015], ['crates', 0.02], ['vending', 0.015], ['wreck', 0.01], ['terminal', 0.01], ['barrels', 0.01]];
+const CITY_OPEN: [string, number][] = [
+  ['vent', 0.005], ['trash', 0.004], ['rubble', 0.003], ['crates', 0.003], ['cables', 0.002], ['barrels', 0.002], ['terminal', 0.002],
+  ['vending', 0.0015], ['wreck', 0.0015], ['scrap_pile', 0.001],
+];
+const URBAN = [...new Set([CITY_FOOT, CITY_TOP, CITY_BORDER, CITY_OPEN].flat().map(([t]) => t))];
 /** Doodads that are plain stone. */
 const STONES = ['rocks_a', 'rocks_b', 'pebbles'];
 const CLIFF_FOOT: [string, number][] = [['rocks_a', 0.22], ['rocks_b', 0.1], ['pebbles', 0.18]];
@@ -60,7 +67,7 @@ export class Decor {
         const higher = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? -1) > level);
         const lower = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? 99) < level);
         const border = x < 3 || y < 3 || x >= map.width - 3 || y >= map.height - 3;
-        const table = higher ? CLIFF_FOOT : lower ? CLIFF_TOP : border ? BORDER : OPEN;
+        const table = this.city ? (higher ? CITY_FOOT : lower ? CITY_TOP : border ? CITY_BORDER : CITY_OPEN) : higher ? CLIFF_FOOT : lower ? CLIFF_TOP : border ? BORDER : OPEN;
         let r = rand(x, y, 1);
         for (const [type, p] of table) {
           if (r < p) {

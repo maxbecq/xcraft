@@ -878,9 +878,95 @@ def scrap_pile(p):
     box(p["hazard"], (0.3, 0.3, 0.05), (-0.25, -0.2, 0.28), rot=(0.5, 0.2, 0.1))
 
 
+# ---- Street clutter of the dead megacity (city biome).
+
+def crates(p):
+    """Two stacked cargo crates and a third knocked over, hazard-striped."""
+    box(p["scrap"], (0.6, 0.45, 0.4), (0, 0, 0.2))
+    box(p["hazard"], (0.62, 0.05, 0.08), (0, -0.23, 0.3))
+    box(p["rust"], (0.45, 0.4, 0.32), (0.04, 0.02, 0.56), rot=(0, 0, 0.2))
+    box(p["scrap"], (0.4, 0.35, 0.35), (-0.45, 0.35, 0.15), rot=(0.25, 0.1, 0.9))
+    for x in (-0.31, 0.31):
+        box(p["dark"], (0.03, 0.47, 0.42), (x, 0, 0.2))  # ribs
+
+
+def barrier(p):
+    """Concrete road barriers, one cracked and tipped over, with a faded hazard band."""
+    for k, (x, rz, rx) in enumerate(((-0.35, 0.05, 0), (0.4, 0.4, 1.35))):
+        z = 0.2 if rx == 0 else 0.13
+        box(p["concrete"], (0.7, 0.2, 0.22), (x, 0, z), rot=(rx, 0, rz))
+        box(p["concrete"], (0.7, 0.12, 0.2), (x, 0, z + 0.18 if rx == 0 else z), rot=(rx, 0, rz))
+        if k == 0:
+            box(p["hazard"], (0.71, 0.13, 0.05), (x, 0, 0.32), rot=(rx, 0, rz))
+    box(p["concrete"], (0.18, 0.15, 0.1), (0.05, 0.3, 0.05), rot=(0.3, 0.4, 0.7))  # chunk
+
+
+def vending(p):
+    """A dead street kiosk: a tall box with a cracked, still-glowing alien screen and a slot."""
+    box(p["scrap"], (0.45, 0.35, 0.95), (0, 0, 0.48))
+    box(p["dark"], (0.5, 0.4, 0.06), (0, 0, 0.98))
+    box(p["cyan_glow"], (0.34, 0.02, 0.45), (0, -0.18, 0.62))
+    box(p["dark_glass"], (0.12, 0.03, 0.2), (0.08, -0.18, 0.55), rot=(0, 0.3, 0.6))  # crack
+    box(p["red_glow"], (0.06, 0.02, 0.03), (-0.12, -0.18, 0.3))
+    box(p["dark"], (0.25, 0.04, 0.06), (0.05, -0.18, 0.2))  # slot
+    cyl(p["rubber"], 0.03, 0.6, (0.3, 0.1, 0.05), rot=(0, math.radians(90), 0.4), verts=5)  # loose cable
+
+
+def trash(p):
+    """A tipped bin and a heap of black bags."""
+    cyl(p["scrap"], 0.16, 0.42, (0.25, 0.15, 0.16), rot=(math.radians(80), 0, 0.5), verts=10)
+    for x, y, s in ((-0.1, 0, 0.18), (-0.3, 0.12, 0.15), (-0.15, -0.2, 0.14), (0.05, -0.15, 0.12)):
+        ball(p["rubber"], s, (x, y, s * 0.8), scale=(1.1, 1, 0.85), seg=8, rings=5)
+    box(p["hazard"], (0.12, 0.08, 0.02), (0.15, -0.3, 0.01), rot=(0, 0, 0.7))
+
+
+def vent(p):
+    """A rooftop-style air vent on the deck: a housing, a grille, a fan and pipes into the plates."""
+    box(p["scrap"], (0.6, 0.6, 0.3), (0, 0, 0.15))
+    cyl(p["dark"], 0.24, 0.04, (0, 0, 0.31), verts=14)
+    for k in range(4):
+        box(p["steel"], (0.42, 0.04, 0.02), (0, 0, 0.34), rot=(0, 0, k * math.pi / 4))  # fan blades
+    for y in (-0.22, -0.11, 0.0, 0.11, 0.22):
+        box(p["steel"], (0.02, 0.5, 0.02), (0.31, y * 0, 0.15 + y * 0.4), rot=(0, 0, math.radians(90)))
+    pipe(p["rust"], (-0.3, 0.2, 0.2), (-0.55, 0.2, 0.02), r=0.05)
+    pipe(p["rust"], (-0.3, -0.15, 0.12), (-0.5, -0.35, 0.02), r=0.04)
+
+
+def terminal(p):
+    """A broken public terminal on a post, its holo screen flickering magenta."""
+    cyl(p["scrap"], 0.08, 0.1, (0, 0, 0.05), verts=8)
+    cyl(p["steel"], 0.04, 0.8, (0, 0, 0.45), verts=8)
+    box(p["dark"], (0.36, 0.08, 0.26), (0, 0, 0.9), rot=(0.3, 0, 0))
+    box(p["purple_glow"], (0.3, 0.02, 0.2), (0, -0.05, 0.91), rot=(0.3, 0, 0))
+    box(p["dark_glass"], (0.14, 0.03, 0.1), (-0.07, -0.06, 0.92), rot=(0.3, 0, 0.5))  # shattered corner
+    box(p["dark"], (0.1, 0.06, 0.06), (0.3, 0.2, 0.03), rot=(0, 0, 0.8))  # fallen panel
+
+
+def cables(p):
+    """A cable drum and a tangle of thick cables and pipe sections."""
+    cyl(p["rust"], 0.26, 0.05, (0, -0.12, 0.26), rot=(math.radians(90), 0, 0), verts=14)
+    cyl(p["rust"], 0.26, 0.05, (0, 0.12, 0.26), rot=(math.radians(90), 0, 0), verts=14)
+    cyl(p["rubber"], 0.18, 0.22, (0, 0, 0.26), rot=(math.radians(90), 0, 0), verts=12)
+    pipe(p["rubber"], (0.1, 0.0, 0.1), (0.6, 0.2, 0.03), r=0.03)
+    pipe(p["rubber"], (0.6, 0.2, 0.03), (0.75, -0.2, 0.03), r=0.03)
+    cyl(p["scrap"], 0.07, 0.7, (-0.35, 0.35, 0.07), rot=(0, math.radians(90), 0.7), verts=8)
+    cyl(p["scrap"], 0.07, 0.5, (-0.4, 0.2, 0.2), rot=(0.3, math.radians(80), 0.5), verts=8)
+
+
+def rubble(p):
+    """Fallen concrete from the towers: broken slabs with bent rebar sticking out."""
+    box(p["concrete"], (0.6, 0.45, 0.1), (0, 0, 0.06), rot=(0.1, 0.08, 0.3))
+    box(p["concrete"], (0.4, 0.3, 0.1), (0.2, 0.15, 0.17), rot=(0.4, 0.2, 0.9))
+    box(p["concrete"], (0.25, 0.2, 0.15), (-0.35, -0.2, 0.07), rot=(0.2, 0.3, 0.2))
+    for k in range(3):
+        cyl(p["rust"], 0.012, 0.5, (0.1 + k * 0.08, 0.05, 0.25), rot=(0.5 + k * 0.2, 0.4, k), verts=4)
+
+
 DOODADS = {
     "rocks_a": rocks_a, "rocks_b": rocks_b, "pebbles": pebbles, "dead_tree": dead_tree, "dry_bush": dry_bush,
     "tire_pile": tire_pile, "barrels": barrels, "wreck": wreck, "bones": bones, "scrap_pile": scrap_pile,
+    "crates": crates, "barrier": barrier, "vending": vending, "trash": trash, "vent": vent, "terminal": terminal,
+    "cables": cables, "rubble": rubble,
 }
 
 def marche(p):

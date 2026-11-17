@@ -1,4 +1,9 @@
-import { AdditiveBlending, BoxGeometry, CanvasTexture, DoubleSide, Color, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
+import {
+  AdditiveBlending, BoxGeometry, type BufferGeometry, CanvasTexture, DoubleSide, Color, CylinderGeometry, Euler, Group, type Material, Matrix4, Mesh,
+  MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Quaternion, RepeatWrapping, SRGBColorSpace, Vector3,
+} from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { DECK_SLAB } from '../terrain';
 
 /** Look of a planet: ground and cliff palette, light, sky and glowing ground veins. Rendering only. */
 export interface Biome {
@@ -103,8 +108,8 @@ export const BIOMES: Record<string, Biome> = {
     id: 'ville',
     name: 'Ville futuriste',
     levels: [new Color(0x3a404a), new Color(0x4a505a), new Color(0x5a606a)],
-    patch: new Color(0x23272e),
-    sand: new Color(0x6a6f78),
+    patch: new Color(0x2e333b),
+    sand: new Color(0x585e68),
     ramp: new Color(0x5a5f68),
     rock: new Color(0x50565e),
     rockDark: new Color(0x16181c),
@@ -168,250 +173,664 @@ export function cityAbyss(width: number, height: number): Mesh {
   return abyss;
 }
 
-/** Facade of an abandoned tower: rows of dark windows, a few still lit, some broken, stains running down. */
-function facade(seed: number): CanvasTexture {
+// ---------------------------------------------------------------- the dead megacity (render only)
+
+/** Seeded random numbers, 0..1. */
+function rng(seed: number): () => number {
+  let r = seed;
+  return () => (r = (r * 9301 + 49297) % 233280) / 233280;
+}
+
+const hash = (n: number) => {
+  const s = Math.sin(n * 12.9898) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+/**
+ * How bright a neon is now: mostly on, with stutters and short outages ('buzz'), or a slow beacon ('blink').
+ * Lights of the same material flicker together, so each sign or lamp group gets its own seed.
+ */
+function flickerLevel(kind: 'buzz' | 'blink', seed: number, t: number): number {
+  if (kind === 'blink') return (t * 0.5 + seed) % 1 < 0.25 ? 1 : 0.3;
+  // Gentle: a rare short stutter, and now and then a dip of a second, never fully off.
+  const h = hash(Math.floor(t * 10 + seed * 31) + seed * 1000);
+  const dip = hash(Math.floor(t * 0.4 + seed * 7)) < 0.06 && hash(Math.floor(t * 6 + seed)) < 0.5;
+  return dip ? 0.45 : h < 0.02 ? 0.6 : 1;
+}
+
+/** A glowing material that flickers (its merged mesh updates the colour before each draw). */
+function flicker<M extends MeshBasicMaterial>(m: M, kind: 'buzz' | 'blink', seed: number): M {
+  m.userData.flicker = { kind, seed, base: m.color.clone() };
+  return m;
+}
+
+/**
+ * Static scenery collected by material and merged into one mesh each at the end: thousands of railing posts,
+ * slabs and windows in a few dozen draw calls.
+ */
+class Batch {
+  private readonly parts = new Map<Material, BufferGeometry[]>();
+  private readonly m = new Matrix4();
+  private readonly q = new Quaternion();
+  private readonly e = new Euler(0, 0, 0, 'YXZ');
+  private readonly p = new Vector3();
+  private readonly one = new Vector3(1, 1, 1);
+
+  add(geo: BufferGeometry, mat: Material, x: number, y: number, z: number, ry = 0, rx = 0, rz = 0): void {
+    this.q.setFromEuler(this.e.set(rx, ry, rz, 'YXZ'));
+    const g = geo.clone().applyMatrix4(this.m.compose(this.p.set(x, y, z), this.q, this.one));
+    const list = this.parts.get(mat);
+    if (list) list.push(g);
+    else this.parts.set(mat, [g]);
+  }
+
+  into(group: Group): Group {
+    for (const [mat, list] of this.parts) {
+      const mesh = new Mesh(mergeGeometries(list), mat);
+      const f = mat.userData.flicker as { kind: 'buzz' | 'blink'; seed: number; base: Color } | undefined;
+      if (f) {
+        const c = (mat as MeshBasicMaterial).color;
+        mesh.onBeforeRender = () => c.copy(f.base).multiplyScalar(flickerLevel(f.kind, f.seed, performance.now() / 1000));
+      }
+      mesh.userData.noPick = true;
+      group.add(mesh);
+    }
+    this.parts.clear();
+    return group;
+  }
+}
+
+const canvas = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
   const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 256;
-  const g = c.getContext('2d')!;
-  let r = seed * 7919 + 13;
-  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  c.width = w;
+  c.height = h;
+  return [c, c.getContext('2d')!];
+};
+
+const texture = (c: HTMLCanvasElement, repeat = false): CanvasTexture => {
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = RepeatWrapping;
+  return t;
+};
+
+/** A soft round glow, white in the middle: light pools on the ground and halos round neon. */
+let glowTexture: CanvasTexture | null = null;
+function glow(color: number, opacity = 1): MeshBasicMaterial {
+  if (!glowTexture) {
+    const [c, g] = canvas(64, 64);
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    glowTexture = texture(c);
+  }
+  return new MeshBasicMaterial({ map: glowTexture, color, opacity, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide });
+}
+
+/** World size of one repeat of the facade texture (8 windows across, 25 floors up). */
+const FACADE_U = 4;
+const FACADE_V = 12;
+
+/** Facade of an abandoned tower: colour (dark windows, stains running down) and glow (the few windows still lit). */
+function facade(seed: number): MeshStandardMaterial {
+  const [c, g] = canvas(64, 256);
+  const [e, ge] = canvas(64, 256);
+  const rand = rng(seed * 7919 + 13);
   g.fillStyle = '#2a2d34';
   g.fillRect(0, 0, 64, 256);
+  ge.fillStyle = '#000';
+  ge.fillRect(0, 0, 64, 256);
+  // Lit windows come in clusters (a lived-in floor), the rest dark or broken.
   for (let y = 4; y < 256; y += 10) {
+    const floorLit = rand() > 0.86;
     for (let x = 3; x < 64; x += 8) {
       const v = rand();
-      g.fillStyle = v > 0.94 ? '#ffd27a' : v > 0.9 ? '#7ae8ff' : v > 0.75 ? '#0a0b0e' : '#15171c';
+      const lit = (floorLit && v > 0.5) || v > 0.975;
+      const col = lit ? (rand() > 0.3 ? '#ffd27a' : rand() > 0.5 ? '#7ae8ff' : '#ff6ad8') : v > 0.7 ? '#0a0b0e' : '#15171c';
+      g.fillStyle = col;
       g.fillRect(x, y, 5, 6);
+      if (lit) {
+        ge.fillStyle = col;
+        ge.fillRect(x, y, 5, 6);
+      }
     }
   }
   g.globalAlpha = 0.35;
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 14; i++) {
     g.fillStyle = '#0c0d10';
-    g.fillRect(rand() * 64, rand() * 128, 2 + rand() * 4, 40 + rand() * 120);
+    g.fillRect(rand() * 64, rand() * 200, 2 + rand() * 4, 40 + rand() * 120);
   }
-  const t = new CanvasTexture(c);
-  t.colorSpace = SRGBColorSpace;
-  return t;
+  return new MeshStandardMaterial({ map: texture(c, true), emissiveMap: texture(e, true), emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.8, metalness: 0.3 });
 }
 
-/**
- * The dead city round the battlefield: towers rising out of the void beyond the map's edges, broken at the top,
- * with antennas and a few lit windows, and walkways reaching from the platforms' edge across the void to them.
- */
-export function cityScape(width: number, height: number, deck: number): Group {
-  const city = new Group();
-  city.userData.noPick = true;
-  let r = 4242;
-  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
-  const steel = new MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.7, metalness: 0.6 });
-  const rail = new MeshStandardMaterial({ color: 0x5a606a, roughness: 0.6, metalness: 0.7 });
-  const neon = [0x2ee8ff, 0xff4fd8, 0xffb04a].map((c) => new MeshBasicMaterial({ color: c }));
-  const facades = [1, 2, 3, 4, 5].map((k) => new MeshStandardMaterial({ map: facade(k), emissiveMap: facade(k), emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.8 }));
-  const add = (m: Mesh) => (city.add(m), m);
-  // Spots round the map, beyond its edges.
-  const spots: [number, number, number, number][] = []; // x, z, edge x, edge z (where a walkway may start)
-  for (let t = 6; t < width; t += 9 + rand() * 6) {
-    spots.push([t, -5 - rand() * 8, t, 0], [t, height + 5 + rand() * 8, t, height]);
-  }
-  for (let t = 6; t < height; t += 9 + rand() * 6) {
-    spots.push([-5 - rand() * 8, t, 0, t], [width + 5 + rand() * 8, t, width, t]);
-  }
-  for (const [x, z, ex, ez] of spots) {
-    const w = 2.5 + rand() * 3;
-    const d = 2.5 + rand() * 3;
-    // Towers between the camera and the map (south and east) stop below the decks, so they never hide the game.
-    const front = x > width || z > height;
-    const top = front ? -1.5 - rand() * 4 : 4 + rand() * 18;
-    const base = -30;
-    const tower = add(new Mesh(new BoxGeometry(w, top - base, d), facades[Math.floor(rand() * facades.length)]));
-    tower.position.set(x, (top + base) / 2, z);
-    // Broken crown: a stub of floors and bare girders at a slant, an antenna, a dead neon sign.
-    const stub = add(new Mesh(new BoxGeometry(w * (0.4 + rand() * 0.4), 1 + rand() * 2, d * (0.4 + rand() * 0.4)), steel));
-    stub.position.set(x + (rand() - 0.5) * w * 0.4, top + 0.6, z + (rand() - 0.5) * d * 0.4);
-    stub.rotation.z = (rand() - 0.5) * 0.3;
-    for (let k = 0; k < (front ? 0 : 3); k++) {
-      const girder = add(new Mesh(new BoxGeometry(0.12, 1.5 + rand() * 2.5, 0.12), rail));
-      girder.position.set(x + (rand() - 0.5) * w, top + 1, z + (rand() - 0.5) * d);
-      girder.rotation.set((rand() - 0.5) * 0.6, 0, (rand() - 0.5) * 0.6);
-    }
-    if (!front && rand() > 0.4) {
-      const antenna = add(new Mesh(new CylinderGeometry(0.04, 0.06, 3 + rand() * 4, 5), rail));
-      antenna.position.set(x, top + 2.5, z);
-    }
-    if (!front && rand() > 0.5) {
-      const sign = add(new Mesh(new BoxGeometry(0.12, 1.5 + rand(), 0.5 + rand() * 0.8), neon[Math.floor(rand() * neon.length)]));
-      sign.position.set(x + (x < 0 ? w / 2 + 0.1 : x > width ? -w / 2 - 0.1 : 0), top - 2 - rand() * 4, z + (z < 0 ? d / 2 + 0.1 : z > height ? -d / 2 - 0.1 : 0));
-    }
-    // Some towers are still linked to the platforms by a walkway, a few of them broken off halfway.
-    if (rand() > 0.45) {
-      const len = Math.hypot(x - ex, z - ez);
-      const reach = rand() > 0.75 ? len * (0.4 + rand() * 0.3) : len;
-      const yaw = Math.atan2(x - ex, z - ez);
-      const walk = new Group();
-      const plank = new Mesh(new BoxGeometry(1.2, 0.12, reach), steel);
-      plank.position.z = reach / 2;
-      walk.add(plank);
-      for (const side of [-0.6, 0.6]) {
-        const bar = new Mesh(new BoxGeometry(0.05, 0.05, reach), rail);
-        bar.position.set(side, 0.55, reach / 2);
-        walk.add(bar);
-        for (let k = 0; k < reach; k += 1.5) {
-          const post = new Mesh(new BoxGeometry(0.05, 0.55, 0.05), rail);
-          post.position.set(side, 0.3, k);
-          walk.add(post);
-        }
-      }
-      const strip = new Mesh(new BoxGeometry(0.06, 0.02, reach), neon[0]);
-      strip.position.set(0, 0.07, reach / 2);
-      walk.add(strip);
-      walk.position.set(ex, deck, ez);
-      walk.rotation.y = yaw;
-      city.add(walk);
-    }
-  }
-  return city;
-}
-
-/**
- * The lower city under the chasms: a deck of plates lower down, a few blocks of buildings rising from it to just
- * under our level, support pillars and lit windows, so a hole shows the city goes on below. Render only.
- */
-export function cityUnderdeck(map: { width: number; height: number; chasm?: Uint8Array }, deck: number): Group {
-  const under = new Group();
-  under.userData.noPick = true;
-  if (!map.chasm) return under;
-  const floor = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.8, metalness: 0.4 });
-  const pillar = new MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.7, metalness: 0.6 });
-  const lamp = new MeshBasicMaterial({ color: 0xffc870 });
-  const neon = [0x2ee8ff, 0xff4fd8].map((c) => new MeshBasicMaterial({ color: c }));
-  const facades = [7, 8, 9].map((k) => new MeshStandardMaterial({ map: facade(k), emissiveMap: facade(k), emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.8 }));
-  let r = 777;
-  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
-  const add = (m: Mesh) => (under.add(m), m);
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
-      if (!map.chasm[y * map.width + x]) continue;
-      const tile = add(new Mesh(new BoxGeometry(1, 0.2, 1), floor));
-      tile.position.set(x + 0.5, deck - 0.1, y + 0.5);
-      const v = rand();
-      if (v < 0.22) {
-        // A block of the lower city, its roof a little below our deck.
-        const h = 2 + rand() * 3;
-        const b = add(new Mesh(new BoxGeometry(0.8 + rand() * 0.6, h, 0.8 + rand() * 0.6), facades[Math.floor(rand() * 3)]));
-        b.position.set(x + 0.5, deck + h / 2, y + 0.5);
-      } else if (v < 0.3) {
-        const p = add(new Mesh(new CylinderGeometry(0.12, 0.15, -deck, 6), pillar));
-        p.position.set(x + 0.5, deck / 2, y + 0.5);
-      } else if (v < 0.42) {
-        const l = add(new Mesh(new BoxGeometry(0.1, 0.06, 0.1), rand() > 0.5 ? lamp : neon[Math.floor(rand() * 2)]));
-        l.position.set(x + rand(), deck + 0.05, y + rand());
-      } else if (v < 0.47) {
-        // Traffic on the lower deck: a streak of light.
-        const t = add(new Mesh(new BoxGeometry(0.8, 0.04, 0.08), neon[Math.floor(rand() * 2)]));
-        t.position.set(x + 0.5, deck + 0.05, y + 0.5);
-        t.rotation.y = rand() > 0.5 ? Math.PI / 2 : 0;
-      }
-    }
-  }
-  return under;
+/** Scales a BoxGeometry's UVs so a repeating texture keeps the same world size on every face. */
+function boxUv(geo: BoxGeometry, w: number, h: number, d: number, U: number, V: number): BoxGeometry {
+  const uv = geo.getAttribute('uv');
+  const faces: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  faces.forEach(([fu, fv], f) => {
+    for (let i = f * 4; i < f * 4 + 4; i++) uv.setXY(i, uv.getX(i) * (fu / U), uv.getY(i) * (fv / V));
+  });
+  return geo;
 }
 
 /** A broken neon sign in an alien script: glyphs of strokes and dots, some tubes dead, on a dark plate. */
-function alienSign(seed: number, color: string): CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 48;
-  const g = c.getContext('2d')!;
-  let r = seed * 7919 + 3;
-  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+function alienSign(seed: number, color: string, vertical = false): CanvasTexture {
+  const [c, g] = vertical ? canvas(48, 160) : canvas(128, 48);
+  const rand = rng(seed * 7919 + 3);
   g.fillStyle = '#0b0c12';
-  g.fillRect(0, 0, 128, 48);
+  g.fillRect(0, 0, c.width, c.height);
+  g.strokeStyle = '#30323c';
+  g.lineWidth = 2;
+  g.strokeRect(2, 2, c.width - 4, c.height - 4);
   g.lineWidth = 3;
   g.lineCap = 'round';
-  for (let k = 0; k < 5; k++) {
-    const x0 = 10 + k * 23;
-    // Each glyph: three or four strokes and maybe a dot; one in four tubes is dead.
+  const glyphs = vertical ? 6 : 5;
+  for (let k = 0; k < glyphs; k++) {
+    // Glyph cell origin, along the sign's long side.
+    const [x0, y0] = vertical ? [14, 8 + k * 25] : [10 + k * 23, 10];
     for (let s = 0; s < 3 + Math.floor(rand() * 2); s++) {
+      // One tube in four is dead.
       g.strokeStyle = rand() < 0.25 ? '#2a2a33' : color;
       g.shadowColor = color;
       g.shadowBlur = 6;
       g.beginPath();
-      g.moveTo(x0 + rand() * 16, 10 + rand() * 28);
-      if (rand() > 0.5) g.quadraticCurveTo(x0 + rand() * 16, 8 + rand() * 32, x0 + rand() * 16, 10 + rand() * 28);
-      else g.lineTo(x0 + rand() * 16, 10 + rand() * 28);
+      g.moveTo(x0 + rand() * 18, y0 + rand() * 18);
+      if (rand() > 0.5) g.quadraticCurveTo(x0 + rand() * 18, y0 + rand() * 20, x0 + rand() * 18, y0 + rand() * 18);
+      else g.lineTo(x0 + rand() * 18, y0 + rand() * 18);
       g.stroke();
     }
     if (rand() > 0.6) {
       g.fillStyle = color;
-      g.fillRect(x0 + 8, 36, 3, 3);
+      g.fillRect(x0 + 8, y0 + 21, 3, 3);
     }
   }
-  const t = new CanvasTexture(c);
-  t.colorSpace = SRGBColorSpace;
-  return t;
+  return texture(c);
+}
+
+const NEON = ['#2ee8ff', '#ff4fd8', '#ffb04a', '#7aff8a', '#ff4a5a'];
+const NEON_HEX = [0x2ee8ff, 0xff4fd8, 0xffb04a, 0x7aff8a, 0xff4a5a];
+
+/** Sign materials, each with its own flicker. */
+function signs(count: number, vertical: boolean, seed: number): MeshBasicMaterial[] {
+  // Only one sign in three flickers; the others hold steady.
+  return Array.from({ length: count }, (_, i) => {
+    const m = new MeshBasicMaterial({ map: alienSign(seed + i, NEON[i % NEON.length], vertical), side: DoubleSide });
+    return i % 3 === 0 ? flicker(m, 'buzz', seed + i * 1.37) : m;
+  });
+}
+
+/** Metal grating for walkways: a grid of dark slots in steel. */
+function grating(): MeshStandardMaterial {
+  const [c, g] = canvas(64, 64);
+  g.fillStyle = '#4a505a';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#16181d';
+  for (let y = 2; y < 64; y += 8) for (let x = 2; x < 64; x += 8) g.fillRect(x, y, 6, 5);
+  return new MeshStandardMaterial({ map: texture(c, true), roughness: 0.55, metalness: 0.7 });
+}
+
+/**
+ * The dead city round the battlefield (after SC2's platform maps): round industrial towers with bands of light and
+ * square towers stepping back as they rise, broken at the top, rising out of the void beyond the map's edges;
+ * grated walkways with edge lights reach from the platforms to some of them, and flying traffic streams past.
+ * Towers between the camera and the map (south and east) stop below the decks, so they never hide the game.
+ */
+export function cityScape(width: number, height: number, deck: number): Group {
+  const city = new Group();
+  city.userData.noPick = true;
+  const b = new Batch();
+  const rand = rng(4242);
+  const steel = new MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.6, metalness: 0.7 });
+  const darkSteel = new MeshStandardMaterial({ color: 0x1e2128, roughness: 0.7, metalness: 0.6 });
+  const rail = new MeshStandardMaterial({ color: 0x5a606a, roughness: 0.5, metalness: 0.8 });
+  const grate = grating();
+  const bands = [0xffb04a, 0xdfe8ff, 0x2ee8ff].map((c) => new MeshBasicMaterial({ color: c }));
+  const beacon = flicker(new MeshBasicMaterial({ color: 0xff3020 }), 'blink', 0.3);
+  const beaconGlow = flicker(glow(0xff3020, 0.9), 'blink', 0.3);
+  const edgeLight = flicker(new MeshBasicMaterial({ color: 0xffc060 }), 'buzz', 71);
+  const facades = [1, 2, 3, 4, 5].map(facade);
+  const vSigns = signs(5, true, 20);
+  const hSigns = signs(5, false, 40);
+  const halos = NEON_HEX.map((c) => glow(c, 0.55));
+
+  const spots: [number, number, number, number][] = []; // x, z, edge x, edge z (where a walkway may start)
+  for (let t = 6; t < width; t += 9 + rand() * 6) spots.push([t, -5 - rand() * 8, t, 0], [t, height + 5 + rand() * 8, t, height]);
+  for (let t = 6; t < height; t += 9 + rand() * 6) spots.push([-5 - rand() * 8, t, 0, t], [width + 5 + rand() * 8, t, width, t]);
+  // A second, farther row on the far sides (north and west), for depth.
+  for (let t = 0; t < width + 20; t += 7 + rand() * 6) spots.push([t - 10, -18 - rand() * 10, NaN, NaN]);
+  for (let t = 0; t < height + 20; t += 7 + rand() * 6) spots.push([-18 - rand() * 10, t - 10, NaN, NaN]);
+
+  const base = -30;
+  for (const [x, z, ex, ez] of spots) {
+    const front = x > width || z > height;
+    const far = Number.isNaN(ex);
+    const top = front ? -1.5 - rand() * 4 : (far ? 10 : 4) + rand() * 20;
+    const h = top - base;
+    // Face turned towards the map: where signs hang.
+    const toward = x < 0 ? Math.PI / 2 : x > width ? -Math.PI / 2 : z < 0 ? 0 : Math.PI;
+    let face: number; // distance from the axis to that face
+    if (rand() < 0.45) {
+      // Round industrial tower: a drum of windows ringed by bands of light, a heavy cap.
+      const r = 1.3 + rand() * 1.4;
+      face = r;
+      const body = new CylinderGeometry(r, r, h, 18, 1, true);
+      const uv = body.getAttribute('uv');
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ((Math.PI * 2 * r) / FACADE_U), uv.getY(i) * (h / FACADE_V));
+      b.add(body, facades[Math.floor(rand() * facades.length)], x, (top + base) / 2, z);
+      const step = 2.5 + rand() * 2;
+      const band = bands[Math.floor(rand() * bands.length)];
+      for (let y = top - 0.8; y > base + 4; y -= step) b.add(new CylinderGeometry(r + 0.06, r + 0.06, 0.16, 18, 1, true), rand() < 0.2 ? darkSteel : band, x, y, z);
+      for (let y = top - 2; y > base + 4; y -= step * 2) b.add(new CylinderGeometry(r + 0.18, r + 0.18, 0.35, 18), darkSteel, x, y, z);
+      b.add(new CylinderGeometry(r + 0.2, r + 0.25, 0.6, 18), darkSteel, x, top + 0.3, z);
+      b.add(new CylinderGeometry(r * 0.6, r * 0.75, 0.5, 14), steel, x, top + 0.85, z);
+      // Radial ribs on the cap, as on SC2's fuel towers.
+      for (let k = 0; k < 6; k++) b.add(new BoxGeometry(0.1, 0.15, r * 1.5), rail, x, top + 1.15, z, (k * Math.PI) / 6);
+      if (!front) b.add(new CylinderGeometry(0.05, 0.08, 2 + rand() * 4, 5), rail, x + r * 0.4, top + 2, z);
+    } else {
+      // Square tower stepping back in tiers, ledges at each setback, rooftop plant, broken girders.
+      let w = 2.5 + rand() * 3;
+      let d = 2.5 + rand() * 3;
+      face = d / 2;
+      const tiers = front ? 1 : 1 + Math.floor(rand() * 3);
+      let y0 = base;
+      const mat = facades[Math.floor(rand() * facades.length)];
+      for (let k = 0; k < tiers; k++) {
+        const y1 = k === tiers - 1 ? top : y0 + (top - y0) * (0.55 + rand() * 0.2);
+        const th = y1 - y0;
+        b.add(boxUv(new BoxGeometry(w, th, d), w, th, d, FACADE_U, FACADE_V), mat, x, (y0 + y1) / 2, z);
+        b.add(new BoxGeometry(w + 0.2, 0.25, d + 0.2), darkSteel, x, y1 + 0.12, z);
+        if (rand() < 0.5) b.add(new BoxGeometry(w + 0.04, 0.12, d + 0.04), bands[Math.floor(rand() * bands.length)], x, y1 - 0.3, z);
+        y0 = y1;
+        if (k < tiers - 1) {
+          w *= 0.65 + rand() * 0.15;
+          d *= 0.65 + rand() * 0.15;
+        }
+      }
+      if (!front) {
+        for (let k = 0; k < 2 + Math.floor(rand() * 3); k++) {
+          b.add(new BoxGeometry(0.4 + rand() * 0.6, 0.4 + rand() * 0.4, 0.4 + rand() * 0.6), steel, x + (rand() - 0.5) * w * 0.6, top + 0.45, z + (rand() - 0.5) * d * 0.6);
+        }
+        if (rand() < 0.5) b.add(new CylinderGeometry(0.35, 0.35, 0.8, 10), rail, x + w * 0.25, top + 0.65, z - d * 0.2);
+        for (let k = 0; k < 3; k++) {
+          b.add(new BoxGeometry(0.12, 1.5 + rand() * 2.5, 0.12), rail, x + (rand() - 0.5) * w, top + 1, z + (rand() - 0.5) * d, 0, (rand() - 0.5) * 0.6, (rand() - 0.5) * 0.6);
+        }
+        if (rand() < 0.6) b.add(new CylinderGeometry(0.04, 0.06, 3 + rand() * 4, 5), rail, x, top + 2.5, z);
+      }
+    }
+    if (!front) {
+      // Aircraft warning light on top.
+      b.add(new BoxGeometry(0.2, 0.2, 0.2), beacon, x, top + 1.6, z);
+      b.add(new PlaneGeometry(1.6, 1.6), beaconGlow, x, top + 1.6, z, Math.PI / 4);
+      // Signs on the face turned to the battlefield: a tall vertical one, or a big billboard.
+      const fx = x + Math.sin(toward) * (face + 0.12);
+      const fz = z + Math.cos(toward) * (face + 0.12);
+      const pick = rand();
+      if (pick < 0.55) {
+        const i = Math.floor(rand() * vSigns.length);
+        const sh = 2.5 + rand() * 2.5;
+        const y = top - sh / 2 - 1 - rand() * 6;
+        b.add(new PlaneGeometry(sh * 0.3, sh), vSigns[i], fx, y, fz, toward);
+        b.add(new PlaneGeometry(sh * 0.9, sh * 1.4), halos[i % halos.length], fx + Math.sin(toward) * 0.05, y, fz + Math.cos(toward) * 0.05, toward);
+      } else if (pick < 0.8) {
+        const i = Math.floor(rand() * hSigns.length);
+        const y = top - 2.5 - rand() * 8;
+        b.add(new PlaneGeometry(3.6, 1.35), hSigns[i], fx, y, fz, toward);
+        b.add(new PlaneGeometry(6, 3), halos[i % halos.length], fx + Math.sin(toward) * 0.05, y, fz + Math.cos(toward) * 0.05, toward);
+      }
+    }
+    // Grated walkways reach from the platforms to some towers, a few broken off halfway.
+    if (!far && rand() > 0.45) {
+      const len = Math.hypot(x - ex, z - ez) - face;
+      const reach = rand() > 0.75 ? len * (0.4 + rand() * 0.3) : len;
+      const yaw = Math.atan2(x - ex, z - ez);
+      const dx = Math.sin(yaw);
+      const dz = Math.cos(yaw);
+      const at = (s: number, side: number, y = 0): [number, number, number] => [ex + dx * s + dz * side, deck + y, ez + dz * s - dx * side];
+      const plank = boxUv(new BoxGeometry(1.4, 0.12, reach), 1.4, 0.12, reach, 1, 1);
+      b.add(plank, grate, ...at(reach / 2, 0, -0.06), yaw);
+      for (const side of [-0.7, 0.7]) {
+        b.add(new BoxGeometry(0.06, 0.06, reach), rail, ...at(reach / 2, side, 0.55), yaw);
+        b.add(new BoxGeometry(0.1, 0.16, reach), darkSteel, ...at(reach / 2, side, -0.1), yaw);
+        for (let k = 0.3; k < reach; k += 1.2) {
+          b.add(new BoxGeometry(0.05, 0.55, 0.05), rail, ...at(k, side, 0.28));
+          b.add(new BoxGeometry(0.08, 0.05, 0.08), edgeLight, ...at(k, side, 0.03));
+        }
+      }
+      // Trusses under the walkway, down to a crossbeam every few metres.
+      for (let k = 1.5; k < reach; k += 3) {
+        b.add(new BoxGeometry(1.4, 0.15, 0.15), darkSteel, ...at(k, 0, -0.6), yaw);
+        for (const side of [-0.6, 0.6]) b.add(new BoxGeometry(0.08, 0.6, 0.08), darkSteel, ...at(k, side, -0.35));
+      }
+    }
+  }
+  b.into(city);
+  // Flying traffic past the far sides and through the void.
+  city.add(traffic([[-40, -4], [width + 40, -4]], 2, 3), traffic([[width + 40, -9], [-40, -9]], 6, 4));
+  city.add(traffic([[-4, height + 40], [-4, -40]], 0.5, 3), traffic([[-11, -40], [-11, height + 40]], 4, 4));
+  return city;
+}
+
+/** Flying cars streaming along a lane (two points, at height y): dark hulls with head and tail lights. */
+function traffic(lane: [[number, number], [number, number]], y: number, count: number): Group {
+  const g = new Group();
+  const [[x0, z0], [x1, z1]] = lane;
+  const len = Math.hypot(x1 - x0, z1 - z0);
+  const yaw = Math.atan2(x1 - x0, z1 - z0);
+  const hull = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.4, metalness: 0.8 });
+  const head = new MeshBasicMaterial({ color: 0xfff0d0 });
+  const tail = new MeshBasicMaterial({ color: 0xff3030 });
+  const halo = glow(0xffe0b0, 0.7);
+  const rand = rng(Math.floor(x0 * 13 + z0 * 7 + y * 3) + 99);
+  for (let i = 0; i < count; i++) {
+    const car = new Group();
+    car.add(new Mesh(new BoxGeometry(0.5, 0.18, 1.0), hull));
+    const cab = new Mesh(new BoxGeometry(0.4, 0.14, 0.45), hull);
+    cab.position.set(0, 0.14, -0.05);
+    car.add(cab);
+    const h = new Mesh(new BoxGeometry(0.4, 0.06, 0.04), head);
+    h.position.z = 0.51;
+    const t = new Mesh(new BoxGeometry(0.4, 0.06, 0.04), tail);
+    t.position.z = -0.51;
+    const hl = new Mesh(new PlaneGeometry(1.2, 1.2), halo);
+    hl.position.z = 0.7;
+    hl.rotation.x = -Math.PI / 2;
+    car.add(h, t, hl);
+    car.rotation.y = yaw;
+    const speed = 3 + rand() * 3;
+    const phase = rand() * len;
+    const bob = rand() * 6;
+    const lift = (rand() - 0.5) * 1.2;
+    // Moves itself before each draw: no hook in the game loop needed.
+    car.children[0].onBeforeRender = () => {
+      const now = performance.now() / 1000;
+      const s = (phase + now * speed) % len;
+      car.position.set(x0 + ((x1 - x0) * s) / len, y + lift + Math.sin(now * 0.8 + bob) * 0.15, z0 + ((z1 - z0) * s) / len);
+    };
+    car.position.set(x0 + ((x1 - x0) * phase) / len, y + lift, z0 + ((z1 - z0) * phase) / len);
+    car.traverse((o) => (o.userData.noPick = true));
+    g.add(car);
+  }
+  // The cars move: keep them drawn (their bounding spheres would be tested at the old place).
+  g.traverse((o) => (o.frustumCulled = false));
+  return g;
+}
+
+/** Concrete of a parking deck: stains and oil, and on 'stall' a painted bay line. */
+function parkingFloor(seed: number, stall: boolean, shade = 1): MeshStandardMaterial {
+  const [c, g] = canvas(64, 64);
+  const rand = rng(seed);
+  g.fillStyle = '#464950';
+  g.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 160; i++) {
+    g.fillStyle = rand() > 0.5 ? '#3c3f46' : '#51545b';
+    g.fillRect(rand() * 64, rand() * 64, 2, 2);
+  }
+  g.globalAlpha = 0.5;
+  g.fillStyle = '#25272c';
+  for (let i = 0; i < 3; i++) {
+    g.beginPath();
+    g.ellipse(rand() * 64, rand() * 64, 4 + rand() * 8, 3 + rand() * 5, rand() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  if (stall) {
+    g.fillStyle = rand() > 0.5 ? '#c8c2a8' : '#c9a23a';
+    g.fillRect(1, 4, 3, 56);
+    g.fillRect(4, 58, 18, 3);
+  }
+  return new MeshStandardMaterial({ map: texture(c), color: new Color().setRGB(shade, shade, shade * 1.08, SRGBColorSpace), roughness: 0.9 });
+}
+
+/** Black and yellow hazard stripes for slab edges. */
+function hazardStripes(): MeshStandardMaterial {
+  const [c, g] = canvas(64, 16);
+  g.fillStyle = '#1a1a1c';
+  g.fillRect(0, 0, 64, 16);
+  g.fillStyle = '#c9a020';
+  for (let x = -16; x < 64; x += 16) {
+    g.beginPath();
+    g.moveTo(x, 16);
+    g.lineTo(x + 8, 0);
+    g.lineTo(x + 16, 0);
+    g.lineTo(x + 8, 16);
+    g.fill();
+  }
+  return new MeshStandardMaterial({ map: texture(c), roughness: 0.8 });
+}
+
+/**
+ * The lower city under the chasms: stacked parking levels. Each storey is a concrete slab with bay lines,
+ * pillars and hanging lights; the levels step back towards the hole's middle, so from above every floor shows
+ * a band with its striped edge, parked and wrecked cars and pools of light, down to the bottom deck.
+ * The storeys carry on under the playable deck, where the camera looks in from the south-east. Render only.
+ */
+export function cityUnderdeck(map: { width: number; height: number; chasm?: Uint8Array }, deck: number): Group {
+  const under = new Group();
+  under.userData.noPick = true;
+  const chasm = map.chasm;
+  if (!chasm) return under;
+  const W = map.width;
+  const H = map.height;
+  const b = new Batch();
+  const rand = rng(777);
+  const LEVELS = 4;
+  const floors = Array.from({ length: LEVELS }, (_, k) => (deck * (k + 1)) / LEVELS); // slab tops, top to bottom
+  const SLAB = 0.25;
+  const MARGIN = 3; // how far the storeys reach under the playable deck
+
+  // Rings: for a hole tile, how far it is from the hole's edge (1 = against it); for a deck tile, how far from the hole.
+  const ring = new Int16Array(W * H).fill(-1);
+  let todo: number[] = [];
+  for (let i = 0; i < W * H; i++) {
+    const x = i % W;
+    const y = (i / W) | 0;
+    const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+      const nx = x + dx;
+      const ny = y + dy;
+      return nx >= 0 && ny >= 0 && nx < W && ny < H && chasm[ny * W + nx] !== chasm[i];
+    });
+    if (near) {
+      ring[i] = 1;
+      todo.push(i);
+    }
+  }
+  for (let d = 2; todo.length; d++) {
+    const next: number[] = [];
+    for (const i of todo) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = (i % W) + dx;
+        const y = ((i / W) | 0) + dy;
+        const j = y * W + x;
+        if (x < 0 || y < 0 || x >= W || y >= H || ring[j] >= 0 || chasm[j] !== chasm[i]) continue;
+        if (!chasm[j] && d > MARGIN) continue;
+        ring[j] = d;
+        next.push(j);
+      }
+    }
+    todo = next;
+  }
+  /** Does level k have floor on tile (x, y)? Under the deck always; in the hole, the deeper the wider. */
+  const has = (k: number, x: number, y: number): boolean => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    const i = y * W + x;
+    if (ring[i] < 0) return false;
+    if (!chasm[i]) return true;
+    return k === LEVELS - 1 || ring[i] <= k + 1;
+  };
+
+  // The deeper the level, the darker everything on it, lights included (the decks above shade it).
+  const DEPTH_LIGHT = [1, 0.5, 0.25, 0.12];
+  const SHADE = [0.4, 0.2, 0.1, 0.05];
+  const mats = DEPTH_LIGHT.map((f, k) => {
+    const lit = (hex: number) => new Color(hex).multiplyScalar(f);
+    const stripes = hazardStripes();
+    stripes.color.setScalar(Math.max(f, 0.2));
+    return {
+      concrete: new MeshStandardMaterial({ color: lit(0x34363c), roughness: 0.9 }),
+      pillarMat: new MeshStandardMaterial({ color: lit(0x3e4045), roughness: 0.85 }),
+      backWall: new MeshStandardMaterial({ color: lit(0x24262c), roughness: 0.9 }),
+      stripes,
+      plain: [1, 2, 3].map((s) => parkingFloor(s + k * 10, false, SHADE[k])),
+      bays: [4, 5].map((s) => parkingFloor(s + k * 10, true, SHADE[k])),
+      tube: [flicker(new MeshBasicMaterial({ color: lit(0xdfffff) }), 'buzz', 3.3 + k), new MeshBasicMaterial({ color: lit(0xffc070) }), new MeshBasicMaterial({ color: lit(0xdfffff) })],
+      pools: [flicker(glow(0x9ad8ff, 0.45 * f), 'buzz', 3.3 + k), glow(0xffb060, 0.5 * f), glow(0x9ad8ff, 0.45 * f), glow(0xff4fd8, 0.35 * f)],
+      edgeLamp: new MeshBasicMaterial({ color: lit(0xffb04a) }),
+      paints: [0x6a2a2a, 0x2a3a5a, 0x7a7468, 0x2a2c30, 0x4a5a3a].map((c) => new MeshStandardMaterial({ color: lit(c), roughness: 0.5, metalness: 0.6 })),
+      glass: new MeshStandardMaterial({ color: 0x10161c, roughness: 0.2, metalness: 0.5 }),
+      rear: new MeshBasicMaterial({ color: lit(0xff2a2a) }),
+      levelSigns: signs(2, false, 60 + k * 2).map((m) => (m.color.setScalar(f), (m.userData.flicker?.base as Color | undefined)?.setScalar(f), m)),
+      halos: NEON_HEX.map((c) => glow(c, 0.4 * f)),
+    };
+  });
+
+  for (let k = 0; k < LEVELS; k++) {
+    const { concrete, pillarMat, backWall, stripes, plain, bays, tube, pools, edgeLamp, paints, glass, rear, levelSigns, halos } = mats[k];
+    const top = floors[k];
+    const ceiling = k === 0 ? -DECK_SLAB : floors[k - 1] - SLAB; // underside of the slab above
+    const storey = ceiling - top;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (!has(k, x, y)) continue;
+        const i = y * W + x;
+        const open = chasm[i] === 1;
+        // A few slabs at the hole's edge have collapsed (not on the bottom deck).
+        if (open && k < LEVELS - 1 && ring[i] === k + 1 && rand() < 0.06) {
+          b.add(new BoxGeometry(0.9, SLAB, 0.9), concrete, x + 0.5, floors[k + 1] + 0.3, y + 0.5, rand() * 3, 0.5, 0.3);
+          continue;
+        }
+        const floorMat = (x + y * 3) % 4 === 0 ? bays[(x + y) % 2] : plain[(x * 7 + y) % 3];
+        b.add(new BoxGeometry(1, SLAB, 1), floorMat, x + 0.5, top - SLAB / 2, y + 0.5, (Math.floor(rand() * 4) * Math.PI) / 2);
+        // Edges: where this level stops (towards the hole, or at the back of the storey under the deck).
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (has(k, x + dx, y + dy)) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          const ex = x + 0.5 + dx * 0.5;
+          const ez = y + 0.5 + dy * 0.5;
+          const along = dx === 0;
+          const outward = nx >= 0 && ny >= 0 && nx < W && ny < H && chasm[ny * W + nx] === 1;
+          if (outward || open) {
+            // Slab edge onto the hole: striped fascia, a low parapet, amber marker lights, pillars.
+            b.add(new BoxGeometry(along ? 1 : 0.06, SLAB + 0.02, along ? 0.06 : 1), stripes, ex, top - SLAB / 2, ez, 0);
+            b.add(new BoxGeometry(along ? 1 : 0.08, 0.3, along ? 0.08 : 1), concrete, ex - dx * 0.04, top + 0.15, ez - dy * 0.04);
+            if ((x + y) % 2 === 0) b.add(new BoxGeometry(0.08, 0.05, 0.08), edgeLamp, ex, top + 0.33, ez);
+            if ((x + y) % 2 === 0 && k > 0) b.add(new BoxGeometry(0.22, storey, 0.22), pillarMat, ex - dx * 0.15, top + storey / 2, ez - dy * 0.15);
+            // A level sign in the alien script, now and then.
+            if (rand() < 0.04) {
+              const s = levelSigns[(k + x) % levelSigns.length];
+              const yaw = Math.atan2(dx, dy);
+              b.add(new PlaneGeometry(0.9, 0.34), s, ex + dx * 0.07, top - SLAB / 2 + 0.05, ez + dy * 0.07, yaw);
+              b.add(new PlaneGeometry(1.8, 0.9), halos[(k + x) % halos.length], ex + dx * 0.09, top - SLAB / 2, ez + dy * 0.09, yaw);
+            }
+          } else {
+            // Back of the storey, under the deck: a dark wall with the odd lit door.
+            b.add(new BoxGeometry(along ? 1 : 0.15, storey, along ? 0.15 : 1), backWall, ex, top + storey / 2, ez);
+            if (rand() < 0.15) b.add(new BoxGeometry(along ? 0.35 : 0.17, 0.6, along ? 0.17 : 0.35), tube[2], ex, top + 0.3, ez);
+          }
+        }
+        // Under the deck: a grid of pillars holding up the storey above.
+        if (!open && x % 2 === 0 && y % 2 === 0) b.add(new BoxGeometry(0.26, storey, 0.26), pillarMat, x + 0.5, top + storey / 2, y + 0.5);
+        // Hanging strip lights and their pool on the floor; some dead.
+        const v = rand();
+        if (v < 0.22) {
+          const lit = rand() > 0.25;
+          const which = Math.floor(rand() * 3);
+          if (!open || k < LEVELS - 1) b.add(new BoxGeometry(0.6, 0.05, 0.08), lit ? tube[which] : concrete, x + 0.5, ceiling - 0.12, y + 0.5, rand() < 0.5 ? 0 : Math.PI / 2);
+          if (lit) b.add(new PlaneGeometry(1.8, 1.8), pools[which], x + 0.5, top + 0.02, y + 0.5, 0, -Math.PI / 2);
+        } else if (open && v < 0.27) {
+          // Street lights on the open bottom deck and terraces.
+          b.add(new PlaneGeometry(1.6, 1.6), pools[3], x + 0.5, top + 0.02, y + 0.5, 0, -Math.PI / 2);
+        } else if (v < 0.4) {
+          // A parked car, now and then a wreck on its roof.
+          const yaw = rand() < 0.8 ? (Math.floor(rand() * 2) * Math.PI) / 2 + (rand() - 0.5) * 0.15 : rand() * 3;
+          const flip = rand() < 0.08;
+          const paint = paints[Math.floor(rand() * paints.length)];
+          const cx = x + 0.5 + (rand() - 0.5) * 0.2;
+          const cz = y + 0.5 + (rand() - 0.5) * 0.2;
+          b.add(new BoxGeometry(0.42, 0.16, 0.78), paint, cx, top + (flip ? 0.28 : 0.12), cz, yaw, 0, flip ? Math.PI : 0);
+          b.add(new BoxGeometry(0.36, 0.13, 0.4), glass, cx, top + (flip ? 0.12 : 0.26), cz, yaw, 0, flip ? Math.PI : 0);
+          if (!flip && rand() < 0.3) b.add(new BoxGeometry(0.36, 0.04, 0.02), rear, cx - Math.sin(yaw) * 0.4, top + 0.15, cz - Math.cos(yaw) * 0.4, yaw);
+        }
+      }
+    }
+  }
+  return b.into(under);
 }
 
 /**
  * Street furniture of the dead city on the playable decks (render only, never in the way): railings along the
- * chasms, street lamps, benches and kiosks, and broken neon signs in alien scripts.
+ * chasms and the map's edge, street lamps with their pools of light, benches, bollards and broken neon signs
+ * in alien scripts. Nothing tall along the south and east edges, where it would stand between camera and game.
  */
 export function cityStreets(map: { width: number; height: number; chasm?: Uint8Array; level: Uint8Array }, heightAt: (x: number, z: number) => number): Group {
   const streets = new Group();
   streets.userData.noPick = true;
   if (!map.chasm) return streets;
-  const metal = new MeshStandardMaterial({ color: 0x4a505a, roughness: 0.6, metalness: 0.7 });
+  const b = new Batch();
+  const metal = new MeshStandardMaterial({ color: 0x4a505a, roughness: 0.5, metalness: 0.8 });
   const dark = new MeshStandardMaterial({ color: 0x1c1f26, roughness: 0.8 });
-  const bulb = new MeshBasicMaterial({ color: 0xffd9a0 });
-  const colors = ['#2ee8ff', '#ff4fd8', '#ffb04a', '#7aff8a'];
-  const signs = colors.map((c, i) => new MeshBasicMaterial({ map: alienSign(i + 1, c), side: DoubleSide }));
-  let r = 31337;
-  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const bulbs = [new MeshBasicMaterial({ color: 0xffd9a0 }), flicker(new MeshBasicMaterial({ color: 0xffd9a0 }), 'buzz', 12.1), new MeshBasicMaterial({ color: 0x9ae8ff })];
+  const pools = [glow(0xffb060, 0.5), flicker(glow(0xffb060, 0.5), 'buzz', 12.1), glow(0x7ad8ff, 0.45)];
+  const boards = signs(8, false, 1);
+  const halos = NEON_HEX.map((c) => glow(c, 0.5));
+  const stripe = flicker(new MeshBasicMaterial({ color: 0x2ee8ff }), 'buzz', 17.5);
+  const rand = rng(31337);
   const chasm = (x: number, y: number) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.chasm![y * map.width + x] === 1;
-  const put = (m: Mesh, x: number, y: number, z: number) => {
-    m.position.set(x, heightAt(x, z) + y, z);
-    streets.add(m);
-    return m;
-  };
-  let lamp = 0;
+  const outside = (x: number, y: number) => x < 0 || y < 0 || x >= map.width || y >= map.height;
+  const put = (geo: BufferGeometry, m: Material, x: number, y: number, z: number, ry = 0, rx = 0, rz = 0) => b.add(geo, m, x, heightAt(x, z) + y, z, ry, rx, rz);
+
+  let n = 0;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       if (chasm(x, y)) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!chasm(x + dx, y + dy)) continue;
-        // A railing along the edge: a post and two rails, some bent or missing.
+        const nx = x + dx;
+        const ny = y + dy;
+        const edgeOfMap = outside(nx, ny);
+        if (!chasm(nx, ny) && !edgeOfMap) continue;
+        // A railing along the drop: a post and two rails, some bent or missing.
         if (rand() < 0.12) continue;
         const ex = x + 0.5 + dx * 0.45;
         const ez = y + 0.5 + dy * 0.45;
         const along = dx === 0;
-        put(new Mesh(new BoxGeometry(0.05, 0.5, 0.05), metal), ex, 0.25, ez);
-        for (const h of [0.25, 0.48]) {
-          const bar = put(new Mesh(new BoxGeometry(along ? 1 : 0.03, 0.03, along ? 0.03 : 1), metal), ex, h, ez);
-          bar.rotation.z = rand() < 0.1 ? (rand() - 0.5) * 0.5 : 0;
-        }
-        // Every few metres a street lamp, a bench or a sign.
-        if (++lamp % 5 === 0) {
-          const ix = x + 0.5 - dx * 0.2;
-          const iz = y + 0.5 - dy * 0.2;
-          const pick = rand();
-          if (pick < 0.45) {
-            put(new Mesh(new CylinderGeometry(0.03, 0.04, 1.6, 6), metal), ix, 0.8, iz);
-            const arm = put(new Mesh(new BoxGeometry(0.35, 0.03, 0.03), metal), ix, 1.58, iz);
-            arm.rotation.y = Math.atan2(dy, -dx);
-            if (rand() > 0.25) put(new Mesh(new BoxGeometry(0.12, 0.06, 0.12), bulb), ix + dx * 0.15, 1.53, iz + dy * 0.15);
-          } else if (pick < 0.7) {
-            const bench = put(new Mesh(new BoxGeometry(along ? 0.7 : 0.25, 0.08, along ? 0.25 : 0.7), dark), ix, 0.22, iz);
-            bench.rotation.y = (rand() - 0.5) * 0.3;
-            put(new Mesh(new BoxGeometry(0.05, 0.2, 0.05), metal), ix, 0.1, iz);
-          } else {
-            // A broken neon sign on its post, a little askew.
-            put(new Mesh(new CylinderGeometry(0.03, 0.03, 1.2, 6), metal), ix, 0.6, iz);
-            const sign = put(new Mesh(new PlaneGeometry(0.9, 0.34), signs[Math.floor(rand() * signs.length)]), ix, 1.35, iz);
-            sign.rotation.set(0, along ? 0 : Math.PI / 2, (rand() - 0.5) * 0.25);
+        put(new BoxGeometry(0.05, 0.5, 0.05), metal, ex, 0.25, ez);
+        for (const h of [0.25, 0.48]) put(new BoxGeometry(along ? 1 : 0.03, 0.03, along ? 0.03 : 1), metal, ex, h, ez, 0, 0, rand() < 0.1 ? (rand() - 0.5) * 0.5 : 0);
+        // A thin neon strip along the chasm's lip, dead in places.
+        if (!edgeOfMap && rand() < 0.6) put(new BoxGeometry(along ? 1 : 0.04, 0.03, along ? 0.04 : 1), stripe, x + 0.5 + dx * 0.49, 0.02, y + 0.5 + dy * 0.49);
+        // Nothing tall on the south and east edges of the map (between the camera and the game).
+        if (edgeOfMap && (dx > 0 || dy > 0)) continue;
+        if (++n % 5 !== 0) continue;
+        const ix = x + 0.5 - dx * 0.2;
+        const iz = y + 0.5 - dy * 0.2;
+        const pick = rand();
+        if (pick < 0.45) {
+          // Street lamp leaning out over the edge; one in five dead.
+          put(new CylinderGeometry(0.03, 0.05, 1.6, 6), metal, ix, 0.8, iz);
+          put(new BoxGeometry(0.4, 0.03, 0.03), metal, ix + dx * 0.15, 1.58, iz + dy * 0.15, Math.atan2(dy, -dx));
+          if (rand() > 0.2) {
+            const w = Math.floor(rand() * bulbs.length);
+            put(new BoxGeometry(0.14, 0.05, 0.14), bulbs[w], ix + dx * 0.3, 1.54, iz + dy * 0.3);
+            put(new PlaneGeometry(2.2, 2.2), pools[w], ix + dx * 0.2, 0.03, iz + dy * 0.2, 0, -Math.PI / 2);
           }
+        } else if (pick < 0.65) {
+          // Bench with its back to the drop, a bollard beside it.
+          put(new BoxGeometry(along ? 0.7 : 0.25, 0.06, along ? 0.25 : 0.7), dark, ix, 0.22, iz);
+          put(new BoxGeometry(along ? 0.7 : 0.04, 0.22, along ? 0.04 : 0.7), dark, ix + dx * 0.11, 0.36, iz + dy * 0.11);
+          for (const s of [-0.28, 0.28]) put(new BoxGeometry(0.05, 0.2, 0.05), metal, ix + (along ? s : 0), 0.1, iz + (along ? 0 : s));
+          put(new CylinderGeometry(0.06, 0.07, 0.35, 8), metal, ix + (along ? 0.55 : 0), 0.17, iz + (along ? 0 : 0.55));
+        } else {
+          // A broken neon sign on its post, askew, facing the street.
+          put(new CylinderGeometry(0.03, 0.03, 1.2, 6), metal, ix, 0.6, iz);
+          const i = Math.floor(rand() * boards.length);
+          const yaw = Math.atan2(-dx, -dy);
+          put(new PlaneGeometry(0.9, 0.34), boards[i], ix, 1.35, iz, yaw, 0, (rand() - 0.5) * 0.25);
+          put(new PlaneGeometry(1.8, 0.9), halos[i % halos.length], ix + dx * 0.03, 1.35, iz + dy * 0.03, yaw);
         }
       }
     }
   }
-  return streets;
+  return b.into(streets);
 }
