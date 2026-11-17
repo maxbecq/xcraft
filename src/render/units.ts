@@ -1476,7 +1476,13 @@ export class EntityRenderer {
       }
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
-      if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
+      // Fighting (or healing) something within reach: face it, even while nudged aside by others or standing to
+      // shoot; otherwise face the way it moves. Render only: the simulation keeps no facing.
+      const o = e.order;
+      const foe = o && (o.kind === 'attack' || o.kind === 'attackMove' || o.kind === 'heal') && o.target ? world.entities.get(o.target) : undefined;
+      const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
+      if (foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach) v.target = Math.atan2(foe.x - e.x, foe.y - e.y);
+      else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       const ground = heightAt(this.map, x, z);
       v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
