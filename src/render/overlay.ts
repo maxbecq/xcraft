@@ -2,7 +2,7 @@ import { Vector3, type Camera } from 'three';
 import { type BuildingDef, FLY_HEIGHT } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import { type Entity, type World, flies } from '../sim/world';
+import { type Entity, type Order, type World, flies } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 export class Overlay {
@@ -22,6 +22,8 @@ export class Overlay {
 
   /** Alt held: every bar shows, unhurt too. */
   showAll = false;
+  /** Shift held: the selected units' orders show as a path of waypoints. */
+  showQueue = false;
 
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     const dpr = window.devicePixelRatio;
@@ -74,6 +76,7 @@ export class Overlay {
         ctx.fillRect(sx - bw / 2, sy - sh - 2, (bw * e.shield) / e.maxShield, sh);
       }
     }
+    if (this.showQueue) this.drawQueue(world, camera, selected, w, h);
     this.drawMarks(camera, w, h);
   }
 
@@ -102,6 +105,56 @@ export class Overlay {
     }
     this.marks.push({ x, z, color, label, t0: performance.now() });
     if (this.marks.length > 6) this.marks.shift();
+  }
+
+  /** Where an order leads (tiles) and its colour: green to go or work, red to fight, gold to cast. */
+  private orderPoint(world: World, o: Order): [number, number, string] | null {
+    const at = (id: number): [number, number] | null => {
+      const t = world.entities.get(id);
+      return t ? [t.x / FP, t.y / FP] : null;
+    };
+    switch (o.kind) {
+      case 'move': return [o.x / FP, o.y / FP, '#4dff6a'];
+      case 'attackMove': return [o.x / FP, o.y / FP, '#ff6a4a'];
+      case 'cast': return [o.x / FP, o.y / FP, '#ffd860'];
+      case 'build': return [o.tx + 0.5, o.ty + 0.5, '#4dff6a'];
+      case 'attack': { const p = at(o.target); return p && [...p, '#ff6a4a']; }
+      case 'gather': case 'construct': case 'enter': case 'heal': { const p = at(o.target); return p && [...p, '#4dff6a']; }
+    }
+  }
+
+  /** The selected units' current and queued orders: a dotted path from each unit through its waypoints. */
+  private drawQueue(world: World, camera: Camera, selected: ReadonlySet<number>, w: number, h: number): void {
+    const ctx = this.ctx;
+    const screen = (x: number, z: number): [number, number] => {
+      this.v.set(x, heightAt(this.map, x, z) + 0.05, z).project(camera);
+      return [((this.v.x + 1) / 2) * w, ((1 - this.v.y) / 2) * h];
+    };
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    for (const id of selected) {
+      const e = world.entities.get(id);
+      if (!e || e.def.kind !== 'unit' || !e.order) continue;
+      let [px, py] = screen(e.x / FP, e.y / FP);
+      for (const o of [e.order, ...e.next]) {
+        const p = this.orderPoint(world, o);
+        if (!p) continue;
+        const [sx, sy] = screen(p[0], p[1]);
+        ctx.strokeStyle = p[2];
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(sx, sy);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = p[2];
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+        ctx.fill();
+        [px, py] = [sx, sy];
+      }
+    }
+    ctx.setLineDash([]);
   }
 
   private drawMarks(camera: Camera, w: number, h: number): void {

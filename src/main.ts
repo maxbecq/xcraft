@@ -863,6 +863,7 @@ function start(): void {
     }
     effects.update(dt);
     overlay.showAll = keys.has('Alt');
+    overlay.showQueue = keys.has('Shift');
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
     power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power));
