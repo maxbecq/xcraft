@@ -11,3 +11,15 @@
 .menu .map-about { width: min(900px, 94vw); margin: -8px 0 0; font: 13px var(--ui); letter-spacing: 0; color: #c9b896; text-align: center; }
 /* Hovering a card lights its frame only: the menu buttons' bright hover fill would wash out the picture and text. */
 .menu .maps .map-card:hover { opacity: 1; color: inherit; background: inherit; border-color: var(--space-glow, #6fd3ff); text-shadow: none; }
+/* Small screens: the maps get a step of their own, as a grid that scrolls with the page. */
+.menu.compact .maps { flex-wrap: wrap; justify-content: center; overflow: visible; width: min(640px, 94vw); }
+.menu.compact .maps .map-card { width: calc(50% - 6px); max-width: 158px; }
+.menu.compact .maps .map-card img { width: 100%; height: auto; aspect-ratio: 1; }
+.menu.compact .map-about { margin: 0; }
+.menu .options .map-change { min-width: 0; padding: 6px 14px; font-size: 14px; letter-spacing: 0.06em; }
+/* Phones held sideways: little height, so smaller cards, the whole row of maps in view. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .menu.compact .maps { width: min(900px, 96vw); }
+  .menu.compact .maps .map-card { width: 128px; padding: 6px; }
+  .menu.compact .maps .map-card .map-meta { font-size: 10px; }
+}

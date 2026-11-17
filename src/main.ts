@@ -590,8 +590,14 @@ function showOptions(menu: HTMLElement): void {
   };
 }
 
-/** The match setup screen: one row per player (on/off switch, dropdowns), then the planet; the match loads from the URL. */
-function showSetup(menu: HTMLElement, s: Setup): void {
+/** Small screens (phones, either way up): the setup comes in two steps, the map first, then the players. */
+const COMPACT = matchMedia('(max-width: 820px), (max-height: 600px)');
+
+/**
+ * The match setup screen: the maps, one row per player (on/off switch, dropdowns), then the planet; the match
+ * loads from the URL. On small screens `step` shows the maps alone, then the rest.
+ */
+function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map'): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
     `<select data-k="${key}">${Object.entries(options)
       .map(([v, label]) => `<option value="${v}"${v === now ? ' selected' : ''}>${label}</option>`)
@@ -615,12 +621,19 @@ function showSetup(menu: HTMLElement, s: Setup): void {
   };
   const watching = s.sides[0].control !== 'you';
   const chosen = mapFile(s.map);
-  menu.className = 'menu setup';
-  menu.innerHTML = `<h2>Nouvelle partie</h2>
-    <fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
-    <p class="map-about">${chosen.description ?? ''}</p>
+  const compact = COMPACT.matches;
+  const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
+    <p class="map-about">${chosen.description ?? ''}</p>`;
+  menu.className = `menu setup${compact ? ' compact' : ''}`;
+  if (compact && step === 'map') {
+    menu.innerHTML = `<h2>Nouvelle partie</h2>${maps}
+      <div class="row"><button data-m="back">Retour</button><button data-m="next" class="go">Suivant</button></div>`;
+  } else
+    menu.innerHTML = `<h2>Nouvelle partie</h2>
+    ${compact ? '' : maps}
     <fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}</fieldset>
     <fieldset class="options"><legend>Partie</legend>
+      ${compact ? `<label>Carte <button type="button" data-m="maps" class="map-change">${chosen.name}</button></label>` : ''}
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
@@ -638,7 +651,7 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     else s.sides[Number(k[1])].control = v;
     const crowd = s.sides[2].control !== 'none' || s.sides[3].control !== 'none';
     if ((s.sides[0].control !== 'you' || crowd) && s.sides[1].control === 'online') s.sides[1].control = 'normal';
-    showSetup(menu, s);
+    showSetup(menu, s, step);
   };
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
@@ -647,8 +660,10 @@ function showSetup(menu: HTMLElement, s: Setup): void {
       s.map = button.dataset.map;
       // Seats the map has no start for close.
       for (let i = seatsOf(mapFile(s.map)); i < 4; i++) s.sides[i].control = 'none';
-      showSetup(menu, s);
-    } else if (m === 'back') showHome();
+      showSetup(menu, s, step);
+    } else if (m === 'next') showSetup(menu, s, 'players');
+    else if (m === 'maps' || (m === 'back' && compact && step === 'players')) showSetup(menu, s, 'map');
+    else if (m === 'back') showHome();
     else if (m === 'go') launch(s);
   };
 }
