@@ -2,7 +2,7 @@ import { Raycaster, Vector2, Vector3, type Camera, type Object3D } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
-import { FLY_HEIGHT, type UnitDef } from '../data';
+import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
@@ -378,6 +378,23 @@ export class Input {
   }
 
   private idleTurn = 0;
+
+  /** Own finished buildings that train units and have nothing in their queue. */
+  idleProducers(): Entity[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === this.player && e.def.kind === 'building' && e.buildLeft === 0 && !!(e.def as BuildingDef).trains?.length && !e.queue.length);
+  }
+
+  private idleProdTurn = 0;
+
+  /** Selects the next idle production building in turn and centres the view on it. */
+  selectIdleProducer(): void {
+    const idle = this.idleProducers();
+    if (!idle.length) return;
+    const e = idle[this.idleProdTurn++ % idle.length];
+    this.selected.clear();
+    this.selected.add(e.id);
+    this.hooks.focus(e.x / FP, e.y / FP);
+  }
 
   /** Selects every idle worker and centres the view on the next one in turn (the idle-workers button). */
   selectIdleWorkers(): void {

@@ -414,7 +414,7 @@ Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
 Appui long puis glisser : rectangle de sélection</div></div>`;
-tools.append(hud.idle, hud.groups);
+tools.append(hud.idle, hud.idleProd, hud.groups);
 document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
 const setPaused = (on: boolean) => {

@@ -57,6 +57,9 @@ export class Hud {
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
+  /** Production buildings with an empty queue: a click goes through them one by one. */
+  readonly idleProd = el('button', 'chip idle-prod');
+  private idleProdCount = 0;
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
   private groupsKey = '';
@@ -101,6 +104,9 @@ export class Hud {
     this.idle.hidden = true;
     this.idle.title = 'Ouvriers inactifs : les sélectionner';
     this.idle.addEventListener('click', () => this.input.selectIdleWorkers());
+    this.idleProd.title = 'Production à l’arrêt : passer les bâtiments en revue';
+    this.idleProd.hidden = true;
+    this.idleProd.addEventListener('click', () => this.input.selectIdleProducer());
     this.groups.addEventListener('click', (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-g]')?.dataset.g;
       if (k) this.input.recallGroup(k);
@@ -187,6 +193,22 @@ export class Hud {
       this.idle.classList.add('flash');
     }
     this.idleCount = n;
+  }
+
+  /** The idle-production chip: how many production buildings stand with an empty queue. */
+  private updateIdleProd(): void {
+    const p = this.input.idleProducers().length;
+    if (p !== this.idleProdCount) {
+      if (!this.idleProd.firstChild) this.idleProd.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].barracks, '')}<b></b>`;
+      this.idleProd.lastChild!.textContent = String(p);
+      this.idleProd.hidden = p === 0;
+      if (p > this.idleProdCount) {
+        this.idleProd.classList.remove('flash');
+        void this.idleProd.offsetWidth;
+        this.idleProd.classList.add('flash');
+      }
+      this.idleProdCount = p;
+    }
   }
 
   /** Sets a resource's count; it flashes as it goes up (income) or down (spending). */
@@ -358,6 +380,7 @@ export class Hud {
     sup.classList.toggle('full', s.used >= s.max);
     this.updatePanel();
     this.updateIdle();
+    this.updateIdleProd();
     this.updateGroups();
     this.updateCard();
     this.updateGhost();
