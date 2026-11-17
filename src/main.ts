@@ -241,6 +241,7 @@ hud.focus = (x, y) => rig.lookAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
+effects.density = GFX.particles;
 const overlay = new Overlay(map);
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map);
