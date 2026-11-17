@@ -748,6 +748,8 @@ interface View {
   type: string;
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
+  /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
+  wheels?: { o: Object3D; r: number }[];
   root: Object3D;
   model: Group;
   ring: Object3D;
@@ -1154,6 +1156,7 @@ export class EntityRenderer {
       const legs = m.v.limbs.insect ?? [];
       if (walk < 1) {
         const ph = this.stepGait(m.v);
+        for (const w of m.v.wheels ?? []) w.o.rotation.x = ph / w.r;
         for (const l of legs) {
           const q = ph + l.group * Math.PI;
           l.o.rotation.y = -l.side * Math.sin(q) * GAIT_SWING;
@@ -1432,6 +1435,7 @@ export class EntityRenderer {
     // Z walkers: the gait follows the ground actually covered, so feet stay planted whatever the speed.
     const gait = v.gait && this.stepGait(v);
     const phase = gait ?? t * speed * 4.2 + e.id;
+    for (const w of v.wheels ?? []) w.o.rotation.x = (gait ?? 0) / w.r;
     const a = (e.def as UnitDef).attack;
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
@@ -1459,12 +1463,14 @@ export class EntityRenderer {
     // Hovering robots float; walkers bounce with their stride.
     const flying = flies(e);
     const hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
-    const bob = hover + (hover ? 0 : moving ? Math.abs(Math.sin(phase)) * 0.045 : Math.sin(t * 2 + e.id) * 0.008);
+    // Wheeled robots rumble over the ground rather than bounce.
+    const rolling = !!v.wheels;
+    const bob = hover + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
-    ease(body, 'x', moving ? 0.14 : fighting && !melee ? 0.06 : 0, 0.15);
+    ease(body, 'x', moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, 0.15);
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
-    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
+    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
@@ -1690,8 +1696,17 @@ export class EntityRenderer {
     }
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
-    const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y };
-    if (insect) {
+    const wheels: { o: Object3D; r: number }[] = [];
+    root.updateMatrixWorld(true); // the unit's scale must be in before the tyres are measured
+    body.traverse((o) => {
+      if (/^zwheel_\d+$/.test(o.name)) {
+        const b = new Box3().setFromObject(o);
+        wheels.push({ o, r: (b.max.y - b.min.y) / 2 });
+      }
+    });
+    // Wheels roll by the ground covered: with a cycle of 2π the phase is the distance itself.
+    const gait = insect ? { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y } : wheels.length ? { x: 0, z: 0, phase: 0, cycle: Math.PI * 2, hip: 0 } : undefined;
+    if (insect || wheels.length) {
       // Z walkers are mostly thin legs: an invisible box round the whole body catches clicks between them.
       const box = new Box3().setFromObject(body);
       const hit = new Mesh(new BoxGeometry(...box.getSize(new Vector3()).toArray()), PICK_PROXY);
@@ -1699,7 +1714,7 @@ export class EntityRenderer {
       pivot.add(hit);
     }
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, gait, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
