@@ -14,6 +14,7 @@ import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './ren
 import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
+import { detectQuality, pickQuality, QUALITY, QUALITY_KEY, QUALITY_NAMES } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
@@ -46,12 +47,22 @@ const renderer = new WebGLRenderer({ antialias: true });
 renderer.localClippingEnabled = true; // Z buildings are fabricated layer by layer (render/units.ts)
 /** Phones and tablets: touch controls, lighter rendering. */
 const TOUCH = matchMedia('(pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(TOUCH ? 1.25 : 2, window.devicePixelRatio));
+/** Graphics quality, from the URL, the menu's choice or the graphics chip (src/quality.ts). */
+const DETECTED = detectQuality(renderer, TOUCH);
+const QUALITY_LEVEL = pickQuality(params, (() => {
+  try {
+    return localStorage.getItem(QUALITY_KEY);
+  } catch {
+    return null;
+  }
+})(), DETECTED);
+const GFX = QUALITY[QUALITY_LEVEL];
+renderer.setPixelRatio(Math.min(GFX.pixelRatio, window.devicePixelRatio));
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(params);
 renderer.toneMappingExposure = biome.exposure;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
@@ -126,8 +137,8 @@ addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 scene.add(new HemisphereLight(biome.sky.color, biome.sky.ground, biome.sky.intensity));
 const sun = new DirectionalLight(biome.sun.color, biome.sun.intensity);
 const SUN_OFFSET = new Vector3(-22, 40, -12);
-sun.castShadow = true;
-sun.shadow.mapSize.set(TOUCH ? 2048 : 4096, TOUCH ? 2048 : 4096);
+sun.castShadow = GFX.shadows > 0;
+sun.shadow.mapSize.set(GFX.shadows || 1, GFX.shadows || 1);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 // The shadow box follows the camera, so shadows stay crisp.
@@ -296,7 +307,7 @@ function scrollDirection(): [number, number] {
 }
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-const post = new Post(renderer, scene, fxScene, rig.camera, !params.has('lowfx'), TOUCH);
+const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light');
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   post.setSize(window.innerWidth, window.innerHeight);
@@ -462,6 +473,15 @@ function showHome(): void {
   };
 }
 
+/** The graphics level picked in the menu, or 'auto'. */
+function storedQuality(): string {
+  try {
+    return localStorage.getItem(QUALITY_KEY) ?? 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
 /** The match setup screen: one row per player (on/off switch, dropdowns), then the planet; the match loads from the URL. */
 function showSetup(menu: HTMLElement, s: Setup): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
@@ -492,6 +512,7 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     <fieldset class="options"><legend>Partie</legend>
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
+      <label>Graphismes ${select('quality', { ...QUALITY_NAMES, auto: `Auto (${QUALITY_NAMES[DETECTED].toLowerCase()})` }, storedQuality())}</label>
     </fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
   menu.onchange = (e) => {
@@ -499,7 +520,15 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
-    if (k === 'biome') s.biome = v;
+    if (k === 'quality') {
+      // A choice for this browser, kept apart from the match: it takes effect when the match loads.
+      try {
+        if (v === 'auto') localStorage.removeItem(QUALITY_KEY);
+        else localStorage.setItem(QUALITY_KEY, v);
+      } catch {
+        // private browsing: the detected level stays
+      }
+    } else if (k === 'biome') s.biome = v;
     else if (k === 'speed') s.speed = Number(v);
     else if (k.startsWith('on')) s.sides[Number(k[2])].control = (el as HTMLInputElement).checked ? 'normal' : 'none';
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
