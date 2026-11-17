@@ -29,7 +29,8 @@ import { Lockstep, matchCode, newRoom, readCode } from './net';
 import { countMatch, countTitle } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-const EDGE_PX = 100;
+/** Its width grows with the screen: 12 % of its short side, never under 120 px (130 px on a 1080p screen). */
+const edgeBand = () => Math.max(120, Math.round(0.12 * Math.min(window.innerWidth, window.innerHeight)));
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -318,6 +319,9 @@ let edgeShown = '';
 let edgeSince = 0;
 /** A pointer settled in a band this long starts scrolling; touching the screen's very edge scrolls at once. */
 const EDGE_DWELL_MS = 200;
+/** In the band's outer part (this share of it), the wait is short: the pointer is clearly heading for the edge. */
+const EDGE_OUTER = 0.4;
+const EDGE_DWELL_OUTER_MS = 60;
 const EDGE_TOUCH_PX = 3;
 /** No edge scrolling this close to a button up top (the menu in its corner): reaching it must not move the view.
  * Buttons down by the console are left out: their calm zone would swallow the bottom band. */
@@ -338,6 +342,7 @@ function scrollDirection(): [number, number] {
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
     // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
     // screen's edge (eased, so the inner half stays slow and easy to control).
+    const EDGE_PX = edgeBand();
     const depth = (d: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
     let ex = mouse.x < EDGE_PX ? -depth(mouse.x) : mouse.x > window.innerWidth - EDGE_PX ? depth(window.innerWidth - mouse.x) : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
@@ -357,7 +362,10 @@ function scrollDirection(): [number, number] {
     if (!inBand) edgeSince = 0;
     else if (!edgeSince) edgeSince = performance.now();
     const touching = floor || mouse.x <= EDGE_TOUCH_PX || mouse.y <= EDGE_TOUCH_PX || mouse.x >= window.innerWidth - 1 - EDGE_TOUCH_PX;
-    if (inBand && (nearButton(mouse.x, mouse.y) || (!touching && performance.now() - edgeSince < EDGE_DWELL_MS))) ex = ey = 0;
+    // Distance to the nearest edge being scrolled, to know whether the pointer is in the band's outer part.
+    const toEdge = Math.min(ex ? Math.min(mouse.x, window.innerWidth - mouse.x) : Infinity, ey > 0 ? mouse.y : ey < 0 ? Math.max(0, bottom - mouse.y) : Infinity);
+    const dwell = toEdge < EDGE_PX * EDGE_OUTER ? EDGE_DWELL_OUTER_MS : EDGE_DWELL_MS;
+    if (inBand && (nearButton(mouse.x, mouse.y) || (!touching && performance.now() - edgeSince < dwell))) ex = ey = 0;
     if (ex) dx = ex;
     if (ey) dy = ey;
     edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
