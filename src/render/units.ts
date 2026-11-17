@@ -1038,7 +1038,11 @@ export class EntityRenderer {
         const fadeIn = Math.min(1, age / fadeMs) ** 2;
         const flash = flashPower * Math.max(0, 1 - Math.abs(age - flashAt) / flashWidth) ** 1.5;
         // It also closes in a little as it fades in.
-        v.ring.scale.setScalar(1 + grow - grow * Math.min(1, age / fadeMs));
+        // Round a human building site it widens to take in the scaffolding while it stands.
+        const wide = v.site?.storeys.some((s) => s.visible) ? (v.ring.userData.site as number) : 1;
+        v.ring.userData.wide = v.ring.userData.wide === undefined ? wide : v.ring.userData.wide + (wide - v.ring.userData.wide) * Math.min(1, dt * 5);
+        const k = (1 + grow - grow * Math.min(1, age / fadeMs)) * v.ring.userData.wide;
+        v.ring.scale.set(k, 1, k);
         dialMat.opacity = 0.6 * fresh * fadeIn;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
@@ -1284,12 +1288,13 @@ export class EntityRenderer {
   }
 
   private drape(ring: Object3D, x: number, z: number, baseY: number): void {
-    const at = `${x.toFixed(2)},${z.toFixed(2)}`;
+    const k = ring.scale.x;
+    const at = `${x.toFixed(2)},${z.toFixed(2)},${k.toFixed(2)}`;
     if (ring.userData.at === at) return;
     ring.userData.at = at;
     for (const m of ring.children as Mesh[]) {
       const pos = m.geometry.getAttribute('position');
-      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + pos.getX(i), z + pos.getZ(i)) - baseY + m.userData.lift);
+      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + k * pos.getX(i), z + k * pos.getZ(i)) - baseY + m.userData.lift);
       pos.needsUpdate = true;
       m.geometry.computeBoundingSphere();
     }
@@ -1411,8 +1416,11 @@ export class EntityRenderer {
       }
     } else if (e.def.kind === 'building' && !(e.def as BuildingDef).warp && e.buildLeft > 0) {
       // Built by workers: a building site (see sync).
-      const made = buildingSite((e.def as BuildingDef).size, new Box3().setFromObject(body).getSize(new Vector3()));
+      const size = new Box3().setFromObject(body).getSize(new Vector3());
+      const made = buildingSite((e.def as BuildingDef).size, size);
       site = made;
+      // The scaffolding (poles, walkways) stands about half a cell outside the model; a little more so its corners stay inside.
+      ring.userData.site = Math.max(1, ((Math.max(size.x, size.z) / 2 + 0.5) * 1.15) / r);
       root.add(made.footing, ...made.storeys);
     } else if (e.def.kind === 'building') {
       // Warped in (Isdaris): it rises inside a wireframe while it materialises.
