@@ -119,13 +119,14 @@ function pcbMap(): CanvasTexture {
       g.translate(ox, oy);
       mg.save();
       mg.translate(ox, oy);
-      // A thin green solder-mask wash over everything, thicker in patches, so the ground still shows.
-      g.fillStyle = 'rgba(30,80,52,0.2)';
+      // One colour only, an old phosphor terminal's green: a dark screen wash over everything, darker in
+      // patches, the ground still showing through, and traces glowing brighter on it.
+      g.fillStyle = 'rgba(6,24,9,0.42)';
       g.fillRect(0, 0, S, S);
       for (const m of masks) {
         const f = g.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
-        f.addColorStop(0, 'rgba(24,74,46,0.35)');
-        f.addColorStop(1, 'rgba(24,74,46,0)');
+        f.addColorStop(0, 'rgba(3,16,5,0.35)');
+        f.addColorStop(1, 'rgba(3,16,5,0)');
         g.fillStyle = f;
         g.fillRect(m.x - m.r, m.y - m.r, m.r * 2, m.r * 2);
       }
@@ -134,13 +135,13 @@ function pcbMap(): CanvasTexture {
       for (const t of traces) {
         g.beginPath();
         t.pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
-        g.strokeStyle = 'rgba(0,0,0,0.4)';
+        g.strokeStyle = 'rgba(0,8,2,0.5)';
         g.lineWidth = t.w + 2;
         g.stroke();
-        g.strokeStyle = '#7f8a44'; // copper seen through the green mask
+        g.strokeStyle = '#1f9a2e'; // phosphor green
         g.lineWidth = t.w;
         g.stroke();
-        g.strokeStyle = 'rgba(255,220,150,0.18)';
+        g.strokeStyle = 'rgba(150,255,150,0.3)'; // brighter core
         g.lineWidth = Math.max(1, t.w * 0.3);
         g.stroke();
         mg.beginPath();
@@ -149,33 +150,33 @@ function pcbMap(): CanvasTexture {
         mg.stroke();
         for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
           // Pad with a drilled hole (via).
-          g.fillStyle = '#b07e3a';
+          g.fillStyle = '#3ccf48';
           g.beginPath();
           g.arc(x, y, t.w + 3, 0, Math.PI * 2);
           g.fill();
-          g.fillStyle = '#16181a';
+          g.fillStyle = '#031006';
           g.beginPath();
           g.arc(x, y, (t.w + 3) * 0.4, 0, Math.PI * 2);
           g.fill();
         }
       }
       for (const ch of chips) {
-        g.fillStyle = '#b8b2a4';
+        g.fillStyle = '#2a8f35';
         for (let px = ch.x + 4; px < ch.x + ch.w - 2; px += 6) {
           g.fillRect(px, ch.y - 4, 3, ch.h + 8); // pins on both long sides
         }
-        g.fillStyle = 'rgba(0,0,0,0.6)';
+        g.fillStyle = 'rgba(0,8,2,0.6)';
         g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
-        g.fillStyle = '#1e2024';
+        g.fillStyle = '#07160a';
         g.fillRect(ch.x, ch.y, ch.w, ch.h);
-        g.fillStyle = 'rgba(255,255,255,0.12)';
+        g.fillStyle = 'rgba(120,255,130,0.14)';
         g.fillRect(ch.x, ch.y, ch.w, 2);
-        g.fillStyle = '#3a3c40';
+        g.fillStyle = '#15501d';
         g.beginPath();
         g.arc(ch.x + 5, ch.y + 5, 2, 0, Math.PI * 2);
         g.fill();
         if (ch.led) {
-          g.fillStyle = 'rgba(90,250,255,1)';
+          g.fillStyle = 'rgba(170,255,170,1)';
           g.beginPath();
           g.arc(ch.x + ch.w - 6, ch.y + ch.h - 6, 2.5, 0, Math.PI * 2);
           g.fill();
@@ -237,7 +238,7 @@ export class PowerNet {
         // Sharp front on the outside, a glow trailing inwards.
         float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
         float glow = texture2D(traces, vMapUv).a * band * 0.22;
-        diffuseColor.rgb += vec3(0.45, 0.9, 1.0) * glow;
+        diffuseColor.rgb += vec3(0.4, 1.0, 0.45) * glow;
         diffuseColor.a = max(diffuseColor.a, glow);`,
       )}`;
     };
