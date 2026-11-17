@@ -30,6 +30,10 @@ Ajoutées le 17 novembre, provisoires aussi :
 - **Humains** : `casernevolante` (Caserne transformée, requiert le Marché), `casernevol` (la même en vol : `speed` règle sa vitesse), capacités `envol` et `atterrissage`.
 - **Isdaris** : `concentrateur` (extension du Trône) et sa capacité `murenergie` : `radius` est la demi-longueur du mur en cases, `duration` sa durée.
 
+Retouches provisoires du 17 novembre, d'après [le rapport d'équilibrage](docs/rapport-equilibrage-2026-11-17.md), à valider par l'équilibreur :
+- `creature` : `hp` 67 → 70 (Humains – Isdaris passe de 67 – 31 à 52 – 46).
+- `dronecombat` : `cost.minerals` 75 → 100, `buildTime` 15 → 18 (Z – Isdaris passe de 84 – 14 à 48 – 50 ; Z – Humains de 90 – 8 à 38 – 60, encore hors cible).
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).

@@ -482,7 +482,9 @@ export class World {
             else this.setOrder(e, { kind: 'attackMove', x: t.x, y: t.y, target: 0 });
           }
         } else {
-          for (const e of fighters) this.setOrder(e, { kind: 'attackMove', x: c.x, y: c.y, target: 0 });
+          // A compact group keeps its formation, as with a plain move.
+          const [ox, oy] = this.formation(fighters);
+          for (const [i, e] of fighters.entries()) this.setOrder(e, { kind: 'attackMove', x: c.x + ox[i], y: c.y + oy[i], target: 0 });
         }
         return;
       }
@@ -939,15 +941,18 @@ export class World {
   private moveGroup(units: Entity[], x: number, y: number): void {
     if (units.length === 0) return;
     // A compact group keeps its formation; a spread-out group converges on the point.
-    const cx = idiv(units.reduce((s, e) => s + e.x, 0), units.length);
-    const cy = idiv(units.reduce((s, e) => s + e.y, 0), units.length);
-    const compact = units.every((e) => dist(e.x, e.y, cx, cy) < 4 * FP);
+    const [ox, oy, compact] = this.formation(units);
     const arrive = idiv(isqrt(units.length) * FP, 2);
-    for (const e of units) {
-      const ox = compact ? e.x - cx : 0;
-      const oy = compact ? e.y - cy : 0;
-      this.setOrder(e, { kind: 'move', x: x + ox, y: y + oy, arrive: compact ? FP / 4 : arrive });
-    }
+    for (const [i, e] of units.entries()) this.setOrder(e, { kind: 'move', x: x + ox[i], y: y + oy[i], arrive: compact ? FP / 4 : arrive });
+  }
+
+  /** Each unit's offset from the group's centre if the group is compact (it keeps its formation), else none. */
+  private formation(units: Entity[]): [number[], number[], boolean] {
+    const n = Math.max(1, units.length);
+    const cx = idiv(units.reduce((s, e) => s + e.x, 0), n);
+    const cy = idiv(units.reduce((s, e) => s + e.y, 0), n);
+    const compact = units.every((e) => dist(e.x, e.y, cx, cy) < 4 * FP);
+    return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
   }
 
   /** While applying a shift-command: new orders go to the end of each unit's list. */

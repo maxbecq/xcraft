@@ -1,7 +1,7 @@
 // Sound effects, synthesised with WebAudio: no audio files. Music is handled separately.
 
 export type Sfx =
-  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click'
+  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'menu' | 'order' | 'target'
   | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive';
 
 const MAX_PER_FRAME = 4;
@@ -11,10 +11,16 @@ export class Audio {
   private master!: GainNode;
   private played = 0;
   private noise!: AudioBuffer;
+  /** Reverb for the interface sounds: a large, bright metal hall, so they ring like a ship's console. */
+  private space!: ConvolverNode;
 
   /** Must be called from a user gesture (browsers keep audio locked until then). */
   start(): void {
-    if (this.ctx) return;
+    // iOS only unlocks audio at the end of a touch: a context made earlier stays suspended until then.
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      return;
+    }
     this.ctx = new AudioContext();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.5;
@@ -22,6 +28,23 @@ export class Audio {
     this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate / 4, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // Impulse: decaying stereo noise after a short pre-delay, its highs dying faster (a one-pole lowpass closing).
+    const rate = this.ctx.sampleRate;
+    const ir = this.ctx.createBuffer(2, Math.floor(rate * 1.6), rate);
+    for (let c = 0; c < 2; c++) {
+      const h = ir.getChannelData(c);
+      let lp = 0;
+      for (let i = Math.floor(rate * 0.012); i < h.length; i++) {
+        const k = i / rate;
+        lp += (Math.random() * 2 - 1 - lp) * Math.max(0.05, 0.9 - k * 0.7);
+        h[i] = lp * Math.exp(-k * 3.6);
+      }
+    }
+    this.space = this.ctx.createConvolver();
+    this.space.buffer = ir;
+    const wet = this.ctx.createGain();
+    wet.gain.value = 0.55;
+    this.space.connect(wet).connect(this.master);
   }
 
   /** Call once per frame to reset the per-frame sound budget. */
@@ -88,6 +111,43 @@ export class Audio {
       o.start(t);
       o.stop(t + decay + 0.02);
     };
+    /** A voice with its own envelope, dry and sent into the reverb by `wet`. */
+    const voice = (peak: number, decay: number, delay: number, wet: number) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + delay);
+      g.gain.exponentialRampToValueAtTime(peak * volume, t + delay + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + delay + decay);
+      g.connect(this.master);
+      const send = ctx.createGain();
+      send.gain.value = wet;
+      g.connect(send).connect(this.space);
+      return g;
+    };
+    /** A glassy ping: steady inharmonic sine partials (no pitch glide), ringing into the reverb. */
+    const ping = (freqs: number[], peak: number, decay: number, delay = 0, wet = 0.7) => {
+      const g = voice(peak, decay, delay, wet);
+      freqs.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        o.frequency.value = f;
+        const p = ctx.createGain();
+        p.gain.value = 1 / (i + 1);
+        o.connect(p).connect(g);
+        o.start(t + delay);
+        o.stop(t + delay + decay + 0.02);
+      });
+    };
+    /** A digital tick: a few milliseconds of band-passed noise, also sent into the reverb. */
+    const tick = (freq: number, peak: number, decay = 0.008, delay = 0, wet = 0.5) => {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = freq;
+      f.Q.value = 2;
+      src.connect(f).connect(voice(peak, decay, delay, wet));
+      src.start(t + delay);
+      src.stop(t + delay + decay + 0.02);
+    };
     switch (sfx) {
       case 'ranged': // a chemical rifle shot: a sharp crack, a low punch, a short rolling tail
         burst('highpass', 3000, 0.22, 0.05);
@@ -123,10 +183,26 @@ export class Audio {
         osc('sawtooth', 440, 330, 0.25);
         setTimeout(() => this.ctx && this.tone(330, 0.3, 'sawtooth'), 220);
         break;
-      case 'click': // a soft, short tick: present but discreet
-        env(0.035, 0.03);
-        osc('sine', 2400, 1700, 0.02);
-        burst('highpass', 6000, 0.012, 0.015);
+      // Interface: clean digital ticks and glassy pings at steady pitch, ringing in the console's reverb.
+      case 'click': // a relay tick with a faint glass ring: present but discreet
+        tick(7000, 0.05, 0.006);
+        ping([3150, 4730], 0.012, 0.07, 0.002, 0.6);
+        break;
+      case 'menu': // a choice made: a soft low latch, a tick, then a bright ringing chord that fades in the hall
+        ping([150], 0.12, 0.06, 0, 0.2);
+        tick(3200, 0.07, 0.012);
+        ping([1046, 1574, 2793, 4186], 0.035, 0.32, 0.006, 0.9);
+        tick(6400, 0.025, 0.006, 0.055, 0.8);
+        break;
+      case 'order': // an order sent: two quick data ticks and a short ping
+        tick(4200, 0.05, 0.007);
+        tick(5200, 0.035, 0.007, 0.04);
+        ping([1760, 2650], 0.012, 0.1, 0.04, 0.6);
+        break;
+      case 'target': // an attack order: a harder crack over a low hit and a darker, dissonant ring
+        ping([95], 0.16, 0.08, 0, 0.3);
+        tick(1900, 0.09, 0.02);
+        ping([622, 933, 1408], 0.03, 0.22, 0.004, 0.7);
         break;
       case 'ray': // Isdaris light rifle: a bright falling chirp with a shimmer
         env(0.16, 0.18);

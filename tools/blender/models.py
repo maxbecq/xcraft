@@ -908,8 +908,14 @@ def reservepsy(p):
     over it, a thin cyan seam where the stored energy shows, and the team colour on two plain pylons."""
     cyl(p["ivory"], 0.92, 0.22, (0, 0, 0.11), verts=24)
     cyl(p["ivory"], 0.78, 0.42, (0, 0, 0.43), verts=24)
-    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.3), seg=24)
-    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.62), seg=24)
+    # Two levels of dotted light, separate parts so the game turns them (in opposite directions).
+    for k, z in enumerate((0.3, 0.62)):
+        part = f"psyband_{k}"
+        JOINTS[part] = (0, 0, z)
+        ring(p["chrome"], 0.8, 0.03, (0, 0, z), seg=24, name=part)
+        for i in range(12):
+            a = (i + 0.5 * k) / 12 * math.tau
+            box(p["cyan_glow"], (0.022, 0.13, 0.04), (math.cos(a) * 0.83, math.sin(a) * 0.83, z), rot=(0, 0, a), name=part)
     cyl(p["cyan_glow"], 0.79, 0.04, (0, 0, 0.67), verts=24)  # energy seam
     ball(p["concrete"], 0.74, (0, 0, 0.68), scale=(1, 1, 0.32), seg=24, rings=8)  # flat shell
     for s in (-1, 1):
@@ -1265,19 +1271,307 @@ DOODADS = {
     "hovercar": hovercar, "walldoor": walldoor, "wallpanel": wallpanel, "wallpipe": wallpipe, "shopfront": shopfront,
 }
 
+def canvas_texture(name):
+    """A tileable 256px canvas, near neutral so the material's colour shows through: an over-under plain weave
+    (8px threads, one repeat per box_uv tile), uneven slubbed threads and sun-faded patches."""
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    import numpy as np
+    S, T = 256, 8
+    rng = np.random.default_rng(11)
+    yy, xx = np.mgrid[0:S, 0:S]
+    over = ((xx // T + yy // T) % 2) == 0
+    h = np.where(over, np.sin(np.pi * (xx % T + 0.5) / T), np.sin(np.pi * (yy % T + 0.5) / T))
+    lum = 0.74 + 0.22 * h
+    slub = np.where(over, _noise(rng, S, 4, (1, 32)), _noise(rng, S, 4, (32, 1)))
+    lum = lum * (0.94 + 0.12 * slub) * (0.86 + 0.2 * _fbm(rng, S, 3, 4))
+    rgb = np.clip(np.stack([lum * 1.01, lum, lum * 0.97], -1), 0, 1)
+    img = bpy.data.images.new(name, S, S)
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(np.concatenate([rgb, np.ones((S, S, 1))], -1).astype(np.float32).ravel())
+    img.pack()
+    return img
+
+
+def awning(team, linen, front=-1.1, rear=1.1, zf=1.67, zr=1.9, half=1.35, posts=(-1.05, 0.0, 1.05), stripes=7,
+           over=0.18, sag=0.17, hang=0.11, scallop=0.08, wave=0.012):
+    """Striped canvas laid over two beams: it sags between them (deeper between the posts), its overhangs droop,
+    it ripples a little, and a scalloped valance hangs front and back, one tongue per stripe."""
+    def z(x, y):
+        t = (y - front) / (rear - front)
+        h = zf + (zr - zf) * t
+        span = abs(math.sin(math.pi * (x - posts[0]) / (posts[1] - posts[0])))
+        if 0 <= t <= 1:
+            h -= sag * 4 * t * (1 - t) * (0.7 + 0.3 * span)
+        else:
+            d = (front - y) if t < 0 else (y - rear)
+            h -= 0.7 * d + 1.8 * d * d
+        dx = max(0.0, abs(x) - abs(posts[-1]))
+        return h - 0.9 * dx * dx + wave * math.sin(x * 9 + y * 4) + 0.6 * wave * math.sin(y * 13 - x * 3)
+    w = 2 * half / stripes
+    nu, nv, nh = 6, 20, 3
+    y0, y1 = front - over, rear + over
+    rows = [("f", k / nh) for k in range(nh, 0, -1)] + [("c", y0 + (y1 - y0) * j / nv) for j in range(nv + 1)] + [("r", k / nh) for k in range(1, nh + 1)]
+    for s in range(stripes):
+        verts, faces, cols = [], [], nu + 1
+        for kind, v in rows:
+            for i in range(cols):
+                u = i / nu
+                x = -half + (s + u) * w
+                drop = (hang + scallop * math.sin(math.pi * u)) * v
+                if kind == "c":
+                    verts.append((x, v, z(x, v)))
+                elif kind == "f":
+                    verts.append((x, y0 - 0.04 * v, z(x, y0) - drop))
+                else:
+                    verts.append((x, y1 + 0.04 * v, z(x, y1) - drop))
+        for r in range(len(rows) - 1):
+            for i in range(nu):
+                a = r * cols + i
+                faces.append((a, a + 1, a + cols + 1, a + cols))
+        me = bpy.data.meshes.new("awning")
+        me.from_pydata(verts, [], faces)
+        me.update()
+        o = bpy.data.objects.new("awning", me)
+        bpy.context.collection.objects.link(o)
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        mod = o.modifiers.new("cloth", "SOLIDIFY")
+        mod.thickness = 0.025
+        mod.offset = 0
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        o.data.materials.append(team if s % 2 == 0 else linen)
+        for poly in o.data.polygons:
+            poly.use_smooth = True
+
+
+def glow_vein(p, glow, pts, r=0.02, into=(0, 1, 0)):
+    """A thin glass vein of team light in a dark iron gutter (set back into the wall along `into`), brass clamps
+    at the ends and about every 40 cm."""
+    back = lambda q: (q[0] + into[0] * r, q[1] + into[1] * r, q[2] + into[2] * r)
+    last = None
+    for a, b in zip(pts, pts[1:]):
+        pipe(p["dark"], back(a), back(b), r=r * 1.3, verts=8)
+        pipe(glow, a, b, r=r, verts=8)
+    for q in pts:
+        if last is None or (Vector(q) - Vector(last)).length > 0.4 or q is pts[-1]:
+            ball(p["bronze"], r * 2.2, q, seg=8, rings=4)
+            last = q
+
+
+def armillary(p, glow, loc, s=1.0):
+    """A brass armillary sphere on a stand, its core lit in the team's colour."""
+    x, y, z = loc
+    cyl(p["dark"], 0.12 * s, 0.1 * s, (x, y, z + 0.05 * s), verts=10)
+    cyl(p["bronze"], 0.03 * s, 0.35 * s, (x, y, z + 0.25 * s), verts=8)
+    c = (x, y, z + 0.62 * s)
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, 0))
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, math.radians(60)))
+    ring(p["bronze"], 0.26 * s, 0.022 * s, c, rot=(math.radians(23), 0, 0))
+    ball(glow, 0.09 * s, c)
+
+
+def gear(p, loc, r=0.17, teeth=10):
+    """A brass cog flat on a wall facing -y."""
+    x, y, z = loc
+    ring(p["bronze"], r * 0.82, 0.04, (x, y, z), rot=(math.radians(90), 0, 0))
+    cyl(p["dark"], 0.05, 0.06, (x, y - 0.01, z), rot=(math.radians(90), 0, 0), verts=12)
+    for i in range(4):
+        box(p["bronze"], (r * 1.6, 0.03, 0.03), (x, y, z), rot=(0, i * math.pi / 4, 0))
+    for i in range(teeth):
+        a = i / teeth * math.tau
+        box(p["bronze"], (0.06, 0.05, 0.06), (x + math.cos(a) * r, y, z + math.sin(a) * r), rot=(0, -a, 0))
+
+
+def ray(origin, d):
+    """First hit of a ray in the scene: (location, normal) or None."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    hit, loc, nor, *_ = bpy.context.scene.ray_cast(dg, Vector(origin), Vector(d))
+    return (loc, nor) if hit else None
+
+
+def roof(x, y):
+    h = ray((x, y, 20), (0, 0, -1))
+    return h[0].z if h else 0.0
+
+
+def wall(x, z, d=(0, 1, 0)):
+    """Where a ray along d (from outside) meets the wall at height z: its depth along d."""
+    d = Vector(d)
+    o = Vector((x, 0, z)) if d.y else Vector((0, x, z))
+    h = ray(o - d * 20, d)
+    return h[0].dot(d) if h else 0.0
+
+
+def traced_vein(p, glow, a, b, d, pad=0.03, step=0.025, r=0.02, tol=0.06):
+    """A glow vein that hugs a wall: rays cast along d from points on the line a-b. Small bumps in the masonry
+    are ignored; where the wall really steps in or out (over `tol`) the vein turns a right angle round the edge,
+    like pipework clamped to the stone. Collinear points merge."""
+    a, b, d = Vector(a), Vector(b), Vector(d).normalized()
+    n = max(2, int((b - a).length / step))
+    runs, pts, prev = [], [], None
+    for i in range(n + 1):
+        o = a + (b - a) * (i / n) - d * 20
+        h = ray(o, d)
+        if not h:
+            if len(pts) > 1:
+                runs.append(pts)
+            pts, prev = [], None
+            continue
+        depth = h[0].dot(d) - pad
+        if prev is not None and abs(depth - prev[1]) <= tol:
+            depth = prev[1]
+        q = o + d * (depth - o.dot(d))
+        if prev is not None and abs(depth - prev[1]) > tol:
+            if abs(depth - prev[1]) > 0.7:  # off the building: start a new run
+                if len(pts) > 1:
+                    runs.append(pts)
+                pts = []
+            else:
+                m = (prev[0] + q) / 2
+                pts.append(m + d * (prev[1] - m.dot(d)))
+                pts.append(m + d * (depth - m.dot(d)))
+        pts.append(q)
+        prev = (q, depth)
+    if len(pts) > 1:
+        runs.append(pts)
+    for pts in runs:
+        if (pts[-1] - pts[0]).length < 0.3:
+            continue  # a scrap of wall between gaps: a stub of vein there reads as noise
+        out = [pts[0]]
+        for j in range(1, len(pts) - 1):
+            u, v = pts[j] - out[-1], pts[j + 1] - pts[j]
+            if u.length < 1e-4 or v.length < 1e-4 or u.normalized().dot(v.normalized()) < 0.999:
+                out.append(pts[j])
+        out.append(pts[-1])
+        glow_vein(p, glow, [tuple(q) for q in out], r=r, into=tuple(d))
+
+
+def dress_conseil(p, glow):
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-1.9, 0, 1.02), (1.9, 0, 1.02), Y)
+    for x in (-1.9, 1.9):
+        traced_vein(p, glow, (x, 0, 0.1), (x, 0, 1.02), Y)
+    traced_vein(p, glow, (0, -1.7, 1.02), (0, 1.7, 1.02), X)
+    traced_vein(p, glow, (0, -1.7, 1.02), (0, 1.7, 1.02), NX)
+    gear(p, (1.3, wall(1.3, 1.5) - 0.03, 1.5), r=0.3, teeth=14)
+    armillary(p, glow, (-0.4, -0.3, roof(-0.4, -0.3)), 1.6)
+
+
+def dress_caserne(p, glow):
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-1.25, 0, 0.98), (1.25, 0, 0.98), Y)
+    for x in (-1.2, 1.2):
+        traced_vein(p, glow, (x, 0, 0.35), (x, 0, 0.98), Y)
+    traced_vein(p, glow, (0, -1.15, 0.98), (0, 1.15, 0.98), X)
+    traced_vein(p, glow, (0, -1.15, 0.98), (0, 1.15, 0.98), NX)
+    gear(p, (0.75, wall(0.75, 1.3) - 0.03, 1.3), r=0.2, teeth=12)
+    armillary(p, glow, (-0.6, 0.0, roof(-0.6, 0.0)), 1.2)
+
+
+def band(p, glow, z, hx, hy, z0=0.15, corners=True, tol=0.06):
+    """The usual dressing: a vein round the front and both sides at height z (the building spans +-hx, +-hy),
+    and down the two front corners to the ground."""
+    Y, X, NX = (0, 1, 0), (-1, 0, 0), (1, 0, 0)
+    traced_vein(p, glow, (-hx, 0, z), (hx, 0, z), Y, tol=tol)
+    traced_vein(p, glow, (0, -hy, z), (0, hy, z), X, tol=tol)
+    traced_vein(p, glow, (0, -hy, z), (0, hy, z), NX, tol=tol)
+    if corners:
+        for x in (-hx + 0.08, hx - 0.08):
+            traced_vein(p, glow, (x, 0, z0), (x, 0, z), Y, tol=tol)
+
+
+def front_gear(p, x, z, r=0.17, teeth=10):
+    gear(p, (x, wall(x, z) - 0.03, z), r=r, teeth=teeth)
+
+
+def dress_grenier(p, glow):
+    band(p, glow, 0.62, 0.9, 0.86)
+    front_gear(p, 0.55, 0.95, 0.13, 9)
+
+
+def dress_mine(p, glow):
+    band(p, glow, 0.72, 1.05, 1.15)
+    front_gear(p, -0.6, 1.0, 0.16)
+
+
+def dress_forge(p, glow):
+    band(p, glow, 0.95, 1.3, 1.0)
+    front_gear(p, 0.75, 1.4, 0.18, 11)
+    armillary(p, glow, (-0.2, 0.2, roof(-0.2, 0.2)), 1.0)
+
+
+def dress_fortin(p, glow):
+    band(p, glow, 0.62, 0.9, 0.8)
+    front_gear(p, 0.55, 1.15, 0.13, 9)
+
+
+def dress_tour(p, glow):
+    band(p, glow, 1.15, 0.88, 0.9)
+    front_gear(p, 0.45, 1.75, 0.13, 9)
+
+
+def dress_metallurgie(p, glow):
+    band(p, glow, 0.62, 1.35, 0.92)
+    front_gear(p, -0.85, 1.05, 0.16)
+
+
+def dress_alchimisterie(p, glow):
+    band(p, glow, 0.8, 1.25, 1.18, tol=0.14)
+    front_gear(p, 0.8, 1.25, 0.16)
+
+
+def dress_creaturium(p, glow):
+    band(p, glow, 0.5, 1.38, 1.26, corners=False, tol=0.3)
+    armillary(p, glow, (0.0, 0.0, roof(0.0, 0.0)), 1.1)
+
+
+#: Meshy buildings dressed with Blender parts: veins of team light fitted to their walls by ray casts and a
+#: little brass mechanism. Only the parts are exported (`<type>-dress.glb`); the game adds them to the model.
+DRESS = {
+    "conseil": dress_conseil, "caserne": dress_caserne, "grenier": dress_grenier, "mine": dress_mine, "forge": dress_forge,
+    "fortin": dress_fortin, "tour": dress_tour, "metallurgie": dress_metallurgie, "alchimisterie": dress_alchimisterie,
+    "creaturium": dress_creaturium,
+}
+
+
+def dress(name, fn):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    MATS.clear()
+    p = palette()
+    bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{name}-meshy.glb"))
+    shell = set(bpy.context.scene.objects)
+    bpy.context.view_layer.update()
+    fn(p, mat("team_glow", 0x3A7BD5, emission=0x3A7BD5))
+    for o in shell:
+        bpy.data.objects.remove(o)
+    return [join([o for o in bpy.context.scene.objects if o.type == "MESH"], f"{name}-dress")]
+
+
 def marche(p):
-    """Market (notice: trade and the economy): a stone floor under a team-striped awning on timber posts,
-    a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still."""
+    """Market (notice: trade and the economy): a stone floor under a team-striped canvas awning on timber posts,
+    a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still. A touch of the
+    camp's alchemical engineering: thin veins of team light along the beam, posts and counter, a cog on the
+    counter and a brass armillary sphere on a mast."""
     box(p["stone_dark"], (2.8, 2.8, 0.16), (0, 0, 0.08))
     box(p["stone"], (2.5, 2.5, 0.06), (0, 0, 0.19))
     for x, y in ((-1.05, -1.05), (1.05, -1.05), (1.05, 1.05), (-1.05, 1.05), (0, -1.05), (0, 1.05)):
         cyl(p["wood"], 0.07, 1.5, (x, y, 0.95), verts=8)
-    # Striped awning: alternating team and linen slats, sloping to the front.
-    for i in range(7):
-        x = -1.15 + i * 0.383
-        box(p["team"] if i % 2 == 0 else p["linen"], (0.385, 2.5, 0.05), (x, 0, 1.75), rot=(math.radians(-9), 0, 0))
+    canvas = canvas_texture("canvas_tex")
+    # "team_canvas" is recoloured per player in game, keeping its weave.
+    awning(textured("team_canvas", 0x3A7BD5, canvas, 0.0, 0.9), textured("linen_canvas", 0xDDD2B8, canvas, 0.0, 0.9))
     box(p["wood"], (2.7, 0.08, 0.08), (0, -1.1, 1.62))
     box(p["wood"], (2.7, 0.08, 0.08), (0, 1.1, 1.85))
+    # "team_glow" lights up in the player's colour in game.
+    glow = mat("team_glow", 0x3A7BD5, emission=0x3A7BD5)
+    glow_vein(p, glow, [(-1.3, -1.165, 1.6), (1.3, -1.165, 1.6)])
+    for x in (-1.05, 1.05):
+        glow_vein(p, glow, [(x, -1.14, 1.56), (x, -1.14, 0.24)])
+    glow_vein(p, glow, [(-0.68, -0.795, 0.76), (0.68, -0.795, 0.76)], r=0.016)
+    gear(p, (-0.52, -0.79, 0.5))
+    cyl(p["bronze"], 0.035, 0.6, (1.05, 1.05, 1.98), verts=8)
+    armillary(p, glow, (1.05, 1.05, 2.22), 0.75)
     # Stone counter with a brass balance.
     box(p["stone"], (1.4, 0.45, 0.6), (0, -0.55, 0.52))
     box(p["wood"], (1.5, 0.5, 0.05), (0, -0.55, 0.84))
@@ -2033,5 +2327,11 @@ for name, fn in MODELS.items():
     export(objs, os.path.join(OUT, f"{name}.glb"))
     icon(objs, os.path.join(ICONS, f"{name}.png"))
     print(f"MODEL {name}: {sum(len(o.data.polygons) for o in objs)} faces, parts {[o.name for o in objs[1:]]}")
+for name, fn in DRESS.items():
+    if ONLY and f"{name}-dress" not in ONLY:
+        continue
+    objs = dress(name, fn)
+    export(objs, os.path.join(OUT, f"{name}-dress.glb"))
+    print(f"DRESS {name}: {sum(len(o.data.polygons) for o in objs)} faces")
 if not ONLY or "doodads" in ONLY:
     export_doodads(os.path.join(OUT, "doodads.glb"))

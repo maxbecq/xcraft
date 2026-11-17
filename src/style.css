@@ -1,4 +1,4 @@
-/* Human UI: scavenged steel plates, rivets and hazard stripes (Mad Max meets Terran). */
+/* Base UI: scavenged steel plates, rivets and hazard stripes (Mad Max meets Terran); each camp reskins it below. */
 :root {
   --plate: linear-gradient(180deg, #5b5246 0%, #3c362e 45%, #2b2620 100%);
   --edge: #7a6a50;
@@ -45,7 +45,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
   box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .map-slot { display: grid; place-items: center; overflow: hidden; }
-.minimap { cursor: crosshair; }
+.minimap { cursor: var(--minimap, crosshair); }
 
 .hud-panel { padding: 10px 12px; overflow: hidden; }
 .hud-panel .name { font: 600 24px/1 var(--title); letter-spacing: 0.04em; color: var(--amber); margin: 2px 0 4px; text-transform: uppercase; }
@@ -130,7 +130,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .menu button:hover, .hud-banner button:hover, .pause-box button:hover { border-color: var(--amber); color: var(--amber); }
-.tools { position: fixed; top: 8px; left: 12px; display: flex; gap: 6px; }
+.tools { position: fixed; top: 8px; left: 12px; display: flex; align-items: center; gap: 6px; }
 .tool { min-width: 0; padding: 5px 12px; font-size: 18px; }
 .pause { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }
 .pause-box {
@@ -202,15 +202,19 @@ body.touch { -webkit-tap-highlight-color: transparent; }
 /* Phones held upright: minimap and selection on one row, commands full width below. */
 @media (orientation: portrait) and (max-width: 820px) {
   .console {
-    height: auto; grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: 96px 98px; gap: 6px;
-    padding: 8px 8px calc(6px + env(safe-area-inset-bottom));
+    height: auto; grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: 84px 86px; gap: 5px;
+    padding: 6px 8px calc(4px + env(safe-area-inset-bottom));
   }
   .minimap { width: 76px; height: 76px; }
-  .hud-panel .portrait { display: block; width: 64px; height: 64px; margin: 0 8px 0 0; }
+  .hud-panel .portrait { display: block; width: 60px; height: 60px; margin: 0 8px 0 0; }
   .map-slot { align-self: start; height: 84px; }
-  .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 46px; }
-  .cmd img { width: 30px; height: 30px; }
-  .hud-toasts { bottom: calc(220px + env(safe-area-inset-bottom)); width: 90vw; }
+  .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 40px; }
+  .cmd img { width: 28px; height: 28px; }
+  .hud-toasts { bottom: calc(196px + env(safe-area-inset-bottom)); width: 90vw; }
+  /* Watching the AI: no commands, so no row for them. */
+  body.spectate .console { grid-template-rows: 84px; }
+  body.spectate .hud-card { display: none; }
+  body.spectate .hud-toasts { bottom: calc(110px + env(safe-area-inset-bottom)); }
   .hud-bar { font-size: 15px; gap: 8px; padding: 3px 8px 5px; right: 6px; }
   /* Icons only, so the tools and the resources share the top line. */
   .tools { top: calc(4px + env(safe-area-inset-top)); left: 6px; gap: 2px; }
@@ -219,11 +223,11 @@ body.touch { -webkit-tap-highlight-color: transparent; }
   .menu h1 { font-size: 56px; }
 }
 
-/* ---------------------------------------------------------------- Human screens: tired green LCD, 1980s terminal */
+/* ---------------------------------------------------------------- Z screens: tired LCD, 1980s terminal */
 
-/* The rusty console stays; what is shown on it is a worn phosphor screen: green on black, scanlines,
-   a soft glow and a little flicker. Isdaris keep their own interface. */
-body:not(.isdaris) {
+/* The rusty console stays; what is shown on it is a worn phosphor screen: scanlines, a soft glow and
+   a little flicker (recoloured cyan for the Z below). Humans and Isdaris have their own interface. */
+body.z {
   --phos: #8dff8a;
   --phos-dim: #3c8a44;
   --phos-dark: #173a1d;
@@ -234,105 +238,105 @@ body:not(.isdaris) {
 }
 
 /* Screens set in the console: glass, scanlines and a dark vignette over whatever they show. */
-body:not(.isdaris) .slot { background: var(--screen); border-color: #2c2a22; border-width: 3px; border-radius: 10px / 14px; box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.08); }
-body:not(.isdaris) .slot::after {
+body.z .slot { background: var(--screen); border-color: #2c2a22; border-width: 3px; border-radius: 10px / 14px; box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.08); }
+body.z .slot::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: var(--scan), radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
   animation: lcd-flicker 7s steps(1) infinite;
 }
 @keyframes lcd-flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.75; } 98% { opacity: 0.95; } }
-@media (prefers-reduced-motion: reduce) { body:not(.isdaris) .slot::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { body.z .slot::after { animation: none; } }
 
-body:not(.isdaris) .hud-panel { font: 16px/1.05 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
-body:not(.isdaris) .hud-panel .name { font: 22px/1 var(--lcd); letter-spacing: 0.06em; color: var(--phos); }
-body:not(.isdaris) .hud-panel .name::before { content: '> '; color: var(--phos-dim); }
-body:not(.isdaris) .hud-panel .info { opacity: 1; color: var(--phos); }
+body.z .hud-panel { font: 16px/1.05 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
+body.z .hud-panel .name { font: 22px/1 var(--lcd); letter-spacing: 0.06em; color: var(--phos); }
+body.z .hud-panel .name::before { content: '> '; color: var(--phos-dim); }
+body.z .hud-panel .info { opacity: 1; color: var(--phos); }
 /* Bars become rows of LCD segments. */
-body:not(.isdaris) .hud-panel .hp, body:not(.isdaris) .hud-panel .bar { height: 10px; background: var(--phos-dark); border: 1px solid var(--phos-dim); border-radius: 0; }
-body:not(.isdaris) .hud-panel .hp > div, body:not(.isdaris) .hud-panel .bar > div, body:not(.isdaris) .hud-panel .hp.shield > div {
+body.z .hud-panel .hp, body.z .hud-panel .bar { height: 10px; background: var(--phos-dark); border: 1px solid var(--phos-dim); border-radius: 0; }
+body.z .hud-panel .hp > div, body.z .hud-panel .bar > div, body.z .hud-panel .hp.shield > div {
   background: repeating-linear-gradient(90deg, var(--phos) 0 6px, transparent 6px 8px); box-shadow: var(--glow);
 }
 /* Pictures on the screen are drawn in phosphor too. */
-body:not(.isdaris) .hud-panel img, body:not(.isdaris) .hud-panel canvas.portrait, body:not(.isdaris) .cmd img { filter: grayscale(1) sepia(1) hue-rotate(65deg) saturate(3.2) brightness(0.95) contrast(1.15); }
-body:not(.isdaris) .hud-panel .portrait, body:not(.isdaris) .hud-panel .queue span, body:not(.isdaris) .hud-panel .tile { background: rgba(141, 255, 138, 0.05); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none; }
-body:not(.isdaris) .hud-panel .tile { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--phos) calc(var(--hp) * 100%), #ff5a3a); }
-body:not(.isdaris) .hud-panel .tile:hover { border-color: var(--phos); }
+body.z .hud-panel img, body.z .hud-panel canvas.portrait, body.z .cmd img { filter: grayscale(1) sepia(1) hue-rotate(65deg) saturate(3.2) brightness(0.95) contrast(1.15); }
+body.z .hud-panel .portrait, body.z .hud-panel .queue span, body.z .hud-panel .tile { background: rgba(141, 255, 138, 0.05); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none; }
+body.z .hud-panel .tile { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--phos) calc(var(--hp) * 100%), #ff5a3a); }
+body.z .hud-panel .tile:hover { border-color: var(--phos); }
 
 /* Commands: cells of the terminal, inverted when pointed at. */
-body:not(.isdaris) .cmd {
+body.z .cmd {
   background: rgba(141, 255, 138, 0.04); color: var(--phos); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none;
   font: 14px/1 var(--lcd); text-shadow: var(--glow);
 }
-body:not(.isdaris) .cmd:hover { background: var(--phos); color: #04120a; border-color: var(--phos); text-shadow: none; }
-body:not(.isdaris) .cmd:hover img { filter: grayscale(1) brightness(0.15); }
-body:not(.isdaris) .cmd.off { filter: none; opacity: 0.38; }
-body:not(.isdaris) .cmd kbd { font: 12px/1 var(--lcd); color: var(--phos); }
-body:not(.isdaris) .cmd kbd::before { content: '['; }
-body:not(.isdaris) .cmd kbd::after { content: ']'; }
-body:not(.isdaris) .cmd:hover kbd, body:not(.isdaris) .cmd:hover small { color: #04120a; }
-body:not(.isdaris) .cmd small { font: 12px/1 var(--lcd); color: var(--phos); }
+body.z .cmd:hover { background: var(--phos); color: #04120a; border-color: var(--phos); text-shadow: none; }
+body.z .cmd:hover img { filter: grayscale(1) brightness(0.15); }
+body.z .cmd.off { filter: none; opacity: 0.38; }
+body.z .cmd kbd { font: 12px/1 var(--lcd); color: var(--phos); }
+body.z .cmd kbd::before { content: '['; }
+body.z .cmd kbd::after { content: ']'; }
+body.z .cmd:hover kbd, body.z .cmd:hover small { color: #04120a; }
+body.z .cmd small { font: 12px/1 var(--lcd); color: var(--phos); }
 
 /* Top displays: an LCD strip set in the steel plate. */
-body:not(.isdaris) .hud-bar { gap: 0; padding: 6px 10px 8px; font: 20px/1 var(--lcd); letter-spacing: 0.04em; }
-body:not(.isdaris) .hud-bar .res {
+body.z .hud-bar { gap: 0; padding: 6px 10px 8px; font: 20px/1 var(--lcd); letter-spacing: 0.04em; }
+body.z .hud-bar .res {
   padding: 2px 10px; color: var(--phos); text-shadow: var(--glow);
   background: var(--scan), var(--screen); border: 2px solid #1d1b16; box-shadow: inset 0 0 8px #000;
 }
-body:not(.isdaris) .hud-bar .res + .res { border-left: 0; }
-body:not(.isdaris) .res i { background: var(--phos) !important; filter: drop-shadow(0 0 3px rgba(141, 255, 138, 0.7)); }
-body:not(.isdaris) .res.sup.full { color: #ffb347; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); animation: lcd-blink 1s steps(1) infinite; }
-body:not(.isdaris) .res.sup.full i { background: #ffb347 !important; }
+body.z .hud-bar .res + .res { border-left: 0; }
+body.z .res i { background: var(--phos) !important; filter: drop-shadow(0 0 3px rgba(141, 255, 138, 0.7)); }
+body.z .res.sup.full { color: #ffb347; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); animation: lcd-blink 1s steps(1) infinite; }
+body.z .res.sup.full i { background: #ffb347 !important; }
 @keyframes lcd-blink { 50% { opacity: 0.35; } }
 
-body:not(.isdaris) .tool {
+body.z .tool {
   font: 17px/1 var(--lcd); letter-spacing: 0.04em; color: var(--phos); text-shadow: var(--glow);
   background: var(--scan), var(--screen); border: 2px solid #4a4436; border-radius: 3px; box-shadow: inset 0 0 8px #000, 0 2px 6px rgba(0, 0, 0, 0.6);
 }
-body:not(.isdaris) .tool:hover { background: var(--phos); color: #04120a; text-shadow: none; }
+body.z .tool:hover { background: var(--phos); color: #04120a; text-shadow: none; }
 
 /* Messages print like terminal lines. */
-body:not(.isdaris) .hud-toast { font: 17px/1.1 var(--lcd); color: var(--phos); text-shadow: var(--glow); background: var(--scan), rgba(4, 14, 6, 0.9); border: 1px solid var(--phos-dim); border-radius: 0; }
-body:not(.isdaris) .hud-toast::before { content: '> '; }
-body:not(.isdaris) .hud-toast.alert { color: #ffb347; border-color: #a86a1e; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); font-size: 24px; }
-body:not(.isdaris) .help { font: 15px/1.25 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
-body:not(.isdaris) .pause-box { background: var(--scan), var(--screen); border: 3px solid #4a4436; border-radius: 10px / 14px; box-shadow: inset 0 0 30px #000, 0 8px 30px rgba(0, 0, 0, 0.7); }
-body:not(.isdaris) .pause-box h2 { font: 50px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow); animation: lcd-blink 1.6s steps(1) infinite; }
-body:not(.isdaris) .pause-box button {
+body.z .hud-toast { font: 17px/1.1 var(--lcd); color: var(--phos); text-shadow: var(--glow); background: var(--scan), rgba(4, 14, 6, 0.9); border: 1px solid var(--phos-dim); border-radius: 0; }
+body.z .hud-toast::before { content: '> '; }
+body.z .hud-toast.alert { color: #ffb347; border-color: #a86a1e; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); font-size: 24px; }
+body.z .help { font: 15px/1.25 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
+body.z .pause-box { background: var(--scan), var(--screen); border: 3px solid #4a4436; border-radius: 10px / 14px; box-shadow: inset 0 0 30px #000, 0 8px 30px rgba(0, 0, 0, 0.7); }
+body.z .pause-box h2 { font: 50px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow); animation: lcd-blink 1.6s steps(1) infinite; }
+body.z .pause-box button {
   min-width: 280px; padding: 6px 20px; font: 23px/1 var(--lcd); color: var(--phos); text-shadow: var(--glow);
   background: rgba(141, 255, 138, 0.04); border: 1px solid var(--phos-dim); border-radius: 0; box-shadow: none;
 }
-body:not(.isdaris) .pause-box button:hover { background: var(--phos); color: #04120a; text-shadow: none; }
-body:not(.isdaris) .help h3 { font: 22px/1 var(--lcd); color: var(--phos); }
-body:not(.isdaris) .help kbd { font: 13px var(--lcd); color: var(--phos); background: var(--phos-dark); border-color: var(--phos-dim); border-radius: 0; }
+body.z .pause-box button:hover { background: var(--phos); color: #04120a; text-shadow: none; }
+body.z .help h3 { font: 22px/1 var(--lcd); color: var(--phos); }
+body.z .help kbd { font: 13px var(--lcd); color: var(--phos); background: var(--phos-dark); border-color: var(--phos-dim); border-radius: 0; }
 
 @media (max-height: 560px), (max-width: 820px) {
-  body:not(.isdaris) .hud-panel { font-size: 16px; }
-  body:not(.isdaris) .hud-panel .name { font-size: 21px; }
-  body:not(.isdaris) .hud-bar { font-size: 19px; padding: 3px 6px 5px; }
-  body:not(.isdaris) .hud-bar .res { padding: 1px 6px; }
-  body:not(.isdaris) .tool { font-size: 17px; }
-  body:not(.isdaris) .cmd { font-size: 15px; }
+  body.z .hud-panel { font-size: 16px; }
+  body.z .hud-panel .name { font-size: 21px; }
+  body.z .hud-bar { font-size: 19px; padding: 3px 6px 5px; }
+  body.z .hud-bar .res { padding: 1px 6px; }
+  body.z .tool { font-size: 17px; }
+  body.z .cmd { font-size: 15px; }
 }
 
 /* Top displays and messages float over the battlefield, printed on the glass: no plates or boxes,
    just phosphor text with a dark halo so it reads on bright sand. Messages type themselves in. */
-body:not(.isdaris) {
+body.z {
   --float: 0 0 2px #000, 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(141, 255, 138, 0.35);
 }
-body:not(.isdaris) .hud-bar, body:not(.isdaris) .hud-bar .res, body:not(.isdaris) .tool, body:not(.isdaris) .hud-toast {
+body.z .hud-bar, body.z .hud-bar .res, body.z .tool, body.z .hud-toast {
   background: none; border: 0; box-shadow: none; text-shadow: var(--float);
 }
-body:not(.isdaris) .hud-bar { gap: 18px; padding: 6px 4px; }
-body:not(.isdaris) .hud-bar .res { padding: 0; }
-body:not(.isdaris) .res i { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 4px rgba(141, 255, 138, 0.7)); }
-body:not(.isdaris) .tool { padding: 2px 4px; }
-body:not(.isdaris) .tool::before { content: '['; color: var(--phos-dim); }
-body:not(.isdaris) .tool::after { content: ']'; color: var(--phos-dim); }
-body:not(.isdaris) .tool:hover { background: none; color: #d6ffd2; text-shadow: var(--float), 0 0 8px var(--phos); }
-body:not(.isdaris) .hud-toast { padding: 0; animation: lcd-type 0.5s steps(24, end) both; }
-body:not(.isdaris) .hud-toast.alert { text-shadow: 0 0 2px #000, 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 179, 71, 0.5); }
+body.z .hud-bar { gap: 18px; padding: 6px 4px; }
+body.z .hud-bar .res { padding: 0; }
+body.z .res i { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 4px rgba(141, 255, 138, 0.7)); }
+body.z .tool { padding: 2px 4px; }
+body.z .tool::before { content: '['; color: var(--phos-dim); }
+body.z .tool::after { content: ']'; color: var(--phos-dim); }
+body.z .tool:hover { background: none; color: #d6ffd2; text-shadow: var(--float), 0 0 8px var(--phos); }
+body.z .hud-toast { padding: 0; animation: lcd-type 0.5s steps(24, end) both; }
+body.z .hud-toast.alert { text-shadow: 0 0 2px #000, 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 179, 71, 0.5); }
 @keyframes lcd-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-@media (prefers-reduced-motion: reduce) { body:not(.isdaris) .hud-toast { animation: none; } }
+@media (prefers-reduced-motion: reduce) { body.z .hud-toast { animation: none; } }
 
 /* Z: the same terminal in neon cyan on carbon; their black carbon pictures are lit, not recoloured. */
 body.z {
@@ -424,12 +428,108 @@ body.isdaris .help kbd { font: 700 12px var(--deco-text); color: var(--gold); ba
   body.isdaris .tool { font-size: 17px; }
 }
 
+/* ---------------------------------------------------------------- Human screens: steel vaults */
+
+/* Blackened steel ribbed like a vault, white light tracing pointed arches: architectural, a little
+   gothic, still futuristic. An arcade crowns the console, the minimap is a rose window, pictures are
+   lancet windows; top displays and messages float over the battlefield. */
+body.humains {
+  --lite: #dff4ff;
+  --rib: rgba(190, 225, 255, 0.55);
+  --ice: #8fd0ff;
+  --vault: rgba(7, 9, 12, 0.95);
+  --lancet: polygon(0 100%, 0 26%, 50% 0, 100% 26%, 100% 100%);
+  --chamfer: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%, 0 16px);
+  --carve: 'Cinzel', 'Marcellus SC', serif;
+  --float: 0 0 3px #000, 0 0 8px rgba(0, 0, 0, 0.9), 0 0 14px rgba(160, 215, 255, 0.35);
+}
+body.humains .console {
+  background: linear-gradient(90deg, rgba(190, 225, 255, 0.1) 1px, transparent 1px) 0 0 / 40px 100%, linear-gradient(180deg, #2b3036 0%, #181b20 55%, #0d0f12 100%);
+  border-top: 1px solid var(--rib); box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(223, 244, 255, 0.25);
+}
+body.humains .console::before { top: -34px; height: 34px; border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='34'%3E%3Cpath d='M1 34 V18.700000000000003 C1 8.5 12.0 2.72 20.0 1 C28.0 2.72 39 8.5 39 18.700000000000003 V34' fill='none' stroke='rgba%28190%2C225%2C255%2C.6%29' stroke-width='1.2'/%3E%3Ccircle cx='20.0' cy='15.3' r='4.8' fill='none' stroke='rgba%28190%2C225%2C255%2C.6%29' stroke-width='1'/%3E%3C/svg%3E") 0 0 / 40px 34px repeat-x, linear-gradient(transparent 30%, rgba(13, 15, 18, 0.9)); pointer-events: none; }
+body.humains .slot {
+  background: linear-gradient(180deg, rgba(40, 60, 80, 0.35), var(--vault)), #07090c; border: 1px solid var(--rib); border-radius: 0; clip-path: var(--chamfer);
+  box-shadow: inset 0 0 0 4px #07090c, inset 0 0 0 5px rgba(190, 225, 255, 0.18), inset 0 0 40px rgba(120, 190, 255, 0.1);
+}
+/* The rose window: a ring of tracery around the round minimap, rising over the console's edge. */
+body.humains .map-slot {
+  width: 196px; height: 196px; align-self: end; justify-self: center; margin-top: -40px; overflow: visible;
+  border: 2px solid var(--rib); border-radius: 50%; clip-path: none;
+  background: repeating-conic-gradient(rgba(190, 225, 255, 0.25) 0deg 1deg, transparent 1deg 30deg), radial-gradient(circle, #07090c 60%, #1a2028 61% 68%, #07090c 69%);
+  box-shadow: 0 0 0 6px #181b20, 0 0 0 7px var(--rib), 0 0 30px rgba(140, 200, 255, 0.25);
+}
+body.humains .map-slot canvas { clip-path: circle(50%); }
+
+body.humains .hud-panel { font: 600 15px/1.2 var(--ui); color: #c9dbe8; }
+body.humains .hud-panel .name { font: 700 23px/1 var(--carve); letter-spacing: 0.14em; color: var(--lite); text-shadow: 0 0 12px rgba(160, 215, 255, 0.7); }
+body.humains .hud-panel .hp, body.humains .hud-panel .bar { height: 4px; background: rgba(190, 225, 255, 0.12); border: 0; border-radius: 0; }
+body.humains .hud-panel .hp > div { background: linear-gradient(90deg, #6fe3b0, #e9fff5); box-shadow: 0 0 8px #6fe3b0; }
+body.humains .hud-panel .hp.shield > div { background: linear-gradient(90deg, #4fb0ff, #e6f6ff); box-shadow: 0 0 8px #4fb0ff; }
+body.humains .hud-panel .bar > div { background: linear-gradient(90deg, #6fb8ff, #f0f8ff); box-shadow: 0 0 8px #6fb8ff; }
+body.humains .hud-panel .portrait, body.humains .hud-panel .tile, body.humains .hud-panel .queue span {
+  background: radial-gradient(circle at 50% 75%, rgba(140, 200, 255, 0.22), #07090c 75%); border: 1px solid var(--rib); border-radius: 0; clip-path: var(--lancet);
+}
+body.humains .hud-panel .tile { box-shadow: inset 0 -3px 0 hsl(calc(var(--hp) * 120), 70%, 55%); }
+body.humains .hud-panel .tile:hover { border-color: var(--lite); }
+
+/* Commands: plain panes edged in light, lit from within when pointed at. */
+body.humains .cmd {
+  background: linear-gradient(180deg, #2a3038, #101317); color: var(--lite); border: 0; border-radius: 0;
+  box-shadow: inset 0 0 0 1px var(--rib), inset 0 -10px 18px rgba(120, 190, 255, 0.12); font: 700 12px/1 var(--ui); letter-spacing: 0.1em;
+}
+body.humains .cmd:hover { background: linear-gradient(180deg, #3a4a5c, #142030); box-shadow: inset 0 0 0 1px var(--lite), inset 0 0 18px rgba(160, 215, 255, 0.55); }
+body.humains .cmd.off { filter: none; opacity: 0.4; }
+body.humains .cmd kbd { top: auto; bottom: 2px; left: 5px; color: var(--ice); }
+body.humains .cmd small { font: 700 11px var(--ui); color: var(--ice); }
+body.humains .cmd img { filter: drop-shadow(0 0 3px rgba(160, 215, 255, 0.5)); }
+
+body.humains .hud-bar, body.humains .hud-bar .res, body.humains .tool, body.humains .hud-toast { background: none; border: 0; box-shadow: none; text-shadow: var(--float); }
+body.humains .hud-bar { gap: 20px; padding: 6px 4px; font: 700 20px/1 var(--carve); letter-spacing: 0.1em; }
+body.humains .res.min, body.humains .res.nrg, body.humains .res.sup, body.humains .res.clock { color: var(--lite); }
+body.humains .res i { background: var(--lite); filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 4px rgba(160, 215, 255, 0.9)); }
+body.humains .res.sup.full { color: #ff9a7a; }
+body.humains .res.sup.full i { background: #ff9a7a; }
+body.humains .tool { padding: 2px 6px; font: 700 16px/1 var(--carve); letter-spacing: 0.1em; color: var(--lite); }
+body.humains .tool:hover { color: #fff; text-shadow: var(--float), 0 0 10px var(--ice); }
+body.humains .hud-toast { padding: 0; font: 700 17px/1.2 var(--carve); letter-spacing: 0.08em; color: var(--lite); animation: vault-light 0.5s ease-out both; }
+body.humains .hud-toast.done { color: #b8f5d8; }
+body.humains .hud-toast.alert { color: #ffb08f; font-size: 21px; }
+@keyframes vault-light { from { opacity: 0; filter: blur(4px); } to { opacity: 1; filter: none; } }
+@media (prefers-reduced-motion: reduce) { body.humains .hud-toast { animation: none; } }
+
+body.humains .pause-box {
+  background: linear-gradient(180deg, rgba(40, 60, 80, 0.4), var(--vault)), #0d0f12; border: 1px solid var(--rib); border-radius: 0; clip-path: var(--chamfer);
+  box-shadow: inset 0 0 0 5px #0d0f12, inset 0 0 0 6px rgba(190, 225, 255, 0.2), inset 0 0 50px rgba(120, 190, 255, 0.12);
+}
+body.humains .pause-box h2 { font: 700 50px/1 var(--carve); letter-spacing: 0.2em; color: var(--lite); text-shadow: 0 0 16px rgba(160, 215, 255, 0.7); }
+body.humains .pause-box button {
+  min-width: 280px; padding: 9px 20px; font: 700 20px/1 var(--carve); letter-spacing: 0.14em; color: var(--lite); border: 0; border-radius: 0;
+  background: linear-gradient(180deg, #2a3038, #101317); box-shadow: inset 0 0 0 1px var(--rib);
+}
+body.humains .pause-box button:hover { color: #fff; background: linear-gradient(180deg, #3a4a5c, #142030); box-shadow: inset 0 0 0 1px var(--lite), inset 0 0 18px rgba(160, 215, 255, 0.55); }
+body.humains .help { font: 600 14px/1.5 var(--ui); color: #c9dbe8; }
+body.humains .help h3 { font: 700 22px/1 var(--carve); letter-spacing: 0.1em; color: var(--lite); }
+body.humains .help kbd { color: var(--ice); background: #07090c; border-color: var(--rib); border-radius: 0; }
+body.humains .cmd-tip { font: 600 14px/1.35 var(--ui); color: #c9dbe8; background: var(--vault); border: 1px solid var(--rib); border-radius: 0; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px); }
+body.humains .cmd-tip b { font: 700 15px var(--carve); letter-spacing: 0.1em; color: var(--lite); }
+
+@media (max-height: 560px), (max-width: 820px) {
+  body.humains .console::before { top: -18px; height: 18px; background-size: 21px 18px, auto; }
+  body.humains .map-slot { width: auto; height: auto; aspect-ratio: 1; margin-top: 0; align-self: center; box-shadow: 0 0 0 3px #181b20, 0 0 0 4px var(--rib); }
+  body.humains .hud-bar { font-size: 16px; gap: 10px; }
+  body.humains .tool { font-size: 14px; }
+}
+
 /* Spectating: the AI plays both sides, so no command buttons. */
 body.spectate .hud-card { visibility: hidden; }
 
 /* ---------------------------------------------------------------- match setup */
 
-.menu.setup { gap: 10px; }
+.menu.setup { gap: 16px; }
+/* Air round the options: the title stands off above them, the buttons below. */
+.menu.setup h2 { margin-bottom: 14px; }
+.menu.setup > .row { margin-top: 14px; }
 .menu.setup h2 { margin: 0 0 4px; font: 600 54px/1 var(--title); letter-spacing: 0.1em; color: #ffd58a; text-transform: uppercase; filter: drop-shadow(0 4px 10px #000); }
 .menu fieldset { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0; padding: 8px 14px 12px; width: min(640px, 92vw); box-sizing: border-box; border: 1px solid rgba(217, 164, 32, 0.45); border-radius: 4px; background: rgba(0, 0, 0, 0.35); }
 .menu legend { padding: 0 8px; font: 600 18px var(--title); letter-spacing: 0.2em; text-transform: uppercase; color: #c9b896; }
@@ -447,6 +547,9 @@ body.spectate .hud-card { visibility: hidden; }
 .menu .seat .closed { grid-column: span 3; font-size: 14px; opacity: 0.5; font-style: italic; }
 .menu select { width: 100%; padding: 6px 8px; font: 15px var(--ui); color: var(--ink); background: rgba(10, 14, 22, 0.85); border: 1px solid rgba(217, 164, 32, 0.45); border-radius: 4px; }
 .menu select:focus { outline: 1px solid var(--amber); }
+/* The menus keep light text whatever faction the background game gives the page (the Isdaris HUD sets a dark ink). */
+.menu { --ink: #efe6cf; }
+.menu option { color: #efe6cf; background: #0a0e16; }
 .menu .options { gap: 18px; align-items: center; }
 .menu .options label { display: flex; align-items: center; gap: 8px; font: 15px var(--ui); color: #c9b896; }
 .menu .options select { width: auto; min-width: 180px; }
@@ -461,7 +564,8 @@ body.spectate .hud-card { visibility: hidden; }
   .menu .seat select, .menu .seat .closed { grid-column: span 3; }
 }
 @media (max-width: 820px), (max-height: 600px) {
-  .menu.setup { gap: 6px; overflow: auto; place-content: start center; padding: 12px 0; }
+  /* Centred while it fits, from the top once it scrolls ('safe'); browsers without it keep it at the top. */
+  .menu.setup { gap: 12px; overflow: auto; place-content: start center; place-content: safe center center; padding: 20px 0; }
   .menu.setup h2 { font-size: 32px; }
   .menu fieldset { padding: 4px 8px 8px; }
   .menu .pick button { font-size: 14px; padding: 5px 9px; }
@@ -572,6 +676,56 @@ body.spectate .hud-card { visibility: hidden; }
 .cmd-tip b { font-size: 15px; }
 .cmd-tip kbd { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font: 600 11px var(--ui); opacity: 0.8; }
 .cmd-tip .need { color: #ff9a8a; }
-body:not(.isdaris) .cmd-tip { font: 15px/1.3 var(--lcd); color: var(--phos); background: rgba(3, 12, 6, 0.95); border-color: var(--phos-dim); text-shadow: var(--glow); }
-body:not(.isdaris) .cmd-tip b { font-size: 17px; }
-body:not(.isdaris) .cmd-tip .need { color: #ffb070; }
+body.z .cmd-tip { font: 15px/1.3 var(--lcd); color: var(--phos); background: rgba(3, 12, 6, 0.95); border-color: var(--phos-dim); text-shadow: var(--glow); }
+body.z .cmd-tip b { font-size: 17px; }
+body.z .cmd-tip .need { color: #ffb070; }
+
+/* Feedback on the HUD, every faction: buttons sink or shake, counts flash, messages fade. */
+.cmd.pressed { animation: cmd-press 0.16s ease-out; }
+@keyframes cmd-press { 0% { transform: translateY(2px) scale(0.95); filter: brightness(1.6); } 100% { transform: none; filter: none; } }
+.cmd.denied { animation: cmd-deny 0.3s ease-in-out; }
+@keyframes cmd-deny { 0%, 100% { transform: none; } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.res.gain { animation: res-gain 0.5s ease-out; }
+@keyframes res-gain { 0% { filter: brightness(1.7) drop-shadow(0 0 4px rgba(160, 255, 170, 0.8)); } 100% { filter: none; } }
+.res.spend { animation: res-spend 0.6s ease-out; }
+@keyframes res-spend { 0% { transform: scale(1.12); filter: drop-shadow(0 0 5px rgba(255, 110, 80, 0.95)); } 100% { transform: none; filter: none; } }
+.res.sup.full { animation: res-full 1.2s ease-in-out infinite; }
+@keyframes res-full { 50% { opacity: 0.55; } }
+.hud-toast { animation: toast-in 0.22s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+/* An animation, not a transition: each faction's own entrance animation holds the opacity (fill both). */
+body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
+@keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .cmd.pressed, .cmd.denied, .res.gain, .res.spend, .res.sup.full { animation: none; } }
+/* Icons in the top bar: idle workers (flashing when one more stops) and control groups (flashing when set). */
+.groups { display: flex; gap: 4px; }
+.chip { position: relative; width: 38px; height: 38px; padding: 0; overflow: hidden; cursor: pointer; background: radial-gradient(circle at 50% 35%, #2a3240, #0b0e14); border: 1px solid rgba(217, 164, 32, 0.7); border-radius: 4px; box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8), 0 1px 3px rgba(0, 0, 0, 0.6); color: #fff; font: 700 12px/1 system-ui, sans-serif; }
+.chip:hover { border-color: #ffd970; filter: brightness(1.25); }
+.chip img { position: absolute; inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); object-fit: cover; }
+.chip b, .chip kbd { position: absolute; text-shadow: 0 0 2px #000, 0 0 3px #000, 0 0 4px #000; }
+.chip b { right: 3px; bottom: 2px; }
+.chip kbd { left: 3px; top: 2px; font: inherit; color: #ffe08a; }
+.chip.idle-workers { border-color: rgba(255, 210, 120, 0.95); margin-right: 6px; }
+.chip.flash { animation: chip-flash 0.9s ease-out; }
+@keyframes chip-flash { 0%, 30% { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255, 230, 150, 0.95)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chip.flash { animation: none; } }
+@media (max-width: 700px) { .chip { width: 30px; height: 30px; font-size: 10px; } }
+/* Phones: the selection's name wraps onto two lines in smaller letters rather than being cut, whatever
+   the faction's own lettering (hence the extra weight over each faction's rule). */
+@media (max-height: 560px), (max-width: 820px) {
+  body[class] .console .hud-panel .name {
+    font-size: 15px; line-height: 1.1; letter-spacing: 0.05em; white-space: normal;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  }
+}
+/* Phones held upright: the menu and army buttons big enough for a thumb, whatever the faction's lettering. */
+@media (orientation: portrait) and (max-width: 820px) {
+  body[class] .tools .tool { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 2px 6px; font-size: 26px; line-height: 1; }
+  /* The idle workers and the groups go on a second line, clear of the resources. */
+  .tools { flex-wrap: wrap; width: 96px; row-gap: 4px; }
+  .tools .groups { flex: none; }
+}
+/* The menu's three bars and the army's crossed swords, drawn (≡ and ⚔ are hairlines in the factions' lettering). */
+.tool .burger { width: 0.85em; height: 0.7em; vertical-align: -0.05em; }
+.tool .swords { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }
+.tool .keep { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }

@@ -2,6 +2,7 @@ import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight,
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio } from './audio';
 import { CameraRig } from './camera';
+import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
@@ -13,6 +14,7 @@ import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './ren
 import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
+import { detectQuality, pickQuality, QUALITY, QUALITY_KEY, QUALITY_NAMES } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
@@ -23,7 +25,7 @@ import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-const EDGE_PX = 40;
+const EDGE_PX = 100;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -45,12 +47,22 @@ const renderer = new WebGLRenderer({ antialias: true });
 renderer.localClippingEnabled = true; // Z buildings are fabricated layer by layer (render/units.ts)
 /** Phones and tablets: touch controls, lighter rendering. */
 const TOUCH = matchMedia('(pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(TOUCH ? 1.25 : 2, window.devicePixelRatio));
+/** Graphics quality, from the URL, the menu's choice or the graphics chip (src/quality.ts). */
+const DETECTED = detectQuality(renderer, TOUCH);
+const QUALITY_LEVEL = pickQuality(params, (() => {
+  try {
+    return localStorage.getItem(QUALITY_KEY);
+  } catch {
+    return null;
+  }
+})(), DETECTED);
+const GFX = QUALITY[QUALITY_LEVEL];
+renderer.setPixelRatio(Math.min(GFX.pixelRatio, window.devicePixelRatio));
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(params);
 renderer.toneMappingExposure = biome.exposure;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
@@ -88,14 +100,17 @@ if (slots.length < 2) slots.push({ control: 'normal', faction: 'humains', team: 
 const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction] = factions;
 const world = createMatch(factions, slots.map((s) => s.team), biome.style === 'city');
+// Title screen: a still scene, not a running match (no simulation, no AI, so no fights and no sound).
+if (ATTRACT) stageAttract(world);
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
 document.body.classList.toggle('z', factions[PLAYER] === 'z');
+document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 // Every player not played by someone is an AI, its difficulty a harvesting handicap.
-const ais = REPLAY || NET_ROLE ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i)]));
+const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i)]));
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
@@ -122,8 +137,8 @@ addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 scene.add(new HemisphereLight(biome.sky.color, biome.sky.ground, biome.sky.intensity));
 const sun = new DirectionalLight(biome.sun.color, biome.sun.intensity);
 const SUN_OFFSET = new Vector3(-22, 40, -12);
-sun.castShadow = true;
-sun.shadow.mapSize.set(TOUCH ? 2048 : 4096, TOUCH ? 2048 : 4096);
+sun.castShadow = GFX.shadows > 0;
+sun.shadow.mapSize.set(GFX.shadows || 1, GFX.shadows || 1);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 // The shadow box follows the camera, so shadows stay crisp.
@@ -202,7 +217,10 @@ const input = new Input(world, map, PLAYER, {
   issue,
   focus: (x, z) => rig.lookAt(x, z),
   click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
-  ordered: (x, z, target) => overlay.mark(PLAYER, x, z, target),
+  ordered: (x, z, target) => {
+    overlay.mark(PLAYER, x, z, target);
+    audio.play(target && target.owner >= 0 && world.hostile(PLAYER, target.owner) ? 'target' : 'order');
+  },
   pan: (dx, dy) => rig.panPixels(dx, dy),
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
@@ -261,16 +279,21 @@ function scrollDirection(): [number, number] {
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
   let edge = '';
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
-    let ex = mouse.x < EDGE_PX ? -1 : mouse.x > window.innerWidth - EDGE_PX ? 1 : 0;
+    // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
+    // screen's edge (eased, so the inner half stays slow and easy to control).
+    const depth = (d: number) => 0.12 + 0.88 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
+    let ex = mouse.x < EDGE_PX ? -depth(mouse.x) : mouse.x > window.innerWidth - EDGE_PX ? depth(window.innerWidth - mouse.x) : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
     edgeGlow.style.setProperty('--edge-bottom', `${window.innerHeight - bottom}px`);
-    let ey = mouse.y < EDGE_PX ? 1 : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -1 : 0;
-    // Near a corner along an edge (the outer fifth): scroll diagonally, no need to aim for the corner itself.
+    let ey = mouse.y < EDGE_PX ? depth(mouse.y) : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -depth(bottom - mouse.y) : 0;
+    // Near a corner along an edge (the outer fifth): scroll diagonally, as fast as along the edge.
     const cornerX = window.innerWidth * 0.2;
     const cornerY = bottom * 0.2;
-    if (ex && !ey) ey = mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom ? -1 : 0;
-    if (ey && !ex) ex = mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0;
+    if (ex && !ey) ey = Math.abs(ex) * (mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom ? -1 : 0);
+    if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
+    // The glow along the edge brightens with the speed.
+    edgeGlow.style.opacity = String(0.35 + 0.65 * Math.max(Math.abs(ex), Math.abs(ey)));
     if (ex) dx = ex;
     if (ey) dy = ey;
     edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
@@ -278,13 +301,13 @@ function scrollDirection(): [number, number] {
   if (edge !== edgeShown) {
     edgeShown = edge;
     edgeGlow.className = `edge-glow ${[...edge].map((d) => `edge-${d}`).join(' ')}`;
-    document.body.style.cursor = edge ? `${edge}-resize` : '';
+    input.scrollEdge = edge;
   }
   return [dx, dy];
 }
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-const post = new Post(renderer, scene, fxScene, rig.camera, !params.has('lowfx'), TOUCH);
+const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light');
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   post.setSize(window.innerWidth, window.innerHeight);
@@ -307,7 +330,7 @@ const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="menu" title="Menu">≡<span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée">⚔<span> Armée</span></button>';
+tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
@@ -323,14 +346,16 @@ Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
 Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
-<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>1</kbd>…<kbd>9</kbd> : rappel (×2 : centrer)<br>
-Flèches, bords d'écran, minimap, clic molette glissé, deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
-<kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
+<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
+Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
+Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
+<kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
 Appui long puis glisser : rectangle de sélection</div></div>`;
+tools.append(hud.idle, hud.groups);
 document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
 const setPaused = (on: boolean) => {
@@ -342,6 +367,12 @@ tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);
   if (t === 'army') input.selectArmy();
+  if (t === 'home') {
+    // The main base: our headquarters, else our oldest building still standing.
+    const own = [...world.entities.values()].filter((e) => e.owner === PLAYER && e.def.kind === 'building');
+    const base = own.find((e) => e.type === FACTIONS[factions[PLAYER]].hq) ?? own[0];
+    if (base) rig.lookAt(base.x / FP, base.y / FP);
+  }
 });
 // The pause menu and the end-of-game banner share these actions.
 document.addEventListener('click', (e) => {
@@ -368,10 +399,15 @@ window.addEventListener(
   },
   { capture: true },
 );
-window.addEventListener('pointerdown', () => audio.start(), { once: true });
-// Menus: a discreet tick on every button and choice.
+for (const type of ['pointerdown', 'pointerup']) window.addEventListener(type, () => audio.start());
+// Menus: a soft blip on every button and choice made, a discreet tick on opening a list or a top-bar button.
 document.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest('.menu button, .menu select, .menu .switch, .tool')) audio.play('click');
+  const t = e.target as HTMLElement;
+  if (t.closest('.menu button, .pause-box button, .hud-banner button')) audio.play('menu');
+  else if (t.closest('.menu select, .tool')) audio.play('click');
+});
+document.addEventListener('change', (e) => {
+  if ((e.target as HTMLElement).closest('.menu')) audio.play('menu');
 });
 
 const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
@@ -423,6 +459,7 @@ function showHome(): void {
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z</p>
     <button data-m="new">Nouvelle partie</button>
     <button data-m="join">Rejoindre une partie</button>
+    <button data-m="options">Options</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
@@ -432,8 +469,47 @@ function showHome(): void {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
     else if (m === 'join') showJoin(menu as HTMLElement);
+    else if (m === 'options') showOptions(menu as HTMLElement);
     else if (m === 'last-replay') playReplay(readReplay());
     else if (m === 'open-replay') openReplayFile();
+  };
+}
+
+/** The graphics level picked in the options, or 'auto'. */
+function storedQuality(): string {
+  try {
+    return localStorage.getItem(QUALITY_KEY) ?? 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+/** Settings kept for this computer (its browser): graphics for now. A change reloads the page on the way back. */
+function showOptions(menu: HTMLElement): void {
+  const before = storedQuality();
+  const options = { ...QUALITY_NAMES, auto: `Auto (${QUALITY_NAMES[DETECTED].toLowerCase()} pour cet ordinateur)` };
+  menu.className = 'menu setup';
+  menu.innerHTML = `<h2>Options</h2>
+    <fieldset class="options"><legend>Affichage</legend>
+      <label>Graphismes <select data-k="quality">${Object.entries(options)
+        .map(([v, label]) => `<option value="${v}"${v === before ? ' selected' : ''}>${label}</option>`)
+        .join('')}</select></label>
+    </fieldset>
+    <div class="row"><button data-m="back">Retour</button></div>`;
+  menu.onchange = (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    try {
+      if (v === 'auto') localStorage.removeItem(QUALITY_KEY);
+      else localStorage.setItem(QUALITY_KEY, v);
+    } catch {
+      // private browsing: the detected level stays
+    }
+  };
+  menu.onclick = (e) => {
+    if ((e.target as HTMLElement).closest('button')?.dataset.m !== 'back') return;
+    // The renderer is set up once per page: a new level needs a reload.
+    if (storedQuality() !== before) location.reload();
+    else showHome();
   };
 }
 
@@ -542,6 +618,7 @@ function launch(s: Setup): void {
 
 function start(): void {
   clock.getDelta();
+  if (ATTRACT) updateFog(); // the simulation never runs to do it
   const timing: Record<string, number> = {};
   if (import.meta.env.DEV) Object.assign(window, { timing });
   let mark = 0;
@@ -553,7 +630,7 @@ function start(): void {
   const frame = (elapsed: number) => {
     mark = performance.now();
     const dt = Math.min(elapsed, 0.25);
-    acc += dt * SPEED;
+    if (!ATTRACT) acc += dt * SPEED;
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && !net.ready(world.tick)) {
@@ -578,9 +655,11 @@ function start(): void {
     lap('sim');
     const [dx, dy] = scrollDirection();
     if (ATTRACT) {
-      // Slow orbit over the battlefield.
-      const t = performance.now() / 1000 / 40;
-      rig.lookAt(map.width / 2 + Math.cos(t) * 26, map.height / 2 + Math.sin(t) * 26);
+      // A slow loop along the diagonal: over the first base, past the armies face to face, over the second.
+      const t = performance.now() / 1000 / 24;
+      const along = Math.cos(t) * 30;
+      const across = Math.sin(t) * 9;
+      rig.lookAt(map.width / 2 - (along - across) / Math.SQRT2, map.height / 2 - (along + across) / Math.SQRT2);
     } else {
       // Eased scrolling: the view speeds up over a quarter second, then glides to a stop (slow, fast, slow).
       const step = SCROLL_ACCEL * dt;

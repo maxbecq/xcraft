@@ -6,6 +6,8 @@ import { FLY_HEIGHT } from '../data';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
+/** Flyers win a click within this distance of where they fly, over anything on the ground. */
+const FLYER_PICK_PX = 28;
 /** Mineral fields and geysers are small on screen: a wider catch, so a worker order lands on them. */
 const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
@@ -38,16 +40,37 @@ interface Layer {
 
 /** Cursor image from layers: each a soft halo of its colour, a dark outline, then the colour; hotspot in the middle. */
 function cursorOf(...layers: Layer[]): string {
+  return cursorSized(32, ...layers);
+}
+
+/**
+ * A cursor with more room round the same 32-unit grid, at the same scale (one unit, one pixel), `view` pixels
+ * wide and centred on the hotspot: the arrow drawn in it lines up with the page's own, so they can cross-fade.
+ */
+function cursorWide(view: number, ...layers: Layer[]): string {
+  const o = 16 - view / 2;
+  return cursorSvg(view, `${o} ${o} ${view} ${view}`, layers);
+}
+
+/** A cursor drawn on the 32-unit grid and shown `px` pixels wide (browsers take up to 128; 48 shows everywhere we target). */
+function cursorSized(px: number, ...layers: Layer[]): string {
+  return cursorSvg(px, '0 0 32 32', layers);
+}
+
+function cursorSvg(px: number, viewBox: string, layers: Layer[]): string {
   const draw = ({ color, shape, opacity = 1 }: Layer) =>
     `<g opacity='${opacity.toFixed(2)}'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g>`;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, default`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${px}' height='${px}' viewBox='${viewBox}'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${px / 2} ${px / 2}, default`;
 }
 
 /** The game's arrow: bronze body, gold edge, its tip on the hotspot. */
 const ARROW: Layer = { color: '#e8b64a', shape: "<path fill='#2b2010' d='M16.6 16.6L17 29.2L20.3 25.9L23.1 31L25.7 29.7L22.9 24.6L27.5 24.2Z'/><path stroke-width='1' opacity='.6' d='M18.4 20.2L18.6 25.6'/>" };
 // The arrow everywhere outside the map's own cursors (menus, console); buttons keep their hand.
 document.documentElement.style.setProperty('--arrow', cursorOf(ARROW));
+/** Over the minimap: a gold viewfinder, the corners of the camera's view framing a dot (where it will look). */
+const VIEWFINDER: Layer = { color: '#e8b64a', shape: "<path d='M6 13V9H10M22 9H26V13M26 19V23H22M10 23H6V19'/><circle cx='16' cy='16' r='1.6' fill='#e8b64a'/>" };
+document.documentElement.style.setProperty('--minimap', cursorOf(VIEWFINDER));
 
 /**
  * Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner,
@@ -75,7 +98,10 @@ const cached = (key: string, make: () => string[]) => cursorCache.get(key) ?? cu
 /** Over something selectable (SC1 lens): corner brackets turning slowly on the ground round a flat ring, a quarter turn in 12 frames. */
 const HOVER_FRAMES = 12;
 const hoverLayers = (color: string): Layer[] =>
-  Array.from({ length: HOVER_FRAMES }, (_, f) => ({ color, shape: `${isoCorners(13, (f / HOVER_FRAMES) * (Math.PI / 2))}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>` }));
+  Array.from({ length: HOVER_FRAMES }, (_, f) => ({ color, shape: `${isoCorners(HOVER_W, (f / HOVER_FRAMES) * (Math.PI / 2))}<ellipse cx='16' cy='16' rx='4.5' ry='2.25'/>` }));
+/** Hover brackets: their half-width, and the cursor box that holds them (wider than the usual 32 px). */
+const HOVER_W = 20;
+const HOVER_BOX = 48;
 
 /** Aiming an attack or an ability: a reticle lying on the ground, its four ticks turning round it. */
 const aimFrames = (color: string) =>
@@ -93,6 +119,23 @@ const aimFrames = (color: string) =>
 
 /** Right-click order given: green brackets snapping shut on the spot. */
 const orderFrames = () => cached('order', () => [14, 10.5, 7, 4].map((w) => cursorOf({ color: '#4dff6a', shape: isoCorners(w) })));
+/** Edge scrolling: twin gold chevrons pointing the way the map scrolls, pushing outwards again and again. */
+const EDGE_ANGLE: Record<string, number> = { e: 0, se: 45, s: 90, sw: 135, w: 180, nw: 225, n: 270, ne: 315 };
+const edgeFrames = (edge: string) =>
+  cached(`edge${edge}`, () =>
+    Array.from({ length: 6 }, (_, f) =>
+      cursorSized(48, { color: '#e8b64a', shape: `<g transform='rotate(${EDGE_ANGLE[edge]} 16 16) translate(${(f * 0.9).toFixed(1)} 0)'><path d='M10 9L17 16L10 23'/><path d='M3 11.5L7.5 16L3 20.5' opacity='.55'/></g>` }),
+    ),
+  );
+/**
+ * Dragging the map (right or middle button held): four arrows lying on the ground round a ring, in the 2:1
+ * isometric squash of the hover brackets and the attack reticle (half as long front to back as side to side).
+ */
+const GRAB = cursorSized(44, {
+  color: '#e8b64a',
+  shape:
+    "<path d='M21 16H30M27 14.2L30 16L27 17.8M11 16H2M5 14.2L2 16L5 17.8M16 13.6V8.5M12.4 10L16 8.5L19.6 10M16 18.4V23.5M12.4 22L16 23.5L19.6 22'/><ellipse cx='16' cy='16' rx='4.6' ry='2.3'/>",
+});
 /** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
 const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
@@ -133,6 +176,12 @@ export class Input {
       }
       const ground = this.groundAt(e.clientX, e.clientY);
       if (this.hooks.click?.(e.button, ground, e.shiftKey, this.entityAt(e.clientX, e.clientY))) return;
+      if (e.button === 2 && !this.own().length) {
+        // Right button with none of ours selected (no order to give): it grabs and drags the map instead.
+        this.grab = { x: e.clientX, y: e.clientY };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       if (e.button === 0) {
         this.dragStart = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
@@ -158,7 +207,7 @@ export class Input {
     canvas.addEventListener('pointercancel', (e) => this.touches.delete(e.pointerId));
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'touch') return this.touchUp(e);
-      if (e.button === 1) this.grab = null;
+      if (e.button === 1 || e.button === 2) this.grab = null;
       if (e.button !== 0 || !this.dragStart) return;
       const r = this.rect(this.dragStart, e);
       this.dragStart = null;
@@ -299,6 +348,23 @@ export class Input {
     }
   }
 
+  /** Own workers with nothing to do (those sheltering in a bunker are busy). */
+  idleWorkers(): Entity[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === this.player && (e.def as { worker?: boolean }).worker && !e.order && !e.inside);
+  }
+
+  private idleTurn = 0;
+
+  /** Selects every idle worker and centres the view on the next one in turn (the idle-workers button). */
+  selectIdleWorkers(): void {
+    const idle = this.idleWorkers();
+    if (!idle.length) return;
+    this.selected.clear();
+    for (const e of idle) this.selected.add(e.id);
+    const e = idle[this.idleTurn++ % idle.length];
+    this.hooks.focus(e.x / FP, e.y / FP);
+  }
+
   /** Own selected entities. */
   own(): Entity[] {
     return [...this.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e && e.owner === this.player);
@@ -325,11 +391,31 @@ export class Input {
     }
     if (!/^Digit[0-9]$/.test(e.code)) return;
     const k = e.code;
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
       e.preventDefault();
-      this.groups.set(k, this.own().map((u) => u.id));
+      const ids = this.own().map((u) => u.id);
+      // Ctrl: the group becomes the selection; Shift: the selection joins it.
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) this.groups.set(k, [...new Set([...(this.groups.get(k) ?? []), ...ids])]);
+      else this.groups.set(k, ids);
+      if (ids.length) this.groupSet = { key: k, time: performance.now() };
       return;
     }
+    this.recallGroup(k);
+  }
+
+  /** Last group assigned (Ctrl or Shift + digit), so its icon can flash. */
+  groupSet = { key: '', time: -Infinity };
+
+  /** Control groups with someone left in them, by key (`Digit1`…`Digit0`), in keyboard order. */
+  groupList(): [string, Entity[]][] {
+    return [...this.groups.keys()]
+      .sort((a, b) => ((Number(a.slice(5)) + 9) % 10) - ((Number(b.slice(5)) + 9) % 10))
+      .map((k): [string, Entity[]] => [k, this.groups.get(k)!.map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e)])
+      .filter(([, es]) => es.length > 0);
+  }
+
+  /** Selects a control group (its digit key, or its icon); twice in a row centres the view on it. */
+  recallGroup(k: string): void {
     const ids = (this.groups.get(k) ?? []).filter((id) => this.world.entities.has(id));
     if (!ids.length) return;
     this.selected.clear();
@@ -357,6 +443,8 @@ export class Input {
     return new Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
   }
 
+  /** Direction the map is scrolling at the screen's edge ('n', 'se'…), or '' (set each frame by the game loop). */
+  scrollEdge = '';
   private lastHoverPick = 0;
   private hoverColor = '';
   private orderedAt = -Infinity;
@@ -385,7 +473,13 @@ export class Input {
     const body = document.body.classList;
     const since = performance.now() - this.orderedAt;
     let cursor: string;
-    if (body.contains('targeting')) {
+    if (this.grab) {
+      cursor = GRAB;
+      this.shown = undefined;
+    } else if (this.scrollEdge && !body.contains('targeting')) {
+      cursor = edgeFrames(this.scrollEdge)[f % 6];
+      this.shown = undefined;
+    } else if (body.contains('targeting')) {
       cursor = aimFrames(body.contains('scanning') ? '#ffd860' : '#ff4a3a')[f % 8];
       this.shown = undefined;
     } else if (since < 4 * ORDER_FRAME_MS) {
@@ -404,11 +498,11 @@ export class Input {
       const id = `${key}${layer.shape}`;
       cursor =
         this.fadeFrom && k < 1
-          ? cursorOf({ ...this.fadeFrom, opacity: 1 - k }, { ...layer, opacity: k })
+          ? cursorWide(HOVER_BOX, { ...this.fadeFrom, opacity: 1 - k }, { ...layer, opacity: k })
           : // The plain arrow is the page's own (CSS): the edge-scroll arrows can replace it there.
             !this.hoverColor
             ? ''
-            : (steady.get(id) ?? steady.set(id, cursorOf(layer)).get(id)!);
+            : (steady.get(id) ?? steady.set(id, cursorWide(HOVER_BOX, layer)).get(id)!);
       this.shown = layer;
     }
     if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
@@ -416,6 +510,16 @@ export class Input {
 
   /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels, else the closest resource. */
   private entityAt(x: number, y: number): Entity | undefined {
+    // Flyers first: small and high up, a ray that just misses one hits whatever is on the ground below.
+    let flyer: Entity | undefined;
+    let flyerD = FLYER_PICK_PX;
+    for (const e of this.world.entities.values()) {
+      if (e.def.kind !== 'unit' || !flies(e) || e.inside || !this.world.sees(this.player, e)) continue;
+      const s = this.screenOf(e);
+      const d = Math.hypot(s.x - x, s.y - y);
+      if (d < flyerD) [flyer, flyerD] = [e, d];
+    }
+    if (flyer) return flyer;
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.

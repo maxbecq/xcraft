@@ -1,11 +1,11 @@
 import {
   AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
@@ -35,6 +35,75 @@ teamPainted.forEach((m) => {
   weather(m, 0.8);
   rimLight(m, 0.4);
 });
+
+/** Team-coloured light (veins, cores): `team_glow` in Blender models. */
+const teamGlow = TEAM_COLORS.map((c) => {
+  const m = mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.6 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.veinTime = veinTime;
+    shader.vertexShader = `varying float vVein;\nuniform float veinTime;\n${shader.vertexShader}`.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      vVein = veinPulse(modelMatrix, position, veinTime);`).replace('void main() {', `${VEIN_PULSE}\nvoid main() {`);
+    shader.fragmentShader = `varying float vVein;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance *= vVein;`);
+  };
+  m.customProgramCacheKey = () => 'team-vein';
+  return m;
+});
+/** Seconds, shared by every vein so one uniform drives them all. */
+const veinTime = { value: 0 };
+/**
+ * Alchemical light breathing in the veins: a slow wave climbing them, a second slower swell and a little
+ * flicker, phased by the mesh's place on the map so no two buildings beat together.
+ */
+const VEIN_PULSE = `float veinPulse(mat4 model, vec3 p, float t) {
+  vec3 o = model[3].xyz;
+  float h = fract(sin(dot(floor(o.xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+  float y = (model * vec4(p, 1.0)).y;
+  return 0.78 + 0.22 * sin(t * (1.1 + h * 0.8) - y * 5.0 + h * 6.28) + 0.12 * sin(t * 0.37 + h * 17.0) + 0.05 * sin(t * 9.0 + h * 40.0);
+}`;
+/** Soft halo around a vein: a shell pushed out along the normals, densest where it faces the eye, added to the scene's light. */
+const veinHalo = TEAM_COLORS.map(
+  (c) =>
+    new ShaderMaterial({
+      uniforms: { color: { value: new Color(c) }, veinTime },
+      vertexShader: `uniform float veinTime;
+        varying float vEdge;
+        varying float vVein;
+        ${VEIN_PULSE}
+        void main() {
+          vec3 p = position + normal * 0.13;
+          vec4 world = modelMatrix * vec4(p, 1.0);
+          vec3 n = normalize(mat3(modelMatrix) * normal);
+          vEdge = abs(dot(n, normalize(cameraPosition - world.xyz)));
+          vVein = veinPulse(modelMatrix, position, veinTime);
+          gl_Position = projectionMatrix * viewMatrix * world;
+        }`,
+      fragmentShader: `uniform vec3 color;
+        varying float vEdge;
+        varying float vVein;
+        void main() {
+          // Thick in the middle of the tube, fading to nothing at its rim: reads as light bleeding into the air.
+          gl_FragColor = vec4(color * 1.8 * vVein, pow(vEdge, 1.5) * 0.65 * vVein);
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    }),
+);
+const teamCanvas = new Map<Texture, MeshStandardMaterial[]>();
+/** Team colour over a woven texture (`team_canvas`: the market's awning), with its hand-painted vertex colours. */
+function teamCloth(map: Texture, team: number): MeshStandardMaterial {
+  let set = teamCanvas.get(map);
+  if (!set) {
+    set = TEAM_COLORS.map((c) => {
+      const m = mat(c, { map, roughness: 0.9, vertexColors: true, emissive: new Color(c).multiplyScalar(0.12) });
+      rimLight(m, 0.4);
+      return m;
+    });
+    teamCanvas.set(map, set);
+  }
+  return set[team] ?? set[0];
+}
 
 const tagMaterials = new Map<Texture, MeshStandardMaterial>();
 /** Graffiti on a wall: transparent, drawn just in front of it. */
@@ -249,6 +318,11 @@ const POOLS: Record<string, [number, number, number, number][]> = {
 let poolTexture: Texture | null = null;
 /** Buildings standing on a paved plaza wider than their model: [plaza width, raised inner step width]. */
 const PLAZAS: Record<string, [number, number]> = { obelisque: [4.7, 3.1] };
+/**
+ * Selection ring radius (tiles) for squat buildings that fill their footprint: from the camera's low pitch the body
+ * hides the back of a ring drawn hugging it, so the ring looks pushed toward the viewer; a wider one shows all round.
+ */
+const RING_RADIUS: Record<string, number> = { reservepsy: 1.4, trone: 2.5 };
 let plazaMaterials: [MeshStandardMaterial, MeshStandardMaterial] | null = null;
 
 /** An Art Deco forecourt: ivory slabs with gold inlays, a sunburst and blue enamel corners, in two low steps. */
@@ -360,6 +434,8 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   assassin: { height: 0.9 },
 };
 const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'emetteur', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'pylonesanglant', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire'];
+/** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
+const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
 const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI / 2 };
 const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
@@ -403,7 +479,8 @@ const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefine
 export async function loadModels(types: string[]): Promise<void> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // Meshy models are meshopt-compressed
   await Promise.all(
-    types.map(async (type) => {
+    // Types drawn with another's model (LOOKS) have no file of their own.
+    types.filter((type) => !LOOKS[type]).map(async (type) => {
       const character = CHARACTERS[type];
       const meshy = !new URLSearchParams(location.search).has('proc');
       if (meshy && STATIC_MESHY.includes(type)) {
@@ -413,6 +490,13 @@ export async function loadModels(types: string[]): Promise<void> {
             if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
+          if (DRESSED.includes(type)) {
+            try {
+              gltf.scene.add((await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-dress.glb`)).scene);
+            } catch {
+              // not built yet: the bare Meshy model
+            }
+          }
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
           holder.add(gltf.scene);
@@ -517,20 +601,48 @@ function model(type: string, team: Material, seed = 0): Group {
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
   let tagIndex = 0;
+  const veins: [Mesh, ShaderMaterial][] = [];
   g.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
     o.receiveShadow = true;
     const name = (o.material as Material).name;
     if (name === 'meshy') o.material = meshySkins.get(type)?.[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? o.material;
-    if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
+    const ti = teamMaterials.indexOf(team as MeshStandardMaterial);
+    if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[ti] ?? team) : team;
+    const map = (o.material as MeshStandardMaterial).map;
+    if (name === 'team_canvas' && map) o.material = teamCloth(map, ti);
+    if (name === 'team_glow' && teamGlow[ti]) {
+      o.material = teamGlow[ti];
+      veins.push([o, veinHalo[ti]]);
+    }
     if (name === 'tag') {
       const tags = graffiti();
       o.material = tagMaterial(tags[(seed * 7 + tagIndex++) % tags.length]);
       o.castShadow = false;
     }
   });
+  // Halos added after the walk, so it does not give them shadows.
+  for (const [o, m] of veins) {
+    const halo = new Mesh(haloShape(o.geometry), m);
+    halo.userData.noPick = true;
+    o.add(halo);
+  }
   return g;
+}
+
+const haloShapes = new WeakMap<BufferGeometry, BufferGeometry>();
+/** A vein's shape with its seams welded and normals smoothed, so the halo swells as one soft tube instead of splitting at hard edges. */
+function haloShape(geo: BufferGeometry): BufferGeometry {
+  let shape = haloShapes.get(geo);
+  if (!shape) {
+    const bare = new BufferGeometry().setAttribute('position', geo.getAttribute('position'));
+    bare.setIndex(geo.getIndex());
+    shape = mergeVertices(bare, 1e-3);
+    shape.computeVertexNormals();
+    haloShapes.set(geo, shape);
+  }
+  return shape;
 }
 
 /** Fallback models, used when a Blender model is missing. Units face +Z. */
@@ -809,6 +921,48 @@ function eddies(): CanvasTexture {
   return eddyTexture;
 }
 
+let haloTexture: Texture | null = null;
+/**
+ * The Réserve psy at rest: its two bands of dotted light turn on themselves, the upper one the other way and
+ * slower, inside a halo of cyan light that slowly swells and fades, phased per building. Render only.
+ */
+function reserveFx(body: Object3D, seed: number): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  const bands = [body.getObjectByName('psyband_0'), body.getObjectByName('psyband_1')];
+  if (!haloTexture) {
+    // Brightest at mid-height, fading out at the top and bottom of the shell.
+    const c = document.createElement('canvas');
+    c.width = 1;
+    c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1, 64);
+    haloTexture = new CanvasTexture(c);
+  }
+  const halo = new Mesh(
+    new CylinderGeometry(0.9, 0.9, 0.7, 32, 1, true),
+    new MeshBasicMaterial({ map: haloTexture, color: 0x5ae0ff, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }),
+  );
+  halo.position.y = 0.46;
+  halo.userData.noPick = true;
+  group.add(halo);
+  const phase = (seed * 2.399) % (Math.PI * 2);
+  return {
+    group,
+    update(dt, t) {
+      if (bands[0]) bands[0].rotation.y += dt * 0.9;
+      if (bands[1]) bands[1].rotation.y -= dt * 0.6;
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.3 + phase); // a slow swell, about 5 s
+      halo.scale.set(1 + 0.14 * breath, 1, 1 + 0.14 * breath);
+      (halo.material as MeshBasicMaterial).opacity = 0.12 + 0.3 * breath;
+    },
+  };
+}
+
 /**
  * The life of an energy well: the glow at the bottom breathes unevenly, eddies turn on the pool, stars drift up
  * out of it and now and then a little geyser of sparks shoots up and falls back. Render only, seeded by the well.
@@ -923,6 +1077,7 @@ export class EntityRenderer {
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
     const now = performance.now();
+    veinTime.value = now / 1000;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.syncRallyFlags(world, selected, player, now);
@@ -1038,13 +1193,27 @@ export class EntityRenderer {
         const fadeIn = Math.min(1, age / fadeMs) ** 2;
         const flash = flashPower * Math.max(0, 1 - Math.abs(age - flashAt) / flashWidth) ** 1.5;
         // It also closes in a little as it fades in.
-        v.ring.scale.setScalar(1 + grow - grow * Math.min(1, age / fadeMs));
+        // Round a human building site it widens to take in the scaffolding while it stands.
+        const wide = v.site?.storeys.some((s) => s.visible) ? (v.ring.userData.site as number) : 1;
+        v.ring.userData.wide = v.ring.userData.wide === undefined ? wide : v.ring.userData.wide + (wide - v.ring.userData.wide) * Math.min(1, dt * 5);
+        const k = (1 + grow - grow * Math.min(1, age / fadeMs)) * v.ring.userData.wide;
+        v.ring.scale.set(k, 1, k);
         dialMat.opacity = 0.6 * fresh * fadeIn;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
         (v.ring.userData.core as MeshBasicMaterial).opacity = (0.55 + 0.4 * fresh) * fadeIn + 0.6 * flash;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
-        this.drape(v.ring, x, z, v.root.position.y);
+        const air = flies(e);
+        if (air !== !!v.ring.userData.air) this.airRing(v.ring, air);
+        if (air) {
+          // In flight: the ring rides just under the model, drawn over the scenery, tied to the ground by a thread.
+          const h = Math.max(0.3, v.model.position.y - 0.1);
+          v.ring.position.y = h;
+          const thread = v.ring.userData.thread as Mesh;
+          thread.scale.y = h;
+          (thread.material as MeshBasicMaterial).opacity = 0.45 * (v.ring.userData.core as MeshBasicMaterial).opacity;
+          (v.ring.userData.spot as Mesh).position.y = 0.06 - h;
+        } else this.drape(v.ring, x, z, v.root.position.y);
       }
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
@@ -1283,13 +1452,50 @@ export class EntityRenderer {
     });
   }
 
+  /**
+   * A selection ring taking off or landing: in the air it lies flat under the flyer and is drawn over everything
+   * (the ground below may be crowded), with a thread down to a spot on the ground marking where the flyer is.
+   */
+  private airRing(ring: Object3D, on: boolean): void {
+    ring.userData.air = on;
+    if (!ring.userData.thread) {
+      const color = (ring.userData.core as MeshBasicMaterial).color;
+      const glow = { color, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending };
+      const thread = new Mesh(new CylinderGeometry(0.012, 0.012, 1, 4).translate(0, -0.5, 0), new MeshBasicMaterial(glow));
+      const spot = new Mesh(new RingGeometry(0.1, 0.17, 24).rotateX(-Math.PI / 2), new MeshBasicMaterial({ ...glow, opacity: 0.6 }));
+      for (const m of [thread, spot]) {
+        m.userData.air = true;
+        m.userData.noPick = true;
+        m.renderOrder = 10;
+        ring.add(m);
+      }
+      ring.userData.thread = thread;
+      ring.userData.spot = spot;
+    }
+    (ring.userData.thread as Mesh).visible = (ring.userData.spot as Mesh).visible = on;
+    for (const m of ring.children as Mesh[]) {
+      if (m.userData.air) continue;
+      (m.material as Material).depthTest = !on;
+      m.renderOrder = on ? 10 : 2;
+      if (!on) continue;
+      // Flat again (it was laid over the ground).
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
+      pos.needsUpdate = true;
+    }
+    ring.userData.at = undefined; // lays itself over the ground again on landing
+    if (!on) ring.position.y = 0;
+  }
+
   private drape(ring: Object3D, x: number, z: number, baseY: number): void {
-    const at = `${x.toFixed(2)},${z.toFixed(2)}`;
+    const k = ring.scale.x;
+    const at = `${x.toFixed(2)},${z.toFixed(2)},${k.toFixed(2)}`;
     if (ring.userData.at === at) return;
     ring.userData.at = at;
     for (const m of ring.children as Mesh[]) {
+      if (m.userData.air) continue; // the flyer's thread and ground spot
       const pos = m.geometry.getAttribute('position');
-      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + pos.getX(i), z + pos.getZ(i)) - baseY + m.userData.lift);
+      for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + k * pos.getX(i), z + k * pos.getZ(i)) - baseY + m.userData.lift);
       pos.needsUpdate = true;
       m.geometry.computeBoundingSphere();
     }
@@ -1315,7 +1521,7 @@ export class EntityRenderer {
     if ((e.def as UnitDef).cloaked) ghost(body);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
-    const r = (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
+    const r = RING_RADIUS[e.type] ?? (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
       const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
       cargo.name = 'cargo';
@@ -1324,6 +1530,7 @@ export class EntityRenderer {
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
+    ring.visible = false; // shown by sync, which starts its fade-in clock then (a view made while selected kept a NaN scale)
     // Floats a little above the ground, higher round buildings, so their plinths do not hide it.
     const lift = e.def.kind === 'building' ? 0.3 : 0.12;
     // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
@@ -1411,8 +1618,11 @@ export class EntityRenderer {
       }
     } else if (e.def.kind === 'building' && !(e.def as BuildingDef).warp && e.buildLeft > 0) {
       // Built by workers: a building site (see sync).
-      const made = buildingSite((e.def as BuildingDef).size, new Box3().setFromObject(body).getSize(new Vector3()));
+      const size = new Box3().setFromObject(body).getSize(new Vector3());
+      const made = buildingSite((e.def as BuildingDef).size, size);
       site = made;
+      // The scaffolding (poles, walkways) stands about half a cell outside the model; a little more so its corners stay inside.
+      ring.userData.site = Math.max(1, ((Math.max(size.x, size.z) / 2 + 0.5) * 1.15) / r);
       root.add(made.footing, ...made.storeys);
     } else if (e.def.kind === 'building') {
       // Warped in (Isdaris): it rises inside a wireframe while it materialises.
@@ -1430,6 +1640,11 @@ export class EntityRenderer {
       const well = wellFx(body, e.id);
       root.add(well.group);
       fx = well;
+    }
+    if (e.type === 'reservepsy') {
+      const reserve = reserveFx(body, e.id);
+      root.add(reserve.group);
+      fx = reserve;
     }
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.

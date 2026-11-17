@@ -38,8 +38,16 @@ export class Hud {
   private readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
+  /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
+  readonly idle = el('button', 'chip idle-workers');
+  private idleCount = 0;
+  /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
+  readonly groups = el('div', 'groups');
+  private groupsKey = '';
   private buttons: Button[] = [];
   private cardKey = '';
+  /** Last button pressed and how it reacted, so the card rebuilt by that press keeps the animation. */
+  private pressed = { key: '', anim: '', at: -Infinity };
   /** Open build menu: basic buildings, or the advanced (tech) ones. */
   private buildMenu: false | 'basic' | 'advanced' = false;
   private placing: string | null = null;
@@ -72,6 +80,13 @@ export class Hud {
     this.console.append(this.mapSlot, this.panel, this.card);
     document.body.append(this.bar, this.console, this.toasts, this.banner);
     this.banner.hidden = true;
+    this.idle.hidden = true;
+    this.idle.title = 'Ouvriers inactifs : les sélectionner';
+    this.idle.addEventListener('click', () => this.input.selectIdleWorkers());
+    this.groups.addEventListener('click', (e) => {
+      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-g]')?.dataset.g;
+      if (k) this.input.recallGroup(k);
+    });
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
@@ -94,10 +109,7 @@ export class Hud {
     this.card.addEventListener('pointerdown', (e) => {
       const key = (e.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key;
       const b = this.buttons.find((x) => x.key === key);
-      if (b && !b.reason) {
-        this.audio.play('click');
-        b.action();
-      }
+      if (b) this.press(b);
     });
     this.panel.addEventListener('pointerdown', (e) => {
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
@@ -123,9 +135,74 @@ export class Hud {
       const b = this.buttons.find((x) => x.key === key);
       if (b) {
         e.preventDefault();
-        if (!b.reason) b.action();
+        if (!e.repeat) this.press(b);
       }
     });
+  }
+
+  private updateGroups(): void {
+    const list = this.input.groupList().map(([k, es]) => {
+      const count = new Map<string, number>();
+      for (const e of es) count.set(e.type, (count.get(e.type) ?? 0) + 1);
+      const type = [...count].sort((a, b) => b[1] - a[1])[0][0];
+      return { k, type, n: es.length };
+    });
+    const set = this.input.groupSet;
+    const key = list.map((g) => `${g.k}${g.type}${g.n}`).join('|') + set.time;
+    if (key === this.groupsKey) return;
+    this.groupsKey = key;
+    const fresh = performance.now() - set.time < 500 ? set.key : '';
+    this.groups.innerHTML = list
+      .map((g) => `<button class="chip${g.k === fresh ? ' flash' : ''}" data-g="${g.k}" title="Groupe ${g.k.slice(5)} : ${DEFS[g.type].name}"><kbd>${g.k.slice(5)}</kbd>${img(g.type, '')}<b>${g.n}</b></button>`)
+      .join('');
+  }
+
+  private updateIdle(): void {
+    const n = this.input.idleWorkers().length;
+    if (n === this.idleCount) return;
+    if (!this.idle.firstChild) this.idle.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].worker, '')}<b></b>`;
+    this.idle.lastChild!.textContent = String(n);
+    this.idle.hidden = n === 0;
+    if (n > this.idleCount) {
+      this.idle.classList.remove('flash');
+      void this.idle.offsetWidth;
+      this.idle.classList.add('flash');
+    }
+    this.idleCount = n;
+  }
+
+  /** Sets a resource's count; it flashes as it goes up (income) or down (spending). */
+  private count(span: HTMLElement, value: number): void {
+    const text = span.lastChild!;
+    const before = Number(text.textContent);
+    text.textContent = String(value);
+    if (Number.isNaN(before) || before === value) return;
+    const dir = value > before ? 'gain' : 'spend';
+    span.classList.remove('gain', 'spend');
+    void span.offsetWidth;
+    span.classList.add(dir);
+  }
+
+  /** A command button pressed, by click or hotkey: it sinks with a tick, or shakes and says why it is locked. */
+  private press(b: Button): void {
+    const el = this.card.querySelector<HTMLElement>(`[data-key="${CSS.escape(b.key)}"]`);
+    const anim = (name: string) => {
+      this.pressed = { key: b.key, anim: name, at: performance.now() };
+      if (!el) return;
+      el.classList.remove('pressed', 'denied');
+      void el.offsetWidth; // restarts the animation on a repeated press
+      el.classList.add(name);
+      el.addEventListener('animationend', () => el.classList.remove(name), { once: true });
+    };
+    if (b.reason) {
+      this.audio.play('error', 0.4);
+      anim('denied');
+      if (el) this.showTip(el);
+      return;
+    }
+    this.audio.play('click');
+    anim(el?.classList.contains('off') ? 'denied' : 'pressed');
+    b.action();
   }
 
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
@@ -163,6 +240,7 @@ export class Hud {
   private attack(x: number, z: number, target?: Entity, queue = false): void {
     const ids = this.input.own().map((e) => e.id);
     const enemy = target && this.world.hostile(target.owner, this.player) ? target.id : undefined;
+    this.audio.play('target');
     this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy, queue });
   }
 
@@ -187,6 +265,7 @@ export class Hud {
       this.audio.play(ev.kind);
       t.textContent = ev.text;
       this.toasts.append(t);
+      setTimeout(() => t.classList.add('gone'), 2200);
       setTimeout(() => t.remove(), 2500);
       while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
     }
@@ -196,8 +275,16 @@ export class Hud {
     const p = this.world.players[this.player];
     const s = this.world.supply(this.player);
     const secs = Math.floor((this.world.tick / ticks(60)) * 60);
-    this.bar.innerHTML = `<span class="res clock">${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</span><span class="res min"><i></i>${p.minerals}</span><span class="res nrg"><i></i>${p.energy}</span><span class="res sup${s.used >= s.max ? ' full' : ''}"><i></i>${s.used}/${s.max}</span>`;
+    if (!this.bar.children.length) this.bar.innerHTML = '<span class="res clock">-</span><span class="res min"><i></i>-</span><span class="res nrg"><i></i>-</span><span class="res sup"><i></i>-</span>';
+    const [clock, min, nrg, sup] = this.bar.children as HTMLCollectionOf<HTMLElement>;
+    clock.lastChild!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    this.count(min, p.minerals);
+    this.count(nrg, p.energy);
+    sup.lastChild!.textContent = `${s.used}/${s.max}`;
+    sup.classList.toggle('full', s.used >= s.max);
     this.updatePanel();
+    this.updateIdle();
+    this.updateGroups();
     this.updateCard();
     this.updateGhost();
     if (this.world.winner !== null && this.banner.hidden) {
@@ -369,7 +456,8 @@ export class Hud {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const pic = b.icon ? img(b.icon, '') : '';
-        return `<button class="cmd${off}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+        const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
+        return `<button class="cmd${off}${anim}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
   }
