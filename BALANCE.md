@@ -24,6 +24,10 @@ Ajoutées la nuit du 16 au 17 novembre, d'après la notice 1.2-1, toutes proviso
 - **Isdaris** : `baliste`, `espion`, `dragon`, `voyageur`, `behemoth`, `orbecommandement`, `trone`, `deflecteur`, les extensions (`miniportail`, `cuvegenetique`, `laboratoire`, `assembleur`, `balise`, `totem`, `autel`, `pyramide`, `observatoire`, `relais`, `porte`) et les recherches (`portailatk1` à `3`, `portailarmor1` à `3`, `assembleuratk1` à `3`, `assembleurarmor1` à `3`, `bouclier1` à `3`, `cercle1` et `2`, `robots`, `enfouissement`, `deflagration`, `silence`, `teleportation`, `manteau`, `feucirculaire`, `couloir`, `chocmental`, `boostgenetique`, `teleportrapide`, `canonlourd`, `dephasage`, `renvoi`, `omniscience`).
 - Toutes les nouvelles capacités dans `abilities`, et les effets des recherches dans `rules.upgrades`.
 
+Ajoutées le 17 novembre, provisoires aussi :
+- **Humains** : `casernevolante` (Caserne transformée, requiert le Marché), `casernevol` (la même en vol : `speed` règle sa vitesse), capacités `envol` et `atterrissage`.
+- **Isdaris** : `concentrateur` (extension du Trône) et sa capacité `murenergie` : `radius` est la demi-longueur du mur en cases, `duration` sa durée.
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).
@@ -93,3 +97,5 @@ Champs ajoutés :
 | `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
 | `tech.isdaris` | Nano-assembleur avec `barracks` portails, plus de `minerals` minerai et `energy` énergie |
 | `army` | poids de chaque unité dans l'armée de l'IA |
+| `research` | recherches de chaque camp, par ordre de priorité ; l'IA lance la première possible sur un bâtiment libre |
+| `extra` | bâtiments tardifs de chaque camp : `[bâtiment, minute]`, un de chaque à partir de cette minute |

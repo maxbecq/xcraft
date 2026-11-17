@@ -119,6 +119,15 @@ export class Effects {
       if (c.kind !== 'rappel') this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
       this.ability(c.kind, this.at(c.x, c.y, 0.1));
     }
+    // Murs d'énergie: a shimmering curtain of cyan sparks over each tile while it stands.
+    for (const m of world.walls) {
+      for (const i of m.tiles) {
+        const [x, y] = [((i % this.map.width) + 0.5) * FP, (Math.floor(i / this.map.width) + 0.5) * FP];
+        if (!seen(x, y)) continue;
+        const p = this.at(x, y, Math.random() * 1.6).add(new Vector3((Math.random() - 0.5) * 0.9, 0, (Math.random() - 0.5) * 0.9));
+        this.spawn(this.tex.glow, 0x5ae8ff, p, new Vector3(0, 0.5, 0), 0.6, 0.55, 0.25, 0.8, 0, true);
+      }
+    }
     for (const tp of world.teleports) if (seen(tp.x1, tp.y1) || seen(tp.x2, tp.y2)) this.audio.play(tp.phase === 'start' ? 'rappel' : 'arrive');
     for (const d of world.deaths) {
       if (!seen(d.x, d.y)) continue;

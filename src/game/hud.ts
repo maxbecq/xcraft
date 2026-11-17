@@ -318,7 +318,8 @@ export class Hud {
       const a = ABILITIES[name];
       if (a.research && !this.world.level(this.player, a.research)) continue;
       const ready = same.some((o) => o.abilityCd === 0);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true, name) });
+      const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: go });
     }
     // Isdaris: turning into a stronger building, in place.
     for (const t of b.def.morphs ?? []) {

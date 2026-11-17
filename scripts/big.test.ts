@@ -9,9 +9,12 @@ it.skipIf(!process.env.BIG)('big', () => {
   const wins: Record<string, number> = { humains: 0, isdaris: 0, draw: 0 };
   // Units each faction made, by type, over all games.
   const made: Record<string, Set<string>> = {};
+  // Upgrade lines each faction had researched at the end, summed over the games.
+  const researched: Record<string, Record<string, number>> = { humains: {}, isdaris: {} };
   let minutes = 0;
   for (const order of [['humains', 'isdaris'], ['isdaris', 'humains']] as [Faction, Faction][]) {
-    for (const h0 of [88, 92, 96, 100, 104, 108, 112]) for (const h1 of [88, 92, 96, 100, 104, 108, 112]) {
+    const hs = process.env.QUICK ? [92, 100, 108] : [88, 92, 96, 100, 104, 108, 112];
+    for (const h0 of hs) for (const h1 of hs) {
       const w = createMatch(order);
       w.players[0].handicap = h0;
       w.players[1].handicap = h1;
@@ -21,10 +24,11 @@ it.skipIf(!process.env.BIG)('big', () => {
         if (w.tick % 100 === 0) for (const e of w.entities.values()) if (e.def.kind === 'unit') (made[e.type] ??= new Set()).add(`${w.players.length}${h0}${h1}${order[0]}:${e.id}`);
       }
       minutes += w.tick / ticks(60);
+      for (const p of w.players) for (const [line, n] of Object.entries(p.upgrades)) if (n) researched[p.faction][line] = (researched[p.faction][line] ?? 0) + n;
       wins[w.winner === null || w.winner < 0 ? 'draw' : order[w.winner]]++;
     }
   }
   const units = Object.fromEntries(Object.entries(made).map(([t, ids]) => [t, ids.size]));
   console.log('BIG', JSON.stringify(wins), JSON.stringify(units));
-  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, units, minutes: Math.round(minutes / 98) }));
+  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, units, researched, minutes: Math.round(minutes / (wins.humains + wins.isdaris + wins.draw)) }));
 }, 1_800_000);

@@ -171,7 +171,7 @@ export interface AbilityDef {
   /** Research needed before it can be used. */
   research?: string;
   /** Aimed at a point of the map, within `range` tiles of the caster (the others are used on the spot). */
-  target?: 'point';
+  target?: 'point' | 'self';
   range?: number;
   /** Area radius (tiles), damage, and the like, depending on the ability. */
   radius?: number;
@@ -244,6 +244,11 @@ export const ABILITIES: Record<string, AbilityDef> = {
   portedephasage: { name: 'Porte de déphasage', hotkey: 'P', research: 'porte', ...BALANCE.abilities.portedephasage },
   /** Char Pégase (notice): takes off (shooting only at flyers) or lands. */
   decollage: { name: 'Décollage / atterrissage', hotkey: 'D', research: 'decollage', ...BALANCE.abilities.decollage },
+  /** Caserne volante: lifts off, a slow flyer that trains nothing until it lands. */
+  envol: { name: 'Décoller', hotkey: 'D', target: 'self', ...BALANCE.abilities.envol },
+  atterrissage: { name: 'Atterrir', hotkey: 'D', target: 'point', ...BALANCE.abilities.atterrissage },
+  /** Trône (Concentrateur): a wall of energy across the map point, no unit nor shot goes through it. */
+  murenergie: { name: "Mur d'énergie", hotkey: 'M', research: 'concentrateur', ...BALANCE.abilities.murenergie },
 };
 export const OBSERVATION = BALANCE.rules.observation;
 export const RAPPEL = BALANCE.rules.rappel;
@@ -266,7 +271,10 @@ const BASE: Record<string, object> = {
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
   grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, requires: { forge: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
-  caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], faction: 'humains', hotkey: 'K' },
+  caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphs: ['casernevolante'], faction: 'humains', hotkey: 'K' },
+  // Notice: a Caserne turned into one that takes off and lands at will, to set up behind the enemy.
+  casernevolante: { kind: 'building', name: 'Caserne volante', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphOnly: true, requires: { marche: 1 }, ability: 'envol', faction: 'humains', hotkey: 'V' },
+  casernevol: { kind: 'unit', name: 'Caserne volante (en vol)', radius: 1.4, flying: true, mechanical: true, ability: 'atterrissage', faction: 'humains', hotkey: 'V' },
   mine: { kind: 'building', name: 'Mine', size: 3, faction: 'humains', hotkey: 'M' },
   // Mod: « Guilde métallurgique » (the notice's Forge).
   forge: {
@@ -375,8 +383,8 @@ const BASE: Record<string, object> = {
   },
   // Notice: « Trône d'Altar Sargon », the last major building: Béhémoths, and the ultimate powers of its extensions.
   trone: {
-    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, abilities: ['canonorbital', 'portedephasage'], faction: 'isdaris', hotkey: 'A',
-    researches: ['relais', 'porte'],
+    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, abilities: ['canonorbital', 'portedephasage', 'murenergie'], faction: 'isdaris', hotkey: 'A',
+    researches: ['relais', 'porte', 'concentrateur'],
   },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).
   discobole: { kind: 'unit', name: 'Chasseur Discobole', radius: 0.5, mechanical: true, requires: { assembleur: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'D' },
@@ -426,6 +434,7 @@ const BASE: Record<string, object> = {
   omniscience: isd('Omniscience', 'N', 'Espions : vision très étendue.', { autel: 1 }),
   relais: extension('Relais de canon orbital', 'R', "Le Trône frappe depuis l'espace un point visé par un Espion."),
   porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris."),
+  concentrateur: extension('Concentrateur énergétique', 'C', "Le Trône dresse un mur d'énergie que rien ne traverse."),
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
@@ -459,7 +468,7 @@ export const DEFS = Object.fromEntries(
 ) as Record<string, Def>;
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
+export const LOOKS: Record<string, string> = { casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
 /** Size of those stand-in models against the original's. */
 export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1 };
 
