@@ -374,10 +374,15 @@ window.addEventListener(
   },
   { capture: true },
 );
-window.addEventListener('pointerdown', () => audio.start(), { once: true });
-// Menus: a discreet tick on every button and choice.
+for (const type of ['pointerdown', 'pointerup']) window.addEventListener(type, () => audio.start());
+// Menus: a soft blip on every button and choice made, a discreet tick on opening a list or a top-bar button.
 document.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest('.menu button, .menu select, .menu .switch, .tool')) audio.play('click');
+  const t = e.target as HTMLElement;
+  if (t.closest('.menu button, .pause-box button, .hud-banner button')) audio.play('menu');
+  else if (t.closest('.menu select, .tool')) audio.play('click');
+});
+document.addEventListener('change', (e) => {
+  if ((e.target as HTMLElement).closest('.menu')) audio.play('menu');
 });
 
 const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);

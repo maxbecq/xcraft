@@ -1,7 +1,7 @@
 // Sound effects, synthesised with WebAudio: no audio files. Music is handled separately.
 
 export type Sfx =
-  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'order' | 'target'
+  | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'menu' | 'order' | 'target'
   | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive';
 
 const MAX_PER_FRAME = 4;
@@ -14,7 +14,11 @@ export class Audio {
 
   /** Must be called from a user gesture (browsers keep audio locked until then). */
   start(): void {
-    if (this.ctx) return;
+    // iOS only unlocks audio at the end of a touch: a context made earlier stays suspended until then.
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      return;
+    }
     this.ctx = new AudioContext();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.5;
@@ -127,6 +131,12 @@ export class Audio {
         env(0.035, 0.03);
         osc('sine', 2400, 1700, 0.02);
         burst('highpass', 6000, 0.012, 0.015);
+        break;
+      case 'menu': // a menu choice made: a soft rising blip, rounder than the click
+        env(0.1, 0.12);
+        osc('sine', 760, 1500, 0.09);
+        osc('triangle', 1520, 3000, 0.05);
+        burst('highpass', 5000, 0.01, 0.02);
         break;
       case 'order': // a right-click order: a short, low double tick, under the HUD click
         env(0.05, 0.05);
