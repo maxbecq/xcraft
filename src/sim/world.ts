@@ -219,6 +219,8 @@ export class World {
   readonly detected: Set<number>[];
   /** Zones revealed by a Forge's Observation céleste, with ticks left. */
   scans: { owner: number; x: number; y: number; left: number; radius?: number }[] = [];
+  /** Murs d'énergie (Concentrateur): tiles no unit nor shot crosses, with ticks left. */
+  walls: { owner: number; tiles: number[]; left: number }[] = [];
   /** Silence des ions: zones where no ability can be used, until a tick. */
   silences: { x: number; y: number; r: number; until: number }[] = [];
   /** Units hidden this tick by a Déflecteur's aura. */
@@ -281,6 +283,8 @@ export class World {
     this.teleports = [];
     this.casts = [];
     this.scans = this.scans.filter((s) => --s.left > 0);
+    for (const m of this.walls) if (--m.left === 0) for (const i of m.tiles) this.grid.blocked[i]--;
+    this.walls = this.walls.filter((m) => m.left > 0);
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
     if (this.tick % 4 === 0) this.see();
@@ -584,6 +588,7 @@ export class World {
         }
         for (const e of units) this.cast(e);
         const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
+        if (b && c.name === 'envol') return void this.takeOff(b);
         if (!b || c.x === undefined || c.y === undefined) return;
         const kind = c.name ?? (b.def as BuildingDef).ability!;
         const ab = ABILITIES[kind];
@@ -599,6 +604,7 @@ export class World {
           if (![...this.entities.values()].some((s) => s.owner === c.player && s.type === 'espion' && dist(s.x, s.y, cx, cy) <= toFp((s.def as UnitDef).sight))) return void this.say(c.player, 'Un Espion doit viser la cible.');
           for (const t of [...this.entities.values()]) if (t.def.kind !== 'resource' && t.hp > 0 && !t.inside && dist(t.x, t.y, cx, cy) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
         }
+        if (kind === 'murenergie') this.wall(c.player, b, c.x, c.y, ab.radius!, ticks(ab.duration));
         if (kind === 'portedephasage') for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) u.phased = ticks(ab.duration);
         this.casts.push({ kind, x: c.x, y: c.y });
         this.players[c.player].energy -= ab.energy!;
@@ -748,6 +754,16 @@ export class World {
         .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
         .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
     if (this.silenced(e.x, e.y)) return false;
+    if (name === 'atterrissage') {
+      const size = (DEFS.casernevolante as BuildingDef).size;
+      const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
+      if (!this.canPlace('casernevolante', tx, ty, e.owner)) {
+        this.say(e.owner, 'Impossible d’atterrir ici.');
+        return true;
+      }
+      this.transmute(e, 'casernevolante', tx, ty);
+      return true;
+    }
     if (name === 'chocmental') {
       const t = near((t) => this.hostile(t.owner, e.owner))[0];
       if (!t) return false;
@@ -813,6 +829,66 @@ export class World {
     t.path = [];
     t.goal = null;
     this.setOrder(t, null);
+  }
+
+  /**
+   * Mur d'énergie: a line of tiles across (x, y), square to the caster's direction, blocked for a while.
+   * Walkers caught on it are pushed off.
+   */
+  private wall(owner: number, from: Entity, x: number, y: number, half: number, left: number): void {
+    const d = dist(from.x, from.y, x, y) || 1;
+    const [ux, uy] = [-(y - from.y) / d, (x - from.x) / d];
+    const tiles = new Set<number>();
+    for (let k = -half * 2; k <= half * 2; k++) {
+      const [tx, ty] = [tileOf(x + Math.trunc((ux * k * FP) / 2)), tileOf(y + Math.trunc((uy * k * FP) / 2))];
+      if (this.grid.inside(tx, ty)) tiles.add(ty * this.grid.width + tx);
+    }
+    for (const i of tiles) this.grid.blocked[i]++;
+    this.walls.push({ owner, tiles: [...tiles], left });
+    for (const u of this.entities.values()) if (u.def.kind === 'unit' && !flies(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+  }
+
+  /** Where a shot from (x1, y1) to (x2, y2) meets a Mur d'énergie, if it does. */
+  walled(x1: number, y1: number, x2: number, y2: number): { x: number; y: number } | undefined {
+    if (!this.walls.length) return undefined;
+    const steps = Math.ceil((dist(x1, y1, x2, y2) * 2) / FP);
+    for (let k = 1; k < steps; k++) {
+      const [x, y] = [x1 + Math.trunc(((x2 - x1) * k) / steps), y1 + Math.trunc(((y2 - y1) * k) / steps)];
+      const i = tileOf(y) * this.grid.width + tileOf(x);
+      if (this.walls.some((m) => m.tiles.includes(i))) return { x, y };
+    }
+    return undefined;
+  }
+
+  /** Caserne volante: takes off, a slow flyer; anything queued must be finished or cancelled first. */
+  private takeOff(b: Entity): void {
+    if (b.queue.length) return void this.say(b.owner, 'Production en cours.');
+    this.transmute(b, 'casernevol');
+  }
+
+  /** A building that becomes a unit, or back (at tiles tx, ty), keeping its id, rally and share of hit points. */
+  private transmute(e: Entity, type: string, tx = 0, ty = 0): void {
+    const def = DEFS[type] as UnitDef | BuildingDef;
+    const hp = e.hp / e.maxHp;
+    if (e.def.kind === 'building') this.block(e, -1);
+    e.type = type;
+    e.def = def;
+    e.maxHp = def.hp;
+    e.hp = Math.max(1, Math.round(def.hp * hp));
+    e.path = [];
+    e.goal = null;
+    this.setOrder(e, null);
+    if (def.kind === 'unit') {
+      e.radius = toFp(def.radius);
+      e.speed = speedPerTick(def.speed);
+      return;
+    }
+    e.radius = (def.size * FP) / 2;
+    e.speed = 0;
+    [e.tx, e.ty] = [tx, ty];
+    e.x = e.px = tx * FP + e.radius;
+    e.y = e.py = ty * FP + e.radius;
+    this.block(e, 1);
   }
 
   /** Unseen by enemies without detection: invisible units, and Belluaires under Camouflage. */
@@ -1377,6 +1453,9 @@ export class World {
 
   /** Deals one attack's damage (with the attacker's Forge upgrades), alerts the victim and lets it fight back. */
   private hit(e: Entity, t: Entity, a: Attack): void {
+    // A Mur d'énergie stops shots: they flare on it.
+    const stop = a.range >= 1 && this.walled(e.x, e.y, t.x, t.y);
+    if (stop) return void this.shots.push({ x1: e.x, y1: e.y, x2: stop.x, y2: stop.y, kind: 'ranged', type: e.type, air1: flies(e), air2: false });
     const U = BALANCE.rules.upgrades;
     const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
     let bonus = machine ? (a.vsMechanical ?? 0) : 0;
@@ -1408,7 +1487,8 @@ export class World {
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
     }
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, air1: flies(e), air2: flies(t) });
-    // Idle soldiers hit from afar fight back.
+    // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
+    if (e.inside) e = this.entities.get(e.inside) ?? e;
     const td = t.def as UnitDef;
     if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
       this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });

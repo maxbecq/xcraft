@@ -59,16 +59,46 @@ export class Audio {
       src.start(t);
       src.stop(t + dur);
     };
+    /** A burst of filtered noise with its own envelope: the bones of every gunshot and impact. */
+    const burst = (type: BiquadFilterType, freq: number, peak: number, decay: number, delay = 0) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + delay);
+      g.gain.exponentialRampToValueAtTime(peak * volume, t + delay + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + delay + decay);
+      g.connect(this.master);
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      src.connect(f).connect(g);
+      src.start(t + delay);
+      src.stop(t + delay + decay + 0.02);
+    };
+    /** A pitched thump (the body of a shot or a blow): a sine dropping fast. */
+    const thump = (f0: number, f1: number, peak: number, decay: number) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(peak * volume, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+      g.connect(this.master);
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + decay);
+      o.connect(g);
+      o.start(t);
+      o.stop(t + decay + 0.02);
+    };
     switch (sfx) {
-      case 'ranged': // alchemical rifle: a hissing crack
-        env(0.25, 0.12);
-        noise(2600, 1.5, 0.12);
-        osc('square', 900, 300, 0.05);
+      case 'ranged': // a chemical rifle shot: a sharp crack, a low punch, a short rolling tail
+        burst('highpass', 3000, 0.22, 0.05);
+        thump(160, 55, 0.22, 0.09);
+        burst('lowpass', 900, 0.1, 0.28, 0.01);
         break;
-      case 'melee': // saw bite
-        env(0.18, 0.1);
-        osc('sawtooth', 220, 140, 0.1);
-        noise(4000, 3, 0.06);
+      case 'melee': // a blade biting: a dull impact with a gritty metallic scrape
+        thump(110, 60, 0.2, 0.08);
+        burst('bandpass', 3200, 0.07, 0.09, 0.01);
+        osc('sawtooth', 180, 130, 0.07);
+        env(0.04, 0.08);
         break;
       case 'heal':
         env(0.08, 0.3);
@@ -93,9 +123,10 @@ export class Audio {
         osc('sawtooth', 440, 330, 0.25);
         setTimeout(() => this.ctx && this.tone(330, 0.3, 'sawtooth'), 220);
         break;
-      case 'click':
-        env(0.1, 0.05);
-        osc('square', 1200, 900, 0.03);
+      case 'click': // a soft, short tick: present but discreet
+        env(0.035, 0.03);
+        osc('sine', 2400, 1700, 0.02);
+        burst('highpass', 6000, 0.012, 0.015);
         break;
       case 'ray': // Isdaris light rifle: a bright falling chirp with a shimmer
         env(0.16, 0.18);

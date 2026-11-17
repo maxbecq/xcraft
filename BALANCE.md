@@ -21,6 +21,23 @@ Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2
 
 Le camp **Z** (les Machines, notice 1.2-1) est entièrement provisoire : le mod SC2 n'a pas ce camp (son camp insectoïde est organique), ses valeurs sont calquées par le programmeur sur les deux autres camps. Sont concernés : `drone`, `dronecombat`, `quadripode`, `hexapode`, `coleoptere`, `intelligence`, `pod`, `assimilateur`, `plateforme`, `armement`, `tourelle`, `zattaque1` à `zattaque3`, `zblindage1` à `zblindage3`, `lanceflammes`, `lanceroquettes`, les armes (`weapons`), `rules.equipSeconds`, `rules.creepRepair`, `ai.army.z` et `ai.kits`.
 
+Ajoutées la nuit du 16 au 17 novembre, d'après la notice 1.2-1, toutes provisoires (valeurs du mod quand il en a, sinon de l'auteur du code) :
+- **Humains** : `marche`, `grandconseil`, `grandealchimisterie`, `cuve`, `cadavre`, `scarabee`, et les recherches (`vehicles1` à `3`, `skin1` à `3`, `canonsscies`, `cuirasse`, `scieassaut`, `lamesempoisonnees`, `chargenapalm`, `observation`, `croissance`, `pillage`, `entrainementgroupe`, `armeschimiques`, `cocktail`, `regenerant`, `acide`, `oeilpercant`, `dressageallosaures`, `trebuchet`, `charlourd`, `decollage`, `chargement`, `scarabeassaut`).
+- **Isdaris** : `baliste`, `espion`, `dragon`, `voyageur`, `behemoth`, `orbecommandement`, `trone`, `deflecteur`, les extensions (`miniportail`, `cuvegenetique`, `laboratoire`, `assembleur`, `balise`, `totem`, `autel`, `pyramide`, `observatoire`, `relais`, `porte`) et les recherches (`portailatk1` à `3`, `portailarmor1` à `3`, `assembleuratk1` à `3`, `assembleurarmor1` à `3`, `bouclier1` à `3`, `cercle1` et `2`, `robots`, `enfouissement`, `deflagration`, `silence`, `teleportation`, `manteau`, `feucirculaire`, `couloir`, `chocmental`, `boostgenetique`, `teleportrapide`, `canonlourd`, `dephasage`, `renvoi`, `omniscience`).
+- Toutes les nouvelles capacités dans `abilities`, et les effets des recherches dans `rules.upgrades`.
+
+Ajoutées le 17 novembre, provisoires aussi :
+- **Humains** : `casernevolante` (Caserne transformée, requiert le Marché), `casernevol` (la même en vol : `speed` règle sa vitesse), capacités `envol` et `atterrissage`.
+- **Isdaris** : `concentrateur` (extension du Trône) et sa capacité `murenergie` : `radius` est la demi-longueur du mur en cases, `duration` sa durée.
+
+Champs ajoutés :
+- `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
+- `lifetime` : durée de vie en secondes (Cadavre réanimé).
+- `bunker` sur une unité : places à bord (Scarabée).
+- `cloakAura` : rayon d'invisibilité autour d'un bâtiment (Déflecteur).
+- Capacités : `range` (portée de lancement), `radius` (zone), `damage`, `max` (unités déplacées au plus), `energy` (coût).
+- `rules.trade` : le Marché échange `give` d'une ressource contre `get` de l'autre.
+
 ## Unités et bâtiments (`units`)
 
 | Champ | Sens |
@@ -89,3 +106,5 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `tech.isdaris` | Nano-assembleur avec `barracks` portails, plus de `minerals` minerai et `energy` énergie |
 | `army` | poids de chaque unité dans l'armée de l'IA |
 | `kits` | poids de chaque kit d'arme que l'IA Z monte sur ses socles |
+| `research` | recherches de chaque camp, par ordre de priorité ; l'IA lance la première possible sur un bâtiment libre |
+| `extra` | bâtiments tardifs de chaque camp : `[bâtiment, minute]`, un de chaque à partir de cette minute |

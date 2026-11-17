@@ -1235,7 +1235,8 @@ export class EntityRenderer {
     const pivot = new Group(); // animated wrapper, so the model keeps its own transform
     pivot.add(body);
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
-    if (e.def.kind === 'unit') body.scale.setScalar(UNIT_SCALE);
+    // A unit drawn with a building's model (Caserne volante in flight) keeps the building's size.
+    if (e.def.kind === 'unit' && DEFS[LOOKS[e.type] ?? e.type]?.kind !== 'building') body.scale.setScalar(UNIT_SCALE);
     if ((e.def as UnitDef).cloaked) ghost(body);
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.

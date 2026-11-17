@@ -8,6 +8,8 @@
     "conseil": { "hp": 4000, "armor": 3, "sight": 13, "supply": 10, "cost": { "minerals": 1000, "energy": 0 }, "buildTime": 80 },
     "grenier": { "hp": 1000, "armor": 1, "sight": 7, "supply": 10, "cost": { "minerals": 200, "energy": 0 }, "buildTime": 25 },
     "caserne": { "hp": 2600, "armor": 1, "sight": 10, "supply": 0, "cost": { "minerals": 350, "energy": 0 }, "buildTime": 45 },
+    "casernevolante": { "hp": 2600, "armor": 1, "sight": 10, "supply": 0, "cost": { "minerals": 150, "energy": 150 }, "buildTime": 40 },
+    "casernevol": { "hp": 2600, "armor": 1, "speed": 1.2, "sight": 9, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1 },
     "mine": { "hp": 1000, "armor": 1, "sight": 5, "supply": -4, "cost": { "minerals": 600, "energy": 0 }, "buildTime": 30, "energyRate": 2.5 },
     "forge": { "hp": 2800, "armor": 2, "sight": 10, "supply": 0, "cost": { "minerals": 400, "energy": 0 }, "buildTime": 50 },
     "fortin": { "hp": 600, "armor": 2, "sight": 8, "supply": 0, "cost": { "minerals": 200, "energy": 0 }, "buildTime": 30, "bunker": 4 },
@@ -113,6 +115,7 @@
     "omniscience": {"cost": {"minerals": 150, "energy": 150}, "buildTime": 50},
     "relais": {"cost": {"minerals": 400, "energy": 400}, "buildTime": 90},
     "porte": {"cost": {"minerals": 400, "energy": 400}, "buildTime": 90},
+    "concentrateur": {"cost": {"minerals": 300, "energy": 300}, "buildTime": 80},
     "portailatk1": {"cost": {"minerals": 250, "energy": 250}, "buildTime": 80},
     "portailatk2": {"cost": {"minerals": 350, "energy": 350}, "buildTime": 90},
     "portailatk3": {"cost": {"minerals": 450, "energy": 450}, "buildTime": 100},
@@ -183,7 +186,10 @@
     "dephasage": {"cooldown": 40, "duration": 6},
     "observatoire": {"cooldown": 60, "duration": 30, "energy": 75, "radius": 15},
     "canonorbital": {"cooldown": 90, "duration": 0, "energy": 200, "radius": 2.5, "damage": 300},
-    "portedephasage": {"cooldown": 90, "duration": 10, "energy": 150, "radius": 4}
+    "portedephasage": {"cooldown": 90, "duration": 10, "energy": 150, "radius": 4},
+    "murenergie": {"cooldown": 45, "duration": 12, "energy": 125, "radius": 3},
+    "envol": {"cooldown": 3, "duration": 0},
+    "atterrissage": {"cooldown": 3, "duration": 0, "range": 0.5}
   },
   "rules": {
     "start": { "minerals": 200, "energy": 0, "serfs": 6 },
@@ -204,6 +210,12 @@
     "maxCloaked": 3,
     "antiAir": { "per": 3, "max": 3 },
     "tech": { "humains": { "minute": 8, "barracks": 2 }, "isdaris": { "barracks": 3, "minerals": 900, "energy": 400 } },
+    "research": {
+      "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
+      "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
+      "z": ["lanceroquettes", "zattaque1", "lanceflammes", "zblindage1", "zattaque2", "zblindage2", "zattaque3", "zblindage3"]
+    },
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 } },
     "kits": { "lourde": 2, "flammes": 1, "roquettes": 2 }
   }

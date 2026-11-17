@@ -214,6 +214,7 @@ def palette():
         "tag": mat("tag", 0xFFFFFF),
         "window_glow": mat("window_glow", 0xFFC870, emission=0xFFA040),
         "lamp_glow": mat("lamp_glow", 0xFFF2C0, emission=0xFFE090),
+        "grimy_glow": mat("grimy_glow", 0x5A4A36, emission=0x3A2610),  # light through filthy glass
         "red_glow": mat("red_glow", 0xFF4A3A, emission=0xFF2010),
         "crystal_pale": mat("crystal_pale", 0xA8E8FF, emission=0x2A7AB0, rough=0.15),
         "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
@@ -1091,11 +1092,144 @@ def rubble(p):
         cyl(p["rust"], 0.012, 0.5, (0.1 + k * 0.08, 0.05, 0.25), rot=(0.5 + k * 0.2, 0.4, k), verts=4)
 
 
+def streetlamp(p):
+    """A slim street lamp: a pole on a plinth, a curved arm and a lit hood, a cable box at its foot."""
+    cyl(p["dark"], 0.11, 0.12, (0, 0, 0.06), verts=8)
+    cyl(p["steel"], 0.035, 1.35, (0, 0, 0.73), verts=8)
+    pipe(p["steel"], (0, 0, 1.38), (0.22, 0, 1.48), r=0.03, verts=6)
+    pipe(p["steel"], (0.22, 0, 1.48), (0.42, 0, 1.46), r=0.03, verts=6)
+    box(p["dark"], (0.26, 0.14, 0.06), (0.42, 0, 1.43))
+    box(p["lamp_glow"], (0.2, 0.09, 0.02), (0.42, 0, 1.4))
+    box(p["scrap"], (0.1, 0.08, 0.18), (0, -0.07, 0.3))
+    box(p["hazard"], (0.08, 0.02, 0.05), (0, -0.115, 0.34))
+
+
+def techbox(p):
+    """A row of street utility cabinets: louvres, a hazard plate, a status light, cables down into the deck."""
+    box(p["scrap"], (0.42, 0.28, 0.6), (-0.22, 0, 0.3))
+    box(p["steel"], (0.34, 0.26, 0.42), (0.2, 0.01, 0.21))
+    for k in range(4):
+        box(p["dark"], (0.3, 0.02, 0.025), (-0.22, -0.145, 0.38 + k * 0.05))  # louvres
+    box(p["hazard"], (0.12, 0.02, 0.08), (-0.22, -0.145, 0.18))
+    ball(p["green_glow"], 0.02, (-0.06, -0.15, 0.52), seg=6, rings=4)
+    ball(p["red_glow"], 0.02, (0.3, -0.135, 0.36), seg=6, rings=4)
+    box(p["dark"], (0.36, 0.2, 0.03), (0.2, 0.01, 0.43))  # lid
+    box(p["dark"], (0.02, 0.1, 0.2), (0.09, -0.14, 0.2), rot=(0, 0, 0.9))  # door hanging open
+    pipe(p["rubber"], (0.38, 0.05, 0.1), (0.62, 0.2, 0.02), r=0.025, verts=6)
+    pipe(p["rubber"], (-0.44, 0.0, 0.12), (-0.6, -0.15, 0.02), r=0.03, verts=6)
+
+
+def billboard(p):
+    """An old street ad on two legs: a frame, a half-dead screen with coloured bands, a torn corner."""
+    for x in (-0.42, 0.42):
+        cyl(p["steel"], 0.03, 0.55, (x, 0.04, 0.27), verts=6)
+    box(p["dark"], (1.0, 0.08, 0.58), (0, 0.04, 0.82))
+    box(p["purple_glow"], (0.86, 0.02, 0.18), (-0.0, -0.005, 0.95))
+    box(p["cyan_glow"], (0.5, 0.02, 0.08), (-0.18, -0.005, 0.76))
+    box(p["orange_glow"], (0.2, 0.02, 0.12), (0.28, -0.005, 0.72))
+    box(p["dark_glass"], (0.3, 0.025, 0.22), (0.3, -0.01, 0.92), rot=(0, 0.25, 0))  # dead pixels
+    box(p["dark"], (0.25, 0.04, 0.2), (0.42, -0.2, 0.06), rot=(1.3, 0, 0.5))  # fallen panel
+    box(p["scrap"], (1.04, 0.1, 0.05), (0, 0.04, 1.12))  # top rail
+
+
+def hovercar(p):
+    """An abandoned flying car grounded askew: a teardrop body, a cracked canopy, dead thruster pods."""
+    body = ball(p["scrap"], 0.5, (0, 0, 0.32), scale=(1.7, 0.85, 0.42), seg=14, rings=8)
+    body.rotation_euler = (0.08, -0.06, 0)
+    ball(p["dark_glass"], 0.3, (-0.18, 0, 0.5), scale=(1.5, 0.9, 0.55), seg=10, rings=6)
+    for x, y in ((-0.55, -0.42), (0.55, -0.42), (-0.55, 0.42), (0.55, 0.42)):
+        cyl(p["dark"], 0.16, 0.14, (x, y, 0.12), verts=10)
+        cyl(p["scrap"], 0.1, 0.02, (x, y, 0.05), verts=10)
+    box(p["red_glow"], (0.04, 0.5, 0.04), (0.84, 0, 0.36))  # tail light, still on
+    box(p["cyan_glow"], (0.03, 0.3, 0.03), (-0.85, 0, 0.3))
+    box(p["rust"], (0.3, 0.4, 0.05), (0.15, 0.35, 0.48), rot=(0.5, 0, 0.2))  # crumpled panel
+    box(p["scrap"], (0.25, 0.12, 0.04), (0.9, 0.55, 0.03), rot=(0, 0, 0.8))  # fallen fin
+
+
+# ---- Fixtures on the city's cliff walls: the wall stands at y = 0, the fixture juts out towards -y.
+
+def walldoor(p):
+    """A service door set in the wall: a steel frame, a half-raised shutter over a dark inside, a lit sign, a step."""
+    box(p["steel"], (0.7, 0.08, 0.95), (0, -0.04, 0.48))
+    box(p["dark"], (0.56, 0.06, 0.8), (0, -0.07, 0.42))
+    box(p["scrap"], (0.56, 0.05, 0.42), (0, -0.09, 0.62))  # shutter, half up
+    for k in range(4):
+        box(p["dark"], (0.56, 0.06, 0.012), (0, -0.1, 0.46 + k * 0.1))
+    box(p["dark"], (0.4, 0.05, 0.1), (0, -0.09, 0.99))
+    box(p["cyan_glow"], (0.34, 0.02, 0.06), (0, -0.12, 0.99))
+    box(p["hazard"], (0.7, 0.04, 0.04), (0, -0.09, 0.9))
+    box(p["concrete"], (0.8, 0.25, 0.06), (0, -0.14, 0.03))  # step
+    ball(p["orange_glow"], 0.025, (0.38, -0.1, 0.8), seg=6, rings=4)
+
+
+def wallpanel(p):
+    """Electrical boxes bolted to the wall, conduits climbing out of them, a warning light."""
+    box(p["scrap"], (0.32, 0.14, 0.42), (-0.15, -0.07, 0.55))
+    box(p["steel"], (0.24, 0.12, 0.3), (0.2, -0.06, 0.45))
+    box(p["dark"], (0.26, 0.02, 0.06), (-0.15, -0.15, 0.62))
+    box(p["hazard"], (0.1, 0.02, 0.1), (-0.15, -0.15, 0.45))
+    box(p["dark"], (0.04, 0.1, 0.2), (0.34, -0.12, 0.45), rot=(0, 0, 0.7))  # door hanging open
+    ball(p["green_glow"], 0.018, (0.12, -0.13, 0.55), seg=6, rings=4)
+    ball(p["red_glow"], 0.025, (-0.15, -0.15, 0.82), seg=6, rings=4)
+    for x in (-0.24, -0.15, -0.06):
+        cyl(p["dark"], 0.02, 0.45, (x, -0.04, 0.98), verts=6)  # conduits up the wall
+    cyl(p["dark"], 0.025, 0.3, (0.2, -0.04, 0.15), verts=6)  # and down into the deck
+    pipe(p["rubber"], (0.3, -0.08, 0.32), (0.45, -0.3, 0.02), r=0.02, verts=5)
+
+
+def wallpipe(p):
+    """A big exhaust duct: out of the wall, a flanged elbow, straight down into the deck through a collar."""
+    r = 0.13
+    pipe(p["rust"], (0, 0.0, 0.82), (0, -0.32, 0.82), r=r, verts=12)
+    pipe(p["rust"], (0, -0.32, 0.82), (0, -0.42, 0.72), r=r, verts=12)  # elbow
+    pipe(p["rust"], (0, -0.45, 0.68), (0, -0.45, 0.0), r=r, verts=12)
+    for y, z, rot in ((-0.02, 0.82, (math.radians(90), 0, 0)), (-0.3, 0.82, (math.radians(90), 0, 0)), (-0.45, 0.6, (0, 0, 0)), (-0.45, 0.25, (0, 0, 0))):
+        cyl(p["steel"], r + 0.03, 0.04, (0, y, z), rot=rot, verts=12)  # flanges
+    cyl(p["concrete"], r + 0.08, 0.08, (0, -0.45, 0.04), verts=12)  # collar in the deck
+    box(p["steel"], (0.06, 0.3, 0.04), (0.16, -0.2, 0.7))  # bracket
+    box(p["hazard"], (0.02, 0.15, 0.08), (r + 0.01, -0.45, 0.4))
+
+
+def rounded(m, w, h, r, depth, loc, seg=5, name="rounded"):
+    """A rounded-rectangle slab standing in the XZ plane (w wide, h tall, corner radius r), depth along Y."""
+    pts = []
+    for cx, cz, a0 in ((w / 2 - r, h / 2 - r, 0), (-w / 2 + r, h / 2 - r, 90), (-w / 2 + r, -h / 2 + r, 180), (w / 2 - r, -h / 2 + r, 270)):
+        for k in range(seg + 1):
+            a = math.radians(a0 + 90 * k / seg)
+            pts.append((cx + r * math.cos(a), cz + r * math.sin(a)))
+    n = len(pts)
+    verts = [(x, -depth / 2, z) for x, z in pts] + [(x, depth / 2, z) for x, z in pts]
+    faces = [tuple(range(n))[::-1], tuple(range(n, 2 * n))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    me.update()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.location = loc
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    return _finish(o, m, name)
+
+
+def shopfront(p):
+    """A shop window in the wall, old-republic style: one big rounded bay of filthy glass, dim light inside, grime run down from it."""
+    rounded(p["steel"], 0.86, 0.62, 0.2, 0.1, (0, -0.02, 0.5))  # frame, half sunk in the wall
+    rounded(p["grimy_glow"], 0.74, 0.5, 0.15, 0.02, (0, -0.075, 0.5))  # lit glass
+    rounded(p["dark_glass"], 0.3, 0.22, 0.08, 0.02, (0.2, -0.085, 0.42))  # a dead, smashed pane corner
+    for x, z, w, h in ((-0.2, 0.36, 0.3, 0.1), (0.05, 0.62, 0.22, 0.07), (-0.27, 0.58, 0.12, 0.14)):
+        rounded(p["dark"], w, h, min(w, h) / 2.2, 0.01, (x, -0.088, z))  # smears of filth on the glass
+    box(p["dark"], (0.74, 0.03, 0.025), (0, -0.085, 0.47))  # transom bar
+    box(p["scrap"], (0.8, 0.1, 0.035), (0, -0.07, 0.2))  # sill
+    box(p["dark"], (0.2, 0.15, 0.12), (-0.28, -0.22, 0.06), rot=(0, 0, 0.3))  # junk left out front
+
+
 DOODADS = {
     "rocks_a": rocks_a, "rocks_b": rocks_b, "pebbles": pebbles, "dead_tree": dead_tree, "dry_bush": dry_bush,
     "tire_pile": tire_pile, "barrels": barrels, "wreck": wreck, "bones": bones, "scrap_pile": scrap_pile,
     "crates": crates, "barrier": barrier, "vending": vending, "trash": trash, "vent": vent, "terminal": terminal,
-    "cables": cables, "rubble": rubble,
+    "cables": cables, "rubble": rubble, "streetlamp": streetlamp, "techbox": techbox, "billboard": billboard,
+    "hovercar": hovercar, "walldoor": walldoor, "wallpanel": wallpanel, "wallpipe": wallpipe, "shopfront": shopfront,
 }
 
 def marche(p):
@@ -1173,6 +1307,97 @@ def scarabee(p):
             box(p["dark"], (0.04, 0.2, 0.05), (x, y, 0.7))  # firing slits
     cyl(p["scrap"], 0.16, 0.08, (0, 0.25, 1.0), verts=12)  # hatch
     pipe(p["scrap"], (0.3, 0.6, 0.7), (0.35, 0.8, 1.0), r=0.04)  # exhaust
+
+
+def baliste(p):
+    """Baliste plasma: a levitating Art Deco gun platform, a fan of ion barrels, cyan levitation rings; front -y."""
+    ball(p["coat"], 0.55, (0, 0.05, 0.45), scale=(1, 1.3, 0.45), seg=16, rings=8)
+    ring(p["cyan_glow"], 0.45, 0.04, (0, 0.05, 0.22), seg=20)
+    ring(p["gold"], 0.58, 0.03, (0, 0.05, 0.45), seg=20)
+    box(p["team"], (0.1, 0.9, 0.06), (0, 0.05, 0.68))
+    for i, x in enumerate((-0.16, -0.05, 0.05, 0.16)):
+        cyl(p["chrome"], 0.04, 0.7, (x, -0.55, 0.62 + (i % 2) * 0.05), rot=(math.radians(90), 0, 0), verts=8)
+    cyl(p["gold"], 0.2, 0.18, (0, -0.25, 0.62), rot=(math.radians(90), 0, 0), verts=12)
+    ball(p["cyan_glow"], 0.07, (0, -0.92, 0.65))
+
+
+def espion(p):
+    """Espion: a small chrome scout drone, a teardrop with fins and a cyan eye; front -y."""
+    ball(p["chrome"], 0.25, (0, 0, 0.3), scale=(0.8, 1.4, 0.7), seg=14, rings=8)
+    ball(p["cyan_glow"], 0.08, (0, -0.32, 0.32))
+    fins(p, p["gold"], 3, 0.18, 0.3, 0.12, width=0.25)
+    ring(p["team"], 0.22, 0.025, (0, 0.05, 0.3), rot=(math.radians(90), 0, 0), seg=16)
+
+
+def dragon(p):
+    """Dragon: the Chimère made for space, a long flying wing with two plasma concentrators on its sides; front -y."""
+    ball(p["coat"], 0.3, (0, 0, 0.35), scale=(0.9, 2.4, 0.5), seg=16, rings=8)
+    box(p["coat"], (1.6, 0.4, 0.05), (0, 0.15, 0.32), rot=(0, 0, 0))
+    for sx in (-1, 1):
+        cyl(p["gold"], 0.1, 0.8, (sx * 0.75, -0.1, 0.35), rot=(math.radians(90), 0, 0), verts=10)
+        ball(p["cyan_glow"], 0.08, (sx * 0.75, -0.52, 0.35))
+        box(p["team"], (0.25, 0.3, 0.06), (sx * 0.45, 0.2, 0.36))
+    box(p["gold"], (0.05, 0.4, 0.25), (0, 0.55, 0.5))
+
+
+def voyageur(p):
+    """Voyageur: a large unarmed flying generator, a ringed sphere with a glowing core and Art Deco fins."""
+    ball(p["coat"], 0.55, (0, 0, 0.6), seg=18, rings=10)
+    ring(p["gold"], 0.75, 0.06, (0, 0, 0.6), seg=28)
+    ring(p["chrome"], 0.68, 0.04, (0, 0, 0.6), rot=(math.radians(90), 0, 0), seg=28)
+    ball(p["cyan_glow"], 0.12, (0, -0.42, 0.6))
+    fins(p, p["team"], 6, 0.5, 0.6, 0.5, width=0.2)
+
+
+def behemoth(p):
+    """Béhémoth: a flying fortress, a stepped Art Deco hull with towers, rows of lights and heavy cannons; front -y."""
+    ball(p["coat"], 0.9, (0, 0, 0.6), scale=(1, 1.6, 0.4), seg=20, rings=10)
+    for z, sz in ((0.85, 0.9), (1.05, 0.6), (1.22, 0.35)):
+        box(p["coat"], (sz, sz * 1.6, 0.2), (0, 0.1, z))
+    ring(p["gold"], 0.95, 0.05, (0, 0, 0.6), seg=32)
+    for sx in (-1, 1):
+        cyl(p["chrome"], 0.08, 1.0, (sx * 0.45, -1.1, 0.75), rot=(math.radians(90), 0, 0), verts=10)
+        box(p["team"], (0.08, 1.2, 0.1), (sx * 0.62, 0.1, 0.9))
+        for k in range(5):
+            ball(p["window_glow"], 0.04, (sx * 0.7, -0.6 + k * 0.3, 0.7))
+    cone(p["gold"], 0.12, 0.6, (0, 0.3, 1.6), verts=8)
+    ball(p["cyan_glow"], 0.2, (0, 0, 0.18))
+
+
+def orbecommandement(p):
+    """Orbe de commandement: a great luminous orb held in a gold ring above a stepped ivory base."""
+    for sz, z in ((2.7, 0.12), (2.1, 0.35), (1.4, 0.55)):
+        box(p["ivory"], (sz, sz, 0.22), (0, 0, z))
+    for k in range(4):
+        a = k / 4 * math.tau + math.pi / 4
+        pipe(p["gold"], (math.cos(a) * 0.9, math.sin(a) * 0.9, 0.6), (math.cos(a) * 0.55, math.sin(a) * 0.55, 1.8), r=0.07, verts=8)
+    ring(p["gold"], 0.62, 0.07, (0, 0, 1.8), seg=28)
+    ball(p["cyan_glow"], 0.48, (0, 0, 1.8), seg=18, rings=10)
+    fins(p, p["team"], 4, 1.15, 0.5, 0.4, width=0.3)
+
+
+def trone(p):
+    """Trône d'Altar Sargon: a stepped ziggurat crowned by a tall gold throne-spire and a halo of light."""
+    for sz, z in ((3.7, 0.15), (3.0, 0.45), (2.3, 0.75), (1.6, 1.05)):
+        box(p["ivory"], (sz, sz, 0.3), (0, 0, z))
+        box(p["gold"], (sz + 0.04, sz + 0.04, 0.04), (0, 0, z + 0.15))
+    box(p["gold"], (0.7, 0.5, 1.4), (0, 0.2, 1.9))
+    box(p["ivory"], (0.6, 0.15, 1.9), (0, 0.5, 2.1))
+    cone(p["gold"], 0.25, 1.2, (0, 0.2, 3.2), verts=8)
+    ring(p["cyan_glow"], 0.55, 0.04, (0, 0.2, 3.0), seg=24)
+    for sx in (-1, 1):
+        box(p["team"], (0.12, 3.0, 0.1), (sx * 1.5, 0, 0.62))
+
+
+def deflecteur(p):
+    """Déflecteur: an Émetteur turned shield of invisibility: a tall chrome mast with three bent vanes and a pale veil."""
+    cyl(p["ivory"], 0.8, 0.25, (0, 0, 0.12), verts=16)
+    cyl(p["chrome"], 0.08, 1.8, (0, 0, 1.1), verts=10)
+    for k in range(3):
+        a = k / 3 * math.tau
+        box(p["gold"], (0.05, 0.5, 0.9), (math.cos(a) * 0.3, math.sin(a) * 0.3, 1.3), rot=(0.25, 0, a))
+    ball(p["crystal_pale"], 0.25, (0, 0, 2.05))
+    box(p["team"], (0.05, 0.4, 0.2), (0.78, 0, 0.18))
 
 
 # ------------------------------------------------------------------ Z: a nest of metal insects, rusted steel, hydraulics and live wires
@@ -1486,6 +1711,8 @@ def tourelle(p):
 
 
 MODELS = {
+    "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
+    "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
     "scarabee": scarabee,
     "cuve": cuve,
     "marche": marche,
@@ -1651,6 +1878,8 @@ def export_doodads(path):
         o = bpy.context.active_object
         o.name = name
         o.data.name = name
+        # The joined object takes the active part's transform: bake it, or a rotated first part tips the prop over.
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         bpy.ops.object.shade_flat()
         paint(o)
     bpy.ops.object.select_all(action="SELECT")

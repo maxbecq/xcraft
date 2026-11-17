@@ -17,7 +17,7 @@ import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } from './terrain';
-import { BIOMES, cityAbyss, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
+import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
@@ -109,11 +109,12 @@ const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
 setBiome(biome);
-const terrain = buildTerrain(map);
+const roads = biome.style === 'city' ? cityRoads(world) : undefined;
+const terrain = buildTerrain(map, roads?.texture);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, biome.style === 'city');
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets);
 if (biome.style === 'city') scene.add(cityAbyss(map.width, map.height), cityScape(map.width, map.height, 0), cityUnderdeck(map, UNDER_DECK), cityStreets(map, (x, z) => heightAt(map, x, z)));
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
@@ -368,6 +369,10 @@ window.addEventListener(
   { capture: true },
 );
 window.addEventListener('pointerdown', () => audio.start(), { once: true });
+// Menus: a discreet tick on every button and choice.
+document.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('.menu button, .menu select, .menu .switch, .tool')) audio.play('click');
+});
 
 const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
 if (!ATTRACT) {
