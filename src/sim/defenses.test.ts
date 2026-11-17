@@ -56,7 +56,7 @@ describe('construction', () => {
       const w = createMatch([faction, 'humains']);
       const worker = [...w.entities.values()].find((e) => e.owner === 0 && (e.def as { worker?: boolean }).worker)!;
       w.players[0].minerals = 1000;
-      const [tx, ty] = faction === 'isdaris' ? [17, 18] : [20, 20];
+      const [tx, ty] = faction === 'isdaris' ? [17, 18] : [18, 18];
       w.step([{ player: 0, kind: 'build', ids: [worker.id], type, tx, ty }]);
       let b;
       for (let i = 0; i < ticks(60) && !(b && b.buildLeft === 0); i++) {
