@@ -17,14 +17,14 @@ describe('Isdaris defences', () => {
     expect(foe.hp).toBeLessThan(foe.maxHp);
   });
 
-  it('a Pylône sanglant needs a Nano-assembleur', () => {
+  it('a Pylône sanglant needs an Orbe de commandement', () => {
     const w = createMatch(['isdaris', 'humains']);
     const em = w.spawn('emetteur', 0, 20 * FP, 30 * FP);
     w.players[0].minerals = 1000;
     w.players[0].energy = 1000;
     w.step([{ player: 0, kind: 'train', ids: [em.id], type: 'pylonesanglant' }]);
     expect(em.queue).toHaveLength(0);
-    w.spawn('nanoassembleur', 0, 30 * FP, 30 * FP);
+    w.spawn('orbecommandement', 0, 30 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'train', ids: [em.id], type: 'pylonesanglant' }]);
     expect(em.queue).toEqual(['pylonesanglant']);
   });

@@ -96,6 +96,11 @@ export interface Entity {
   ttl: number;
   /** Char Pégase in the air (Décollage). */
   airborne: boolean;
+  /** Créature under ground (Enfouissement). */
+  burrowed: boolean;
+  /** Ticks left: phased out, unhurt and unable to fight (Module déphasant, Porte de déphasage); sending damage back (Sphère de renvoi). */
+  phased: number;
+  reflect: number;
 }
 
 export interface Player {
@@ -202,7 +207,11 @@ export class World {
   /** Invisible enemy units each player currently detects (updated with vision). */
   readonly detected: Set<number>[];
   /** Zones revealed by a Forge's Observation céleste, with ticks left. */
-  scans: { owner: number; x: number; y: number; left: number }[] = [];
+  scans: { owner: number; x: number; y: number; left: number; radius?: number }[] = [];
+  /** Silence des ions: zones where no ability can be used, until a tick. */
+  silences: { x: number; y: number; r: number; until: number }[] = [];
+  /** Units hidden this tick by a Déflecteur's aura. */
+  private shrouded = new Set<number>();
   /** Winning player once the game is over. */
   winner: number | null = null;
   private nextId = 1;
@@ -229,7 +238,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -240,6 +249,7 @@ export class World {
     }
     this.entities.set(e.id, e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
+    if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
   }
 
@@ -271,6 +281,8 @@ export class World {
       if (e.abilityCd > 0) e.abilityCd--;
       if (e.held > 0) e.held--;
       if (e.camo > 0) e.camo--;
+      if (e.phased > 0) e.phased--;
+      if (e.reflect > 0) e.reflect--;
       // Régénérant wears off: the toxins turn on their host.
       if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
       if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
@@ -295,14 +307,21 @@ export class World {
     for (const v of this.vision) v.begin();
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
-      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight;
+      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0);
       for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r, flies(e));
     }
-    for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
+    for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), s.radius ?? OBSERVATION.radius);
     for (const d of this.detected) d.clear();
+    // Déflecteurs hide the allied ground units round them.
+    this.shrouded.clear();
+    for (const d of this.entities.values()) {
+      const r = (d.def as BuildingDef).cloakAura;
+      if (!r || d.buildLeft > 0) continue;
+      for (const u of this.entities.values()) if (u.owner === d.owner && u.def.kind === 'unit' && !flies(u) && dist(u.x, u.y, d.x, d.y) <= toFp(r)) this.shrouded.add(u.id);
+    }
     for (const e of this.entities.values()) {
       if (!this.hidden(e)) continue;
-      for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
+      for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= toFp(s.radius ?? OBSERVATION.radius)) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       for (const s of this.entities.values()) {
         const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : 0);
         if (r && this.hostile(s.owner, e.owner) && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
@@ -513,7 +532,8 @@ export class World {
         return;
       }
       case 'ability': {
-        if (c.name) {
+        const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && b.abilityCd === 0);
+        if (c.name && !named) {
           // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
           const ab = ABILITIES[c.name];
           if (!ab) return;
@@ -526,14 +546,23 @@ export class World {
           return void this.setOrder(e, { kind: 'cast', ability: c.name, x, y });
         }
         for (const e of units) this.cast(e);
-        const b = buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
+        const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
         if (!b || c.x === undefined || c.y === undefined) return;
-        const kind = (b.def as BuildingDef).ability!;
+        const kind = c.name ?? (b.def as BuildingDef).ability!;
         const ab = ABILITIES[kind];
+        if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
         if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
         if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
         if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');
         if (kind === 'observation') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration) });
+        if (kind === 'observatoire') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration), radius: ab.radius });
+        if (kind === 'canonorbital') {
+          // The beam needs an Espion watching the spot; it spares nothing under it.
+          const [cx, cy] = [c.x, c.y];
+          if (![...this.entities.values()].some((s) => s.owner === c.player && s.type === 'espion' && dist(s.x, s.y, cx, cy) <= toFp((s.def as UnitDef).sight))) return void this.say(c.player, 'Un Espion doit viser la cible.');
+          for (const t of [...this.entities.values()]) if (t.def.kind !== 'resource' && t.hp > 0 && !t.inside && dist(t.x, t.y, cx, cy) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+        }
+        if (kind === 'portedephasage') for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) u.phased = ticks(ab.duration);
         this.casts.push({ kind, x: c.x, y: c.y });
         this.players[c.player].energy -= ab.energy!;
         b.abilityCd = ticks(ab.cooldown);
@@ -621,8 +650,23 @@ export class World {
   private cast(e: Entity, name = (e.def as UnitDef).ability): void {
     const def = e.def as UnitDef;
     const ab = name && ABILITIES[name];
-    if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research))) return;
-    if (name === 'decollage') {
+    if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
+    const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
+    if (name === 'enfouissement') {
+      e.burrowed = !e.burrowed;
+      this.setOrder(e, null);
+    } else if (name === 'feucirculaire') {
+      for (const t of around(ab.radius!, (t) => this.hostile(t.owner, e.owner))) this.hit(e, t, { damage: ab.damage!, range: 1, cooldown: 0 });
+    } else if (name === 'manteau') {
+      for (const t of around(ab.radius!, (t) => t.owner === e.owner)) t.camo = ticks(ab.duration);
+    } else if (name === 'dephasage') {
+      e.phased = ticks(ab.duration);
+    } else if (name === 'couloir') {
+      // Through the corridor to the nearest other Espion of ours.
+      const other = [...this.entities.values()].filter((o) => o !== e && o.owner === e.owner && o.type === 'espion').sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.id - b.id)[0];
+      if (!other) return void this.say(e.owner, 'Il faut un second Espion.');
+      for (const t of around(ab.radius!, (t) => t.owner === e.owner && t !== e && !flies(t)).slice(0, ab.max)) this.place(t, other.x, other.y);
+    } else if (name === 'decollage') {
       // Take off, or land where the ground is open; either takes a moment.
       if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
       e.airborne = !e.airborne;
@@ -666,7 +710,36 @@ export class World {
       [...this.entities.values()]
         .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
         .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
-    if (name === 'explosiftoxique') {
+    if (this.silenced(e.x, e.y)) return false;
+    if (name === 'chocmental') {
+      const t = near((t) => this.hostile(t.owner, e.owner))[0];
+      if (!t) return false;
+      t.held = Math.max(t.held, ticks(ab.duration));
+    } else if (name === 'double') {
+      const t = near((t) => t.owner === e.owner && t.type !== 'cadavre')[0];
+      if (!t) return false;
+      const copy = this.spawn(t.type, e.owner, t.x + FP, t.y);
+      copy.ttl = ticks(ab.duration);
+    } else if (name === 'deflagration') {
+      const t = [...this.entities.values()]
+        .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
+        .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+      if (!t) return false;
+      this.hit(e, t, { damage: ab.damage!, range: 7, cooldown: 0 });
+    } else if (name === 'silence') {
+      this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+    } else if (name === 'teleport') {
+      this.place(e, x, y);
+    } else if (name === 'teleportgroupe') {
+      const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+      if (!b) return false;
+      const group = [...this.entities.values()].filter((t) => t.owner === e.owner && t.def.kind === 'unit' && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(ab.radius!)).slice(0, ab.max);
+      for (const t of group) this.place(t, b.x, b.y + ((b.def as BuildingDef).size * FP) / 2 + FP);
+    } else if (name === 'renvoi') {
+      const t = near((t) => t.owner === e.owner)[0];
+      if (!t) return false;
+      t.reflect = ticks(ab.duration);
+    } else if (name === 'explosiftoxique') {
       for (const t of near((t) => this.hostile(t.owner, e.owner))) t.poison = Math.max(t.poison, ticks(ab.duration));
     } else if (name === 'regenerant') {
       const t = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical)[0];
@@ -686,14 +759,33 @@ export class World {
         t.held = Math.max(t.held, ticks(ab.duration));
       } else t.hp = Math.min(t.maxHp, t.hp + 2 * ab.damage!);
     }
-    e.abilityCd = ticks(ab.cooldown);
+    // Téléportation rapide: the teleport comes back twice as fast.
+    e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
     this.casts.push({ kind: name, x, y });
     return true;
   }
 
+  /** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
+  private place(t: Entity, x: number, y: number): void {
+    if (!flies(t)) {
+      const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1);
+      [x, y] = [ox * FP + FP / 2, oy * FP + FP / 2];
+    }
+    t.x = t.px = x;
+    t.y = t.py = y;
+    t.path = [];
+    t.goal = null;
+    this.setOrder(t, null);
+  }
+
   /** Unseen by enemies without detection: invisible units, and Belluaires under Camouflage. */
   hidden(e: Entity): boolean {
-    return !!(e.def as UnitDef).cloaked || e.camo > 0;
+    return !!(e.def as UnitDef).cloaked || e.camo > 0 || e.burrowed || this.shrouded.has(e.id);
+  }
+
+  /** Inside a Silence des ions zone: no ability can be used there. */
+  silenced(x: number, y: number): boolean {
+    return this.silences.some((z) => z.until > this.tick && dist(z.x, z.y, x, y) <= z.r);
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
@@ -817,10 +909,32 @@ export class World {
     return false;
   }
 
+  /** Which attack upgrade line a weapon follows: Forge melee or ranged (Humans), Portail or Assembleur (Isdaris). */
+  private attackLine(e: Entity, a: Attack): UpgradeLine {
+    if (this.players[e.owner].faction === 'isdaris') return (e.def as UnitDef).mechanical ? 'assembleuratk' : 'portailatk';
+    return a.range < 1 ? 'melee' : 'ranged';
+  }
+
+  /** Cercle d'énergie: major Isdaris buildings get a stronger shield; Boost génétique: Créatures get hp and speed. */
+  private empower(u: Entity, type: string): void {
+    const U = BALANCE.rules.upgrades;
+    if (type.startsWith('cercle') && u.def.kind === 'building' && ['obelisque', 'portail', 'nanoassembleur', 'orbecommandement', 'trone'].includes(u.type)) {
+      const extra = idiv((u.def.shield ?? 0) * U.cerclePercent, 100);
+      u.maxShield += extra;
+      u.shield += extra;
+    } else if (type === 'boostgenetique' && u.type === 'creature') {
+      const extra = idiv((u.def as UnitDef).hp * U.boost.hp, 100);
+      u.maxHp += extra;
+      u.hp += extra;
+      u.speed = speedPerTick(((u.def as UnitDef).speed * (100 + U.boost.speed)) / 100);
+    }
+  }
+
   /** Armour from research: Armure infanterie for foot soldiers, Blindage véhicules for machines, Peau épaisse for saurians, and unit ones. */
   private armorBonus(t: Entity): number {
     const d = t.def as UnitDef;
-    let bonus = this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+    let bonus = this.players[t.owner].faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+    if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
     if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
     if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
     return bonus;
@@ -829,6 +943,7 @@ export class World {
   /** Extra range from research (Canons sciés: Auxiliaires; Trébuchet intégré: Ankylosaures against buildings). */
   private rangeBonus(e: Entity, t?: Entity): number {
     if (e.type === 'ankylosaure' && t?.def.kind === 'building' && this.level(e.owner, 'trebuchet')) return BALANCE.rules.upgrades.trebuchetRange;
+    if (e.type === 'baliste' && this.level(e.owner, 'canonlourd')) return BALANCE.rules.upgrades.canonlourdRange;
     return e.type === 'auxiliaire' ? this.level(e.owner, 'canonsscies') : 0;
   }
 
@@ -868,6 +983,7 @@ export class World {
     const t = ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime);
     if (DEFS[type].kind !== 'unit') return t;
     let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
+    if (b.type === 'portail' && this.level(b.owner, 'miniportail')) speedup += BALANCE.rules.upgrades.miniportailSpeedup;
     // The Grand Conseil plans production: every unit comes out faster while it stands.
     if ([...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0)) speedup += BALANCE.rules.upgrades.grandConseilSpeedup;
     return idiv(t * (100 - speedup), 100);
@@ -876,7 +992,7 @@ export class World {
   /** Damage that goes through shields first; armour only protects hp. */
   private hurt(t: Entity, damage: number): void {
     t.lastHit = this.tick;
-    if (t.invuln > 0) return;
+    if (t.invuln > 0 || t.phased > 0) return;
     if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
     const absorbed = Math.min(t.shield, damage);
     t.shield -= absorbed;
@@ -895,7 +1011,7 @@ export class World {
     if (!shielding && !(regen && e.hp < e.maxHp)) return;
     const aura = shielding && this.nearShieldAura(e);
     if (shielding && !aura && this.tick - e.lastHit < ticks(7)) return;
-    const rate = regen && e.hp < e.maxHp ? regen : aura ? 8 : 2;
+    const rate = regen && e.hp < e.maxHp ? regen : (aura ? 8 : 2) + (e.owner >= 0 ? this.level(e.owner, 'bouclier') * BALANCE.rules.upgrades.boucliersRegen : 0);
     if (++e.regenTimer < ticks(1 / rate)) return;
     e.regenTimer = 0;
     if (shielding) e.shield++;
@@ -917,6 +1033,18 @@ export class World {
     // Caught under a new building (with or without orders): walk out first.
     if (!flies(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
+    if (e.burrowed) {
+      // Under ground it waits, and bursts out when an enemy walker comes near.
+      e.order = null;
+      const r = toFp(ABILITIES.enfouissement.radius!);
+      for (const t of this.entities.values()) {
+        if (t.def.kind === 'unit' && !flies(t) && this.hostile(t.owner, e.owner) && t.hp > 0 && dist(t.x, t.y, e.x, e.y) <= r && this.sees(e.owner, t)) {
+          e.burrowed = false;
+          return this.setOrder(e, { kind: 'attack', target: t.id, auto: true, lx: e.x, ly: e.y });
+        }
+      }
+      return;
+    }
     const o = e.order;
     if (!o) {
       if ((this.tick + e.id) % 4 === 0) this.acquire(e);
@@ -1167,7 +1295,9 @@ export class World {
     e.path = [];
     if (e.cooldown > 0) return;
     // Stimulant: attacks 50 % faster.
+    if (e.phased > 0) return;
     e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
+    if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = idiv(e.cooldown * (100 - BALANCE.rules.upgrades.boost.rate), 100);
     this.hit(e, t, a);
   }
 
@@ -1180,12 +1310,15 @@ export class World {
     if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
     if (machine && e.type === 'cuve' && this.level(e.owner, 'acide')) bonus += U.acideBonus;
     let upgrade = 0;
-    if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, a.range < 1 ? 'melee' : 'ranged') * Math.max(1, Math.round(a.damage / 10));
+    if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(a.damage / 10));
+    if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
     // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
     if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((a.damage + bonus) * U.conseilAura.percent, 100));
     this.hurt(t, a.damage + bonus + upgrade);
     t.lastAttacker = e.id;
     t.lastHitBy = e.owner;
+    // Sphère de renvoi: part of the blow goes back to the attacker.
+    if (t.reflect > 0 && e.def.kind === 'unit' && e.hp > 0) this.hurt(e, Math.max(1, idiv((a.damage + bonus) * U.renvoiPercent, 100)));
     // Lames empoisonnées: a Belluaire's blade poisons living units.
     if (e.type === 'belluaire' && t.def.kind === 'unit' && !machine && this.level(e.owner, 'lamesempoisonnees')) t.poison = ticks(U.poison.seconds);
     // Area weapons splash, half damage, on the ground units round the target (Armes chimiques: the Alchimiste's cocktails too).
@@ -1319,10 +1452,16 @@ export class World {
         this.players[b.owner].upgrades[up.line] = up.level;
         this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');
         if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
+        if (type.startsWith('cercle') || type === 'boostgenetique') for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
         if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UpgradeDef).buildTime);
         return;
       }
       const u = this.spawnBeside(type, b);
+      // Cuve génétique: Créatures come in pairs.
+      if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
+        const twin = this.spawnBeside(type, b);
+        if (b.rally) this.setOrder(twin, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
+      }
       const field = (u.def as UnitDef).worker && (!b.rally || b.rallyTarget) ? (this.entities.get(b.rallyTarget) ?? this.nearestField(u)) : undefined;
       // Workers go mining by default (or on the rallied field); others walk to the rally point.
       if (field) this.setOrder(u, { kind: 'gather', target: field.id, phase: 'go', timer: 0 });

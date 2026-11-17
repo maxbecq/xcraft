@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type BuildingDef, DEFS, FLY_HEIGHT, LOOKS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
@@ -929,6 +929,7 @@ export class EntityRenderer {
     // Mineral fields use one of several crystal clusters, turned and sized at random (stable per field).
     const variant = e.type === 'minerai' ? MINERAL_VARIANTS[e.id % MINERAL_VARIANTS.length] : e.type;
     const body = model(variant, teamMaterials[e.owner] ?? neutral, e.id);
+    body.scale.multiplyScalar(LOOK_SCALE[e.type] ?? 1);
     if (e.type === 'minerai') {
       body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
       body.userData.base = 0.85 + ((e.id * 40503) % 100) / 330;

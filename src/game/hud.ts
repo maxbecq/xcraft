@@ -313,11 +313,12 @@ export class Hud {
       const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
       list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
     }
-    // A building's ability, once researched if it must be.
-    if (b.def.ability && !(ABILITIES[b.def.ability].research && !this.world.level(this.player, ABILITIES[b.def.ability].research!))) {
-      const a = ABILITIES[b.def.ability];
+    // A building's abilities, once researched if they must be.
+    for (const name of abilitiesOf(b.def as BuildingDef)) {
+      const a = ABILITIES[name];
+      if (a.research && !this.world.level(this.player, a.research)) continue;
       const ready = same.some((o) => o.abilityCd === 0);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true) });
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true, name) });
     }
     // Isdaris: turning into a stronger building, in place.
     for (const t of b.def.morphs ?? []) {
@@ -335,6 +336,8 @@ export class Hud {
     // Research: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {
       if (!this.world.researchable(this.player, t)) continue;
+      // Research behind an extension or another research not done yet stays out of the card.
+      if (Object.keys((DEFS[t] as UpgradeDef).requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !this.world.level(this.player, (DEFS[r] as UpgradeDef).line))) continue;
       const d = DEFS[t] as UpgradeDef;
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });

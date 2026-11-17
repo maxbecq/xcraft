@@ -32,6 +32,8 @@ const MAX_WAVE = BALANCE.ai.maxWave;
 /** Forge lines in research order. */
 const RESEARCH = ['ranged', 'armor', 'melee'];
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
+/** Isdaris extensions the AI researches, in order: druides, then ground vehicles, then flyers. */
+const EXTENSIONS = ['laboratoire', 'assembleur', 'balise'];
 
 /** A computer player. It only acts through commands, like a human. */
 export class AI {
@@ -122,7 +124,10 @@ export class AI {
     // Energy kept back for the tech building, then for its units, so cheaper units do not eat it all.
     const techDef = f.tech ? (DEFS[f.tech] as BuildingDef) : undefined;
     const techUp = buildings.some((b) => b.type === f.tech && b.buildLeft === 0);
-    const reserve = !techDef ? 0 : techUp ? Math.min(...techDef.trains!.map((t) => (DEFS[t] as UnitDef).cost.energy)) : techWanted ? techDef.cost.energy : 0;
+    // Isdaris units come with extensions researched on their building (notice): keep energy for the next one.
+    const unlocked = techDef?.trains!.filter((t) => !w.lacks(this.player, t) && (DEFS[t] as UnitDef).attack) ?? [];
+    const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x));
+    const reserve = !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     let energy = p.energy - promisedEnergy;
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
@@ -169,6 +174,16 @@ export class AI {
         energy -= cost.energy;
       }
     }
+    // Isdaris extensions (notice), in order, on the building that hosts each.
+    if (nextExtension && !saving) {
+      const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0);
+      const cost = (DEFS[nextExtension] as UpgradeDef).cost;
+      if (host && minerals >= cost.minerals && energy >= cost.energy) {
+        out.push({ player: this.player, kind: 'train', ids: [host.id], type: nextExtension });
+        minerals -= cost.minerals;
+        energy -= cost.energy;
+      }
+    }
     // Isdaris turn buildings into defences: a Récepteur armé from mid-game, Pylônes sanglants when the tech allows.
     for (const b of buildings) {
       const into = (b.def as BuildingDef).morphs?.find((m) => {
@@ -191,7 +206,7 @@ export class AI {
     // Heavier units from the second production building, one at a time, when affordable.
     for (const t of buildings.filter((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0)) {
       // The kind it has fewest of (Discobole and Chimère take turns); against flyers, only what can shoot them.
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u));
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && (DEFS[u] as UnitDef).attack);
       const antiAirTrains = trains.filter((u) => reaches((DEFS[u] as UnitDef).attack!, true));
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains).slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
       const def = type && (DEFS[type] as UnitDef);
@@ -391,10 +406,10 @@ export class AI {
     if (this.faction !== FACTIONS.humains) {
       // Weighted rotation through the faction's army; energy-hungry units only when affordable, a few invisible ones at most.
       const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
-      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals);
+      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals && !this.world.lacks(this.player, t));
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
       // Against flying enemies, only what can shoot them.
-      const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked);
+      const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       const army = this.enemyAir && antiAir.length ? antiAir : affordable;
       // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones.
