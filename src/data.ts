@@ -23,6 +23,8 @@ export interface Attack {
   air?: boolean;
   /** Hits ground units and buildings (default: true). */
   ground?: boolean;
+  /** Area weapon: half damage to the enemy ground units within this radius (tiles) of the target. */
+  splash?: number;
 }
 
 /** Can this attack reach that target, flying or not? */
@@ -65,6 +67,12 @@ export interface UnitDef {
   detector?: number;
   /** Active ability (key of ABILITIES). */
   ability?: string;
+  /** Further abilities, after `ability`. */
+  abilities?: string[];
+  /** Lives this many seconds, then falls (Cadavre réanimé). */
+  lifetime?: number;
+  /** Units it can carry (Scarabée): they shoot from inside. */
+  bunker?: number;
   faction: Faction;
   hotkey: string;
 }
@@ -105,6 +113,8 @@ export interface BuildingDef {
   bunker?: number;
   /** Buildings this one can turn into, in place, through its production queue (paying the new one's cost). */
   morphs?: string[];
+  /** One per player at most (Grand Conseil). */
+  unique?: boolean;
   /** Not placed by workers: only reached by turning another building into it. */
   morphOnly?: boolean;
   /** Upgrades researched here (keys of DEFS, kind 'upgrade'), through the production queue. */
@@ -156,6 +166,17 @@ export interface AbilityDef {
   energy?: number;
   /** Research needed before it can be used. */
   research?: string;
+  /** Aimed at a point of the map, within `range` tiles of the caster (the others are used on the spot). */
+  target?: 'point';
+  range?: number;
+  /** Area radius (tiles), damage, and the like, depending on the ability. */
+  radius?: number;
+  damage?: number;
+}
+
+/** Every active ability of a unit or building def. */
+export function abilitiesOf(def: { ability?: string; abilities?: string[] }): string[] {
+  return [...(def.ability ? [def.ability] : []), ...(def.abilities ?? [])];
 }
 
 export const ABILITIES: Record<string, AbilityDef> = {
@@ -173,6 +194,18 @@ export const ABILITIES: Record<string, AbilityDef> = {
    * is ours (the Prisme took 100 s to regain its 100 energy). `duration` is the channel.
    */
   rappel: { name: 'Rappel', hotkey: 'R', ...BALANCE.abilities.rappel },
+  /** Belluaire (notice): a sweeping blow that hits every enemy on the ground around it. */
+  coupcirculaire: { name: 'Coup circulaire', hotkey: 'C', ...BALANCE.abilities.coupcirculaire },
+  /** Belluaire (notice): blends into the surroundings, unseen by enemies without detection, for a while. */
+  camouflage: { name: 'Camouflage', hotkey: 'F', ...BALANCE.abilities.camouflage },
+  /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
+  explosiftoxique: { name: 'Explosif toxique', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
+  /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
+  regenerant: { name: 'Régénérant', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
+  /** Alchimiste (notice): a living unit fallen near the point rises and fights for a while as a Cadavre réanimé. */
+  reanimation: { name: 'Réanimation', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
+  /** Phalangiste (notice): a napalm charge on a vehicle near the point: an enemy one is burnt and stopped, an ally one repaired. */
+  napalm: { name: 'Charge de napalm', hotkey: 'N', target: 'point', research: 'chargenapalm', ...BALANCE.abilities.napalm },
 };
 export const OBSERVATION = BALANCE.rules.observation;
 export const RAPPEL = BALANCE.rules.rappel;
@@ -190,15 +223,17 @@ const BASE: Record<string, object> = {
   legionnaire: { kind: 'unit', name: 'Légionnaire-scieur', radius: 0.375, ability: 'charge', faction: 'humains', hotkey: 'L' },
   soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, ability: 'peauderoc', faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
-  phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, faction: 'humains', hotkey: 'P' },
-  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, faction: 'humains', hotkey: 'C' },
+  phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
+  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], faction: 'humains', hotkey: 'C' },
+  // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
+  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, requires: { forge: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
   caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], faction: 'humains', hotkey: 'K' },
   mine: { kind: 'building', name: 'Mine', size: 3, faction: 'humains', hotkey: 'M' },
   // Mod: « Guilde métallurgique » (the notice's Forge).
   forge: {
     kind: 'building', name: 'Forge', size: 3, ability: 'observation', faction: 'humains', hotkey: 'F',
-    researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3', 'vehicles1', 'vehicles2', 'vehicles3', 'skin1', 'skin2', 'skin3', 'canonsscies', 'cuirasse', 'scieassaut', 'lamesempoisonnees', 'observation'],
+    researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3', 'vehicles1', 'vehicles2', 'vehicles3', 'skin1', 'skin2', 'skin3', 'canonsscies', 'cuirasse', 'scieassaut', 'lamesempoisonnees', 'chargenapalm', 'observation'],
   },
   // Notice: « Marché », trade one resource for the other at a poor rate, and economic research (mod: « Guilde des dresseurs-marchands »).
   marche: { kind: 'building', name: 'Marché', size: 3, requires: { caserne: 1 }, researches: ['croissance', 'pillage', 'entrainementgroupe'], faction: 'humains', hotkey: 'R' },
@@ -214,9 +249,17 @@ const BASE: Record<string, object> = {
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
   pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
-  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques'], faction: 'humains', hotkey: 'A' },
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
-  alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, faction: 'humains', hotkey: 'A' },
+  alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, abilities: ['explosiftoxique', 'regenerant', 'reanimation'], faction: 'humains', hotkey: 'A' },
+  // Notice: « Grande Alchimisterie », where the Réservoirs de substances are deployed.
+  grandealchimisterie: {
+    kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, faction: 'humains', hotkey: 'G',
+  },
+  // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
+  cuve: { kind: 'unit', name: 'Réservoir de substances', radius: 0.7, mechanical: true, faction: 'humains', hotkey: 'V' },
+  // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
+  cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
   creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures'], faction: 'humains', hotkey: 'C' },
   // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
@@ -227,7 +270,7 @@ const BASE: Record<string, object> = {
   allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
   // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
   // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
-  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, faction: 'humains', hotkey: 'B' },
+  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, abilities: ['coupcirculaire', 'camouflage'], faction: 'humains', hotkey: 'B' },
   ...upgrades('melee', 'Attaque corps à corps', 'C'),
   ...upgrades('ranged', 'Attaque à distance', 'D'),
   ...upgrades('armor', 'Armure infanterie', 'A'),
@@ -246,6 +289,10 @@ const BASE: Record<string, object> = {
   oeilpercant: research('Œil perçant', 'O', 'Les Plésiosaures détectent les unités invisibles.'),
   dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures."),
   charlourd: research('Char lourd', 'L', 'Chars Pégase : +15 dégâts, +2 armure.'),
+  cocktail: research('Cocktail alchimistique', 'K', "Les Alchimistes lancent l'Explosif toxique."),
+  regenerant: research('Régénérant chimique', 'R', 'Les Alchimistes lancent le Régénérant sur leurs alliés.'),
+  acide: research('Acide anti-structure', 'Q', 'Réservoirs de substances : gros bonus contre les bâtiments et les machines.'),
+  chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
 
   // ---------------------------------------------------------------- Isdaris
   moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },
@@ -294,6 +341,9 @@ const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(
   Object.entries(BASE).map(([type, d]) => [type, { ...d, ...STATS[type], ...((d as { line?: string }).line === '' ? { line: type } : {}) }]),
 ) as Record<string, Def>;
+
+/** Types drawn with another's model and icon until they get their own (render only). */
+export const LOOKS: Record<string, string> = { grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;

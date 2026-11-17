@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type BuildingDef, DEFS, FLY_HEIGHT, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FLY_HEIGHT, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
@@ -93,7 +93,7 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
 }
 const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
 const timber = new MeshStandardMaterial({ vertexColors: true, roughness: 1 });
-const canvasCloth = new MeshStandardMaterial({ color: 0x6b6a45, roughness: 1, side: DoubleSide });
+const canvasCloth = new MeshStandardMaterial({ vertexColors: true, roughness: 1, side: DoubleSide });
 const footing = new MeshStandardMaterial({ vertexColors: true, roughness: 1 });
 
 /**
@@ -156,30 +156,71 @@ function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storey
     // Old timber: each piece its own weathered shade (grey-brown, sun-bleached or dark with damp), a little out of true.
     const add = (g: BufferGeometry, x: number, y: number, z: number, rotY = 0, rotZ = 0) => {
       g.rotateX((rand() - 0.5) * 0.05).rotateZ(rotZ + (rand() - 0.5) * 0.05).rotateY(rotY).translate(x, y, z);
-      shade.setHSL(0.06 + rand() * 0.03, 0.3 + rand() * 0.18, 0.045 + rand() * 0.07);
+      shade.setHSL(0.06 + rand() * 0.035, 0.22 + rand() * 0.25, 0.035 + rand() * 0.08);
+      // Grain and stains: every vertex a little lighter or darker than the piece.
       const n = g.getAttribute('position').count;
-      g.setAttribute('color', new BufferAttribute(new Float32Array(Array.from({ length: n * 3 }, (_, i) => [shade.r, shade.g, shade.b][i % 3])), 3));
+      const colors = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const k = 0.6 + rand() * 0.7;
+        colors.set([shade.r * k, shade.g * k, shade.b * k], i * 3);
+      }
+      g.setAttribute('color', new BufferAttribute(colors, 3));
       parts.push(g);
+    };
+    // A run of boards end to end along x (or z), each its own length, sagging, warped and a little out of line.
+    const boards = (len: number, wid: number, thick: number, x: number, y: number, z: number, alongZ = false) => {
+      for (let t = 0; t < len - 0.05; ) {
+        const l = Math.min(len - t, 0.5 + rand() * 0.5);
+        const g = new BoxGeometry(Math.max(0.05, l - 0.025), thick, wid, 5, 1, 1);
+        const pos = g.getAttribute('position');
+        const sag = 0.006 + rand() * 0.02;
+        for (let i = 0; i < pos.count; i++) {
+          const u = pos.getX(i) / l + 0.5;
+          pos.setY(i, pos.getY(i) - sag * 4 * u * (1 - u) + (rand() - 0.5) * 0.006);
+          pos.setZ(i, pos.getZ(i) + (rand() - 0.5) * 0.006);
+        }
+        const c = -len / 2 + t + l / 2;
+        add(g, alongZ ? x : x + c, y + (rand() - 0.5) * 0.02, alongZ ? z + c : z, alongZ ? Math.PI / 2 : 0, (rand() - 0.5) * 0.025);
+        t += l;
+      }
     };
     // Poles round the outline, one bay apart.
     const nx = bays(w);
     const nz = bays(d);
-    for (let i = 0; i <= nx; i++) for (const z of [-d, d]) add(new CylinderGeometry(0.035, 0.035, step, 5), -w + (2 * w * i) / nx, y0 + step / 2, z);
-    for (let i = 1; i < nz; i++) for (const x of [-w, w]) add(new CylinderGeometry(0.035, 0.035, step, 5), x, y0 + step / 2, -d + (2 * d * i) / nz);
+    const pole = () => new CylinderGeometry(0.028 + rand() * 0.012, 0.035 + rand() * 0.012, step + 0.04, 6, 3);
+    for (let i = 0; i <= nx; i++) for (const z of [-d, d]) add(pole(), -w + (2 * w * i) / nx, y0 + step / 2, z);
+    for (let i = 1; i < nz; i++) for (const x of [-w, w]) add(pole(), x, y0 + step / 2, -d + (2 * d * i) / nz);
     // Ledgers on top of the storey, a plank deck on each long side, and a cross brace on two faces.
-    add(new BoxGeometry(2 * w, 0.05, 0.05), 0, y0 + step, -d);
-    add(new BoxGeometry(2 * w, 0.05, 0.05), 0, y0 + step, d);
-    add(new BoxGeometry(0.05, 0.05, 2 * d), -w, y0 + step, 0);
-    add(new BoxGeometry(0.05, 0.05, 2 * d), w, y0 + step, 0);
-    add(new BoxGeometry(2 * w, 0.04, 0.32), 0, y0 + step - 0.02, d + 0.12);
-    add(new BoxGeometry(0.32, 0.04, 2 * d), w + 0.12, y0 + step - 0.02, 0);
+    boards(2 * w + 0.1, 0.05, 0.05, 0, y0 + step, -d);
+    boards(2 * w + 0.1, 0.05, 0.05, 0, y0 + step, d);
+    boards(2 * d + 0.1, 0.05, 0.05, -w, y0 + step, 0, true);
+    boards(2 * d + 0.1, 0.05, 0.05, w, y0 + step, 0, true);
+    // Walkways of three loose boards on the two camera-facing sides.
+    for (const o of [0.03, 0.135, 0.24]) {
+      boards(2 * w + 0.2, 0.095, 0.03, 0, y0 + step - 0.01, d + o);
+      boards(2 * d + 0.2, 0.095, 0.03, w + o, y0 + step - 0.01, 0, true);
+    }
     const brace = Math.hypot(2 * w / nx, step);
     add(new BoxGeometry(brace, 0.04, 0.04), -w + w / nx, y0 + step / 2, d + 0.02, 0, Math.atan2(step, (2 * w) / nx));
     add(new BoxGeometry(brace, 0.04, 0.04), w + 0.02, y0 + step / 2, -d + d / nz, Math.PI / 2, Math.atan2(step, (2 * d) / nz));
     const storey = new Group();
     storey.add(new Mesh(mergeGeometries(parts), timber));
     // Canvas sheets hang on the camera-facing sides, alternating, so the work behind is half hidden.
-    const sheet = (len: number) => new PlaneGeometry(len * 0.92, step * 0.8);
+    // Old canvas: billowing, faded in patches, stained darker towards the hem.
+    const sheet = (len: number) => {
+      const g = new PlaneGeometry(len * 0.92, step * 0.8, 6, 3);
+      const pos = g.getAttribute('position');
+      const cloth = new Color().setHSL(0.14 + rand() * 0.04, 0.18 + rand() * 0.12, 0.13 + rand() * 0.06);
+      const colors = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        const low = 0.5 - pos.getY(i) / (step * 0.8);
+        pos.setZ(i, Math.sin((pos.getX(i) / len) * 9 + k) * 0.03 + (rand() - 0.5) * 0.02);
+        const f = (0.7 + rand() * 0.5) * (1 - 0.35 * low);
+        colors.set([cloth.r * f, cloth.g * f, cloth.b * f], i * 3);
+      }
+      g.setAttribute('color', new BufferAttribute(colors, 3));
+      return g;
+    };
     const front = new Mesh(sheet(2 * w), canvasCloth);
     front.position.set(0, y0 + step * 0.5, d + 0.03);
     const side = new Mesh(sheet(2 * d), canvasCloth);
@@ -456,6 +497,7 @@ export function preview(type: string, owner: number): { object: Group; clips: An
 
 /** A copy of a Blender model; `seed` picks its graffiti. */
 function model(type: string, team: Material, seed = 0): Group {
+  type = LOOKS[type] ?? type;
   const r = rigged.get(type);
   if (r) {
     const g = new Group();
@@ -735,8 +777,10 @@ export class EntityRenderer {
         const fresh = Math.max(0, 1 - age / 1200);
         // Buildings: the ring fades in, then gives a short flash of light before settling.
         const building = e.def.kind === 'building';
-        const fadeIn = building ? Math.min(1, age / 220) : 1;
-        const flash = building ? Math.max(0, 1 - Math.abs(age - 330) / 130) : 0;
+        const fadeIn = building ? Math.min(1, age / 450) ** 2 : 1;
+        const flash = building ? Math.max(0, 1 - Math.abs(age - 560) / 170) ** 1.5 : 0;
+        // It also closes in a little as it fades in.
+        v.ring.scale.setScalar(building ? 1.18 - 0.18 * Math.min(1, age / 450) : 1);
         dialMat.opacity = 0.6 * fresh * fadeIn;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;

@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, abilitiesOf, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -15,7 +15,9 @@ export type Order =
   | { kind: 'attackMove'; x: number; y: number; target: number }
   | { kind: 'heal'; target: number }
   /** Walk into a bunker (Fortin) and take cover there. */
-  | { kind: 'enter'; target: number };
+  | { kind: 'enter'; target: number }
+  /** Walk within range of (x, y), then use an aimed ability there. */
+  | { kind: 'cast'; ability: string; x: number; y: number };
 
 /** Flying units go straight over cliffs and buildings. */
 export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying;
@@ -86,8 +88,12 @@ export interface Entity {
   lastAttacker: number;
   /** Owner of the last attacker (Pillage pays it when a building falls). */
   lastHitBy: number;
-  /** Ticks of poison left (Lames empoisonnées). */
+  /** Ticks of poison left (Lames empoisonnées, Explosif toxique). */
   poison: number;
+  /** Ticks left: hidden from enemies without detection (Camouflage), unhurt (Régénérant), alive (Cadavre réanimé). */
+  camo: number;
+  invuln: number;
+  ttl: number;
 }
 
 export interface Player {
@@ -114,7 +120,7 @@ export type Command =
   /** Every unit in the given bunkers walks out. */
   | { player: number; kind: 'unload'; ids: number[] }
   /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */
-  | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number }
+  | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number; name?: string }
   /** Marché: sells some of one resource for some of the other. */
   | { player: number; kind: 'trade'; ids: number[]; sell: 'minerals' | 'energy' }
   /** Attack a target, or attack-move to a point when there is none. */
@@ -221,7 +227,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -262,6 +268,10 @@ export class World {
       if (e.cooldown > 0) e.cooldown--;
       if (e.abilityCd > 0) e.abilityCd--;
       if (e.held > 0) e.held--;
+      if (e.camo > 0) e.camo--;
+      // Régénérant wears off: the toxins turn on their host.
+      if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
+      if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
       if (e.skin > 0) e.skin--;
       if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
       this.regenerate(e);
@@ -289,7 +299,7 @@ export class World {
     for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), OBSERVATION.radius);
     for (const d of this.detected) d.clear();
     for (const e of this.entities.values()) {
-      if (!(e.def as UnitDef).cloaked) continue;
+      if (!this.hidden(e)) continue;
       for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= OBSERVATION.radius * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       for (const s of this.entities.values()) {
         const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : 0);
@@ -302,16 +312,22 @@ export class World {
   sees(player: number, e: Entity): boolean {
     if (e.owner === player || (e.owner >= 0 && !this.hostile(e.owner, player))) return true;
     if (e.inside) return false;
-    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!e.def.cloaked || this.detected[player].has(e.id));
+    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!this.hidden(e) || this.detected[player].has(e.id));
     const size = (e.def as BuildingDef).size ?? 1;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
     return false;
   }
 
+  /** Recent bodies (Réanimation), dropped after 20 s. */
+  private corpses: { x: number; y: number; tick: number }[] = [];
+
   private bury(): void {
+    this.corpses = this.corpses.filter((c) => this.tick - c.tick < ticks(20));
     for (const e of [...this.entities.values()]) {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner, air: flies(e) });
+      // Living units leave a body an Alchimiste can raise for a while.
+      if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
       if (e.def.kind === 'building' && e.lastHitBy >= 0 && this.hostile(e.lastHitBy, e.owner) && this.level(e.lastHitBy, 'pillage')) {
         const share = BALANCE.rules.upgrades.pillageShare;
@@ -495,6 +511,18 @@ export class World {
         return;
       }
       case 'ability': {
+        if (c.name) {
+          // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
+          const ab = ABILITIES[c.name];
+          if (!ab) return;
+          if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
+          const casters = units.filter((e) => abilitiesOf(e.def as UnitDef).includes(c.name!) && e.abilityCd === 0);
+          if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
+          if (c.x === undefined || c.y === undefined || !casters.length) return;
+          const [x, y] = [c.x, c.y];
+          const e = casters.sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+          return void this.setOrder(e, { kind: 'cast', ability: c.name, x, y });
+        }
         for (const e of units) this.cast(e);
         const b = buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
         if (!b || c.x === undefined || c.y === undefined) return;
@@ -530,6 +558,7 @@ export class World {
   }
 
   lacks(player: number, type: string): string {
+    if ((DEFS[type] as BuildingDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
     const req = (DEFS[type] as UpgradeDef | UnitDef | BuildingDef).requires ?? {};
     const missing = Object.entries(req)
       .filter(([t, n]) =>
@@ -586,11 +615,20 @@ export class World {
   }
 
   /** Uses the unit's active ability if it is ready. */
-  private cast(e: Entity): void {
+  /** Uses an ability on the spot (by default the unit's first one); aimed ones go through castAt. */
+  private cast(e: Entity, name = (e.def as UnitDef).ability): void {
     const def = e.def as UnitDef;
-    const ab = def.ability && ABILITIES[def.ability];
-    if (!ab || e.abilityCd > 0) return;
-    if (def.ability === 'peauderoc') {
+    const ab = name && ABILITIES[name];
+    if (!ab || ab.target === 'point' || e.abilityCd > 0) return;
+    if (name === 'coupcirculaire') {
+      // A sweeping blow: every enemy on the ground within reach (poisoned too, with Lames empoisonnées).
+      for (const t of [...this.entities.values()]) {
+        if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || flies(t) || !this.hostile(t.owner, e.owner) || this.gap(e, t) > toFp(ab.radius!)) continue;
+        this.hit(e, t, { damage: ab.damage!, range: 0.1, cooldown: 0 });
+      }
+    } else if (name === 'camouflage') {
+      e.camo = ticks(ab.duration);
+    } else if (name === 'peauderoc') {
       // The most wounded ally in range (itself included) not already protected.
       let best: Entity | undefined;
       for (const t of this.entities.values()) {
@@ -609,7 +647,44 @@ export class World {
       e.speed = speedPerTick(def.speed * (def.ability === 'charge' ? 2 : 1.5));
     }
     e.abilityCd = ticks(ab.cooldown);
-    this.casts.push({ kind: def.ability!, x: e.x, y: e.y });
+    this.casts.push({ kind: name!, x: e.x, y: e.y });
+  }
+
+  /** An aimed ability, the caster in range of (x, y). False when there is nothing there to use it on. */
+  private castAt(e: Entity, name: string, x: number, y: number): boolean {
+    const ab = ABILITIES[name];
+    const near = (test: (t: Entity) => boolean) =>
+      [...this.entities.values()]
+        .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
+        .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
+    if (name === 'explosiftoxique') {
+      for (const t of near((t) => this.hostile(t.owner, e.owner))) t.poison = Math.max(t.poison, ticks(ab.duration));
+    } else if (name === 'regenerant') {
+      const t = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical)[0];
+      if (!t) return false;
+      t.invuln = ticks(ab.duration);
+    } else if (name === 'reanimation') {
+      const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
+      if (i < 0) return false;
+      const [c] = this.corpses.splice(i, 1);
+      const u = this.spawn('cadavre', e.owner, c.x, c.y);
+      u.ttl = ticks(ab.duration);
+    } else if (name === 'napalm') {
+      const t = near((t) => !!(t.def as UnitDef).mechanical)[0];
+      if (!t) return false;
+      if (this.hostile(t.owner, e.owner)) {
+        this.hit(e, t, { damage: ab.damage!, range: 6, cooldown: 0 });
+        t.held = Math.max(t.held, ticks(ab.duration));
+      } else t.hp = Math.min(t.maxHp, t.hp + 2 * ab.damage!);
+    }
+    e.abilityCd = ticks(ab.cooldown);
+    this.casts.push({ kind: name, x, y });
+    return true;
+  }
+
+  /** Unseen by enemies without detection: invisible units, and Belluaires under Camouflage. */
+  hidden(e: Entity): boolean {
+    return !!(e.def as UnitDef).cloaked || e.camo > 0;
   }
 
   private smart(c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
@@ -726,6 +801,13 @@ export class World {
     return linked;
   }
 
+  /** Near one of its player's finished Conseils (or the Grand Conseil). */
+  private nearCouncil(e: Entity): boolean {
+    const r = toFp(BALANCE.rules.upgrades.conseilAura.radius);
+    for (const b of this.entities.values()) if (b.owner === e.owner && (b.type === 'conseil' || b.type === 'grandconseil') && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r) return true;
+    return false;
+  }
+
   /** Armour from research: Armure infanterie for foot soldiers, Blindage véhicules for machines, Peau épaisse for saurians, and unit ones. */
   private armorBonus(t: Entity): number {
     const d = t.def as UnitDef;
@@ -755,12 +837,17 @@ export class World {
   /** Training time in ticks, the Caserne's shortened by Entraînement groupé. */
   private trainTime(b: Entity, type: string): number {
     const t = ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime);
-    return b.type === 'caserne' && DEFS[type].kind === 'unit' && this.level(b.owner, 'entrainementgroupe') ? idiv(t * (100 - BALANCE.rules.upgrades.entrainementSpeedup), 100) : t;
+    if (DEFS[type].kind !== 'unit') return t;
+    let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
+    // The Grand Conseil plans production: every unit comes out faster while it stands.
+    if ([...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0)) speedup += BALANCE.rules.upgrades.grandConseilSpeedup;
+    return idiv(t * (100 - speedup), 100);
   }
 
   /** Damage that goes through shields first; armour only protects hp. */
   private hurt(t: Entity, damage: number): void {
     t.lastHit = this.tick;
+    if (t.invuln > 0) return;
     if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
     const absorbed = Math.min(t.shield, damage);
     t.shield -= absorbed;
@@ -808,6 +895,16 @@ export class World {
       return;
     }
     switch (o.kind) {
+      case 'cast': {
+        const ab = ABILITIES[o.ability];
+        if (e.abilityCd > 0) return this.setOrder(e, null);
+        if (dist(e.x, e.y, o.x, o.y) > toFp(ab.range ?? 0)) {
+          if (this.goTo(e, o.x, o.y)) this.setOrder(e, null);
+          return;
+        }
+        if (!this.castAt(e, o.ability, o.x, o.y)) this.say(e.owner, `${ab.name} : rien à viser ici.`);
+        return this.setOrder(e, null);
+      }
       case 'attack':
       case 'attackMove':
       case 'heal':
@@ -1016,7 +1113,7 @@ export class World {
       return this.strike(e, t);
     }
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || t.inside || (!this.sees(e.owner, t) && (o.auto || (t.def as UnitDef).cloaked))) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || t.inside || (!this.sees(e.owner, t) && (o.auto || this.hidden(t)))) return this.setOrder(e, null);
     if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
       // Chased too far: walk back.
       return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
@@ -1050,18 +1147,22 @@ export class World {
     let bonus = machine ? (a.vsMechanical ?? 0) : 0;
     if (machine && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
     if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
+    if (machine && e.type === 'cuve' && this.level(e.owner, 'acide')) bonus += U.acideBonus;
     let upgrade = 0;
     if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, a.range < 1 ? 'melee' : 'ranged') * Math.max(1, Math.round(a.damage / 10));
+    // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
+    if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((a.damage + bonus) * U.conseilAura.percent, 100));
     this.hurt(t, a.damage + bonus + upgrade);
     t.lastAttacker = e.id;
     t.lastHitBy = e.owner;
     // Lames empoisonnées: a Belluaire's blade poisons living units.
     if (e.type === 'belluaire' && t.def.kind === 'unit' && !machine && this.level(e.owner, 'lamesempoisonnees')) t.poison = ticks(U.poison.seconds);
-    // Armes chimiques: the Alchimiste's cocktails splash, half damage, on the ground units round the target.
-    if (e.type === 'alchimiste' && this.level(e.owner, 'armeschimiques')) {
-      for (const o of this.entities.values()) {
+    // Area weapons splash, half damage, on the ground units round the target (Armes chimiques: the Alchimiste's cocktails too).
+    const splash = a.splash ?? (e.type === 'alchimiste' && this.level(e.owner, 'armeschimiques') ? U.chemicalSplash : 0);
+    if (splash) {
+      for (const o of [...this.entities.values()]) {
         if (o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
-        if (dist(o.x, o.y, t.x, t.y) <= toFp(U.chemicalSplash)) this.hurt(o, idiv(a.damage + upgrade, 2));
+        if (dist(o.x, o.y, t.x, t.y) <= toFp(splash)) this.hurt(o, idiv(a.damage + upgrade, 2));
       }
     }
     if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {

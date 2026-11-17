@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -51,6 +51,8 @@ export class Hud {
   private targeting = false;
   /** The click aims a Forge's Observation céleste instead of an attack. */
   private scanning = false;
+  /** Unit ability being aimed (none: a building's). */
+  private aimed?: string;
   private readonly banner = el('div', 'hud-banner');
   private readonly tip = el('div', 'cmd-tip');
   private readonly ghost: Mesh;
@@ -167,12 +169,13 @@ export class Hud {
   private aim(x: number, z: number, target?: Entity): void {
     if (!this.scanning) return this.attack(x, z, target);
     const ids = this.input.own().map((e) => e.id);
-    this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP) });
+    this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP), name: this.aimed });
   }
 
-  private setTargeting(on: boolean, scan = false): void {
+  private setTargeting(on: boolean, scan = false, ability?: string): void {
     this.targeting = on;
     this.scanning = on && scan;
+    this.aimed = on ? ability : undefined;
     document.body.classList.toggle('targeting', on);
     document.body.classList.toggle('scanning', on && scan);
   }
@@ -276,11 +279,14 @@ export class Hud {
         list.push({ label: 'Avancé', key: 'V', action: () => (this.buildMenu = 'advanced') });
       }
       // One button per active ability among the selected units; each ready unit uses it.
-      for (const ab of new Set(units.map((u) => (u.def as UnitDef).ability).filter((a): a is string => !!a))) {
-        const casters = units.filter((u) => (u.def as UnitDef).ability === ab);
+      for (const ab of new Set(units.flatMap((u) => abilitiesOf(u.def as UnitDef)))) {
+        const casters = units.filter((u) => abilitiesOf(u.def as UnitDef).includes(ab));
         const ready = casters.filter((u) => u.abilityCd === 0).length;
         const a = ABILITIES[ab];
-        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, action: () => cmd({ kind: 'ability', ids: casters.map((u) => u.id) }) });
+        const reason = a.research && !this.world.level(this.player, a.research) ? `Requiert : ${DEFS[a.research].name}` : undefined;
+        // Aimed ones wait for a click on the map (gold reticle); the others go at once.
+        const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
+        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
       }
       return list;
     }
@@ -300,7 +306,8 @@ export class Hud {
       const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
       list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
     }
-    if (b.def.ability) {
+    // A building's ability, once researched if it must be.
+    if (b.def.ability && !(ABILITIES[b.def.ability].research && !this.world.level(this.player, ABILITIES[b.def.ability].research!))) {
       const a = ABILITIES[b.def.ability];
       const ready = same.some((o) => o.abilityCd === 0);
       list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: () => this.setTargeting(true, true) });
@@ -414,7 +421,7 @@ export class Hud {
   }
 }
 
-const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${type}.png`;
+const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${LOOKS[type] ?? type}.png`;
 const noIcon = new Set<string>();
 const img = (type: string, alt: string) => (noIcon.has(type) ? '' : `<img src="${icon(type)}" alt="${alt}" data-icon="${type}">`);
 

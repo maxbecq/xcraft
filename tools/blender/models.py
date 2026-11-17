@@ -882,7 +882,30 @@ def marche(p):
     tag(p, (0.0, -0.785, 0.55), (0.5, 0.25))
 
 
+def cuve(p):
+    """Réservoir de substances (notice): a heavy copper vat of glowing reagents on a timber sledge, with
+    pipes, valves and a little crane holding a bomb ready to throw; the front is -y."""
+    box(p["wood"], (0.9, 1.3, 0.12), (0, 0, 0.16))
+    for x in (-0.38, 0.38):
+        box(p["wood"], (0.1, 1.45, 0.1), (x, 0, 0.07))  # runners
+    for x, y in ((-0.48, -0.42), (0.48, -0.42), (-0.48, 0.42), (0.48, 0.42)):
+        cyl(p["rust"], 0.17, 0.08, (x, y, 0.17), rot=(0, math.radians(90), 0), verts=12)  # wheels
+    cyl(p["bronze"], 0.4, 0.62, (0, 0.08, 0.55), verts=16)
+    cyl(p["scrap"], 0.42, 0.05, (0, 0.08, 0.36), verts=16)
+    cyl(p["scrap"], 0.42, 0.05, (0, 0.08, 0.76), verts=16)
+    cyl(p["team"], 0.41, 0.1, (0, 0.08, 0.6), verts=16)
+    ball(p["green_glow"], 0.34, (0, 0.08, 0.86), scale=(1, 1, 0.35))
+    cone(p["bronze"], 0.12, 0.25, (0, 0.08, 1.02), verts=10)
+    pipe(p["bronze"], (0.3, 0.3, 0.8), (0.3, 0.55, 0.3), r=0.035)
+    pipe(p["bronze"], (-0.3, -0.15, 0.75), (-0.3, -0.5, 0.95), r=0.03)
+    ball(p["green_glow"], 0.07, (-0.3, -0.52, 0.98))
+    cyl(p["red_glow"], 0.05, 0.03, (0.41, -0.05, 0.6), rot=(0, math.radians(90), 0), verts=10)  # valve
+    pipe(p["wood"], (0.25, -0.35, 0.22), (0.25, -0.55, 0.85), r=0.035)  # crane arm
+    ball(p["orange_glow"], 0.08, (0.25, -0.58, 0.8))
+
+
 MODELS = {
+    "cuve": cuve,
     "marche": marche,
     "serf": serf, "auxiliaire": auxiliaire, "legionnaire": legionnaire, "soigneur": soigneur,
     "conseil": conseil, "grenier": grenier, "caserne": caserne, "mine": mine, "minerai": minerai, "puits": puits,
