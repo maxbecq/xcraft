@@ -31,11 +31,18 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
     const css = target ? getComputedStyle(target).cursor : '';
     // The computed value is url("…") with any quote escaped; the game's SVG cursors hold brackets, so read up to
     // the closing quote, not the first ")".
-    const m = /url\("((?:[^"\\]|\\.)*)"\)\s*(\d+)?\s*(\d+)?/.exec(css);
+    // Some browsers give it unquoted.
+    const m = /url\("((?:[^"\\]|\\.)*)"\)\s*(\d+)?\s*(\d+)?/.exec(css) ?? /url\(([^\s"]+)\)\s*(\d+)?\s*(\d+)?/.exec(css);
     const [img, hx, hy] = m ? [m[1], Number(m[2] ?? 0), Number(m[3] ?? 0)] : [ARROW, 1, 1];
     if (cursor.dataset.img !== img) {
       cursor.dataset.img = img;
       cursor.style.backgroundImage = `url("${img}")`;
+      // An image the browser cannot draw would leave no cursor at all: fall back to the plain arrow.
+      const probe = new Image();
+      probe.onerror = () => {
+        if (cursor.dataset.img === img) cursor.style.backgroundImage = `url("${ARROW}")`;
+      };
+      probe.src = img.replace(/\\(.)/g, '$1');
     }
     cursor.style.transform = `translate(${x - hx}px, ${y - hy}px)`;
   };
