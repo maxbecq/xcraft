@@ -951,7 +951,9 @@ function start(): void {
   let quietUntil = 0;
   if (ATTRACT) document.addEventListener('pointerdown', () => (quietUntil = performance.now() + 350), true);
   const capped = ATTRACT && (TOUCH || QUALITY_LEVEL === 'basse');
-  renderer.setAnimationLoop((now: number) => {
+  renderer.setAnimationLoop(() => {
+    // performance.now(), the very clock quietUntil is set on, rather than the loop's own frame time.
+    const now = performance.now();
     if (ATTRACT && (now < quietUntil || (capped && now - lastDraw < 30))) return;
     lastDraw = now;
     const dt = clock.getDelta();
