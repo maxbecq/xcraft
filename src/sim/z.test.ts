@@ -77,6 +77,27 @@ describe('Z', () => {
     expect(far.hp).toBe(100);
   });
 
+  it('the AI refits heavy machine guns with researched kits', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    p.energy = 5000;
+    p.upgrades.lanceflammes = 1;
+    p.upgrades.lanceroquettes = 1;
+    const [ic] = of(w, 0, 'intelligence');
+    w.spawn('plateforme', 0, ic.x + 8 * FP, ic.y);
+    const socles = [0, 1, 2, 3, 4].map((i) => {
+      const s = w.spawn('hexapode', 0, ic.x + 5 * FP, ic.y + (i - 2) * FP);
+      s.kit = 'lourde';
+      return s;
+    });
+    const ai = new AI(w, 0);
+    for (let i = 0; i < ticks(10); i++) w.step(ai.think());
+    const kits = socles.map((s) => s.kit);
+    expect(kits).toContain('flammes');
+    expect(kits).toContain('roquettes');
+  });
+
   it('the AI builds a Z base and an armed army', () => {
     const w = createMatch(['z', 'humains']);
     const ai = new AI(w, 0);

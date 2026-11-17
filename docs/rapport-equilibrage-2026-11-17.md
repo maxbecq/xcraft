@@ -105,4 +105,8 @@ Proposition : `dronecombat.hp` 70 → **73**. Humains – Isdaris n'est pas conc
 
 Résultat complet avec les trois retouches : Humains – Isdaris 52 – 46, Z – Humains 49 – 49, Z – Isdaris 52 – 46.
 
-À noter : changer les dégâts du lance-flammes ne change **aucune** partie (résultats identiques à la référence). Le kit est recherché par l'IA mais ne semble jamais toucher : à vérifier côté programme (IA ou simulation), pas côté stats.
+À noter : changer les dégâts du lance-flammes ne change **aucune** partie (résultats identiques à la référence). Vérification faite, l'arme fonctionne (un Hexapode au lance-flammes tue un Légionnaire plus vite qu'à la mitrailleuse lourde) ; c'est l'IA Z qui ne la montait jamais :
+- elle recherche le Lance-roquettes vers 17 min et le Lance-flammes vers 20 min, alors que les parties durent 14 min en moyenne ;
+- à ce moment, presque tous ses socles portent déjà la mitrailleuse lourde, et un socle équipé ne changeait jamais de kit.
+
+Correction côté IA (pas de stat) : un socle à la mitrailleuse lourde resté à la base est rééquipé d'un kit recherché. Mesure après correction : Humains – Isdaris 52 – 46, Z – Humains 49 – 49, Z – Isdaris 52 – 46, inchangés (les kits recherchés n'arrivent que dans les parties de plus de 17 min). Pour que le lance-flammes et le lance-roquettes pèsent dans l'équilibre, il faudrait qu'ils arrivent plus tôt : coût ou durée de `lanceflammes` / `lanceroquettes` (150/150, 50 s), ou le Centre d'armement, à l'appréciation de l'équilibreur.

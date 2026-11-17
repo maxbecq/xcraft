@@ -275,14 +275,16 @@ export class AI {
     }
 
     // Z: socles waiting at home get a weapon kit, in a weighted rotation (only kits that hit flyers against them).
+    // A socle with a kit that needs no research is refitted once researched kits come into the rotation:
+    // researches land late, when most socles already carry the heavy machine gun.
     for (const u of army) {
       const allowed = (u.def as UnitDef).weapons;
-      if (!allowed || u.kit || (u.order && u.order.kind !== 'move') || this.wave.has(u.id)) continue;
+      if (!allowed || (u.kit && WEAPONS[u.kit].research) || (u.order && u.order.kind !== 'move') || this.wave.has(u.id)) continue;
       const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => allowed.includes(k) && !(WEAPONS[k].research && !w.level(this.player, WEAPONS[k].research!)) && (!this.enemyAir || reaches(WEAPONS[k].attack, true)));
       const total = kits.reduce((n, [, wgt]) => n + wgt, 0);
       let k = u.id % Math.max(1, total);
       const kit = kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
-      const cost = kit && WEAPONS[kit].cost;
+      const cost = kit && kit !== u.kit && WEAPONS[kit].cost;
       if (!cost || minerals - keep < cost.minerals || (cost.energy > 0 && energy - unitReserve < cost.energy)) continue;
       out.push({ player: this.player, kind: 'equip', ids: [u.id], weapon: kit });
       minerals -= cost.minerals;
