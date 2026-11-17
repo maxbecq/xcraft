@@ -8,6 +8,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
+import { armillaries, LIFE_GLSL } from './life';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, flies } from '../sim/world';
@@ -449,6 +450,7 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
 function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
+  const living = vivid && !unit;
   m.onBeforeCompile = (shader) => {
     shader.uniforms.teamColor = { value: team };
     shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
@@ -457,6 +459,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
         ${vivid ? 'paint = min(mix(vec3(dot(paint, vec3(0.3, 0.59, 0.11))), paint, 1.35) * 1.3 + 0.01, 1.0);' : ''}
         diffuseColor.rgb = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08), teamMask);
+        ${living ? 'vec4 life = lifeGlow(paint, vLife, vSeed, veinTime);\n        diffuseColor.rgb *= life.a;' : ''}
         ${ivory ? `// Isdaris armour is mostly ivory: tint the pale, unsaturated plates too, or sides blur in a melee.
         float lum = dot(paint, vec3(0.3, 0.59, 0.11));
         float chroma = 1.0 - min(paint.r, min(paint.g, paint.b)) / max(max(paint.r, max(paint.g, paint.b)), 0.001);
@@ -464,7 +467,15 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         diffuseColor.rgb = mix(diffuseColor.rgb, teamColor * (lum * 1.5 + 0.1), ivoryMask * 0.6);
         teamMask = max(teamMask, ivoryMask * 0.35);` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};`);
+        totalEmissiveRadiance += teamColor * teamMask * ${unit ? '0.7' : '0.3'};${living ? '\n        totalEmissiveRadiance += life.rgb;' : ''}`);
+    if (living) {
+      // Human buildings come alive: windows and vats (render/life.ts).
+      shader.uniforms.veinTime = veinTime;
+      shader.vertexShader = `varying vec3 vLife;\nvarying float vSeed;\n${shader.vertexShader}`.replace('#include <project_vertex>', `#include <project_vertex>
+        vLife = (modelMatrix * vec4(transformed, 1.0)).xyz - modelMatrix[3].xyz;
+        vSeed = fract(sin(dot(floor(modelMatrix[3].xz), vec2(12.9898, 78.233))) * 43758.5453);`);
+      shader.fragmentShader = `varying vec3 vLife;\nvarying float vSeed;\nuniform float veinTime;\n${LIFE_GLSL}\n${shader.fragmentShader}`;
+    }
   };
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
@@ -1842,6 +1853,7 @@ export class EntityRenderer {
       root.add(well.group);
       fx = well;
     }
+    fx ??= armillaries(body, e.id) ?? undefined;
     if (e.type === 'reservepsy') {
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);

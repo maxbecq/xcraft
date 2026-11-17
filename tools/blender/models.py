@@ -1358,9 +1358,14 @@ def armillary(p, glow, loc, s=1.0):
     cyl(p["dark"], 0.12 * s, 0.1 * s, (x, y, z + 0.05 * s), verts=10)
     cyl(p["bronze"], 0.03 * s, 0.35 * s, (x, y, z + 0.25 * s), verts=8)
     c = (x, y, z + 0.62 * s)
-    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, 0))
-    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, math.radians(60)))
-    ring(p["bronze"], 0.26 * s, 0.022 * s, c, rot=(math.radians(23), 0, 0))
+    # The rings are parts of their own, pivoting at the centre: the game turns the meridians one way and the
+    # tilted ecliptic the other.
+    k = sum(1 for n in JOINTS if n.startswith("armillary_"))
+    meridians, ecliptic = f"armillary_{k}", f"armillaryb_{k}"
+    JOINTS[meridians] = JOINTS[ecliptic] = c
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, 0), name=meridians)
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, math.radians(60)), name=meridians)
+    ring(p["bronze"], 0.26 * s, 0.022 * s, c, rot=(math.radians(23), 0, 0), name=ecliptic)
     ball(glow, 0.09 * s, c)
 
 
@@ -1531,6 +1536,7 @@ DRESS = {
 def dress(name, fn):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     MATS.clear()
+    JOINTS.clear()
     p = palette()
     bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, f"{name}-meshy.glb"))
     shell = set(bpy.context.scene.objects)
@@ -1538,7 +1544,18 @@ def dress(name, fn):
     fn(p, mat("team_glow", 0x3A7BD5, emission=0x3A7BD5))
     for o in shell:
         bpy.data.objects.remove(o)
-    return [join([o for o in bpy.context.scene.objects if o.type == "MESH"], f"{name}-dress")]
+    # Moving parts (armillary rings) stay apart, each pivoting at its joint.
+    parts = []
+    for part, pivot in JOINTS.items():
+        pieces = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts and o.name.split(".")[0] == part]
+        if not pieces:
+            continue
+        o = join(pieces, part)
+        bpy.context.scene.cursor.location = pivot
+        bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+        parts.append(o)
+    rest = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in parts]
+    return [join(rest, f"{name}-dress"), *parts]
 
 
 def marche(p):
