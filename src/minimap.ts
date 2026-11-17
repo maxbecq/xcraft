@@ -69,7 +69,11 @@ export class Minimap {
       const p = point(e);
       if (e.button === 2) return this.onOrder(p.x, p.y);
       if (this.intercept(p.x, p.y)) return;
-      this.canvas.setPointerCapture(e.pointerId);
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // a held pointer (Pointer Lock) refuses capture: game/pointerlock.ts keeps the press on this canvas
+      }
       move(e);
     });
     this.canvas.addEventListener('pointermove', (e) => {

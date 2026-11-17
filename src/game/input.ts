@@ -173,7 +173,7 @@ export class Input {
         // Middle button: grab and drag the map.
         e.preventDefault();
         this.grab = { x: e.clientX, y: e.clientY };
-        canvas.setPointerCapture(e.pointerId);
+        hold(canvas, e.pointerId);
         return;
       }
       const ground = this.groundAt(e.clientX, e.clientY);
@@ -181,12 +181,12 @@ export class Input {
       if (e.button === 2 && !this.own().length) {
         // Right button with none of ours selected (no order to give): it grabs and drags the map instead.
         this.grab = { x: e.clientX, y: e.clientY };
-        canvas.setPointerCapture(e.pointerId);
+        hold(canvas, e.pointerId);
         return;
       }
       if (e.button === 0) {
         this.dragStart = { x: e.clientX, y: e.clientY };
-        canvas.setPointerCapture(e.pointerId);
+        hold(canvas, e.pointerId);
         // A click on something selects it at once, on the press (ring, portrait and card in this very frame); a drag
         // that follows turns into a box, which replaces it on release. Shift (add or take out) waits for the release.
         const hit = e.shiftKey ? undefined : this.entityAt(e.clientX, e.clientY);
@@ -626,5 +626,15 @@ export class Input {
   private groundAt(x: number, y: number): Vector3 | null {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     return this.raycaster.intersectObject(this.hooks.terrain)[0]?.point ?? null;
+  }
+}
+
+/** Pointer capture, when there is one: a held pointer (Pointer Lock) refuses it, and game/pointerlock.ts then keeps the
+ * events of a press on the element pressed. */
+function hold(el: Element, pointerId: number): void {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {
+    // locked pointer
   }
 }

@@ -1,6 +1,7 @@
 import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
+import { holdPointer } from './game/pointerlock';
 import { CameraRig } from './camera';
 import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
@@ -29,8 +30,18 @@ import { Lockstep, matchCode, newRoom, readCode } from './net';
 import { countMatch, countTitle } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-/** Its width grows with the screen: 12 % of its short side, never under 120 px (130 px on a 1080p screen). */
-const edgeBand = () => Math.max(120, Math.round(0.12 * Math.min(window.innerWidth, window.innerHeight)));
+/** Scrolling settings for this computer (Options): speed and edge band width (1 = as designed), pointer held in the window. */
+const SCROLL_KEY = 'xcraft.scroll';
+const SCROLL: { speed: number; band: number; lock: boolean } = (() => {
+  const base = { speed: 1, band: 1, lock: true };
+  try {
+    return { ...base, ...JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}') };
+  } catch {
+    return base;
+  }
+})();
+/** Its width grows with the screen: 12 % of its short side, never under 120 px (130 px on a 1080p screen), times the setting. */
+const edgeBand = () => Math.round(SCROLL.band * Math.max(120, 0.12 * Math.min(window.innerWidth, window.innerHeight)));
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -236,6 +247,8 @@ const input = new Input(world, map, PLAYER, {
   fling: (vx, vy) => rig.fling(vx, vy),
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
+/** Windowed: the pointer stays in the game (Pointer Lock), so edge scrolling never loses it off the window. */
+const pointer = holdPointer(renderer.domElement, () => SCROLL.lock && !TOUCH && !paused && !ATTRACT);
 const audio = new Audio();
 /** Our units' wordless answer, at most every 0.3 s so a burst of clicks does not chatter. */
 let lastAnswer = 0;
@@ -400,6 +413,8 @@ let paused = false;
 /** Edge and arrow-key scrolling, eased: current speed per axis (-1..1), and how fast it changes per second. */
 const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 8;
+/** How long the view has been scrolled without a break (s), for the speed-up. */
+let scrollHeld = 0;
 /** Letting go is gentler than setting off: the view coasts on about a quarter of a second. */
 const SCROLL_DECEL = 4;
 const tools = document.createElement('div');
@@ -438,6 +453,7 @@ document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
 const setPaused = (on: boolean) => {
   paused = on;
+  if (on) pointer.release(); // the menu wants the real cursor
   pause.hidden = !on;
   if (!on) helpText.hidden = true;
 };
@@ -630,10 +646,26 @@ function showOptions(menu: HTMLElement): void {
         .join('')}</select></label>
       ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
+    ${TOUCH ? '' : `<fieldset class="options"><legend>Défilement</legend>
+      <label>Vitesse <input type="range" data-k="speed" min="0.5" max="2" step="0.1" value="${SCROLL.speed}"></label>
+      <label>Largeur des bords <input type="range" data-k="band" min="0.6" max="1.6" step="0.1" value="${SCROLL.band}"></label>
+      <label><input type="checkbox" data-k="lock"${SCROLL.lock ? ' checked' : ''}> Garder la souris dans la fenêtre (hors plein écran)</label>
+    </fieldset>`}
     <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.onchange = (e) => {
     const field = e.target as HTMLSelectElement | HTMLInputElement;
+    const k = field.dataset.k;
+    if (k === 'speed' || k === 'band' || k === 'lock') {
+      if (k === 'lock') SCROLL.lock = (field as HTMLInputElement).checked;
+      else SCROLL[k] = Number(field.value);
+      try {
+        localStorage.setItem(SCROLL_KEY, JSON.stringify(SCROLL));
+      } catch {
+        // private browsing: kept for this page only
+      }
+      return;
+    }
     if (field.dataset.k === 'fullscreen') {
       try {
         localStorage.setItem(FULLSCREEN_KEY, (field as HTMLInputElement).checked ? '1' : '0');
@@ -840,7 +872,10 @@ function start(): void {
       scroll.y = towards(scroll.y, dy);
       rig.coast(dt);
       const ease = (v: number) => Math.sign(v) * Math.abs(v) * Math.abs(v) * (3 - 2 * Math.abs(v)); // smoothstep
-      if (scroll.x || scroll.y) rig.pan(ease(scroll.x), ease(scroll.y), dt);
+      // Held on and on, scrolling speeds up: slow to aim at first, up to 1.8 times as fast after a second and a half.
+      scrollHeld = dx || dy ? scrollHeld + dt : 0;
+      const boost = SCROLL.speed * (1 + 0.8 * Math.min(1, Math.max(0, scrollHeld - 0.4) / 1.2));
+      if (scroll.x || scroll.y) rig.pan(ease(scroll.x) * boost, ease(scroll.y) * boost, dt);
     }
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
