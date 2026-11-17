@@ -1046,7 +1046,100 @@ def scarabee(p):
     pipe(p["scrap"], (0.3, 0.6, 0.7), (0.35, 0.8, 1.0), r=0.04)  # exhaust
 
 
+def baliste(p):
+    """Baliste plasma: a levitating Art Deco gun platform, a fan of ion barrels, cyan levitation rings; front -y."""
+    ball(p["coat"], 0.55, (0, 0.05, 0.45), scale=(1, 1.3, 0.45), seg=16, rings=8)
+    ring(p["cyan_glow"], 0.45, 0.04, (0, 0.05, 0.22), seg=20)
+    ring(p["gold"], 0.58, 0.03, (0, 0.05, 0.45), seg=20)
+    box(p["team"], (0.1, 0.9, 0.06), (0, 0.05, 0.68))
+    for i, x in enumerate((-0.16, -0.05, 0.05, 0.16)):
+        cyl(p["chrome"], 0.04, 0.7, (x, -0.55, 0.62 + (i % 2) * 0.05), rot=(math.radians(90), 0, 0), verts=8)
+    cyl(p["gold"], 0.2, 0.18, (0, -0.25, 0.62), rot=(math.radians(90), 0, 0), verts=12)
+    ball(p["cyan_glow"], 0.07, (0, -0.92, 0.65))
+
+
+def espion(p):
+    """Espion: a small chrome scout drone, a teardrop with fins and a cyan eye; front -y."""
+    ball(p["chrome"], 0.25, (0, 0, 0.3), scale=(0.8, 1.4, 0.7), seg=14, rings=8)
+    ball(p["cyan_glow"], 0.08, (0, -0.32, 0.32))
+    fins(p, p["gold"], 3, 0.18, 0.3, 0.12, width=0.25)
+    ring(p["team"], 0.22, 0.025, (0, 0.05, 0.3), rot=(math.radians(90), 0, 0), seg=16)
+
+
+def dragon(p):
+    """Dragon: the Chimère made for space, a long flying wing with two plasma concentrators on its sides; front -y."""
+    ball(p["coat"], 0.3, (0, 0, 0.35), scale=(0.9, 2.4, 0.5), seg=16, rings=8)
+    box(p["coat"], (1.6, 0.4, 0.05), (0, 0.15, 0.32), rot=(0, 0, 0))
+    for sx in (-1, 1):
+        cyl(p["gold"], 0.1, 0.8, (sx * 0.75, -0.1, 0.35), rot=(math.radians(90), 0, 0), verts=10)
+        ball(p["cyan_glow"], 0.08, (sx * 0.75, -0.52, 0.35))
+        box(p["team"], (0.25, 0.3, 0.06), (sx * 0.45, 0.2, 0.36))
+    box(p["gold"], (0.05, 0.4, 0.25), (0, 0.55, 0.5))
+
+
+def voyageur(p):
+    """Voyageur: a large unarmed flying generator, a ringed sphere with a glowing core and Art Deco fins."""
+    ball(p["coat"], 0.55, (0, 0, 0.6), seg=18, rings=10)
+    ring(p["gold"], 0.75, 0.06, (0, 0, 0.6), seg=28)
+    ring(p["chrome"], 0.68, 0.04, (0, 0, 0.6), rot=(math.radians(90), 0, 0), seg=28)
+    ball(p["cyan_glow"], 0.12, (0, -0.42, 0.6))
+    fins(p, p["team"], 6, 0.5, 0.6, 0.5, width=0.2)
+
+
+def behemoth(p):
+    """Béhémoth: a flying fortress, a stepped Art Deco hull with towers, rows of lights and heavy cannons; front -y."""
+    ball(p["coat"], 0.9, (0, 0, 0.6), scale=(1, 1.6, 0.4), seg=20, rings=10)
+    for z, sz in ((0.85, 0.9), (1.05, 0.6), (1.22, 0.35)):
+        box(p["coat"], (sz, sz * 1.6, 0.2), (0, 0.1, z))
+    ring(p["gold"], 0.95, 0.05, (0, 0, 0.6), seg=32)
+    for sx in (-1, 1):
+        cyl(p["chrome"], 0.08, 1.0, (sx * 0.45, -1.1, 0.75), rot=(math.radians(90), 0, 0), verts=10)
+        box(p["team"], (0.08, 1.2, 0.1), (sx * 0.62, 0.1, 0.9))
+        for k in range(5):
+            ball(p["window_glow"], 0.04, (sx * 0.7, -0.6 + k * 0.3, 0.7))
+    cone(p["gold"], 0.12, 0.6, (0, 0.3, 1.6), verts=8)
+    ball(p["cyan_glow"], 0.2, (0, 0, 0.18))
+
+
+def orbecommandement(p):
+    """Orbe de commandement: a great luminous orb held in a gold ring above a stepped ivory base."""
+    for sz, z in ((2.7, 0.12), (2.1, 0.35), (1.4, 0.55)):
+        box(p["ivory"], (sz, sz, 0.22), (0, 0, z))
+    for k in range(4):
+        a = k / 4 * math.tau + math.pi / 4
+        pipe(p["gold"], (math.cos(a) * 0.9, math.sin(a) * 0.9, 0.6), (math.cos(a) * 0.55, math.sin(a) * 0.55, 1.8), r=0.07, verts=8)
+    ring(p["gold"], 0.62, 0.07, (0, 0, 1.8), seg=28)
+    ball(p["cyan_glow"], 0.48, (0, 0, 1.8), seg=18, rings=10)
+    fins(p, p["team"], 4, 1.15, 0.5, 0.4, width=0.3)
+
+
+def trone(p):
+    """Trône d'Altar Sargon: a stepped ziggurat crowned by a tall gold throne-spire and a halo of light."""
+    for sz, z in ((3.7, 0.15), (3.0, 0.45), (2.3, 0.75), (1.6, 1.05)):
+        box(p["ivory"], (sz, sz, 0.3), (0, 0, z))
+        box(p["gold"], (sz + 0.04, sz + 0.04, 0.04), (0, 0, z + 0.15))
+    box(p["gold"], (0.7, 0.5, 1.4), (0, 0.2, 1.9))
+    box(p["ivory"], (0.6, 0.15, 1.9), (0, 0.5, 2.1))
+    cone(p["gold"], 0.25, 1.2, (0, 0.2, 3.2), verts=8)
+    ring(p["cyan_glow"], 0.55, 0.04, (0, 0.2, 3.0), seg=24)
+    for sx in (-1, 1):
+        box(p["team"], (0.12, 3.0, 0.1), (sx * 1.5, 0, 0.62))
+
+
+def deflecteur(p):
+    """Déflecteur: an Émetteur turned shield of invisibility: a tall chrome mast with three bent vanes and a pale veil."""
+    cyl(p["ivory"], 0.8, 0.25, (0, 0, 0.12), verts=16)
+    cyl(p["chrome"], 0.08, 1.8, (0, 0, 1.1), verts=10)
+    for k in range(3):
+        a = k / 3 * math.tau
+        box(p["gold"], (0.05, 0.5, 0.9), (math.cos(a) * 0.3, math.sin(a) * 0.3, 1.3), rot=(0.25, 0, a))
+    ball(p["crystal_pale"], 0.25, (0, 0, 2.05))
+    box(p["team"], (0.05, 0.4, 0.2), (0.78, 0, 0.18))
+
+
 MODELS = {
+    "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
+    "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
     "scarabee": scarabee,
     "cuve": cuve,
     "marche": marche,

@@ -459,13 +459,9 @@ export const DEFS = Object.fromEntries(
 ) as Record<string, Def>;
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = {
-  grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf',
-  baliste: 'discobole', espion: 'chimere', dragon: 'chimere', voyageur: 'chimere', behemoth: 'chimere',
-  deflecteur: 'emetteur', orbecommandement: 'orbe', trone: 'obelisque',
-};
+export const LOOKS: Record<string, string> = { grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, espion: 0.65, dragon: 1.15, voyageur: 1.5, behemoth: 2.4, baliste: 1.15, orbecommandement: 1.5, trone: 0.85 };
+export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
