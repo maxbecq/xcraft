@@ -31,11 +31,15 @@ Quatre nouvelles cartes (Le Col, Les Ponts, Carrefour, L'Anneau), mesurées dans
 
 ### 4. Où on en est (carte d'origine)
 
-| Paire | Au matin | Après les stats (§ 1) | Après l'IA Isdaris (§ 2, dernière mesure) |
-|---|---|---|---|
-| Humains – Isdaris | 67 – 31 | 52 – 46 | 49 – 46 (3 nuls) |
-| Z – Humains | 90 – 8 | 49 – 49 | 49 – 49 (non concerné) |
-| Z – Isdaris | 84 – 14 | 52 – 46 | **60 – 38** |
+| Paire | Au matin | Après les stats (§ 1) | Après l'IA Isdaris (§ 2) | Après la correction des constructions (dernière mesure) |
+|---|---|---|---|---|
+| Humains – Isdaris | 67 – 31 | 52 – 46 | 49 – 46 (3 nuls) | 49 – 46 (3 nuls) |
+| Z – Humains | 90 – 8 | 49 – 49 | 49 – 49 (non concerné) | 49 – 49 |
+| Z – Isdaris | 84 – 14 | 52 – 46 | **60 – 38** | **64 – 34** |
+
+Dernière mesure : `main` au commit `b224f33`, 98 parties par paire. Elle vérifie l'effet de `9890e80` : l'IA ne construit plus en boucle là où ses ouvriers ne peuvent pas aller. Seul ce commit change les parties à deux joueurs depuis la mesure précédente. Sur Origine, les parties Humains – Isdaris et Z – Humains donnent les mêmes résultats ; Z – Isdaris passe de 60 – 38 à 64 – 34, un écart de 4 qui n'est pas significatif. La correction ne change donc pas l'équilibre sur cette carte. Durée moyenne : 14 à 15 min.
+
+Victoires par départ (p0 en haut à gauche, p1 en bas à droite) : Humains – Isdaris 57 / 38, Z – Humains 44 / 54, Z – Isdaris 61 / 37. Au total 162 / 129, soit +33 pour p0 sur 291 parties (1,9 σ, à la limite du significatif ; la mesure du rapport des cartes donnait +22).
 
 L'IA Isdaris passe au Psycho-assembleur à la minute 12 : elle produit quelques unités avancées (9 Porte-disques, 3 Balistes sur 196 parties). Plus tôt (minute 8), elle en fait bien plus (53 Porte-disques, 51 Balistes, 19 Chimères) mais perd davantage (65 – 33 contre les Humains, 71 – 27 contre Z) : ces unités semblent trop chères pour leur force. C'est le premier point à régler ; Z – Isdaris reste en défaveur des Isdaris.
 
