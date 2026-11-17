@@ -103,7 +103,7 @@ export class Minimap {
 
     for (const e of world.entities.values()) {
       if (e.type === 'minerai' || e.type === 'puits') {
-        ctx.fillStyle = e.type === 'minerai' ? '#7fd8ff' : '#c08bff';
+        ctx.fillStyle = e.type === 'minerai' ? '#ffb060' : '#c08bff';
         ctx.fillRect(e.tx, e.ty, e.type === 'puits' ? 3 : 1, e.type === 'puits' ? 3 : 1);
         continue;
       }
