@@ -1032,12 +1032,13 @@ export class EntityRenderer {
         dialMat.map!.rotation += dt * (e.owner === player ? 2.2 : -2.2);
         const age = performance.now() - v.ring.userData.since;
         const fresh = Math.max(0, 1 - age / 1200);
-        // Buildings: the ring fades in, then gives a short flash of light before settling.
-        const building = e.def.kind === 'building';
-        const fadeIn = building ? Math.min(1, age / 450) ** 2 : 1;
-        const flash = building ? Math.max(0, 1 - Math.abs(age - 560) / 170) ** 1.5 : 0;
+        // The ring fades in, then gives a short flash of light before settling: slow and bright round a
+        // building, quick and soft round a unit.
+        const [fadeMs, flashAt, flashWidth, flashPower, grow] = e.def.kind === 'building' ? [450, 560, 170, 1, 0.18] : [150, 230, 110, 0.4, 0.08];
+        const fadeIn = Math.min(1, age / fadeMs) ** 2;
+        const flash = flashPower * Math.max(0, 1 - Math.abs(age - flashAt) / flashWidth) ** 1.5;
         // It also closes in a little as it fades in.
-        v.ring.scale.setScalar(building ? 1.18 - 0.18 * Math.min(1, age / 450) : 1);
+        v.ring.scale.setScalar(1 + grow - grow * Math.min(1, age / fadeMs));
         dialMat.opacity = 0.6 * fresh * fadeIn;
         // The halo goes with the ticks; the ring itself settles a little dimmer.
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
