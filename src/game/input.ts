@@ -445,11 +445,13 @@ export class Input {
     }
     if (!/^Digit[0-9]$/.test(e.code)) return;
     const k = e.code;
-    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
       e.preventDefault();
       const ids = this.own().map((u) => u.id);
-      // Ctrl: the group becomes the selection; Shift: the selection joins it.
-      if (e.shiftKey && !e.ctrlKey && !e.metaKey) this.groups.set(k, [...new Set([...(this.groups.get(k) ?? []), ...ids])]);
+      // Ctrl, Cmd or Alt/Option: the group becomes the selection; Shift alone: the selection joins it. On a Mac,
+      // Cmd+digit switches browser tabs and Ctrl+digit desktops before the page sees them: Option is the one that
+      // reaches the game there.
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) this.groups.set(k, [...new Set([...(this.groups.get(k) ?? []), ...ids])]);
       else this.groups.set(k, ids);
       if (ids.length) this.groupSet = { key: k, time: performance.now() };
       return;
