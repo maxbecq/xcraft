@@ -111,7 +111,7 @@ function pcbMap(): CanvasTexture {
     traces.push({ pts, w: rnd() < 0.2 ? 5 : 2 + rnd() * 1.5 });
   }
   const chips = Array.from({ length: 7 }, () => ({ x: Math.floor(rnd() * (S / G)) * G, y: Math.floor(rnd() * (S / G)) * G, w: G * (2 + Math.floor(rnd() * 3)), h: G * (1 + Math.floor(rnd() * 2)), led: rnd() < 0.6 }));
-  const masks = Array.from({ length: 10 }, () => ({ x: rnd() * S, y: rnd() * S, r: 40 + rnd() * 90 }));
+  const masks = Array.from({ length: 16 }, () => ({ x: rnd() * S, y: rnd() * S, r: 50 + rnd() * 110 }));
   // Everything is drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
   for (const ox of [-S, 0, S])
     for (const oy of [-S, 0, S]) {
@@ -119,10 +119,13 @@ function pcbMap(): CanvasTexture {
       g.translate(ox, oy);
       mg.save();
       mg.translate(ox, oy);
+      // A thin green solder-mask wash over everything, thicker in patches, so the ground still shows.
+      g.fillStyle = 'rgba(30,80,52,0.2)';
+      g.fillRect(0, 0, S, S);
       for (const m of masks) {
         const f = g.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
-        f.addColorStop(0, 'rgba(18,52,40,0.35)');
-        f.addColorStop(1, 'rgba(18,52,40,0)');
+        f.addColorStop(0, 'rgba(24,74,46,0.35)');
+        f.addColorStop(1, 'rgba(24,74,46,0)');
         g.fillStyle = f;
         g.fillRect(m.x - m.r, m.y - m.r, m.r * 2, m.r * 2);
       }
@@ -134,7 +137,7 @@ function pcbMap(): CanvasTexture {
         g.strokeStyle = 'rgba(0,0,0,0.4)';
         g.lineWidth = t.w + 2;
         g.stroke();
-        g.strokeStyle = '#9c6a2e';
+        g.strokeStyle = '#7f8a44'; // copper seen through the green mask
         g.lineWidth = t.w;
         g.stroke();
         g.strokeStyle = 'rgba(255,220,150,0.18)';
@@ -231,7 +234,8 @@ export class PowerNet {
         '#include <map_fragment>',
         `#include <map_fragment>
         float w = fract(vDist / 6.0 - time * 0.2);
-        float band = smoothstep(0.0, 0.05, w) * smoothstep(0.2, 0.05, w);
+        // Sharp front on the outside, a glow trailing inwards.
+        float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
         float glow = texture2D(traces, vMapUv).a * band * 0.22;
         diffuseColor.rgb += vec3(0.45, 0.9, 1.0) * glow;
         diffuseColor.a = max(diffuseColor.a, glow);`,
