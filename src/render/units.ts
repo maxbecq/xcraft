@@ -763,6 +763,10 @@ interface View {
   arms?: { upper: Object3D; tip?: Object3D }[];
   /** Z Plate-forme: the socle being built on its deck, fabricated layer by layer as training goes on. */
   fab?: { type: string; model: Object3D; plane: Plane; line: Mesh; bottom: number; top: number; total: number };
+  /** The unit just finished on a Plate-forme's deck, waiting for its own view to take its place. */
+  handoff?: { type: string; owner: number; at: Vector3; yaw: number; time: number };
+  /** A unit leaving the Plate-forme's deck: it rolls or walks from where it was built to its place outside. */
+  emerge?: { from: Vector3; age: number; time: number };
   print?: { plane: Plane; frame: Plane; frameMaterial: LineBasicMaterial; lines: LineSegments[]; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
@@ -1223,6 +1227,13 @@ export class EntityRenderer {
       const ground = heightAt(this.map, x, z);
       v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
       v.root.position.set(x, v.ground, z);
+      if (v.emerge) {
+        // Off the deck: a ramp down from where it was built to where the simulation put it.
+        v.emerge.age += dt;
+        const k = smoothstep(v.emerge.age / v.emerge.time);
+        v.root.position.lerpVectors(v.emerge.from, v.root.position, k);
+        if (k >= 1) v.emerge = undefined;
+      }
       const picked = selected.has(e.id);
       if (picked && !v.ring.visible) v.ring.userData.since = performance.now();
       v.ring.visible = picked;
@@ -1330,6 +1341,9 @@ export class EntityRenderer {
   private assemble(v: View, e: Entity, t: number): void {
     const type = e.buildLeft === 0 && e.queue.length && DEFS[e.queue[0]]?.kind === 'unit' ? e.queue[0] : '';
     if (v.fab && v.fab.type !== type) {
+      // Finished (not cancelled): the new unit drives off from here rather than appearing outside.
+      if (v.fab.total > 0 && v.fab.plane.constant >= v.fab.top - (v.fab.top - v.fab.bottom) * 0.2)
+        v.handoff = { type: v.fab.type, owner: e.owner, at: v.fab.model.getWorldPosition(new Vector3()), yaw: v.model.rotation.y + v.fab.model.rotation.y, time: performance.now() };
       v.fab.model.removeFromParent();
       v.fab.line.removeFromParent();
       v.fab = undefined;
@@ -1401,7 +1415,7 @@ export class EntityRenderer {
 
   private animate(v: View, e: Entity, dt: number): void {
     const t = performance.now() / 1000;
-    const moving = e.x !== e.px || e.y !== e.py;
+    const moving = e.x !== e.px || e.y !== e.py || !!v.emerge;
     if (v.mixer) {
       const kind = e.order?.kind;
       const def = e.def as UnitDef;
@@ -1727,6 +1741,22 @@ export class EntityRenderer {
       }
       play(v, CLIP.idle, 0.8);
       v.mixer.setTime((e.id % 17) / 7); // out of step with each other
+    }
+    if (v.unit) {
+      // Just finished on a Plate-forme's deck: start there, facing as it was built, and drive off.
+      const to = new Vector3(e.x / FP, 0, e.y / FP);
+      const now = performance.now();
+      for (const b of this.views.values()) {
+        const h = b.handoff;
+        if (!h || h.type !== e.type || h.owner !== e.owner || now - h.time > 500 || Math.hypot(h.at.x - to.x, h.at.z - to.z) > 5) continue;
+        b.handoff = undefined;
+        const d = Math.hypot(h.at.x - to.x, h.at.z - to.z);
+        v.emerge = { from: h.at.clone(), age: 0, time: Math.min(1.6, Math.max(0.7, d / 1.5)) };
+        v.heading = h.yaw;
+        v.target = Math.atan2(to.x - h.at.x, to.z - h.at.z);
+        if (v.gait) [v.gait.x, v.gait.z] = [h.at.x, h.at.z];
+        break;
+      }
     }
     this.views.set(e.id, v);
     return v;
