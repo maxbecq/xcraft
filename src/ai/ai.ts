@@ -39,9 +39,15 @@ const LEVELS = BALANCE.ai.levels;
 /** Bases an AI holds at most, and minutes between its expansions after the natural (maps with more bases). */
 const MAX_BASES = 4;
 const EXPAND_EVERY = 5;
-/** Each team's target base, shared by its AIs (by world). */
+/** Each team's target base (building id, by team), shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
-const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
+export const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
+/**
+ * Extra cost of an enemy another team already targets (free-for-all), worth 30 tiles of road: without it, the
+ * equally distant neighbours of a four-corner map are picked by entity order, two AIs pile on the same players
+ * and the two others are left alone.
+ */
+const GANG_UP = (30 * FP) / 20;
 /**
  * Isdaris extensions the AI researches, in order: ground vehicles, druides, then flyers. Each waits for its host,
  * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
@@ -832,7 +838,9 @@ export class AI {
       let defence = 0;
       for (const g of guard) if (dist(g.x, g.y, b.x, b.y) < 9 * FP) defence += g.hp + g.shield;
       if (b.type === FACTIONS[w.players[b.owner].faction].hq) defence /= 2;
-      const cost = defence + dist(b.x, b.y, home.x, home.y) / 20;
+      let targeted = 0;
+      for (const [t, id] of focus) if (t !== team && w.entities.get(id)?.owner === b.owner) targeted++;
+      const cost = defence + dist(b.x, b.y, home.x, home.y) / 20 + targeted * GANG_UP;
       if (cost < best) [pick, best] = [b, cost];
     }
     if (pick) focus.set(team, pick.id);
