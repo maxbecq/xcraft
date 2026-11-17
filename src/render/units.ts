@@ -642,7 +642,7 @@ interface View {
   /** Z building being fabricated: a ring of cyan light at the height being laid. */
   seam?: Mesh;
   /** Z building being fabricated: its own materials cut by a plane rising from `bottom` to `top`. */
-  print?: { plane: Plane; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
+  print?: { plane: Plane; frame: Plane; frameMaterial: LineBasicMaterial; lines: LineSegments[]; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   /** Energy well: its living pool (see wellFx). */
@@ -667,6 +667,11 @@ interface View {
 /** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip; legs of one group step together. */
 interface InsectLeg {
   o: Object3D;
+  /** The shin, hanging from the femur `o`, pivoting at the knee. */
+  shin?: Object3D;
+  /** How far the femur rises above level, and the shin drops below it, at rest (radians). */
+  alpha: number;
+  beta: number;
   /** Pair index, from the front. */
   pair: number;
   group: number;
@@ -692,6 +697,38 @@ const GAIT_SWING = 0.35;
  */
 function gaitCycle(body: Object3D, legs: InsectLeg[]): number {
   body.updateMatrixWorld(true);
+  // Angles that unfold each leg straight and level (see the drone's deployment), found by bisection on the
+  // model itself: the femur turned down until the knee is level with the hip, then the shin turned up until
+  // it is level with the knee.
+  const y = (o: Object3D) => {
+    o.updateWorldMatrix(true, true);
+    return o.getWorldPosition(new Vector3()).y;
+  };
+  const centreY = (o: Object3D) => {
+    o.updateWorldMatrix(true, true);
+    const b = new Box3().setFromObject(o);
+    return (b.min.y + b.max.y) / 2;
+  };
+  const solve = (set: (a: number) => void, above: () => boolean, hi: number) => {
+    let [lo, top] = [0, hi];
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + top) / 2;
+      set(mid);
+      if (above()) lo = mid;
+      else top = mid;
+    }
+    return (lo + top) / 2;
+  };
+  for (const l of legs) {
+    const shin = l.shin;
+    if (!shin) continue;
+    l.alpha = solve((a) => (l.o.rotation.z = -l.side * a), () => y(shin) > y(l.o), 1.5);
+    l.o.rotation.z = -l.side * l.alpha;
+    l.beta = solve((b) => (shin.rotation.z = l.side * b), () => centreY(shin) < y(shin), 3) - l.alpha;
+    l.o.rotation.z = 0;
+    shin.rotation.z = 0;
+  }
+  body.updateMatrixWorld(true);
   const pivot = new Vector3();
   const reach =
     legs.reduce((sum, l) => {
@@ -706,7 +743,7 @@ function insectLegs(body: Object3D): InsectLeg[] | undefined {
   const legs: InsectLeg[] = [];
   body.traverse((o) => {
     const m = /^zleg_(\d+)_([lr])$/.exec(o.name);
-    if (m) legs.push({ o, pair: Number(m[1]), group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
+    if (m) legs.push({ o, shin: o.getObjectByName(`zshin_${m[1]}_${m[2]}`), alpha: 0, beta: 0, pair: Number(m[1]), group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
   });
   return legs.length ? legs : undefined;
 }
@@ -860,7 +897,7 @@ export class EntityRenderer {
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
   /** Z drones merging into the building they raised. */
-  private merging: { v: View; age: number; building: number; size: number; from: Vector3; to: Vector3 }[] = [];
+  private merging: { v: View; age: number; building: number; from: Vector3; to: Vector3 }[] = [];
   private last = performance.now();
 
   /** Called when a building first appears (to clear scenery under it). */
@@ -889,7 +926,7 @@ export class EntityRenderer {
         if (into && v.root.visible) {
           // A Z drone merging into the building it raised: it folds and sinks into it, it does not die.
           v.ring.visible = false;
-          this.merging.push({ v, age: 0, building: into.id, size: (into.def as BuildingDef).size, to: new Vector3(into.x / FP, heightAt(this.map, into.x / FP, into.y / FP), into.y / FP), from: v.root.position.clone() });
+          this.merging.push({ v, age: 0, building: into.id, to: new Vector3(into.x / FP, heightAt(this.map, into.x / FP, into.y / FP), into.y / FP), from: v.root.position.clone() });
         } else if (v.unit && v.root.visible) {
           v.ring.visible = false;
           if (v.mixer) play(v, CLIP.die);
@@ -921,18 +958,17 @@ export class EntityRenderer {
       }
       const k = smoothstep((m.age - DEPLOY_WALK) / DEPLOY_SPREAD);
       const g = m.v.gait!;
-      // Legs reach the footprint's corners: stretched along their length, spread to the diagonals, flattened.
-      const reach = g.cycle / (4 * Math.sin(GAIT_SWING));
-      const stretch = Math.min(2.5, Math.max(1, (m.size * 0.62) / Math.max(0.1, reach)));
+      // Legs unfold straight and flat: the femur comes down level, the shin swings out in line with it, and
+      // the pairs spread evenly round the body, a star of struts on the ground.
       const pairs = Math.max(...legs.map((l) => l.pair)) + 1;
       for (const l of legs) {
         const along = pairs > 1 ? l.pair / (pairs - 1) - 0.5 : 0;
-        l.o.rotation.y = -l.side * along * 1.4 * k;
-        l.o.rotation.z = l.side * 0.55 * k;
-        l.o.scale.x = 1 + (stretch - 1) * k;
+        l.o.rotation.y = -l.side * along * 1.6 * k;
+        l.o.rotation.z = -l.side * l.alpha * k;
+        if (l.shin) l.shin.rotation.z = l.side * (l.alpha + l.beta) * k;
       }
-      // The body settles onto the ground, a light judder as it locks in.
-      m.v.model.position.y = -g.hip * 0.8 * k + (k < 1 ? 0 : Math.sin(m.age * 40) * 0.004);
+      // The body comes down with them until the struts lie on the ground, a light judder as it locks in.
+      m.v.model.position.y = -g.hip * 0.92 * k + (k < 1 ? 0 : Math.sin(m.age * 40) * 0.004);
       return true;
     });
     this.dying = this.dying.filter((d) => {
@@ -1016,10 +1052,16 @@ export class EntityRenderer {
         const total = ticks((e.def as BuildingDef).buildTime);
         const p = e.buildLeft > 0 ? 1 - e.buildLeft / total : 1;
         if ((e.def as BuildingDef).absorbs) {
-          // Z: the drone deployed on the site fabricates the machine layer by layer from the ground up; a
-          // cyan line of light runs round it at the height being laid.
+          // Z, in stages round the drone deployed at its heart: a cyan armature of the building's edges
+          // rises first, the plates are fabricated layer by layer behind it (a line of light at the height
+          // being laid), then the armature goes out and the drone is left inside, the machine's core.
           if (v.print) {
-            const h = v.print.bottom + (v.print.top - v.print.bottom) * p;
+            const span = v.print.top - v.print.bottom;
+            const armature = Math.min(1, p / 0.4);
+            const plates = Math.min(1, Math.max(0, (p - 0.2) / 0.72));
+            v.print.frame.constant = v.root.position.y + v.print.bottom + span * armature;
+            v.print.frameMaterial.opacity = 0.8 * Math.min(1, Math.max(0, (1 - p) / 0.08));
+            const h = v.print.bottom + span * plates;
             v.print.plane.constant = v.root.position.y + h;
             if (v.seam) {
               v.seam.position.y = h + 0.02;
@@ -1028,6 +1070,10 @@ export class EntityRenderer {
             if (p >= 1) {
               // Done: back to the shared materials, no cut.
               for (const [mesh, material] of v.print.originals) mesh.material = material;
+              for (const l of v.print.lines) {
+                l.removeFromParent();
+                l.geometry.dispose();
+              }
               v.seam?.removeFromParent();
               v.print = undefined;
               v.seam = undefined;
@@ -1252,10 +1298,21 @@ export class EntityRenderer {
       if (e.buildLeft > 0) {
         const box = new Box3().setFromObject(body);
         const plane = new Plane(new Vector3(0, -1, 0), 0);
+        // The armature: the building's own edges in cyan, rising ahead of the plates.
+        const frame = new Plane(new Vector3(0, -1, 0), 0);
+        const frameMaterial = new LineBasicMaterial({ color: 0x7ff5ff, transparent: true, opacity: 0.8, depthWrite: false, clippingPlanes: [frame] });
         const originals: [Mesh, Material | Material[]][] = [];
+        const meshes: Mesh[] = [];
         body.traverse((o) => {
-          const mesh = o as Mesh;
-          if (!mesh.isMesh) return;
+          if ((o as Mesh).isMesh) meshes.push(o as Mesh);
+        });
+        const lines = meshes.map((mesh) => {
+          const l = new LineSegments(new EdgesGeometry(mesh.geometry, 35), frameMaterial);
+          l.userData.noPick = true;
+          mesh.add(l);
+          return l;
+        });
+        meshes.forEach((mesh) => {
           originals.push([mesh, mesh.material]);
           // Its own copies, cut by the plane; inner faces drawn so the cut reads as solid, not hollow.
           const cut = (m: Material) => {
@@ -1267,7 +1324,7 @@ export class EntityRenderer {
           };
           mesh.material = Array.isArray(mesh.material) ? mesh.material.map(cut) : cut(mesh.material);
         });
-        print = { plane, bottom: box.min.y, top: box.max.y, originals };
+        print = { plane, frame, frameMaterial, lines, bottom: box.min.y, top: box.max.y, originals };
         const half = (e.def as BuildingDef).size / 2;
         // A square outline round the footprint (a four-sided ring turned by 45°).
         seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));

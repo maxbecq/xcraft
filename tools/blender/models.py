@@ -1096,7 +1096,9 @@ def piston(p, a, b, r):
 
 def joint_leg(p, base, knee, foot, r=0.035, part=None):
     """An insect leg built like a crane: a square rusted femur pushed by a hydraulic jack, an axle at the knee,
-    a steel shin ending in a claw. With `part`, the leg is its own object pivoting at the hip, for the walk."""
+    a steel shin ending in a claw. With `part` ("zleg_<pair>_<side>"), the femur is its own object pivoting at
+    the hip and the shin ("zshin_<pair>_<side>") its child pivoting at the knee, for the walk and for
+    unfolding the leg straight."""
     before = set(bpy.context.scene.objects)
     base, knee, foot = Vector(base), Vector(knee), Vector(foot)
     shell(p["zsteel"], r * 1.6, base, seg=6, rings=3)
@@ -1106,15 +1108,21 @@ def joint_leg(p, base, knee, foot, r=0.035, part=None):
     yaw = math.atan2(knee.y - base.y, knee.x - base.x) + math.pi / 2
     cyl(p["zsteel"], r * 1.4, r * 2.6, knee, rot=(0, math.pi / 2, yaw), verts=8)
     cyl(p["zcopper"], r * 0.7, r * 2.9, knee, rot=(0, math.pi / 2, yaw), verts=6)  # axle caps
+    if r >= 0.035:
+        cable(p, base + Vector((0, 0, -r)), knee + Vector((0, 0, -r)), sag=r * 2.5, r=r * 0.3)
+    femur = set(bpy.context.scene.objects) - before
     pipe(p["zsteel"], knee, foot + Vector((0, 0, r * 2)), r=r * 0.7, verts=4)
     cyl(p["zsteel"], r, r * 0.8, foot + Vector((0, 0, r * 2)), verts=6)  # ankle collar
     cone(p["zsteel"], r * 0.9, r * 3, (foot.x, foot.y, foot.z + r * 1.5), rot=(math.pi, 0, 0), verts=4)
-    if r >= 0.035:
-        cable(p, base + Vector((0, 0, -r)), knee + Vector((0, 0, -r)), sag=r * 2.5, r=r * 0.3)
+    shin = set(bpy.context.scene.objects) - before - femur
     if part:
-        for o in set(bpy.context.scene.objects) - before:
+        for o in femur:
             o.name = part
         JOINTS[part] = tuple(base)
+        child = part.replace("zleg_", "zshin_")
+        for o in shin:
+            o.name = child
+        JOINTS[child] = tuple(knee)
 
 
 def legs(p, n, rx, ry, z, reach, lift, r=0.035):
@@ -1445,6 +1453,14 @@ def build(name, fn):
         bpy.context.scene.cursor.location = pivot
         bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
         parts.append(o)
+    # Z legs: each shin hangs from its femur, so it follows the femur and bends at the knee.
+    by_name = {o.name: o for o in parts}
+    for o in parts:
+        if o.name.startswith("zshin_") and o.name.replace("zshin_", "zleg_") in by_name:
+            femur = by_name[o.name.replace("zshin_", "zleg_")]
+            world = o.matrix_world.copy()
+            o.parent = femur
+            o.matrix_world = world
     # Graffiti quads stay separate objects, so the game can paint a different tag on each.
     tags = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name.split(".")[0] == "tag"]
     for i, t in enumerate(tags):
