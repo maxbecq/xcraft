@@ -266,6 +266,10 @@ Planches : [`docs/concepts-dieux/planche-camp.png`](concepts-dieux/planche-camp.
 
 **Style : fantasy héroïque onirique, rendue comme le reste du jeu** : matières mates et texturées (pierre appareillée, métal martelé, tissu tissé, fourrure, bois veiné), creux assombris, contours encrés ; corps d'une seule pièce aux proportions héroïques, armures en plaques ; la magie se voit partout (halos, runes lumineuses, lucioles, éclairs, voiles de lumière, feuillage d'éther qui pend en lianes). Inspiration générale de la fantasy stylisée des RTS, sans reprendre aucun modèle ni nom existant.
 
+**Halo des dieux, entre science-fiction et fantasy** : derrière la tête de chaque dieu flotte un anneau holographique en segments, doublé d'un anneau d'or gradué de glyphes, traversé d'un anneau incliné en gyroscope, avec trois nœuds de lumière en orbite. Couleur selon la mythologie : bleu foudre (nordique), or solaire (grec), ambre (égyptien), éther (Gaïa).
+
+*Direction artistique validée comme premier jet (17 novembre 2026).*
+
 **Idée directrice : le sanctuaire.** Les Humains bricolent (ferraille, rouille), les Isdaris sont Art déco chromé, les Z sont des machines rouillées sur câbles. Les Dieux sont **de la pierre sculptée et polie, de l'or et de la lumière** : rien de rapiécé, rien de mécanique, des formes posées et symétriques.
 
 - **Matériaux** : marbre blanc veiné, pierre claire taillée, or poli (les dieux et les arêtes), bois vivant et écorce (Yggdrasill), éther translucide (Esprits, Élémentaires).
