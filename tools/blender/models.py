@@ -235,6 +235,7 @@ def palette():
         "zsteel": textured("zsteel", 0x8E8A80, metal_texture("zsteel_tex", False), metallic=0.7, rough=0.55),
         "zrust": textured("zrust", 0x9A5430, metal_texture("zrust_tex", True), metallic=0.25, rough=0.95),
         "zcopper": mat("zcopper", 0xC07038, metallic=0.9, rough=0.35),
+        "zdark": textured("zdark", 0x6A6C72, metal_texture("zsteel_tex", False), metallic=0.5, rough=0.6),
     }
 
 
@@ -1594,8 +1595,9 @@ def coleoptere(p):
 
 def intelligence(p):
     """Intelligence centrale: the nest's mind folded under rusted, faceted shells, asymmetric like a crouching
-    insect, server fins on its flank, a red eye cluster, antennae masts, and live wires spilling into the creep."""
-    cyl(p["graphite"], 2.3, 0.3, (0, 0, 0.15), verts=10)
+    insect, server fins on its flank, a red eye cluster, antennae masts, coolant pipes and cable bundles climbing
+    its shells, tanks on its back, and live wires spilling into the creep."""
+    cyl(p["zdark"], 2.3, 0.3, (0, 0, 0.15), verts=10)
     for k, (r, z, sx) in enumerate(((1.9, 0.9, 1.0), (1.55, 1.55, 0.92), (1.1, 2.1, 0.85))):
         o = shell(p["zsteel"] if k != 1 else p["zrust"], r, (0.15 * k, 0.1 * k, z), scale=(sx, 1.15, 0.5), seg=10, rings=5)
         o.rotation_euler = (0, 0, 0.3 * k)
@@ -1604,7 +1606,7 @@ def intelligence(p):
         a = k / 5 * math.tau + 0.4
         box(p["team"], (0.5, 0.9, 0.08), (math.cos(a) * 1.2, math.sin(a) * 1.2, 1.35), rot=(0.4 * math.sin(a), -0.4 * math.cos(a), a))
     for k in range(6):  # server fins
-        box(p["graphite"], (0.06, 0.7, 0.6), (1.75, 0.3 + k * 0.0, 0.85), rot=(0, 0, 0.15 * k - 0.4))
+        box(p["zdark"], (0.06, 0.7, 0.6), (1.75, 0.3 + k * 0.0, 0.85), rot=(0, 0, 0.15 * k - 0.4))
     eyes(p, 0.35, -0.85, 2.15, n=3, r=0.12, spread=0.3)  # the mind's eyes
     for s, h in ((-1, 1.4), (1, 1.0)):  # antennae masts
         pipe(p["zsteel"], (s * 0.4, -0.8, 2.2), (s * 0.9, -1.8, 2.2 + h), r=0.05, verts=4)
@@ -1620,6 +1622,34 @@ def intelligence(p):
         for z in (0.55, 0.7):
             ring(p["zcopper"], 0.13, 0.03, (x, y, z), seg=10)
         ball(p["cyan_glow"], 0.1, (x, y, 0.8), seg=6, rings=4)
+    # Coolant pipes climbing the front flank in flanged runs, bent to follow the shells.
+    for dx in (-1.1, -0.8):
+        run = [(dx, -2.45, 0.3), (dx, -2.1, 0.95), (dx + 0.1, -1.6, 1.5), (dx + 0.2, -1.05, 1.95)]
+        for u, v in zip(run, run[1:]):
+            pipe(p["zcopper"], u, v, r=0.06, verts=6)
+        for u, v in zip(run, run[1:]):
+            d = Vector(v) - Vector(u)
+            pipe(p["zsteel"], Vector(u) - d.normalized() * 0.04, Vector(u) + d.normalized() * 0.04, r=0.095, verts=6)  # flange
+        pipe(p["zsteel"], run[-1], Vector(run[-1]) + Vector((0, 0.12, 0.05)), r=0.095, verts=6)
+    for y, z in ((-2.1, 1.0), (-1.6, 1.52)):  # clamps holding the pipes on the shell
+        box(p["zrust"], (0.5, 0.1, 0.06), (-0.9, y + 0.04, z), rot=(0.6, 0, 0))
+    # Cable bundles hugging the right flank from the crown down into the ground.
+    for k, dy in enumerate((0.3, 0.48, 0.66)):
+        cable(p, (1.0, dy, 2.25), (2.45, dy + 0.15, 0.08), sag=-0.12 - 0.03 * k, r=0.045)
+    for z, x in ((1.75, 1.55), (1.0, 2.15)):  # straps over the bundle
+        box(p["zsteel"], (0.08, 0.55, 0.05), (x, 0.55, z), rot=(0, -0.7, 0))
+    # Coolant tanks on the right flank, banded, piped into the shell.
+    for k, y in enumerate((-0.9, -0.25)):
+        cyl(p["zrust"], 0.22, 0.9, (1.95, y, 0.55), rot=(math.pi / 2, 0, 0.1), verts=10)
+        for t in (-0.3, 0.3):
+            cyl(p["zsteel"], 0.235, 0.05, (1.95, y + t, 0.55), rot=(math.pi / 2, 0, 0.1), verts=10)
+        pipe(p["zcopper"], (1.95, y, 0.77), (1.55, y + 0.1, 1.1), r=0.04, verts=6)
+        cyl(p["zsteel"], 0.06, 0.05, (1.95, y, 0.78), verts=6)
+    # Exhaust stacks on the crown.
+    for x, y, h in ((-0.45, 0.45, 0.5), (-0.2, 0.7, 0.35)):
+        cyl(p["zdark"], 0.08, h, (x, y, 2.35 + h / 2), verts=6)
+        ring(p["zrust"], 0.085, 0.025, (x, y, 2.35 + h), seg=8)
+
 
 
 def pod(p):
@@ -1661,20 +1691,50 @@ def assimilateur(p):
 
 
 def plateforme(p):
-    """Plate-forme: a flat assembly deck with hazard edges, two jacked robot arms welding a socle, cable trays."""
+    """Plate-forme: an assembly deck of riveted, rust-stained steel plates on a jacked frame, hazard edges,
+    two robot arms welding a socle, coolant pipes and cable trays along its edges."""
     box(p["zsteel"], (2.8, 2.8, 0.25), (0, 0, 0.12))
-    box(p["graphite"], (2.2, 2.2, 0.12), (0, 0, 0.3))
+    for i, x in enumerate((-0.825, -0.275, 0.275, 0.825)):  # deck plates, a few worn to rust, seams between
+        for j, y in enumerate((-0.825, -0.275, 0.275, 0.825)):
+            box(p["zrust"] if (i * 7 + j * 3) % 5 == 0 else p["zdark"], (0.52, 0.52, 0.12), (x, y, 0.3))
+    for k in range(5):  # bolt strips along the seams
+        c = -1.1 + k * 0.55
+        for t in (-1.0, -0.5, 0.0, 0.5, 1.0):
+            cyl(p["zsteel"], 0.025, 0.02, (c, t, 0.37), verts=6)
     for k in range(4):  # landing neon lines
         box(p["cyan_glow"], (1.8, 0.04, 0.02), (0, -0.75 + k * 0.5, 0.37))
     for s in (-1, 1):
         box(p["hazard"], (0.15, 2.6, 0.03), (s * 1.27, 0, 0.26))
+        box(p["zrust"], (0.04, 2.8, 0.18), (s * 1.42, 0, 0.12))  # rusted skirt
+        for y in (-1.2, -0.4, 0.4, 1.2):  # side ribs
+            box(p["zsteel"], (0.06, 0.08, 0.24), (s * 1.43, y, 0.12))
+    for sx in (-1, 1):  # corner jacks holding the deck level
+        for sy in (-1, 1):
+            piston(p, (sx * 1.25, sy * 1.25, 0.02), (sx * 1.25, sy * 1.25, 0.3), r=0.07)
+            cyl(p["zsteel"], 0.14, 0.04, (sx * 1.25, sy * 1.25, 0.02), verts=6)  # foot pad
     box(p["team"], (2.82, 0.2, 0.27), (0, 1.3, 0.13))
     for k, (x, y, h, reach) in enumerate(((-1.1, 1.0, 1.6, 1.2), (1.15, 0.9, 1.1, 0.8))):
         cyl(p["zrust"], 0.2, 0.4, (x, y, 0.55), verts=8)
+        cyl(p["zsteel"], 0.24, 0.05, (x, y, 0.36), verts=8)  # mounting flange
         # Each arm is animated (zarm_<k>, its forearm zarm_<k>_tip with the welding spark) while a socle is built.
         joint_leg(p, (x, y, 0.75), (x * 0.8, y - reach * 0.3, 0.75 + h), (x * 0.3, y - reach, 0.9), r=0.07, part=f"zarm_{k}")
         ball(p["orange_glow"], 0.08, (x * 0.3, y - reach, 0.85), seg=6, rings=4, name=f"zarm_{k}_tip")  # welding spark
+    # Coolant pipes along the back and left edges, flanged, feeding the arm bases.
+    run = [(-1.35, -1.2, 0.42), (-1.35, 0.75, 0.42), (-1.1, 0.75, 0.42)]
+    for a, b in zip(run, run[1:]):
+        pipe(p["zcopper"], a, b, r=0.045, verts=6)
+    for q in run[:2]:
+        cyl(p["zsteel"], 0.075, 0.05, q, rot=(math.pi / 2, 0, 0), verts=6)
+    pipe(p["zcopper"], (1.35, -1.2, 0.42), (1.35, 0.7, 0.42), r=0.045, verts=6)
+    for y in (-1.2, -0.25, 0.7):
+        cyl(p["zsteel"], 0.075, 0.05, (1.35, y, 0.42), rot=(math.pi / 2, 0, 0), verts=6)
+    pipe(p["zcopper"], (1.35, 0.7, 0.42), (1.15, 0.9, 0.55), r=0.045, verts=6)
+    box(p["zdark"], (2.4, 0.3, 0.06), (0, -1.38, 0.3))  # cable tray at the front
+    for x in (-0.9, -0.3, 0.3, 0.9):
+        box(p["zsteel"], (0.04, 0.32, 0.1), (x, -1.38, 0.32))
     cable(p, (-1.3, 1.25, 0.3), (0.1, -0.1, 0.6), sag=0.2, r=0.035)
+    cable(p, (1.3, -1.35, 0.33), (1.15, 0.9, 0.75), sag=0.12, r=0.03)
+    cable(p, (-1.0, -1.38, 0.33), (-1.1, 1.0, 0.75), sag=0.1, r=0.025)
 
 
 def armement(p):
@@ -1832,7 +1892,7 @@ def icon(objs, path):
     """Renders a transparent 128px icon from the game's camera angle."""
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
-    scene.render.resolution_x = scene.render.resolution_y = 128
+    scene.render.resolution_x = scene.render.resolution_y = int(os.environ.get("ICON_SIZE", 128))
     scene.render.film_transparent = True
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
