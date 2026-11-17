@@ -945,11 +945,12 @@ function start(): void {
     setTimeout(() => loading?.remove(), 500);
   }));
   // Title screen: the scene is only a backdrop behind the menu. On phones and the basse level it is drawn at most
-  // 30 times a second, and on every level it holds still for a moment after a touch or a click, so the menu's
-  // answer is drawn at once instead of waiting behind a heavy frame.
+  // 30 times a second, and on phones it holds still for a moment after a touch, so the menu's answer is drawn at
+  // once instead of waiting behind a heavy frame.
   let lastDraw = 0;
   let quietUntil = 0;
-  if (ATTRACT) document.addEventListener('pointerdown', () => (quietUntil = performance.now() + 350), true);
+  // Only on touch screens: on a computer the pause read as the backdrop freezing at every click.
+  if (ATTRACT && TOUCH) document.addEventListener('pointerdown', () => (quietUntil = performance.now() + 350), true);
   const capped = ATTRACT && (TOUCH || QUALITY_LEVEL === 'basse');
   renderer.setAnimationLoop(() => {
     // performance.now(), the very clock quietUntil is set on, rather than the loop's own frame time.
