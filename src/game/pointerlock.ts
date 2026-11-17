@@ -61,18 +61,19 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
   };
 
   // While locked, the browser's own mouse events (frozen at where the lock began) are swallowed before anyone sees
-  // them, and replayed at our position instead.
+  // them, and replayed at our position instead. The mouse family drives it: every browser sends mousemove (with its
+  // movement), mousedown and mouseup under a lock, while Safari sends no pointer events there.
   const replay = (e: Event) => {
     if (!locked() || !e.isTrusted) return;
     e.stopImmediatePropagation();
     const src = e as MouseEvent;
-    if (e.type === 'pointermove') {
+    if (e.type === 'mousemove') {
       x = Math.min(window.innerWidth - 1, Math.max(0, x + src.movementX));
       y = Math.min(window.innerHeight - 1, Math.max(0, y + src.movementY));
     }
     // A press on a canvas (the map, the minimap) keeps its moves and release there, as pointer capture would.
     const target = pressed instanceof HTMLCanvasElement ? pressed : (document.elementFromPoint(x, y) ?? document.body);
-    if (e.type === 'pointermove') {
+    if (e.type === 'mousemove') {
       if (target !== over) {
         if (over) fire('pointerout', over, src);
         fire('pointerover', target, src);
@@ -80,11 +81,11 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
       }
       fire('pointermove', target, src);
       draw(target);
-    } else if (e.type === 'pointerdown') {
+    } else if (e.type === 'mousedown') {
       pressed = target;
       fire('pointerdown', target, src);
       fire('mousedown', target, src);
-    } else if (e.type === 'pointerup') {
+    } else if (e.type === 'mouseup') {
       fire('pointerup', target, src);
       fire('mouseup', target, src);
       if (pressed === target && src.button === 0) fire('click', document.elementFromPoint(x, y) ?? target, src);
