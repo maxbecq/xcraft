@@ -28,9 +28,19 @@ export class Audio {
     this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate / 4, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    // Impulse: decaying stereo noise after a short pre-delay, its highs dying faster (a one-pole lowpass closing).
-    const rate = this.ctx.sampleRate;
-    const ir = this.ctx.createBuffer(2, Math.floor(rate * 1.6), rate);
+    this.space = this.ctx.createConvolver();
+    const wet = this.ctx.createGain();
+    wet.gain.value = 0.55;
+    this.space.connect(wet).connect(this.master);
+    // The reverb's impulse is long to compute and to load into the convolver: done once the tap that woke the
+    // sound has been answered on screen (until then the interface sounds come out dry).
+    requestAnimationFrame(() => setTimeout(() => (this.space.buffer = this.impulse()), 0));
+  }
+
+  /** Decaying stereo noise after a short pre-delay, its highs dying faster (a one-pole lowpass closing). */
+  private impulse(): AudioBuffer {
+    const rate = this.ctx!.sampleRate;
+    const ir = this.ctx!.createBuffer(2, Math.floor(rate * 1.6), rate);
     for (let c = 0; c < 2; c++) {
       const h = ir.getChannelData(c);
       let lp = 0;
@@ -40,11 +50,7 @@ export class Audio {
         h[i] = lp * Math.exp(-k * 3.6);
       }
     }
-    this.space = this.ctx.createConvolver();
-    this.space.buffer = ir;
-    const wet = this.ctx.createGain();
-    wet.gain.value = 0.55;
-    this.space.connect(wet).connect(this.master);
+    return ir;
   }
 
   /** Call once per frame to reset the per-frame sound budget. */

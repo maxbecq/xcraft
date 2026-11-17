@@ -480,7 +480,8 @@ if (!ATTRACT) {
 } else {
   countTitle();
   document.body.classList.add('attract');
-  ready.then(start);
+  // Shaders compiled in the background (parallel compile where the browser has it) rather than in one long first frame.
+  ready.then(() => renderer.compileAsync(scene, rig.camera)).catch(() => {}).then(start);
   showHome();
   loading?.classList.add('mini'); // the menu does not wait for the scene behind it
 }
@@ -874,7 +875,16 @@ function start(): void {
     loading?.classList.add('done');
     setTimeout(() => loading?.remove(), 500);
   }));
-  renderer.setAnimationLoop(() => {
+  // Title screen: the scene is only a backdrop behind the menu. On phones and the basse level it is drawn at most
+  // 30 times a second, and on every level it holds still for a moment after a touch or a click, so the menu's
+  // answer is drawn at once instead of waiting behind a heavy frame.
+  let lastDraw = 0;
+  let quietUntil = 0;
+  if (ATTRACT) document.addEventListener('pointerdown', () => (quietUntil = performance.now() + 350), true);
+  const capped = ATTRACT && (TOUCH || QUALITY_LEVEL === 'basse');
+  renderer.setAnimationLoop((now: number) => {
+    if (ATTRACT && (now < quietUntil || (capped && now - lastDraw < 30))) return;
+    lastDraw = now;
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.
     // A network game never pauses: the other player is still playing.
