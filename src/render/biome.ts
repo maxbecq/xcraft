@@ -873,9 +873,9 @@ const ROAD_PX = 8;
  * Streets of the city, painted on the decks: the ways a player walks (headquarters to natural expansion, to the
  * centre, and from one expansion to the next), found on the walking grid, kept off cliff edges and mineral fields,
  * smoothed into curves. A texture over the whole map: red = asphalt, green = dashed centre line, blue = edge lines.
- * Render only: the simulation never sees it.
+ * Also returns the street centre lines (tile units), for the props along them. Render only: the simulation never sees it.
  */
-export function cityRoads(world: World): CanvasTexture {
+export function cityRoads(world: World): { texture: CanvasTexture; streets: [number, number][][] } {
   const map = world.map;
   const W = map.width;
   const H = map.height;
@@ -993,12 +993,13 @@ export function cityRoads(world: World): CanvasTexture {
     if (players.length > 1) ways.push(route(nat[i], nat[(i + 1) % players.length]));
   });
 
+  const streets = ways.filter((w) => w.length > 1).map(smooth);
   const layer = (draw: (g: CanvasRenderingContext2D) => void) => {
     const [c, g] = canvas(W * ROAD_PX, H * ROAD_PX);
     g.scale(ROAD_PX, ROAD_PX);
     g.lineCap = g.lineJoin = 'round';
     g.strokeStyle = '#fff';
-    for (const way of ways.filter((w) => w.length > 1).map(smooth)) {
+    for (const way of streets) {
       g.beginPath();
       g.moveTo(...way[0]);
       for (const p of way) g.lineTo(...p);
@@ -1035,5 +1036,5 @@ export function cityRoads(world: World): CanvasTexture {
   const t = new CanvasTexture(out);
   t.flipY = false;
   t.colorSpace = NoColorSpace;
-  return t;
+  return { texture: t, streets };
 }

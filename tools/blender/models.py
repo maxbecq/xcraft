@@ -962,11 +962,124 @@ def rubble(p):
         cyl(p["rust"], 0.012, 0.5, (0.1 + k * 0.08, 0.05, 0.25), rot=(0.5 + k * 0.2, 0.4, k), verts=4)
 
 
+def streetlamp(p):
+    """A slim street lamp: a pole on a plinth, a curved arm and a lit hood, a cable box at its foot."""
+    cyl(p["dark"], 0.11, 0.12, (0, 0, 0.06), verts=8)
+    cyl(p["steel"], 0.035, 1.35, (0, 0, 0.73), verts=8)
+    pipe(p["steel"], (0, 0, 1.38), (0.22, 0, 1.48), r=0.03, verts=6)
+    pipe(p["steel"], (0.22, 0, 1.48), (0.42, 0, 1.46), r=0.03, verts=6)
+    box(p["dark"], (0.26, 0.14, 0.06), (0.42, 0, 1.43))
+    box(p["lamp_glow"], (0.2, 0.09, 0.02), (0.42, 0, 1.4))
+    box(p["scrap"], (0.1, 0.08, 0.18), (0, -0.07, 0.3))
+    box(p["hazard"], (0.08, 0.02, 0.05), (0, -0.115, 0.34))
+
+
+def techbox(p):
+    """A row of street utility cabinets: louvres, a hazard plate, a status light, cables down into the deck."""
+    box(p["scrap"], (0.42, 0.28, 0.6), (-0.22, 0, 0.3))
+    box(p["steel"], (0.34, 0.26, 0.42), (0.2, 0.01, 0.21))
+    for k in range(4):
+        box(p["dark"], (0.3, 0.02, 0.025), (-0.22, -0.145, 0.38 + k * 0.05))  # louvres
+    box(p["hazard"], (0.12, 0.02, 0.08), (-0.22, -0.145, 0.18))
+    ball(p["green_glow"], 0.02, (-0.06, -0.15, 0.52), seg=6, rings=4)
+    ball(p["red_glow"], 0.02, (0.3, -0.135, 0.36), seg=6, rings=4)
+    box(p["dark"], (0.36, 0.2, 0.03), (0.2, 0.01, 0.43))  # lid
+    box(p["dark"], (0.02, 0.1, 0.2), (0.09, -0.14, 0.2), rot=(0, 0, 0.9))  # door hanging open
+    pipe(p["rubber"], (0.38, 0.05, 0.1), (0.62, 0.2, 0.02), r=0.025, verts=6)
+    pipe(p["rubber"], (-0.44, 0.0, 0.12), (-0.6, -0.15, 0.02), r=0.03, verts=6)
+
+
+def billboard(p):
+    """An old street ad on two legs: a frame, a half-dead screen with coloured bands, a torn corner."""
+    for x in (-0.42, 0.42):
+        cyl(p["steel"], 0.03, 0.55, (x, 0.04, 0.27), verts=6)
+    box(p["dark"], (1.0, 0.08, 0.58), (0, 0.04, 0.82))
+    box(p["purple_glow"], (0.86, 0.02, 0.18), (-0.0, -0.005, 0.95))
+    box(p["cyan_glow"], (0.5, 0.02, 0.08), (-0.18, -0.005, 0.76))
+    box(p["orange_glow"], (0.2, 0.02, 0.12), (0.28, -0.005, 0.72))
+    box(p["dark_glass"], (0.3, 0.025, 0.22), (0.3, -0.01, 0.92), rot=(0, 0.25, 0))  # dead pixels
+    box(p["dark"], (0.25, 0.04, 0.2), (0.42, -0.2, 0.06), rot=(1.3, 0, 0.5))  # fallen panel
+    box(p["scrap"], (1.04, 0.1, 0.05), (0, 0.04, 1.12))  # top rail
+
+
+def hovercar(p):
+    """An abandoned flying car grounded askew: a teardrop body, a cracked canopy, dead thruster pods."""
+    body = ball(p["scrap"], 0.5, (0, 0, 0.32), scale=(1.7, 0.85, 0.42), seg=14, rings=8)
+    body.rotation_euler = (0.08, -0.06, 0)
+    ball(p["dark_glass"], 0.3, (-0.18, 0, 0.5), scale=(1.5, 0.9, 0.55), seg=10, rings=6)
+    for x, y in ((-0.55, -0.42), (0.55, -0.42), (-0.55, 0.42), (0.55, 0.42)):
+        cyl(p["dark"], 0.16, 0.14, (x, y, 0.12), verts=10)
+        cyl(p["scrap"], 0.1, 0.02, (x, y, 0.05), verts=10)
+    box(p["red_glow"], (0.04, 0.5, 0.04), (0.84, 0, 0.36))  # tail light, still on
+    box(p["cyan_glow"], (0.03, 0.3, 0.03), (-0.85, 0, 0.3))
+    box(p["rust"], (0.3, 0.4, 0.05), (0.15, 0.35, 0.48), rot=(0.5, 0, 0.2))  # crumpled panel
+    box(p["scrap"], (0.25, 0.12, 0.04), (0.9, 0.55, 0.03), rot=(0, 0, 0.8))  # fallen fin
+
+
+# ---- Fixtures on the city's cliff walls: the wall stands at y = 0, the fixture juts out towards -y.
+
+def walldoor(p):
+    """A service door set in the wall: a steel frame, a half-raised shutter over a dark inside, a lit sign, a step."""
+    box(p["steel"], (0.7, 0.08, 0.95), (0, -0.04, 0.48))
+    box(p["dark"], (0.56, 0.06, 0.8), (0, -0.07, 0.42))
+    box(p["scrap"], (0.56, 0.05, 0.42), (0, -0.09, 0.62))  # shutter, half up
+    for k in range(4):
+        box(p["dark"], (0.56, 0.06, 0.012), (0, -0.1, 0.46 + k * 0.1))
+    box(p["dark"], (0.4, 0.05, 0.1), (0, -0.09, 0.99))
+    box(p["cyan_glow"], (0.34, 0.02, 0.06), (0, -0.12, 0.99))
+    box(p["hazard"], (0.7, 0.04, 0.04), (0, -0.09, 0.9))
+    box(p["concrete"], (0.8, 0.25, 0.06), (0, -0.14, 0.03))  # step
+    ball(p["orange_glow"], 0.025, (0.38, -0.1, 0.8), seg=6, rings=4)
+
+
+def wallpanel(p):
+    """Electrical boxes bolted to the wall, conduits climbing out of them, a warning light."""
+    box(p["scrap"], (0.32, 0.14, 0.42), (-0.15, -0.07, 0.55))
+    box(p["steel"], (0.24, 0.12, 0.3), (0.2, -0.06, 0.45))
+    box(p["dark"], (0.26, 0.02, 0.06), (-0.15, -0.15, 0.62))
+    box(p["hazard"], (0.1, 0.02, 0.1), (-0.15, -0.15, 0.45))
+    box(p["dark"], (0.04, 0.1, 0.2), (0.34, -0.12, 0.45), rot=(0, 0, 0.7))  # door hanging open
+    ball(p["green_glow"], 0.018, (0.12, -0.13, 0.55), seg=6, rings=4)
+    ball(p["red_glow"], 0.025, (-0.15, -0.15, 0.82), seg=6, rings=4)
+    for x in (-0.24, -0.15, -0.06):
+        cyl(p["dark"], 0.02, 0.45, (x, -0.04, 0.98), verts=6)  # conduits up the wall
+    cyl(p["dark"], 0.025, 0.3, (0.2, -0.04, 0.15), verts=6)  # and down into the deck
+    pipe(p["rubber"], (0.3, -0.08, 0.32), (0.45, -0.3, 0.02), r=0.02, verts=5)
+
+
+def wallpipe(p):
+    """A big exhaust duct: out of the wall, a flanged elbow, straight down into the deck through a collar."""
+    r = 0.13
+    pipe(p["rust"], (0, 0.0, 0.82), (0, -0.32, 0.82), r=r, verts=12)
+    pipe(p["rust"], (0, -0.32, 0.82), (0, -0.42, 0.72), r=r, verts=12)  # elbow
+    pipe(p["rust"], (0, -0.45, 0.68), (0, -0.45, 0.0), r=r, verts=12)
+    for y, z, rot in ((-0.02, 0.82, (math.radians(90), 0, 0)), (-0.3, 0.82, (math.radians(90), 0, 0)), (-0.45, 0.6, (0, 0, 0)), (-0.45, 0.25, (0, 0, 0))):
+        cyl(p["steel"], r + 0.03, 0.04, (0, y, z), rot=rot, verts=12)  # flanges
+    cyl(p["concrete"], r + 0.08, 0.08, (0, -0.45, 0.04), verts=12)  # collar in the deck
+    box(p["steel"], (0.06, 0.3, 0.04), (0.16, -0.2, 0.7))  # bracket
+    box(p["hazard"], (0.02, 0.15, 0.08), (r + 0.01, -0.45, 0.4))
+
+
+def shopfront(p):
+    """A small shop in the wall: a lit window (some panes dead), a torn awning, an alien sign, a half-down shutter."""
+    box(p["dark"], (0.9, 0.1, 0.8), (0, -0.05, 0.42))
+    box(p["window_glow"], (0.36, 0.02, 0.42), (-0.2, -0.11, 0.4))
+    box(p["dark_glass"], (0.3, 0.02, 0.42), (0.2, -0.11, 0.4))
+    box(p["scrap"], (0.3, 0.03, 0.22), (0.2, -0.12, 0.52))  # shutter half down
+    box(p["steel"], (0.02, 0.03, 0.46), (0.0, -0.12, 0.4))
+    box(p["hazard"], (0.94, 0.42, 0.03), (0, -0.25, 0.72), rot=(0.25, 0, 0))  # awning
+    box(p["dark"], (0.3, 0.2, 0.03), (0.3, -0.3, 0.68), rot=(0.6, 0.2, 0))  # torn flap
+    box(p["purple_glow"], (0.08, 0.03, 0.3), (0.42, -0.14, 0.95))  # vertical sign
+    box(p["dark"], (0.25, 0.2, 0.2), (-0.3, -0.25, 0.1))  # crate out front
+    box(p["concrete"], (0.9, 0.3, 0.03), (0, -0.2, 0.015))
+
+
 DOODADS = {
     "rocks_a": rocks_a, "rocks_b": rocks_b, "pebbles": pebbles, "dead_tree": dead_tree, "dry_bush": dry_bush,
     "tire_pile": tire_pile, "barrels": barrels, "wreck": wreck, "bones": bones, "scrap_pile": scrap_pile,
     "crates": crates, "barrier": barrier, "vending": vending, "trash": trash, "vent": vent, "terminal": terminal,
-    "cables": cables, "rubble": rubble,
+    "cables": cables, "rubble": rubble, "streetlamp": streetlamp, "techbox": techbox, "billboard": billboard,
+    "hovercar": hovercar, "walldoor": walldoor, "wallpanel": wallpanel, "wallpipe": wallpipe, "shopfront": shopfront,
 }
 
 def marche(p):
@@ -1284,6 +1397,8 @@ def export_doodads(path):
         o = bpy.context.active_object
         o.name = name
         o.data.name = name
+        # The joined object takes the active part's transform: bake it, or a rotated first part tips the prop over.
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         bpy.ops.object.shade_flat()
         paint(o)
     bpy.ops.object.select_all(action="SELECT")

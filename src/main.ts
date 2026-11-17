@@ -107,11 +107,12 @@ const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
 setBiome(biome);
-const terrain = buildTerrain(map, biome.style === 'city' ? cityRoads(world) : undefined);
+const roads = biome.style === 'city' ? cityRoads(world) : undefined;
+const terrain = buildTerrain(map, roads?.texture);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, biome.style === 'city');
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets);
 if (biome.style === 'city') scene.add(cityAbyss(map.width, map.height), cityScape(map.width, map.height, 0), cityUnderdeck(map, UNDER_DECK), cityStreets(map, (x, z) => heightAt(map, x, z)));
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
