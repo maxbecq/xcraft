@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, MeshLambertMaterial, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -70,132 +70,179 @@ function fieldMap(): CanvasTexture {
   return fieldTexture;
 }
 
-let pcbTexture: CanvasTexture | null = null;
-/** The traces alone, white on transparent: where the waves of current light up. */
-let pcbTraces: CanvasTexture | null = null;
+/** The creep's textures: ground tint and traces (map), their phosphor light (emissive), traces alone (mask), noise. */
+let pcb: { map: CanvasTexture; glow: CanvasTexture; traces: CanvasTexture; noise: CanvasTexture } | null = null;
+
+/** Sine of the camera's elevation: how much the view squashes the ground's depth on screen. */
+const VIEW_SQUASH = 0.574;
+
 /**
- * Z creep, circuit variant: a tileable printed circuit with no board under it, so the ground shows through.
- * Copper traces routed at right angles and 45°, pads and vias, chips with their pins and status LEDs, and a
- * faint solder-mask tint in patches. Laid in world space, so neighbouring zones join up.
+ * How far a direction on the creep texture (canvas x, y) lies on screen from the nearest horizontal or
+ * vertical, in degrees. The texture is laid with u = x and v = -z and the camera looks down (-1, -1), so
+ * canvas (1, 1) runs straight up the screen and (1, -1) straight across.
  */
-function pcbMap(): CanvasTexture {
-  if (pcbTexture) return pcbTexture;
-  const S = 512;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d')!;
-  const mc = document.createElement('canvas');
-  mc.width = mc.height = S;
-  const mg = mc.getContext('2d')!;
-  mg.lineCap = mg.lineJoin = 'round';
-  mg.strokeStyle = mg.fillStyle = '#fff';
-  let seed = 11;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const G = 16; // routing grid
-  type Trace = { pts: [number, number][]; w: number };
-  const traces: Trace[] = [];
-  const DIRS: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
-  for (let i = 0; i < 70; i++) {
-    let x = Math.floor(rnd() * (S / G)) * G;
-    let y = Math.floor(rnd() * (S / G)) * G;
-    let d = Math.floor(rnd() * 4) * 2; // start straight
-    const pts: [number, number][] = [[x, y]];
-    const steps = 3 + Math.floor(rnd() * 5);
-    for (let k = 0; k < steps; k++) {
-      const n = 1 + Math.floor(rnd() * 5);
-      x += DIRS[d][0] * G * n;
-      y += DIRS[d][1] * G * n;
-      pts.push([x, y]);
-      // Turn by 45°, never onto the (1, 1) diagonal: with the UVs (x, -z) and the camera looking down
-      // (-1, -1), it would run straight up the screen and read as something standing, not lying on the ground.
-      const turn = rnd() < 0.5 ? 1 : 7;
-      d = (d + turn) % 8;
-      if (d === 1 || d === 5) d = (d + 8 - turn + (8 - turn)) % 8;
-    }
-    traces.push({ pts, w: rnd() < 0.2 ? 5 : 2 + rnd() * 1.5 });
+export function offAxis(angle: number): number {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const deg = (Math.atan2(((c + s) / Math.SQRT2) * VIEW_SQUASH, (c - s) / Math.SQRT2) * 180) / Math.PI;
+  const m = ((deg % 90) + 90) % 90;
+  return Math.min(m, 90 - m);
+}
+
+/** Tileable value noise, `cells` lattice cells across, two octaves, in [0, 1]. */
+function tileNoise(size: number, cells: number, seed: number): Float32Array {
+  let k = seed;
+  const rnd = () => ((k = (k * 16807) % 2147483647) / 2147483647);
+  const out = new Float32Array(size * size);
+  for (const [n, amp] of [[cells, 0.65], [cells * 2, 0.35]] as const) {
+    const lat = Array.from({ length: n * n }, rnd);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const fx = (x / size) * n;
+        const fy = (y / size) * n;
+        const x0 = Math.floor(fx);
+        const y0 = Math.floor(fy);
+        const tx = fx - x0;
+        const ty = fy - y0;
+        const sx = tx * tx * (3 - 2 * tx);
+        const sy = ty * ty * (3 - 2 * ty);
+        const v = (i: number, j: number) => lat[((j + n) % n) * n + ((i + n) % n)];
+        const top = v(x0, y0) + (v(x0 + 1, y0) - v(x0, y0)) * sx;
+        const bot = v(x0, y0 + 1) + (v(x0 + 1, y0 + 1) - v(x0, y0 + 1)) * sx;
+        out[y * size + x] += (top + (bot - top) * sy) * amp;
+      }
   }
-  const chips = Array.from({ length: 7 }, () => ({ x: Math.floor(rnd() * (S / G)) * G, y: Math.floor(rnd() * (S / G)) * G, w: G * (2 + Math.floor(rnd() * 3)), h: G * (1 + Math.floor(rnd() * 2)), led: rnd() < 0.6 }));
-  const masks = Array.from({ length: 16 }, () => ({ x: rnd() * S, y: rnd() * S, r: 50 + rnd() * 110 }));
-  // Everything is drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
+  return out;
+}
+
+/**
+ * Z creep: worn electronics grown into the ground. Traces at free angles, never running straight across or
+ * up the screen (they would read as things standing up), branching off each other, ending in pads, with
+ * light points here and there; a dark, uneven film under them, the ground showing through. The traces'
+ * phosphor green is in the emissive texture only, so the film takes the scene's light like the ground.
+ */
+function pcbTextures(): NonNullable<typeof pcb> {
+  if (pcb) return pcb;
+  const S = 512;
+  const canvas = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d')!;
+    g.lineCap = g.lineJoin = 'round';
+    return [c, g] as const;
+  };
+  const [mc, g] = canvas(); // map: film and dim traces
+  const [ec, eg] = canvas(); // emissive: the phosphor light
+  const [tc, tg] = canvas(); // traces alone, for the waves
+  eg.fillStyle = '#000';
+  eg.fillRect(0, 0, S, S);
+  tg.strokeStyle = tg.fillStyle = '#fff';
+  let seed = 23;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const MIN_OFF = 22; // degrees away from the screen's horizontal and vertical
+  // A heading near `from`, turned by up to `turn`, that does not run along the screen's axes.
+  const heading = (from: number, turn: number) => {
+    for (let k = 0; k < 40; k++) {
+      const a = from + (rnd() * 2 - 1) * turn;
+      if (offAxis(a) >= MIN_OFF) return a;
+    }
+    return Math.PI / 12; // 15° off the texture's x axis: about 45° on screen
+  };
+  type Trace = { pts: [number, number][]; w: number; glow: number };
+  const traces: Trace[] = [];
+  const walk = (x: number, y: number, a: number, steps: number, w: number) => {
+    const pts: [number, number][] = [[x, y]];
+    for (let k = 0; k < steps; k++) {
+      a = heading(a, 0.6);
+      const len = 12 + rnd() * 34;
+      x += Math.cos(a) * len;
+      y += Math.sin(a) * len;
+      pts.push([x, y]);
+      if (w > 1.6 && rnd() < 0.18 && traces.length < 160) walk(x, y, a + (rnd() < 0.5 ? 1 : -1) * (0.7 + rnd() * 0.6), 2 + Math.floor(rnd() * 4), w * 0.6);
+    }
+    traces.push({ pts, w, glow: 0.35 + rnd() * 0.65 });
+  };
+  for (let i = 0; i < 46; i++) walk(rnd() * S, rnd() * S, heading(rnd() * Math.PI * 2, Math.PI), 4 + Math.floor(rnd() * 6), rnd() < 0.2 ? 4 : 1.6 + rnd() * 1.6);
+  const lights = Array.from({ length: 34 }, () => ({ x: rnd() * S, y: rnd() * S, r: 1.5 + rnd() * 2.5 }));
+  // Drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
   for (const ox of [-S, 0, S])
     for (const oy of [-S, 0, S]) {
-      g.save();
-      g.translate(ox, oy);
-      mg.save();
-      mg.translate(ox, oy);
-      // One colour only, an old phosphor terminal's green: a dark screen wash over everything, darker in
-      // patches, the ground still showing through, and traces glowing brighter on it.
-      g.fillStyle = 'rgba(6,24,9,0.42)';
-      g.fillRect(0, 0, S, S);
-      for (const m of masks) {
-        const f = g.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
-        f.addColorStop(0, 'rgba(3,16,5,0.35)');
-        f.addColorStop(1, 'rgba(3,16,5,0)');
-        g.fillStyle = f;
-        g.fillRect(m.x - m.r, m.y - m.r, m.r * 2, m.r * 2);
+      for (const ctx of [g, eg, tg]) {
+        ctx.save();
+        ctx.translate(ox, oy);
       }
-      g.lineCap = 'round';
-      g.lineJoin = 'round';
+      // The film: dark, thin, so the ground's colour and grain stay under it.
+      g.fillStyle = 'rgba(8,20,10,0.55)';
+      g.fillRect(0, 0, S, S);
       for (const t of traces) {
-        g.beginPath();
-        t.pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
-        g.strokeStyle = 'rgba(0,8,2,0.5)';
-        g.lineWidth = t.w + 2;
+        const path = (ctx: CanvasRenderingContext2D) => {
+          ctx.beginPath();
+          t.pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        };
+        path(g);
+        g.strokeStyle = 'rgba(2,8,3,0.55)'; // a groove either side
+        g.lineWidth = t.w + 2.5;
         g.stroke();
-        g.strokeStyle = '#1f9a2e'; // phosphor green
+        g.strokeStyle = '#16521d';
         g.lineWidth = t.w;
         g.stroke();
-        g.strokeStyle = 'rgba(150,255,150,0.3)'; // brighter core
-        g.lineWidth = Math.max(1, t.w * 0.3);
-        g.stroke();
-        mg.beginPath();
-        t.pts.forEach(([x, y], k) => (k ? mg.lineTo(x, y) : mg.moveTo(x, y)));
-        mg.lineWidth = t.w;
-        mg.stroke();
+        path(eg);
+        eg.strokeStyle = `rgba(40,${Math.round(150 + 60 * t.glow)},60,${0.45 + 0.4 * t.glow})`;
+        eg.lineWidth = Math.max(1.2, t.w * 0.7);
+        eg.stroke();
+        path(tg);
+        tg.lineWidth = t.w;
+        tg.stroke();
         for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
-          // Pad with a drilled hole (via).
-          g.fillStyle = '#3ccf48';
+          const r = t.w + 2;
+          g.fillStyle = '#1d6a26';
           g.beginPath();
-          g.arc(x, y, t.w + 3, 0, Math.PI * 2);
+          g.arc(x, y, r, 0, Math.PI * 2);
           g.fill();
-          g.fillStyle = '#031006';
+          g.fillStyle = '#030a04';
           g.beginPath();
-          g.arc(x, y, (t.w + 3) * 0.4, 0, Math.PI * 2);
+          g.arc(x, y, r * 0.42, 0, Math.PI * 2);
           g.fill();
+          eg.strokeStyle = `rgba(60,${Math.round(170 + 60 * t.glow)},70,0.8)`;
+          eg.lineWidth = 1.2;
+          eg.beginPath();
+          eg.arc(x, y, r * 0.75, 0, Math.PI * 2);
+          eg.stroke();
         }
       }
-      for (const ch of chips) {
-        g.fillStyle = '#2a8f35';
-        for (let px = ch.x + 4; px < ch.x + ch.w - 2; px += 6) {
-          g.fillRect(px, ch.y - 4, 3, ch.h + 8); // pins on both long sides
-        }
-        g.fillStyle = 'rgba(0,8,2,0.6)';
-        g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
-        g.fillStyle = '#07160a';
-        g.fillRect(ch.x, ch.y, ch.w, ch.h);
-        g.fillStyle = 'rgba(120,255,130,0.14)';
-        g.fillRect(ch.x, ch.y, ch.w, 2);
-        g.fillStyle = '#15501d';
-        g.beginPath();
-        g.arc(ch.x + 5, ch.y + 5, 2, 0, Math.PI * 2);
-        g.fill();
-        if (ch.led) {
-          g.fillStyle = 'rgba(170,255,170,1)';
-          g.beginPath();
-          g.arc(ch.x + ch.w - 6, ch.y + ch.h - 6, 2.5, 0, Math.PI * 2);
-          g.fill();
-        }
+      for (const l of lights) {
+        const f = eg.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 3);
+        f.addColorStop(0, 'rgba(190,255,190,1)');
+        f.addColorStop(0.3, 'rgba(70,230,90,0.8)');
+        f.addColorStop(1, 'rgba(20,120,30,0)');
+        eg.fillStyle = f;
+        eg.fillRect(l.x - l.r * 3, l.y - l.r * 3, l.r * 6, l.r * 6);
       }
-      g.restore();
-      mg.restore();
+      for (const ctx of [g, eg, tg]) ctx.restore();
     }
-  pcbTraces = new CanvasTexture(mc);
-  pcbTraces.wrapS = pcbTraces.wrapT = RepeatWrapping;
-  pcbTexture = new CanvasTexture(c);
-  pcbTexture.colorSpace = SRGBColorSpace;
-  pcbTexture.wrapS = pcbTexture.wrapT = RepeatWrapping;
-  pcbTexture.anisotropy = 4;
-  return pcbTexture;
+  // Noise for the frayed rim (red), grime and wear (green).
+  const N = 128;
+  const nc = document.createElement('canvas');
+  nc.width = nc.height = N;
+  const ng = nc.getContext('2d')!;
+  const img = ng.createImageData(N, N);
+  const fray = tileNoise(N, 8, 5);
+  const grime = tileNoise(N, 4, 9);
+  for (let i = 0; i < N * N; i++) {
+    img.data[i * 4] = fray[i] * 255;
+    img.data[i * 4 + 1] = grime[i] * 255;
+    img.data[i * 4 + 3] = 255;
+  }
+  ng.putImageData(img, 0, 0);
+  const tex = (c: HTMLCanvasElement, srgb: boolean) => {
+    const t = new CanvasTexture(c);
+    t.wrapS = t.wrapT = RepeatWrapping;
+    if (srgb) t.colorSpace = SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  };
+  pcb = { map: tex(mc, true), glow: tex(ec, true), traces: tex(tc, false), noise: tex(nc, false) };
+  return pcb;
 }
 
 /** Tiles covered by one repeat of the circuit texture. */
@@ -210,7 +257,7 @@ export class PowerNet {
   private readonly root = new Group();
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
-  private readonly creepMaterial = new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true });
+  private readonly creepMaterial = new MeshLambertMaterial({ map: pcbTextures().map, emissiveMap: pcbTextures().glow, emissive: 0xffffff, emissiveIntensity: 1.6, transparent: true, depthWrite: false, side: DoubleSide });
   private readonly creepTime = { value: 0 };
   /** Wires between Z buildings: dark rubber. */
   private readonly wireMaterial = new MeshStandardMaterial({ color: 0x17181c, metalness: 0.1, roughness: 0.55 });
@@ -233,18 +280,30 @@ export class PowerNet {
     // Faint waves of current rolling out from each building over the traces (aDist: tiles from its centre).
     this.creepMaterial.onBeforeCompile = (sh) => {
       sh.uniforms.time = this.creepTime;
-      sh.uniforms.traces = { value: pcbTraces };
-      sh.vertexShader = `attribute float aDist;\nvarying float vDist;\n${sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDist = aDist;')}`;
-      sh.fragmentShader = `uniform float time;\nuniform sampler2D traces;\nvarying float vDist;\n${sh.fragmentShader.replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-        float w = fract(vDist / 6.0 - time * 0.2);
-        // Sharp front on the outside, a glow trailing inwards.
-        float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
-        float glow = texture2D(traces, vMapUv).a * band * 0.22;
-        diffuseColor.rgb += vec3(0.4, 1.0, 0.45) * glow;
-        diffuseColor.a = max(diffuseColor.a, glow);`,
-      )}`;
+      sh.uniforms.traces = { value: pcbTextures().traces };
+      sh.uniforms.noise = { value: pcbTextures().noise };
+      sh.vertexShader = `attribute float aDist;\nattribute float aRim;\nvarying float vDist;\nvarying float vRim;\n${sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDist = aDist;\nvRim = aRim;')}`;
+      sh.fragmentShader = `uniform float time;\nuniform sampler2D traces;\nuniform sampler2D noise;\nvarying float vDist;\nvarying float vRim;\n${sh.fragmentShader
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+          float trace = texture2D(traces, vMapUv).a;
+          vec2 nz = vec2(texture2D(noise, vMapUv * 1.9).r, texture2D(noise, vMapUv * 0.55 + 0.37).g);
+          // The rim frays into the ground through noise instead of fading evenly.
+          float fray = smoothstep(nz.x - 0.14, nz.x + 0.14, vRim);
+          // Grime: the film thins and thickens in patches; the traces keep their ink.
+          diffuseColor.a *= fray * mix(mix(0.45, 1.15, nz.y), 1.0, trace);
+          diffuseColor.rgb *= mix(0.7, 1.0, nz.y);`,
+        )
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          // Worn traces glow less; waves of current roll out from each building, sharp front outside.
+          totalEmissiveRadiance *= fray * mix(0.3, 1.0, smoothstep(0.3, 0.7, nz.y));
+          float w = fract(vDist / 6.0 - time * 0.2);
+          float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
+          totalEmissiveRadiance += vec3(0.4, 1.0, 0.45) * trace * band * 0.3 * fray;`,
+        )}`;
     };
   }
 
@@ -335,7 +394,7 @@ export class PowerNet {
       if (creep(e)) {
         // World-space UVs, so overlapping zones line up; the rim frays out unevenly into the ground.
         const uv = geo.getAttribute('uv');
-        const color = new Float32Array(pos.count * 4);
+        const rim = new Float32Array(pos.count);
         const dist = new Float32Array(pos.count);
         for (let i = 0; i < pos.count; i++) {
           const x = pos.getX(i);
@@ -343,15 +402,18 @@ export class PowerNet {
           uv.setXY(i, x / PCB_TILE, -z / PCB_TILE);
           const d = Math.hypot(x - cx, z - cz) / r;
           const ragged = 0.12 * Math.sin(x * 1.7 + z * 0.6) * Math.sin(z * 1.3 - x * 0.4);
-          const a = Math.min(1, Math.max(0, (1 - d + ragged) / 0.3));
-          color.set([1, 1, 1, a], i * 4);
+          // Not on cliff walls: there the world-space pattern smears into streaks running up the screen.
+          const slope = Math.hypot(heightAt(this.map, x + 0.3, z) - heightAt(this.map, x - 0.3, z), heightAt(this.map, x, z + 0.3) - heightAt(this.map, x, z - 0.3)) / 0.6;
+          const flat = 1 - Math.min(1, Math.max(0, (slope - 0.5) / 0.4));
+          rim[i] = Math.min(1, Math.max(0, (1 - d + ragged) / 0.35)) * flat;
           dist[i] = d * r;
         }
-        geo.setAttribute('color', new BufferAttribute(color, 4));
+        geo.setAttribute('aRim', new BufferAttribute(rim, 1));
         geo.setAttribute('aDist', new BufferAttribute(dist, 1));
       }
       const disc = new Mesh(geo, creep(e) ? this.creepMaterial : this.fieldMaterial);
       disc.renderOrder = 1;
+      disc.receiveShadow = creep(e); // lit and shaded like the ground it lies on
       this.root.add(disc);
     }
     // Z: a wire from each node to the nearest node already linked, and from every other building
