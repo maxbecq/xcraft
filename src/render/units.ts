@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -560,12 +560,71 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
         // Bright silhouette edges on everything but mineral fields, stronger on units.
         if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
+        if (isdaris && d.faction === 'z' && d.kind === 'unit') rigidSkin(gltf.scene);
         templates.set(type, type.startsWith('minerai') ? mergeGeodes(gltf.scene) : gltf.scene);
       } catch {
         // keep the placeholder
       }
     })(), todo.length)),
   );
+}
+
+/** Layer no camera draws: parts kept only to be measured (legs, wheels, the body's box). */
+const MEASURED_ONLY = 31;
+
+/**
+ * A Z machine as one skinned mesh per material: a Hexapode's 51 parts become 10 draw calls. Each part is a bone
+ * moving only its own vertices, so the legs, shins and wheels the animation turns carry their parts as before.
+ * The parts stay where they were, for measuring, on a layer no camera, light or ray sees.
+ */
+function rigidSkin(scene: Group): void {
+  scene.updateMatrixWorld(true);
+  const all: Object3D[] = [];
+  scene.traverse((o) => all.push(o));
+  const bones: Object3D[] = [];
+  const parts = new Map<Material, BufferGeometry[]>();
+  const hidden: Mesh[] = [];
+  for (const o of all) {
+    if (!(o instanceof Mesh)) continue;
+    hidden.push(o);
+    // A node with several materials loads as a group of meshes that do not move on their own: the group is the bone.
+    const node = o.parent !== scene && o.matrix.equals(new Matrix4()) ? o.parent! : o;
+    const bone = bones.includes(node) ? bones.indexOf(node) : bones.push(node) - 1;
+    const g = new BufferGeometry();
+    for (const [name, a] of Object.entries(o.geometry.attributes as Record<string, BufferAttribute>)) {
+      const out = new Float32Array(a.count * a.itemSize);
+      for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+      g.setAttribute(name, new BufferAttribute(out, a.itemSize));
+    }
+    g.setIndex(o.geometry.index ? Array.from(o.geometry.index.array) : null);
+    g.applyMatrix4(o.matrixWorld);
+    const n = g.getAttribute('position').count;
+    g.setAttribute('skinIndex', new BufferAttribute(new Uint16Array(n * 4).fill(0).map((_, i) => (i % 4 ? 0 : bone)), 4));
+    g.setAttribute('skinWeight', new BufferAttribute(new Float32Array(n * 4).map((_, i) => (i % 4 ? 0 : 1)), 4));
+    const list = parts.get(o.material as Material) ?? parts.set(o.material as Material, []).get(o.material as Material)!;
+    list.push(g);
+  }
+  const skins: SkinnedMesh[] = [];
+  for (const [material, list] of parts) {
+    for (const g of list) for (const name of Object.keys(g.attributes)) if (!list.every((h) => h.getAttribute(name))) g.deleteAttribute(name);
+    const geo = mergeGeometries(list);
+    if (!geo) return; // parts that do not match: keep the model as it is
+    const skin = new SkinnedMesh(geo, material);
+    skin.name = (material as Material).name;
+    skins.push(skin);
+  }
+  const skeleton = new Skeleton(bones as never[]);
+  for (const skin of skins) {
+    scene.add(skin);
+    skin.bind(skeleton, new Matrix4());
+    skin.skeleton.update();
+    skin.computeBoundingBox();
+    skin.computeBoundingSphere();
+    skin.boundingSphere!.radius *= 1.3; // legs swing out of the rest pose
+    skin.userData.rigid = bones.map((b) => all.indexOf(b)); // where each bone sits in the model's traversal order
+  }
+  for (const o of hidden) o.layers.set(MEASURED_ONLY);
+  scene.userData.rigid = true;
 }
 
 /**
@@ -667,6 +726,14 @@ function model(type: string, team: Material, seed = 0): Group {
   const t = templates.get(type);
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
+  // Z machines (rigidSkin): the copy's skins follow the copy's nodes (the skins come last in the traversal).
+  if (t.userData.rigid) {
+    const nodes: Object3D[] = [];
+    g.traverse((o) => nodes.push(o));
+    for (const o of nodes) {
+      if (o instanceof SkinnedMesh && o.userData.rigid) o.bind(new Skeleton((o.userData.rigid as number[]).map((i) => nodes[i]) as never[], o.skeleton.boneInverses), o.bindMatrix);
+    }
+  }
   let tagIndex = 0;
   const veins: [Mesh, ShaderMaterial][] = [];
   g.traverse((o) => {
