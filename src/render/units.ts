@@ -1051,6 +1051,9 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   };
 }
 
+/** How long a unit takes to fall when it dies, and its death burst lasts (s). */
+const DIE_S = 0.3;
+const BURST_S = 0.4;
 const RALLY = 0x4dff6a;
 /**
  * Rally point marker: a slim beacon planted in the ground. A dark steel needle on a small hexagonal foot inlaid
@@ -1105,10 +1108,54 @@ function animateRally(flag: Group, now: number, phase: number): void {
 }
 const WHITE = new Color(0xffffff);
 
+/** What a fallen unit's team paint and silhouette glow turn to: dull grey, so a corpse never reads as a fighter. */
+const CORPSE_TEAM = new Color(0x2a2724);
+const NO_RIM = [0, 0, 0];
+
+/**
+ * A fallen unit's look: each mesh gets its own copy of its material, darkened, with team colour, silhouette
+ * glow and emissive lights put out, and glowing parts hidden. The copies keep the living unit's shader hooks and
+ * cache key, so the compiled programs are reused: no shader compiles in the middle of a battle.
+ */
+function toCorpse(root: Object3D): void {
+  root.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const dull = (m: Material): Material => {
+      if (m.blending === AdditiveBlending) {
+        o.visible = false; // glows and halos go out
+        return m;
+      }
+      const c = m.clone();
+      c.onBeforeCompile = (shader, r) => {
+        m.onBeforeCompile.call(c, shader, r);
+        if (shader.uniforms.teamColor) shader.uniforms.teamColor.value = CORPSE_TEAM;
+        if (shader.uniforms.rimColor) shader.uniforms.rimColor.value = NO_RIM;
+      };
+      c.customProgramCacheKey = () => m.customProgramCacheKey(); // the living unit's key, whatever it is made of
+      const k = c as MeshStandardMaterial;
+      k.color?.multiplyScalar(0.16); // linear: about 40 % brightness on screen
+      k.emissive?.setRGB(0, 0, 0);
+      c.userData.corpse = true;
+      return c;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(dull) : dull(o.material);
+  });
+}
+
+/** Frees the corpse's own materials once it has sunk. */
+function dropCorpse(root: Object3D): void {
+  root.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m.userData.corpse) m.dispose();
+  });
+}
+
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
+  /** Death bursts: a few dark drops for the living, sparks for machines. */
+  private bursts: { pts: Points; vel: Float32Array; age: number }[] = [];
   /** Z drones merging into the building they raised. */
   private merging: { v: View; age: number; building: number; from: Vector3; to: Vector3 }[] = [];
   private last = performance.now();
@@ -1142,8 +1189,18 @@ export class EntityRenderer {
           v.ring.visible = false;
           this.merging.push({ v, age: 0, building: into.id, to: new Vector3(into.x / FP, heightAt(this.map, into.x / FP, into.y / FP), into.y / FP), from: v.root.position.clone() });
         } else if (v.unit && v.root.visible) {
+          // Out of the fight at once: no ring, a quick fall (a quarter of a second), a dark corpse and a burst.
           v.ring.visible = false;
-          if (v.mixer) play(v, CLIP.die);
+          const die = v.clips?.get(CLIP.die);
+          if (v.mixer && die) {
+            v.mixer.stopAllAction();
+            die.reset().play();
+            die.timeScale = die.getClip().duration / DIE_S;
+            v.playing = die;
+          }
+          toCorpse(v.model);
+          const d = DEFS[v.type] as UnitDef | undefined;
+          this.burst(v.root.position.clone().setY(v.root.position.y + (v.model.position.y > 0.5 ? v.model.position.y : 0) + 0.5), !!d?.mechanical || d?.faction === 'z');
           this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
         } else this.scene.remove(v.root);
       }
@@ -1188,22 +1245,43 @@ export class EntityRenderer {
     });
     this.dying = this.dying.filter((d) => {
       d.age += dt;
-      if (d.v.mixer) {
-        // Animated characters play their own fall, then sink.
+      const sink = Math.max(0, d.age - 2.5) * 0.4; // the corpse lies a while, then sinks into the ground
+      if (d.v.mixer && d.v.playing === d.v.clips?.get(CLIP.die)) {
+        // Animated characters play their own fall, sped up to DIE_S, and settle a little lower, so a clip that
+        // ends kneeling still reads as down.
         d.v.mixer.update(dt);
-        d.v.model.position.y = -Math.max(0, d.age - 2.5) * 0.4;
-        if (d.age < 4) return true;
-        this.scene.remove(d.v.root);
-        return false;
+        const e = Math.min(1, d.age / DIE_S);
+        d.v.model.scale.y = (d.v.model.userData.sy ??= d.v.model.scale.y) * (1 - 0.3 * e);
+        d.v.model.position.y = -sink;
+      } else {
+        // The others give way: they slump, flatten and tilt in a fifth of a second.
+        const f = Math.min(1, d.age / 0.2);
+        const e = 1 - (1 - f) * (1 - f);
+        d.v.model.rotation.z = d.side * 0.4 * e;
+        d.v.model.scale.y = (d.v.model.userData.sy ??= d.v.model.scale.y) * (1 - 0.55 * e);
+        // Flyers drop out of the sky first, fast.
+        const alt: number = (d.v.model.userData.alt ??= d.v.model.position.y);
+        const air = alt > 0.5 ? Math.max(0, alt - 14 * d.age * d.age) : 0;
+        d.v.model.position.y = air - sink;
       }
-      const f = Math.min(1, d.age / 0.45);
-      d.v.model.rotation.z = d.side * (Math.PI / 2) * f * f;
-      // Flyers drop out of the sky first.
-      const alt: number = (d.v.model.userData.alt ??= d.v.model.position.y);
-      const air = alt > 0.5 ? Math.max(0, alt - 5 * d.age * d.age) : 0.12 * f;
-      d.v.model.position.y = air - Math.max(0, d.age - 2.5) * 0.4;
       if (d.age < 4) return true;
       this.scene.remove(d.v.root);
+      dropCorpse(d.v.model);
+      return false;
+    });
+    this.bursts = this.bursts.filter((b) => {
+      b.age += dt;
+      const pos = b.pts.geometry.getAttribute('position') as BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        b.vel[i * 3 + 1] -= 9 * dt;
+        pos.setXYZ(i, pos.getX(i) + b.vel[i * 3] * dt, Math.max(0.03, pos.getY(i) + b.vel[i * 3 + 1] * dt), pos.getZ(i) + b.vel[i * 3 + 2] * dt);
+      }
+      pos.needsUpdate = true;
+      (b.pts.material as PointsMaterial).opacity = Math.max(0, 1 - b.age / BURST_S);
+      if (b.age < BURST_S) return true;
+      this.scene.remove(b.pts);
+      b.pts.geometry.dispose();
+      (b.pts.material as PointsMaterial).dispose();
       return false;
     });
     this.hostile = (a, b) => world.hostile(a, b);
@@ -1486,6 +1564,28 @@ export class EntityRenderer {
   }
 
   /** Lays a selection ring's meshes on the ground around (x, z), over dunes and slopes; only when it moved. */
+  /** A short burst where a unit falls: a dozen dark drops (soberly, no gore), or sparks for a machine. */
+  private burst(at: Vector3, mechanical: boolean): void {
+    const n = mechanical ? 14 : 12;
+    const pos = new Float32Array(n * 3);
+    const vel = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = (mechanical ? 1.2 : 0.6) + Math.random() * (mechanical ? 1.8 : 1);
+      pos.set([at.x, at.y, at.z], i * 3);
+      vel.set([Math.cos(a) * r, (mechanical ? 2 : 1.4) + Math.random() * 1.6, Math.sin(a) * r], i * 3);
+    }
+    const geom = new BufferGeometry();
+    geom.setAttribute('position', new BufferAttribute(pos, 3));
+    // Sizes in pixels: the camera is orthographic, where point sizes do not follow the zoom anyway.
+    const pts = new Points(geom, mechanical
+      ? new PointsMaterial({ map: spark(), size: 9, sizeAttenuation: false, color: 0xffc070, transparent: true, depthWrite: false, blending: AdditiveBlending })
+      : new PointsMaterial({ map: spark(), size: 7, sizeAttenuation: false, color: 0x5a0d0a, transparent: true, depthWrite: false, alphaTest: 0.05 }));
+    pts.userData.noPick = true;
+    this.scene.add(pts);
+    this.bursts.push({ pts, vel, age: 0 });
+  }
+
   /** A small flag planted on the rally point of each selected building of ours that has one. */
   private readonly rallyFlags: Group[] = [];
 
@@ -1569,6 +1669,7 @@ export class EntityRenderer {
     if (e.type === 'minerai') {
       body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
       body.userData.base = 0.85 + ((e.id * 40503) % 100) / 330;
+      body.userData.geodes = ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
     }
     const pivot = new Group(); // animated wrapper, so the model keeps its own transform
     pivot.add(body);
@@ -1666,7 +1767,6 @@ export class EntityRenderer {
         });
         print = { plane, frame, frameMaterial, lines, bottom: box.min.y, top: box.max.y, originals };
         const half = (e.def as BuildingDef).size / 2;
-      body.userData.geodes = ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
         // A square outline round the footprint (a four-sided ring turned by 45°).
         seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
         seam.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
