@@ -314,7 +314,7 @@ const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="menu" title="Menu">≡<span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée">⚔<span> Armée</span></button>';
+tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée">⚔<span> Armée</span></button>';
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
