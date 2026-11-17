@@ -100,3 +100,22 @@ describe('group arrival', () => {
     expect(play()).toEqual(play());
   });
 });
+
+describe('production across several buildings', () => {
+  it('each click goes to the least busy one, a full one is skipped, the error only when all are full', () => {
+    const w = new World(createMap());
+    w.players[0].minerals = 99999;
+    w.spawn('conseil', 0, 10 * FP, 10 * FP); // supply
+    w.spawn('grenier', 0, 30 * FP, 10 * FP);
+    const a = w.spawn('caserne', 0, 20 * FP, 20 * FP);
+    const b = w.spawn('caserne', 0, 30 * FP, 20 * FP);
+    const train = () => w.step([{ player: 0, kind: 'train', ids: [a.id, b.id], type: 'auxiliaire' }]);
+    for (let i = 0; i < 5; i++) train();
+    expect([a.queue.length, b.queue.length].sort()).toEqual([2, 3]);
+    for (let i = 0; i < 5; i++) train();
+    expect([a.queue.length, b.queue.length]).toEqual([5, 5]);
+    expect(w.events.some((e) => e.text === "File d'attente pleine.")).toBe(false);
+    train();
+    expect(w.events.some((e) => e.text === "File d'attente pleine.")).toBe(true);
+  });
+});
