@@ -1282,11 +1282,11 @@ export class World {
 
   private think(e: Entity): void {
     if (e.inside) return this.shelter(e);
+    // A god summons only while it stands still (even pushed onto a blocked tile, which it steps off without a goal).
+    if (e.queue.length && !e.goal && e.held === 0) this.produce(e);
     // Caught under a new building (with or without orders): walk out first.
     if (!flies(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
-    // A god summons only while it stands still.
-    if (e.queue.length && !e.goal) this.produce(e);
     // Célérité naine: a Nain leaps at the enemy it goes for.
     if (e.type === 'nain' && e.order?.kind === 'attack' && e.abilityCd === 0 && e.boost === 0 && this.level(e.owner, 'celerite')) {
       const C = BALANCE.rules.upgrades.celerite;
