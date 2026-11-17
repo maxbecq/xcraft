@@ -234,7 +234,7 @@ const input = new Input(world, map, PLAYER, {
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
 const audio = new Audio();
-const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
+const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 hud.ping = (x, y) => minimap.ping(x, y);
