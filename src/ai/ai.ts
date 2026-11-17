@@ -39,6 +39,8 @@ const LEVELS = BALANCE.ai.levels;
 /** Bases an AI holds at most, and minutes between its expansions after the natural (maps with more bases). */
 const MAX_BASES = 4;
 const EXPAND_EVERY = 5;
+/** Build orders on one spot before the AI gives it up (its workers never got there). */
+const MAX_TRIES = 3;
 /** Each team's target base (building id, by team), shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 export const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
@@ -67,6 +69,8 @@ export class AI {
   private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
   private wave = new Set<number>();
+  /** Build orders given per spot ("tx,ty"); a spot tried MAX_TRIES times with nothing built there is given up. */
+  private tried = new Map<string, number>();
 
   private readonly faction: FactionDef;
 
@@ -204,6 +208,8 @@ export class AI {
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
     if (moreEnergy && f !== FACTIONS.isdaris && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
+    // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
+    for (const b of buildings) this.tried.delete(`${b.tx},${b.ty}`);
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (minerals < def.cost.minerals) {
@@ -215,6 +221,7 @@ export class AI {
       const builder = this.builder(serfs, spot);
       if (!spot || !builder) continue;
       out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1] });
+      this.tried.set(`${spot[0]},${spot[1]}`, (this.tried.get(`${spot[0]},${spot[1]}`) ?? 0) + 1);
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
     }
@@ -710,7 +717,7 @@ export class AI {
       }
       return best ? [best.tx, best.ty] : null;
     }
-    if (type === this.faction.hq) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player)) ?? null;
+    if (type === this.faction.hq) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx, ty)) ?? null;
     const cx = Math.floor((near ?? home).x / FP);
     const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.
@@ -723,16 +730,35 @@ export class AI {
           const tx = cx + dx * sx - Math.floor(def.size / 2);
           const ty = cy + dy * sy - Math.floor(def.size / 2);
           // Leave a one-tile corridor around every building.
-          if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player)) continue;
+          if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player) || !this.fresh(tx, ty)) continue;
           if (this.closeToResources(tx, ty, def.size) || this.closeToRamp(tx, ty, def.size)) continue;
           // Power-field buildings spread out to cover more ground: none closer to another field than most of its radius.
-          if (def.power && !def.morphOnly && first === undefined) first = [tx, ty];
+          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, tx, ty)) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
+          if (!this.walkable(home, tx, ty)) continue;
           return [tx, ty];
         }
       }
     }
     return first ?? null;
+  }
+
+  /** Not a spot given up after MAX_TRIES build orders. */
+  private fresh(tx: number, ty: number): boolean {
+    return (this.tried.get(`${tx},${ty}`) ?? 0) < MAX_TRIES;
+  }
+
+  /**
+   * Can workers walk from the base to this tile by a reasonable road? A spot on the low ground at the foot of the
+   * base's cliff is next door as the crow flies but a long way round on foot: the worker heads for the cliff edge,
+   * gets stuck there and the order fails ("Emplacement inaccessible").
+   */
+  private walkable(home: Entity, tx: number, ty: number): boolean {
+    const g = this.world.grid;
+    const [sx, sy] = g.nearestOpen(Math.floor(home.x / FP), Math.floor(home.y / FP));
+    const path = g.findPath(sx, sy, tx, ty);
+    if ((path.length ? path[path.length - 1] : sy * g.width + sx) !== ty * g.width + tx) return false;
+    return path.length <= Math.hypot(tx - sx, ty - sy) * 3 + 20;
   }
 
   /** Would a new power field centred on (x, y) tiles mostly overlap one of ours? */
