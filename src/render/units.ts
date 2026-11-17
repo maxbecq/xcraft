@@ -494,7 +494,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.18, steel);
-        roughnessFactor = mix(roughnessFactor, 0.2, teamMask);`)
+        roughnessFactor = mix(roughnessFactor, 0.35, teamMask);`)
         .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         metalnessFactor = mix(metalnessFactor, 0.85, steel);
         metalnessFactor = mix(metalnessFactor, 0.35, teamMask);`);
