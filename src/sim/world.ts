@@ -20,6 +20,9 @@ export type Order =
   | { kind: 'cast'; ability: string; x: number; y: number };
 
 /** Flying units go straight over cliffs and buildings. */
+/** Reach of the cell index beyond a search range, in tiles: the widest building's half plus a tick's walk. */
+const CELL_MARGIN = 4;
+
 export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying || e.airborne;
 
 export interface Entity {
@@ -261,6 +264,7 @@ export class World {
       this.block(e, 1);
     }
     this.entities.set(e.id, e);
+    if (this.cells) this.file(e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
     if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
@@ -311,11 +315,13 @@ export class World {
       if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
       this.regenerate(e);
     }
+    this.index();
     for (const e of [...this.entities.values()]) {
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
       if (e.def.kind === 'unit') this.think(e);
       else if (e.def.kind === 'building') this.operate(e);
     }
+    this.cells = null;
     if (this.tick % TICK_RATE === 0) this.repairOnCreep();
     this.bury();
     this.separate();
@@ -828,6 +834,7 @@ export class World {
     }
     t.x = t.px = x;
     t.y = t.py = y;
+    if (this.cells) this.file(t); // teleported: findable at its new spot this tick
     t.path = [];
     t.goal = null;
     this.setOrder(t, null);
@@ -1529,6 +1536,37 @@ export class World {
     else if (o?.kind === 'attack') this.setOrder(e, o.auto ? null : { kind: 'attackMove', x: o.lx, y: o.ly, target: 0 });
   }
 
+  /**
+   * Entities filed by 8×8-tile cell while units and buildings act (null otherwise: then every entity is scanned).
+   * Positions move a little during the tick, hence the margin when reading it.
+   */
+  private cells: Map<number, Entity[]> | null = null;
+
+  private index(): void {
+    this.cells = new Map();
+    for (const e of this.entities.values()) this.file(e);
+  }
+
+  private file(e: Entity): void {
+    const k = (tileOf(e.y) >> 3) * 1024 + (tileOf(e.x) >> 3);
+    const list = this.cells!.get(k);
+    if (list) list.push(e);
+    else this.cells!.set(k, [e]);
+  }
+
+  /** Entities that may lie within `range` of a point, edges included (a superset: callers still measure). */
+  private around(x: number, y: number, range: number): Iterable<Entity> {
+    if (!this.cells) return this.entities.values();
+    const r = range + CELL_MARGIN * FP;
+    const out: Entity[] = [];
+    for (let cy = Math.max(0, tileOf(y - r)) >> 3; cy <= tileOf(y + r) >> 3; cy++) {
+      for (let cx = Math.max(0, tileOf(x - r)) >> 3; cx <= tileOf(x + r) >> 3; cx++) {
+        for (const t of this.cells.get(cy * 1024 + cx) ?? []) if (this.entities.get(t.id) === t) out.push(t);
+      }
+    }
+    return out;
+  }
+
   /** Edge-to-edge distance. */
   private gap(e: Entity, t: Entity): number {
     if (t.def.kind === 'unit') return dist(e.x, e.y, t.x, t.y) - e.radius - t.radius;
@@ -1548,7 +1586,7 @@ export class World {
   private enemyNear(e: Entity, range: number, unitsOnly = false, a = this.weapon(e)): Entity | undefined {
     let best: Entity | undefined;
     let bestScore = Infinity;
-    for (const t of this.entities.values()) {
+    for (const t of this.around(e.x, e.y, range)) {
       if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
       if (a && !reaches(a, flies(t))) continue;
       if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
@@ -1556,7 +1594,8 @@ export class World {
       const d = this.gap(e, t);
       if (d > range || !this.sees(e.owner, t)) continue;
       const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];
-      if (score < bestScore) [best, bestScore] = [t, score];
+      // Ties go to the oldest entity, as when every entity was scanned in order.
+      if (score < bestScore || (score === bestScore && t.id < best!.id)) [best, bestScore] = [t, score];
     }
     return best;
   }

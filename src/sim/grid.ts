@@ -95,14 +95,22 @@ export class Grid {
    * A* over tiles, from a tile to the reachable tile closest to the goal.
    * Returns tile indices from start (excluded) to the end tile.
    */
+  private cost = new Int32Array(0);
+  private from = new Int32Array(0);
+  private seen = new Int32Array(0);
+  private done = new Int32Array(0);
+  private search = 0;
+
   findPath(sx: number, sy: number, gx: number, gy: number): number[] {
     const w = this.width;
     const start = sy * w + sx;
     const goal = gy * w + gx;
     if (start === goal) return [];
-    const g = new Int32Array(w * this.height).fill(-1);
-    const from = new Int32Array(w * this.height).fill(-1);
-    const closed = new Uint8Array(w * this.height);
+    // Buffers kept between searches: a tile's cost counts only if it was set in this search (stamp).
+    const n = w * this.height;
+    if (this.cost.length !== n) [this.cost, this.from, this.seen, this.done] = [new Int32Array(n), new Int32Array(n), new Int32Array(n), new Int32Array(n)];
+    const run = ++this.search;
+    const { cost: g, from, seen, done } = this;
     const heap = new Heap();
     const h = (i: number) => {
       const dx = Math.abs((i % w) - gx);
@@ -110,13 +118,14 @@ export class Grid {
       return 10 * (dx + dy) - 6 * Math.min(dx, dy); // octile, costs 10 and 14
     };
     g[start] = 0;
+    seen[start] = run;
     heap.push(h(start), start);
     let best = start;
     let bestH = h(start);
     while (heap.size > 0) {
       const cur = heap.pop();
-      if (closed[cur]) continue;
-      closed[cur] = 1;
+      if (done[cur] === run) continue;
+      done[cur] = run;
       const hc = h(cur);
       if (hc < bestH) {
         best = cur;
@@ -131,7 +140,8 @@ export class Grid {
         if (!this.canStep(cx, cy, nx, ny)) continue;
         const ni = ny * w + nx;
         const ng = g[cur] + (d < 4 ? 10 : 14);
-        if (g[ni] !== -1 && ng >= g[ni]) continue;
+        if (seen[ni] === run && ng >= g[ni]) continue;
+        seen[ni] = run;
         g[ni] = ng;
         from[ni] = cur;
         heap.push(ng + h(ni), ni);
