@@ -107,7 +107,7 @@ export class Decor {
           const r = rand(tx, ty, 11 + ox);
           if (r > 0.45) continue;
           const type = WALL[Math.floor(rand(tx, ty, 13 + ox) * WALL.length)];
-          const [x, z] = ox ? [tx + 0.04, ty + 0.5] : [tx + 0.5, ty + 0.04];
+          const [x, z] = ox ? [tx + 0.02, ty + 0.5] : [tx + 0.5, ty + 0.02];
           taken.push([x + ox * 0.5, z + oz * 0.5]);
           // Height from the tile's middle: right at the wall the deck height blends into the level above.
           this.place(type, tx, ty, x, z, Math.atan2(ox, oz), heightAt(map, tx + 0.5, ty + 0.5));
@@ -198,7 +198,7 @@ export class Decor {
               c.setXYZ(i, v, v, v);
             }
           }
-        } else weather(m, 1);
+        } else weather(m, this.city ? 1.8 : 1); // the dead city: filthier
         fog(m);
         const im = new InstancedMesh(part.geometry, part.material, list.length);
         // Parts keep their offset inside the doodad (whose origin is the file origin).

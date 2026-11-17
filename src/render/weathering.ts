@@ -23,7 +23,7 @@ export function weather(m: Material, amount: number): void {
         #ifdef USE_INSTANCING
           wp = instanceMatrix * wp;
         #endif
-        vHeight = wp.y;
+        vHeight = transformed.y; // height on the model itself: props on a high deck get grime at their feet too
         wp = modelMatrix * wp;
         vWPos = wp.xyz;
         vWNormal = normalize(mat3(modelMatrix) * objectNormal);`,
@@ -53,14 +53,14 @@ export function weather(m: Material, amount: number): void {
           // Rust: irregular orange-brown blotches with a darker core.
           float rust = smoothstep(0.58, 0.78, wFbm(vWPos * 2.3));
           vec3 rustCol = mix(vec3(0.55, 0.26, 0.1), vec3(0.32, 0.13, 0.05), wNoise(vWPos * 9.0));
-          diffuseColor.rgb = mix(diffuseColor.rgb, rustCol, rust * 0.75 * weatherAmount);
+          diffuseColor.rgb = mix(diffuseColor.rgb, rustCol, min(1.0, rust * 0.75 * weatherAmount));
           // Damp: dark streaks running down vertical faces.
           float streak = wNoise(vec3(vWPos.x * 7.0 + vWPos.z * 7.0, vWPos.y * 0.7, 0.0));
           float damp = smoothstep(0.62, 0.85, streak) * side * smoothstep(0.35, 0.6, wFbm(vWPos * 0.9 + 3.0));
           diffuseColor.rgb *= 1.0 - damp * 0.45 * weatherAmount;
           // Grime: dirt splashed up from the ground.
           float grime = (1.0 - smoothstep(0.0, 0.55, vHeight)) * (0.6 + 0.4 * wNoise(vWPos * 6.0));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.16, 0.12), grime * 0.5 * weatherAmount);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.16, 0.12), min(1.0, grime * 0.5 * weatherAmount));
         }`,
       );
   };

@@ -92,6 +92,7 @@ def palette():
         "tag": mat("tag", 0xFFFFFF),
         "window_glow": mat("window_glow", 0xFFC870, emission=0xFFA040),
         "lamp_glow": mat("lamp_glow", 0xFFF2C0, emission=0xFFE090),
+        "grimy_glow": mat("grimy_glow", 0x5A4A36, emission=0x3A2610),  # light through filthy glass
         "red_glow": mat("red_glow", 0xFF4A3A, emission=0xFF2010),
         "crystal_pale": mat("crystal_pale", 0xA8E8FF, emission=0x2A7AB0, rough=0.15),
         "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
@@ -1060,18 +1061,38 @@ def wallpipe(p):
     box(p["hazard"], (0.02, 0.15, 0.08), (r + 0.01, -0.45, 0.4))
 
 
+def rounded(m, w, h, r, depth, loc, seg=5, name="rounded"):
+    """A rounded-rectangle slab standing in the XZ plane (w wide, h tall, corner radius r), depth along Y."""
+    pts = []
+    for cx, cz, a0 in ((w / 2 - r, h / 2 - r, 0), (-w / 2 + r, h / 2 - r, 90), (-w / 2 + r, -h / 2 + r, 180), (w / 2 - r, -h / 2 + r, 270)):
+        for k in range(seg + 1):
+            a = math.radians(a0 + 90 * k / seg)
+            pts.append((cx + r * math.cos(a), cz + r * math.sin(a)))
+    n = len(pts)
+    verts = [(x, -depth / 2, z) for x, z in pts] + [(x, depth / 2, z) for x, z in pts]
+    faces = [tuple(range(n))[::-1], tuple(range(n, 2 * n))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    me.update()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.location = loc
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    return _finish(o, m, name)
+
+
 def shopfront(p):
-    """A small shop in the wall: a lit window (some panes dead), a torn awning, an alien sign, a half-down shutter."""
-    box(p["dark"], (0.9, 0.1, 0.8), (0, -0.05, 0.42))
-    box(p["window_glow"], (0.36, 0.02, 0.42), (-0.2, -0.11, 0.4))
-    box(p["dark_glass"], (0.3, 0.02, 0.42), (0.2, -0.11, 0.4))
-    box(p["scrap"], (0.3, 0.03, 0.22), (0.2, -0.12, 0.52))  # shutter half down
-    box(p["steel"], (0.02, 0.03, 0.46), (0.0, -0.12, 0.4))
-    box(p["hazard"], (0.94, 0.42, 0.03), (0, -0.25, 0.72), rot=(0.25, 0, 0))  # awning
-    box(p["dark"], (0.3, 0.2, 0.03), (0.3, -0.3, 0.68), rot=(0.6, 0.2, 0))  # torn flap
-    box(p["purple_glow"], (0.08, 0.03, 0.3), (0.42, -0.14, 0.95))  # vertical sign
-    box(p["dark"], (0.25, 0.2, 0.2), (-0.3, -0.25, 0.1))  # crate out front
-    box(p["concrete"], (0.9, 0.3, 0.03), (0, -0.2, 0.015))
+    """A shop window in the wall, old-republic style: one big rounded bay of filthy glass, dim light inside, grime run down from it."""
+    rounded(p["steel"], 0.86, 0.62, 0.2, 0.1, (0, -0.02, 0.5))  # frame, half sunk in the wall
+    rounded(p["grimy_glow"], 0.74, 0.5, 0.15, 0.02, (0, -0.075, 0.5))  # lit glass
+    rounded(p["dark_glass"], 0.3, 0.22, 0.08, 0.02, (0.2, -0.085, 0.42))  # a dead, smashed pane corner
+    for x, z, w, h in ((-0.2, 0.36, 0.3, 0.1), (0.05, 0.62, 0.22, 0.07), (-0.27, 0.58, 0.12, 0.14)):
+        rounded(p["dark"], w, h, min(w, h) / 2.2, 0.01, (x, -0.088, z))  # smears of filth on the glass
+    box(p["dark"], (0.74, 0.03, 0.025), (0, -0.085, 0.47))  # transom bar
+    box(p["scrap"], (0.8, 0.1, 0.035), (0, -0.07, 0.2))  # sill
+    box(p["dark"], (0.2, 0.15, 0.12), (-0.28, -0.22, 0.06), rot=(0, 0, 0.3))  # junk left out front
 
 
 DOODADS = {
