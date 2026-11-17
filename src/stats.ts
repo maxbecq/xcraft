@@ -4,7 +4,7 @@
  */
 
 /** The GoatCounter site code: `xxx` in `xxx.goatcounter.com`. Empty: nothing is sent. `VITE_GOATCOUNTER` overrides it. */
-const SITE_CODE = '';
+const SITE_CODE = 'xcraft';
 const SITE: string = import.meta.env.VITE_GOATCOUNTER || SITE_CODE;
 
 function send(path: string, title: string, event: boolean): void {
