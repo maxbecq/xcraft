@@ -477,6 +477,7 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   ready.then(start);
   showHome();
+  loading?.classList.add('mini'); // the menu does not wait for the scene behind it
 }
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */

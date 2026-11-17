@@ -48,6 +48,10 @@
       #loading .tip { max-width: min(520px, 86vw); min-height: 2.8em; opacity: 0.75; }
       #loading .tip b { color: #ffd36a; font-weight: 700; }
       @media (prefers-reduced-motion: reduce) { #loading .fill::after { animation: none; } }
+      /* Title screen: the menu is up at once, only a thin bar along the bottom edge while the scene loads behind it. */
+      #loading.mini { inset: auto 0 0 0; padding: 0; background: none; pointer-events: none; }
+      #loading.mini > :not(.track) { display: none; }
+      #loading.mini .track { width: 100vw; height: 2px; border-radius: 0; }
     </style>
     <div id="loading" role="status" aria-live="polite">
       <h1>XCRAFT</h1>
