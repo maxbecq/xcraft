@@ -77,8 +77,8 @@ export const BIOMES: Record<string, Biome> = {
     decorTint: new Color(0.8, 0.82, 0.88),
     dunes: 1.0,
     greyStones: true,
-    // A rille: a deep trench of black regolith.
-    chasm: { depth: 6, floor: new Color(0x141518) },
+    // A rille: a shallow trench of dark regolith.
+    chasm: { depth: 1.4, floor: new Color(0x4a4c52) },
   },
   alien: {
     id: 'alien',
@@ -95,8 +95,8 @@ export const BIOMES: Record<string, Biome> = {
     background: 0x07040e,
     exposure: 1.1,
     decorTint: new Color(0.55, 0.5, 0.75),
-    // A rift: a dark trench, a faint sheen of the cracks' colour at the bottom.
-    chasm: { depth: 6, floor: new Color(0x10302e) },
+    // A rift: a shallow trench, its floor tinged with the cracks' colour.
+    chasm: { depth: 1.4, floor: new Color(0x1c2a34) },
   },
   // Frozen world: blue-white ice, snow drifts for dunes, pale light in the cracks.
   glace: {
