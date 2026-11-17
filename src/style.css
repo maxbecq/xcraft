@@ -202,15 +202,19 @@ body.touch { -webkit-tap-highlight-color: transparent; }
 /* Phones held upright: minimap and selection on one row, commands full width below. */
 @media (orientation: portrait) and (max-width: 820px) {
   .console {
-    height: auto; grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: 96px 98px; gap: 6px;
-    padding: 8px 8px calc(6px + env(safe-area-inset-bottom));
+    height: auto; grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: 84px 86px; gap: 5px;
+    padding: 6px 8px calc(4px + env(safe-area-inset-bottom));
   }
   .minimap { width: 76px; height: 76px; }
-  .hud-panel .portrait { display: block; width: 64px; height: 64px; margin: 0 8px 0 0; }
+  .hud-panel .portrait { display: block; width: 60px; height: 60px; margin: 0 8px 0 0; }
   .map-slot { align-self: start; height: 84px; }
-  .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 46px; }
-  .cmd img { width: 30px; height: 30px; }
-  .hud-toasts { bottom: calc(220px + env(safe-area-inset-bottom)); width: 90vw; }
+  .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 40px; }
+  .cmd img { width: 28px; height: 28px; }
+  .hud-toasts { bottom: calc(196px + env(safe-area-inset-bottom)); width: 90vw; }
+  /* Watching the AI: no commands, so no row for them. */
+  body.spectate .console { grid-template-rows: 84px; }
+  body.spectate .hud-card { display: none; }
+  body.spectate .hud-toasts { bottom: calc(110px + env(safe-area-inset-bottom)); }
   .hud-bar { font-size: 15px; gap: 8px; padding: 3px 8px 5px; right: 6px; }
   /* Icons only, so the tools and the resources share the top line. */
   .tools { top: calc(4px + env(safe-area-inset-top)); left: 6px; gap: 2px; }
@@ -703,3 +707,11 @@ body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
 @keyframes chip-flash { 0%, 30% { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255, 230, 150, 0.95)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .chip.flash { animation: none; } }
 @media (max-width: 700px) { .chip { width: 30px; height: 30px; font-size: 10px; } }
+/* Phones: the selection's name wraps onto two lines in smaller letters rather than being cut, whatever
+   the faction's own lettering (hence the extra weight over each faction's rule). */
+@media (max-height: 560px), (max-width: 820px) {
+  body[class] .console .hud-panel .name {
+    font-size: 15px; line-height: 1.1; letter-spacing: 0.05em; white-space: normal;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  }
+}
