@@ -139,38 +139,114 @@ function pcbTextures(): NonNullable<typeof pcb> {
   tg.strokeStyle = tg.fillStyle = '#fff';
   let seed = 23;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  // Routed like a circuit board along three directions only: the texture's two axes, which lie on screen
-  // as the two diagonals of the iso grid, and a jog at JOG; never along the screen's horizontal or vertical.
-  const G = 16;
-  const JOG = (27 * Math.PI) / 180;
-  const AXES = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
-  type Trace = { pts: [number, number][]; w: number; glow: number };
-  const traces: Trace[] = [];
-  const walk = (x: number, y: number, a: number, steps: number, w: number) => {
-    const pts: [number, number][] = [[x, y]];
-    let jogged = false;
-    for (let k = 0; k < steps; k++) {
-      const len = jogged ? G * (1 + Math.floor(rnd() * 2)) : G * (2 + Math.floor(rnd() * 5));
-      x += Math.cos(a) * len;
-      y += Math.sin(a) * len;
-      pts.push([x, y]);
-      if (w > 1.6 && !jogged && rnd() < 0.15 && traces.length < 140) walk(x, y, a + (rnd() < 0.5 ? 1 : -1) * (Math.PI / 2), 2 + Math.floor(rnd() * 3), w * 0.6);
-      // Next: after a jog, back onto an axis going the same way; otherwise a right-angle turn or a jog.
-      const along = (b: number) => Math.cos(b - a) > 0.1;
-      if (jogged || rnd() < 0.7) {
-        const options = AXES.filter((b) => (jogged ? along(b) : Math.abs(Math.cos(b - a)) < 0.1));
-        a = options[Math.floor(rnd() * options.length)];
-        jogged = false;
-      } else {
-        a = [JOG, JOG + Math.PI].find(along) ?? a;
-        jogged = a === JOG || a === JOG + Math.PI;
+  // Routed like a real board: buses of parallel traces leave the chips' pins and turn together, never crossing,
+  // ending in vias. Three directions only: the texture's two axes (the iso grid's diagonals on screen) and a
+  // 1:2 jog (about 60° on screen); never the screen's horizontal or vertical.
+  const U = 6; // trace pitch, and the chips' pin pitch
+  const C = 2; // occupancy cell, px; the tile wraps
+  const NC = S / C;
+  const taken = new Uint8Array(NC * NC);
+  type P = [number, number];
+  const cellsOf = (pts: P[], r: number) => {
+    const out = new Set<number>();
+    const rc = Math.ceil(r / C);
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / C) + 1;
+      for (let k = 0; k <= n; k++) {
+        const cx = Math.floor((x0 + ((x1 - x0) * k) / n) / C);
+        const cy = Math.floor((y0 + ((y1 - y0) * k) / n) / C);
+        for (let dy = -rc; dy <= rc; dy++)
+          for (let dx = -rc; dx <= rc; dx++) if (dx * dx + dy * dy <= rc * rc) out.add((((cy + dy) % NC) + NC) % NC * NC + ((((cx + dx) % NC) + NC) % NC));
       }
     }
-    traces.push({ pts, w, glow: 0.35 + rnd() * 0.65 });
+    return [...out];
   };
-  for (let i = 0; i < 52; i++) walk(Math.floor(rnd() * (S / G)) * G, Math.floor(rnd() * (S / G)) * G, AXES[Math.floor(rnd() * 4)], 4 + Math.floor(rnd() * 5), rnd() < 0.2 ? 4 : 1.8 + rnd() * 1.4);
-  const chips = Array.from({ length: 7 }, () => ({ x: Math.floor(rnd() * (S / G)) * G, y: Math.floor(rnd() * (S / G)) * G, w: G * (2 + Math.floor(rnd() * 2)), h: G * (1 + Math.floor(rnd() * 2)) }));
-  const lights = Array.from({ length: 34 }, () => ({ x: rnd() * S, y: rnd() * S, r: 1.5 + rnd() * 2.5 }));
+  const free = (cells: number[]) => cells.every((c) => !taken[c]);
+  const take = (cells: number[]) => cells.forEach((c) => (taken[c] = 1));
+  const rect = (x: number, y: number, w: number, h: number): P[] => {
+    const pts: P[] = [];
+    for (let yy = y; yy <= y + h; yy += C) pts.push([x, yy], [x + w, yy]);
+    return pts;
+  };
+  type Trace = { pts: P[]; w: number; glow: number };
+  const traces: Trace[] = [];
+  type Chip = { x: number; y: number; w: number; h: number };
+  const chips: Chip[] = [];
+  for (let i = 0; i < 60 && chips.length < 12; i++) {
+    const ch = { x: Math.floor(rnd() * (S / U)) * U, y: Math.floor(rnd() * (S / U)) * U, w: U * (4 + Math.floor(rnd() * 6)), h: 14 + Math.floor(rnd() * 3) * 6 };
+    const cells = cellsOf(rect(ch.x - 9, ch.y - 9, ch.w + 18, ch.h + 18), 2);
+    if (!free(cells)) continue;
+    take(cellsOf(rect(ch.x - 2, ch.y - 2, ch.w + 4, ch.h + 4), 2));
+    chips.push(ch);
+  }
+  const unit = (a: P) => {
+    const l = Math.hypot(a[0], a[1]);
+    return [a[0] / l, a[1] / l] as P;
+  };
+  // A route from p heading d: straight runs, right-angle turns, and jogs that shift the run sideways.
+  const route = (p: P, d: P, legs: number): P[] => {
+    const pts: P[] = [p];
+    let [x, y] = p;
+    for (let k = 0; k < legs; k++) {
+      const len = U * (2 + Math.floor(rnd() * 7));
+      x += d[0] * len;
+      y += d[1] * len;
+      pts.push([x, y]);
+      if (k === legs - 1) break;
+      if (rnd() < 0.35) {
+        // Jog along (2, 1) or (-2, -1), whichever goes on, then back to the same heading.
+        const j = unit(d[0] * 2 + d[1] > 0 ? [2, 1] : [-2, -1]);
+        const jl = U * (2 + Math.floor(rnd() * 3));
+        x += j[0] * jl;
+        y += j[1] * jl;
+        pts.push([x, y]);
+      } else d = rnd() < 0.5 ? [-d[1], d[0]] : [d[1], -d[0]];
+    }
+    return pts;
+  };
+  // The same route shifted sideways by o, mitred at each corner so parallel traces keep their pitch.
+  const offset = (pts: P[], o: number): P[] =>
+    pts.map(([x, y], i) => {
+      const nrm = (a: P, b: P) => unit([-(b[1] - a[1]), b[0] - a[0]]);
+      const n1 = i > 0 ? nrm(pts[i - 1], pts[i]) : nrm(pts[0], pts[1]);
+      const n2 = i < pts.length - 1 ? nrm(pts[i], pts[i + 1]) : n1;
+      const k = o / (1 + n1[0] * n2[0] + n1[1] * n2[1]);
+      return [x + (n1[0] + n2[0]) * k, y + (n1[1] + n2[1]) * k];
+    });
+  const bus = (start: P, d: P, k: number, w: number) => {
+    const base = route(start, d, 2 + Math.floor(rnd() * 4));
+    const lines = Array.from({ length: k }, (_, i) => offset(base, (i - (k - 1) / 2) * U));
+    const cells = lines.map((l) => cellsOf(l, w / 2 + 1.2));
+    if (!cells.every(free)) return false;
+    cells.forEach(take);
+    const glow = 0.35 + rnd() * 0.65;
+    for (const pts of lines) traces.push({ pts, w, glow });
+    take(lines.flatMap((l) => cellsOf([l[l.length - 1], l[l.length - 1]], 4))); // room for the vias
+    return true;
+  };
+  // Buses out of the chips' long sides, from groups of neighbouring pins.
+  for (const ch of chips)
+    for (const side of [-1, 1]) {
+      const pins = Math.floor(ch.w / U);
+      for (let tries = 0, done = 0; tries < 10 && done < 3; tries++) {
+        const k = Math.min(pins, 2 + Math.floor(rnd() * 4));
+        const first = Math.floor(rnd() * (pins - k + 1));
+        const cx = ch.x + U * (first + (k - 1) / 2 + 0.5);
+        const y = side < 0 ? ch.y - 7 : ch.y + ch.h + 7;
+        if (bus([cx, y], [0, side], k, 2)) done++;
+      }
+    }
+  // Free-standing buses and a few thick power traces filling the rest of the board.
+  for (let i = 0; i < 4000; i++) {
+    const p: P = [Math.floor(rnd() * (S / U)) * U, Math.floor(rnd() * (S / U)) * U];
+    const d: P = [[1, 0], [0, 1], [-1, 0], [0, -1]][Math.floor(rnd() * 4)] as P;
+    if (rnd() < 0.12) bus(p, d, 1, 4);
+    else bus(p, d, 1 + Math.floor(rnd() * 4), 2);
+  }
+  const ends = traces.flatMap((t) => [t.pts[0], t.pts[t.pts.length - 1]]);
+  const lights = ends.filter(() => rnd() < 0.05).map(([x, y]) => ({ x, y, r: 1.4 + rnd() * 1.4 }));
   // Drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
   for (const ox of [-S, 0, S])
     for (const oy of [-S, 0, S]) {
@@ -201,7 +277,7 @@ function pcbTextures(): NonNullable<typeof pcb> {
         tg.lineWidth = t.w;
         tg.stroke();
         for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
-          const r = t.w + 2;
+          const r = t.w * 0.6 + 1.6;
           g.fillStyle = '#1d6a26';
           g.beginPath();
           g.arc(x, y, r, 0, Math.PI * 2);
@@ -219,7 +295,7 @@ function pcbTextures(): NonNullable<typeof pcb> {
       }
       for (const ch of chips) {
         g.fillStyle = '#2f6a34';
-        for (let px = ch.x + 4; px < ch.x + ch.w - 2; px += 6) g.fillRect(px, ch.y - 4, 3, ch.h + 8); // pins
+        for (let px = ch.x + U / 2; px < ch.x + ch.w; px += U) g.fillRect(px - 1.2, ch.y - 7, 2.4, ch.h + 14); // pins
         g.fillStyle = 'rgba(2,8,3,0.7)';
         g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
         g.fillStyle = '#0c140d';
@@ -316,7 +392,7 @@ export class PowerNet {
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
           // Worn traces glow less; waves of current roll out from each building, sharp front outside.
-          totalEmissiveRadiance *= fray * mix(0.3, 1.0, smoothstep(0.3, 0.7, nz.y));
+          totalEmissiveRadiance *= fray * mix(0.55, 1.0, smoothstep(0.3, 0.7, nz.y));
           float w = fract(vDist / 6.0 - time * 0.2);
           float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
           totalEmissiveRadiance += vec3(0.4, 1.0, 0.45) * trace * band * 0.3 * fray;`,
