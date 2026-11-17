@@ -4,17 +4,17 @@ import { FP } from '../sim/fixed';
 import type { World } from '../sim/world';
 
 /**
- * Ground under resources: a dark, cracked stain with glowing veins, so a mineral line reads as an
- * outcrop of ore and a well as a scorched fissure field. Rendering only.
+ * Ground under resources: a dark, cracked stain with glowing veins, so a mineral line reads as a
+ * glowing geode bed and a well as a scorched fissure field. Rendering only.
  */
 export function addDeposits(scene: Scene, map: GameMap, world: World, fog: (m: Material) => void): void {
-  const mineral = deposit('#1a2a3a', '#3fbfff', 11);
+  const mineral = deposit('#2a2018', '#c06a28', 11);
   const well = deposit('#24162e', '#c070ff', 23);
   const geo = new PlaneGeometry(1, 1);
   geo.rotateX(-Math.PI / 2);
   for (const e of world.entities.values()) {
     if (e.type !== 'minerai' && e.type !== 'puits') continue;
-    const [maps, color] = e.type === 'minerai' ? [mineral, 0x2aa8ff] : [well, 0xb060ff];
+    const [maps, color] = e.type === 'minerai' ? [mineral, 0xb0581c] : [well, 0xb060ff];
     const m = new MeshStandardMaterial({
       map: maps[0], emissiveMap: maps[1], emissive: new Color(color), emissiveIntensity: 1.6,
       transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, roughness: 1,

@@ -121,7 +121,7 @@ const steel = mat(0x8c949c, { metalness: 0.6, roughness: 0.4 });
 const stone = mat(0xb9ae94);
 const darkStone = mat(0x7d7464);
 const wood = mat(0x7a5634);
-const crystal = mat(0x56c8ff, { emissive: 0x0f4d80, roughness: 0.25, metalness: 0.1 });
+const ore = mat(0xffc070, { emissive: 0xa0400c, roughness: 0.5 }); // a lump of glowing geode
 const wellGlow = mat(0x9b5cff, { emissive: 0x5a20c0, roughness: 0.3 });
 const ring = (color: number, opacity: number) => new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: AdditiveBlending });
 const RINGS = {
@@ -312,7 +312,7 @@ const POOLS: Record<string, [number, number, number, number][]> = {
   reservepsy: [[0, 0, 1.5, 0xb070ff]],
   portail: [[0, 0.4, 1.8, 0x40d8ff]],
   recepteur: [[0, 0, 1.6, 0xb070ff]],
-  minerai: [[0, 0, 1.0, 0x3aa8ff]],
+  minerai: [[0, 0, 1.6, 0xb06020]], // the geodes' halo
   puits: [[0, 0, 2.4, 0xb060ff]],
 };
 let poolTexture: Texture | null = null;
@@ -541,13 +541,13 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
       }
       try {
         const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}.glb`);
-        // Rust, damp and grime: heavy on buildings, light on soldiers, none on crystals.
+        // Rust, damp and grime: heavy on buildings, light on soldiers, none on mineral fields.
         // Isdaris technology stays almost pristine.
         const d = DEFS[type];
         const isdaris = !!d && 'faction' in d && d.faction !== 'humains'; // Isdaris and Z
         const amount = type.startsWith('minerai') || type === 'puits' ? 0 : (d?.kind === 'unit' ? 0.35 : 1) * (isdaris ? 0.15 : 1);
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
-        // Bright silhouette edges on everything but crystals, stronger on units.
+        // Bright silhouette edges on everything but mineral fields, stronger on units.
         if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
         templates.set(type, gltf.scene);
       } catch {
@@ -673,7 +673,7 @@ function placeholder(type: string, team: Material): Group {
       body(0.25);
       head(0.62);
       add(new BoxGeometry(0.06, 0.06, 0.4), wood, 0.2, 0.4, 0.15);
-      add(new SphereGeometry(0.12, 6, 4), crystal, 0, 0.55, -0.22).name = 'cargo';
+      add(new SphereGeometry(0.12, 6, 4), ore, 0, 0.55, -0.22).name = 'cargo';
       break;
     case 'auxiliaire':
       body(0.35);
@@ -715,9 +715,9 @@ function placeholder(type: string, team: Material): Group {
       add(new CylinderGeometry(0.15, 0.15, 1.6), wellGlow, 0.9, 0.9, 0.5);
       break;
     case 'minerai':
-      add(new ConeGeometry(0.28, 0.9, 5), crystal, -0.12, 0.45, 0.05);
-      add(new ConeGeometry(0.22, 0.65, 5), crystal, 0.2, 0.32, -0.1).rotation.z = -0.3;
-      add(new ConeGeometry(0.18, 0.5, 5), crystal, 0.05, 0.25, 0.25).rotation.x = 0.4;
+      add(new ConeGeometry(0.28, 0.9, 5), ore, -0.12, 0.45, 0.05);
+      add(new ConeGeometry(0.22, 0.65, 5), ore, 0.2, 0.32, -0.1).rotation.z = -0.3;
+      add(new ConeGeometry(0.18, 0.5, 5), ore, 0.05, 0.25, 0.25).rotation.x = 0.4;
       break;
     case 'puits':
       add(new CylinderGeometry(1.4, 1.5, 0.12, 20), darkStone, 0, 0.06, 0);
@@ -1274,9 +1274,11 @@ export class EntityRenderer {
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
       if (e.type === 'minerai') {
-        // Fields shrink as they are mined out.
+        // Fields shrink as they are mined out, and their small geodes go one by one.
         const body = v.model.children[0];
-        body.scale.setScalar(body.userData.base * (0.5 + 0.5 * Math.min(1, e.amount / (e.def as { amount: number }).amount)));
+        const left = Math.min(1, e.amount / (e.def as { amount: number }).amount);
+        body.scale.setScalar(body.userData.base * (0.7 + 0.3 * left));
+        (body.userData.geodes as Object3D[]).forEach((g, i) => (g.visible = left > 0.75 - i * 0.25));
       }
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
@@ -1560,7 +1562,7 @@ export class EntityRenderer {
     if (e.def.kind === 'building') this.onBuilding(e);
     const root = new Group();
     root.userData.id = e.id;
-    // Mineral fields use one of several crystal clusters, turned and sized at random (stable per field).
+    // Mineral fields use one of several geode clusters, turned and sized at random (stable per field).
     const variant = e.type === 'minerai' ? MINERAL_VARIANTS[e.id % MINERAL_VARIANTS.length] : e.type;
     const body = model(variant, teamMaterials[e.owner] ?? neutral, e.id);
     body.scale.multiplyScalar(LOOK_SCALE[e.type] ?? 1);
@@ -1578,7 +1580,7 @@ export class EntityRenderer {
     // Selection: a bright ring with a soft halo outside it.
     const r = RING_RADIUS[e.type] ?? (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);
     if ((e.def as { worker?: boolean }).worker && !pivot.getObjectByName('cargo')) {
-      const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), crystal);
+      const cargo = new Mesh(new SphereGeometry(0.11, 6, 4), ore);
       cargo.name = 'cargo';
       cargo.position.set(0, 0.62, -0.2);
       pivot.add(cargo);
@@ -1664,6 +1666,7 @@ export class EntityRenderer {
         });
         print = { plane, frame, frameMaterial, lines, bottom: box.min.y, top: box.max.y, originals };
         const half = (e.def as BuildingDef).size / 2;
+      body.userData.geodes = ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
         // A square outline round the footprint (a four-sided ring turned by 45°).
         seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
         seam.rotation.set(-Math.PI / 2, 0, Math.PI / 4);

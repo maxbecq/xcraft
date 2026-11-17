@@ -10,8 +10,9 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Vector, noise
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else "public/models"
@@ -250,6 +251,10 @@ def palette():
         "crystal_deep": mat("crystal_deep", 0x2E86D8, emission=0x0A3A80, rough=0.2),
         "purple_deep": mat("purple_deep", 0xE0C0FF, emission=0xB060FF),
         "crystal_vein": mat("crystal_vein", 0x8FE6FF, emission=0x2AA8FF),
+        "rock_geode": mat("rock_geode", 0x5E5852, rough=0.95),
+        "geode_band": mat("geode_band", 0xD8CCB2, rough=0.6),
+        "geode_lining": mat("geode_lining", 0x9A5E2C, rough=0.85),
+        "geode_core": mat("geode_core", 0xC8742A, emission=0x5A2208, rough=0.5),
         "ivory": mat("ivory", 0xEDE6D6, rough=0.35),
         "chrome": mat("chrome", 0xC8CCD2, metallic=1.0, rough=0.18),
         "gold": mat("gold", 0xD4AF37, metallic=1.0, rough=0.25),
@@ -705,83 +710,75 @@ def crystal(p, mat, base, tilt, length, radius, tip_mat=None):
     return body, tip
 
 
-def slab(p, seed, size, loc, tilt):
-    """A broken plate of rock pushed up through the ground, partly buried."""
-    o = rock_mesh(p, seed, 1.0, (0, 0, 0), squash=1.0)
-    o.scale = size
-    o.rotation_euler = tilt
-    o.location = loc
+def geode(p, seed, r, loc, lean, name="geode"):
+    """A stone shell split open: a flat cut face (tilted by `lean` radians towards `seed`'s direction, so it shows
+    from above whatever way the field is turned) with a thin pale agate band, an ochre lining sloping into a hollow,
+    and a glowing core. Partly buried."""
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    off = Vector((seed * 3.1, seed * 1.7, seed * 0.9))
+    for v in bm.verts:
+        v.co *= 1 + 0.16 * noise.noise(v.co * 1.6 + off)
+        v.co.z *= 0.85
+    a = seed * 2.4
+    n = Vector((math.cos(a) * math.sin(lean), math.sin(a) * math.sin(lean), math.cos(lean)))
+    cut = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=n * 0.22, plane_no=n, clear_outer=True)
+    face = bmesh.ops.holes_fill(bm, edges=[e for e in cut["geom_cut"] if isinstance(e, bmesh.types.BMEdge)], sides=0)["faces"]
+    # Concentric rings inwards: shell wall, agate band, lining sloping down, then the hollow's glowing floor.
+    for slot, thick, depth in ((0, 0.1, 0.0), (1, 0.07, 0.0), (2, 0.22, -0.16), (2, 0.08, -0.06)):
+        ring = bmesh.ops.inset_region(bm, faces=face, thickness=thick, depth=depth)["faces"]
+        for f in ring:
+            f.material_index = slot
+    for f in face:
+        f.material_index = 3
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.scale(bm, vec=(r, r, r), verts=bm.verts)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for m in ("rock_geode", "geode_band", "geode_lining", "geode_core"):
+        me.materials.append(p[m])
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.location = (loc[0], loc[1], r * 0.4)
     return o
 
 
-def vein(p, a, b, w=0.025):
-    """A thin glowing seam of crystal running over the rock."""
-    return pipe(p["crystal_vein"], a, b, r=w, verts=4)
-
-
-def outcrop(p, seed, slabs, clusters, shards):
+def geode_field(p, seed, big, small):
+    """A mineral field of glowing geodes. `big` geodes stay till the field runs dry; each of the `small` ones is a
+    part (geode_a, geode_b, geode_c) the game hides as the field is mined, the first one first."""
     r = lambda k: ((seed * 7919 + k * 104729) % 1000) / 1000
-    for i, (size, loc, tilt) in enumerate(slabs):
-        slab(p, seed * 10 + i, size, loc, tilt)
-    k = 0
-    for (cx, cy, cz), n, spread, lean in clusters:
-        for j in range(n):
-            k += 1
-            ang = r(k) * math.tau
-            length = 0.2 + r(k + 50) * 0.5 * (1.2 if j == 0 else 0.8)
-            rad = 0.05 + r(k + 90) * 0.07
-            mat = ("crystal", "crystal_deep", "crystal_deep")[int(r(k + 130) * 3) % 3]
-            base = (cx + math.cos(ang) * spread * r(k + 7), cy + math.sin(ang) * spread * r(k + 11), cz - 0.08)
-            crystal(p, mat, base, (lean * (0.4 + r(k + 3)), ang + math.pi / 2), length, rad, tip_mat="crystal_pale")
-            # A few small crystals huddle at the foot of each big one.
-            if j < 3:
-                for q in range(2):
-                    a2 = ang + (q - 0.5) * 1.1
-                    crystal(p, "crystal_pale", (base[0] + math.cos(a2) * rad * 1.6, base[1] + math.sin(a2) * rad * 1.6, base[2]), (lean + 0.5, a2 + math.pi / 2), length * 0.35, rad * 0.45)
-    # Rubble and grit round the outcrop.
-    for j in range(9):
-        k += 1
-        ang = r(k) * math.tau
-        d = 0.35 + r(k + 17) * 0.45
+    for i, (size, x, y) in enumerate(big):
+        geode(p, seed * 10 + i, size, (x, y), 0.25 + 0.15 * r(i))
+    for i, (size, x, y) in enumerate(small):
+        name = f"geode_{'abc'[i]}"
+        JOINTS[name] = (x, y, 0.0)
+        geode(p, seed * 10 + 5 + i, size, (x, y), 0.3 + 0.2 * r(i + 9), name)
+    # Shell chips and grit round the field.
+    for j in range(10):
+        ang = r(j + 20) * math.tau
+        d = 0.5 + r(j + 40) * 0.4
         o = rock_mesh(p, seed * 31 + j, 1.0, (0, 0, 0), squash=0.6)
-        sz = 0.05 + r(k + 23) * 0.08
+        o.data.materials[0] = p["rock_geode"]
+        sz = 0.04 + r(j + 60) * 0.05
         o.scale = (sz, sz * 0.8, sz * 0.6)
         o.location = (math.cos(ang) * d, math.sin(ang) * d, 0.0)
-    for j in range(shards):
-        k += 1
-        ang = r(k) * math.tau
-        d = 0.45 + r(k + 5) * 0.4
-        crystal(p, "crystal_pale", (math.cos(ang) * d, math.sin(ang) * d, 0.0), (1.3, r(k + 9) * math.tau), 0.1 + r(k + 13) * 0.12, 0.03)
 
 
 def minerai(p):
-    outcrop(p, 1,
-            [((0.55, 0.35, 0.22), (-0.15, 0.1, 0.05), (0.2, -0.3, 0.4)), ((0.4, 0.3, 0.18), (0.35, -0.15, 0.02), (-0.25, 0.2, -0.5))],
-            [((0.05, -0.05, 0.15), 6, 0.18, 0.55), ((-0.35, 0.25, 0.1), 3, 0.1, 0.7)], 4)
-    vein(p, (-0.5, 0.0, 0.12), (0.1, 0.2, 0.22))
-    vein(p, (0.2, -0.3, 0.12), (0.55, -0.05, 0.1))
+    geode_field(p, 1, [(0.4, -0.05, 0.05)], [(0.26, 0.48, -0.22), (0.22, -0.45, -0.35), (0.16, 0.12, 0.55)])
 
 
 def minerai_1(p):
-    outcrop(p, 2,
-            [((0.65, 0.3, 0.2), (0.0, 0.0, 0.0), (-0.15, 0.25, 0.9)), ((0.3, 0.25, 0.16), (-0.45, -0.2, 0.0), (0.3, 0.1, 0.2))],
-            [((0.1, 0.05, 0.15), 5, 0.2, 0.45), ((-0.4, -0.15, 0.08), 2, 0.08, 0.8)], 5)
-    vein(p, (-0.55, 0.1, 0.1), (0.4, -0.1, 0.18))
+    geode_field(p, 2, [(0.34, 0.15, 0.1), (0.24, -0.35, 0.3)], [(0.22, -0.3, -0.35), (0.18, 0.5, -0.3), (0.14, 0.55, 0.35)])
 
 
 def minerai_2(p):
-    outcrop(p, 3,
-            [((0.5, 0.4, 0.25), (0.1, 0.1, 0.05), (0.35, -0.2, 0.3)), ((0.35, 0.3, 0.2), (-0.35, -0.1, 0.0), (-0.3, 0.3, -0.7)), ((0.25, 0.2, 0.14), (0.4, -0.35, 0.0), (0.2, 0.2, 1.2))],
-            [((0.0, 0.0, 0.2), 7, 0.22, 0.4), ((0.4, -0.3, 0.08), 2, 0.06, 0.9)], 3)
-    vein(p, (-0.45, 0.2, 0.15), (0.45, 0.05, 0.25))
-    vein(p, (0.0, -0.4, 0.1), (0.15, 0.3, 0.22))
+    geode_field(p, 3, [(0.44, 0.0, 0.0)], [(0.2, -0.5, 0.15), (0.24, 0.35, -0.4), (0.15, -0.15, -0.55)])
 
 
 def minerai_3(p):
-    outcrop(p, 4,
-            [((0.6, 0.45, 0.18), (0.0, 0.0, 0.0), (0.1, 0.15, 0.2))],
-            [((0.15, 0.1, 0.12), 4, 0.12, 0.6), ((-0.25, -0.15, 0.1), 4, 0.12, 0.5)], 6)
-    vein(p, (-0.5, -0.2, 0.08), (0.5, 0.25, 0.12))
+    geode_field(p, 4, [(0.32, -0.2, 0.0), (0.3, 0.3, 0.2)], [(0.2, 0.25, -0.45), (0.17, -0.55, -0.2), (0.13, -0.1, 0.55)])
 
 
 def puits(p):
