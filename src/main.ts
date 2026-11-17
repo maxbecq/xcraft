@@ -406,6 +406,7 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
+<kbd>Tab</kbd> : type actif d'une sélection mixte (ses capacités) · <kbd>Maj</kbd> maintenu : voir les ordres en file<br>
 <kbd>Espace</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
 <kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause

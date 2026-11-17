@@ -155,6 +155,15 @@ export class Hud {
     );
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const types = e.key === 'Tab' ? [...new Set(this.input.own().map((o) => o.type))] : [];
+      if (types.length > 1) {
+        // Tab: the next kind in a mixed selection becomes the active one (its abilities, its production).
+        e.preventDefault();
+        // After the last kind, back to everyone's commands together.
+        const cycle: (string | null)[] = [null, ...types];
+        this.activeType = cycle[(cycle.indexOf(this.activeType) + 1) % cycle.length];
+        return;
+      }
       const key = e.key === 'Escape' ? 'Escape' : e.key.toUpperCase();
       const b = this.buttons.find((x) => x.key === key);
       if (b) {
@@ -405,7 +414,7 @@ export class Hud {
     if (sel.length > 1) {
       this.details.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
-        .map((e) => `<div class="tile${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
+        .map((e) => `<div class="tile${e.type === this.activeType ? ' active' : ''}${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
         .join('')}</div>`;
       return;
     }
@@ -470,13 +479,17 @@ export class Hud {
     return this.input.own().filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).worker);
   }
 
+  /** The active kind in a mixed selection (Tab): its abilities and production are the ones on the card. */
+  private activeType: string | null = null;
+
   private buttonsFor(): Button[] {
     const own = this.input.own();
+    if (!own.some((o) => o.type === this.activeType)) this.activeType = null;
     const ids = own.map((e) => e.id);
     const cmd = (c: Order) => this.issue({ ...c, player: this.player } as Command);
     if (this.placing) return [{ label: 'Annuler', key: 'Escape', action: () => (this.placing = null) }];
     if (this.targeting) return [{ label: 'Annuler', key: 'Escape', action: () => this.setTargeting(false) }];
-    const units = own.filter((e) => e.def.kind === 'unit');
+    let units = own.filter((e) => e.def.kind === 'unit');
     if (units.length) {
       if (this.buildMenu && this.workers().length) {
         const f = FACTIONS[this.world.players[this.player].faction];
@@ -489,7 +502,11 @@ export class Hud {
         ];
       }
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
-      if (units.some((u) => this.world.weapon(u))) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
+      // Stop and Attack go to everyone; abilities and weapon kits to the active kind only, once Tab picked one.
+      const all = units;
+      const sub = units.filter((u) => u.type === this.activeType);
+      if (sub.length) units = sub;
+      if (all.some((u) => this.world.weapon(u))) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
       // Carriers (Scarabée, Bourdon with Chargement): let everyone out.
       const carriers = units.filter((u) => this.world.room(u));
       if (carriers.length) {
@@ -521,7 +538,7 @@ export class Hud {
       return list;
     }
     this.buildMenu = false;
-    const b = own[0];
+    const b = own.find((o) => o.type === this.activeType) ?? own[0];
     if (!b || b.def.kind !== 'building') return [];
     const same = own.filter((o) => o.type === b.type);
     if (b.buildLeft > 0) return [{ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [b.id] }) }];
