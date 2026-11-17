@@ -105,6 +105,8 @@ export interface Entity {
   reflect: number;
   /** Z socle: weapon kit fitted (key of WEAPONS), or '' for the light machine gun it came with. */
   kit: string;
+  /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
+  absorbed?: number;
 }
 
 export interface Player {
@@ -1182,6 +1184,7 @@ export class World {
         b.shield = 0;
         if (def.absorbs) {
           // The drone becomes part of the structure, which then assembles itself.
+          b.absorbed = e.id;
           this.setOrder(e, null);
           this.remove(e);
           return;

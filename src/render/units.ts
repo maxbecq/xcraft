@@ -639,6 +639,8 @@ interface View {
   scaffold?: Object3D;
   /** Human building site: the footing, and the scaffolding storeys from the ground up. */
   site?: { footing: Object3D; storeys: Object3D[] };
+  /** Z building being assembled: a ring of cyan light on the ground round it. */
+  seam?: Mesh;
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   /** Energy well: its living pool (see wellFx). */
@@ -666,6 +668,14 @@ interface InsectLeg {
   group: number;
   side: number;
 }
+
+/** Seconds a Z drone takes to fold and merge into the building it raised. */
+const MERGE_TIME = 0.9;
+const fract = (x: number) => x - Math.floor(x);
+const smoothstep = (x: number) => {
+  const c = Math.min(1, Math.max(0, x));
+  return c * c * (3 - 2 * c);
+};
 
 /** How far a Z leg turns either way while walking, in radians. */
 const GAIT_SWING = 0.35;
@@ -844,6 +854,8 @@ function rallyFlag(): Group {
 export class EntityRenderer {
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
+  /** Z drones merging into the building they raised. */
+  private merging: { v: View; age: number; from: Vector3; to: Vector3 }[] = [];
   private last = performance.now();
 
   /** Called when a building first appears (to clear scenery under it). */
@@ -868,13 +880,35 @@ export class EntityRenderer {
       if (!world.entities.has(id)) {
         this.views.delete(id);
         // Fallen soldiers topple over and sink into the ground; buildings just go (they explode).
-        if (v.unit && v.root.visible) {
+        const into = v.unit && [...world.entities.values()].find((b) => b.absorbed === id);
+        if (into && v.root.visible) {
+          // A Z drone merging into the building it raised: it folds and sinks into it, it does not die.
+          v.ring.visible = false;
+          this.merging.push({ v, age: 0, to: new Vector3(into.x / FP, v.root.position.y, into.y / FP), from: v.root.position.clone() });
+        } else if (v.unit && v.root.visible) {
           v.ring.visible = false;
           if (v.mixer) play(v, CLIP.die);
           this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
         } else this.scene.remove(v.root);
       }
     }
+    this.merging = this.merging.filter((m) => {
+      m.age += dt;
+      const f = Math.min(1, m.age / MERGE_TIME);
+      const k = f * f * (3 - 2 * f);
+      // Legs fold up under the body, then it slides into the site's centre, shrinking and sinking.
+      for (const l of m.v.limbs.insect ?? []) {
+        l.o.rotation.y *= 0.8;
+        l.o.rotation.z = l.side * Math.min(1, f * 2) * 1.1;
+      }
+      const slide = Math.max(0, (f - 0.3) / 0.7);
+      m.v.root.position.lerpVectors(m.from, m.to, slide * slide);
+      m.v.model.scale.setScalar(1 - 0.9 * Math.max(0, (k - 0.35) / 0.65));
+      m.v.model.position.y = -0.4 * slide * slide;
+      if (f < 1) return true;
+      this.scene.remove(m.v.root);
+      return false;
+    });
     this.dying = this.dying.filter((d) => {
       d.age += dt;
       if (d.v.mixer) {
@@ -955,7 +989,20 @@ export class EntityRenderer {
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
         const p = e.buildLeft > 0 ? 1 - e.buildLeft / total : 1;
-        if (v.site) {
+        if ((e.def as BuildingDef).absorbs) {
+          // Z: the machine unfolds out of a compact core in mechanical steps, each a quick move then a
+          // pause: it widens, rises and turns into place, with a cyan seam of light at its base.
+          const STEPS = 6;
+          const step = Math.min(STEPS, Math.floor(p * STEPS));
+          const u = p >= 1 ? 1 : (step + smoothstep(fract(p * STEPS) / 0.35)) / STEPS;
+          v.model.scale.set(0.3 + 0.7 * u, 0.12 + 0.88 * u, 0.3 + 0.7 * u);
+          v.model.rotation.y = (1 - u) * 0.9;
+          if (v.seam) {
+            v.seam.visible = p < 1;
+            v.seam.scale.setScalar(0.35 + 0.65 * u);
+            (v.seam.material as MeshBasicMaterial).opacity = 0.35 + 0.35 * Math.abs(Math.sin(now / 90)) * (1 - fract(p * STEPS));
+          }
+        } else if (v.site) {
           // Footing first, then storeys of scaffolding going up round an empty site; the building appears
           // inside once they are all up, then the scaffolding comes down storey by storey from the top.
           const n = v.site.storeys.length;
@@ -1167,7 +1214,18 @@ export class EntityRenderer {
     }
     let scaffold: Object3D | undefined;
     let site: View['site'];
-    if (e.def.kind === 'building' && !(e.def as BuildingDef).warp && e.buildLeft > 0) {
+    let seam: Mesh | undefined;
+    if (e.def.kind === 'building' && (e.def as BuildingDef).absorbs) {
+      // Z: assembled by the drone merged into it, it unfolds by itself (see sync); no site, no frame.
+      if (e.buildLeft > 0) {
+        const r = ((e.def as BuildingDef).size / 2) * 1.05;
+        seam = new Mesh(new RingGeometry(r * 0.94, r, 40), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+        seam.rotation.x = -Math.PI / 2;
+        seam.position.y = 0.06;
+        seam.userData.noPick = true;
+        root.add(seam);
+      }
+    } else if (e.def.kind === 'building' && !(e.def as BuildingDef).warp && e.buildLeft > 0) {
       // Built by workers: a building site (see sync).
       const made = buildingSite((e.def as BuildingDef).size, new Box3().setFromObject(body).getSize(new Vector3()));
       site = made;
@@ -1192,7 +1250,7 @@ export class EntityRenderer {
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
     const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect) };
-    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, seam, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
