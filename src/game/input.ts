@@ -49,22 +49,33 @@ const ARROW: Layer = { color: '#e8b64a', shape: "<path fill='#2b2010' d='M16.6 1
 // The arrow everywhere outside the map's own cursors (menus, console); buttons keep their hand.
 document.documentElement.style.setProperty('--arrow', cursorOf(ARROW));
 
-/** Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner. */
-function isoCorners(w: number): string {
-  const h = w / 2;
-  const arm = 0.26; // bracket arm, as a share of the diamond's side
-  const corner = (cx: number, cy: number, ax: number, ay: number, bx: number, by: number) =>
-    `M${cx + (ax - cx) * arm} ${cy + (ay - cy) * arm}L${cx} ${cy}L${cx + (bx - cx) * arm} ${cy + (by - cy) * arm}`;
-  const [t, r, b, l] = [[16, 16 - h], [16 + w, 16], [16, 16 + h], [16 - w, 16]];
-  return `<path d='${corner(t[0], t[1], l[0], l[1], r[0], r[1]) + corner(r[0], r[1], t[0], t[1], b[0], b[1]) + corner(b[0], b[1], r[0], r[1], l[0], l[1]) + corner(l[0], l[1], b[0], b[1], t[0], t[1])}'/>`;
+/**
+ * Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner,
+ * turned by `turn` radians on the ground.
+ */
+function isoCorners(w: number, turn = 0): string {
+  const arm = 0.26; // bracket arm, as a share of the square's side
+  const p = Array.from({ length: 4 }, (_, k) => {
+    const a = turn - Math.PI / 2 + (k * Math.PI) / 2;
+    return [16 + w * Math.cos(a), 16 + (w / 2) * Math.sin(a)];
+  });
+  const f = (v: number) => v.toFixed(2);
+  return `<path d='${p
+    .map(([cx, cy], k) => {
+      const [[ax, ay], [bx, by]] = [p[(k + 3) % 4], p[(k + 1) % 4]];
+      return `M${f(cx + (ax - cx) * arm)} ${f(cy + (ay - cy) * arm)}L${f(cx)} ${f(cy)}L${f(cx + (bx - cx) * arm)} ${f(cy + (by - cy) * arm)}`;
+    })
+    .join('')}'/>`;
 }
 
 const cursorCache = new Map<string, string[]>();
 const steady = new Map<string, string>();
 const cached = (key: string, make: () => string[]) => cursorCache.get(key) ?? cursorCache.set(key, make()).get(key)!;
 
-/** Over something selectable (SC1 lens): corner brackets closing in step by step round a flat ring. */
-const hoverLayers = (color: string): Layer[] => [15, 13.5, 12, 10.5].map((w) => ({ color, shape: `${isoCorners(w)}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>` }));
+/** Over something selectable (SC1 lens): corner brackets turning slowly on the ground round a flat ring, a quarter turn in 12 frames. */
+const HOVER_FRAMES = 12;
+const hoverLayers = (color: string): Layer[] =>
+  Array.from({ length: HOVER_FRAMES }, (_, f) => ({ color, shape: `${isoCorners(13, (f / HOVER_FRAMES) * (Math.PI / 2))}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>` }));
 
 /** Aiming an attack or an ability: a reticle lying on the ground, its four ticks turning round it. */
 const aimFrames = (color: string) =>
@@ -381,7 +392,7 @@ export class Input {
       cursor = orderFrames()[Math.floor(since / ORDER_FRAME_MS)];
       this.shown = undefined;
     } else {
-      const layer = this.hoverColor ? hoverLayers(this.hoverColor)[Math.floor(f / 2) % 4] : ARROW;
+      const layer = this.hoverColor ? hoverLayers(this.hoverColor)[f % HOVER_FRAMES] : ARROW;
       const key = this.hoverColor || 'arrow';
       if (key !== this.cursorKey) {
         // Fade from what was on screen; straight in after an aim or an order.
