@@ -549,15 +549,21 @@ export class World {
         this.setOrder(worker, { kind: 'build', type: c.type, tx: c.tx, ty: c.ty });
         return;
       }
-      case 'train':
-        // Gods summon too (Dieux).
-        for (const b of [...buildings, ...units.filter((u) => (u.def as UnitDef).trains)]) {
+      case 'train': {
+        // Gods summon too (Dieux). The least busy producer takes it: shortest queue, then the one whose current item
+        // ends first, then the lowest id (deterministic); full ones are skipped.
+        const producers = [...buildings, ...units.filter((u) => (u.def as UnitDef).trains)].sort((a, b) => a.queue.length - b.queue.length || a.trainLeft - b.trainLeft || a.id - b.id);
+        let full = false;
+        for (const b of producers) {
           const def = b.def as BuildingDef;
           if (def.researches?.includes(c.type)) {
             if (!this.researchable(c.player, c.type)) return;
             const lack = this.lacks(c.player, c.type);
             if (lack) return void this.say(c.player, lack);
-            if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
+            if (b.queue.length >= 5) {
+              full = true;
+              continue;
+            }
             const up = DEFS[c.type] as UpgradeDef;
             if (!this.pay(c.player, up)) return;
             b.queue.push(c.type);
@@ -578,7 +584,10 @@ export class World {
           if (!def.trains?.includes(c.type)) continue;
           const missing = this.lacks(c.player, c.type);
           if (missing) return void this.say(c.player, missing);
-          if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
+          if (b.queue.length >= 5) {
+            full = true;
+            continue;
+          }
           const unit = DEFS[c.type] as UnitDef;
           const s = this.supply(c.player);
           if (s.used + unit.supply > s.max) return void this.say(c.player, `Logistique insuffisante : construisez des ${SUPPLY_NAMES[this.players[c.player].faction]}.`);
@@ -587,7 +596,9 @@ export class World {
           if (b.queue.length === 1) b.trainLeft = this.trainTime(b, c.type);
           return; // one building per command, like SC
         }
+        if (full) this.say(c.player, "File d'attente pleine.");
         return;
+      }
       case 'cancel':
         for (const b of mine) {
           if (b.def.kind !== 'building' && !(b.def as UnitDef).trains) continue;
