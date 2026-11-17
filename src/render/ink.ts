@@ -44,6 +44,8 @@ export function inkPass(depth: Texture, normal: Texture, camera: OrthographicCam
         nEdge = max(nEdge, 1.0 - dot(n, normalAt(vUv + vec2(px.x, 0.0))));
         nEdge = max(nEdge, 1.0 - dot(n, normalAt(vUv + vec2(0.0, px.y))));
         float normalEdge = smoothstep(0.25, 0.6, nEdge);
+        // Characters: their outline only, not every crease of their armour, which reads as clutter.
+        normalEdge *= step(0.75, texture2D(tNormal, vUv).a);
         float edge = max(depthEdge, normalEdge * 0.75);
         // Nothing drawn (background): no ink.
         if (d >= depthRange * 0.9999) edge = 0.0;

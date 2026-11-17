@@ -490,14 +490,12 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
     const compile = m.onBeforeCompile;
     m.onBeforeCompile = (shader, r) => {
       compile.call(m, shader, r);
-      // Bare steel polished, team paint glossy, leather and cloth left rough.
+      // Bare steel lightly polished; team paint, leather and cloth stay matte (gloss streaks read as clutter).
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.18, steel);
-        roughnessFactor = mix(roughnessFactor, 0.35, teamMask);`)
+        roughnessFactor = mix(roughnessFactor, 0.3, steel);`)
         .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
-        metalnessFactor = mix(metalnessFactor, 0.85, steel);
-        metalnessFactor = mix(metalnessFactor, 0.35, teamMask);`);
+        metalnessFactor = mix(metalnessFactor, 0.6, steel);`);
     };
   }
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
@@ -1927,6 +1925,11 @@ export class EntityRenderer {
     // A unit drawn with a building's model (Caserne volante in flight) keeps the building's size.
     if (e.def.kind === 'unit' && DEFS[LOOKS[e.type] ?? e.type]?.kind !== 'building') body.scale.setScalar(UNIT_SCALE);
     if ((e.def as UnitDef).cloaked) ghost(body);
+    // Static unit models are marked for the ink pass (see Post), like the skinned characters.
+    if (e.def.kind === 'unit')
+      body.traverse((o) => {
+        if (o instanceof Mesh && !(o instanceof SkinnedMesh) && !o.geometry.getAttribute('aUnit')) o.geometry.setAttribute('aUnit', new BufferAttribute(new Float32Array(o.geometry.getAttribute('position').count).fill(1), 1));
+      });
     root.add(pivot);
     // Selection: a bright ring with a soft halo outside it.
     const r = RING_RADIUS[e.type] ?? (e.radius / FP) * (e.def.kind === 'unit' ? 1.5 : 1.1);

@@ -52,6 +52,12 @@ export class Post {
         }
       });
     };
+    // Units leave alpha 0.5 in the normal buffer, so the ink pass can tell them apart: animated characters
+    // (skinned), and static unit models, whose geometry carries aUnit = 1 (unset elsewhere, so read as 0).
+    this.ao.normalMaterial.onBeforeCompile = (sh) => {
+      sh.vertexShader = `attribute float aUnit;\nvarying float vUnit;\n${sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvUnit = aUnit;')}`;
+      sh.fragmentShader = `varying float vUnit;\n${sh.fragmentShader.replace(/}\s*$/, '#ifdef USE_SKINNING\n  gl_FragColor.a = 0.5;\n#endif\n  if (vUnit > 0.5) gl_FragColor.a = 0.5;\n}')}`;
+    };
     composer.addPass(this.ao);
     // `?noink` keeps the plain 3D look.
     if (!new URLSearchParams(location.search).has('noink')) {
