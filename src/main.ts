@@ -11,7 +11,7 @@ import { Post } from './render/post';
 import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './render/units';
-import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
+import { type BuildingDef, DEFS, FACTIONS, type Faction, LOOKS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import { DEFAULT_MAP, MAPS, mapFile } from './maps';
@@ -464,8 +464,12 @@ document.addEventListener('change', (e) => {
 
 // The loading screen (index.html) fills as the models arrive and lifts once the first pictures are drawn.
 const loading = document.getElementById('loading');
+// Only the models this page can show: the title scene's own, or in a match every type of the factions playing and the neutral ones.
+const shown = ATTRACT
+  ? [...new Set([...world.entities.values()].map((e) => e.type))]
+  : Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade' && (!('faction' in DEFS[t]) || factions.includes(DEFS[t].faction)));
 const ready = Promise.all([
-  loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
+  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
   decor.load(scene, (m) => fogMaterial(m, fog, map)),
 ]);
 ready.then(() => loading?.style.setProperty('--p', '1'));
@@ -477,6 +481,7 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   ready.then(start);
   showHome();
+  loading?.classList.add('mini'); // the menu does not wait for the scene behind it
 }
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */

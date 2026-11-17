@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Entity, World } from '../sim/world';
-import { AI, DIFFICULTY } from './ai';
+import { AI, DIFFICULTY, teamFocus } from './ai';
 
 /** Plays until someone wins or the time runs out; returns the winner and the game time in minutes. */
 function play(world: World, ais: AI[], minutes: number): { winner: number | null; minutes: number } {
@@ -12,6 +12,17 @@ function play(world: World, ais: AI[], minutes: number): { winner: number | null
 }
 
 describe('AI', () => {
+  it('spreads its attacks in a four-player free-for-all: two opponents never pick the same first target', () => {
+    // Carrefour: four corners, each at the same distance from its two neighbours.
+    const w = createMatch(['humains', 'humains', 'humains', 'humains'], undefined, 'carrefour');
+    const ais = [0, 1, 2, 3].map((i) => new AI(w, i));
+    const focus = teamFocus(w);
+    while (focus.size < 4 && w.tick < ticks(15 * 60)) w.step(ais.flatMap((ai) => ai.think()));
+    const victims = [...focus.values()].map((id) => w.entities.get(id)!.owner);
+    expect(victims).toHaveLength(4);
+    expect(new Set(victims).size, `targets ${victims}`).toBe(4);
+  }, 60_000);
+
   it('beats an idle opponent', () => {
     const w = createMatch();
     const r = play(w, [new AI(w, 1)], 20);

@@ -1,6 +1,52 @@
 # Rapport d'équilibrage — 17 novembre 2026
 
-Pour l'équilibreur. Mesures faites par l'IA contre l'IA ; aucune valeur de `src/balance.json` n'a été changée dans le jeu : les essais tournent sur une copie.
+Pour l'équilibreur. Mesures faites par l'IA contre l'IA (98 parties par paire de camps, cible 49 – 49 ± 5).
+
+## Récapitulatif : ce qui a été fait le 17 novembre
+
+Tout est dans `main` et en ligne. Toutes les valeurs ci-dessous sont **provisoires** : le programmeur les a posées pour avancer, l'équilibreur garde la main et peut les changer ou les annuler. Elles sont aussi listées dans `BALANCE.md`, section « Valeurs provisoires ».
+
+### 1. Stats d'unités changées (`src/balance.json` > `units`)
+
+| Unité | Champ | Avant | Après | Pourquoi |
+|---|---|---|---|---|
+| Créature (Isdaris) | `hp` | 67 | 70 | Isdaris trop faibles contre les Humains |
+| Drone de combat (Z) | `cost.minerals` | 75 | 100 | même arme que l'Auxiliaire, il coûtait 25 % de moins ; Z gagnait 90 – 8 et 84 – 14 |
+| Drone de combat (Z) | `buildTime` | 15 | 18 | idem (même temps que l'Auxiliaire) |
+| Drone de combat (Z) | `hp` | 70 | 73 | après les deux lignes ci-dessus, Z était trop faible contre les Humains (38 – 60) |
+
+Aucune autre stat d'unité n'a été touchée.
+
+### 2. Réglages de l'IA (`src/balance.json` > `ai`, et le code de l'IA)
+
+Ce ne sont pas des stats d'unités, mais ils changent les résultats :
+- L'IA garde une réserve pour ses recherches et utilise les capacités de combat.
+- Les niveaux de difficulté jouent différemment (facile : petites vagues, pas de recherche ; difficile : s'étend plus tôt, concentre le tir). Les mesures se font au niveau normal.
+- Z : un socle à la mitrailleuse lourde resté à la base passe au lance-flammes ou au lance-roquettes une fois recherchés (avant, l'IA ne montait jamais le lance-flammes). Victoires inchangées.
+- Isdaris : l'IA construit enfin le Psycho-assembleur et ses unités (`ai.tech.isdaris` → `{ minute: 12, barracks: 3 }`, `feucirculaire` ajouté aux recherches). Détail dans `BALANCE.md`.
+
+### 3. Cartes
+
+Quatre nouvelles cartes (Le Col, Les Ponts, Carrefour, L'Anneau), mesurées dans [le rapport des cartes](rapport-cartes-2026-11-17.md). Seule retouche : une passerelle sur le gouffre de L'Anneau. Les autres cartes sont restées telles quelles.
+
+### 4. Où on en est (carte d'origine)
+
+| Paire | Au matin | Après les stats (§ 1) | Après l'IA Isdaris (§ 2, dernière mesure) |
+|---|---|---|---|
+| Humains – Isdaris | 67 – 31 | 52 – 46 | 49 – 46 (3 nuls) |
+| Z – Humains | 90 – 8 | 49 – 49 | 49 – 49 (non concerné) |
+| Z – Isdaris | 84 – 14 | 52 – 46 | **60 – 38** |
+
+L'IA Isdaris passe au Psycho-assembleur à la minute 12 : elle produit quelques unités avancées (9 Porte-disques, 3 Balistes sur 196 parties). Plus tôt (minute 8), elle en fait bien plus (53 Porte-disques, 51 Balistes, 19 Chimères) mais perd davantage (65 – 33 contre les Humains, 71 – 27 contre Z) : ces unités semblent trop chères pour leur force. C'est le premier point à régler ; Z – Isdaris reste en défaveur des Isdaris.
+
+### 5. Questions pour l'équilibreur
+
+1. Valides-tu la Créature à 70 PV et le Drone de combat à 100 minerais, 18 s, 73 PV ?
+2. Les unités du Psycho-assembleur (Porte-disques, Baliste, Chimère) : faut-il baisser leur prix ou relever leur force ?
+3. Le lance-flammes et le lance-roquettes Z arrivent trop tard pour compter (vers 17 à 20 min) : faut-il les rendre moins chers ou plus rapides à rechercher ?
+4. Les stats réglées sur la carte d'origine ne tiennent pas sur les nouvelles cartes : équilibre-t-on sur une seule carte de référence ou sur la moyenne ?
+
+Le détail des essais suit.
 
 ## Méthode
 
