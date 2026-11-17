@@ -1367,6 +1367,8 @@ export class EntityRenderer {
         const body = v.model.children[0];
         const left = Math.min(1, e.amount / (e.def as { amount: number }).amount);
         body.scale.setScalar(body.userData.base * (0.7 + 0.3 * left));
+        // Looked up here rather than at creation, so a view made by older code (hot reload) still works.
+        body.userData.geodes ??= ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
         (body.userData.geodes as Object3D[]).forEach((g, i) => (g.visible = left > 0.75 - i * 0.25));
       }
       if (e.def.kind === 'building') {
@@ -1683,7 +1685,6 @@ export class EntityRenderer {
     if (e.type === 'minerai') {
       body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
       body.userData.base = 0.85 + ((e.id * 40503) % 100) / 330;
-      body.userData.geodes = ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
     }
     const pivot = new Group(); // animated wrapper, so the model keeps its own transform
     pivot.add(body);
