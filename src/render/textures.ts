@@ -77,7 +77,20 @@ function bake(size: number, height: (u: number, v: number) => number, shade: (h:
 }
 
 /** Dry, cracked wasteland ground with pebbles. */
-export function groundTextures(): [Texture, Texture] {
+/** Metal deck plates for the city: a grid of panels with seams, rivets, dents and wear. */
+function plateHeight(u: number, v: number): number {
+  const cells = 8;
+  const fx = (u * cells) % 1;
+  const fy = (v * cells) % 1;
+  const seam = Math.min(fx, 1 - fx, fy, 1 - fy) < 0.025 ? -0.45 : 0;
+  const rivet = [0.08, 0.92].some((a) => [0.08, 0.92].some((b) => Math.hypot(fx - a, fy - b) < 0.025)) ? 0.35 : 0;
+  // Every other panel is a tread plate; wear and dents everywhere.
+  const tread = (Math.floor(u * cells) + Math.floor(v * cells)) % 3 === 0 && Math.sin((u + v) * 260) > 0.6 ? 0.08 : 0;
+  return seam + rivet + tread + fbm(u, v, 4, 6, 11) * 0.25 - fbm(u, v, 2, 40, 37) * 0.08;
+}
+
+export function groundTextures(style?: string): [Texture, Texture] {
+  if (style === 'city') return bake(512, plateHeight, (h, u, v) => 0.7 + h * 0.35 + (fbm(u, v, 3, 5, 41) - 0.5) * 0.35, 5);
   const height = (u: number, v: number) => {
     const base = fbm(u, v, 5, 4, 11);
     const cracks = 1 - Math.min(1, Math.abs(fbm(u, v, 3, 6, 23) - 0.5) * 18);
@@ -90,7 +103,7 @@ export function groundTextures(): [Texture, Texture] {
 }
 
 /** White where the ground texture has cracks: used to make glowing veins on strange worlds. */
-export function crackMask(): Texture {
+export function crackMask(style?: string): Texture {
   const size = 512;
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -98,8 +111,18 @@ export function crackMask(): Texture {
   const img = ctx.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const crack = 1 - Math.min(1, Math.abs(fbm(x / size, y / size, 3, 6, 23) - 0.5) * 30);
       const i = (y * size + x) * 4;
+      if (style === 'city') {
+        // Neon strips in some of the deck seams, flickering out in patches (an abandoned city).
+        const fx = ((x / size) * 8) % 1;
+        const fy = ((y / size) * 8) % 1;
+        const seam = Math.min(fx, 1 - fx, fy, 1 - fy) < 0.012 ? 1 : 0;
+        const lit = fbm(x / size, y / size, 3, 3, 71) > 0.5 ? 1 : 0;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = seam * lit * 255;
+        img.data[i + 3] = 255;
+        continue;
+      }
+      const crack = 1 - Math.min(1, Math.abs(fbm(x / size, y / size, 3, 6, 23) - 0.5) * 30);
       // Red: thin cracks. Green: broad patches deciding where the cracks glow (sampled at another scale).
       img.data[i] = Math.pow(Math.max(0, crack), 2) * 255;
       img.data[i + 1] = fbm(x / size, y / size, 4, 2, 71) * 255;
@@ -115,7 +138,19 @@ export function crackMask(): Texture {
 }
 
 /** Layered rock for cliff faces: horizontal strata broken by noise. u runs along the cliff, v up it. */
-export function rockTextures(): [Texture, Texture] {
+export function rockTextures(style?: string): [Texture, Texture] {
+  if (style === 'city') {
+    // Wall cladding: tall panels between ribs, with vents and grime streaks running down.
+    const wall = (u: number, v: number) => {
+      const fx = (u * 6) % 1;
+      const fy = (v * 3) % 1;
+      const rib = fx < 0.06 ? 0.5 : 0;
+      const joint = fy < 0.03 ? -0.4 : 0;
+      const vent = fx > 0.4 && fx < 0.75 && fy > 0.5 && fy < 0.8 && Math.sin(v * 3 * 40 * Math.PI) > 0 ? -0.25 : 0;
+      return rib + joint + vent + fbm(u, v, 3, 8, 53) * 0.2;
+    };
+    return bake(512, wall, (h, u) => 0.6 + h * 0.4 - fbm(u, u * 0.3, 2, 20, 61) * 0.2, 6);
+  }
   const height = (u: number, v: number) => {
     const n = fbm(u, v, 5, 4, 53);
     const strata = Math.sin((v + n * 0.15) * Math.PI * 2 * 6) * 0.5 + 0.5;

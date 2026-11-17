@@ -17,7 +17,7 @@ import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome } from './terrain';
-import { BIOMES, pickBiome } from './render/biome';
+import { BIOMES, cityAbyss, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
@@ -111,7 +111,8 @@ const terrain = buildTerrain(map);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones);
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, biome.style === 'city');
+if (biome.style === 'city') scene.add(cityAbyss(map.width, map.height));
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.

@@ -128,12 +128,12 @@ export function buildTerrain(map: GameMap): Group {
     }
   }
 
-  const [gMap, gNormal] = groundTextures();
-  const [rMap, rNormal] = rockTextures();
+  const [gMap, gNormal] = groundTextures(B.style);
+  const [rMap, rNormal] = rockTextures(B.style);
   const groundMat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(0.8, 0.8), roughness: 0.95 });
   if (B.veins) {
     // Strange worlds: light glows up through the cracks.
-    groundMat.emissiveMap = crackMask();
+    groundMat.emissiveMap = crackMask(B.style);
     groundMat.emissive = B.veins;
     groundMat.emissiveIntensity = 2.2;
   }

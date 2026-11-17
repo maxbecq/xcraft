@@ -6,6 +6,8 @@ import { weather } from './weathering';
 import type { World } from '../sim/world';
 
 /** Scenery by context, as [doodad, chance per tile]. */
+/** Doodads that belong in a dead city: junk, wrecks, drums. */
+const URBAN = ['barrels', 'wreck', 'scrap_pile', 'tire_pile'];
 /** Doodads that are plain stone. */
 const STONES = ['rocks_a', 'rocks_b', 'pebbles'];
 const CLIFF_FOOT: [string, number][] = [['rocks_a', 0.22], ['rocks_b', 0.1], ['pebbles', 0.18]];
@@ -36,7 +38,7 @@ export class Decor {
   private readonly meshes = new Map<string, InstancedMesh[]>();
   readonly root = new Object3D();
 
-  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false) {
+  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false, private readonly city = false) {
     const keepClear = new Set<number>();
     const clear = (cx: number, cy: number, r: number) => {
       for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) keepClear.add(y * map.width + x);
@@ -92,7 +94,7 @@ export class Decor {
     for (const [type, list] of byType) {
       const node = gltf.scene.getObjectByName(type);
       // The Moon (grey stones): nothing but stones, no plants, wrecks or scrap.
-      if (!node || (this.greyStones && !STONES.includes(type))) continue;
+      if (!node || (this.greyStones && !STONES.includes(type)) || (this.city && !URBAN.includes(type))) continue;
       const parts: Mesh[] = [];
       node.traverse((o) => o instanceof Mesh && parts.push(o));
       const ims = parts.map((part) => {

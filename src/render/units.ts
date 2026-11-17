@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, type BufferGeometry, type Material, type Scene, type Texture,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -639,6 +639,8 @@ interface View {
   site?: { footing: Object3D; storeys: Object3D[] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
+  /** Energy well: its living pool (see wellFx). */
+  fx?: { update(dt: number, t: number): void };
   heading: number;
   /** Flyers: ground height under them, eased so they glide over cliffs instead of jumping. */
   ground?: number;
@@ -670,6 +672,119 @@ function play(v: View, name: string, timeScale = 1): void {
   next.reset().play();
   if (v.playing) next.crossFadeFrom(v.playing, 0.2, false);
   v.playing = next;
+}
+
+/** A soft round spark, for the well's stars and geysers. */
+let sparkTexture: CanvasTexture | undefined;
+function spark(): CanvasTexture {
+  if (sparkTexture) return sparkTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(230,200,255,0.8)');
+  grad.addColorStop(1, 'rgba(160,80,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 32, 32);
+  return (sparkTexture = new CanvasTexture(c));
+}
+
+/** Swirling eddies drawn as spiral arcs, turned slowly over the pool. */
+let eddyTexture: CanvasTexture | undefined;
+function eddies(): CanvasTexture {
+  if (eddyTexture) return eddyTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.translate(64, 64);
+  for (let k = 0; k < 5; k++) {
+    g.rotate((Math.PI * 2) / 5);
+    g.beginPath();
+    for (let a = 0; a < 3.2; a += 0.1) g.lineTo(Math.cos(a) * (8 + a * 15), Math.sin(a) * (8 + a * 15));
+    g.strokeStyle = `rgba(255,220,255,${0.35 + 0.1 * k})`;
+    g.lineWidth = 3;
+    g.stroke();
+  }
+  eddyTexture = new CanvasTexture(c);
+  eddyTexture.center.set(0.5, 0.5);
+  return eddyTexture;
+}
+
+/**
+ * The life of an energy well: the glow at the bottom breathes unevenly, eddies turn on the pool, stars drift up
+ * out of it and now and then a little geyser of sparks shoots up and falls back. Render only, seeded by the well.
+ */
+function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  group.userData.noPick = true;
+  // Its own copies of the glowing materials, so each well breathes on its own.
+  const glows: MeshStandardMaterial[] = [];
+  body.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const m = o.material as MeshStandardMaterial;
+    if (m.emissive && m.emissive.getHex() !== 0) {
+      o.material = m.clone();
+      glows.push(o.material as MeshStandardMaterial);
+    }
+  });
+  const base = glows.map((m) => m.emissiveIntensity);
+  const swirl = eddies().clone();
+  swirl.needsUpdate = true;
+  const eddy = new Mesh(new PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2), new MeshBasicMaterial({ map: swirl, transparent: true, opacity: 0.35, depthWrite: false, blending: AdditiveBlending, color: 0xd8a0ff }));
+  eddy.position.y = 0.09;
+  group.add(eddy);
+  // Particles: n stars drifting up, and a geyser of the same sparks from time to time.
+  const n = 36;
+  const pos = new Float32Array(n * 3);
+  const vel = new Float32Array(n * 3);
+  const wild = new Uint8Array(n); // geyser sparks, under gravity
+  let r = seed * 9301 + 49297;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const reset = (i: number, geyser?: [number, number]) => {
+    const a = rand() * Math.PI * 2;
+    const d = geyser ? 0.05 : rand() * 0.6;
+    pos.set([(geyser?.[0] ?? 0) + Math.cos(a) * d, 0.08, (geyser?.[1] ?? 0) + Math.sin(a) * d], i * 3);
+    vel.set(geyser ? [(rand() - 0.5) * 0.6, 1.6 + rand() * 1.2, (rand() - 0.5) * 0.6] : [(rand() - 0.5) * 0.08, 0.25 + rand() * 0.35, (rand() - 0.5) * 0.08], i * 3);
+    wild[i] = geyser ? 1 : 0;
+  };
+  for (let i = 0; i < n; i++) {
+    reset(i);
+    pos[i * 3 + 1] = 0.08 + rand() * 2;
+  }
+  const geom = new BufferGeometry();
+  geom.setAttribute('position', new BufferAttribute(pos, 3));
+  const stars = new Points(geom, new PointsMaterial({ map: spark(), size: 0.16, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xe8c8ff }));
+  stars.frustumCulled = false;
+  group.add(stars);
+  let nextGeyser = 1 + rand() * 4;
+  return {
+    group,
+    update(dt, t) {
+      // Uneven breathing: two slow waves and a faster flicker.
+      const pulse = 0.75 + 0.2 * Math.sin(t * 1.3 + seed) + 0.12 * Math.sin(t * 3.7 + seed * 2) + 0.06 * Math.sin(t * 11 + seed);
+      glows.forEach((m, i) => (m.emissiveIntensity = base[i] * pulse));
+      swirl.rotation += dt * 0.35;
+      (eddy.material as MeshBasicMaterial).opacity = 0.2 + 0.18 * pulse;
+      nextGeyser -= dt;
+      if (nextGeyser <= 0) {
+        // A geyser: a dozen sparks leap from one spot of the pool.
+        const a = rand() * Math.PI * 2;
+        const spot: [number, number] = [Math.cos(a) * rand() * 0.45, Math.sin(a) * rand() * 0.45];
+        for (let k = 0; k < 12; k++) reset(Math.floor(rand() * n), spot);
+        nextGeyser = 2 + rand() * 5;
+      }
+      for (let i = 0; i < n; i++) {
+        const j = i * 3;
+        if (wild[i]) vel[j + 1] -= dt * 3; // geyser sparks arc up and fall back into the pool
+        pos[j] += vel[j] * dt;
+        pos[j + 1] += vel[j + 1] * dt;
+        pos[j + 2] += vel[j + 2] * dt;
+        if (pos[j + 1] > 2.4 || pos[j + 1] < 0.05) reset(i);
+      }
+      geom.getAttribute('position').needsUpdate = true;
+    },
+  };
 }
 
 /** Rally point marker: a pole with a green pennant, its cloth hinged on the pole. */
@@ -793,6 +908,7 @@ export class EntityRenderer {
         this.animate(v, e, dt);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
+      v.fx?.update(dt, now / 1000);
       if (e.type === 'minerai') {
         // Fields shrink as they are mined out.
         const body = v.model.children[0];
@@ -1009,7 +1125,13 @@ export class EntityRenderer {
     this.scene.add(root);
     // Buildings and new units face the map centre.
     const facing = Math.atan2(this.map.width / 2 - e.x / FP, this.map.height / 2 - e.y / FP);
-    const v: View = { type: e.type, root, model: pivot, ring, scaffold, site, pools, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    let fx: View['fx'];
+    if (e.type === 'puits') {
+      const well = wellFx(body, e.id);
+      root.add(well.group);
+      fx = well;
+    }
+    const v: View = { type: e.type, root, model: pivot, ring, scaffold, site, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
