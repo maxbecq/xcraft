@@ -294,6 +294,11 @@ export class Hud {
   }
 
   private aim(x: number, z: number, target?: Entity, queue = false): void {
+    if (this.aimed === 'patrol') {
+      // Patrol: between where each unit stands and the point clicked.
+      this.audio.play('order');
+      return this.issue({ player: this.player, kind: 'patrol', ids: this.input.own().map((e) => e.id), x: Math.round(x * FP), y: Math.round(z * FP), queue });
+    }
     if (!this.scanning) return this.attack(x, z, target, queue);
     const ids = this.input.own().map((e) => e.id);
     this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP), name: this.aimed });
@@ -506,7 +511,11 @@ export class Hud {
       const all = units;
       const sub = units.filter((u) => u.type === this.activeType);
       if (sub.length) units = sub;
-      if (all.some((u) => this.world.weapon(u))) list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
+      if (all.some((u) => this.world.weapon(u))) {
+        list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
+        list.push({ label: 'Maintenir', key: 'H', action: () => cmd({ kind: 'hold', ids }) });
+        list.push({ label: 'Patrouille', key: 'P', action: () => this.setTargeting(true, false, 'patrol') });
+      }
       // Carriers (Scarabée, Bourdon with Chargement): let everyone out.
       const carriers = units.filter((u) => this.world.room(u));
       if (carriers.length) {

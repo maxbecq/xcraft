@@ -12,7 +12,8 @@ export type Order =
   | { kind: 'construct'; target: number }
   /** `auto`: picked by the unit itself; it gives up beyond its leash point (lx, ly). */
   | { kind: 'attack'; target: number; auto: boolean; lx: number; ly: number }
-  | { kind: 'attackMove'; x: number; y: number; target: number }
+  /** `back`: a patrol, which turns round at (x, y) and heads back there, for ever. */
+  | { kind: 'attackMove'; x: number; y: number; target: number; back?: [number, number] }
   | { kind: 'heal'; target: number }
   /** Walk into a bunker (Fortin) and take cover there. */
   | { kind: 'enter'; target: number }
@@ -89,6 +90,8 @@ export interface Entity {
   abilityCd: number;
   /** Ticks left during which the unit can neither act nor take orders (Rappel). */
   held: number;
+  /** Holding position: fights only within reach, does not move to chase. Any move, attack or stop ends it. */
+  stand: boolean;
   /** Last entity that hit it (lets the AI tell an invisible attacker from a distant one). */
   lastAttacker: number;
   /** Owner of the last attacker (Pillage pays it when a building falls). */
@@ -130,6 +133,10 @@ export type Command =
   /** Right-click: move, gather, construct, return cargo or set a rally point, depending on the target. */
   | { player: number; kind: 'smart'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
   | { player: number; kind: 'stop'; ids: number[] }
+  /** Hold position: stop, and from then on only shoot what comes within reach, never step out to chase. */
+  | { player: number; kind: 'hold'; ids: number[] }
+  /** Patrol between where each unit stands and (x, y), fighting what comes into sight on the way. */
+  | { player: number; kind: 'patrol'; ids: number[]; x: number; y: number; queue?: boolean }
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number; queue?: boolean }
   | { player: number; kind: 'train'; ids: number[]; type: string }
   | { player: number; kind: 'cancel'; ids: number[] }
@@ -254,7 +261,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -462,13 +469,23 @@ export class World {
     const mine = this.owned(c);
     const units = mine.filter((e) => e.def.kind === 'unit' && e.held === 0 && !e.inside);
     const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);
+    if (c.kind === 'move' || c.kind === 'smart' || c.kind === 'attack' || c.kind === 'patrol' || c.kind === 'stop' || c.kind === 'build' || c.kind === 'hold') {
+      for (const e of units) e.stand = c.kind === 'hold';
+    }
     switch (c.kind) {
       case 'stop':
+      case 'hold':
         units.forEach((e) => {
           e.next = [];
           this.setOrder(e, null);
         });
         return;
+      case 'patrol': {
+        const fighters = units.filter((e) => this.weapon(e) || (e.def as UnitDef).heal);
+        const [ox, oy] = this.formation(fighters);
+        for (const [i, e] of fighters.entries()) this.setOrder(e, { kind: 'attackMove', x: c.x + ox[i], y: c.y + oy[i], target: 0, back: [e.x, e.y] });
+        return;
+      }
       case 'unload':
         for (const b of [...buildings, ...units]) for (const u of [...this.entities.values()]) if (u.inside === b.id) this.leave(u);
         return;
@@ -947,19 +964,39 @@ export class World {
 
   private moveGroup(units: Entity[], x: number, y: number): void {
     if (units.length === 0) return;
-    // A compact group keeps its formation; a spread-out group converges on the point.
-    const [ox, oy, compact] = this.formation(units);
-    const arrive = idiv(isqrt(units.length) * FP, 2);
-    for (const [i, e] of units.entries()) this.setOrder(e, { kind: 'move', x: x + ox[i], y: y + oy[i], arrive: compact ? FP / 4 : arrive });
+    // A compact group keeps its formation; a spread-out one gathers into a block round the point.
+    const [ox, oy] = this.formation(units, true);
+    for (const [i, e] of units.entries()) this.setOrder(e, { kind: 'move', x: x + ox[i], y: y + oy[i], arrive: FP / 4 });
   }
 
-  /** Each unit's offset from the group's centre if the group is compact (it keeps its formation), else none. */
-  private formation(units: Entity[]): [number[], number[], boolean] {
+  /**
+   * Each unit's offset from the destination. A compact group keeps its formation. A spread-out one converges on the
+   * point, or with `spread` (a plain move) gets a slot each in a square block, filled in the order the units stand
+   * (north to south, then west to east in each row), so they do not cross on the way nor pile onto the one point.
+   */
+  private formation(units: Entity[], spread = false): [number[], number[], boolean] {
     const n = Math.max(1, units.length);
     const cx = idiv(units.reduce((s, e) => s + e.x, 0), n);
     const cy = idiv(units.reduce((s, e) => s + e.y, 0), n);
     const compact = units.every((e) => dist(e.x, e.y, cx, cy) < 4 * FP);
-    return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
+    if (compact || !spread || units.length === 1) return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
+    const cols = isqrt(units.length - 1) + 1;
+    const rows = idiv(units.length + cols - 1, cols);
+    const step = 2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + FP / 4;
+    const order = units.map((_, i) => i).sort((a, b) => units[a].y - units[b].y || units[a].x - units[b].x || units[a].id - units[b].id);
+    const ox: number[] = new Array(units.length);
+    const oy: number[] = new Array(units.length);
+    order.forEach((u, k) => {
+      ox[u] = (k % cols) * step - idiv((cols - 1) * step, 2);
+      oy[u] = idiv(k, cols) * step - idiv((rows - 1) * step, 2);
+    });
+    // Within each row, west to east: re-sort the row's units by x so neighbours keep their side.
+    for (let r = 0; r < rows; r++) {
+      const row = order.slice(r * cols, r * cols + cols);
+      const xs = row.map((u) => ox[u]).sort((a, b) => a - b);
+      row.sort((a, b) => units[a].x - units[b].x || units[a].id - units[b].id).forEach((u, j) => (ox[u] = xs[j]));
+    }
+    return [ox, oy, false];
   }
 
   /** While applying a shift-command: new orders go to the end of each unit's list. */
@@ -1383,7 +1420,8 @@ export class World {
     const patient = def.heal ? this.patient(e) : undefined;
     if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
     if (!def.attack) return;
-    const t = this.enemyNear(e, def.sight * FP);
+    // Holding position: only what is already within reach.
+    const t = this.enemyNear(e, e.stand ? toFp(def.attack.range) + e.radius + FP : def.sight * FP);
     if (t) this.setOrder(e, { kind: 'attack', target: t.id, auto: true, lx: e.x, ly: e.y });
   }
 
@@ -1427,7 +1465,12 @@ export class World {
       if (!t || t.hp <= 0 || !this.sees(e.owner, t) || this.gap(e, t) > (def.sight + 2) * FP) {
         t = (this.tick + e.id) % 4 === 0 && this.tick >= e.calmUntil ? this.enemyNear(e, def.sight * FP) : undefined;
         o.target = t?.id ?? 0;
-        if (!t && this.goTo(e, o.x, o.y)) this.setOrder(e, null);
+        if (!t && this.goTo(e, o.x, o.y)) {
+          if (!o.back) return this.setOrder(e, null);
+          // A patrol turns round at each end.
+          [o.x, o.y, o.back] = [o.back[0], o.back[1], [o.x, o.y]];
+          e.goal = null;
+        }
         if (!t) return;
         e.goal = null;
       }
@@ -1451,7 +1494,7 @@ export class World {
     const a = this.weapon(e);
     if (!a) return;
     if (!reaches(a, flies(t))) return this.setOrder(e, null);
-    if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e, t)) + FP / 8) return this.chase(e, t);
+    if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e, t)) + FP / 8) return e.stand ? this.setOrder(e, null) : this.chase(e, t);
     e.shortTicks = 0;
     e.goal = null;
     e.path = [];

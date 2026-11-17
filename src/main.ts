@@ -411,7 +411,7 @@ pause.innerHTML = `<div class="pause-box">
 Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter) · double-clic ou <kbd>Ctrl</kbd>+clic : tout ce type à l'écran<br>
 Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
-<kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
+<kbd>S</kbd> stop · <kbd>H</kbd> maintenir la position · <kbd>P</kbd> puis clic : patrouille · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
