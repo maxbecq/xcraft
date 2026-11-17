@@ -1,11 +1,11 @@
-// Faction data (Humans, Isdaris, Z), from XC Mod 1.53 (SC2) where it exists.
+// Faction data (Humans, Isdaris, Z, Dieux), from XC Mod 1.53 (SC2) where it exists.
 // Times are in SC "Normal" seconds; the simulation runs at "Faster" (see GAME_SPEED).
 // Every balance number (hp, costs, damage, ability timings, AI thresholds) lives in balance.json, owned by the
 // balance designer (see BALANCE.md); this file holds what each thing is and does.
 
 import BALANCE from './balance.json';
 
-export type Faction = 'humains' | 'isdaris' | 'z';
+export type Faction = 'humains' | 'isdaris' | 'z' | 'dieux';
 
 export interface Cost {
   minerals: number;
@@ -75,6 +75,14 @@ export interface UnitDef {
   bunker?: number;
   /** Z socle: weapon kits (keys of WEAPONS) it can be fitted with, in place of the light machine gun of `attack`. */
   weapons?: string[];
+  /** Dieux: a god that summons these units at its feet, through its own queue, while it stands still. */
+  trains?: string[];
+  /** One per player at most, queued ones included (the gods). */
+  unique?: boolean;
+  /** Places buildings (Gaïa); by default only workers do. */
+  builder?: boolean;
+  /** Comes back by itself at its side's headquarters this many seconds after dying (Gaïa). */
+  respawn?: number;
   faction: Faction;
   hotkey: string;
 }
@@ -123,6 +131,8 @@ export interface BuildingDef {
   morphs?: string[];
   /** One per player at most (Grand Conseil). */
   unique?: boolean;
+  /** Needs `count` of these units or buildings standing, any of them (Yggdrasill protecteur: two first-rank gods). */
+  requiresAny?: { of: string[]; count: number };
   /** Not placed by workers: only reached by turning another building into it. */
   morphOnly?: boolean;
   /** Upgrades researched here (keys of DEFS, kind 'upgrade'), through the production queue. */
@@ -253,6 +263,16 @@ export const ABILITIES: Record<string, AbilityDef> = {
   atterrissage: { name: 'Atterrir', hotkey: 'D', target: 'point', ...BALANCE.abilities.atterrissage },
   /** Trône (Concentrateur): a wall of energy across the map point, no unit nor shot goes through it. */
   murenergie: { name: "Mur d'énergie", hotkey: 'M', research: 'concentrateur', ...BALANCE.abilities.murenergie },
+  /** Gaïa (notice): appears by the friendly building nearest the point. */
+  teleportgaia: { name: 'Téléportation de Gaïa', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleportgaia },
+  /** Gaïa (notice): a magic arrow on the enemy nearest the point. */
+  flechegaia: { name: 'Flèche de Gaïa', hotkey: 'F', target: 'point', ...BALANCE.abilities.flechegaia },
+  /** Thor (notice, « Courroux du marteau »): his next blow hits several times as hard. */
+  courroux: { name: 'Courroux du marteau', hotkey: 'C', target: 'self', ...BALANCE.abilities.courroux },
+  /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
+  pluiedefeu: { name: 'Pluie de feu', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
+  /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
+  tempete: { name: 'Tempête de sable', hotkey: 'T', target: 'point', ...BALANCE.abilities.tempete },
 };
 export const OBSERVATION = BALANCE.rules.observation;
 export const RAPPEL = BALANCE.rules.rappel;
@@ -466,15 +486,43 @@ const BASE: Record<string, object> = {
   lanceflammes: research('Lance-flammes', 'F', 'Kit lance-flammes pour les socles terrestres.', undefined, 'z'),
   lanceroquettes: research('Lance-roquettes', 'R', 'Kit lance-roquettes, contre les véhicules et les bâtiments.', undefined, 'z'),
 
+  // ---------------------------------------------------------------- Dieux (notice 1.2-1): gods that summon their armies
+  // The gods stand in for production buildings: building-sized, unique, summoned at the Porte d'Asgaard, each summons
+  // its own troops at its feet. Gaïa (given at the start, back by herself when she falls) calls the buildings down:
+  // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
+  esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
+  gaia: { kind: 'unit', name: 'Gaïa', radius: 1.3, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
+  thor: { kind: 'unit', name: 'Thor', radius: 1.2, trains: ['nain'], unique: true, ability: 'courroux', faction: 'dieux', hotkey: 'T' },
+  apollon: { kind: 'unit', name: 'Apollon', radius: 1.1, trains: ['minotaure'], unique: true, ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
+  seth: { kind: 'unit', name: 'Seth', radius: 1.1, trains: ['sphinx'], unique: true, ability: 'tempete', faction: 'dieux', hotkey: 'S' },
+  nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
+  minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
+  // A statue set going by magic: a machine for the bonuses against machines.
+  sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, faction: 'dieux', hotkey: 'X' },
+  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
+  // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
+  branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], faction: 'dieux', hotkey: 'B' },
+  protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
+  antre: { kind: 'building', name: 'Antre', size: 3, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
+  puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
+  temple: {
+    kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
+    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite'],
+  },
+  ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
+  ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
+  ...upgrades('armor', 'Amélioration armure', 'A', undefined, 'dieux', 3, 'darmor'),
+  celerite: research('Célérité naine', 'N', 'Les Nains bondissent sur un ennemi proche.', undefined, 'dieux'),
+
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
 };
 
 /** The three levels of a Forge line (costs and times in balance.json); `base`: buildings the line needs from level 1. */
-function upgrades(line: UpgradeLine, name: string, hotkey: string, base?: Record<string, number>, faction: Faction = 'humains', levels = 3): Record<string, object> {
+function upgrades(line: UpgradeLine, name: string, hotkey: string, base?: Record<string, number>, faction: Faction = 'humains', levels = 3, key = line): Record<string, object> {
   const out: Record<string, object> = {};
   const steps = faction === 'humains' ? UPGRADE_REQUIRES : [undefined, undefined, undefined];
-  for (let i = 0; i < levels; i++) out[`${line}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, requires: { ...base, ...steps[i] }, faction, hotkey };
+  for (let i = 0; i < levels; i++) out[`${key}${i + 1}`] = { kind: 'upgrade', name: `${name} ${i + 1}`, line, level: i + 1, requires: { ...base, ...steps[i] }, faction, hotkey };
   return out;
 }
 
@@ -541,6 +589,14 @@ export interface FactionDef {
   defense?: string;
   /** Power-field building (Isdaris), if any. */
   pylon?: string;
+  /** Dieux: the unit that places buildings (else the workers), the one that summons the workers (else the hq),
+   * units given at the start besides the workers, and the cheap drop-off the AI expands with (else the hq). */
+  builder?: string;
+  workerFrom?: string;
+  start?: string[];
+  outpost?: string;
+  /** Dieux: the gods, summoned at the hq; they produce the army. */
+  gods?: string[];
   /** Second production building, for its heavier units, if any. */
   tech?: string;
   /** Buildings in the build menu, in order. */
@@ -571,5 +627,12 @@ export const FACTIONS: Record<Faction, FactionDef> = {
     buildable: ['intelligence', 'pod', 'assimilateur', 'plateforme', 'tourelle', 'armement'],
     advanced: ['armement'],
     army: Object.entries(BALANCE.ai.army.z),
+  },
+  dieux: {
+    name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
+    forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth'],
+    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple'],
+    advanced: ['temple'],
+    army: Object.entries(BALANCE.ai.army.dieux),
   },
 };

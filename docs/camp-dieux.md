@@ -163,7 +163,7 @@ Population 4 chacune (avant Offrandes), uniques, détection 10. Les dieux font o
 | Dieu | PV | Armure | Vitesse | Coût | Temps | Attaque (dégâts / portée / recharge) |
 |---|---|---|---|---|---|---|
 | Gaïa | 3000 | 6 | 2.0 | offerte au départ | — | aucune ; Flèche magique 30 |
-| Thor | 2200 | 3 | 1.8 | 400 / 100 | 45 | 45 / 0.1 / 1.5 |
+| Thor | 2200 | 3 | 1.8 | 400 / 0 | 45 | 45 / 0.1 / 1.5 |
 | Apollon | 1500 | 1 | 2.6 | 500 / 250 | 50 | 25 / 6 / 1.5 |
 | Seth | 1700 | 2 | 2.5 | 500 / 200 | 50 | 35 / 0.1 / 1.2 (bonus contre les unités blessées) |
 | Odin | 2500 | 3 | 2.1 | 750 / 400 | 60 | 50 / 0.1 / 1.5 |
@@ -199,7 +199,7 @@ Population 4 chacune (avant Offrandes), uniques, détection 10. Les dieux font o
 
 | Bâtiment | PV | Armure | Pop. | Coût | Temps | Remarque | Analogie |
 |---|---|---|---|---|---|---|---|
-| Porte d'Asgaard | 4500 | 3 | +10 | 1200 / 0 | 90 | dépôt | Conseil (1000, 80 s) |
+| Porte d'Asgaard | 4500 | 3 | +14 | 1200 / 0 | 90 | dépôt ; Gaïa compte pour 4 | Conseil (1000, 80 s) |
 | Antre | 900 | 1 | +4 | 300 / 0 | 30 | dépôt | — |
 | Puits | 1000 | 1 | comme la Mine | 600 / 0 | 30 | énergie 2.5/s | Mine |
 | Branche d'Yggdrasill | 600 | 1 | +10 | 200 / 0 | 25 | 12 / 1 / 1.2 | Grenier + Fortin |
@@ -247,6 +247,8 @@ But : une partie complète contre les trois autres camps, IA comprise.
 - **IA** (`src/ai/ai.ts`) : plan Dieux (Gaïa bâtit, deux dieux de rang 1, armée de Nains + Sphinx, protège ses dieux et recule un dieu blessé).
 - **Rendu** : modèles Blender (`tools/blender/models.py`) pour ces 8 unités et 5 bâtiments, icônes, sons ; HUD (boutons d'invocation sur les dieux).
 - **Équilibre** : nouvelles paires dans `npm run balance:big` (Dieux contre chacun des trois camps).
+
+**État (17 novembre 2026) : V1 codée**, branche `claude/dieux-v1`. Réponses aux questions de la section 5 : mes propositions par défaut (un dieu mort se réinvoque au coût plein après 60 s de deuil ; Gaïa revient seule à la Porte après 45 s ; un dieu n'invoque que s'il est à l'arrêt ; « 2 sur 3 » = vivants en même temps ; Temple de vénération ; Peau de pierre, Flèche de Gaïa). Modèles du jeu tirés des concepts (`tools/blender/dieux/`), sans animation de marche pour l'instant.
 
 ### V2 — rang 2
 

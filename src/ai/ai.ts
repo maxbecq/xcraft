@@ -59,7 +59,9 @@ const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
-const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2 };
+const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, tempete: 2 };
+/** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
+const GODS = BALANCE.ai.gods as [string, number][];
 
 /** A computer player. It only acts through commands, like a human. */
 export class AI {
@@ -97,17 +99,20 @@ export class AI {
     const home = mine.find((e) => e.type === f.hq);
     if (!home) return this.lastStand(mine);
     const serfs = mine.filter((e) => e.type === f.worker);
+    // Dieux: Gaïa places the buildings, and the gods (production) stay home, out of the army.
+    const builders = f.builder ? mine.filter((e) => e.type === f.builder) : serfs;
+    const gods = mine.filter((e) => f.gods?.includes(e.type));
     // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
     const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
-    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !e.inside);
+    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside);
     const buildings = mine.filter((e) => e.def.kind === 'building');
     // A building turned into another (Récepteur armé…) still counts as what it was.
-    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
+    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + builders.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
     const p = w.players[this.player];
     // Resources promised to serfs walking to a construction site are already spent.
     let minerals = p.minerals;
     let promisedEnergy = 0;
-    for (const s of serfs) {
+    for (const s of builders) {
       if (s.order?.kind !== 'build') continue;
       minerals -= (DEFS[s.order.type] as BuildingDef).cost.minerals;
       promisedEnergy += (DEFS[s.order.type] as BuildingDef).cost.energy;
@@ -132,27 +137,29 @@ export class AI {
     }
 
     // Supply first, then production buildings, then the mine.
-    const building = (type: string) => serfs.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
+    const building = (type: string) => builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
-    if (supply.max < 200 && supply.max - supply.used <= 2 + count(f.barracks) * 2 && !building(f.supply)) wants.push(f.supply);
+    // Production: the casernes, or for the Dieux the Porte and its gods.
+    const producers = f.gods ? 1 + gods.length : count(f.barracks);
+    if (supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply)) wants.push(f.supply);
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
     // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
     const bases = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length;
     const firstExtractor = count(f.extractor) === 0;
-    if (count(f.barracks) >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
+    if (producers >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
     // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
     // Isdaris, whose research and advanced units starve without it.
     const moreEnergy = !firstExtractor && count(f.extractor) < bases && !building(f.extractor) && !!this.spot(f.extractor, home);
-    if (moreEnergy && f === FACTIONS.isdaris) wants.push(f.extractor);
+    if (moreEnergy && (f === FACTIONS.isdaris || f.gods)) wants.push(f.extractor);
     let casernesWanted = this.plan.casernes.filter(([at]) => serfs.length >= at).reduce((m, [, n]) => Math.max(m, n), 0);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
     if (minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
-    if (count(f.barracks) < casernesWanted) wants.push(f.barracks);
+    if (!f.gods && count(f.barracks) < casernesWanted) wants.push(f.barracks);
     // Mid-game: a Forge, detection against an enemy that has invisible units, a defence or two.
     const minute = w.tick / ticks(60);
-    if (f.forge && count(f.forge) === 0 && count(f.barracks) >= 2 && count(f.extractor) > 0) wants.push(f.forge);
+    if (f.forge && count(f.forge) === 0 && producers >= 2 && count(f.extractor) > 0 && !w.lacks(this.player, f.forge)) wants.push(f.forge);
     const enemyCloaks = w.players.some((o) => w.hostile(o.id, this.player) && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
     // One tower late anyway: level 3 upgrades need it.
     // Flying enemies: a few more of the defence that shoots them down (Tour alchimistique, Orbe plasma).
@@ -200,11 +207,12 @@ export class AI {
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
-    const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
+    const outpost = f.outpost ?? f.hq;
+    const councils = buildings.filter((b) => b.type === f.hq || b.type === outpost).length + builders.filter((s) => s.order?.kind === 'build' && s.order.type === outpost).length;
     const firstAt = this.hard ? LEVELS.hard.expandMinute : 7;
     const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
-    const expand = councils < MAX_BASES && serfs.length >= this.plan.serfs && due && !!this.spot(f.hq, home);
-    if (expand) wants.push(f.hq);
+    const expand = councils < MAX_BASES && serfs.length >= this.plan.serfs && due && !!this.spot(outpost, home);
+    if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
     if (moreEnergy && f !== FACTIONS.isdaris && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
@@ -213,12 +221,12 @@ export class AI {
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (minerals < def.cost.minerals) {
-        if (type === f.hq) continue;
+        if (type === outpost) continue;
         break; // save up for the most urgent one
       }
       if (energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
-      const builder = this.builder(serfs, spot);
+      const builder = this.builder(builders, spot);
       if (!spot || !builder) continue;
       out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1] });
       this.tried.set(`${spot[0]},${spot[1]}`, (this.tried.get(`${spot[0]},${spot[1]}`) ?? 0) + 1);
@@ -230,8 +238,9 @@ export class AI {
     const free = supply.max - supply.used;
     const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
     const councilHome = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
-    if (serfs.length < serfTarget && councilHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply)) {
-      out.push({ player: this.player, kind: 'train', ids: [councilHome.id], type: f.worker });
+    const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
+    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply)) {
+      out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       minerals -= 100;
     }
     // Research in priority order on idle buildings; production buildings only with minerals to spare.
@@ -298,7 +307,7 @@ export class AI {
       energy -= def.cost.energy;
     }
     const rally = this.rallyPoint(home);
-    for (const c of buildings.filter((b) => b.type === f.barracks && b.buildLeft === 0)) {
+    for (const c of buildings.filter((b) => !f.gods && b.type === f.barracks && b.buildLeft === 0)) {
       if (!c.rally) out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
@@ -308,6 +317,32 @@ export class AI {
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
       this.trained++;
+    }
+
+    // Dieux: the Porte summons the next god when its time has come; each god summons its troops, when affordable.
+    if (f.gods && !saving) {
+      const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
+      const def = next && (DEFS[next[0]] as UnitDef);
+      if (next && def && !w.lacks(this.player, next[0]) && home.queue.length === 0) {
+        if (minerals >= def.cost.minerals && energy >= def.cost.energy && free - out.filter((o) => o.kind === 'train').length >= def.supply) {
+          out.push({ player: this.player, kind: 'train', ids: [home.id], type: next[0] });
+          minerals -= def.cost.minerals;
+          energy -= def.cost.energy;
+        }
+        // Saving up for it, once the first god is out.
+        else if (gods.length) minerals -= def.cost.minerals;
+      }
+      for (const g of gods) {
+        if (g.queue.length > 1) continue;
+        const type = (g.def as UnitDef).trains!.find((t) => !w.lacks(this.player, t));
+        const def = type && (DEFS[type] as UnitDef);
+        if (!def || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
+        if (minerals - keep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : reserve) < def.cost.energy) continue;
+        out.push({ player: this.player, kind: 'train', ids: [g.id], type: type! });
+        minerals -= def.cost.minerals;
+        energy -= def.cost.energy;
+        this.trained++;
+      }
     }
 
     // Z: socles waiting at home get a weapon kit, in a weighted rotation (only kits that hit flyers against them).
@@ -376,7 +411,7 @@ export class AI {
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length && !this.easy) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
-    if (!this.easy) out.push(...this.tactics(army));
+    if (!this.easy) out.push(...this.tactics([...army, ...gods]));
     const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
     const ability = caster && (caster.def as BuildingDef).ability!;
     if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy!) {
@@ -571,6 +606,9 @@ export class AI {
             const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
             cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
           }
+        } else if (name === 'courroux') {
+          const d = this.engaged(u);
+          if (d !== undefined && d < 3 * FP) cmd = self(u, name);
         } else if (name === 'decollage') {
           // Pégase: up against flyers only, down again once none is left.
           const air = near.some((f) => flies(f));
@@ -717,7 +755,7 @@ export class AI {
       }
       return best ? [best.tx, best.ty] : null;
     }
-    if (type === this.faction.hq) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx, ty)) ?? null;
+    if (type === this.faction.hq || type === this.faction.outpost) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx, ty)) ?? null;
     const cx = Math.floor((near ?? home).x / FP);
     const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.

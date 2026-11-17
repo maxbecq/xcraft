@@ -14,7 +14,7 @@ it.skipIf(!process.env.BIG)('big', () => {
   // Units each faction made, by type, over all games.
   const made: Record<string, Set<string>> = {};
   // Upgrade lines each faction had researched at the end, summed over the games.
-  const researched: Record<string, Record<string, number>> = { humains: {}, isdaris: {}, z: {} };
+  const researched: Record<string, Record<string, number>> = { humains: {}, isdaris: {}, z: {}, dieux: {} };
   // Abilities cast, by name, over all games.
   const casts: Record<string, number> = {};
   // Wins by start position, per pairing: p0 starts top left (player 1 in the map file), p1 opposite.

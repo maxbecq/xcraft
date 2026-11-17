@@ -78,7 +78,7 @@ const stored = (k: string) => {
     return null;
   }
 };
-const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' ? v : 'humains');
+const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' || v === 'dieux' ? v : 'humains');
 /** The map: a replay's, else from the URL, else the last one picked. */
 const MAP = mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
 /** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
@@ -111,6 +111,7 @@ const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
 if (ATTRACT) stageAttract(world);
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
 document.body.classList.toggle('z', factions[PLAYER] === 'z');
+document.body.classList.toggle('dieux', factions[PLAYER] === 'dieux');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
@@ -544,7 +545,7 @@ function readSetup(): Setup {
 function showHome(): void {
   const menu = document.querySelector('.menu') ?? document.body.appendChild(document.createElement('div'));
   menu.className = 'menu';
-  menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z</p>
+  menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z · Dieux</p>
     <button data-m="new">Nouvelle partie</button>
     <button data-m="join">Rejoindre une partie</button>
     <button data-m="options">Options</button>

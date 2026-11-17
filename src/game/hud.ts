@@ -481,7 +481,8 @@ export class Hud {
   // ---------------------------------------------------------------- command card
 
   private workers(): Entity[] {
-    return this.input.own().filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).worker);
+    // Those that place buildings: workers, or Gaïa for the Dieux (their Esprits only harvest).
+    return this.input.own().filter((e) => e.def.kind === 'unit' && ((e.def as UnitDef).builder ?? (e.def as UnitDef).worker));
   }
 
   /** The active kind in a mixed selection (Tab): its abilities and production are the ones on the card. */
@@ -537,6 +538,14 @@ export class Hud {
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
       }
+      // Dieux: the gods summon their troops (in the least busy of the selected ones that can).
+      for (const t of new Set(units.flatMap((u) => (u.def as UnitDef).trains ?? []))) {
+        const d = DEFS[t] as UnitDef;
+        const order = units.filter((u) => (u.def as UnitDef).trains?.includes(t)).sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
+        list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+      }
+      const summoning = units.find((u) => u.queue.length);
+      if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
       // Z socles: a weapon kit to fit on those that take it and do not carry it yet.
       for (const [k, kit] of Object.entries(WEAPONS)) {
         const takers = units.filter((u) => (u.def as UnitDef).weapons?.includes(k) && u.kit !== k);

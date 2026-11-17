@@ -64,6 +64,11 @@ export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?
       const [tx, ty] = at(q, wx + (i % 2), wy + Math.floor(i / 2), 1);
       world.spawn(f.worker, owner, tx * FP + FP / 2, ty * FP + FP / 2);
     }
+    // Dieux: Gaïa is there from the start, by the workers.
+    for (const [i, type] of (f.start ?? []).entries()) {
+      const [tx, ty] = at(q, wx + 3 + i * 3, wy + 1, 1);
+      world.spawn(type, owner, tx * FP + FP / 2, ty * FP + FP / 2);
+    }
     world.players[owner].minerals = START.minerals;
     world.players[owner].energy = START.energy;
   }

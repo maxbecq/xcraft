@@ -39,6 +39,8 @@ Réglages d'IA provisoires du 17 novembre (l'IA Isdaris passe enfin au Psycho-as
 - `ai.research.isdaris` : `feucirculaire` ajouté après `totem`.
 - Mesure (`big.test.ts`, 98 parties par paire), à `minute` 12 : Humains – Isdaris 52 – 46 → 49 – 46 (3 nuls), Z – Isdaris 52 – 46 → 60 – 38 ; l'IA fait 9 Porte-disques et 3 Balistes (aucun avant). À `minute` 8, elle en fait bien plus (53 Porte-disques, 51 Balistes, 19 Chimères) mais les Isdaris perdent davantage (65 – 33, 71 – 27) : les unités du Psycho-assembleur coûtent cher pour leur force. À l'équilibreur de juger leur prix ; la minute pourra redescendre ensuite.
 
+Le camp des **Dieux** (V1, rang 1, d'après la notice 1.2-1 et `docs/camp-dieux.md`) est entièrement provisoire, calqué par l'auteur du code sur les trois autres camps : `esprit`, `gaia`, `thor`, `apollon`, `seth`, `nain`, `minotaure`, `sphinx`, `asgaard`, `branche`, `protecteur`, `antre`, `puitsdivin`, `temple`, `dmelee1` à `dmelee3`, `dranged1` à `dranged3`, `darmor1` à `darmor3`, `celerite`, les capacités `teleportgaia`, `flechegaia`, `courroux`, `pluiedefeu`, `tempete`, `rules.upgrades.courroux`, `rules.upgrades.celerite`, `rules.upgrades.mourning`, `ai.army.dieux`, `ai.research.dieux` et `ai.gods`. Ajustés pour que l'IA puisse jouer : Thor ne coûte pas d'énergie (sinon rien ne démarre avant le Puits) et la Porte d'Asgaard loge 14 (Gaïa compte pour 4 au départ). À surveiller : chaque dieu n'invoque qu'une unité à la fois, l'IA accumule du minerai.
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).
@@ -96,6 +98,9 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `stimulantHp` | PV coûtés par le Stimulant |
 | `equipSeconds` | secondes pendant lesquelles un socle Z reste immobile quand on lui monte un kit |
 | `creepRepair` | PV rendus chaque seconde aux unités Z au sol sur leur creep |
+| `upgrades.courroux` | Courroux du marteau (Thor) : multiplicateur de son prochain coup au corps à corps |
+| `upgrades.celerite` | Célérité naine : un Nain bondit vers l'ennemi à moins de `range` cases, vitesse ×`speed` pendant `seconds`, une fois toutes les `cooldown` secondes |
+| `upgrades.mourning` | secondes avant de pouvoir réinvoquer un dieu tombé (Gaïa revient seule après son `respawn`) |
 
 ## IA (`ai`)
 
@@ -117,5 +122,6 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `tech.isdaris` | Psycho-assembleur à partir de `minute` avec `barracks` portails |
 | `army` | poids de chaque unité dans l'armée de l'IA |
 | `kits` | poids de chaque kit d'arme que l'IA Z monte sur ses socles |
+| `gods` | Dieux : `[dieu, minute]`, la Porte d'Asgaard invoque chaque dieu à partir de sa minute, dans l'ordre |
 | `research` | recherches de chaque camp, par ordre de priorité ; l'IA lance la première possible sur un bâtiment libre |
 | `extra` | bâtiments tardifs de chaque camp : `[bâtiment, minute]`, un de chaque à partir de cette minute |

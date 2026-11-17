@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine, WEAPONS } from '../data';
 import type { GameMap } from '../map';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -111,6 +111,8 @@ export interface Entity {
   reflect: number;
   /** Z socle: weapon kit fitted (key of WEAPONS), or '' for the light machine gun it came with. */
   kit: string;
+  /** Thor's Courroux du marteau: ticks left in which his next blow hits several times as hard. */
+  charged: number;
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -202,7 +204,7 @@ export interface GameEvent {
 
 const REACH = FP / 4;
 /** The supply building of each faction, for the "not enough supply" message. */
-const SUPPLY_NAMES: Record<Faction, string> = { humains: 'greniers', isdaris: 'réserves psy', z: 'pods' };
+const SUPPLY_NAMES: Record<Faction, string> = { humains: 'greniers', isdaris: 'réserves psy', z: 'pods', dieux: "branches d'Yggdrasill" };
 
 /** How close (tiles) an Isdaris worker must be to beam a building down. */
 const WARP_RANGE = 6;
@@ -233,6 +235,12 @@ export class World {
   walls: { owner: number; tiles: number[]; left: number }[] = [];
   /** Silence des ions: zones where no ability can be used, until a tick. */
   silences: { x: number; y: number; r: number; until: number }[] = [];
+  /** Tempêtes de sable (Seth): zones where the owner's enemies cannot shoot, until a tick. */
+  storms: { owner: number; x: number; y: number; r: number; until: number }[] = [];
+  /** Units coming back by themselves at their side's headquarters (Gaïa), at a tick. */
+  private respawns: { owner: number; type: string; at: number }[] = [];
+  /** Gods fallen lately, by "player:type": tick from which they can be summoned again. */
+  private mourning = new Map<string, number>();
   /** Units hidden this tick by a Déflecteur's aura. */
   private shrouded = new Set<number>();
   /** Winning player once the game is over. */
@@ -261,7 +269,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -319,9 +327,12 @@ export class World {
       if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
       if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
       if (e.skin > 0) e.skin--;
+      if (e.charged > 0) e.charged--;
       if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
       this.regenerate(e);
     }
+    this.revive();
+    this.storms = this.storms.filter((z) => z.until > this.tick);
     this.index();
     for (const e of [...this.entities.values()]) {
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
@@ -391,8 +402,23 @@ export class World {
         this.players[e.lastHitBy].energy += idiv(e.def.cost.energy * share, 100);
       }
       if (e.order?.kind === 'gather') this.release(e, e.order.target);
+      if (e.def.kind === 'unit' && e.def.respawn) this.respawns.push({ owner: e.owner, type: e.type, at: this.tick + ticks(e.def.respawn) });
+      else if (e.def.kind === 'unit' && e.def.unique) this.mourning.set(`${e.owner}:${e.type}`, this.tick + ticks(BALANCE.rules.upgrades.mourning));
       this.remove(e);
     }
+  }
+
+  /** Gaïa comes back by her side's headquarters once her time is up (later, if it has none standing). */
+  private revive(): void {
+    for (const r of this.respawns) {
+      if (this.tick < r.at) continue;
+      const hq = [...this.entities.values()].find((b) => b.owner === r.owner && b.type === FACTIONS[this.players[r.owner].faction].hq && b.buildLeft === 0);
+      if (!hq) continue;
+      this.spawnBeside(r.type, hq);
+      this.say(r.owner, `${DEFS[r.type].name} est de retour.`, 'done');
+      r.at = -1;
+    }
+    this.respawns = this.respawns.filter((r) => r.at >= 0);
   }
 
   /** Two players (owners) at war: neither neutral, and on different teams. */
@@ -426,8 +452,10 @@ export class World {
     let max = 0;
     for (const e of this.entities.values()) {
       if (e.owner !== player) continue;
-      if (e.def.kind === 'unit') used += e.def.supply;
-      else if (e.def.kind === 'building') {
+      if (e.def.kind === 'unit') {
+        used += e.def.supply;
+        for (const t of e.queue) used += (DEFS[t] as UnitDef).supply;
+      } else if (e.def.kind === 'building') {
         if (e.def.supply < 0) used -= e.def.supply;
         else if (e.buildLeft === 0) max += e.def.supply;
         for (const t of e.queue) if (DEFS[t].kind === 'unit') used += (DEFS[t] as UnitDef).supply;
@@ -512,7 +540,7 @@ export class World {
         return;
       }
       case 'build': {
-        const worker = units.find((e) => (e.def as UnitDef).worker);
+        const worker = units.find((e) => (e.def as UnitDef).builder ?? (e.def as UnitDef).worker);
         const bdef = DEFS[c.type];
         if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
         const lack = this.lacks(c.player, c.type);
@@ -522,7 +550,8 @@ export class World {
         return;
       }
       case 'train':
-        for (const b of buildings) {
+        // Gods summon too (Dieux).
+        for (const b of [...buildings, ...units.filter((u) => (u.def as UnitDef).trains)]) {
           const def = b.def as BuildingDef;
           if (def.researches?.includes(c.type)) {
             if (!this.researchable(c.player, c.type)) return;
@@ -561,8 +590,8 @@ export class World {
         return;
       case 'cancel':
         for (const b of mine) {
-          if (b.def.kind !== 'building') continue;
-          if (b.buildLeft > 0) {
+          if (b.def.kind !== 'building' && !(b.def as UnitDef).trains) continue;
+          if (b.def.kind === 'building' && b.buildLeft > 0) {
             this.refund(c.player, b.def);
             this.remove(b);
           } else if (b.queue.length) {
@@ -657,7 +686,13 @@ export class World {
   }
 
   lacks(player: number, type: string): string {
-    if ((DEFS[type] as BuildingDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
+    if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
+    const mourn = this.mourning.get(`${player}:${type}`) ?? 0;
+    if (mourn > this.tick) return `En deuil : réinvocation dans ${Math.ceil((mourn - this.tick) / ticks(1))} s.`;
+    const any = (DEFS[type] as BuildingDef).requiresAny;
+    if (any && [...this.entities.values()].filter((b) => b.owner === player && any.of.includes(b.type) && b.buildLeft === 0).length < any.count) {
+      return `Requiert : ${any.count} parmi ${any.of.map((t) => DEFS[t].name).join(', ')}`;
+    }
     const req = (DEFS[type] as UpgradeDef | UnitDef | BuildingDef).requires ?? {};
     const missing = Object.entries(req)
       .filter(([t, n]) =>
@@ -749,6 +784,8 @@ export class World {
       }
     } else if (name === 'camouflage') {
       e.camo = ticks(ab.duration);
+    } else if (name === 'courroux') {
+      e.charged = ticks(ab.duration);
     } else if (name === 'peauderoc') {
       // The most wounded ally in range (itself included) not already protected.
       let best: Entity | undefined;
@@ -806,6 +843,22 @@ export class World {
       this.hit(e, t, { damage: ab.damage!, range: 7, cooldown: 0 });
     } else if (name === 'silence') {
       this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+    } else if (name === 'tempete') {
+      this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+    } else if (name === 'flechegaia') {
+      const t = [...this.entities.values()]
+        .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
+        .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+      if (!t) return false;
+      this.hit(e, t, { damage: ab.damage!, range: ab.range!, cooldown: 0 });
+    } else if (name === 'pluiedefeu') {
+      const foes = near((t) => this.hostile(t.owner, e.owner));
+      if (!foes.length) return false;
+      for (const t of foes) this.hurt(t, ab.damage!);
+    } else if (name === 'teleportgaia') {
+      const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+      if (!b) return false;
+      this.place(e, b.x, b.y + ((b.def as BuildingDef).size * FP) / 2 + e.radius + FP / 2);
     } else if (name === 'teleport') {
       this.place(e, x, y);
     } else if (name === 'teleportgroupe') {
@@ -1124,7 +1177,7 @@ export class World {
   private armorBonus(t: Entity): number {
     const d = t.def as UnitDef;
     const faction = this.players[t.owner].faction;
-    let bonus = faction === 'z' ? this.level(t.owner, 'zblindage') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+    let bonus = faction === 'z' ? this.level(t.owner, 'zblindage') : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
     if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
     if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
     if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
@@ -1225,6 +1278,18 @@ export class World {
     // Caught under a new building (with or without orders): walk out first.
     if (!flies(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
+    // A god summons only while it stands still.
+    if (e.queue.length && !e.goal) this.produce(e);
+    // Célérité naine: a Nain leaps at the enemy it goes for.
+    if (e.type === 'nain' && e.order?.kind === 'attack' && e.abilityCd === 0 && e.boost === 0 && this.level(e.owner, 'celerite')) {
+      const C = BALANCE.rules.upgrades.celerite;
+      const t = this.entities.get(e.order.target);
+      if (t && this.gap(e, t) > FP && this.gap(e, t) <= toFp(C.range)) {
+        e.boost = ticks(C.seconds);
+        e.speed = speedPerTick((e.def as UnitDef).speed * C.speed);
+        e.abilityCd = ticks(C.cooldown);
+      }
+    }
     if (e.burrowed) {
       // Under ground it waits, and bursts out when an enemy walker comes near.
       e.order = null;
@@ -1501,6 +1566,8 @@ export class World {
     if (e.cooldown > 0) return;
     // Stimulant: attacks 50 % faster.
     if (e.phased > 0) return;
+    // Inside an enemy Tempête de sable, ranged weapons are useless.
+    if (a.range >= 1 && this.storms.some((z) => this.hostile(z.owner, e.owner) && dist(z.x, z.y, e.x, e.y) <= z.r)) return;
     e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
     if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = idiv(e.cooldown * (100 - BALANCE.rules.upgrades.boost.rate), 100);
     this.hit(e, t, a);
@@ -1522,7 +1589,13 @@ export class World {
     if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
     // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
     if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((a.damage + bonus) * U.conseilAura.percent, 100));
-    this.hurt(t, a.damage + bonus + upgrade);
+    // Courroux du marteau: the charged blow.
+    let damage = a.damage + bonus + upgrade;
+    if (e.charged > 0 && a.range < 1) {
+      damage *= U.courroux;
+      e.charged = 0;
+    }
+    this.hurt(t, damage);
     t.lastAttacker = e.id;
     t.lastHitBy = e.owner;
     // Sphère de renvoi: part of the blow goes back to the attacker.
@@ -1685,6 +1758,11 @@ export class World {
       b.timer = 0;
       this.players[b.owner].energy++;
     }
+    this.produce(b);
+  }
+
+  /** Training, research and morphing through the queue of a building, or of a god (Dieux). */
+  private produce(b: Entity): void {
     if (b.queue.length && --b.trainLeft <= 0) {
       const type = b.queue.shift()!;
       const up = DEFS[type];
@@ -1766,6 +1844,14 @@ export class World {
 
   /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
   private spawnBeside(type: string, b: Entity): Entity {
+    if (b.def.kind === 'unit') {
+      // At a god's feet, on its rally side (in front by default).
+      const toward = b.rally ?? { x: b.x, y: b.y - FP };
+      const d = dist(b.x, b.y, toward.x, toward.y) || 1;
+      const reach = b.radius + FP;
+      const [tx, ty] = this.grid.nearestOpen(tileOf(b.x + idiv((toward.x - b.x) * reach, d)), tileOf(b.y + idiv((toward.y - b.y) * reach, d)), -1);
+      return this.spawn(type, b.owner, tx * FP + FP / 2, ty * FP + FP / 2);
+    }
     const size = (b.def as BuildingDef).size;
     const toward = b.rally ?? { x: b.x + FP, y: b.y + FP };
     let best = this.grid.nearestOpen(b.tx + size, b.ty + size, this.grid.level(b.tx, b.ty)); // walled in: closest open tile
