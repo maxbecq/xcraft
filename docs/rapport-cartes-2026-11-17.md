@@ -124,3 +124,21 @@ La rampe de 4 est la plus proche d'une bonne retouche : l'écart entre départs 
 Six parties Z – Isdaris ont été suivies minute par minute. L'Isdaris garde une seule base jusqu'à 21 à 24 min et une armée de 8 à 9 unités, alors qu'il accumule 700 à 1300 d'énergie et 500 à 800 de minerai. Il perd ses armées vers 12 min.
 
 Ce n'est pas le terrain qui le bride : il ne dépense pas ce qu'il récolte. C'est un problème de production de l'IA isdaris, plus visible sur cette grande carte, où les parties durent longtemps. Aucune retouche de carte n'est donc proposée. À examiner côté IA : pourquoi l'IA isdaris n'entraîne pas d'unités alors qu'elle a les ressources.
+
+## Carrefour redessiné (17 novembre au soir)
+
+Le commit `2bdfb49` a redessiné Carrefour : chaque coin est maintenant symétrique aussi par rapport à sa diagonale, avec deux rampes à la base principale, deux sorties et deux puits à la naturelle. Le but était l'équité entre coins voisins dans les parties à 4. Les chiffres de Carrefour plus haut sont ceux de l'ancienne carte.
+
+Mesures à 2 dans deux coins opposés, comme plus haut, 98 parties par paire. `2bdfb49` mesure la nouvelle carte seule. `c3a60a9` ajoute le maintien de position, la patrouille et l'arrivée répartie des groupes ; c'est l'état actuel de `main`.
+
+| Version | Humains – Isdaris | Z – Humains | Z – Isdaris | p0 / p1 | Durée moyenne |
+|---|---|---|---|---|---|
+| Ancienne carte (`1a3ce5d`) | 58 – 40 | 54 – 44 | **62 – 30** (6 nuls) | 133 / 155 (+22 p1, 1,3 σ) | 15 à 21 min |
+| Nouvelle carte (`2bdfb49`) | 55 – 37 (6 nuls) | **77 – 19** (2 nuls) | **61 – 37** | **116 / 170 (+54 p1, 3,2 σ)** | 16 à 21 min |
+| Nouvelle carte (`c3a60a9`) | 46 – 46 (6 nuls) | **80 – 16** (2 nuls) | **67 – 31** | **106 / 180 (+74 p1, 4,4 σ)** | 18 à 21 min |
+
+- Z – Humains sort nettement de la cible : 54 – 44 avant, 77 – 19 puis 80 – 16.
+- Le départ en bas à droite (p1) gagne beaucoup plus souvent : +54 avec la nouvelle carte, +74 avec les nouveaux ordres. C'est très significatif, alors que l'ancienne carte n'avait pas d'écart significatif. Dans chaque paire, p1 l'emporte : Humains – Isdaris 33 / 59, Z – Humains 41 / 55, Z – Isdaris 32 / 66 (mesure `c3a60a9`).
+- Les coins sont symétriques par construction (vérifié par `src/maps.test.ts`). L'avantage de p1 vient donc du comportement des unités, comme sur L'Anneau, mais il est ici plus fort. La cause n'a pas été cherchée.
+- En 1 contre 1, la nouvelle carte de Carrefour est moins équilibrée que l'ancienne. À voir avec le programmeur : garder le dessin pour les parties à 4, ou chercher d'où vient l'avantage de p1.
+
