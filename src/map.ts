@@ -10,6 +10,8 @@ export interface GameMap {
   ramp: (Dir | null)[];
   /** Position along a ramp: 0 is the tile touching the higher ground. */
   rampStep: Uint8Array;
+  /** Chasms (city map): tiles open on the void, impassable on foot, flown over. */
+  chasm?: Uint8Array;
 }
 
 export const LEVEL_HEIGHT = 1.25;
@@ -32,7 +34,7 @@ const TURN: Record<Dir, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' };
  * The V1 map: one base in the top-left corner, copied by rotation for every player — by 180° for two
  * players (the original map), by quarter turns for four (bases in all four corners).
  */
-export function createMap(players = 2): GameMap {
+export function createMap(players = 2, chasms = false): GameMap {
   const width = 96;
   const height = 96;
   const map: GameMap = {
@@ -78,6 +80,21 @@ export function createMap(players = 2): GameMap {
   paint((x, y) => ragged(x, y, 20, 20, 17, 8, 1), 1); // natural expansion plateau
   paint((x, y) => ragged(x, y, 14, 14, 10, 5, 2), 2); // main base
   paint((x, y) => ragged(x, y, 47.5, 47.5, 6, 3, 3), 1); // centre hill
+  if (chasms) {
+    // City map (as on SC2 space platforms): holes onto the void between the bases, round the centre, leaving lanes.
+    map.chasm = new Uint8Array(width * height);
+    for (const [cx, cy, seed] of [[48, 27, 4], [27, 48, 5]]) {
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (!ragged(x, y, cx, cy, 6, 3, seed)) continue;
+          for (const q of turns) {
+            const [rx, ry] = rotateTile(width, x, y, q);
+            map.chasm[ry * width + rx] = 1;
+          }
+        }
+      }
+    }
+  }
 
   ramp(25, 13, 'W', 3, 1); // main -> natural
   ramp(19, 38, 'N', 3, 0); // natural -> low ground (south)

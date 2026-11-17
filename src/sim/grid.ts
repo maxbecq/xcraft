@@ -10,6 +10,8 @@ export class Grid {
   private readonly corners: Int8Array;
   /** Tiles drawn with a diagonal cliff cut: walkable, but not buildable. */
   private readonly cut: Uint8Array;
+  /** Chasms: never walkable nor buildable. */
+  private readonly chasm: Uint8Array;
 
   constructor(map: GameMap) {
     this.width = map.width;
@@ -17,6 +19,7 @@ export class Grid {
     this.blocked = new Uint8Array(map.width * map.height);
     this.corners = new Int8Array(map.width * map.height * 4);
     this.cut = new Uint8Array(map.width * map.height);
+    this.chasm = map.chasm ?? new Uint8Array(map.width * map.height);
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         this.corners.set(cornerLevels(map, x, y), (y * map.width + x) * 4);
@@ -30,7 +33,7 @@ export class Grid {
   }
 
   open(x: number, y: number): boolean {
-    return this.inside(x, y) && this.blocked[y * this.width + x] === 0;
+    return this.inside(x, y) && this.blocked[y * this.width + x] === 0 && this.chasm[y * this.width + x] === 0;
   }
 
   /** Level of a flat, buildable tile, or -1 for a ramp or a cut cliff corner. */
@@ -53,7 +56,7 @@ export class Grid {
    */
   canStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
     // Leaving a blocked tile is allowed, so units caught under a new building can walk out.
-    if (!this.inside(ax, ay) || !this.inside(bx, by) || (!throughBuildings && !this.open(bx, by))) return false;
+    if (!this.inside(ax, ay) || !this.inside(bx, by) || this.chasm[by * this.width + bx] || (!throughBuildings && !this.open(bx, by))) return false;
     const dx = bx - ax;
     const dy = by - ay;
     if (dx !== 0 && dy !== 0) {

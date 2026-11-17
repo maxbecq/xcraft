@@ -55,7 +55,7 @@ export class Decor {
 
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
-        if (keepClear.has(y * map.width + x) || cutCorner(map, x, y) >= 0) continue;
+        if (keepClear.has(y * map.width + x) || cutCorner(map, x, y) >= 0 || map.chasm?.[y * map.width + x]) continue;
         const level = tileAt(map, x, y)!.level;
         const higher = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? -1) > level);
         const lower = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? 99) < level);

@@ -34,6 +34,7 @@ const noise = (x: number, z: number, scale: number, seed: number) => fbm((x / sc
 
 /** Colour of a tile for the minimap. */
 export function tileColor(map: GameMap, x: number, y: number): Color {
+  if (map.chasm?.[y * map.width + x]) return new Color(0x050409);
   const t = tileAt(map, x, y)!;
   const c = B.levels[t.level].clone();
   if (t.ramp) c.lerp(B.levels[t.level + 1], 0.5);
@@ -86,8 +87,10 @@ export function buildTerrain(map: GameMap): Group {
     return [new Vector3(vx + (shift?.x ?? 0), h + bump + dune, vz + (shift?.y ?? 0)), c];
   };
 
+  const chasm = (x: number, y: number) => !!map.chasm?.[y * map.width + x];
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
+      if (chasm(x, y)) continue; // open onto the void
       const t = tileAt(map, x, y)!;
       const h = cornerHeights(map, x, y);
       const cut = cutCorner(map, x, y);
@@ -115,12 +118,15 @@ export function buildTerrain(map: GameMap): Group {
   // Straight cliff walls along tile edges, from each tile down to any lower neighbour (or off the map).
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
+      if (chasm(x, y)) continue;
       for (let e = 0; e < 4; e++) {
         const { dx, dy, c } = EDGES[e];
         const [ta, tb] = drawnEdge(map, x, y, e);
         let ba: number;
         let bb: number;
-        if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
+        // A chasm: the platform's edge drops a long way into the void.
+        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [-14, -14];
+        else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
         else [ba, bb] = [-2.5, -2.5]; // skirt around the map
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
         const p0 = new Vector2(x + CORNER_POS[c[0]][0], y + CORNER_POS[c[0]][1]);

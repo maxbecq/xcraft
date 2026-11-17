@@ -26,8 +26,8 @@ export function expansion(world: World, owner: number): [number, number] {
  * A new match on the V1 map, two to four players (each its faction's headquarters and workers in its own
  * corner); `teams[i]` puts player i in a team (default: everyone alone).
  */
-export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[]): World {
-  const world = new World(createMap(factions.length), factions.length);
+export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[], chasms = false): World {
+  const world = new World(createMap(factions.length, chasms), factions.length);
   const w = world.map.width;
   const corner = (owner: number, tx: number, ty: number, size: number): [number, number] => rotateFootprint(w, tx, ty, size, CORNERS[owner]);
 
