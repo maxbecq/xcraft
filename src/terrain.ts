@@ -109,7 +109,8 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
             : B.chasm.floor.clone().multiplyScalar(0.6 + n * 0.8);
           return [new Vector3(x + cx, floorY + (B.chasm.glossy ? 0 : (n - 0.5) * 0.5), y + cy), c];
         });
-        floor.quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
+        // Rock floors take the ground's texture; ice keeps its own smooth, glossy sheet.
+        (B.chasm.glossy ? floor : ground).quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
         continue;
       }
       const t = tileAt(map, x, y)!;
@@ -176,7 +177,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   cliffMesh.castShadow = true;
   const g = new Group();
   g.add(groundMesh, cliffMesh);
-  if (pit && map.chasm) {
+  if (pit && map.chasm && B.chasm.glossy) {
     const { glow, glossy } = B.chasm;
     const floorMat = new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
     const floorMesh = floor.mesh(floorMat);

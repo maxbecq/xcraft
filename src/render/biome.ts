@@ -56,8 +56,8 @@ export const BIOMES: Record<string, Biome> = {
     background: 0x0d0f12,
     exposure: 1.05,
     decorTint: new Color(1, 1, 1),
-    // A crevasse: sheer rock down into the dark.
-    chasm: { depth: 6, floor: new Color(0x2a1d14) },
+    // A shallow crevasse: a short drop of rock onto dark, stony sand.
+    chasm: { depth: 1.4, floor: new Color(0x5a4028) },
   },
   // The desert's shapes under a black sky: grey regolith, dark maria, a hard white sun.
   lune: {
