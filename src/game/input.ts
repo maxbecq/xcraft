@@ -50,6 +50,9 @@ function cursorOf(...layers: Layer[]): string {
 const ARROW: Layer = { color: '#e8b64a', shape: "<path fill='#2b2010' d='M16.6 16.6L17 29.2L20.3 25.9L23.1 31L25.7 29.7L22.9 24.6L27.5 24.2Z'/><path stroke-width='1' opacity='.6' d='M18.4 20.2L18.6 25.6'/>" };
 // The arrow everywhere outside the map's own cursors (menus, console); buttons keep their hand.
 document.documentElement.style.setProperty('--arrow', cursorOf(ARROW));
+/** Over the minimap: a gold viewfinder, the corners of the camera's view framing a dot (where it will look). */
+const VIEWFINDER: Layer = { color: '#e8b64a', shape: "<path d='M6 13V9H10M22 9H26V13M26 19V23H22M10 23H6V19'/><circle cx='16' cy='16' r='1.6' fill='#e8b64a'/>" };
+document.documentElement.style.setProperty('--minimap', cursorOf(VIEWFINDER));
 
 /**
  * Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner,

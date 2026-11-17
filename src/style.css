@@ -45,7 +45,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
   box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .map-slot { display: grid; place-items: center; overflow: hidden; }
-.minimap { cursor: crosshair; }
+.minimap { cursor: var(--minimap, crosshair); }
 
 .hud-panel { padding: 10px 12px; overflow: hidden; }
 .hud-panel .name { font: 600 24px/1 var(--title); letter-spacing: 0.04em; color: var(--amber); margin: 2px 0 4px; text-transform: uppercase; }
@@ -728,3 +728,4 @@ body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
 /* The menu's three bars and the army's crossed swords, drawn (≡ and ⚔ are hairlines in the factions' lettering). */
 .tool .burger { width: 0.85em; height: 0.7em; vertical-align: -0.05em; }
 .tool .swords { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }
+.tool .keep { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }

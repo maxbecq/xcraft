@@ -319,7 +319,7 @@ const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
-tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button>';
+tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
@@ -338,7 +338,7 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
-<kbd>F2</kbd> ou ⚔ : toute l'armée · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
+<kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
@@ -356,6 +356,12 @@ tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);
   if (t === 'army') input.selectArmy();
+  if (t === 'home') {
+    // The main base: our headquarters, else our oldest building still standing.
+    const own = [...world.entities.values()].filter((e) => e.owner === PLAYER && e.def.kind === 'building');
+    const base = own.find((e) => e.type === FACTIONS[factions[PLAYER]].hq) ?? own[0];
+    if (base) rig.lookAt(base.x / FP, base.y / FP);
+  }
 });
 // The pause menu and the end-of-game banner share these actions.
 document.addEventListener('click', (e) => {
