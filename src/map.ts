@@ -142,8 +142,10 @@ export function reliefAt(map: GameMap, vx: number, vz: number): number {
 
 function computeRelief(map: GameMap, vx: number, vz: number): number {
   for (const [dx, dy] of [[0, 0], [-1, 0], [0, -1], [-1, -1], [1, 0], [0, 1], [1, 1], [-1, 1], [1, -1]]) {
-    const t = tileAt(map, Math.min(map.width - 1, Math.max(0, vx + dx)), Math.min(map.height - 1, Math.max(0, vz + dy)));
-    if (!t || t.ramp || t.level !== tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))?.level) return 0;
+    const [tx, ty] = [Math.min(map.width - 1, Math.max(0, vx + dx)), Math.min(map.height - 1, Math.max(0, vz + dy))];
+    const t = tileAt(map, tx, ty);
+    // Chasms count as a cliff too: flat ground along their rim, so it meets the top of the wall.
+    if (!t || t.ramp || map.chasm?.[ty * map.width + tx] || t.level !== tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))?.level) return 0;
   }
   // Plateaus are where bases go (main base on level 2, expansions on level 1): only a gentle swell there.
   const level = tileAt(map, Math.min(map.width - 1, vx), Math.min(map.height - 1, vz))!.level;

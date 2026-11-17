@@ -67,6 +67,19 @@ export class Decor {
         const higher = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? -1) > level);
         const lower = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => (tileAt(map, x + dx, y + dy)?.level ?? 99) < level);
         const border = x < 3 || y < 3 || x >= map.width - 3 || y >= map.height - 3;
+        if (higher) {
+          // Scree: stones fallen at the foot of the wall, against it.
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            if ((tileAt(map, x + dx, y + dy)?.level ?? -1) <= level) continue;
+            for (let k = 0; k < 2; k++) {
+              const r = rand(x * 3 + k, y * 5 + dx + 2 * dy, 21);
+              if (r > 0.75) continue;
+              const along = (rand(x + k, y, 23 + dx) - 0.5) * 0.9;
+              const off = 0.18 + rand(x, y + k, 25 + dy) * 0.22;
+              this.place(r < 0.3 ? 'rocks_a' : 'pebbles', x, y, x + 0.5 + dx * (0.5 - off) + dy * along, y + 0.5 + dy * (0.5 - off) + dx * along);
+            }
+          }
+        }
         const table = higher ? CLIFF_FOOT : lower ? CLIFF_TOP : border ? BORDER : OPEN;
         let r = rand(x, y, 1);
         for (const [type, p] of table) {

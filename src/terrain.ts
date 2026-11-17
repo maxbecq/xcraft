@@ -69,6 +69,7 @@ function drawnEdge(map: GameMap, x: number, y: number, edge: number): [number, n
 /** `roads`: streets to paint on the ground, a texture over the whole map (see cityRoads). */
 export function buildTerrain(map: GameMap, roads?: Texture): Group {
   leanMap = map;
+  rimCache.clear();
   const ground = new Builder();
   const cliffs = new Builder();
   const up = new Vector3(0, 1, 0);
@@ -88,8 +89,9 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
     const dune = reliefAt(map, vx, vz);
     if (dune) c.multiplyScalar(1 + (dune / (B.dunes ?? 1)) * 0.25);
     // On a cliff top, the corner is pushed out or in a little, so the plateau's edge is not a ruled line.
-    const shift = edge && level >= Math.max(...ls) ? rimShift(vx, vz) : null;
-    return [new Vector3(vx + (shift?.x ?? 0), h + bump + dune, vz + (shift?.y ?? 0)), c];
+    const top = edge && level >= Math.max(...ls);
+    const shift = top ? rimShift(vx, vz) : null;
+    return [new Vector3(vx + (shift?.x ?? 0), h + bump + dune - (top ? rimDrop(vx, vz) : 0), vz + (shift?.y ?? 0)), c];
   };
 
   const chasm = (x: number, y: number) => !!map.chasm?.[y * map.width + x];
@@ -200,8 +202,66 @@ function drawnLevel(map: GameMap, x: number, y: number): number {
  */
 function rimShift(vx: number, vz: number): Vector2 {
   if (B.style === 'city' || !Number.isInteger(vx) || !Number.isInteger(vz) || vx <= 0 || vz <= 0 || vx >= leanMap.width || vz >= leanMap.height) return new Vector2();
-  const amount = (noise(vx * 1.9, vz * 1.9, 1, 47) - 0.3) * 0.55;
-  return downhill(vx, vz, new Vector2()).multiplyScalar(amount);
+  const key = vz * (leanMap.width + 1) + vx;
+  let s = rimCache.get(key);
+  if (!s) rimCache.set(key, (s = smoothRim(vx, vz).add(downhill(vx, vz, new Vector2()).multiplyScalar((noise(vx * 1.9, vz * 1.9, 1, 47) - 0.5) * 0.3))));
+  return s;
+}
+const rimCache = new Map<number, Vector2>();
+
+/**
+ * How far a cliff-top corner sinks, in places: the plateau's ground slopes gently down into the wall there, so
+ * the lip looks worn round instead of cut. Same rules as rimShift (none in the city, at the map's edge, by ramps).
+ */
+function rimDrop(vx: number, vz: number): number {
+  const m = leanMap;
+  if (B.style === 'city' || vx <= 0 || vz <= 0 || vx >= m.width || vz >= m.height) return 0;
+  for (let y = vz - 1; y <= vz; y++) for (let x = vx - 1; x <= vx; x++) if (m.ramp[y * m.width + x]) return 0;
+  const n = noise(vx, vz, 4, 71);
+  const t = Math.min(1, Math.max(0, (n - 0.42) / 0.25));
+  return t * t * (3 - 2 * t) * 0.24;
+}
+
+/** Blur radius of the plateau outline, in tiles: staircases become slopes, square corners round off. */
+const RIM_SIGMA = 1;
+/**
+ * Where a cliff-top corner moves so the plateau's outline follows a blurred copy of the tile grid (its 0.5 contour,
+ * one Newton step), instead of the tiles' square steps. Zero next to ramps and cut tiles, which keep their shape.
+ */
+function smoothRim(vx: number, vz: number): Vector2 {
+  const m = leanMap;
+  const cx = (x: number) => Math.min(m.width - 1, Math.max(0, x));
+  const cy = (y: number) => Math.min(m.height - 1, Math.max(0, y));
+  for (let y = vz - 1; y <= vz; y++) for (let x = vx - 1; x <= vx; x++) if (m.ramp[cy(y) * m.width + cx(x)]) return new Vector2();
+  const top = Math.max(...[[vx - 1, vz - 1], [vx, vz - 1], [vx, vz], [vx - 1, vz]].map(([x, y]) => drawnLevel(m, cx(x), cy(y))));
+  let sw = 0;
+  let sh = 0;
+  const pts: [number, number, number, number][] = [];
+  for (let y = vz - 3; y < vz + 3; y++) {
+    for (let x = vx - 3; x < vx + 3; x++) {
+      const dx = x + 0.5 - vx;
+      const dz = y + 0.5 - vz;
+      const w = Math.exp(-(dx * dx + dz * dz) / (2 * RIM_SIGMA * RIM_SIGMA));
+      // A tile cut by a diagonal cliff is half plateau.
+      const h = drawnLevel(m, cx(x), cy(y)) < top ? 0 : cutCorner(m, cx(x), cy(y)) >= 0 ? 0.5 : 1;
+      sw += w;
+      sh += w * h;
+      pts.push([dx, dz, w, h]);
+    }
+  }
+  const f = sh / sw;
+  const g = new Vector2();
+  for (const [dx, dz, w, h] of pts) g.add(new Vector2(dx, dz).multiplyScalar((w * (h - f)) / sw));
+  if (g.lengthSq() < 1e-6) return new Vector2();
+  const step = g.multiplyScalar((0.5 - f) / g.lengthSq());
+  return step.clampLength(0, 0.48);
+}
+
+/** Highest drawn level among the four tiles around a grid vertex. */
+function topLevel(vx: number, vz: number): number {
+  const m = leanMap;
+  const lv = (x: number, y: number) => drawnLevel(m, Math.min(m.width - 1, Math.max(0, x)), Math.min(m.height - 1, Math.max(0, y)));
+  return Math.max(lv(vx - 1, vz - 1), lv(vx, vz - 1), lv(vx, vz), lv(vx - 1, vz));
 }
 
 /** Downhill direction at a grid vertex, from the levels of the four tiles around it: where cliffs lean. */
@@ -222,15 +282,20 @@ function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
 function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2): void {
   // The top follows the ground's rim, pushed in and out like the plateau's edge (see rimShift).
   const [c0, c1] = [p0, p1];
-  p0 = p0.clone().add(rimShift(p0.x, p0.y));
-  p1 = p1.clone().add(rimShift(p1.x, p1.y));
+  const s0 = rimShift(p0.x, p0.y);
+  const s1 = rimShift(p1.x, p1.y);
+  // A worn lip (see rimDrop) only where this wall starts from the highest ground at that corner, as the ground does.
+  const drop = (c: Vector2, t: number) => (Number.isInteger(c.x) && Number.isInteger(c.y) && t >= topLevel(c.x, c.y) * LEVEL_HEIGHT - 0.01 ? rimDrop(c.x, c.y) : 0);
+  t0 -= drop(p0, t0);
+  t1 -= drop(p1, t1);
   const grid: Vector3[][] = [];
   const cols: Color[][] = [];
   for (let i = 0; i <= WALL_SEGMENTS; i++) {
     const t = i / WALL_SEGMENTS;
     const ends = i === 0 || i === WALL_SEGMENTS;
-    const px = p0.x + (p1.x - p0.x) * t;
-    const pz = p0.y + (p1.y - p0.y) * t;
+    const sh = s0.clone().lerp(s1, t);
+    const px = c0.x + (c1.x - c0.x) * t + sh.x;
+    const pz = c0.y + (c1.y - c0.y) * t + sh.y;
     const top = t0 + (t1 - t0) * t;
     const bottom = b0 + (b1 - b0) * t - 0.08;
     // Shared end points lean along the downhill direction of their (unshifted) grid corner.
@@ -250,7 +315,9 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4) * built;
       const lean = j === 0 ? 0 : (built ? SLANT * Math.pow(s, 0.8) : 0.04 * s) + n * 0.6 + bulge * Math.pow(s, 0.6);
       const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
-      row.push(new Vector3(px + dir.x * lean, y + lift, pz + dir.y * lean));
+      // A rim pulled in (rounded corner) slopes back out to the foot, so the foot still meets the lower ground.
+      const back = lean + Math.max(0, -sh.dot(dir)) * s;
+      row.push(new Vector3(px + dir.x * back, y + lift, pz + dir.y * back));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
     }
     grid.push(row);
