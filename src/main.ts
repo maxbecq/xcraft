@@ -8,6 +8,7 @@ import { Input } from './game/input';
 import { Minimap } from './minimap';
 import { Effects } from './render/effects';
 import { Post } from './render/post';
+import { Paving } from './render/paving';
 import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './render/units';
@@ -245,6 +246,7 @@ effects.density = GFX.particles;
 const overlay = new Overlay(map);
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map);
+const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
@@ -859,6 +861,7 @@ function start(): void {
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
     power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power));
+    paving.update(world, sees);
     audio.frame();
     lap('fx+overlay');
     minimap.draw(world, sees);
