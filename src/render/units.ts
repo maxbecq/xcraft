@@ -1156,7 +1156,17 @@ export class EntityRenderer {
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh * fadeIn + 0.45 * flash;
         (v.ring.userData.core as MeshBasicMaterial).opacity = (0.55 + 0.4 * fresh) * fadeIn + 0.6 * flash;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
-        this.drape(v.ring, x, z, v.root.position.y);
+        const air = flies(e);
+        if (air !== !!v.ring.userData.air) this.airRing(v.ring, air);
+        if (air) {
+          // In flight: the ring rides just under the model, drawn over the scenery, tied to the ground by a thread.
+          const h = Math.max(0.3, v.model.position.y - 0.1);
+          v.ring.position.y = h;
+          const thread = v.ring.userData.thread as Mesh;
+          thread.scale.y = h;
+          (thread.material as MeshBasicMaterial).opacity = 0.45 * (v.ring.userData.core as MeshBasicMaterial).opacity;
+          (v.ring.userData.spot as Mesh).position.y = 0.06 - h;
+        } else this.drape(v.ring, x, z, v.root.position.y);
       }
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
@@ -1395,12 +1405,48 @@ export class EntityRenderer {
     });
   }
 
+  /**
+   * A selection ring taking off or landing: in the air it lies flat under the flyer and is drawn over everything
+   * (the ground below may be crowded), with a thread down to a spot on the ground marking where the flyer is.
+   */
+  private airRing(ring: Object3D, on: boolean): void {
+    ring.userData.air = on;
+    if (!ring.userData.thread) {
+      const color = (ring.userData.core as MeshBasicMaterial).color;
+      const glow = { color, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending };
+      const thread = new Mesh(new CylinderGeometry(0.012, 0.012, 1, 4).translate(0, -0.5, 0), new MeshBasicMaterial(glow));
+      const spot = new Mesh(new RingGeometry(0.1, 0.17, 24).rotateX(-Math.PI / 2), new MeshBasicMaterial({ ...glow, opacity: 0.6 }));
+      for (const m of [thread, spot]) {
+        m.userData.air = true;
+        m.userData.noPick = true;
+        m.renderOrder = 10;
+        ring.add(m);
+      }
+      ring.userData.thread = thread;
+      ring.userData.spot = spot;
+    }
+    (ring.userData.thread as Mesh).visible = (ring.userData.spot as Mesh).visible = on;
+    for (const m of ring.children as Mesh[]) {
+      if (m.userData.air) continue;
+      (m.material as Material).depthTest = !on;
+      m.renderOrder = on ? 10 : 2;
+      if (!on) continue;
+      // Flat again (it was laid over the ground).
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
+      pos.needsUpdate = true;
+    }
+    ring.userData.at = undefined; // lays itself over the ground again on landing
+    if (!on) ring.position.y = 0;
+  }
+
   private drape(ring: Object3D, x: number, z: number, baseY: number): void {
     const k = ring.scale.x;
     const at = `${x.toFixed(2)},${z.toFixed(2)},${k.toFixed(2)}`;
     if (ring.userData.at === at) return;
     ring.userData.at = at;
     for (const m of ring.children as Mesh[]) {
+      if (m.userData.air) continue; // the flyer's thread and ground spot
       const pos = m.geometry.getAttribute('position');
       for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(this.map, x + k * pos.getX(i), z + k * pos.getZ(i)) - baseY + m.userData.lift);
       pos.needsUpdate = true;

@@ -6,6 +6,8 @@ import { FLY_HEIGHT } from '../data';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
+/** Flyers win a click within this distance of where they fly, over anything on the ground. */
+const FLYER_PICK_PX = 28;
 /** Mineral fields and geysers are small on screen: a wider catch, so a worker order lands on them. */
 const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
@@ -453,6 +455,16 @@ export class Input {
 
   /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels, else the closest resource. */
   private entityAt(x: number, y: number): Entity | undefined {
+    // Flyers first: small and high up, a ray that just misses one hits whatever is on the ground below.
+    let flyer: Entity | undefined;
+    let flyerD = FLYER_PICK_PX;
+    for (const e of this.world.entities.values()) {
+      if (e.def.kind !== 'unit' || !flies(e) || e.inside || !this.world.sees(this.player, e)) continue;
+      const s = this.screenOf(e);
+      const d = Math.hypot(s.x - x, s.y - y);
+      if (d < flyerD) [flyer, flyerD] = [e, d];
+    }
+    if (flyer) return flyer;
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
