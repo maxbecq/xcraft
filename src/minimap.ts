@@ -5,6 +5,8 @@ import type { Entity, World } from './sim/world';
 import type { GameMap } from './map';
 import { tileColor } from './terrain';
 
+const PING_MS = 3000;
+
 /** Top-down map, turned 45° to match the camera, showing the view and moving it on click. */
 export class Minimap {
   readonly canvas = document.createElement('canvas');
@@ -18,6 +20,8 @@ export class Minimap {
 
   /** Called with a right-clicked map point, in tiles. */
   onOrder: (x: number, y: number) => void = () => {};
+  /** Attack alerts: red rings spreading from the spot for a few seconds. */
+  private pings: { x: number; y: number; t: number }[] = [];
   /** Left-click hook (e.g. attack-move); return true to keep the camera still. */
   intercept: (x: number, y: number) => boolean = () => false;
 
@@ -85,6 +89,10 @@ export class Minimap {
     this.tiles.getContext('2d')!.putImageData(this.image, 0, 0);
   }
 
+  ping(x: number, y: number): void {
+    this.pings.push({ x, y, t: performance.now() });
+  }
+
   draw(world: World, sees: (e: Entity) => boolean): void {
     const ctx = this.ctx;
     ctx.resetTransform();
@@ -103,6 +111,19 @@ export class Minimap {
       ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
       const s = Math.max(1.5, (e.radius * 2) / FP);
       ctx.fillRect(e.x / FP - s / 2, e.y / FP - s / 2, s, s);
+    }
+
+    const now = performance.now();
+    this.pings = this.pings.filter((p) => now - p.t < PING_MS);
+    ctx.lineWidth = 2 / this.scale;
+    for (const p of this.pings) {
+      for (const lag of [0, 0.5]) {
+        const k = ((now - p.t) / 1000 + lag) % 1; // two rings a second, each growing and fading
+        ctx.strokeStyle = `rgba(255, 60, 40, ${1 - k})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 + k * 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.beginPath();

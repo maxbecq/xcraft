@@ -214,10 +214,15 @@ export class Input {
       this.box.hidden = true;
       const click = r.w < DRAG_PX && r.h < DRAG_PX;
       const hit = click ? this.entityAt(e.clientX, e.clientY) : undefined;
-      const picked = click ? (hit ? [hit.id] : []) : this.inBox(r);
+      // Double-click, or Ctrl/Cmd+click, on one of ours: all of its kind on screen.
+      const kind = hit && hit.owner === this.player ? hit.type : '';
+      const now = performance.now();
+      const all = !!kind && (e.ctrlKey || e.metaKey || (kind === this.lastClick.type && now - this.lastClick.time < DOUBLE_TAP_MS));
+      this.lastClick = { time: all ? 0 : now, type: kind };
+      const picked = all ? this.sameOnScreen(kind) : click ? (hit ? [hit.id] : []) : this.inBox(r);
       if (!e.shiftKey) this.selected.clear();
       for (const id of picked) {
-        if (e.shiftKey && click && this.selected.has(id)) this.selected.delete(id);
+        if (e.shiftKey && click && !all && this.selected.has(id)) this.selected.delete(id);
         else this.selected.add(id);
       }
     });
@@ -232,6 +237,7 @@ export class Input {
   private touchMode: TouchMode | null = null;
   private longPress = 0;
   private lastTap = { time: 0, type: '' };
+  private lastClick = { time: 0, type: '' };
 
   private touchDown(e: PointerEvent, canvas: HTMLCanvasElement): void {
     try {
@@ -318,8 +324,7 @@ export class Input {
     const now = performance.now();
     if (target && target.owner === this.player) {
       if (this.lastTap.type === target.type && now - this.lastTap.time < DOUBLE_TAP_MS) {
-        const same = [...this.world.entities.values()].filter((e) => e.owner === this.player && e.type === target.type && this.onScreen(e));
-        same.forEach((e) => this.selected.add(e.id));
+        this.sameOnScreen(target.type).forEach((id) => this.selected.add(id));
       } else {
         this.selected.clear();
         this.selected.add(target.id);
@@ -333,6 +338,11 @@ export class Input {
     }
     this.selected.clear();
     if (target) this.selected.add(target.id); // inspect an enemy or a resource
+  }
+
+  /** Our things of a kind in view. */
+  private sameOnScreen(type: string): number[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === this.player && e.type === type && this.onScreen(e)).map((e) => e.id);
   }
 
   private onScreen(e: Entity): boolean {

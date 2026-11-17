@@ -38,6 +38,13 @@ export class Hud {
   private readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
+  /** Where the last attack alert happened (tiles): Space or a click on its message goes there. */
+  alertAt: { x: number; y: number } | null = null;
+  /** Set by the game: marks an alert on the minimap, and moves the view. */
+  ping: (x: number, y: number) => void = () => {};
+  focus: (x: number, y: number) => void = () => {};
+  /** Hit points (and shield) of our things at the last tick, to find where an attack lands. */
+  private readonly lastHp = new Map<number, number>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
@@ -259,9 +266,25 @@ export class Hud {
   }
 
   notify(events: GameEvent[]): void {
+    // The world's alert says only "attacked": the place is the last of ours that lost health this tick.
+    let hit: Entity | undefined;
+    if (this.lastHp.size > 2 * this.world.entities.size + 64) this.lastHp.clear(); // forget the dead now and then
+    for (const e of this.world.entities.values()) {
+      if (e.owner !== this.player) continue;
+      const was = this.lastHp.get(e.id);
+      if (was !== undefined && e.hp + e.shield < was) hit = e;
+      this.lastHp.set(e.id, e.hp + e.shield);
+    }
     for (const ev of events) {
       if (ev.player !== this.player) continue;
       const t = el('div', `hud-toast ${ev.kind}`);
+      if (ev.kind === 'alert' && hit) {
+        const at = { x: hit.x / FP, y: hit.y / FP };
+        this.alertAt = at;
+        this.ping(at.x, at.y);
+        t.title = 'Aller voir (Espace)';
+        t.addEventListener('click', () => this.focus(at.x, at.y));
+      }
       this.audio.play(ev.kind);
       t.textContent = ev.text;
       this.toasts.append(t);
@@ -269,6 +292,11 @@ export class Hud {
       setTimeout(() => t.remove(), 2500);
       while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
     }
+  }
+
+  /** Space: the view goes to the last attack. */
+  toAlert(): void {
+    if (this.alertAt) this.focus(this.alertAt.x, this.alertAt.y);
   }
 
   update(): void {

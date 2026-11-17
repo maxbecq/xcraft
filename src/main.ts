@@ -233,6 +233,8 @@ const audio = new Audio();
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio);
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
+hud.ping = (x, y) => minimap.ping(x, y);
+hud.focus = (x, y) => rig.lookAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
@@ -255,6 +257,23 @@ const keys = new Set<string>();
 window.addEventListener('keydown', (e) => keys.add(e.key));
 window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
+// Space: to the last attack. F5…F8: saved views (Ctrl, Cmd or Shift + the key saves the current one).
+const views = new Map<string, { x: number; z: number }>();
+window.addEventListener('keydown', (e) => {
+  if ((e.target as HTMLElement).closest?.('input, textarea, select')) return;
+  if (e.key === 'Alt') e.preventDefault(); // held to show every health bar, not to open the browser's menu
+  if (e.code === 'Space') {
+    e.preventDefault();
+    hud.toAlert();
+  } else if (/^F[5-8]$/.test(e.key)) {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey || e.shiftKey) views.set(e.key, { x: rig.target.x, z: rig.target.z });
+    else {
+      const v = views.get(e.key);
+      if (v) rig.lookAt(v.x, v.z);
+    }
+  }
+});
 
 let mouse: { x: number; y: number; onButton: boolean } | null = null;
 // Edge scrolling follows the mouse only: fingers drag the map instead. Not over a button (the Menu sits
@@ -367,13 +386,15 @@ pause.innerHTML = `<div class="pause-box">
 <button data-p="replay">Enregistrer le replay</button>
 <button data-p="quit">Quitter la partie</button>
 <div class="help" hidden><h3>Contrôles</h3>
-Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter)<br>
+Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter) · double-clic ou <kbd>Ctrl</kbd>+clic : tout ce type à l'écran<br>
 Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>A</kbd> puis clic : attaquer / attaque-déplacement<br>
 <kbd>S</kbd> stop · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
+<kbd>Espace</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
+<kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
@@ -809,6 +830,7 @@ function start(): void {
       effects.burn(new Vector3(x, heightAt(map, x, z) + size * 0.4, z), e.hp / e.maxHp, size, dt, e.id, (e.def as BuildingDef).faction === 'isdaris');
     }
     effects.update(dt);
+    overlay.showAll = keys.has('Alt');
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
     power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power));

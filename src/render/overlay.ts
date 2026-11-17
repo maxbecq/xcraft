@@ -20,6 +20,9 @@ export class Overlay {
     this.ctx = this.canvas.getContext('2d')!;
   }
 
+  /** Alt held: every bar shows, unhurt too. */
+  showAll = false;
+
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     const dpr = window.devicePixelRatio;
     const w = window.innerWidth;
@@ -37,7 +40,7 @@ export class Overlay {
     this.right.setFromMatrixColumn(camera.matrixWorld, 0); // the screen's horizontal, in the world
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp || e.inside) continue;
-      if (!selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
+      if (!this.showAll && !selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
       if (!sees(e)) continue;
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
