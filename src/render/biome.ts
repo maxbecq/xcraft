@@ -1,4 +1,4 @@
-import { AdditiveBlending, BoxGeometry, CanvasTexture, Color, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
+import { AdditiveBlending, BoxGeometry, CanvasTexture, DoubleSide, Color, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
 
 /** Look of a planet: ground and cliff palette, light, sky and glowing ground veins. Rendering only. */
 export interface Biome {
@@ -271,4 +271,147 @@ export function cityScape(width: number, height: number, deck: number): Group {
     }
   }
   return city;
+}
+
+/**
+ * The lower city under the chasms: a deck of plates lower down, a few blocks of buildings rising from it to just
+ * under our level, support pillars and lit windows, so a hole shows the city goes on below. Render only.
+ */
+export function cityUnderdeck(map: { width: number; height: number; chasm?: Uint8Array }, deck: number): Group {
+  const under = new Group();
+  under.userData.noPick = true;
+  if (!map.chasm) return under;
+  const floor = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.8, metalness: 0.4 });
+  const pillar = new MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.7, metalness: 0.6 });
+  const lamp = new MeshBasicMaterial({ color: 0xffc870 });
+  const neon = [0x2ee8ff, 0xff4fd8].map((c) => new MeshBasicMaterial({ color: c }));
+  const facades = [7, 8, 9].map((k) => new MeshStandardMaterial({ map: facade(k), emissiveMap: facade(k), emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.8 }));
+  let r = 777;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const add = (m: Mesh) => (under.add(m), m);
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      if (!map.chasm[y * map.width + x]) continue;
+      const tile = add(new Mesh(new BoxGeometry(1, 0.2, 1), floor));
+      tile.position.set(x + 0.5, deck - 0.1, y + 0.5);
+      const v = rand();
+      if (v < 0.22) {
+        // A block of the lower city, its roof a little below our deck.
+        const h = 2 + rand() * 3;
+        const b = add(new Mesh(new BoxGeometry(0.8 + rand() * 0.6, h, 0.8 + rand() * 0.6), facades[Math.floor(rand() * 3)]));
+        b.position.set(x + 0.5, deck + h / 2, y + 0.5);
+      } else if (v < 0.3) {
+        const p = add(new Mesh(new CylinderGeometry(0.12, 0.15, -deck, 6), pillar));
+        p.position.set(x + 0.5, deck / 2, y + 0.5);
+      } else if (v < 0.42) {
+        const l = add(new Mesh(new BoxGeometry(0.1, 0.06, 0.1), rand() > 0.5 ? lamp : neon[Math.floor(rand() * 2)]));
+        l.position.set(x + rand(), deck + 0.05, y + rand());
+      } else if (v < 0.47) {
+        // Traffic on the lower deck: a streak of light.
+        const t = add(new Mesh(new BoxGeometry(0.8, 0.04, 0.08), neon[Math.floor(rand() * 2)]));
+        t.position.set(x + 0.5, deck + 0.05, y + 0.5);
+        t.rotation.y = rand() > 0.5 ? Math.PI / 2 : 0;
+      }
+    }
+  }
+  return under;
+}
+
+/** A broken neon sign in an alien script: glyphs of strokes and dots, some tubes dead, on a dark plate. */
+function alienSign(seed: number, color: string): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 48;
+  const g = c.getContext('2d')!;
+  let r = seed * 7919 + 3;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  g.fillStyle = '#0b0c12';
+  g.fillRect(0, 0, 128, 48);
+  g.lineWidth = 3;
+  g.lineCap = 'round';
+  for (let k = 0; k < 5; k++) {
+    const x0 = 10 + k * 23;
+    // Each glyph: three or four strokes and maybe a dot; one in four tubes is dead.
+    for (let s = 0; s < 3 + Math.floor(rand() * 2); s++) {
+      g.strokeStyle = rand() < 0.25 ? '#2a2a33' : color;
+      g.shadowColor = color;
+      g.shadowBlur = 6;
+      g.beginPath();
+      g.moveTo(x0 + rand() * 16, 10 + rand() * 28);
+      if (rand() > 0.5) g.quadraticCurveTo(x0 + rand() * 16, 8 + rand() * 32, x0 + rand() * 16, 10 + rand() * 28);
+      else g.lineTo(x0 + rand() * 16, 10 + rand() * 28);
+      g.stroke();
+    }
+    if (rand() > 0.6) {
+      g.fillStyle = color;
+      g.fillRect(x0 + 8, 36, 3, 3);
+    }
+  }
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Street furniture of the dead city on the playable decks (render only, never in the way): railings along the
+ * chasms, street lamps, benches and kiosks, and broken neon signs in alien scripts.
+ */
+export function cityStreets(map: { width: number; height: number; chasm?: Uint8Array; level: Uint8Array }, heightAt: (x: number, z: number) => number): Group {
+  const streets = new Group();
+  streets.userData.noPick = true;
+  if (!map.chasm) return streets;
+  const metal = new MeshStandardMaterial({ color: 0x4a505a, roughness: 0.6, metalness: 0.7 });
+  const dark = new MeshStandardMaterial({ color: 0x1c1f26, roughness: 0.8 });
+  const bulb = new MeshBasicMaterial({ color: 0xffd9a0 });
+  const colors = ['#2ee8ff', '#ff4fd8', '#ffb04a', '#7aff8a'];
+  const signs = colors.map((c, i) => new MeshBasicMaterial({ map: alienSign(i + 1, c), side: DoubleSide }));
+  let r = 31337;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const chasm = (x: number, y: number) => x >= 0 && y >= 0 && x < map.width && y < map.height && map.chasm![y * map.width + x] === 1;
+  const put = (m: Mesh, x: number, y: number, z: number) => {
+    m.position.set(x, heightAt(x, z) + y, z);
+    streets.add(m);
+    return m;
+  };
+  let lamp = 0;
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      if (chasm(x, y)) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!chasm(x + dx, y + dy)) continue;
+        // A railing along the edge: a post and two rails, some bent or missing.
+        if (rand() < 0.12) continue;
+        const ex = x + 0.5 + dx * 0.45;
+        const ez = y + 0.5 + dy * 0.45;
+        const along = dx === 0;
+        put(new Mesh(new BoxGeometry(0.05, 0.5, 0.05), metal), ex, 0.25, ez);
+        for (const h of [0.25, 0.48]) {
+          const bar = put(new Mesh(new BoxGeometry(along ? 1 : 0.03, 0.03, along ? 0.03 : 1), metal), ex, h, ez);
+          bar.rotation.z = rand() < 0.1 ? (rand() - 0.5) * 0.5 : 0;
+        }
+        // Every few metres a street lamp, a bench or a sign.
+        if (++lamp % 5 === 0) {
+          const ix = x + 0.5 - dx * 0.2;
+          const iz = y + 0.5 - dy * 0.2;
+          const pick = rand();
+          if (pick < 0.45) {
+            put(new Mesh(new CylinderGeometry(0.03, 0.04, 1.6, 6), metal), ix, 0.8, iz);
+            const arm = put(new Mesh(new BoxGeometry(0.35, 0.03, 0.03), metal), ix, 1.58, iz);
+            arm.rotation.y = Math.atan2(dy, -dx);
+            if (rand() > 0.25) put(new Mesh(new BoxGeometry(0.12, 0.06, 0.12), bulb), ix + dx * 0.15, 1.53, iz + dy * 0.15);
+          } else if (pick < 0.7) {
+            const bench = put(new Mesh(new BoxGeometry(along ? 0.7 : 0.25, 0.08, along ? 0.25 : 0.7), dark), ix, 0.22, iz);
+            bench.rotation.y = (rand() - 0.5) * 0.3;
+            put(new Mesh(new BoxGeometry(0.05, 0.2, 0.05), metal), ix, 0.1, iz);
+          } else {
+            // A broken neon sign on its post, a little askew.
+            put(new Mesh(new CylinderGeometry(0.03, 0.03, 1.2, 6), metal), ix, 0.6, iz);
+            const sign = put(new Mesh(new PlaneGeometry(0.9, 0.34), signs[Math.floor(rand() * signs.length)]), ix, 1.35, iz);
+            sign.rotation.set(0, along ? 0 : Math.PI / 2, (rand() - 0.5) * 0.25);
+          }
+        }
+      }
+    }
+  }
+  return streets;
 }

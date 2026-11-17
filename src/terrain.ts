@@ -26,6 +26,8 @@ export function setBiome(b: Biome): void {
 }
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
+/** City map: height of the lower city's deck, seen through the chasms. */
+export const UNDER_DECK = -6;
 const WALL_SEGMENTS = 7;
 const WALL_ROWS = 6;
 
@@ -125,7 +127,7 @@ export function buildTerrain(map: GameMap): Group {
         let ba: number;
         let bb: number;
         // A chasm: the platform's edge drops a long way into the void.
-        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [-14, -14];
+        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [UNDER_DECK, UNDER_DECK];
         else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
         else [ba, bb] = [-2.5, -2.5]; // skirt around the map
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
