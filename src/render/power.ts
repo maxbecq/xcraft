@@ -106,7 +106,11 @@ function pcbMap(): CanvasTexture {
       x += DIRS[d][0] * G * n;
       y += DIRS[d][1] * G * n;
       pts.push([x, y]);
-      d = (d + (rnd() < 0.5 ? 1 : 7)) % 8; // turn by 45°
+      // Turn by 45°, never onto the (1, 1) diagonal: with the UVs (x, -z) and the camera looking down
+      // (-1, -1), it would run straight up the screen and read as something standing, not lying on the ground.
+      const turn = rnd() < 0.5 ? 1 : 7;
+      d = (d + turn) % 8;
+      if (d === 1 || d === 5) d = (d + 8 - turn + (8 - turn)) % 8;
     }
     traces.push({ pts, w: rnd() < 0.2 ? 5 : 2 + rnd() * 1.5 });
   }
