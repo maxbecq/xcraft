@@ -2,6 +2,7 @@ import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight,
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio } from './audio';
 import { CameraRig } from './camera';
+import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
@@ -88,6 +89,8 @@ if (slots.length < 2) slots.push({ control: 'normal', faction: 'humains', team: 
 const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction] = factions;
 const world = createMatch(factions, slots.map((s) => s.team), biome.style === 'city');
+// Title screen: a still scene, not a running match (no simulation, no AI, so no fights and no sound).
+if (ATTRACT) stageAttract(world);
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
 document.body.classList.toggle('z', factions[PLAYER] === 'z');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
@@ -96,7 +99,7 @@ document.body.classList.toggle('spectate', SPECTATE);
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 // Every player not played by someone is an AI, its difficulty a harvesting handicap.
-const ais = REPLAY || NET_ROLE ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i)]));
+const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i)]));
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
@@ -553,6 +556,7 @@ function launch(s: Setup): void {
 
 function start(): void {
   clock.getDelta();
+  if (ATTRACT) updateFog(); // the simulation never runs to do it
   const timing: Record<string, number> = {};
   if (import.meta.env.DEV) Object.assign(window, { timing });
   let mark = 0;
@@ -564,7 +568,7 @@ function start(): void {
   const frame = (elapsed: number) => {
     mark = performance.now();
     const dt = Math.min(elapsed, 0.25);
-    acc += dt * SPEED;
+    if (!ATTRACT) acc += dt * SPEED;
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && !net.ready(world.tick)) {
@@ -589,9 +593,11 @@ function start(): void {
     lap('sim');
     const [dx, dy] = scrollDirection();
     if (ATTRACT) {
-      // Slow orbit over the battlefield.
-      const t = performance.now() / 1000 / 40;
-      rig.lookAt(map.width / 2 + Math.cos(t) * 26, map.height / 2 + Math.sin(t) * 26);
+      // A slow loop along the diagonal: over the first base, past the armies face to face, over the second.
+      const t = performance.now() / 1000 / 24;
+      const along = Math.cos(t) * 30;
+      const across = Math.sin(t) * 9;
+      rig.lookAt(map.width / 2 - (along - across) / Math.SQRT2, map.height / 2 - (along + across) / Math.SQRT2);
     } else {
       // Eased scrolling: the view speeds up over a quarter second, then glides to a stop (slow, fast, slow).
       const step = SCROLL_ACCEL * dt;
