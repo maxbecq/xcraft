@@ -473,10 +473,10 @@ export class Input {
     return { x: Math.min(a.x, b.clientX), y: Math.min(a.y, b.clientY), w: Math.abs(b.clientX - a.x), h: Math.abs(b.clientY - a.y) };
   }
 
-  private screenOf(e: Entity): { x: number; y: number } {
+  private screenOf(e: Entity, lift = 0.4): { x: number; y: number } {
     const x = e.x / FP;
     const z = e.y / FP;
-    const v = new Vector3(x, heightAt(this.map, x, z) + 0.4 + (flies(e) ? FLY_HEIGHT : 0), z).project(this.hooks.camera());
+    const v = new Vector3(x, heightAt(this.map, x, z) + lift + (flies(e) ? FLY_HEIGHT : 0), z).project(this.hooks.camera());
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
   }
 
@@ -597,8 +597,12 @@ export class Input {
   private inBox(r: { x: number; y: number; w: number; h: number }, workers = false): number[] {
     const inside = [...this.world.entities.values()].filter((e) => {
       if (e.owner !== this.player || e.inside || (e.def.kind !== 'unit' && e.def.kind !== 'building')) return false;
-      const s = this.screenOf(e);
-      return s.x >= r.x && s.x <= r.x + r.w && s.y >= r.y && s.y <= r.y + r.h;
+      // A god (Dieux) stands as tall as a building: a box round its body takes it, not only one round its feet.
+      const lifts = e.def.kind === 'unit' && (e.def as UnitDef).radius >= 1 ? [0.4, 1.5, 3] : [0.4];
+      return lifts.some((lift) => {
+        const s = this.screenOf(e, lift);
+        return s.x >= r.x && s.x <= r.x + r.w && s.y >= r.y && s.y <= r.y + r.h;
+      });
     });
     const units = inside.filter((e) => e.def.kind === 'unit');
     const army = units.filter((e) => !(e.def as UnitDef).worker);

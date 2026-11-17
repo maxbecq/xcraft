@@ -107,15 +107,17 @@ export class AI {
     const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside);
     const buildings = mine.filter((e) => e.def.kind === 'building');
     // A building turned into another (Récepteur armé…) still counts as what it was.
-    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + builders.filter((s) => s.order?.kind === 'build' && s.order.type === type).length;
+    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + builders.reduce((n, s) => n + [s.order, ...s.next].filter((o) => o?.kind === 'build' && o.type === type).length, 0);
     const p = w.players[this.player];
     // Resources promised to serfs walking to a construction site are already spent.
     let minerals = p.minerals;
     let promisedEnergy = 0;
     for (const s of builders) {
-      if (s.order?.kind !== 'build') continue;
-      minerals -= (DEFS[s.order.type] as BuildingDef).cost.minerals;
-      promisedEnergy += (DEFS[s.order.type] as BuildingDef).cost.energy;
+      for (const o of [s.order, ...s.next]) {
+        if (o?.kind !== 'build') continue;
+        minerals -= (DEFS[o.type] as BuildingDef).cost.minerals;
+        promisedEnergy += (DEFS[o.type] as BuildingDef).cost.energy;
+      }
     }
     const supply = w.supply(this.player);
     const flyersSeen = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && flies(e) && w.sees(this.player, e)).length;
@@ -137,7 +139,7 @@ export class AI {
     }
 
     // Supply first, then production buildings, then the mine.
-    const building = (type: string) => builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
+    const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
     // Production: the casernes, or for the Dieux the Porte and its gods.
     const producers = f.gods ? 1 + gods.length : count(f.barracks);
@@ -164,7 +166,10 @@ export class AI {
     // One tower late anyway: level 3 upgrades need it.
     // Flying enemies: a few more of the defence that shoots them down (Tour alchimistique, Orbe plasma).
     const detectors = f.detector && f.detector !== f.defense ? Math.max((enemyCloaks && minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0), antiAir) : 0;
-    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) + antiAir : 0;
+    // Dieux: their gods summon one unit at a time, minerals pile up: spare ones go into more Branches (turned into
+    // Yggdrasill protecteurs) and into bases, sooner.
+    const rich = !!f.gods && p.minerals > 800;
+    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) + antiAir + (rich ? Math.min(3, Math.floor(minute / 4) + Math.floor(p.minerals / 800)) : 0) : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
     // The second production building, for heavier units, only with resources to spare: its units cost
     // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
@@ -207,11 +212,11 @@ export class AI {
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
-    const outpost = f.outpost ?? f.hq;
-    const councils = buildings.filter((b) => b.type === f.hq || b.type === outpost).length + builders.filter((s) => s.order?.kind === 'build' && s.order.type === outpost).length;
+    const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
+    const councils = buildings.filter((b) => b.type === f.hq || b.type === f.outpost).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
     const firstAt = this.hard ? LEVELS.hard.expandMinute : 7;
-    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
-    const expand = councils < MAX_BASES && serfs.length >= this.plan.serfs && due && !!this.spot(outpost, home);
+    const due = (rich && minute >= 4) || councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
@@ -226,9 +231,14 @@ export class AI {
       }
       if (energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
-      const builder = this.builder(builders, spot);
+      // Gaïa, the Dieux's only builder, chains her buildings (a few at most) instead of placing one at a time.
+      const chained = f.builder && !this.builder(builders, spot) ? builders.find((b) => b.next.length < 3) : undefined;
+      const builder = this.builder(builders, spot) ?? chained;
       if (!spot || !builder) continue;
-      out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1] });
+      // Not where a chained building already goes.
+      const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
+      if (taken) continue;
+      out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1], queue: !!chained });
       this.tried.set(`${spot[0]},${spot[1]}`, (this.tried.get(`${spot[0]},${spot[1]}`) ?? 0) + 1);
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
@@ -272,7 +282,7 @@ export class AI {
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
         if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
-        return d.energyRate ? minute > 6 && have === 0 : minute > 9 && have < 2;
+        return d.energyRate ? minute > 6 && have === 0 : f.gods ? minute > 6 && have < 4 : minute > 9 && have < 2;
       });
       if (!into || saving) continue;
       out.push({ player: this.player, kind: 'train', ids: [b.id], type: into });
