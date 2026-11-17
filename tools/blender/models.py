@@ -726,13 +726,17 @@ def emetteur(p):
 
 
 def reservepsy(p):
-    """Psy reserve: a glowing dome on an Art Deco pedestal, banded in gold."""
-    cyl(p["ivory"], 0.9, 0.3, (0, 0, 0.15), verts=12)
-    cyl(p["chrome"], 0.75, 0.55, (0, 0, 0.55), verts=12, r2=0.65)
-    ring(p["gold"], 0.7, 0.04, (0, 0, 0.8))
-    ball(p["violet_glow"], 0.62, (0, 0, 0.82), scale=(1, 1, 0.7), seg=16, rings=8)
-    fins(p, p["team"], 6, 0.8, 0.5, 0.6, width=0.22)
-    cone(p["gold"], 0.08, 0.5, (0, 0, 1.45), verts=8)
+    """Psy reserve, sober like the other Isdaris buildings: a low ivory drum with chrome bands, a flat pale shell
+    over it, a thin cyan seam where the stored energy shows, and the team colour on two plain pylons."""
+    cyl(p["ivory"], 0.92, 0.22, (0, 0, 0.11), verts=24)
+    cyl(p["ivory"], 0.78, 0.42, (0, 0, 0.43), verts=24)
+    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.3), seg=24)
+    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.62), seg=24)
+    cyl(p["cyan_glow"], 0.79, 0.04, (0, 0, 0.67), verts=24)  # energy seam
+    ball(p["concrete"], 0.74, (0, 0, 0.68), scale=(1, 1, 0.32), seg=24, rings=8)  # flat shell
+    for s in (-1, 1):
+        box(p["ivory"], (0.16, 0.16, 0.8), (s * 0.85, 0, 0.4))
+        box(p["team"], (0.17, 0.05, 0.5), (s * 0.85, -0.08, 0.45))
 
 
 def portail(p):
