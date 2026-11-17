@@ -71,6 +71,8 @@ function fieldMap(): CanvasTexture {
 }
 
 let pcbTexture: CanvasTexture | null = null;
+/** The traces alone, white on transparent: where the waves of current light up. */
+let pcbTraces: CanvasTexture | null = null;
 /**
  * Z creep, circuit variant: a tileable printed circuit with no board under it, so the ground shows through.
  * Copper traces routed at right angles and 45°, pads and vias, chips with their pins and status LEDs, and a
@@ -82,6 +84,11 @@ function pcbMap(): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const g = c.getContext('2d')!;
+  const mc = document.createElement('canvas');
+  mc.width = mc.height = S;
+  const mg = mc.getContext('2d')!;
+  mg.lineCap = mg.lineJoin = 'round';
+  mg.strokeStyle = mg.fillStyle = '#fff';
   let seed = 11;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const G = 16; // routing grid
@@ -110,6 +117,8 @@ function pcbMap(): CanvasTexture {
     for (const oy of [-S, 0, S]) {
       g.save();
       g.translate(ox, oy);
+      mg.save();
+      mg.translate(ox, oy);
       for (const m of masks) {
         const f = g.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
         f.addColorStop(0, 'rgba(18,52,40,0.35)');
@@ -131,6 +140,10 @@ function pcbMap(): CanvasTexture {
         g.strokeStyle = 'rgba(255,220,150,0.18)';
         g.lineWidth = Math.max(1, t.w * 0.3);
         g.stroke();
+        mg.beginPath();
+        t.pts.forEach(([x, y], k) => (k ? mg.lineTo(x, y) : mg.moveTo(x, y)));
+        mg.lineWidth = t.w;
+        mg.stroke();
         for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
           // Pad with a drilled hole (via).
           g.fillStyle = '#b07e3a';
@@ -166,7 +179,10 @@ function pcbMap(): CanvasTexture {
         }
       }
       g.restore();
+      mg.restore();
     }
+  pcbTraces = new CanvasTexture(mc);
+  pcbTraces.wrapS = pcbTraces.wrapT = RepeatWrapping;
   pcbTexture = new CanvasTexture(c);
   pcbTexture.colorSpace = SRGBColorSpace;
   pcbTexture.wrapS = pcbTexture.wrapT = RepeatWrapping;
@@ -187,31 +203,9 @@ export class PowerNet {
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
   private readonly creepMaterial = new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true });
-  /** Wires between Z buildings: a dark rubber sheath, lit from above, with sparks glowing through it. */
-  private readonly wireMaterial = new ShaderMaterial({
-    uniforms: { time: { value: 0 } },
-    vertexShader: `
-      varying vec2 vUv;
-      varying vec3 vNormal;
-      void main() {
-        vUv = uv;
-        vNormal = normalize(mat3(modelMatrix) * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: `
-      uniform float time;
-      varying vec2 vUv;
-      varying vec3 vNormal;
-      void main() {
-        float light = 0.35 + 0.65 * clamp(dot(vNormal, normalize(vec3(0.4, 1.0, 0.3))), 0.0, 1.0);
-        vec3 sheath = vec3(0.03, 0.035, 0.045) * light + vec3(0.12) * pow(max(vNormal.y, 0.0), 12.0);
-        float p = fract((vUv.x - time * 4.0) / 3.0);
-        float q = fract((vUv.x + time * 1.5) / 5.0);
-        float glow = pow(p, 18.0) + 0.35 * pow(p, 4.0) + 0.25 * pow(q, 24.0);
-        vec3 spark = vec3(0.5, 0.96, 1.0);
-        gl_FragColor = vec4(sheath + spark * glow * 1.4, 1.0);
-      }`,
-  });
+  private readonly creepTime = { value: 0 };
+  /** Wires between Z buildings: dark rubber. */
+  private readonly wireMaterial = new MeshStandardMaterial({ color: 0x17181c, metalness: 0.1, roughness: 0.55 });
   private readonly plugGeometry = new CylinderGeometry(1, 1, 1, 8);
   private readonly plugSteel = new MeshStandardMaterial({ color: 0x7d786e, metalness: 0.6, roughness: 0.5 });
   private readonly plugCopper = new MeshStandardMaterial({ color: 0xb06a34, metalness: 0.8, roughness: 0.35 });
@@ -228,6 +222,21 @@ export class PowerNet {
 
   constructor(scene: Object3D, private readonly map: GameMap) {
     scene.add(this.root);
+    // Faint waves of current rolling out from each building over the traces (aDist: tiles from its centre).
+    this.creepMaterial.onBeforeCompile = (sh) => {
+      sh.uniforms.time = this.creepTime;
+      sh.uniforms.traces = { value: pcbTraces };
+      sh.vertexShader = `attribute float aDist;\nvarying float vDist;\n${sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDist = aDist;')}`;
+      sh.fragmentShader = `uniform float time;\nuniform sampler2D traces;\nvarying float vDist;\n${sh.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float w = fract(vDist / 6.0 - time * 0.2);
+        float band = smoothstep(0.0, 0.05, w) * smoothstep(0.2, 0.05, w);
+        float glow = texture2D(traces, vMapUv).a * band * 0.22;
+        diffuseColor.rgb += vec3(0.45, 0.9, 1.0) * glow;
+        diffuseColor.a = max(diffuseColor.a, glow);`,
+      )}`;
+    };
   }
 
   /** `highlight`: an Isdaris building is being placed, or a power building is selected. */
@@ -242,7 +251,7 @@ export class PowerNet {
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
     this.creepMaterial.opacity = highlight ? 1 : 0.75;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
-    this.wireMaterial.uniforms.time.value = t;
+    this.creepTime.value = t;
     this.updateWarps(world, sees, t);
   }
 
@@ -318,6 +327,7 @@ export class PowerNet {
         // World-space UVs, so overlapping zones line up; the rim frays out unevenly into the ground.
         const uv = geo.getAttribute('uv');
         const color = new Float32Array(pos.count * 4);
+        const dist = new Float32Array(pos.count);
         for (let i = 0; i < pos.count; i++) {
           const x = pos.getX(i);
           const z = pos.getZ(i);
@@ -326,15 +336,17 @@ export class PowerNet {
           const ragged = 0.12 * Math.sin(x * 1.7 + z * 0.6) * Math.sin(z * 1.3 - x * 0.4);
           const a = Math.min(1, Math.max(0, (1 - d + ragged) / 0.3));
           color.set([1, 1, 1, a], i * 4);
+          dist[i] = d * r;
         }
         geo.setAttribute('color', new BufferAttribute(color, 4));
+        geo.setAttribute('aDist', new BufferAttribute(dist, 1));
       }
       const disc = new Mesh(geo, creep(e) ? this.creepMaterial : this.fieldMaterial);
       disc.renderOrder = 1;
       this.root.add(disc);
     }
-    // Z: a trace (or wire) from each node to the nearest node already linked, and from every other building
-    // to its nearest node, with sparks of current running along it.
+    // Z: a wire from each node to the nearest node already linked, and from every other building
+    // to its nearest node.
     for (const owner of new Set(nodes.filter(creep).map((e) => e.owner))) {
       const own = nodes.filter((e) => e.owner === owner);
       const linked = [own.find((e) => (e.def as BuildingDef).dropoff) ?? own[0]];
@@ -398,7 +410,7 @@ export class PowerNet {
 
   /**
    * A real wire lying on the ground between two buildings: a rubber tube that leaves each building through a
-   * plug at its edge, with sparks of current glowing through the sheath.
+   * plug at its edge.
    */
   private wire(a: Entity, b: Entity, pts: [number, number][]): void {
     const edge = (e: Entity) => ((e.def as BuildingDef).size / 2) * 0.8;
@@ -410,9 +422,6 @@ export class PowerNet {
     const curve = new CatmullRomCurve3(kept.filter((_, i) => i % 2 === 0 || i === kept.length - 1).map(([x, z]) => new Vector3(x, heightAt(this.map, x, z) + radius + 0.03, z)));
     const length = curve.getLength();
     const geo = new TubeGeometry(curve, Math.ceil(length * 4), radius, 6);
-    const uv = geo.getAttribute('uv');
-    const start = ((a.id * 7919 + b.id * 104729) % 1000) / 37; // each wire starts its pulses elsewhere
-    for (let i = 0; i < uv.count; i++) uv.setX(i, start + uv.getX(i) * length);
     this.root.add(new Mesh(geo, this.wireMaterial));
     for (const [t, dir] of [[0, 1], [1, -1]] as const) {
       const at = curve.getPointAt(t);
