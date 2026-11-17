@@ -560,12 +560,58 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
         // Bright silhouette edges on everything but mineral fields, stronger on units.
         if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
-        templates.set(type, gltf.scene);
+        templates.set(type, type.startsWith('minerai') ? mergeGeodes(gltf.scene) : gltf.scene);
       } catch {
         // keep the placeholder
       }
     })(), todo.length)),
   );
+}
+
+/**
+ * A mineral field as one mesh per material (4 draw calls instead of 16, 30 fields on a map). The small geodes
+ * come after the main cluster, the first to be mined out last of all, so mining shortens what is drawn: with k
+ * small geodes left, each mesh draws `userData.geodeCounts[k]` indices.
+ */
+function mergeGeodes(scene: Group): Group {
+  scene.updateMatrixWorld(true);
+  const order = ['', 'geode_c', 'geode_b', 'geode_a'];
+  const parts = new Map<Material, BufferGeometry[][]>();
+  scene.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    let p: Object3D | null = o;
+    while (p && !order.includes(p.name)) p = p.parent;
+    const slot = Math.max(0, order.indexOf(p?.name ?? ''));
+    // Floats throughout (the packed models quantise normals), placed where the node puts them.
+    const g = new BufferGeometry();
+    for (const [name, a] of Object.entries(o.geometry.attributes as Record<string, BufferAttribute>)) {
+      const out = new Float32Array(a.count * a.itemSize);
+      for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+      g.setAttribute(name, new BufferAttribute(out, a.itemSize));
+    }
+    g.setIndex(o.geometry.index ? Array.from(o.geometry.index.array) : null);
+    g.applyMatrix4(o.matrixWorld);
+    const slots = parts.get(o.material as Material) ?? parts.set(o.material as Material, [[], [], [], []]).get(o.material as Material)!;
+    slots[slot].push(g);
+  });
+  const field = new Group();
+  for (const [material, slots] of parts) {
+    // Only the attributes every part has (the main cluster carries a second UV set nothing reads).
+    const all = slots.flat();
+    for (const g of all) for (const name of Object.keys(g.attributes)) if (!all.every((h) => h.getAttribute(name))) g.deleteAttribute(name);
+    const geo = mergeGeometries(all);
+    if (!geo) return scene; // parts that do not match: keep the model as it is
+    const counts = [0, 0, 0, 0];
+    let n = 0;
+    slots.forEach((list, k) => {
+      for (const g of list) n += g.index ? g.index.count : g.getAttribute('position').count;
+      counts[k] = n;
+    });
+    const mesh = new Mesh(geo, material);
+    mesh.userData.geodeCounts = counts;
+    field.add(mesh);
+  }
+  return field;
 }
 
 /**
@@ -1433,9 +1479,18 @@ export class EntityRenderer {
         const body = v.model.children[0];
         const left = Math.min(1, e.amount / (e.def as { amount: number }).amount);
         body.scale.setScalar(body.userData.base * (0.7 + 0.3 * left));
-        // Looked up here rather than at creation, so a view made by older code (hot reload) still works.
-        body.userData.geodes ??= ['geode_a', 'geode_b', 'geode_c'].map((n) => body.getObjectByName(n)).filter((o) => o);
-        (body.userData.geodes as Object3D[]).forEach((g, i) => (g.visible = left > 0.75 - i * 0.25));
+        // Each field draws its own share of the merged meshes (mergeGeodes): its geometry shares the buffers.
+        body.userData.geodes ??= body.children.filter((m): m is Mesh => m instanceof Mesh && !!m.userData.geodeCounts).map((m) => {
+          const g = new BufferGeometry();
+          g.setIndex(m.geometry.index);
+          for (const [name, a] of Object.entries(m.geometry.attributes)) g.setAttribute(name, a);
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          g.boundingSphere = m.geometry.boundingSphere;
+          m.geometry = g;
+          return m;
+        });
+        const k = (left > 0.25 ? 1 : 0) + (left > 0.5 ? 1 : 0) + (left > 0.75 ? 1 : 0);
+        for (const m of body.userData.geodes as Mesh[]) m.geometry.setDrawRange(0, m.userData.geodeCounts[k]);
       }
       if (e.def.kind === 'building') {
         const total = ticks((e.def as BuildingDef).buildTime);
