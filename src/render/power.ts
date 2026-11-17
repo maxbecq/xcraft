@@ -1,4 +1,4 @@
-import { AdditiveBlending, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -71,57 +71,114 @@ function fieldMap(): CanvasTexture {
 }
 
 let creepTexture: CanvasTexture | null = null;
-/** Z creep (notice): a chaotic but working mesh of black carbon cables with neon beads, fading at the rim. */
+/**
+ * Z creep (notice): a chaotic but working mesh of electric cables. Bundles of insulated wires run out from the
+ * centre, each shaded as a tube (dark edge, coloured sheath, a highlight), held by ties, with junction boxes
+ * and their LEDs along the way; the rim frays out.
+ */
 function creepMap(): CanvasTexture {
   if (creepTexture) return creepTexture;
+  const S = 1024;
+  const C = S / 2;
   const c = document.createElement('canvas');
-  c.width = c.height = 512;
+  c.width = c.height = S;
   const g = c.getContext('2d')!;
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   g.lineCap = 'round';
-  for (let i = 0; i < 140; i++) {
-    // Cables run out from the centre, wandering.
-    const a = rnd() * Math.PI * 2;
-    const r0 = rnd() * 60;
-    const r1 = 120 + rnd() * 120;
-    const bend = (rnd() - 0.5) * 1.6;
-    const x0 = 256 + Math.cos(a) * r0;
-    const y0 = 256 + Math.sin(a) * r0;
-    const x1 = 256 + Math.cos(a + bend) * r1;
-    const y1 = 256 + Math.sin(a + bend) * r1;
-    const mx = 256 + Math.cos(a + bend / 2 + (rnd() - 0.5)) * (r0 + r1) * 0.5;
-    const my = 256 + Math.sin(a + bend / 2 + (rnd() - 0.5)) * (r0 + r1) * 0.5;
-    g.strokeStyle = i % 3 ? 'rgba(18,20,26,0.92)' : 'rgba(44,48,58,0.92)';
-    g.lineWidth = 2 + rnd() * 5;
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.quadraticCurveTo(mx, my, x1, y1);
+  g.lineJoin = 'round';
+  // Insulation colours: mostly black and grey rubber, some dark red, rusty orange and faded yellow.
+  const sheaths = ['#15161a', '#1d1f24', '#2b2d33', '#15161a', '#5a1e1a', '#7a4a22', '#6e6230', '#202a2e'];
+  const point = (a: number, r: number) => [C + Math.cos(a) * r, C + Math.sin(a) * r] as const;
+  type Path = [number, number, number, number, number, number, number, number];
+  const along = (p: Path, t: number) => {
+    const u = 1 - t;
+    return [u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6], u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7]] as const;
+  };
+  const tube = (p: Path, dx: number, dy: number, w: number, color: string) => {
+    const trace = () => {
+      g.beginPath();
+      g.moveTo(p[0] + dx, p[1] + dy);
+      g.bezierCurveTo(p[2] + dx, p[3] + dy, p[4] + dx, p[5] + dy, p[6] + dx, p[7] + dy);
+    };
+    trace();
+    g.strokeStyle = 'rgba(0,0,0,0.85)';
+    g.lineWidth = w + 3;
     g.stroke();
-    if (i % 4 === 0) {
-      // A neon thread along some of them.
-      g.strokeStyle = i % 8 ? 'rgba(60,240,255,0.7)' : 'rgba(255,60,200,0.6)';
-      g.lineWidth = 1;
-      g.stroke();
-    }
-  }
-  for (let i = 0; i < 60; i++) {
-    g.fillStyle = i % 5 ? 'rgba(90,250,255,0.9)' : 'rgba(255,80,210,0.9)';
+    g.strokeStyle = color;
+    g.lineWidth = w;
+    g.stroke();
+    g.save();
+    g.translate(-w * 0.18, -w * 0.18);
+    trace();
+    g.strokeStyle = 'rgba(255,255,255,0.22)';
+    g.lineWidth = Math.max(1, w * 0.25);
+    g.stroke();
+    g.restore();
+  };
+  const bundles: Path[] = [];
+  for (let i = 0; i < 46; i++) {
+    // A bundle wanders out from near the centre to the rim.
     const a = rnd() * Math.PI * 2;
-    const r = rnd() * 230;
+    const bend = (rnd() - 0.5) * 1.4;
+    const [x0, y0] = point(a, rnd() * 90);
+    const [x1, y1] = point(a + bend * 0.3 + (rnd() - 0.5) * 0.6, 160 + rnd() * 180);
+    const [x2, y2] = point(a + bend * 0.7 + (rnd() - 0.5) * 0.6, 300 + rnd() * 160);
+    const [x3, y3] = point(a + bend, 380 + rnd() * 130);
+    const path: Path = [x0, y0, x1, y1, x2, y2, x3, y3];
+    bundles.push(path);
+    const n = 1 + Math.floor(rnd() * 4);
+    const w = 5 + rnd() * 9;
+    for (let k = 0; k < n; k++) {
+      const off = (k - (n - 1) / 2) * w * 0.95;
+      const nx = -Math.sin(a) * off;
+      const ny = Math.cos(a) * off;
+      tube(path, nx, ny, w * (0.75 + rnd() * 0.4), sheaths[Math.floor(rnd() * sheaths.length)]);
+    }
+    // Cable ties across the bundle.
+    if (n > 1)
+      for (let t = 0.2 + rnd() * 0.2; t < 0.95; t += 0.18 + rnd() * 0.2) {
+        const [x, y] = along(path, t);
+        const [xb, yb] = along(path, t + 0.01);
+        const ang = Math.atan2(yb - y, xb - x);
+        g.save();
+        g.translate(x, y);
+        g.rotate(ang);
+        g.fillStyle = 'rgba(120,118,110,0.95)';
+        g.fillRect(-2, (-n * w) / 2 - 2, 4, n * w + 4);
+        g.restore();
+      }
+  }
+  // Junction boxes on the bundles, with a status LED.
+  for (let i = 0; i < 26; i++) {
+    const [x, y] = along(bundles[i % bundles.length], 0.25 + rnd() * 0.6);
+    const s = 14 + rnd() * 12;
+    g.save();
+    g.translate(x, y);
+    g.rotate(rnd() * Math.PI);
+    g.fillStyle = 'rgba(0,0,0,0.8)';
+    g.fillRect(-s / 2 - 2, -s / 2 - 2, s + 4, s * 0.7 + 4);
+    g.fillStyle = rnd() < 0.5 ? '#4a4640' : '#6a3a22';
+    g.fillRect(-s / 2, -s / 2, s, s * 0.7);
+    g.fillStyle = 'rgba(255,255,255,0.15)';
+    g.fillRect(-s / 2, -s / 2, s, 2);
+    g.fillStyle = i % 4 ? 'rgba(90,250,255,1)' : 'rgba(255,70,50,1)';
     g.beginPath();
-    g.arc(256 + Math.cos(a) * r, 256 + Math.sin(a) * r, 1.5 + rnd() * 2, 0, Math.PI * 2);
+    g.arc(s * 0.25, -s * 0.15, 2.5, 0, Math.PI * 2);
     g.fill();
+    g.restore();
   }
   // Ragged rim: fade the outer ring out.
   g.globalCompositeOperation = 'destination-in';
-  const fade = g.createRadialGradient(256, 256, 150, 256, 256, 256);
+  const fade = g.createRadialGradient(C, C, S * 0.3, C, C, C);
   fade.addColorStop(0, 'rgba(0,0,0,1)');
-  fade.addColorStop(0.8, 'rgba(0,0,0,0.7)');
+  fade.addColorStop(0.8, 'rgba(0,0,0,0.85)');
   fade.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = fade;
-  g.fillRect(0, 0, 512, 512);
+  g.fillRect(0, 0, S, S);
   creepTexture = new CanvasTexture(c);
+  creepTexture.colorSpace = SRGBColorSpace;
+  creepTexture.anisotropy = 4;
   return creepTexture;
 }
 
@@ -158,7 +215,7 @@ export class PowerNet {
     if (key !== this.key) this.rebuild(nodes, world);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
-    this.creepMaterial.opacity = highlight ? 1 : 0.85;
+    this.creepMaterial.opacity = highlight ? 1 : 0.95;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.updateWarps(world, sees, t);
   }
