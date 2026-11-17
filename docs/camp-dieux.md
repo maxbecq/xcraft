@@ -264,7 +264,7 @@ Temple primordial, les trois sorts ultimes, l'Avatar de Jormunggand ; niveaux de
 
 Planches : [`docs/concepts-dieux/planche-camp.png`](concepts-dieux/planche-camp.png) (palette, matériaux, silhouettes) et [`docs/concepts-dieux/planche-v1.png`](concepts-dieux/planche-v1.png) (bâtiments clés et unités de la V1), rendues dans Blender sous l'angle du jeu (environ 35° au-dessus de l'horizon).
 
-**Style : fantasy héroïque peinte à la main, onirique.** Proportions exagérées (épaules, mains, armes, cornes), dégradés sombres en bas et clairs en haut comme une peinture, couleurs saturées ; la magie se voit partout (halos, runes lumineuses, lucioles, éclairs, voiles de lumière, feuillage d'éther qui pend en lianes). Inspiration générale de la fantasy stylisée des RTS, sans reprendre aucun modèle ni nom existant.
+**Style : fantasy héroïque onirique, rendue comme le reste du jeu** : matières mates et texturées (pierre appareillée, métal martelé, tissu tissé, fourrure, bois veiné), creux assombris, contours encrés ; corps d'une seule pièce aux proportions héroïques, armures en plaques ; la magie se voit partout (halos, runes lumineuses, lucioles, éclairs, voiles de lumière, feuillage d'éther qui pend en lianes). Inspiration générale de la fantasy stylisée des RTS, sans reprendre aucun modèle ni nom existant.
 
 **Idée directrice : le sanctuaire.** Les Humains bricolent (ferraille, rouille), les Isdaris sont Art déco chromé, les Z sont des machines rouillées sur câbles. Les Dieux sont **de la pierre sculptée et polie, de l'or et de la lumière** : rien de rapiécé, rien de mécanique, des formes posées et symétriques.
 
