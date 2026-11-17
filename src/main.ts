@@ -462,7 +462,13 @@ document.addEventListener('change', (e) => {
   if ((e.target as HTMLElement).closest('.menu')) audio.play('menu');
 });
 
-const ready = Promise.all([loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS]), decor.load(scene, (m) => fogMaterial(m, fog, map))]);
+// The loading screen (index.html) fills as the models arrive and lifts once the first pictures are drawn.
+const loading = document.getElementById('loading');
+const ready = Promise.all([
+  loadModels([...Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade'), ...MINERAL_VARIANTS], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
+  decor.load(scene, (m) => fogMaterial(m, fog, map)),
+]);
+ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {
   ready.then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
@@ -857,6 +863,11 @@ function start(): void {
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
   if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer });
+  // Two frames on (the first compiles the shaders), the picture is ready: the loading screen fades away.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    loading?.classList.add('done');
+    setTimeout(() => loading?.remove(), 500);
+  }));
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.

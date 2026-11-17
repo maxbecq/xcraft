@@ -476,11 +476,14 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
 const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'humains';
 
 /** Loads the Blender models; types without one keep their placeholder. */
-export async function loadModels(types: string[]): Promise<void> {
+export async function loadModels(types: string[], onProgress?: (done: number, total: number) => void): Promise<void> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // Meshy models are meshopt-compressed
+  let done = 0;
+  const count = <T,>(p: Promise<T>, total: number) => p.finally(() => onProgress?.(++done, total));
+  const todo = types.filter((type) => !LOOKS[type]);
   await Promise.all(
     // Types drawn with another's model (LOOKS) have no file of their own.
-    types.filter((type) => !LOOKS[type]).map(async (type) => {
+    todo.map((type) => count((async () => {
       const character = CHARACTERS[type];
       const meshy = !new URLSearchParams(location.search).has('proc');
       if (meshy && STATIC_MESHY.includes(type)) {
@@ -542,7 +545,7 @@ export async function loadModels(types: string[]): Promise<void> {
       } catch {
         // keep the placeholder
       }
-    }),
+    })(), todo.length)),
   );
 }
 

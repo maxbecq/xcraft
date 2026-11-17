@@ -34,6 +34,53 @@
         }, true);
       })();
     </script>
+    <!-- Loading screen, drawn before any script runs; main.ts fills the bar and lifts it once the first picture is up. -->
+    <style>
+      #loading { position: fixed; inset: 0; z-index: 90; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px; text-align: center;
+        background: radial-gradient(ellipse at 50% 40%, #13202e 0%, #070b12 60%, #030508 100%); color: #cfe3f5; font: 500 15px/1.4 Rajdhani, system-ui, sans-serif; transition: opacity 0.45s ease; }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading h1 { margin: 0; font: 900 clamp(48px, 9vw, 96px)/1 Orbitron, system-ui, sans-serif; letter-spacing: 0.12em; color: #eaf6ff; text-shadow: 0 0 18px rgba(120, 200, 255, 0.55), 0 0 40px rgba(80, 160, 255, 0.25); }
+      #loading .what { letter-spacing: 0.3em; text-transform: uppercase; font-size: 13px; opacity: 0.7; }
+      #loading .track { position: relative; width: min(420px, 70vw); height: 4px; background: rgba(150, 200, 255, 0.12); border-radius: 2px; overflow: hidden; }
+      #loading .fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--p, 0) * 100%); background: linear-gradient(90deg, #4fb0ff, #e6f6ff); box-shadow: 0 0 10px #4fb0ff; transition: width 0.25s ease-out; }
+      #loading .fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent); animation: loading-sheen 1.1s linear infinite; }
+      @keyframes loading-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+      #loading .tip { max-width: min(520px, 86vw); min-height: 2.8em; opacity: 0.75; }
+      #loading .tip b { color: #ffd36a; font-weight: 700; }
+      @media (prefers-reduced-motion: reduce) { #loading .fill::after { animation: none; } }
+    </style>
+    <div id="loading" role="status" aria-live="polite">
+      <h1>XCRAFT</h1>
+      <div class="what">Chargement</div>
+      <div class="track"><div class="fill"></div></div>
+      <div class="tip"></div>
+    </div>
+    <script>
+      (function () {
+        var tips = [
+          '<b>Espace</b> : aller voir la dernière attaque.',
+          '<b>Double-clic</b> sur une unité : toutes celles de ce type à l\u2019écran.',
+          '<b>Alt</b> maintenu : toutes les barres de vie.',
+          '<b>Ctrl+1…9</b> : créer un groupe, <b>1…9</b> pour le rappeler.',
+          '<b>Ctrl+F5…F8</b> : mémoriser une vue, <b>F5…F8</b> pour y revenir.',
+          'L\u2019icône d\u2019ouvrier en haut sélectionne les <b>ouvriers inactifs</b>.',
+          '<b>A</b> puis clic : attaquer en se déplaçant.',
+        ];
+        // Fingers have no keyboard: touch tips on phones and tablets.
+        if (matchMedia('(pointer: coarse)').matches) tips = [
+          '<b>Double tap</b> sur une unité : toutes celles de ce type à l\u2019écran.',
+          '<b>Appui long</b> puis glisser : rectangle de sélection.',
+          '<b>Pincer</b> pour zoomer, <b>glisser</b> pour déplacer la vue.',
+          'Touchez l\u2019<b>alerte rouge</b> pour aller voir l\u2019attaque.',
+          'L\u2019icône d\u2019ouvrier en haut sélectionne les <b>ouvriers inactifs</b>.',
+        ];
+        var q = new URLSearchParams(location.search);
+        var match = q.has('play') || q.has('spectate') || q.has('replay') || q.has('net');
+        var box = document.getElementById('loading');
+        box.querySelector('.what').textContent = match ? 'Chargement de la partie' : 'Chargement';
+        box.querySelector('.tip').innerHTML = match ? tips[Math.floor(Math.random() * tips.length)] : '';
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
