@@ -332,8 +332,38 @@ export class Hud {
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
     if ((e.def as UnitDef).weapons) html += `<div class="info">Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse légère'}</div>`;
+    if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
     this.portrait.render();
+  }
+
+  /**
+   * Fighting stats of the selected unit or building, for anyone looking (spectators too): attack and armour with
+   * their research bonus, range, rate of fire, speed and sight.
+   */
+  private stats(e: Entity): string {
+    const fmt = (v: number) => (Math.round(v * 10) / 10).toLocaleString('fr-FR');
+    const plus = (n: number) => (n > 0 ? ` <em>+${n}</em>` : '');
+    const parts: string[] = [];
+    const a = this.world.weapon(e);
+    if (a) {
+      // shortcut: only the faction's attack research is counted, not the rarer unit-specific bonuses (Acide, Conseil's aura…).
+      const p = this.world.players[e.owner];
+      const line = p?.faction === 'isdaris' ? ((e.def as UnitDef).mechanical ? 'assembleuratk' : 'portailatk') : p?.faction === 'z' ? 'zattaque' : a.range < 1 ? 'melee' : 'ranged';
+      const up = e.owner >= 0 && e.def.kind === 'unit' && !(e.def as UnitDef).worker ? this.world.level(e.owner, line) * Math.max(1, Math.round(a.damage / 10)) : 0;
+      parts.push(`<span title="Dégâts par coup">Attaque ${a.damage}${plus(up)}</span>`);
+      parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
+      parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
+    }
+    if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
+    if ('armor' in e.def) {
+      // The world keeps the armour research to itself; read it rather than copy its many cases.
+      const bonus = e.def.kind === 'unit' && e.owner >= 0 ? (this.world['armorBonus'] as (t: Entity) => number).call(this.world, e) : 0;
+      parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
+    }
+    if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).speed)}</span>`);
+    if ('sight' in e.def) parts.push(`<span>Vue ${e.def.sight}</span>`);
+    return parts.length ? `<div class="stats">${parts.join('')}</div>` : '';
   }
 
   // ---------------------------------------------------------------- command card

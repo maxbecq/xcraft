@@ -729,3 +729,7 @@ body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
 .tool .burger { width: 0.85em; height: 0.7em; vertical-align: -0.05em; }
 .tool .swords { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }
 .tool .keep { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }
+/* Fighting stats of the selection: a wrapped row of small labels, research bonuses in gold. */
+.hud-panel .stats { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; font-size: 12px; line-height: 1.3; opacity: 0.85; }
+.hud-panel .stats em { font-style: normal; color: #ffd36a; }
+@media (max-height: 560px), (max-width: 820px) { .hud-panel .stats { font-size: 10px; gap: 0 6px; margin-top: 2px; } }
