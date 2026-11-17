@@ -1,0 +1,87 @@
+# Rapport d'équilibrage — 17 novembre 2026
+
+Pour l'équilibreur. Mesures faites par l'IA contre l'IA ; aucune valeur de `src/balance.json` n'a été changée dans le jeu : les essais tournent sur une copie.
+
+## Méthode
+
+- `npm run balance:big` : 98 parties par paire de camps (handicaps de récolte de 88 à 112 des deux côtés, chaque camp joue des deux côtés de la carte). Cible : 49 victoires chacun, ±5.
+- Code mesuré : `main` au commit `217e8cb` (IA avec réserve pour les recherches et capacités de combat).
+- Le jeu est chaotique : deux réglages très proches peuvent donner ±10 victoires d'écart. Un écart de moins de 10 sur 98 parties n'est pas significatif.
+- Les autres scripts : `factions.test.ts` est un petit échantillon Humains–Isdaris (doublon de `big`), `sweep.test.ts` compare des plans d'IA (pas des stats), `balance.test.ts` suit une partie Humains minute par minute. `big.test.ts` couvre déjà les paires avec Z.
+
+## Situation actuelle
+
+| Paire | Victoires | Durée moyenne |
+|---|---|---|
+| Humains – Isdaris | **67 – 31** | 12 min |
+| Z – Humains | **90 – 8** | 16 min |
+| Z – Isdaris | **84 – 14** | 13 min |
+
+Ordre de force : Z ≫ Humains > Isdaris.
+
+### Constats
+
+1. **Z est moins cher que les autres pour la même chose.** Le Drone de combat a l'arme de l'Auxiliaire (6 dégâts, portée 4, 1 coup/s) pour 75 minerais et 15 s au lieu de 100 minerais et 18 s (70 PV au lieu de 80). L'IA Z en fait sa base : 7143 Drones de combat contre les Humains, 5407 contre les Isdaris. Le reste du camp est aussi environ 25 % moins cher (Drone 75 contre 100 pour le Serf, Pod 150 contre 200 pour le Grenier, Plate-forme 300 contre 350 pour la Caserne), et Z se répare sur le creep.
+2. **Les Isdaris manquent d'énergie.** Leurs unités de base en consomment (Archer 50, Druide 150) alors que l'Auxiliaire et le Légionnaire humains n'en coûtent pas : toute l'énergie humaine va aux recherches (56 niveaux d'attaque à distance, 33 Croissance), les Isdaris s'arrêtent au Laboratoire (58) et n'atteignent jamais les améliorations du Portail.
+3. **Unités presque jamais produites par l'IA** (sur 294 parties) : Plésiosaure (≤ 7), Phalangiste (0), Psycho-assembleur et ses unités (0), Druide contre Z (3), Hexapode (≤ 148), Coléoptère (≤ 60). C'est en partie le choix de l'IA (`ai.army`), pas forcément les stats.
+
+## Essais (sur copie, 98 parties par paire)
+
+### Isdaris (paire Humains – Isdaris, référence 67 – 31)
+
+| Essai | Résultat | Commentaire |
+|---|---|---|
+| Archer : énergie 50 → 25 | 65 – 33 | +57 % d'Archers, presque aucun effet |
+| Attaque/armure du Portail niveau 1 : 250/250 → 150/150 | 67 – 31 | aucun effet : l'IA n'y arrive jamais |
+| Créature : PV 67 → 75 | 39 – 59 | trop fort |
+| Créature : PV 67 → 72 | 44 – 54 | |
+| Créature : PV 67 → 71 | 58 – 40 | |
+| **Créature : PV 67 → 70** | **52 – 46** | dans la cible |
+
+### Z (référence 90 – 8 contre Humains, 84 – 14 contre Isdaris)
+
+| Essai | Z – Humains | Z – Isdaris |
+|---|---|---|
+| Drone de combat 100 minerais, 18 s | 38 – 60 | 50 – 48 |
+| + Drone 100 minerais | 39 – 57 | 50 – 48 |
+| + Pod 200, Plate-forme 350, Assimilateur 600 | 12 – 83 | 26 – 69 |
+
+Avec la Créature à 70 PV :
+
+| Drone de combat | Z – Humains | Z – Isdaris |
+|---|---|---|
+| 90 minerais, 16 s | 66 – 31 | 62 – 36 |
+| 100 minerais, 15 s | 63 – 35 | 47 – 51 |
+| 100 minerais, 16 s | 69 – 29 | 56 – 42 |
+| 100 minerais, 17 s | 63 – 35 | 57 – 40 |
+| 100 minerais, 17 s, `creepRepair` 2 → 1 | 60 – 38 | 60 – 34 |
+| 100 minerais, 17,5 s | 56 – 42 | 63 – 35 |
+| **100 minerais, 18 s** | **38 – 60** | **48 – 50** |
+
+Le levier Z est le Drone de combat ; le prix du Drone ouvrier et des bâtiments compte peu ou trop. Contre les Humains, le résultat bascule entre 17,5 s et 18 s (probablement un seuil dans le rythme des vagues de l'IA).
+
+## Proposition
+
+Deux valeurs seulement, à marquer provisoires dans `BALANCE.md` :
+
+| Stat | Actuel | Proposé | Raison |
+|---|---|---|---|
+| `creature.hp` | 67 | **70** | Isdaris trop faibles contre les Humains ; levier le plus net |
+| `dronecombat.cost.minerals` | 75 | **100** | même prix que l'Auxiliaire, dont il a l'arme |
+| `dronecombat.buildTime` | 15 | **18** | même temps que l'Auxiliaire |
+
+Effet mesuré :
+
+| Paire | Avant | Après |
+|---|---|---|
+| Humains – Isdaris | 67 – 31 | **52 – 46** |
+| Z – Humains | 90 – 8 | **38 – 60** |
+| Z – Isdaris | 84 – 14 | **48 – 50** |
+
+Reste à régler : **Z devient un peu faible contre les Humains** (38 – 60, hors cible). L'alternative à 17,5 s donne 56 – 42 et 63 – 35 : meilleure contre les Humains, trop forte contre les Isdaris. Au total la version à 18 s est plus proche de l'équilibre (Z gagne 44 % de ses parties, contre 61 %). Pour relever Z face aux Humains seulement, une piste à essayer serait un des socles (Quadripode, Hexapode) ou les kits d'armes, que l'IA Z utilise peu.
+
+## Questions pour l'équilibreur
+
+- Valides-tu les deux changements (Créature 70 PV, Drone de combat au prix et au temps de l'Auxiliaire) ?
+- Faut-il que le camp Z reste moins cher (identité « essaim de machines ») et perde autrement, par exemple moins de PV ?
+- Quel essai veux-tu pour Z contre les Humains ?
