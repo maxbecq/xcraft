@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Float32BufferAttribute, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -332,6 +332,36 @@ export class PowerNet {
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
   private readonly creepMaterial: MeshBasicMaterial;
+  /** Z links: a dim trace or wire with sparks of current running along it (uv.x is the distance in tiles). */
+  private readonly linkMaterial = new ShaderMaterial({
+    uniforms: { time: { value: 0 }, base: { value: new Color(0xc89040) }, spark: { value: new Color(0x7ff5ff) }, baseAlpha: { value: 0.75 } },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform float time;
+      uniform vec3 base;
+      uniform vec3 spark;
+      uniform float baseAlpha;
+      varying vec2 vUv;
+      void main() {
+        float across = 1.0 - abs(vUv.y * 2.0 - 1.0);
+        // Sparks every 3 tiles, running at 4 tiles a second, with a fading tail behind.
+        float p = fract((vUv.x - time * 4.0) / 3.0);
+        float head = pow(p, 18.0) + 0.35 * pow(p, 4.0);
+        // A slower, fainter second current the other way.
+        float q = fract((vUv.x + time * 1.5) / 5.0);
+        head += 0.25 * pow(q, 24.0);
+        float glow = head * smoothstep(0.0, 0.6, across);
+        vec3 col = mix(base * (0.7 + 0.3 * across), spark, clamp(glow, 0.0, 1.0));
+        gl_FragColor = vec4(col + spark * glow * 0.6, clamp(baseAlpha * smoothstep(0.0, 0.35, across) + glow, 0.0, 1.0));
+      }`,
+    transparent: true,
+    depthWrite: false,
+  });
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -345,6 +375,10 @@ export class PowerNet {
 
   constructor(scene: Object3D, private readonly map: GameMap, private readonly creepStyle: CreepStyle = 'cables') {
     scene.add(this.root);
+    if (creepStyle === 'cables') {
+      this.linkMaterial.uniforms.base.value.set(0x1d1f24);
+      this.linkMaterial.uniforms.baseAlpha.value = 0.95;
+    }
     this.creepMaterial =
       creepStyle === 'circuit'
         ? new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true })
@@ -355,12 +389,15 @@ export class PowerNet {
   update(world: World, sees: (e: Entity) => boolean, highlight: boolean): void {
     // Only the linked network powers anything; a cut-off emitter shows no zone and no beam.
     const nodes = world.players.flatMap((p) => world.powerNetwork(p.id)).filter(sees);
-    const key = nodes.map((e) => e.id).join(',');
-    if (key !== this.key) this.rebuild(nodes, world);
+    // Z buildings outside the network's nodes get a powered link too, so they join the key.
+    const fed = [...world.entities.values()].filter((e) => e.def.kind === 'building' && e.buildLeft <= 0 && !(e.def as BuildingDef).power && world.players[e.owner]?.faction === 'z' && sees(e));
+    const key = [...nodes, ...fed].map((e) => e.id).join(',');
+    if (key !== this.key) this.rebuild(nodes, world, fed, key);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
     this.creepMaterial.opacity = highlight ? 1 : this.creepStyle === 'circuit' ? 0.75 : 0.95;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
+    this.linkMaterial.uniforms.time.value = t;
     this.updateWarps(world, sees, t);
   }
 
@@ -413,9 +450,9 @@ export class PowerNet {
     this.warpGlow.uniforms.opacity.value = 0.2 + 0.07 * Math.sin(t * 5.3);
   }
 
-  private rebuild(nodes: Entity[], world: World): void {
+  private rebuild(nodes: Entity[], world: World, fed: Entity[], key: string): void {
     const creep = (e: Entity) => world.players[e.owner].faction === 'z';
-    this.key = nodes.map((e) => e.id).join(',');
+    this.key = key;
     this.root.clear();
     const at = (e: Entity) => new Vector3(e.x / FP, heightAt(this.map, e.x / FP, e.y / FP), e.y / FP);
     for (const e of nodes) {
@@ -451,6 +488,16 @@ export class PowerNet {
       disc.renderOrder = 1;
       this.root.add(disc);
     }
+    // Z: a trace (or wire) from each node to the nearest node already linked, and from every other building
+    // to its nearest node, with sparks of current running along it.
+    for (const owner of new Set(nodes.filter(creep).map((e) => e.owner))) {
+      const own = nodes.filter((e) => e.owner === owner);
+      const linked = [own.find((e) => (e.def as BuildingDef).dropoff) ?? own[0]];
+      for (const e of own) if (e !== linked[0]) linked.push(e);
+      const nearest = (e: Entity, among: Entity[]) => among.reduce((a, b) => (Math.hypot(b.x - e.x, b.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y) ? b : a));
+      for (let i = 1; i < linked.length; i++) this.link(linked[i], nearest(linked[i], linked.slice(0, i)));
+      for (const e of fed) if (e.owner === owner) this.link(e, nearest(e, own));
+    }
     // Per player, a tree grown from the main buildings: each emitter links to the nearest node already
     // in the network whose zone touches its own.
     for (const owner of new Set(nodes.filter((e) => !creep(e)).map((e) => e.owner))) {
@@ -472,6 +519,62 @@ export class PowerNet {
         rest.splice(rest.indexOf(best[0]), 1);
       }
     }
+  }
+
+  /**
+   * A route on the ground between two buildings, at right angles and 45° like a circuit trace (a looser
+   * curve for the cables), draped over the terrain; its UV runs along it in tiles, for the pulses.
+   */
+  private link(a: Entity, b: Entity): void {
+    const [ax, az, bx, bz] = [a.x / FP, a.y / FP, b.x / FP, b.y / FP];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const diag = Math.min(Math.abs(dx), Math.abs(dz));
+    const diagFirst = (a.id + b.id) % 2 === 0;
+    const corner = (t: number): [number, number] => [ax + Math.sign(dx) * t, az + Math.sign(dz) * t];
+    const knee: [number, number] = diagFirst ? corner(diag) : [bx - Math.sign(dx) * diag, bz - Math.sign(dz) * diag];
+    const route: [number, number][] = [[ax, az], knee, [bx, bz]];
+    const pts: [number, number][] = [];
+    for (let k = 0; k < route.length - 1; k++) {
+      const [x0, z0] = route[k];
+      const [x1, z1] = route[k + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.25));
+      for (let i = 0; i < n; i++) {
+        const t = i / n;
+        // Cables sag into gentle waves instead of keeping a straight line.
+        const wave = this.creepStyle === 'cables' ? Math.sin((k + t) * Math.PI * 2 + a.id) * 0.25 : 0;
+        const len = Math.hypot(x1 - x0, z1 - z0) || 1;
+        pts.push([x0 + (x1 - x0) * t + (-(z1 - z0) / len) * wave, z0 + (z1 - z0) * t + ((x1 - x0) / len) * wave]);
+      }
+    }
+    pts.push([bx, bz]);
+    const half = this.creepStyle === 'cables' ? 0.11 : 0.1;
+    const position: number[] = [];
+    const uv: number[] = [];
+    const index: number[] = [];
+    let along = ((a.id * 7919 + b.id * 104729) % 1000) / 37; // each link starts its pulses elsewhere
+    pts.forEach(([x, z], i) => {
+      const [px, pz] = pts[Math.max(0, i - 1)];
+      const [nx, nz] = pts[Math.min(pts.length - 1, i + 1)];
+      const len = Math.hypot(nx - px, nz - pz) || 1;
+      const ox = (-(nz - pz) / len) * half;
+      const oz = ((nx - px) / len) * half;
+      if (i) along += Math.hypot(x - px, z - pz);
+      for (const s of [-1, 1]) {
+        const vx = x + ox * s;
+        const vz = z + oz * s;
+        position.push(vx, heightAt(this.map, vx, vz) + 0.12, vz);
+        uv.push(along, s < 0 ? 0 : 1);
+      }
+      if (i) index.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+    });
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new Float32BufferAttribute(position, 3));
+    geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    geo.setIndex(index);
+    const m = new Mesh(geo, this.linkMaterial);
+    m.renderOrder = 2;
+    this.root.add(m);
   }
 
   private beam(from: Vector3, to: Vector3): void {
