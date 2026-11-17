@@ -29,11 +29,25 @@ export interface InputHooks {
 const LONG_PRESS_MS = 400;
 const TAP_SLOP_PX = 12;
 
-/** Cursor image from SVG strokes on a 32 px box: a soft halo of the colour, a dark outline, then the colour. */
-function cursorOf(color: string, shape: string): string {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, pointer`;
+/** One drawing of a cursor: SVG strokes on a 32 px box, in a colour, at an opacity (for cross-fades). */
+interface Layer {
+  color: string;
+  shape: string;
+  opacity?: number;
 }
+
+/** Cursor image from layers: each a soft halo of its colour, a dark outline, then the colour; hotspot in the middle. */
+function cursorOf(...layers: Layer[]): string {
+  const draw = ({ color, shape, opacity = 1 }: Layer) =>
+    `<g opacity='${opacity.toFixed(2)}'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, default`;
+}
+
+/** The game's arrow: bronze body, gold edge, its tip on the hotspot. */
+const ARROW: Layer = { color: '#e8b64a', shape: "<path fill='#2b2010' d='M16.6 16.6L17 29.2L20.3 25.9L23.1 31L25.7 29.7L22.9 24.6L27.5 24.2Z'/><path stroke-width='1' opacity='.6' d='M18.4 20.2L18.6 25.6'/>" };
+// The arrow everywhere outside the map's own cursors (menus, console); buttons keep their hand.
+document.documentElement.style.setProperty('--arrow', cursorOf(ARROW));
 
 /** Corner brackets of a ground square seen in isometric view: a 2:1 diamond, `w` from centre to side corner. */
 function isoCorners(w: number): string {
@@ -46,11 +60,11 @@ function isoCorners(w: number): string {
 }
 
 const cursorCache = new Map<string, string[]>();
+const steady = new Map<string, string>();
 const cached = (key: string, make: () => string[]) => cursorCache.get(key) ?? cursorCache.set(key, make()).get(key)!;
 
 /** Over something selectable (SC1 lens): corner brackets closing in step by step round a flat ring. */
-const hoverFrames = (color: string) =>
-  cached(`hover${color}`, () => [15, 13.5, 12, 10.5].map((w) => cursorOf(color, `${isoCorners(w)}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>`)));
+const hoverLayers = (color: string): Layer[] => [15, 13.5, 12, 10.5].map((w) => ({ color, shape: `${isoCorners(w)}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>` }));
 
 /** Aiming an attack or an ability: a reticle lying on the ground, its four ticks turning round it. */
 const aimFrames = (color: string) =>
@@ -62,12 +76,14 @@ const aimFrames = (color: string) =>
         const [c, s] = [Math.cos(a), Math.sin(a)];
         ticks += `M${(16 + 13 * c).toFixed(2)} ${(16 + 6.5 * s).toFixed(2)}L${(16 + 7.5 * c).toFixed(2)} ${(16 + 3.75 * s).toFixed(2)}`;
       }
-      return cursorOf(color, `<ellipse cx='16' cy='16' rx='10' ry='5'/><path d='${ticks}'/><ellipse cx='16' cy='16' rx='1.2' ry='0.6'/>`);
+      return cursorOf({ color, shape: `<ellipse cx='16' cy='16' rx='10' ry='5'/><path d='${ticks}'/><ellipse cx='16' cy='16' rx='1.2' ry='0.6'/>` });
     }),
   );
 
 /** Right-click order given: green brackets snapping shut on the spot. */
-const orderFrames = () => cached('order', () => [14, 10.5, 7, 4].map((w) => cursorOf('#4dff6a', isoCorners(w))));
+const orderFrames = () => cached('order', () => [14, 10.5, 7, 4].map((w) => cursorOf({ color: '#4dff6a', shape: isoCorners(w) })));
+/** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
+const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
 type TouchMode = 'pending' | 'pan' | 'box' | 'pinch';
 
@@ -334,6 +350,11 @@ export class Input {
   private hoverColor = '';
   private orderedAt = -Infinity;
   private cursorFrame = 0;
+  /** What the cursor last showed (undefined after an aim or an order), and the cross-fade under way. */
+  private shown: Layer | undefined;
+  private cursorKey = '';
+  private fadeFrom: Layer | undefined;
+  private fadeStart = 0;
 
   /** Owner colour of what is under the cursor (SC1 lens), checked at most every 50 ms. */
   private hoverCursor(x: number, y: number): void {
@@ -344,18 +365,41 @@ export class Input {
     this.hoverColor = !e ? '' : e.owner === this.player ? '#4dff6a' : e.owner < 0 ? '#ffe27a' : this.world.hostile(e.owner, this.player) ? '#ff4a3a' : '#5ad8ff';
   }
 
-  /** Animated cursors, by priority: aiming (red, gold for an ability), a right-click order just given, hovering. */
+  /**
+   * Animated cursors, by priority: aiming (red, gold for an ability), a right-click order just given, hovering,
+   * else the arrow. Aiming and orders show at once; hover and the arrow cross-fade into each other.
+   */
   private animateCursor(): void {
     const f = this.cursorFrame++;
     const body = document.body.classList;
     const since = performance.now() - this.orderedAt;
-    const cursor = body.contains('targeting')
-      ? aimFrames(body.contains('scanning') ? '#ffd860' : '#ff4a3a')[f % 8]
-      : since < 4 * ORDER_FRAME_MS
-        ? orderFrames()[Math.floor(since / ORDER_FRAME_MS)]
-        : this.hoverColor
-          ? hoverFrames(this.hoverColor)[Math.floor(f / 2) % 4]
-          : '';
+    let cursor: string;
+    if (body.contains('targeting')) {
+      cursor = aimFrames(body.contains('scanning') ? '#ffd860' : '#ff4a3a')[f % 8];
+      this.shown = undefined;
+    } else if (since < 4 * ORDER_FRAME_MS) {
+      cursor = orderFrames()[Math.floor(since / ORDER_FRAME_MS)];
+      this.shown = undefined;
+    } else {
+      const layer = this.hoverColor ? hoverLayers(this.hoverColor)[Math.floor(f / 2) % 4] : ARROW;
+      const key = this.hoverColor || 'arrow';
+      if (key !== this.cursorKey) {
+        // Fade from what was on screen; straight in after an aim or an order.
+        this.fadeFrom = this.shown;
+        this.fadeStart = performance.now();
+        this.cursorKey = key;
+      }
+      const k = Math.min(1, (performance.now() - this.fadeStart) / FADE_MS);
+      const id = `${key}${layer.shape}`;
+      cursor =
+        this.fadeFrom && k < 1
+          ? cursorOf({ ...this.fadeFrom, opacity: 1 - k }, { ...layer, opacity: k })
+          : // The plain arrow is the page's own (CSS): the edge-scroll arrows can replace it there.
+            !this.hoverColor
+            ? ''
+            : (steady.get(id) ?? steady.set(id, cursorOf(layer)).get(id)!);
+      this.shown = layer;
+    }
     if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
   }
 

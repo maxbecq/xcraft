@@ -16,6 +16,7 @@
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font: 600 14px/1.25 var(--ui); color: var(--ink); user-select: none; }
 canvas { display: block; }
+html, body { cursor: var(--arrow, default); }
 [hidden] { display: none !important; }
 
 .selection-box { position: fixed; border: 1px solid #5f6; background: rgba(85, 255, 102, 0.08); pointer-events: none; }
