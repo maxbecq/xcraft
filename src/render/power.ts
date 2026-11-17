@@ -317,7 +317,7 @@ function pcbMap(): CanvasTexture {
   return pcbTexture;
 }
 
-/** How the Z creep is drawn: wire bundles out of each building, or a printed circuit over the ground. */
+/** How the Z creep is drawn: a printed circuit over the ground (default), or wire bundles out of each building. */
 export type CreepStyle = 'cables' | 'circuit';
 /** Tiles covered by one repeat of the circuit texture. */
 const PCB_TILE = 8;
@@ -373,7 +373,7 @@ export class PowerNet {
   private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
   private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
-  constructor(scene: Object3D, private readonly map: GameMap, private readonly creepStyle: CreepStyle = 'cables') {
+  constructor(scene: Object3D, private readonly map: GameMap, private readonly creepStyle: CreepStyle = 'circuit') {
     scene.add(this.root);
     if (creepStyle === 'cables') {
       this.linkMaterial.uniforms.base.value.set(0x1d1f24);
