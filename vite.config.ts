@@ -22,5 +22,6 @@ export default defineConfig({
     __BUILT__: JSON.stringify(new Date().toISOString()),
   },
   // Many tests play whole minutes of game: CI machines are slower than a desktop.
-  test: { testTimeout: 30_000 },
+  // .claude/worktrees: other sessions' checkouts, with their own tests.
+  test: { testTimeout: 30_000, exclude: ['**/node_modules/**', '.claude/**'] },
 });

@@ -636,8 +636,20 @@ export class AI {
     const focus = teamFocus(w);
     const held = w.entities.get(focus.get(team) ?? 0);
     if (held && held.hp > 0 && w.hostile(held.owner, this.player)) return held;
-    const enemy = (e: Entity) => w.hostile(e.owner, this.player);
-    const pick = this.nearest(home, (e) => enemy(e) && e.type === FACTIONS[w.players[e.owner].faction].hq) ?? this.nearest(home, (e) => enemy(e) && e.def.kind === 'building');
+    // The enemy building that costs least to reach and take: its defences (armed buildings and soldiers we know of
+    // round it), then distance; a headquarters counts as half defended, since its fall hurts most.
+    const known = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && (e.def.kind === 'building' || w.sees(this.player, e)));
+    const guard = known.filter((e) => (e.def as UnitDef | BuildingDef).attack && !(e.def as UnitDef).worker);
+    let pick: Entity | undefined;
+    let best = Infinity;
+    for (const b of known) {
+      if (b.def.kind !== 'building') continue;
+      let defence = 0;
+      for (const g of guard) if (dist(g.x, g.y, b.x, b.y) < 9 * FP) defence += g.hp + g.shield;
+      if (b.type === FACTIONS[w.players[b.owner].faction].hq) defence /= 2;
+      const cost = defence + dist(b.x, b.y, home.x, home.y) / 20;
+      if (cost < best) [pick, best] = [b, cost];
+    }
     if (pick) focus.set(team, pick.id);
     return pick;
   }

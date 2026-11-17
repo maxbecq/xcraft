@@ -1354,7 +1354,8 @@ export class World {
       this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
     }
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, air1: flies(e), air2: flies(t) });
-    // Idle soldiers hit from afar fight back.
+    // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
+    if (e.inside) e = this.entities.get(e.inside) ?? e;
     const td = t.def as UnitDef;
     if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
       this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
