@@ -1466,7 +1466,7 @@ def joint_leg(p, base, knee, foot, r=0.035, part=None):
         for o in femur:
             o.name = part
         JOINTS[part] = tuple(base)
-        child = part.replace("zleg_", "zshin_")
+        child = part.replace("zleg_", "zshin_") if part.startswith("zleg_") else part + "_tip"
         for o in shin:
             o.name = child
         JOINTS[child] = tuple(knee)
@@ -1669,11 +1669,11 @@ def plateforme(p):
     for s in (-1, 1):
         box(p["hazard"], (0.15, 2.6, 0.03), (s * 1.27, 0, 0.26))
     box(p["team"], (2.82, 0.2, 0.27), (0, 1.3, 0.13))
-    for (x, y, h, reach) in ((-1.1, 1.0, 1.6, 1.2), (1.15, 0.9, 1.1, 0.8)):
+    for k, (x, y, h, reach) in enumerate(((-1.1, 1.0, 1.6, 1.2), (1.15, 0.9, 1.1, 0.8))):
         cyl(p["zrust"], 0.2, 0.4, (x, y, 0.55), verts=8)
-        joint_leg(p, (x, y, 0.75), (x * 0.8, y - reach * 0.3, 0.75 + h), (x * 0.3, y - reach, 0.9), r=0.07)
-        ball(p["orange_glow"], 0.08, (x * 0.3, y - reach, 0.85), seg=6, rings=4)  # welding spark
-    shell(p["zrust"], 0.35, (0.1, -0.3, 0.55), scale=(1, 1.3, 0.5))  # a socle half-built
+        # Each arm is animated (zarm_<k>, its forearm zarm_<k>_tip with the welding spark) while a socle is built.
+        joint_leg(p, (x, y, 0.75), (x * 0.8, y - reach * 0.3, 0.75 + h), (x * 0.3, y - reach, 0.9), r=0.07, part=f"zarm_{k}")
+        ball(p["orange_glow"], 0.08, (x * 0.3, y - reach, 0.85), seg=6, rings=4, name=f"zarm_{k}_tip")  # welding spark
     cable(p, (-1.3, 1.25, 0.3), (0.1, -0.1, 0.6), sag=0.2, r=0.035)
 
 
@@ -1806,8 +1806,9 @@ def build(name, fn):
     # Z legs: each shin hangs from its femur, so it follows the femur and bends at the knee.
     by_name = {o.name: o for o in parts}
     for o in parts:
-        if o.name.startswith("zshin_") and o.name.replace("zshin_", "zleg_") in by_name:
-            femur = by_name[o.name.replace("zshin_", "zleg_")]
+        upper = o.name.replace("zshin_", "zleg_") if o.name.startswith("zshin_") else o.name[: -len("_tip")] if o.name.endswith("_tip") else None
+        if upper in by_name:
+            femur = by_name[upper]
             world = o.matrix_world.copy()
             o.parent = femur
             o.matrix_world = world

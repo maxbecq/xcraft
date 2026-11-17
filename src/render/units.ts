@@ -642,6 +642,10 @@ interface View {
   /** Z building being fabricated: a ring of cyan light at the height being laid. */
   seam?: Mesh;
   /** Z building being fabricated: its own materials cut by a plane rising from `bottom` to `top`. */
+  /** Z Plate-forme: its robot arms (upper part, forearm with the welding spark), animated while it builds. */
+  arms?: { upper: Object3D; tip?: Object3D }[];
+  /** Z Plate-forme: the socle being built on its deck, fabricated layer by layer as training goes on. */
+  fab?: { type: string; model: Object3D; plane: Plane; line: Mesh; bottom: number; top: number; total: number };
   print?: { plane: Plane; frame: Plane; frameMaterial: LineBasicMaterial; lines: LineSegments[]; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
@@ -678,6 +682,10 @@ interface InsectLeg {
   side: number;
 }
 
+/** Not drawn, but hit by the click raycast. */
+const PICK_PROXY = new MeshBasicMaterial({ visible: false });
+/** Height of the Z Plate-forme's deck, where the socles are built. */
+const PLATFORM_DECK = 0.37;
 /** Seconds a Z drone takes to scuttle to the centre of the site it raised. */
 const DEPLOY_WALK = 0.6;
 /** Seconds it takes to settle and spread its legs into a base. */
@@ -1091,6 +1099,7 @@ export class EntityRenderer {
         }
         if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
         if (v.pools) v.pools.visible = e.buildLeft === 0;
+        if (v.arms) this.assemble(v, e, now / 1000);
       }
     }
   }
@@ -1099,6 +1108,71 @@ export class EntityRenderer {
    * Walk cycle (legs, counter-swinging arms, bob, forward lean, sway), breathing when idle,
    * aiming and recoil for gunners, a full-body swing for melee. Everything is eased so poses never snap.
    */
+  /**
+   * Z Plate-forme at work: its arms sweep and weld over the deck, sparks flickering at their tips, while the
+   * socle in training is fabricated on it layer by layer from the deck up, a cyan line at the height laid.
+   */
+  private assemble(v: View, e: Entity, t: number): void {
+    const type = e.buildLeft === 0 && e.queue.length && DEFS[e.queue[0]]?.kind === 'unit' ? e.queue[0] : '';
+    if (v.fab && v.fab.type !== type) {
+      v.fab.model.removeFromParent();
+      v.fab.line.removeFromParent();
+      v.fab = undefined;
+    }
+    if (type && !v.fab) {
+      const ghost = model(type, teamMaterials[e.owner] ?? teamMaterials[0]);
+      ghost.scale.setScalar(UNIT_SCALE * (LOOK_SCALE[type] ?? 1));
+      ghost.position.set(0, PLATFORM_DECK, 0.1); // on the deck, between the arms
+      ghost.rotation.y = Math.PI * 0.15;
+      v.model.add(ghost);
+      v.root.updateMatrixWorld(true); // placed this frame: its world matrix may not be up to date yet
+      const box = new Box3().setFromObject(ghost);
+      const plane = new Plane(new Vector3(0, -1, 0), box.min.y);
+      ghost.traverse((o) => {
+        const mesh = o as Mesh;
+        if (!mesh.isMesh) return;
+        mesh.userData.noPick = true;
+        const cut = (m: Material) => {
+          const c = m.clone();
+          c.clippingPlanes = [plane];
+          c.clipShadows = true;
+          c.side = DoubleSide;
+          return c;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(cut) : cut(mesh.material);
+      });
+      const size = box.getSize(new Vector3());
+      const r = Math.max(size.x, size.z) * 0.3; // round the body, inside the splayed legs
+      const line = new Mesh(new RingGeometry(r * 0.94, r, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+      line.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
+      line.scale.setScalar(Math.SQRT2);
+      line.userData.noPick = true;
+      v.root.add(line); // goes with the building if it is destroyed
+      const centre = box.getCenter(new Vector3()).sub(v.root.position);
+      line.position.set(centre.x, box.min.y - v.root.position.y, centre.z);
+      v.fab = { type, model: ghost, plane, line, bottom: box.min.y, top: box.max.y, total: e.trainLeft };
+    }
+    const working = !!v.fab;
+    if (v.fab) {
+      v.fab.total = Math.max(v.fab.total, e.trainLeft);
+      const p = v.fab.total > 0 ? 1 - e.trainLeft / v.fab.total : 0;
+      const h = v.fab.bottom + (v.fab.top - v.fab.bottom) * p;
+      v.fab.plane.constant = h;
+      v.fab.line.position.y = h - v.root.position.y + 0.01;
+      (v.fab.line.material as MeshBasicMaterial).opacity = 0.5 + 0.3 * Math.abs(Math.sin(t * 8));
+    }
+    v.arms!.forEach((a, i) => {
+      const ease = (o: Object3D | undefined, axis: 'x' | 'y' | 'z', to: number) => {
+        if (o) o.rotation[axis] += (to - o.rotation[axis]) * 0.12;
+      };
+      const k = i * 2.3;
+      ease(a.upper, 'y', working ? Math.sin(t * 1.3 + k) * 0.35 : 0);
+      ease(a.upper, 'x', working ? Math.sin(t * 2.1 + k) * 0.08 : 0);
+      ease(a.tip, 'x', working ? Math.sin(t * 3.7 + k) * 0.25 : 0);
+      ease(a.tip, 'z', working ? Math.cos(t * 2.9 + k) * 0.2 : 0);
+    });
+  }
+
   /** Advances a Z walker's gait by the distance its view moved since the last frame; returns the phase. */
   private stepGait(v: View): number {
     const { x, z } = v.root.position;
@@ -1359,7 +1433,15 @@ export class EntityRenderer {
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
     const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y };
-    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    if (insect) {
+      // Z walkers are mostly thin legs: an invisible box round the whole body catches clicks between them.
+      const box = new Box3().setFromObject(body);
+      const hit = new Mesh(new BoxGeometry(...box.getSize(new Vector3()).toArray()), PICK_PROXY);
+      hit.position.copy(box.getCenter(new Vector3()));
+      pivot.add(hit);
+    }
+    const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
+    const v: View = { type: e.type, gait, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
