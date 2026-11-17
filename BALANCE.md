@@ -32,7 +32,7 @@ Ajoutées le 17 novembre, provisoires aussi :
 
 Retouches provisoires du 17 novembre, d'après [le rapport d'équilibrage](docs/rapport-equilibrage-2026-11-17.md), à valider par l'équilibreur :
 - `creature` : `hp` 67 → 70 (Humains – Isdaris passe de 67 – 31 à 52 – 46).
-- `dronecombat` : `cost.minerals` 75 → 100, `buildTime` 15 → 18 (Z – Isdaris passe de 84 – 14 à 48 – 50 ; Z – Humains de 90 – 8 à 38 – 60, encore hors cible).
+- `dronecombat` : `cost.minerals` 75 → 100, `buildTime` 15 → 18 (Z – Isdaris passe de 84 – 14 à 48 – 50 ; Z – Humains de 90 – 8 à 38 – 60, encore hors cible), puis `hp` 70 → 73 (Z – Humains 49 – 49, Z – Isdaris 52 – 46).
 
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.

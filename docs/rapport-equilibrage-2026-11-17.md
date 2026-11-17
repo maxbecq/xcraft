@@ -85,3 +85,24 @@ Reste à régler : **Z devient un peu faible contre les Humains** (38 – 60, ho
 - Valides-tu les deux changements (Créature 70 PV, Drone de combat au prix et au temps de l'Auxiliaire) ?
 - Faut-il que le camp Z reste moins cher (identité « essaim de machines ») et perde autrement, par exemple moins de PV ?
 - Quel essai veux-tu pour Z contre les Humains ?
+
+## Suite : Z contre les Humains (après les retouches ci-dessus)
+
+Point de départ : `main` avec Créature 70 PV et Drone de combat 100 minerais / 18 s, soit Z – Humains 38 – 60 et Z – Isdaris 48 – 50. Essais sur copie, 98 parties par paire :
+
+| Essai | Z – Humains | Z – Isdaris |
+|---|---|---|
+| Quadripode : PV 120 → 140 | 43 – 55 | 57 – 40 |
+| Drone de combat : armure 0 → 1 | 69 – 29 | 61 – 37 |
+| Drone de combat : PV 70 → 80 | 67 – 31 | 58 – 40 |
+| Hexapode : coût 200/75 → 175/50 | 40 – 58 | 52 – 46 |
+| Kit lance-flammes : dégâts 10 → 12 | 38 – 60 | 48 – 50 |
+| Drone de combat : PV 70 → 77 | 72 – 26 | 39 – 55 |
+| Drone de combat : PV 70 → 75 | 68 – 30 | 55 – 43 |
+| **Drone de combat : PV 70 → 73** | **49 – 49** | **52 – 46** |
+
+Proposition : `dronecombat.hp` 70 → **73**. Humains – Isdaris n'est pas concerné (52 – 46).
+
+Résultat complet avec les trois retouches : Humains – Isdaris 52 – 46, Z – Humains 49 – 49, Z – Isdaris 52 – 46.
+
+À noter : changer les dégâts du lance-flammes ne change **aucune** partie (résultats identiques à la référence). Le kit est recherché par l'IA mais ne semble jamais toucher : à vérifier côté programme (IA ou simulation), pas côté stats.
