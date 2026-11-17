@@ -25,6 +25,8 @@ export interface InputHooks {
   ordered?: (x: number, z: number, target?: Entity) => void;
   /** Touch: move the camera by a finger drag (pixels) and zoom by a pinch factor. */
   pan: (dx: number, dy: number) => void;
+  /** A finger let go of a drag at this speed (pixels per second); 0, 0 when a finger touches down. */
+  fling?: (vx: number, vy: number) => void;
   zoom: (factor: number) => void;
 }
 
@@ -238,6 +240,8 @@ export class Input {
   private longPress = 0;
   private lastTap = { time: 0, type: '' };
   private lastClick = { time: 0, type: '' };
+  /** A dragging finger's speed (pixels per second) and the time of its last move. */
+  private panVel = { x: 0, y: 0, t: 0 };
 
   private touchDown(e: PointerEvent, canvas: HTMLCanvasElement): void {
     try {
@@ -246,6 +250,8 @@ export class Input {
       // capture is a convenience: the touch still works without it
     }
     this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    this.hooks.fling?.(0, 0); // a finger down catches a sliding view
+    this.panVel = { x: 0, y: 0, t: performance.now() };
     clearTimeout(this.longPress);
     if (this.touches.size === 1) {
       this.touchMode = 'pending';
@@ -289,7 +295,13 @@ export class Input {
       this.touchMode = 'pan';
       clearTimeout(this.longPress);
     }
-    if (this.touchMode === 'pan') this.hooks.pan(dx, dy);
+    if (this.touchMode === 'pan') {
+      this.hooks.pan(dx, dy);
+      // The finger's speed, smoothed over the last few moves, for the slide after it lets go.
+      const now = performance.now();
+      const ms = Math.max(1, now - this.panVel.t);
+      this.panVel = { x: 0.5 * this.panVel.x + 0.5 * ((dx / ms) * 1000), y: 0.5 * this.panVel.y + 0.5 * ((dy / ms) * 1000), t: now };
+    }
     if (this.touchMode === 'box' && this.dragStart) {
       const r = this.rect(this.dragStart, e);
       Object.assign(this.box.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
@@ -302,6 +314,8 @@ export class Input {
     this.touches.delete(e.pointerId);
     if (this.touches.size > 0) return;
     this.touchMode = null;
+    // Let go while still moving (not after a pause): the view slides on.
+    if (mode === 'pan' && performance.now() - this.panVel.t < 60) this.hooks.fling?.(this.panVel.x, this.panVel.y);
     if (mode === 'box' && this.dragStart) {
       const r = this.rect(this.dragStart, e);
       this.dragStart = null;

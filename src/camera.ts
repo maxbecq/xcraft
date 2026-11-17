@@ -8,6 +8,9 @@ const MIN_VIEW = 12;
 const MAX_VIEW = 40;
 /** Pan speed, in screen heights per second. */
 const PAN_SPEED = 1.4;
+/** A flung view coasts this long (time constant, s): it travels its launch speed × FLING_TAU further. */
+export const FLING_TAU = 0.12;
+const FLING_MAX = 2500; // px/s, so a frantic swipe does not throw the view across the map
 
 /** Camera offset from the point it looks at, for a given distance. */
 export function isoOffset(distance: number): Vector3 {
@@ -36,6 +39,8 @@ export class CameraRig {
   viewHeight = 17;
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
+  /** Speed the view keeps after a finger lets go of a drag, in screen pixels per second. */
+  private readonly drift = new Vector2();
 
   constructor(private readonly width: number, private readonly height: number) {}
 
@@ -55,6 +60,19 @@ export class CameraRig {
     const perUnit = window.innerHeight / this.viewHeight;
     const g = screenToGround(-dx / perUnit, dy / perUnit);
     this.lookAt(this.target.x + g.x, this.target.z + g.z);
+  }
+
+  /** A finger lifted mid-drag at (vx, vy) pixels per second: the view slides on a little and stops. 0, 0 halts it. */
+  fling(vx: number, vy: number): void {
+    this.drift.set(vx, vy).clampLength(0, FLING_MAX);
+  }
+
+  /** Moves a flung view on by one frame, slowing it down. */
+  coast(dt: number): void {
+    if (!this.drift.x && !this.drift.y) return;
+    this.panPixels(this.drift.x * dt, this.drift.y * dt);
+    this.drift.multiplyScalar(Math.exp(-dt / FLING_TAU));
+    if (this.drift.length() < 15) this.drift.set(0, 0);
   }
 
   zoomBy(factor: number): void {

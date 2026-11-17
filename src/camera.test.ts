@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { CameraRig, PITCH, isoOffset, screenToGround } from './camera';
+import { CameraRig, FLING_TAU, PITCH, isoOffset, screenToGround } from './camera';
 
 describe('isoOffset', () => {
   it('keeps the requested distance', () => {
@@ -43,6 +43,21 @@ describe('CameraRig', () => {
     rig.lookAt(-10, 200);
     expect(rig.target.x).toBe(0);
     expect(rig.target.z).toBe(96);
+  });
+
+  it('slides a flung view on by about speed × FLING_TAU, then stops', () => {
+    Object.assign(globalThis, { window: { innerHeight: 1000 } });
+    const rig = new CameraRig(96, 96);
+    rig.lookAt(48, 48);
+    const still = new CameraRig(96, 96);
+    still.lookAt(48, 48);
+    still.panPixels(1000 * FLING_TAU, 0); // where the slide should end
+    rig.fling(1000, 0);
+    for (let i = 0; i < 120; i++) rig.coast(1 / 60);
+    expect(rig.target.distanceTo(still.target)).toBeLessThan(0.2); // within 10 %: frame steps and the stop threshold
+    const end = rig.target.clone();
+    rig.coast(1 / 60);
+    expect(rig.target.equals(end)).toBe(true);
   });
 
   it('bounds the zoom', () => {

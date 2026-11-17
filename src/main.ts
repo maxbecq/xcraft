@@ -229,6 +229,7 @@ const input = new Input(world, map, PLAYER, {
     audio.play(target && target.owner >= 0 && world.hostile(PLAYER, target.owner) ? 'target' : 'order');
   },
   pan: (dx, dy) => rig.panPixels(dx, dy),
+  fling: (vx, vy) => rig.fling(vx, vy),
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
 const audio = new Audio();
@@ -373,6 +374,8 @@ let paused = false;
 /** Edge and arrow-key scrolling, eased: current speed per axis (-1..1), and how fast it changes per second. */
 const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 8;
+/** Letting go is gentler than setting off: the view coasts on about a quarter of a second. */
+const SCROLL_DECEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
@@ -790,9 +793,13 @@ function start(): void {
       rig.lookAt(map.width / 2 - (along - across) / Math.SQRT2, map.height / 2 - (along + across) / Math.SQRT2);
     } else {
       // Eased scrolling: the view speeds up over an eighth of a second, then glides to a stop (slow, fast, slow).
-      const step = SCROLL_ACCEL * dt;
-      scroll.x += Math.max(-step, Math.min(step, dx - scroll.x));
-      scroll.y += Math.max(-step, Math.min(step, dy - scroll.y));
+      const towards = (v: number, to: number) => {
+        const step = (Math.abs(to) < Math.abs(v) || Math.sign(to) !== Math.sign(v) ? SCROLL_DECEL : SCROLL_ACCEL) * dt;
+        return v + Math.max(-step, Math.min(step, to - v));
+      };
+      scroll.x = towards(scroll.x, dx);
+      scroll.y = towards(scroll.y, dy);
+      rig.coast(dt);
       const ease = (v: number) => Math.sign(v) * Math.abs(v) * Math.abs(v) * (3 - 2 * Math.abs(v)); // smoothstep
       if (scroll.x || scroll.y) rig.pan(ease(scroll.x), ease(scroll.y), dt);
     }
