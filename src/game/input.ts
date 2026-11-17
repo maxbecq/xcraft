@@ -562,7 +562,11 @@ export class Input {
     if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
   }
 
-  /** Entity under the cursor: a mesh hit, else the closest unit within a few pixels, else the closest resource. */
+  /**
+   * Entity under the cursor. A unit wins over a building or a field: any unit the ray meets (even one behind a tall
+   * building's corner), else the closest unit within a few pixels, and only then the building or field hit, else the
+   * closest resource.
+   */
   private entityAt(x: number, y: number): Entity | undefined {
     // Flyers first: small and high up, a ray that just misses one hits whatever is on the ground below.
     let flyer: Entity | undefined;
@@ -575,13 +579,16 @@ export class Input {
     }
     if (flyer) return flyer;
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
+    let first: Entity | undefined;
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
       if (hit.object.userData.noPick) continue;
       let o: Object3D | null = hit.object;
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);
-      if (e && hit.object.visible && !e.inside) return e;
+      if (!e || !hit.object.visible || e.inside) continue;
+      if (e.def.kind === 'unit') return e;
+      first ??= e;
     }
     let best: Entity | undefined;
     let bestD = PICK_PX;
@@ -592,6 +599,7 @@ export class Input {
       if (d < bestD) [best, bestD] = [e, d];
     }
     if (best) return best;
+    if (first) return first;
     bestD = RESOURCE_PICK_PX;
     for (const e of this.world.entities.values()) {
       if (e.def.kind !== 'resource') continue;
