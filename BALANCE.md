@@ -43,6 +43,11 @@ Le camp des **Dieux** (V1, rang 1, d'après la notice 1.2-1 et `docs/camp-dieux.
 - Première mesure (`big.test.ts`, QUICK : 18 parties par paire, IA normale) : Dieux – Humains 3 – 14 (1 nul), Dieux – Isdaris 8 – 10, Dieux – Z 9 – 3 (6 nuls) ; parties de 25 minutes en moyenne. L'IA fait surtout des Nains, quelques Sphinx, presque pas d'Apollon ni de Minotaures (énergie).
 - Après l'IA « dépensière » (Gaïa enchaîne ses constructions, extension dès la minute 4 quand elle a plus de 800 minerais, Porte d'Asgaard au lieu d'Antre au-delà de 1600, jusqu'à 3 Branches de plus et 4 Yggdrasill protecteurs), 18 parties par paire : Dieux – Humains 5 – 4 (9 nuls), Dieux – Isdaris 9 – 4 (5 nuls), Dieux – Z 11 – 2 (5 nuls) ; 26 minutes en moyenne. Provisoire. Elle garde encore 2 500 à 3 000 minerais vers la minute 12 : chaque dieu n'invoque qu'une unité à la fois, c'est la vraie limite (temps d'invocation ou invocations simultanées, à trancher par l'équilibreur). Avec plus de tours (jusqu'à 10), la réserve tombait à 1 200 – 2 000 mais l'IA se retranchait : 17 nuls sur 18 contre les Humains.
 
+IA facile plus facile, réglages provisoires du 17 novembre (le joueur se faisait battre) :
+- `difficulty.easy` : 70 → 60 (minerai encaissé).
+- `levels.easy` : `{ waveBonus: -3 }` → `plan` (10 ouvriers par base, casernes `[[8, 1], [10, 2]]`, vagues de 5 puis +1), `attackMinute` 11, `maxWave` 6, `expandMinute` 14.
+- Mesure (`EASY=1 npx vitest run scripts/easy.test.ts`, IA facile contre IA normale, 4 camps × 4 camps × 2 côtés = 32 parties) : avant, 1 victoire sur 32, première attaque à 4,9 min, vagues de 7,0 unités ; après, 1 victoire sur 32, première attaque à 11,6 min (dans les 9 parties qui durent jusque-là), vagues de 5,9 unités.
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).
@@ -116,7 +121,10 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `plan.healerEvery` | une unité sur N est un Soigneur |
 | `plan.legionShare` | part de Légionnaires parmi les unités de base des Humains (0 à 1) |
 | `difficulty` | minerai encaissé par l'IA, en % (facile, normal, difficile) |
-| `levels.easy.waveBonus` | IA facile : unités en plus (ou en moins si négatif) avant de lancer une vague ; elle ne fait ni recherches, ni capacités, ni repli |
+| `levels.easy.plan` | IA facile : son propre plan, qui remplace les champs de `plan` donnés (moins d'ouvriers et de casernes, petites vagues) ; elle forme une unité à la fois par bâtiment, ne fait ni recherches, ni capacités, ni repli, et ses Assassins ne vont pas chasser les ouvriers |
+| `levels.easy.attackMinute` | IA facile : aucune vague d'attaque avant cette minute |
+| `levels.easy.maxWave` | IA facile : unités au plus par vague, le reste garde la base |
+| `levels.easy.expandMinute` | IA facile : minute à partir de laquelle elle s'étend |
 | `levels.hard.expandMinute` | IA difficile : minute à partir de laquelle elle s'étend ; ses soldats concentrent aussi leurs tirs sur l'ennemi le plus entamé |
 | `maxCloaked` | Assassins au plus en même temps |
 | `antiAir` | une défense anti-air en plus par `per` volants ennemis vus, `max` au plus |

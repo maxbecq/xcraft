@@ -80,13 +80,15 @@ export class AI {
   private readonly hard: boolean;
 
   /**
-   * `level` (menu: easy, normal, hard) changes how it plays, on top of the harvest handicap: the easy AI attacks
-   * with smaller waves and never researches, casts, kites nor falls back; the hard AI expands sooner and its
+   * `level` (menu: easy, normal, hard) changes how it plays, on top of the harvest handicap: the easy AI has a
+   * smaller economy and army (its own plan), trains one unit at a time, attacks late with small waves, expands late,
+   * never raids workers, researches, casts, kites nor falls back; the hard AI expands sooner and its
    * soldiers focus their fire on the enemy they can finish.
    */
   constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal') {
     this.faction = FACTIONS[world.players[player].faction];
     this.easy = level === 'easy';
+    if (this.easy) this.plan = { ...plan, ...(LEVELS.easy.plan as Partial<Plan>) };
     this.hard = level === 'hard';
   }
 
@@ -214,7 +216,7 @@ export class AI {
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
     const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
     const councils = buildings.filter((b) => b.type === f.hq || b.type === f.outpost).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
-    const firstAt = this.hard ? LEVELS.hard.expandMinute : 7;
+    const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : 7;
     const due = (rich && minute >= 4) || councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
@@ -319,7 +321,7 @@ export class AI {
     const rally = this.rallyPoint(home);
     for (const c of buildings.filter((b) => !f.gods && b.type === f.barracks && b.buildLeft === 0)) {
       if (!c.rally) out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
-      if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
+      if (saving || c.queue.length > (this.easy ? 0 : 1) || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
       if (minerals - keep - gatewaysKeep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
@@ -343,7 +345,7 @@ export class AI {
         else if (gods.length) minerals -= def.cost.minerals;
       }
       for (const g of gods) {
-        if (g.queue.length > 1) continue;
+        if (g.queue.length > (this.easy ? 0 : 1)) continue;
         const type = (g.def as UnitDef).trains!.find((t) => !w.lacks(this.player, t));
         const def = type && (DEFS[type] as UnitDef);
         if (!def || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
@@ -408,8 +410,9 @@ export class AI {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-    } else if (atHome.length >= Math.min(MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) + (this.easy ? LEVELS.easy.waveBonus : 0) || (atHome.length >= 6 && supply.used >= 190)) {
-      atHome.forEach((u) => this.wave.add(u.id));
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190))) {
+      // Easy: never more than its wave cap at once, the rest stays home.
+      atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       this.waves++;
     }
     // Abilities: stimulant and charge when engaging, Peau de roc while healing in a fight.
@@ -455,7 +458,7 @@ export class AI {
       out.push({ player: this.player, kind: 'smart', ids: fleeing.map((u) => u.id), x: refuge.x, y: refuge.y });
     }
 
-    out.push(...this.raid(raiders));
+    if (!this.easy) out.push(...this.raid(raiders));
     if (this.hard) out.push(...this.focus([...this.wave].map((id) => w.entities.get(id)!)));
     const target = this.enemyTarget(home);
     const waveUnits = [...this.wave].map((id) => w.entities.get(id)!);
