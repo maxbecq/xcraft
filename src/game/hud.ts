@@ -54,6 +54,8 @@ export class Hud {
   private readonly lastHp = new Map<number, number>();
   /** When each of ours was last hurt (ms), for the red edge on its picture in the selection. */
   private readonly hitAt = new Map<number, number>();
+  /** Our workers on their way to build, by id, with what: to name a building cancelled for want of resources. */
+  private readonly sites = new Map<number, string>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
@@ -330,8 +332,21 @@ export class Hud {
     }
     // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none.
     if (this.spectator) return;
-    for (const ev of events) {
+    // A worker that reached its site but could no longer pay drops its build order with a bare "Pas assez de…":
+    // say what was lost, as an alert pointing at the worker (it comes long after the order, often off screen).
+    const dropped = [...this.sites].filter(([id]) => this.world.entities.get(id)?.order?.kind !== 'build');
+    this.sites.clear();
+    for (const e of this.world.entities.values()) if (e.owner === this.player && e.order?.kind === 'build') this.sites.set(e.id, e.order.type);
+    for (let ev of events) {
       if (ev.player !== this.player) continue;
+      let at: { x: number; y: number } | undefined;
+      if (ev.kind === 'alert' && hit) at = { x: hit.x / FP, y: hit.y / FP };
+      const site = ev.kind === 'error' && ev.text.startsWith('Pas assez') ? dropped.shift() : undefined;
+      const worker = site && this.world.entities.get(site[0]);
+      if (site) {
+        ev = { ...ev, kind: 'alert', text: `${DEFS[site[1]].name} : construction annulée, ${ev.text[0].toLowerCase()}${ev.text.slice(1)}` };
+        if (worker) at = { x: worker.x / FP, y: worker.y / FP };
+      }
       // The same message again: its line counts up (×2, ×3…) and stays on, instead of piling up.
       const same = [...this.toasts.children].find((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('gone') && c.dataset.kind === ev.kind && c.dataset.text === ev.text);
       if (same) {
@@ -352,12 +367,12 @@ export class Hud {
       const t = el('div', `hud-toast ${ev.kind}`);
       t.innerHTML = SIGNS[ev.kind];
       Object.assign(t.dataset, { kind: ev.kind, text: ev.text, n: '1', sound: String(performance.now()) });
-      if (ev.kind === 'alert' && hit) {
-        const at = { x: hit.x / FP, y: hit.y / FP };
-        this.alertAt = at;
-        this.ping(at.x, at.y);
+      if (at) {
+        const to = at;
+        this.alertAt = to;
+        this.ping(to.x, to.y);
         t.title = 'Aller voir (Espace)';
-        t.addEventListener('click', () => this.focus(at.x, at.y));
+        t.addEventListener('click', () => this.focus(to.x, to.y));
       }
       this.audio.play(ev.kind);
       t.append(ev.text, el('b', 'times'));
