@@ -43,11 +43,24 @@ function cursorOf(...layers: Layer[]): string {
   return cursorSized(32, ...layers);
 }
 
+/**
+ * A cursor with more room round the same 32-unit grid, at the same scale (one unit, one pixel), `view` pixels
+ * wide and centred on the hotspot: the arrow drawn in it lines up with the page's own, so they can cross-fade.
+ */
+function cursorWide(view: number, ...layers: Layer[]): string {
+  const o = 16 - view / 2;
+  return cursorSvg(view, `${o} ${o} ${view} ${view}`, layers);
+}
+
 /** A cursor drawn on the 32-unit grid and shown `px` pixels wide (browsers take up to 128; 48 shows everywhere we target). */
 function cursorSized(px: number, ...layers: Layer[]): string {
+  return cursorSvg(px, '0 0 32 32', layers);
+}
+
+function cursorSvg(px: number, viewBox: string, layers: Layer[]): string {
   const draw = ({ color, shape, opacity = 1 }: Layer) =>
     `<g opacity='${opacity.toFixed(2)}'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g>`;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${px}' height='${px}' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${px}' height='${px}' viewBox='${viewBox}'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${px / 2} ${px / 2}, default`;
 }
 
@@ -85,7 +98,10 @@ const cached = (key: string, make: () => string[]) => cursorCache.get(key) ?? cu
 /** Over something selectable (SC1 lens): corner brackets turning slowly on the ground round a flat ring, a quarter turn in 12 frames. */
 const HOVER_FRAMES = 12;
 const hoverLayers = (color: string): Layer[] =>
-  Array.from({ length: HOVER_FRAMES }, (_, f) => ({ color, shape: `${isoCorners(13, (f / HOVER_FRAMES) * (Math.PI / 2))}<ellipse cx='16' cy='16' rx='3.5' ry='1.75'/>` }));
+  Array.from({ length: HOVER_FRAMES }, (_, f) => ({ color, shape: `${isoCorners(HOVER_W, (f / HOVER_FRAMES) * (Math.PI / 2))}<ellipse cx='16' cy='16' rx='4.5' ry='2.25'/>` }));
+/** Hover brackets: their half-width, and the cursor box that holds them (wider than the usual 32 px). */
+const HOVER_W = 20;
+const HOVER_BOX = 48;
 
 /** Aiming an attack or an ability: a reticle lying on the ground, its four ticks turning round it. */
 const aimFrames = (color: string) =>
@@ -482,11 +498,11 @@ export class Input {
       const id = `${key}${layer.shape}`;
       cursor =
         this.fadeFrom && k < 1
-          ? cursorOf({ ...this.fadeFrom, opacity: 1 - k }, { ...layer, opacity: k })
+          ? cursorWide(HOVER_BOX, { ...this.fadeFrom, opacity: 1 - k }, { ...layer, opacity: k })
           : // The plain arrow is the page's own (CSS): the edge-scroll arrows can replace it there.
             !this.hoverColor
             ? ''
-            : (steady.get(id) ?? steady.set(id, cursorOf(layer)).get(id)!);
+            : (steady.get(id) ?? steady.set(id, cursorWide(HOVER_BOX, layer)).get(id)!);
       this.shown = layer;
     }
     if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
