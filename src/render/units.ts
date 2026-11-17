@@ -921,6 +921,48 @@ function eddies(): CanvasTexture {
   return eddyTexture;
 }
 
+let haloTexture: Texture | null = null;
+/**
+ * The Réserve psy at rest: its two bands of dotted light turn on themselves, the upper one the other way and
+ * slower, inside a halo of cyan light that slowly swells and fades, phased per building. Render only.
+ */
+function reserveFx(body: Object3D, seed: number): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  const bands = [body.getObjectByName('psyband_0'), body.getObjectByName('psyband_1')];
+  if (!haloTexture) {
+    // Brightest at mid-height, fading out at the top and bottom of the shell.
+    const c = document.createElement('canvas');
+    c.width = 1;
+    c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1, 64);
+    haloTexture = new CanvasTexture(c);
+  }
+  const halo = new Mesh(
+    new CylinderGeometry(0.9, 0.9, 0.7, 32, 1, true),
+    new MeshBasicMaterial({ map: haloTexture, color: 0x5ae0ff, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }),
+  );
+  halo.position.y = 0.46;
+  halo.userData.noPick = true;
+  group.add(halo);
+  const phase = (seed * 2.399) % (Math.PI * 2);
+  return {
+    group,
+    update(dt, t) {
+      if (bands[0]) bands[0].rotation.y += dt * 0.9;
+      if (bands[1]) bands[1].rotation.y -= dt * 0.6;
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.3 + phase); // a slow swell, about 5 s
+      halo.scale.set(1 + 0.14 * breath, 1, 1 + 0.14 * breath);
+      (halo.material as MeshBasicMaterial).opacity = 0.12 + 0.3 * breath;
+    },
+  };
+}
+
 /**
  * The life of an energy well: the glow at the bottom breathes unevenly, eddies turn on the pool, stars drift up
  * out of it and now and then a little geyser of sparks shoots up and falls back. Render only, seeded by the well.
@@ -1598,6 +1640,11 @@ export class EntityRenderer {
       const well = wellFx(body, e.id);
       root.add(well.group);
       fx = well;
+    }
+    if (e.type === 'reservepsy') {
+      const reserve = reserveFx(body, e.id);
+      root.add(reserve.group);
+      fx = reserve;
     }
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.

@@ -875,8 +875,14 @@ def reservepsy(p):
     over it, a thin cyan seam where the stored energy shows, and the team colour on two plain pylons."""
     cyl(p["ivory"], 0.92, 0.22, (0, 0, 0.11), verts=24)
     cyl(p["ivory"], 0.78, 0.42, (0, 0, 0.43), verts=24)
-    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.3), seg=24)
-    ring(p["chrome"], 0.8, 0.03, (0, 0, 0.62), seg=24)
+    # Two levels of dotted light, separate parts so the game turns them (in opposite directions).
+    for k, z in enumerate((0.3, 0.62)):
+        part = f"psyband_{k}"
+        JOINTS[part] = (0, 0, z)
+        ring(p["chrome"], 0.8, 0.03, (0, 0, z), seg=24, name=part)
+        for i in range(12):
+            a = (i + 0.5 * k) / 12 * math.tau
+            box(p["cyan_glow"], (0.022, 0.13, 0.04), (math.cos(a) * 0.83, math.sin(a) * 0.83, z), rot=(0, 0, a), name=part)
     cyl(p["cyan_glow"], 0.79, 0.04, (0, 0, 0.67), verts=24)  # energy seam
     ball(p["concrete"], 0.74, (0, 0, 0.68), scale=(1, 1, 0.32), seg=24, rings=8)  # flat shell
     for s in (-1, 1):
