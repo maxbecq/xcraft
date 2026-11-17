@@ -25,7 +25,7 @@ import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-const EDGE_PX = 72;
+const EDGE_PX = 100;
 const params = new URLSearchParams(location.search);
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
@@ -301,7 +301,7 @@ function scrollDirection(): [number, number] {
   if (edge !== edgeShown) {
     edgeShown = edge;
     edgeGlow.className = `edge-glow ${[...edge].map((d) => `edge-${d}`).join(' ')}`;
-    document.body.style.cursor = edge ? `${edge}-resize` : '';
+    input.scrollEdge = edge;
   }
   return [dx, dy];
 }

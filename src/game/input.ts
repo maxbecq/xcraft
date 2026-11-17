@@ -98,6 +98,16 @@ const aimFrames = (color: string) =>
 
 /** Right-click order given: green brackets snapping shut on the spot. */
 const orderFrames = () => cached('order', () => [14, 10.5, 7, 4].map((w) => cursorOf({ color: '#4dff6a', shape: isoCorners(w) })));
+/** Edge scrolling: twin gold chevrons pointing the way the map scrolls, pushing outwards again and again. */
+const EDGE_ANGLE: Record<string, number> = { e: 0, se: 45, s: 90, sw: 135, w: 180, nw: 225, n: 270, ne: 315 };
+const edgeFrames = (edge: string) =>
+  cached(`edge${edge}`, () =>
+    Array.from({ length: 6 }, (_, f) =>
+      cursorOf({ color: '#e8b64a', shape: `<g transform='rotate(${EDGE_ANGLE[edge]} 16 16) translate(${(f * 0.9).toFixed(1)} 0)'><path d='M10 9L17 16L10 23'/><path d='M3 11.5L7.5 16L3 20.5' opacity='.55'/></g>` }),
+    ),
+  );
+/** Dragging the map (right or middle button held): four arrows round a gold hub. */
+const GRAB = cursorOf({ color: '#e8b64a', shape: "<path d='M16 4V28M4 16H28M12.5 7.5L16 4L19.5 7.5M12.5 24.5L16 28L19.5 24.5M7.5 12.5L4 16L7.5 19.5M24.5 12.5L28 16L24.5 19.5'/><circle cx='16' cy='16' r='3' fill='#2b2010'/>" });
 /** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
 const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
@@ -405,6 +415,8 @@ export class Input {
     return new Vector2((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
   }
 
+  /** Direction the map is scrolling at the screen's edge ('n', 'se'…), or '' (set each frame by the game loop). */
+  scrollEdge = '';
   private lastHoverPick = 0;
   private hoverColor = '';
   private orderedAt = -Infinity;
@@ -433,7 +445,13 @@ export class Input {
     const body = document.body.classList;
     const since = performance.now() - this.orderedAt;
     let cursor: string;
-    if (body.contains('targeting')) {
+    if (this.grab) {
+      cursor = GRAB;
+      this.shown = undefined;
+    } else if (this.scrollEdge && !body.contains('targeting')) {
+      cursor = edgeFrames(this.scrollEdge)[f % 6];
+      this.shown = undefined;
+    } else if (body.contains('targeting')) {
       cursor = aimFrames(body.contains('scanning') ? '#ffd860' : '#ff4a3a')[f % 8];
       this.shown = undefined;
     } else if (since < 4 * ORDER_FRAME_MS) {
