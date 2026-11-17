@@ -143,6 +143,32 @@ def metal_texture(name, rusty):
     return img
 
 
+def foil_texture(name):
+    """A tileable crinkled thermal blanket, like a lander's gold foil: creased facets catching the light in
+    bright and dark streaks, tarnished with soot and rust-brown grime."""
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    import numpy as np
+    S = 512
+    rng = np.random.default_rng(11)
+    n = _fbm(rng, S, 12, 3)
+    gy, gx = np.gradient(n)
+    # Folds: the light rakes across, so each crease shows a bright face and a dark one.
+    g = gx * 0.7 + gy * 0.3
+    lum = 0.9 + 0.35 * g / (np.abs(g).max() * 0.4)
+    lum = np.clip(np.round(lum * 5) / 5, 0.35, 1.25)  # flattened facets rather than smooth bumps
+    soot = _fbm(rng, S, 3, 4)
+    rgb = np.stack([lum, lum * 0.97, lum * 0.92], -1) * (0.8 + 0.2 * soot[..., None])
+    stain = np.clip((soot - 0.62) / 0.08, 0, 1)[..., None]
+    rgb = rgb * (1 - stain) + np.array([0.45, 0.25, 0.14]) * stain
+    rgb = np.clip(rgb, 0, 1)
+    img = bpy.data.images.new(name, S, S)
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(np.concatenate([rgb, np.ones((S, S, 1))], -1).astype(np.float32).ravel())
+    img.pack()
+    return img
+
+
 def textured(name, color, image, metallic, rough):
     """A material whose base colour is an image texture times `color` (the vertex colours still multiply in
     game, exported alongside)."""
@@ -235,6 +261,7 @@ def palette():
         "zsteel": textured("zsteel", 0x8E8A80, metal_texture("zsteel_tex", False), metallic=0.7, rough=0.55),
         "zrust": textured("zrust", 0x9A5430, metal_texture("zrust_tex", True), metallic=0.25, rough=0.95),
         "zcopper": mat("zcopper", 0xC07038, metallic=0.9, rough=0.35),
+        "zfoil": textured("zfoil", 0xE0B050, foil_texture("zfoil_tex"), metallic=0.45, rough=0.4),
         "zdark": textured("zdark", 0x6A6C72, metal_texture("zsteel_tex", False), metallic=0.5, rough=0.6),
     }
 
@@ -1593,80 +1620,123 @@ def coleoptere(p):
     gun(p, (0, -0.3, 0.36), length=0.3)
 
 
-def intelligence(p):
-    """Intelligence centrale: the nest's mind folded under rusted, faceted shells, asymmetric like a crouching
-    insect, server fins on its flank, a red eye cluster, antennae masts, coolant pipes and cable bundles climbing
-    its shells, tanks on its back, and live wires spilling into the creep."""
-    cyl(p["zdark"], 2.3, 0.3, (0, 0, 0.15), verts=10)
-    for k, (r, z, sx) in enumerate(((1.9, 0.9, 1.0), (1.55, 1.55, 0.92), (1.1, 2.1, 0.85))):
-        o = shell(p["zsteel"] if k != 1 else p["zrust"], r, (0.15 * k, 0.1 * k, z), scale=(sx, 1.15, 0.5), seg=10, rings=5)
-        o.rotation_euler = (0, 0, 0.3 * k)
-        ring(p["cyan_glow"], r * 0.98, 0.03, (0.15 * k, 0.1 * k, z - 0.05), seg=20)
-    for k in range(5):  # dorsal plates in team colour
-        a = k / 5 * math.tau + 0.4
-        box(p["team"], (0.5, 0.9, 0.08), (math.cos(a) * 1.2, math.sin(a) * 1.2, 1.35), rot=(0.4 * math.sin(a), -0.4 * math.cos(a), a))
-    for k in range(6):  # server fins
-        box(p["zdark"], (0.06, 0.7, 0.6), (1.75, 0.3 + k * 0.0, 0.85), rot=(0, 0, 0.15 * k - 0.4))
-    eyes(p, 0.35, -0.85, 2.15, n=3, r=0.12, spread=0.3)  # the mind's eyes
-    for s, h in ((-1, 1.4), (1, 1.0)):  # antennae masts
-        pipe(p["zsteel"], (s * 0.4, -0.8, 2.2), (s * 0.9, -1.8, 2.2 + h), r=0.05, verts=4)
-        for t in (0.4, 0.7):
-            q = Vector((s * 0.4, -0.8, 2.2)).lerp(Vector((s * 0.9, -1.8, 2.2 + h)), t)
-            box(p["zsteel"], (0.3, 0.03, 0.03), q)
-        ball(p["red_glow"], 0.07, (s * 0.9, -1.8, 2.2 + h), seg=6, rings=4)
-    for k in range(9):  # live wires into the ground
-        a = k / 9 * math.tau + 0.2
-        cable(p, (math.cos(a) * 1.7, math.sin(a) * 1.7, 0.75), (math.cos(a + 0.3) * 2.5, math.sin(a + 0.3) * 2.5, 0.05), sag=0.25, r=0.06)
-    for x, y in ((-2.0, 1.2), (1.8, 1.5), (-1.4, -1.9)):  # relay pylons
-        cyl(p["zsteel"], 0.15, 0.6, (x, y, 0.4), verts=6)
-        for z in (0.55, 0.7):
-            ring(p["zcopper"], 0.13, 0.03, (x, y, z), seg=10)
-        ball(p["cyan_glow"], 0.1, (x, y, 0.8), seg=6, rings=4)
-    # Coolant pipes climbing the front flank in flanged runs, bent to follow the shells.
-    for dx in (-1.1, -0.8):
-        run = [(dx, -2.45, 0.3), (dx, -2.1, 0.95), (dx + 0.1, -1.6, 1.5), (dx + 0.2, -1.05, 1.95)]
-        for u, v in zip(run, run[1:]):
-            pipe(p["zcopper"], u, v, r=0.06, verts=6)
-        for u, v in zip(run, run[1:]):
-            d = Vector(v) - Vector(u)
-            pipe(p["zsteel"], Vector(u) - d.normalized() * 0.04, Vector(u) + d.normalized() * 0.04, r=0.095, verts=6)  # flange
-        pipe(p["zsteel"], run[-1], Vector(run[-1]) + Vector((0, 0.12, 0.05)), r=0.095, verts=6)
-    for y, z in ((-2.1, 1.0), (-1.6, 1.52)):  # clamps holding the pipes on the shell
-        box(p["zrust"], (0.5, 0.1, 0.06), (-0.9, y + 0.04, z), rot=(0.6, 0, 0))
-    # Cable bundles hugging the right flank from the crown down into the ground.
-    for k, dy in enumerate((0.3, 0.48, 0.66)):
-        cable(p, (1.0, dy, 2.25), (2.45, dy + 0.15, 0.08), sag=-0.12 - 0.03 * k, r=0.045)
-    for z, x in ((1.75, 1.55), (1.0, 2.15)):  # straps over the bundle
-        box(p["zsteel"], (0.08, 0.55, 0.05), (x, 0.55, z), rot=(0, -0.7, 0))
-    # Coolant tanks on the right flank, banded, piped into the shell.
-    for k, y in enumerate((-0.9, -0.25)):
-        cyl(p["zrust"], 0.22, 0.9, (1.95, y, 0.55), rot=(math.pi / 2, 0, 0.1), verts=10)
-        for t in (-0.3, 0.3):
-            cyl(p["zsteel"], 0.235, 0.05, (1.95, y + t, 0.55), rot=(math.pi / 2, 0, 0.1), verts=10)
-        pipe(p["zcopper"], (1.95, y, 0.77), (1.55, y + 0.1, 1.1), r=0.04, verts=6)
-        cyl(p["zsteel"], 0.06, 0.05, (1.95, y, 0.78), verts=6)
-    # Exhaust stacks on the crown.
-    for x, y, h in ((-0.45, 0.45, 0.5), (-0.2, 0.7, 0.35)):
-        cyl(p["zdark"], 0.08, h, (x, y, 2.35 + h / 2), verts=6)
-        ring(p["zrust"], 0.085, 0.025, (x, y, 2.35 + h), seg=8)
+def lander_leg(p, a, body_r, top, foot_r, bottom=0.0, r=0.06):
+    """A lander leg splayed out at angle `a`: a jacked primary strut from the top of the descent stage down to
+    a dish footpad, two braces from the bottom of the stage, like an insect standing on the ground."""
+    c, s_ = math.cos(a), math.sin(a)
+    hip = Vector((c * body_r, s_ * body_r, top))
+    foot = Vector((c * foot_r, s_ * foot_r, bottom + r * 2))
+    piston(p, hip, foot, r=r)
+    knee = hip.lerp(foot, 0.62)
+    for da in (-0.35, 0.35):
+        q = Vector((math.cos(a + da) * body_r * 0.9, math.sin(a + da) * body_r * 0.9, top - (top - bottom) * 0.45))
+        pipe(p["zrust"], q, knee, r=r * 0.45, verts=4)
+    ball(p["zsteel"], r * 1.4, knee, seg=6, rings=3)
+    cyl(p["zsteel"], r * 4, r * 1.2, (foot.x, foot.y, bottom + r * 0.6), r2=r * 2.6, verts=8)  # footpad
+    return hip, foot
 
+
+def rcs(p, loc, yaw, r=0.05):
+    """A reaction thruster quad: a block with four small nozzles pointing up, down and to both sides."""
+    loc = Vector(loc)
+    box(p["zsteel"], (r * 2, r * 2, r * 2), loc, rot=(0, 0, yaw))
+    out = Vector((math.cos(yaw), math.sin(yaw), 0))
+    side = Vector((-out.y, out.x, 0))
+    for d in (Vector((0, 0, 1)), Vector((0, 0, -1)), side, -side):
+        q = loc + d * r * 1.6
+        o = cone(p["graphite"], r * 0.7, r * 1.4, q, verts=6)
+        o.rotation_mode = "QUATERNION"
+        o.rotation_quaternion = (-d).to_track_quat("Z", "Y")
+
+
+def intelligence(p):
+    """Intelligence centrale: a rusted lunar lander come down to nest. An octagonal descent stage wrapped in
+    tarnished gold foil stands on four splayed, jacked legs with dish pads; on it the faceted command cabin,
+    triangular red windows for eyes, thruster quads, a docking tunnel, a dish and antennae. Coolant tanks and
+    pipes on its flanks, cable bundles and live wires spilling into the creep."""
+    cone(p["graphite"], 0.75, 0.7, (0, 0, 0.6), rot=(math.pi, 0, 0), verts=12)  # descent engine bell
+    cyl(p["purple_glow"], 0.45, 0.04, (0, 0, 0.27), verts=12)
+    # Descent stage: an octagonal box in foil, rusted steel frame at the corners, team panels.
+    cyl(p["zfoil"], 1.55, 0.95, (0, 0, 1.3), verts=8, name="zfoil_body").rotation_euler = (0, 0, math.pi / 8)
+    for k in range(8):
+        a = k / 8 * math.tau
+        box(p["zrust"], (0.1, 0.1, 1.0), (math.cos(a) * 1.44, math.sin(a) * 1.44, 1.3), rot=(0, 0, a))
+    for z in (0.83, 1.77):
+        cyl(p["zsteel"], 1.47, 0.06, (0, 0, z), verts=8)
+    for k in (1, 3):
+        a = k / 4 * math.tau + math.pi / 4
+        box(p["team"], (0.08, 0.6, 0.35), (math.cos(a) * 1.42, math.sin(a) * 1.42, 1.3), rot=(0, 0, a))
+    ring(p["cyan_glow"], 1.52, 0.03, (0, 0, 0.9), seg=24)
+    for k in range(4):
+        hip, foot = lander_leg(p, k / 4 * math.tau + math.pi / 4, 1.3, 1.65, 2.25, r=0.09)
+    ladder(p, 0.05, -1.75, 0.2, 1.6)  # down the front leg
+    # Ascent stage: the faceted cabin, set back, its front sloped like a face.
+    box(p["zsteel"], (1.9, 1.5, 1.0), (0, 0.15, 2.3))
+    box(p["zsteel"], (1.4, 0.55, 0.8), (0, -0.66, 2.2), rot=(-0.35, 0, 0))  # front, leaning back
+    box(p["zrust"], (0.95, 0.5, 0.55), (0.55, 0.55, 2.55), rot=(0, 0.2, 0.3))  # off-centre equipment bay
+    for s in (-1, 1):  # cheek tanks
+        cyl(p["zrust"], 0.34, 0.8, (s * 1.1, 0.0, 2.15), rot=(math.pi / 2, 0, 0), verts=8)
+        for t in (-0.25, 0.25):
+            cyl(p["zsteel"], 0.355, 0.05, (s * 1.1, t, 2.15), rot=(math.pi / 2, 0, 0), verts=8)
+        cyl(p["red_glow"], 0.17, 0.04, (s * 0.3, -0.86, 2.4), rot=(math.radians(70), 0, math.pi / 2), verts=3)  # windows
+        cyl(p["zsteel"], 0.22, 0.03, (s * 0.3, -0.84, 2.4), rot=(math.radians(70), 0, math.pi / 2), verts=3)
+    eyes(p, 0, -0.95, 2.05, n=1, r=0.07)  # hatch light
+    box(p["zdark"], (0.42, 0.06, 0.45), (0, -0.9, 1.95))  # hatch
+    cyl(p["zsteel"], 0.28, 0.35, (0, 0.15, 2.95), verts=8)  # docking tunnel
+    cyl(p["zcopper"], 0.32, 0.06, (0, 0.15, 3.12), verts=8)
+    for k, (x, y) in enumerate(((0.85, -0.5), (-0.85, -0.5), (0.85, 0.75), (-0.85, 0.75))):  # thruster quads
+        pipe(p["zsteel"], (x * 0.85, y, 2.6), (x * 1.15, y, 2.75), r=0.03, verts=4)
+        rcs(p, (x * 1.2, y, 2.78), math.atan2(y, x), r=0.07)
+    # Dish on a mast, antennae.
+    pipe(p["zsteel"], (-0.5, 0.6, 2.7), (-0.75, 0.8, 3.4), r=0.04, verts=6)
+    o = cone(p["zsteel"], 0.38, 0.14, (-0.78, 0.83, 3.45), verts=10)
+    o.rotation_euler = (0.6, -0.5, 0)
+    ball(p["red_glow"], 0.05, (-0.78, 0.83, 3.5), seg=6, rings=4)
+    for s, h in ((-1, 0.9), (1, 0.6)):
+        pipe(p["zsteel"], (s * 0.6, -0.3, 2.7), (s * 0.9, -0.6, 2.7 + h), r=0.025, verts=4)
+        ball(p["red_glow"], 0.05, (s * 0.9, -0.6, 2.7 + h), seg=6, rings=4)
+    # Coolant pipes from the right tank down the stage, flanged.
+    run = [(1.2, 0.0, 2.0), (1.45, -0.2, 1.75), (1.6, -0.4, 0.9), (1.9, -0.55, 0.15)]
+    for u, v in zip(run, run[1:]):
+        pipe(p["zcopper"], u, v, r=0.055, verts=6)
+        d = (Vector(v) - Vector(u)).normalized()
+        pipe(p["zsteel"], Vector(u) - d * 0.04, Vector(u) + d * 0.04, r=0.09, verts=6)
+    # Cable bundles from the cabin over the stage down to the ground, and live wires into the creep.
+    for k, dy in enumerate((0.45, 0.62, 0.79)):
+        cable(p, (-0.8, dy, 1.95), (-2.3, dy + 0.3, 0.08), sag=-0.05 - 0.03 * k, r=0.045)
+    for k in range(6):
+        a = k / 6 * math.tau + 0.1
+        cable(p, (math.cos(a) * 1.5, math.sin(a) * 1.5, 0.95), (math.cos(a + 0.35) * 2.45, math.sin(a + 0.35) * 2.45, 0.05), sag=0.2, r=0.05)
 
 
 def pod(p):
-    """Pod: a riveted steel cocoon on cable roots, copper coils around its waist, a cyan seam where the supply
-    cells charge, a beacon on top."""
-    for k in range(6):
-        a = k / 6 * math.tau
-        cable(p, (math.cos(a) * 0.4, math.sin(a) * 0.4, 0.55), (math.cos(a + 0.4) * 0.95, math.sin(a + 0.4) * 0.95, 0.04), sag=0.1, r=0.05)
-    shell(p["zsteel"], 0.6, (0, 0, 0.95), scale=(0.85, 0.85, 1.15), seg=10, rings=6)
-    for z in (0.65, 0.95, 1.25):
-        ring(p["zrust"], 0.53 - abs(z - 0.95) * 0.3, 0.04, (0, 0, z), seg=12)
-    ring(p["zcopper"], 0.5, 0.025, (0, 0, 0.82), seg=16)
-    ring(p["zcopper"], 0.5, 0.025, (0, 0, 0.88), seg=16)
-    box(p["cyan_glow"], (0.04, 0.04, 0.8), (0.05, -0.5, 0.95), rot=(0.12, 0, 0))  # seam
-    box(p["team"], (0.3, 0.05, 0.25), (0.25, 0.45, 1.05), rot=(-0.2, 0, 0.5))
-    cone(p["zsteel"], 0.12, 0.35, (0, 0, 1.75), verts=6)
-    ball(p["red_glow"], 0.06, (0, 0, 1.95), seg=6, rings=4)
+    """Pod: a small lander, a foil-wrapped octagonal stage on four jacked legs, a riveted cell canister on top
+    with copper coils and a cyan charge seam, a thruster quad and a beacon mast."""
+    cone(p["graphite"], 0.28, 0.3, (0, 0, 0.3), rot=(math.pi, 0, 0), verts=10)  # engine bell
+    cyl(p["purple_glow"], 0.17, 0.03, (0, 0, 0.16), verts=10)
+    cyl(p["zfoil"], 0.58, 0.42, (0, 0, 0.66), verts=8, name="zfoil_body").rotation_euler = (0, 0, math.pi / 8)
+    for k in range(8):
+        a = k / 8 * math.tau
+        box(p["zrust"], (0.05, 0.05, 0.44), (math.cos(a) * 0.54, math.sin(a) * 0.54, 0.66), rot=(0, 0, a))
+    cyl(p["zsteel"], 0.55, 0.04, (0, 0, 0.88), verts=8)
+    box(p["team"], (0.05, 0.35, 0.25), (0.52, 0.22, 0.66), rot=(0, 0, math.pi / 8))
+    for k in range(4):
+        lander_leg(p, k / 4 * math.tau + math.pi / 4, 0.48, 0.82, 0.92, r=0.04)
+    # The cell canister: a squat riveted drum, rusted bands, copper coils, the charge seam.
+    cyl(p["zsteel"], 0.4, 0.4, (0, 0.08, 1.1), verts=8)
+    box(p["zsteel"], (0.42, 0.2, 0.32), (0, -0.33, 1.05), rot=(-0.4, 0, 0))  # sloped face
+    cyl(p["red_glow"], 0.07, 0.02, (0, -0.42, 1.1), rot=(math.radians(65), 0, math.pi / 2), verts=3)  # window
+    for z in (0.92, 1.28):
+        cyl(p["zrust"], 0.42, 0.05, (0, 0.08, z), verts=8)
+    ring(p["zcopper"], 0.41, 0.022, (0, 0.08, 1.07), seg=16)
+    ring(p["zcopper"], 0.41, 0.022, (0, 0.08, 1.13), seg=16)
+    box(p["cyan_glow"], (0.03, 0.03, 0.3), (0.3, -0.22, 1.1), rot=(0, 0, 0.8))  # seam
+    cyl(p["zsteel"], 0.32, 0.08, (0, 0.08, 1.34), r2=0.24, verts=8)
+    rcs(p, (0.45, 0.32, 1.25), math.atan2(0.32, 0.45), r=0.04)
+    rcs(p, (-0.45, 0.32, 1.25), math.atan2(0.32, -0.45), r=0.04)
+    pipe(p["zsteel"], (-0.1, 0.2, 1.38), (-0.15, 0.25, 1.75), r=0.02, verts=4)  # beacon mast
+    ball(p["red_glow"], 0.05, (-0.15, 0.25, 1.77), seg=6, rings=4)
+    cable(p, (-0.3, -0.2, 1.0), (-0.85, -0.45, 0.04), sag=0.05, r=0.035)
 
 
 def assimilateur(p):
