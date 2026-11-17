@@ -19,6 +19,19 @@ Les parties IA contre IA mesurent l'équilibre entre IA, pas entre joueurs. Elle
 
 Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2, adaptées au jeu par le programmeur ; elles attendent l'équilibrage : `metallurgie`, `bourdon` (le mod ne lui donnait pas d'arme), `pegase`, `alchimisterie`, `alchimiste`, `creaturium`, `plesiosaure`, `ankylosaure`, `allosaure`, `belluaire`. Le bonus du mod contre l'infanterie légère ou biologique n'existe pas encore dans le jeu : il est intégré aux dégâts de base, et `vsMechanical` ne joue que contre les bâtiments.
 
+Ajoutées la nuit du 16 au 17 novembre, d'après la notice 1.2-1, toutes provisoires (valeurs du mod quand il en a, sinon de l'auteur du code) :
+- **Humains** : `marche`, `grandconseil`, `grandealchimisterie`, `cuve`, `cadavre`, `scarabee`, et les recherches (`vehicles1` à `3`, `skin1` à `3`, `canonsscies`, `cuirasse`, `scieassaut`, `lamesempoisonnees`, `chargenapalm`, `observation`, `croissance`, `pillage`, `entrainementgroupe`, `armeschimiques`, `cocktail`, `regenerant`, `acide`, `oeilpercant`, `dressageallosaures`, `trebuchet`, `charlourd`, `decollage`, `chargement`, `scarabeassaut`).
+- **Isdaris** : `baliste`, `espion`, `dragon`, `voyageur`, `behemoth`, `orbecommandement`, `trone`, `deflecteur`, les extensions (`miniportail`, `cuvegenetique`, `laboratoire`, `assembleur`, `balise`, `totem`, `autel`, `pyramide`, `observatoire`, `relais`, `porte`) et les recherches (`portailatk1` à `3`, `portailarmor1` à `3`, `assembleuratk1` à `3`, `assembleurarmor1` à `3`, `bouclier1` à `3`, `cercle1` et `2`, `robots`, `enfouissement`, `deflagration`, `silence`, `teleportation`, `manteau`, `feucirculaire`, `couloir`, `chocmental`, `boostgenetique`, `teleportrapide`, `canonlourd`, `dephasage`, `renvoi`, `omniscience`).
+- Toutes les nouvelles capacités dans `abilities`, et les effets des recherches dans `rules.upgrades`.
+
+Champs ajoutés :
+- `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
+- `lifetime` : durée de vie en secondes (Cadavre réanimé).
+- `bunker` sur une unité : places à bord (Scarabée).
+- `cloakAura` : rayon d'invisibilité autour d'un bâtiment (Déflecteur).
+- Capacités : `range` (portée de lancement), `radius` (zone), `damage`, `max` (unités déplacées au plus), `energy` (coût).
+- `rules.trade` : le Marché échange `give` d'une ressource contre `get` de l'autre.
+
 ## Unités et bâtiments (`units`)
 
 | Champ | Sens |
