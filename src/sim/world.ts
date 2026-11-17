@@ -1018,36 +1018,43 @@ export class World {
   private moveGroup(units: Entity[], x: number, y: number): void {
     if (units.length === 0) return;
     // A compact group keeps its formation; a spread-out one gathers into a block round the point.
-    const [ox, oy] = this.formation(units, true);
+    const [ox, oy] = this.formation(units, [x, y]);
     for (const [i, e] of units.entries()) this.setOrder(e, { kind: 'move', x: x + ox[i], y: y + oy[i], arrive: FP / 4 });
   }
 
   /**
    * Each unit's offset from the destination. A compact group keeps its formation. A spread-out one converges on the
-   * point, or with `spread` (a plain move) gets a slot each in a square block, filled in the order the units stand
-   * (north to south, then west to east in each row), so they do not cross on the way nor pile onto the one point.
+   * point, or, given the point (`to`, a plain move), gets a slot each in a block facing the way it goes: rows across
+   * the march, the units nearest the point in the front row, each row filled left to right as the units stand. All of
+   * it is reckoned along the march, not the map's axes, so two mirrored groups get mirrored blocks (no side favoured).
    */
-  private formation(units: Entity[], spread = false): [number[], number[], boolean] {
+  private formation(units: Entity[], to?: [number, number]): [number[], number[], boolean] {
     const n = Math.max(1, units.length);
     const cx = idiv(units.reduce((s, e) => s + e.x, 0), n);
     const cy = idiv(units.reduce((s, e) => s + e.y, 0), n);
     const compact = units.every((e) => dist(e.x, e.y, cx, cy) < 4 * FP);
-    if (compact || !spread || units.length === 1) return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
+    if (compact || !to || units.length === 1) return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
+    // The march: from the group's centre to the point (straight "down" if it is already there).
+    let [dx, dy] = [to[0] - cx, to[1] - cy];
+    if (dx === 0 && dy === 0) dy = FP;
+    const len = isqrt(dx * dx + dy * dy);
+    const along = (e: Entity) => (e.x - cx) * dx + (e.y - cy) * dy; // larger: nearer the point
+    const across = (e: Entity) => (e.y - cy) * dx - (e.x - cx) * dy; // larger: further left of the march
     const cols = isqrt(units.length - 1) + 1;
     const rows = idiv(units.length + cols - 1, cols);
-    const step = 2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + FP / 4;
-    const order = units.map((_, i) => i).sort((a, b) => units[a].y - units[b].y || units[a].x - units[b].x || units[a].id - units[b].id);
+    const step = 2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + FP / 4; // even, so the block is centred exactly
+    const order = units.map((_, i) => i).sort((a, b) => along(units[b]) - along(units[a]) || units[a].id - units[b].id);
     const ox: number[] = new Array(units.length);
     const oy: number[] = new Array(units.length);
-    order.forEach((u, k) => {
-      ox[u] = (k % cols) * step - idiv((cols - 1) * step, 2);
-      oy[u] = idiv(k, cols) * step - idiv((rows - 1) * step, 2);
-    });
-    // Within each row, west to east: re-sort the row's units by x so neighbours keep their side.
     for (let r = 0; r < rows; r++) {
-      const row = order.slice(r * cols, r * cols + cols);
-      const xs = row.map((u) => ox[u]).sort((a, b) => a - b);
-      row.sort((a, b) => units[a].x - units[b].x || units[a].id - units[b].id).forEach((u, j) => (ox[u] = xs[j]));
+      // Front row first; in each row, the units from right to left of the march take the slots right to left.
+      const row = order.slice(r * cols, r * cols + cols).sort((a, b) => across(units[a]) - across(units[b]) || units[a].id - units[b].id);
+      const fwd = idiv((rows - 1) * step, 2) - r * step;
+      row.forEach((u, c) => {
+        const side = c * step - idiv((row.length - 1) * step, 2);
+        ox[u] = idiv(dx * fwd - dy * side, len);
+        oy[u] = idiv(dy * fwd + dx * side, len);
+      });
     }
     return [ox, oy, false];
   }

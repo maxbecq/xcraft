@@ -72,6 +72,23 @@ describe('group arrival', () => {
     expect(ys[0]).toBeLessThan(ys[2]);
   });
 
+  it('gives two mirrored groups mirrored slots (no side of the map favoured)', () => {
+    const w = new World(createMap());
+    const W = w.map.width * FP;
+    const H = w.map.height * FP;
+    const spots = [[30, 52], [30, 60], [31, 68], [36, 61], [33, 56], [28, 63]];
+    const a = spots.map(([x, y]) => w.spawn('auxiliaire', 0, x * FP, y * FP));
+    const b = spots.map(([x, y]) => w.spawn('auxiliaire', 1, W - x * FP, H - y * FP));
+    w.step([{ player: 0, kind: 'move', ids: a.map((e) => e.id), x: 50 * FP, y: 60 * FP }]);
+    w.step([{ player: 1, kind: 'move', ids: b.map((e) => e.id), x: W - 50 * FP, y: H - 60 * FP }]);
+    const slot = (e: Entity) => (e.order?.kind === 'move' ? [e.order.x, e.order.y] : []);
+    a.forEach((e, i) => {
+      const [x, y] = slot(e);
+      const [mx, my] = slot(b[i]);
+      expect([W - mx, H - my]).toEqual([x, y]);
+    });
+  });
+
   it('is the same for the same orders (no hidden randomness)', () => {
     const play = () => {
       const w = new World(createMap());
