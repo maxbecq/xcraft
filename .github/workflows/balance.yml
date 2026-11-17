@@ -1,6 +1,6 @@
 name: Balance
 
-# On every PR touching balance.json: 98 AI games with main's numbers and with the PR's, compared in a comment.
+# On every PR touching balance.json: 98 AI games per pair of factions with main's numbers and with the PR's, compared in a comment.
 on:
   pull_request:
     paths: [src/balance.json]
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   balance:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:

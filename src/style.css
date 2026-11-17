@@ -333,6 +333,18 @@ body:not(.isdaris) .hud-toast.alert { text-shadow: 0 0 2px #000, 0 0 6px rgba(0,
 @keyframes lcd-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @media (prefers-reduced-motion: reduce) { body:not(.isdaris) .hud-toast { animation: none; } }
 
+/* Z: the same terminal in neon cyan on carbon; their black carbon pictures are lit, not recoloured. */
+body.z {
+  --phos: #6ff4ff;
+  --phos-dim: #2c7f8c;
+  --phos-dark: #0e2a30;
+  --screen: radial-gradient(ellipse at 50% 45%, #0d2128 0%, #071216 70%, #030809 100%);
+  --glow: 0 0 4px rgba(111, 244, 255, 0.6), 0 0 10px rgba(255, 90, 200, 0.2);
+}
+body.z .hud-panel img, body.z .hud-panel canvas.portrait, body.z .cmd img { filter: brightness(2.4) contrast(1.1) drop-shadow(0 0 2px rgba(111, 244, 255, 0.6)); }
+body.z .cmd:hover img { filter: brightness(0.3); }
+body.z .res i { background: var(--phos) !important; }
+
 /* Phones: the console keeps one height whatever is selected. Health shows as its bar, production as
    its bar and a row of small icons (the first is the one in progress), names stay on one line. */
 @media (max-height: 560px), (max-width: 820px) {

@@ -105,6 +105,9 @@ def palette():
         "deadwood": mat("deadwood", 0x5E4A3A, rough=0.95),
         "drygrass": mat("drygrass", 0xB59A5C, rough=1.0),
         "bone": mat("bone", 0xB8AC92, rough=0.95),
+        "carbon": mat("carbon", 0x22262C, metallic=0.5, rough=0.3),
+        "graphite": mat("graphite", 0x4A505A, metallic=0.8, rough=0.35),
+        "pink_glow": mat("pink_glow", 0xFF5AC8, emission=0xFF20A0),
     }
 
 
@@ -1046,6 +1049,192 @@ def scarabee(p):
     pipe(p["scrap"], (0.3, 0.6, 0.7), (0.35, 0.8, 1.0), r=0.04)  # exhaust
 
 
+# ------------------------------------------------------------------ Z: a nest of metal insects, carbon and neon
+
+def joint_leg(p, base, knee, foot, r=0.035):
+    """An insect leg in two segments, with ball joints at the hip and the knee and a claw at the foot."""
+    pipe(p["graphite"], base, knee, r=r, verts=6)
+    pipe(p["carbon"], knee, foot, r=r * 0.75, verts=6)
+    ball(p["graphite"], r * 1.4, knee, seg=8, rings=4)
+    ball(p["cyan_glow"], r * 0.9, base, seg=6, rings=4)
+    cone(p["graphite"], r * 0.9, r * 3, (foot[0], foot[1], foot[2] + r), rot=(math.pi, 0, 0), verts=5)
+
+
+def legs(p, n, rx, ry, z, reach, lift, r=0.035):
+    """n pairs of legs along the body (front -y), splayed out and slightly forward or back."""
+    for i in range(n):
+        t = 0 if n == 1 else i / (n - 1) - 0.5
+        y = t * ry * 2
+        for s in (-1, 1):
+            base = (s * rx, y, z)
+            knee = (s * (rx + reach * 0.55), y + t * reach * 0.6, z + lift)
+            foot = (s * (rx + reach), y + t * reach * 1.1, 0.0)
+            joint_leg(p, base, knee, foot, r)
+
+
+def gun(p, loc, length=0.3, barrels=1, r=0.025):
+    x, y, z = loc
+    box(p["graphite"], (0.12 + 0.05 * barrels, 0.14, 0.09), (x, y, z))
+    for k in range(barrels):
+        bx = x + (k - (barrels - 1) / 2) * r * 2.6
+        cyl(p["carbon"], r, length, (bx, y - length / 2 - 0.05, z), rot=(math.radians(90), 0, 0), verts=8)
+    box(p["cyan_glow"], (0.1, 0.02, 0.02), (x, y - 0.075, z + 0.03))
+
+
+def drone(p):
+    """Drone: a small carbon bug on four legs with two harvesting mandibles and a cyan eye."""
+    ball(p["carbon"], 0.18, (0, 0.04, 0.3), scale=(1, 1.3, 0.6), seg=12, rings=6)
+    ball(p["graphite"], 0.1, (0, -0.17, 0.3), scale=(1, 1, 0.8), seg=10, rings=6)  # head
+    ball(p["cyan_glow"], 0.035, (0, -0.26, 0.32), seg=8, rings=4)  # eye
+    box(p["team"], (0.08, 0.26, 0.03), (0, 0.06, 0.41))  # dorsal plate
+    for s in (-1, 1):
+        pipe(p["graphite"], (s * 0.05, -0.22, 0.27), (s * 0.09, -0.36, 0.18), r=0.018, verts=5)
+        cone(p["cyan_glow"], 0.02, 0.07, (s * 0.09, -0.38, 0.15), rot=(math.radians(150), 0, 0), verts=5)
+    legs(p, 2, 0.12, 0.1, 0.28, 0.2, 0.08, r=0.022)
+
+
+def dronecombat(p):
+    """Drone de combat: the worker bug with a light machine gun on its back instead of mandibles."""
+    ball(p["carbon"], 0.19, (0, 0.04, 0.32), scale=(1, 1.3, 0.6), seg=12, rings=6)
+    ball(p["graphite"], 0.1, (0, -0.18, 0.31), scale=(1, 1, 0.8), seg=10, rings=6)
+    ball(p["pink_glow"], 0.035, (0, -0.27, 0.33), seg=8, rings=4)
+    box(p["team"], (0.08, 0.24, 0.03), (0, 0.1, 0.43))
+    gun(p, (0, -0.02, 0.47), length=0.28)
+    legs(p, 2, 0.12, 0.1, 0.3, 0.22, 0.09, r=0.022)
+
+
+def quadripode(p):
+    """Quadripode: a light, fast four-legged walker, a slim body high on long legs, a gun mount at the front."""
+    ball(p["carbon"], 0.22, (0, 0.05, 0.62), scale=(0.9, 1.5, 0.5), seg=12, rings=6)
+    ball(p["graphite"], 0.12, (0, -0.28, 0.6), scale=(1, 1.1, 0.7), seg=10, rings=6)
+    for s in (-1, 1):
+        ball(p["cyan_glow"], 0.03, (s * 0.06, -0.38, 0.62), seg=6, rings=4)
+    box(p["team"], (0.06, 0.4, 0.03), (0, 0.08, 0.74))
+    box(p["pink_glow"], (0.02, 0.3, 0.02), (0.12, 0.05, 0.66))  # side neon
+    gun(p, (0, -0.3, 0.74), length=0.3)
+    legs(p, 2, 0.14, 0.18, 0.58, 0.42, 0.18, r=0.03)
+
+
+def hexapode(p):
+    """Hexapode: a heavier six-legged walker under an armoured, ribbed carapace, an asymmetric sensor horn."""
+    ball(p["carbon"], 0.36, (0, 0.05, 0.62), scale=(1, 1.35, 0.55), seg=14, rings=8)
+    for k in range(4):  # carapace ribs
+        ring(p["graphite"], 0.3 - abs(k - 1.5) * 0.04, 0.025, (0, -0.25 + k * 0.17, 0.66), rot=(math.radians(90), 0, 0), seg=16)
+    ball(p["graphite"], 0.17, (0, -0.42, 0.58), scale=(1.1, 1, 0.75), seg=12, rings=6)
+    box(p["team"], (0.32, 0.12, 0.04), (0, 0.2, 0.86), rot=(0.15, 0, 0))
+    box(p["team"], (0.26, 0.1, 0.04), (0, -0.05, 0.87))
+    for s in (-1, 1):
+        ball(p["cyan_glow"], 0.035, (s * 0.08, -0.56, 0.6), seg=6, rings=4)
+    pipe(p["graphite"], (0.1, -0.45, 0.68), (0.2, -0.55, 0.92), r=0.015, verts=5)  # horn, one side only
+    ball(p["pink_glow"], 0.03, (0.2, -0.55, 0.92), seg=6, rings=4)
+    gun(p, (0, -0.35, 0.86), length=0.35)
+    legs(p, 3, 0.26, 0.28, 0.55, 0.5, 0.22, r=0.04)
+
+
+def coleoptere(p):
+    """Coléoptère: a flying beetle, its wing cases spread over two thin neon-veined wings, glowing thrusters below."""
+    ball(p["carbon"], 0.28, (0, 0.05, 0.5), scale=(0.9, 1.5, 0.6), seg=14, rings=8)
+    ball(p["graphite"], 0.14, (0, -0.42, 0.5), scale=(1, 1, 0.8), seg=10, rings=6)
+    for s in (-1, 1):
+        ball(p["cyan_glow"], 0.03, (s * 0.07, -0.53, 0.52), seg=6, rings=4)
+        o = ball(p["team"], 0.3, (s * 0.24, 0.1, 0.62), scale=(0.5, 1.2, 0.18), seg=12, rings=6)  # wing case
+        o.rotation_euler = (0, s * 0.5, s * 0.25)
+        box(p["dark_glass"], (0.55, 0.3, 0.01), (s * 0.5, 0.22, 0.6), rot=(0, s * -0.15, s * 0.35))  # wing
+        box(p["cyan_glow"], (0.5, 0.012, 0.012), (s * 0.5, 0.22, 0.61), rot=(0, s * -0.15, s * 0.35))
+        cyl(p["pink_glow"], 0.06, 0.05, (s * 0.12, 0.25, 0.28), verts=10)  # thruster
+    gun(p, (0, -0.3, 0.36), length=0.3)
+
+
+def intelligence(p):
+    """Intelligence centrale: the nest's mind folded under a segmented carbon shell, asymmetric like a crouching
+    insect, neon seams between the plates, antennae and a tangle of cables spilling out into the creep."""
+    cyl(p["graphite"], 2.3, 0.3, (0, 0, 0.15), verts=10)
+    for k, (r, z, sx) in enumerate(((1.9, 0.9, 1.0), (1.55, 1.55, 0.92), (1.1, 2.1, 0.85))):
+        o = ball(p["carbon"], r, (0.15 * k, 0.1 * k, z), scale=(sx, 1.15, 0.5), seg=16, rings=8)
+        o.rotation_euler = (0, 0, 0.3 * k)
+        ring(p["cyan_glow"], r * 0.98, 0.03, (0.15 * k, 0.1 * k, z - 0.05), seg=20)
+    for k in range(5):  # dorsal plates in team colour
+        a = k / 5 * math.tau + 0.4
+        box(p["team"], (0.5, 0.9, 0.08), (math.cos(a) * 1.2, math.sin(a) * 1.2, 1.35), rot=(0.4 * math.sin(a), -0.4 * math.cos(a), a))
+    ball(p["pink_glow"], 0.35, (0.35, -0.6, 2.25), scale=(1, 1, 0.6), seg=12, rings=6)  # the mind's eye
+    for s, h in ((-1, 1.4), (1, 1.0)):
+        pipe(p["graphite"], (s * 0.4, -0.8, 2.2), (s * 0.9, -1.8, 2.2 + h), r=0.05, verts=6)
+        ball(p["cyan_glow"], 0.08, (s * 0.9, -1.8, 2.2 + h), seg=8, rings=4)
+    for k in range(9):  # cables into the ground
+        a = k / 9 * math.tau + 0.2
+        pipe(p["carbon"], (math.cos(a) * 1.7, math.sin(a) * 1.7, 0.6), (math.cos(a + 0.3) * 2.4, math.sin(a + 0.3) * 2.4, 0.05), r=0.07, verts=6)
+    for x, y in ((-2.0, 1.2), (1.8, 1.5), (-1.4, -1.9)):  # sensor nodes
+        cyl(p["graphite"], 0.15, 0.5, (x, y, 0.4), verts=6)
+        ball(p["cyan_glow"], 0.12, (x, y, 0.7), seg=8, rings=4)
+
+
+def pod(p):
+    """Pod: a ribbed carbon egg on cable roots, a neon seam glowing where the supply cells sleep."""
+    for k in range(6):
+        a = k / 6 * math.tau
+        pipe(p["carbon"], (math.cos(a) * 0.35, math.sin(a) * 0.35, 0.5), (math.cos(a + 0.4) * 0.9, math.sin(a + 0.4) * 0.9, 0.03), r=0.06, verts=6)
+    ball(p["carbon"], 0.6, (0, 0, 0.95), scale=(0.85, 0.85, 1.15), seg=14, rings=8)
+    for z in (0.65, 0.95, 1.25):
+        ring(p["graphite"], 0.52 - abs(z - 0.95) * 0.3, 0.035, (0, 0, z), seg=16)
+    box(p["cyan_glow"], (0.04, 0.04, 0.8), (0.05, -0.5, 0.95), rot=(0.12, 0, 0))  # seam
+    box(p["team"], (0.3, 0.05, 0.25), (0.25, 0.45, 1.05), rot=(-0.2, 0, 0.5))
+    cone(p["graphite"], 0.12, 0.35, (0, 0, 1.75), verts=6)
+    ball(p["pink_glow"], 0.06, (0, 0, 1.95), seg=6, rings=4)
+
+
+def assimilateur(p):
+    """Assimilateur: a spider clamped over the energy well, three jointed legs and a pump body drinking the light."""
+    cyl(p["graphite"], 1.25, 0.2, (0, 0, 0.1), verts=9)
+    for k in range(3):
+        a = k / 3 * math.tau + 0.3
+        joint_leg(p, (math.cos(a) * 0.5, math.sin(a) * 0.5, 1.4), (math.cos(a) * 1.25, math.sin(a) * 1.25, 1.7), (math.cos(a) * 1.35, math.sin(a) * 1.35, 0.15), r=0.09)
+        box(p["team"], (0.08, 0.35, 0.3), (math.cos(a) * 0.95, math.sin(a) * 0.95, 1.55), rot=(0, 0.6, a))
+    ball(p["carbon"], 0.55, (0, 0, 1.45), scale=(1, 1, 0.75), seg=14, rings=8)
+    cyl(p["purple_glow"], 0.16, 1.2, (0, 0, 0.7), verts=10)  # drawn energy
+    ring(p["cyan_glow"], 0.5, 0.03, (0, 0, 1.3), seg=18)
+    cone(p["graphite"], 0.15, 0.5, (0.15, 0.1, 2.05), verts=6)
+
+
+def plateforme(p):
+    """Plate-forme: a flat assembly deck where the socles are built, two jointed robot arms over it, one larger."""
+    box(p["graphite"], (2.8, 2.8, 0.25), (0, 0, 0.12))
+    box(p["carbon"], (2.2, 2.2, 0.12), (0, 0, 0.3))
+    for k in range(4):  # landing neon lines
+        box(p["cyan_glow"], (1.8, 0.04, 0.02), (0, -0.75 + k * 0.5, 0.37))
+    box(p["team"], (2.82, 0.2, 0.27), (0, 1.3, 0.13))
+    for (x, y, h, reach) in ((-1.1, 1.0, 1.6, 1.2), (1.15, 0.9, 1.1, 0.8)):
+        cyl(p["graphite"], 0.18, 0.4, (x, y, 0.55), verts=8)
+        joint_leg(p, (x, y, 0.75), (x * 0.8, y - reach * 0.3, 0.75 + h), (x * 0.3, y - reach, 0.9), r=0.07)
+        ball(p["pink_glow"], 0.07, (x * 0.3, y - reach, 0.85), seg=8, rings=4)  # welding tip
+    ball(p["carbon"], 0.35, (0.1, -0.3, 0.55), scale=(1, 1.3, 0.5), seg=12, rings=6)  # a socle half-built
+
+
+def armement(p):
+    """Centre d'armement: an armoured hive block, a rack of barrels on its back and a turret head tested on its flank."""
+    box(p["carbon"], (2.5, 2.2, 1.0), (0, 0.1, 0.5))
+    ball(p["carbon"], 1.1, (0, 0.1, 1.0), scale=(1.1, 0.95, 0.5), seg=14, rings=8)
+    for k in range(5):
+        cyl(p["graphite"], 0.07, 1.6, (-0.8 + k * 0.4, 0.75, 1.55), rot=(math.radians(70), 0, 0), verts=8)  # barrels
+    box(p["team"], (2.52, 0.12, 0.4), (0, -1.0, 0.6))
+    for x in (-0.9, -0.3, 0.3):
+        box(p["cyan_glow"], (0.3, 0.03, 0.05), (x, -1.0, 0.92))
+    cyl(p["graphite"], 0.3, 0.3, (0.9, -0.5, 1.5), verts=10)
+    gun(p, (0.9, -0.5, 1.75), length=0.7, barrels=2, r=0.05)
+    pipe(p["carbon"], (-1.2, -0.6, 0.9), (-1.35, -1.25, 0.05), r=0.08, verts=6)
+
+
+def tourelle(p):
+    """Tourelle: a small metal tower on three clawed feet, its head a twin heavy machine gun with a sensor eye."""
+    for k in range(3):
+        a = k / 3 * math.tau + 0.5
+        joint_leg(p, (math.cos(a) * 0.25, math.sin(a) * 0.25, 0.9), (math.cos(a) * 0.7, math.sin(a) * 0.7, 1.0), (math.cos(a) * 0.85, math.sin(a) * 0.85, 0.05), r=0.06)
+    cyl(p["carbon"], 0.25, 1.0, (0, 0, 0.6), verts=8, r2=0.18)
+    box(p["team"], (0.3, 0.06, 0.3), (0, 0.24, 0.7))
+    ball(p["graphite"], 0.32, (0, 0, 1.35), scale=(1, 1.2, 0.7), seg=12, rings=6)
+    gun(p, (0, -0.2, 1.4), length=0.75, barrels=2, r=0.04)
+    ball(p["pink_glow"], 0.06, (0.18, -0.3, 1.55), seg=8, rings=4)
+
+
 MODELS = {
     "scarabee": scarabee,
     "cuve": cuve,
@@ -1055,6 +1244,8 @@ MODELS = {
     "minerai_1": minerai_1, "minerai_2": minerai_2, "minerai_3": minerai_3,
     "moissonneur": moissonneur, "archer": archer, "creature": creature, "druide": druide,
     "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
+    "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
+    "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
 }
 
 

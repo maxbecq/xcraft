@@ -7,7 +7,7 @@ Tous les chiffres d'équilibrage du jeu sont dans [`src/balance.json`](src/balan
 1. Sur GitHub, ouvrir `src/balance.json` et cliquer sur le crayon (« Edit this file »).
 2. Changer les valeurs.
 3. « Commit changes… », choisir « Create a new branch » et ouvrir la pull request.
-4. Attendre le commentaire du bot (environ 10 minutes). Il joue 98 parties IA contre IA avec les chiffres de `main` puis avec ceux de la PR, et compare les victoires, la durée des parties et les unités produites.
+4. Attendre le commentaire du bot (environ une demi-heure). Il joue 98 parties IA contre IA par paire de camps (Humains-Isdaris, Z-Humains, Z-Isdaris) avec les chiffres de `main` puis avec ceux de la PR, et compare les victoires, la durée des parties et les unités produites.
 5. Si les tests échouent, le fichier est invalide : une virgule manquante, une valeur absente ou un nom d'unité mal écrit. Le message d'erreur nomme la ligne fautive.
 6. Le programmeur relit et fusionne la PR.
 
@@ -18,6 +18,8 @@ Les parties IA contre IA mesurent l'équilibre entre IA, pas entre joueurs. Elle
 ## Valeurs provisoires
 
 Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2, adaptées au jeu par le programmeur ; elles attendent l'équilibrage : `metallurgie`, `bourdon` (le mod ne lui donnait pas d'arme), `pegase`, `alchimisterie`, `alchimiste`, `creaturium`, `plesiosaure`, `ankylosaure`, `allosaure`, `belluaire`. Le bonus du mod contre l'infanterie légère ou biologique n'existe pas encore dans le jeu : il est intégré aux dégâts de base, et `vsMechanical` ne joue que contre les bâtiments.
+
+Le camp **Z** (les Machines, notice 1.2-1) est entièrement provisoire : le mod SC2 n'a pas ce camp (son camp insectoïde est organique), ses valeurs sont calquées par le programmeur sur les deux autres camps. Sont concernés : `drone`, `dronecombat`, `quadripode`, `hexapode`, `coleoptere`, `intelligence`, `pod`, `assimilateur`, `plateforme`, `armement`, `tourelle`, `zattaque1` à `zattaque3`, `zblindage1` à `zblindage3`, `lanceflammes`, `lanceroquettes`, les armes (`weapons`), `rules.equipSeconds`, `rules.creepRepair`, `ai.army.z` et `ai.kits`.
 
 ## Unités et bâtiments (`units`)
 
@@ -48,6 +50,10 @@ Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2
 
 `melee1` à `armor3` sont les améliorations de la Forge (coût et durée de chaque niveau).
 
+## Armes du camp Z (`weapons`)
+
+Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec la mitrailleuse légère de leur fiche `units` (`attack`). On leur monte ensuite un kit qui la remplace, payé à chaque socle : `attack` (mêmes champs que pour les unités) et `cost`. Le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; le Lance-flammes ne va pas sur le Coléoptère, et le Drone de combat ne prend aucun kit.
+
 ## Capacités (`abilities`)
 
 `cooldown` (secondes avant réutilisation), `duration` (secondes d'effet ; pour Rappel, la canalisation), `energy` (énergie dépensée).
@@ -62,6 +68,8 @@ Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2
 | `rappel` | rayon de ramassage, unités rappelées au plus, secondes d'étourdissement à l'arrivée |
 | `peauDeRoc` | portée et réduction de dégâts de Peau de roc |
 | `stimulantHp` | PV coûtés par le Stimulant |
+| `equipSeconds` | secondes pendant lesquelles un socle Z reste immobile quand on lui monte un kit |
+| `creepRepair` | PV rendus chaque seconde aux unités Z au sol sur leur creep |
 
 ## IA (`ai`)
 
@@ -80,3 +88,4 @@ Les unités ajoutées d'après la notice 1.2-1 reprennent les valeurs du mod SC2
 | `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
 | `tech.isdaris` | Nano-assembleur avec `barracks` portails, plus de `minerals` minerai et `energy` énergie |
 | `army` | poids de chaque unité dans l'armée de l'IA |
+| `kits` | poids de chaque kit d'arme que l'IA Z monte sur ses socles |

@@ -189,8 +189,9 @@ export interface GameEvent {
 }
 
 const REACH = FP / 4;
-/** Why a building cannot go there: out of the power field (Isdaris), off the creep (Z), or simply blocked. */
-const misplaced = (def: BuildingDef): string => (!def.needsPower ? 'Emplacement invalide.' : def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.");
+/** The supply building of each faction, for the "not enough supply" message. */
+const SUPPLY_NAMES: Record<Faction, string> = { humains: 'greniers', isdaris: 'réserves psy', z: 'pods' };
+
 /** How close (tiles) an Isdaris worker must be to beam a building down. */
 const WARP_RANGE = 6;
 
@@ -485,7 +486,7 @@ export class World {
         if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
         const lack = this.lacks(c.player, c.type);
         if (lack) return void this.say(c.player, lack);
-        if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, misplaced(bdef));
+        if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, this.misplaced(bdef, c.tx, c.ty, c.player));
         this.setOrder(worker, { kind: 'build', type: c.type, tx: c.tx, ty: c.ty });
         return;
       }
@@ -520,7 +521,7 @@ export class World {
           if (b.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
           const unit = DEFS[c.type] as UnitDef;
           const s = this.supply(c.player);
-          if (s.used + unit.supply > s.max) return void this.say(c.player, 'Logistique insuffisante : construisez des greniers.');
+          if (s.used + unit.supply > s.max) return void this.say(c.player, `Logistique insuffisante : construisez des ${SUPPLY_NAMES[this.players[c.player].faction]}.`);
           if (!this.pay(c.player, unit)) return;
           b.queue.push(c.type);
           if (b.queue.length === 1) b.trainLeft = this.trainTime(b, c.type);
@@ -922,6 +923,12 @@ export class World {
     return true;
   }
 
+  /** Why a building cannot go there: out of the power field (Isdaris), off the creep (Z), or simply blocked. */
+  private misplaced(def: BuildingDef, tx: number, ty: number, player: number): string {
+    if (!def.needsPower || this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return 'Emplacement invalide.';
+    return def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.";
+  }
+
   /** Is a point inside one of the player's linked power fields (Isdaris)? */
   powered(player: number, x: number, y: number): boolean {
     return this.powerNetwork(player).some((b) => dist(b.x, b.y, x, y) <= (b.def as BuildingDef).power! * FP);
@@ -1165,7 +1172,7 @@ export class World {
           return;
         }
         if (!this.canPlace(o.type, o.tx, o.ty, e.owner)) {
-          this.say(e.owner, misplaced(def));
+          this.say(e.owner, this.misplaced(def, o.tx, o.ty, e.owner));
           return this.setOrder(e, null);
         }
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);

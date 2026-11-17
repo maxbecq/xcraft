@@ -88,6 +88,7 @@ const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction] = factions;
 const world = createMatch(factions, slots.map((s) => s.team), biome.style === 'city');
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
+document.body.classList.toggle('z', factions[PLAYER] === 'z');
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
