@@ -36,6 +36,23 @@ teamPainted.forEach((m) => {
   rimLight(m, 0.4);
 });
 
+/** Team-coloured light (veins, cores): `team_glow` in Blender models. */
+const teamGlow = TEAM_COLORS.map((c) => mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.1 }));
+const teamCanvas = new Map<Texture, MeshStandardMaterial[]>();
+/** Team colour over a woven texture (`team_canvas`: the market's awning), with its hand-painted vertex colours. */
+function teamCloth(map: Texture, team: number): MeshStandardMaterial {
+  let set = teamCanvas.get(map);
+  if (!set) {
+    set = TEAM_COLORS.map((c) => {
+      const m = mat(c, { map, roughness: 0.9, vertexColors: true, emissive: new Color(c).multiplyScalar(0.12) });
+      rimLight(m, 0.4);
+      return m;
+    });
+    teamCanvas.set(map, set);
+  }
+  return set[team] ?? set[0];
+}
+
 const tagMaterials = new Map<Texture, MeshStandardMaterial>();
 /** Graffiti on a wall: transparent, drawn just in front of it. */
 function tagMaterial(map: Texture): MeshStandardMaterial {
@@ -523,7 +540,11 @@ function model(type: string, team: Material, seed = 0): Group {
     o.receiveShadow = true;
     const name = (o.material as Material).name;
     if (name === 'meshy') o.material = meshySkins.get(type)?.[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? o.material;
-    if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? team) : team;
+    const ti = teamMaterials.indexOf(team as MeshStandardMaterial);
+    if (name === 'team') o.material = o.geometry.getAttribute('color') ? (teamPainted[ti] ?? team) : team;
+    const map = (o.material as MeshStandardMaterial).map;
+    if (name === 'team_canvas' && map) o.material = teamCloth(map, ti);
+    if (name === 'team_glow') o.material = teamGlow[ti] ?? o.material;
     if (name === 'tag') {
       const tags = graffiti();
       o.material = tagMaterial(tags[(seed * 7 + tagIndex++) % tags.length]);

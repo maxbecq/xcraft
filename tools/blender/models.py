@@ -1232,19 +1232,142 @@ DOODADS = {
     "hovercar": hovercar, "walldoor": walldoor, "wallpanel": wallpanel, "wallpipe": wallpipe, "shopfront": shopfront,
 }
 
+def canvas_texture(name):
+    """A tileable 256px canvas, near neutral so the material's colour shows through: an over-under plain weave
+    (8px threads, one repeat per box_uv tile), uneven slubbed threads and sun-faded patches."""
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    import numpy as np
+    S, T = 256, 8
+    rng = np.random.default_rng(11)
+    yy, xx = np.mgrid[0:S, 0:S]
+    over = ((xx // T + yy // T) % 2) == 0
+    h = np.where(over, np.sin(np.pi * (xx % T + 0.5) / T), np.sin(np.pi * (yy % T + 0.5) / T))
+    lum = 0.74 + 0.22 * h
+    slub = np.where(over, _noise(rng, S, 4, (1, 32)), _noise(rng, S, 4, (32, 1)))
+    lum = lum * (0.94 + 0.12 * slub) * (0.86 + 0.2 * _fbm(rng, S, 3, 4))
+    rgb = np.clip(np.stack([lum * 1.01, lum, lum * 0.97], -1), 0, 1)
+    img = bpy.data.images.new(name, S, S)
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(np.concatenate([rgb, np.ones((S, S, 1))], -1).astype(np.float32).ravel())
+    img.pack()
+    return img
+
+
+def awning(team, linen, front=-1.1, rear=1.1, zf=1.67, zr=1.9, half=1.35, posts=(-1.05, 0.0, 1.05), stripes=7,
+           over=0.18, sag=0.17, hang=0.11, scallop=0.08, wave=0.012):
+    """Striped canvas laid over two beams: it sags between them (deeper between the posts), its overhangs droop,
+    it ripples a little, and a scalloped valance hangs front and back, one tongue per stripe."""
+    def z(x, y):
+        t = (y - front) / (rear - front)
+        h = zf + (zr - zf) * t
+        span = abs(math.sin(math.pi * (x - posts[0]) / (posts[1] - posts[0])))
+        if 0 <= t <= 1:
+            h -= sag * 4 * t * (1 - t) * (0.7 + 0.3 * span)
+        else:
+            d = (front - y) if t < 0 else (y - rear)
+            h -= 0.7 * d + 1.8 * d * d
+        dx = max(0.0, abs(x) - abs(posts[-1]))
+        return h - 0.9 * dx * dx + wave * math.sin(x * 9 + y * 4) + 0.6 * wave * math.sin(y * 13 - x * 3)
+    w = 2 * half / stripes
+    nu, nv, nh = 6, 20, 3
+    y0, y1 = front - over, rear + over
+    rows = [("f", k / nh) for k in range(nh, 0, -1)] + [("c", y0 + (y1 - y0) * j / nv) for j in range(nv + 1)] + [("r", k / nh) for k in range(1, nh + 1)]
+    for s in range(stripes):
+        verts, faces, cols = [], [], nu + 1
+        for kind, v in rows:
+            for i in range(cols):
+                u = i / nu
+                x = -half + (s + u) * w
+                drop = (hang + scallop * math.sin(math.pi * u)) * v
+                if kind == "c":
+                    verts.append((x, v, z(x, v)))
+                elif kind == "f":
+                    verts.append((x, y0 - 0.04 * v, z(x, y0) - drop))
+                else:
+                    verts.append((x, y1 + 0.04 * v, z(x, y1) - drop))
+        for r in range(len(rows) - 1):
+            for i in range(nu):
+                a = r * cols + i
+                faces.append((a, a + 1, a + cols + 1, a + cols))
+        me = bpy.data.meshes.new("awning")
+        me.from_pydata(verts, [], faces)
+        me.update()
+        o = bpy.data.objects.new("awning", me)
+        bpy.context.collection.objects.link(o)
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        mod = o.modifiers.new("cloth", "SOLIDIFY")
+        mod.thickness = 0.025
+        mod.offset = 0
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        o.data.materials.append(team if s % 2 == 0 else linen)
+        for poly in o.data.polygons:
+            poly.use_smooth = True
+
+
+def vein(p, glow, pts, r=0.02, into=(0, 1, 0)):
+    """A thin glass vein of team light in a dark iron gutter (set back into the wall along `into`), brass clamps
+    at the ends and about every 40 cm."""
+    back = lambda q: (q[0] + into[0] * r, q[1] + into[1] * r, q[2] + into[2] * r)
+    last = None
+    for a, b in zip(pts, pts[1:]):
+        pipe(p["dark"], back(a), back(b), r=r * 1.3, verts=8)
+        pipe(glow, a, b, r=r, verts=8)
+    for q in pts:
+        if last is None or (Vector(q) - Vector(last)).length > 0.4 or q is pts[-1]:
+            ball(p["bronze"], r * 2.2, q, seg=8, rings=4)
+            last = q
+
+
+def armillary(p, glow, loc, s=1.0):
+    """A brass armillary sphere on a stand, its core lit in the team's colour."""
+    x, y, z = loc
+    cyl(p["dark"], 0.12 * s, 0.1 * s, (x, y, z + 0.05 * s), verts=10)
+    cyl(p["bronze"], 0.03 * s, 0.35 * s, (x, y, z + 0.25 * s), verts=8)
+    c = (x, y, z + 0.62 * s)
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, 0))
+    ring(p["bronze"], 0.3 * s, 0.02 * s, c, rot=(math.radians(90), 0, math.radians(60)))
+    ring(p["bronze"], 0.26 * s, 0.022 * s, c, rot=(math.radians(23), 0, 0))
+    ball(glow, 0.09 * s, c)
+
+
+def gear(p, loc, r=0.17, teeth=10):
+    """A brass cog flat on a wall facing -y."""
+    x, y, z = loc
+    ring(p["bronze"], r * 0.82, 0.04, (x, y, z), rot=(math.radians(90), 0, 0))
+    cyl(p["dark"], 0.05, 0.06, (x, y - 0.01, z), rot=(math.radians(90), 0, 0), verts=12)
+    for i in range(4):
+        box(p["bronze"], (r * 1.6, 0.03, 0.03), (x, y, z), rot=(0, i * math.pi / 4, 0))
+    for i in range(teeth):
+        a = i / teeth * math.tau
+        box(p["bronze"], (0.06, 0.05, 0.06), (x + math.cos(a) * r, y, z + math.sin(a) * r), rot=(0, -a, 0))
+
+
 def marche(p):
-    """Market (notice: trade and the economy): a stone floor under a team-striped awning on timber posts,
-    a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still."""
+    """Market (notice: trade and the economy): a stone floor under a team-striped canvas awning on timber posts,
+    a stone counter with a brass balance, crates, sacks, amphorae and a small alchemical still. A touch of the
+    camp's alchemical engineering: thin veins of team light along the beam, posts and counter, a cog on the
+    counter and a brass armillary sphere on a mast."""
     box(p["stone_dark"], (2.8, 2.8, 0.16), (0, 0, 0.08))
     box(p["stone"], (2.5, 2.5, 0.06), (0, 0, 0.19))
     for x, y in ((-1.05, -1.05), (1.05, -1.05), (1.05, 1.05), (-1.05, 1.05), (0, -1.05), (0, 1.05)):
         cyl(p["wood"], 0.07, 1.5, (x, y, 0.95), verts=8)
-    # Striped awning: alternating team and linen slats, sloping to the front.
-    for i in range(7):
-        x = -1.15 + i * 0.383
-        box(p["team"] if i % 2 == 0 else p["linen"], (0.385, 2.5, 0.05), (x, 0, 1.75), rot=(math.radians(-9), 0, 0))
+    canvas = canvas_texture("canvas_tex")
+    # "team_canvas" is recoloured per player in game, keeping its weave.
+    awning(textured("team_canvas", 0x3A7BD5, canvas, 0.0, 0.9), textured("linen_canvas", 0xDDD2B8, canvas, 0.0, 0.9))
     box(p["wood"], (2.7, 0.08, 0.08), (0, -1.1, 1.62))
     box(p["wood"], (2.7, 0.08, 0.08), (0, 1.1, 1.85))
+    # "team_glow" lights up in the player's colour in game.
+    glow = mat("team_glow", 0x3A7BD5, emission=0x3A7BD5)
+    vein(p, glow, [(-1.3, -1.165, 1.6), (1.3, -1.165, 1.6)])
+    for x in (-1.05, 1.05):
+        vein(p, glow, [(x, -1.14, 1.56), (x, -1.14, 0.24)])
+    vein(p, glow, [(-0.68, -0.795, 0.76), (0.68, -0.795, 0.76)], r=0.016)
+    gear(p, (-0.52, -0.79, 0.5))
+    cyl(p["bronze"], 0.035, 0.6, (1.05, 1.05, 1.98), verts=8)
+    armillary(p, glow, (1.05, 1.05, 2.22), 0.75)
     # Stone counter with a brass balance.
     box(p["stone"], (1.4, 0.45, 0.6), (0, -0.55, 0.52))
     box(p["wood"], (1.5, 0.5, 0.05), (0, -0.55, 0.84))
