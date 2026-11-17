@@ -631,6 +631,8 @@ function ghost(body: Object3D): void {
 interface View {
   /** Entity type it was built for: a building turned into another gets a new view. */
   type: string;
+  /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
+  gait?: { x: number; z: number; phase: number; cycle: number };
   root: Object3D;
   model: Group;
   ring: Object3D;
@@ -663,6 +665,26 @@ interface InsectLeg {
   o: Object3D;
   group: number;
   side: number;
+}
+
+/** How far a Z leg turns either way while walking, in radians. */
+const GAIT_SWING = 0.35;
+
+/**
+ * Ground covered by one full gait cycle: each leg group sweeps its feet back by one stride while planted,
+ * and the groups take turns, so the body moves two strides a cycle. A stride is the arc the foot sweeps:
+ * twice the leg's reach times the sine of the swing.
+ */
+function gaitCycle(body: Object3D, legs: InsectLeg[]): number {
+  body.updateMatrixWorld(true);
+  const pivot = new Vector3();
+  const reach =
+    legs.reduce((sum, l) => {
+      const box = new Box3().setFromObject(l.o);
+      l.o.getWorldPosition(pivot);
+      return sum + Math.max(Math.abs(box.min.x - pivot.x), Math.abs(box.max.x - pivot.x));
+    }, 0) / legs.length;
+  return 2 * (2 * reach * Math.sin(GAIT_SWING));
 }
 
 function insectLegs(body: Object3D): InsectLeg[] | undefined {
@@ -953,6 +975,17 @@ export class EntityRenderer {
    * Walk cycle (legs, counter-swinging arms, bob, forward lean, sway), breathing when idle,
    * aiming and recoil for gunners, a full-body swing for melee. Everything is eased so poses never snap.
    */
+  /** Advances a Z walker's gait by the distance its view moved since the last frame; returns the phase. */
+  private stepGait(v: View): number {
+    const { x, z } = v.root.position;
+    const g = v.gait!;
+    const moved = Math.hypot(x - g.x, z - g.z);
+    if (moved < 1) g.phase += (moved / g.cycle) * Math.PI * 2; // a longer jump is a teleport, not a step
+    g.x = x;
+    g.z = z;
+    return g.phase;
+  }
+
   private animate(v: View, e: Entity, dt: number): void {
     const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py;
@@ -986,7 +1019,9 @@ export class EntityRenderer {
       return;
     }
     const speed = (e.def as UnitDef).speed;
-    const phase = t * speed * 4.2 + e.id;
+    // Z walkers: the gait follows the ground actually covered, so feet stay planted whatever the speed.
+    const gait = v.gait && this.stepGait(v);
+    const phase = gait ?? t * speed * 4.2 + e.id;
     const a = (e.def as UnitDef).attack;
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
@@ -1004,9 +1039,10 @@ export class EntityRenderer {
     ease(v.limbs.armR, 'x', armR, melee ? 0.45 : 0.25);
     // Insect gait: alternating tripods (diagonal pairs on four legs); a leg lifts while it swings forward.
     for (const [i, l] of (v.limbs.insect ?? []).entries()) {
-      const ph = phase * 1.5 + l.group * Math.PI;
-      ease(l.o, 'y', moving ? Math.sin(ph) * 0.35 : Math.sin(t * 1.3 + i * 2.1 + e.id) * 0.03, 0.35);
-      ease(l.o, 'z', moving ? l.side * Math.max(0, Math.cos(ph)) * 0.4 : 0, 0.35);
+      const ph = phase + l.group * Math.PI;
+      // Each side sweeps its foot forwards while lifted (cos > 0), backwards while planted.
+      ease(l.o, 'y', moving ? -l.side * Math.sin(ph) * GAIT_SWING : Math.sin(t * 1.3 + i * 2.1 + e.id) * 0.03, moving ? 0.7 : 0.2);
+      ease(l.o, 'z', moving ? l.side * Math.max(0, Math.cos(ph)) * 0.4 : 0, moving ? 0.7 : 0.2);
     }
     const body = v.model.children[0];
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
@@ -1153,8 +1189,11 @@ export class EntityRenderer {
       root.add(well.group);
       fx = well;
     }
-    const v: View = { type: e.type, root, model: pivot, ring, scaffold, site, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
-      limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect: insectLegs(body) } };
+    const insect = insectLegs(body);
+    // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
+    const gait = insect && { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect) };
+    const v: View = { type: e.type, gait, root, model: pivot, ring, scaffold, site, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+      limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
       v.mixer = new AnimationMixer(body);
