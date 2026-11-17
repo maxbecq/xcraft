@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Float32BufferAttribute, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -68,149 +68,6 @@ function fieldMap(): CanvasTexture {
   }
   fieldTexture = new CanvasTexture(c);
   return fieldTexture;
-}
-
-let creepTexture: CanvasTexture | null = null;
-/**
- * Z creep (notice): a chaotic but working mesh of electric cables. Bundles of insulated wires run out from the
- * centre, each shaded as a tube (dark edge, coloured sheath, a highlight), held by ties, with junction boxes
- * and their LEDs along the way; the rim frays out.
- */
-function creepMap(): CanvasTexture {
-  if (creepTexture) return creepTexture;
-  const S = 1024;
-  const C = S / 2;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d')!;
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  g.lineCap = 'round';
-  g.lineJoin = 'round';
-  // Insulation colours: mostly black and grey rubber, some dark red, rusty orange and faded yellow.
-  const sheaths = ['#15161a', '#1d1f24', '#2b2d33', '#15161a', '#5a1e1a', '#7a4a22', '#6e6230', '#202a2e'];
-  const point = (a: number, r: number) => [C + Math.cos(a) * r, C + Math.sin(a) * r] as const;
-  type Path = [number, number, number, number, number, number, number, number];
-  const along = (p: Path, t: number) => {
-    const u = 1 - t;
-    return [u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6], u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7]] as const;
-  };
-  const tube = (p: Path, dx: number, dy: number, w: number, color: string) => {
-    const trace = () => {
-      g.beginPath();
-      g.moveTo(p[0] + dx, p[1] + dy);
-      g.bezierCurveTo(p[2] + dx, p[3] + dy, p[4] + dx, p[5] + dy, p[6] + dx, p[7] + dy);
-    };
-    trace();
-    g.strokeStyle = 'rgba(0,0,0,0.85)';
-    g.lineWidth = w + 3;
-    g.stroke();
-    g.strokeStyle = color;
-    g.lineWidth = w;
-    g.stroke();
-    g.save();
-    g.translate(-w * 0.18, -w * 0.18);
-    trace();
-    g.strokeStyle = 'rgba(255,255,255,0.22)';
-    g.lineWidth = Math.max(1, w * 0.25);
-    g.stroke();
-    g.restore();
-  };
-  /** A cable end or an inline coupler: a steel sleeve with a dark mouth, a copper band and pins. */
-  const plug = (x: number, y: number, ang: number, w: number, coupler = false) => {
-    const len = w * (coupler ? 2.6 : 2.2);
-    g.save();
-    g.translate(x, y);
-    g.rotate(ang);
-    g.fillStyle = 'rgba(0,0,0,0.85)';
-    g.fillRect(-len / 2 - 2, -w * 0.8 - 2, len + 4, w * 1.6 + 4);
-    g.fillStyle = '#7d786e';
-    g.fillRect(-len / 2, -w * 0.8, len, w * 1.6);
-    g.fillStyle = 'rgba(255,255,255,0.25)';
-    g.fillRect(-len / 2, -w * 0.8, len, w * 0.35);
-    g.fillStyle = '#b06a34';
-    g.fillRect(coupler ? -w * 0.25 : len / 2 - w * 0.6, -w * 0.8, w * 0.5, w * 1.6);
-    if (!coupler) {
-      // Pins sticking out of the mouth, plugged into the ground.
-      g.fillStyle = '#d8c070';
-      for (const k of [-0.4, 0, 0.4]) g.fillRect(-len / 2 - w * 0.5, k * w - 1, w * 0.5, 2);
-    }
-    g.restore();
-  };
-  const bundles: Path[] = [];
-  for (let i = 0; i < 46; i++) {
-    // A bundle wanders out from near the centre to the rim.
-    const a = rnd() * Math.PI * 2;
-    const bend = (rnd() - 0.5) * 1.4;
-    const [x0, y0] = point(a, rnd() * 90);
-    const [x1, y1] = point(a + bend * 0.3 + (rnd() - 0.5) * 0.6, 160 + rnd() * 180);
-    const [x2, y2] = point(a + bend * 0.7 + (rnd() - 0.5) * 0.6, 300 + rnd() * 160);
-    const [x3, y3] = point(a + bend, 380 + rnd() * 130);
-    const path: Path = [x0, y0, x1, y1, x2, y2, x3, y3];
-    bundles.push(path);
-    const n = 1 + Math.floor(rnd() * 4);
-    const w = 5 + rnd() * 9;
-    for (let k = 0; k < n; k++) {
-      const off = (k - (n - 1) / 2) * w * 0.95;
-      const nx = -Math.sin(a) * off;
-      const ny = Math.cos(a) * off;
-      const ww = w * (0.75 + rnd() * 0.4);
-      tube(path, nx, ny, ww, sheaths[Math.floor(rnd() * sheaths.length)]);
-      // No bare ends: a plug where each wire starts and ends, a coupler on some.
-      plug(path[0] + nx, path[1] + ny, Math.atan2(path[3] - path[1], path[2] - path[0]), ww);
-      plug(path[6] + nx, path[7] + ny, Math.atan2(path[5] - path[7], path[4] - path[6]), ww);
-      if (rnd() < 0.35) {
-        const t = 0.3 + rnd() * 0.4;
-        const [x, y] = along(path, t);
-        const [xb, yb] = along(path, t + 0.01);
-        plug(x + nx, y + ny, Math.atan2(yb - y, xb - x), ww, true);
-      }
-    }
-    // Cable ties across the bundle.
-    if (n > 1)
-      for (let t = 0.2 + rnd() * 0.2; t < 0.95; t += 0.18 + rnd() * 0.2) {
-        const [x, y] = along(path, t);
-        const [xb, yb] = along(path, t + 0.01);
-        const ang = Math.atan2(yb - y, xb - x);
-        g.save();
-        g.translate(x, y);
-        g.rotate(ang);
-        g.fillStyle = 'rgba(120,118,110,0.95)';
-        g.fillRect(-2, (-n * w) / 2 - 2, 4, n * w + 4);
-        g.restore();
-      }
-  }
-  // Junction boxes on the bundles, with a status LED.
-  for (let i = 0; i < 26; i++) {
-    const [x, y] = along(bundles[i % bundles.length], 0.25 + rnd() * 0.6);
-    const s = 14 + rnd() * 12;
-    g.save();
-    g.translate(x, y);
-    g.rotate(rnd() * Math.PI);
-    g.fillStyle = 'rgba(0,0,0,0.8)';
-    g.fillRect(-s / 2 - 2, -s / 2 - 2, s + 4, s * 0.7 + 4);
-    g.fillStyle = rnd() < 0.5 ? '#4a4640' : '#6a3a22';
-    g.fillRect(-s / 2, -s / 2, s, s * 0.7);
-    g.fillStyle = 'rgba(255,255,255,0.15)';
-    g.fillRect(-s / 2, -s / 2, s, 2);
-    g.fillStyle = i % 4 ? 'rgba(90,250,255,1)' : 'rgba(255,70,50,1)';
-    g.beginPath();
-    g.arc(s * 0.25, -s * 0.15, 2.5, 0, Math.PI * 2);
-    g.fill();
-    g.restore();
-  }
-  // Ragged rim: fade the outer ring out.
-  g.globalCompositeOperation = 'destination-in';
-  const fade = g.createRadialGradient(C, C, S * 0.3, C, C, C);
-  fade.addColorStop(0, 'rgba(0,0,0,1)');
-  fade.addColorStop(0.8, 'rgba(0,0,0,0.85)');
-  fade.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = fade;
-  g.fillRect(0, 0, S, S);
-  creepTexture = new CanvasTexture(c);
-  creepTexture.colorSpace = SRGBColorSpace;
-  creepTexture.anisotropy = 4;
-  return creepTexture;
 }
 
 let pcbTexture: CanvasTexture | null = null;
@@ -317,8 +174,6 @@ function pcbMap(): CanvasTexture {
   return pcbTexture;
 }
 
-/** How the Z creep is drawn: a printed circuit over the ground (default), or wire bundles out of each building. */
-export type CreepStyle = 'cables' | 'circuit';
 /** Tiles covered by one repeat of the circuit texture. */
 const PCB_TILE = 8;
 
@@ -331,37 +186,35 @@ export class PowerNet {
   private readonly root = new Group();
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
-  private readonly creepMaterial: MeshBasicMaterial;
-  /** Z links: a dim trace or wire with sparks of current running along it (uv.x is the distance in tiles). */
-  private readonly linkMaterial = new ShaderMaterial({
-    uniforms: { time: { value: 0 }, base: { value: new Color(0xc89040) }, spark: { value: new Color(0x7ff5ff) }, baseAlpha: { value: 0.75 } },
+  private readonly creepMaterial = new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true });
+  /** Wires between Z buildings: a dark rubber sheath, lit from above, with sparks glowing through it. */
+  private readonly wireMaterial = new ShaderMaterial({
+    uniforms: { time: { value: 0 } },
     vertexShader: `
       varying vec2 vUv;
+      varying vec3 vNormal;
       void main() {
         vUv = uv;
+        vNormal = normalize(mat3(modelMatrix) * normal);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: `
       uniform float time;
-      uniform vec3 base;
-      uniform vec3 spark;
-      uniform float baseAlpha;
       varying vec2 vUv;
+      varying vec3 vNormal;
       void main() {
-        float across = 1.0 - abs(vUv.y * 2.0 - 1.0);
-        // Sparks every 3 tiles, running at 4 tiles a second, with a fading tail behind.
+        float light = 0.35 + 0.65 * clamp(dot(vNormal, normalize(vec3(0.4, 1.0, 0.3))), 0.0, 1.0);
+        vec3 sheath = vec3(0.03, 0.035, 0.045) * light + vec3(0.12) * pow(max(vNormal.y, 0.0), 12.0);
         float p = fract((vUv.x - time * 4.0) / 3.0);
-        float head = pow(p, 18.0) + 0.35 * pow(p, 4.0);
-        // A slower, fainter second current the other way.
         float q = fract((vUv.x + time * 1.5) / 5.0);
-        head += 0.25 * pow(q, 24.0);
-        float glow = head * smoothstep(0.0, 0.6, across);
-        vec3 col = mix(base * (0.7 + 0.3 * across), spark, clamp(glow, 0.0, 1.0));
-        gl_FragColor = vec4(col + spark * glow * 0.6, clamp(baseAlpha * smoothstep(0.0, 0.35, across) + glow, 0.0, 1.0));
+        float glow = pow(p, 18.0) + 0.35 * pow(p, 4.0) + 0.25 * pow(q, 24.0);
+        vec3 spark = vec3(0.5, 0.96, 1.0);
+        gl_FragColor = vec4(sheath + spark * glow * 1.4, 1.0);
       }`,
-    transparent: true,
-    depthWrite: false,
   });
+  private readonly plugGeometry = new CylinderGeometry(1, 1, 1, 8);
+  private readonly plugSteel = new MeshStandardMaterial({ color: 0x7d786e, metalness: 0.6, roughness: 0.5 });
+  private readonly plugCopper = new MeshStandardMaterial({ color: 0xb06a34, metalness: 0.8, roughness: 0.35 });
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -373,16 +226,8 @@ export class PowerNet {
   private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
   private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
-  constructor(scene: Object3D, private readonly map: GameMap, private readonly creepStyle: CreepStyle = 'circuit') {
+  constructor(scene: Object3D, private readonly map: GameMap) {
     scene.add(this.root);
-    if (creepStyle === 'cables') {
-      this.linkMaterial.uniforms.base.value.set(0x1d1f24);
-      this.linkMaterial.uniforms.baseAlpha.value = 0.95;
-    }
-    this.creepMaterial =
-      creepStyle === 'circuit'
-        ? new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true })
-        : new MeshBasicMaterial({ map: creepMap(), transparent: true, depthWrite: false, side: DoubleSide });
   }
 
   /** `highlight`: an Isdaris building is being placed, or a power building is selected. */
@@ -395,9 +240,9 @@ export class PowerNet {
     if (key !== this.key) this.rebuild(nodes, world, fed, key);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
-    this.creepMaterial.opacity = highlight ? 1 : this.creepStyle === 'circuit' ? 0.75 : 0.95;
+    this.creepMaterial.opacity = highlight ? 1 : 0.75;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
-    this.linkMaterial.uniforms.time.value = t;
+    this.wireMaterial.uniforms.time.value = t;
     this.updateWarps(world, sees, t);
   }
 
@@ -469,7 +314,7 @@ export class PowerNet {
         pos.setXYZ(i, x, heightAt(this.map, x, z) + 0.08, z);
       }
       geo.computeBoundingSphere();
-      if (creep(e) && this.creepStyle === 'circuit') {
+      if (creep(e)) {
         // World-space UVs, so overlapping zones line up; the rim frays out unevenly into the ground.
         const uv = geo.getAttribute('uv');
         const color = new Float32Array(pos.count * 4);
@@ -541,40 +386,45 @@ export class PowerNet {
       const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.25));
       for (let i = 0; i < n; i++) {
         const t = i / n;
-        // Cables sag into gentle waves instead of keeping a straight line.
-        const wave = this.creepStyle === 'cables' ? Math.sin((k + t) * Math.PI * 2 + a.id) * 0.25 : 0;
+        // The wire snakes a little instead of keeping a straight line.
+        const wave = Math.sin((k + t) * Math.PI * 2 + a.id) * 0.25;
         const len = Math.hypot(x1 - x0, z1 - z0) || 1;
         pts.push([x0 + (x1 - x0) * t + (-(z1 - z0) / len) * wave, z0 + (z1 - z0) * t + ((x1 - x0) / len) * wave]);
       }
     }
     pts.push([bx, bz]);
-    const half = this.creepStyle === 'cables' ? 0.11 : 0.1;
-    const position: number[] = [];
-    const uv: number[] = [];
-    const index: number[] = [];
-    let along = ((a.id * 7919 + b.id * 104729) % 1000) / 37; // each link starts its pulses elsewhere
-    pts.forEach(([x, z], i) => {
-      const [px, pz] = pts[Math.max(0, i - 1)];
-      const [nx, nz] = pts[Math.min(pts.length - 1, i + 1)];
-      const len = Math.hypot(nx - px, nz - pz) || 1;
-      const ox = (-(nz - pz) / len) * half;
-      const oz = ((nx - px) / len) * half;
-      if (i) along += Math.hypot(x - px, z - pz);
-      for (const s of [-1, 1]) {
-        const vx = x + ox * s;
-        const vz = z + oz * s;
-        position.push(vx, heightAt(this.map, vx, vz) + 0.12, vz);
-        uv.push(along, s < 0 ? 0 : 1);
+    this.wire(a, b, pts);
+  }
+
+  /**
+   * A real wire lying on the ground between two buildings: a rubber tube that leaves each building through a
+   * plug at its edge, with sparks of current glowing through the sheath.
+   */
+  private wire(a: Entity, b: Entity, pts: [number, number][]): void {
+    const edge = (e: Entity) => ((e.def as BuildingDef).size / 2) * 0.8;
+    const out = (x: number, z: number, e: Entity) => Math.hypot(x - e.x / FP, z - e.y / FP) > edge(e);
+    const kept = pts.filter(([x, z]) => out(x, z, a) && out(x, z, b));
+    if (kept.length < 3) return;
+    // Every other sample, so the tube stays smooth; it rests on the ground, a little higher than its radius.
+    const radius = 0.07;
+    const curve = new CatmullRomCurve3(kept.filter((_, i) => i % 2 === 0 || i === kept.length - 1).map(([x, z]) => new Vector3(x, heightAt(this.map, x, z) + radius + 0.03, z)));
+    const length = curve.getLength();
+    const geo = new TubeGeometry(curve, Math.ceil(length * 4), radius, 6);
+    const uv = geo.getAttribute('uv');
+    const start = ((a.id * 7919 + b.id * 104729) % 1000) / 37; // each wire starts its pulses elsewhere
+    for (let i = 0; i < uv.count; i++) uv.setX(i, start + uv.getX(i) * length);
+    this.root.add(new Mesh(geo, this.wireMaterial));
+    for (const [t, dir] of [[0, 1], [1, -1]] as const) {
+      const at = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t).multiplyScalar(dir);
+      for (const [r, len, shift, material] of [[radius * 1.7, 0.32, 0.12, this.plugSteel], [radius * 1.95, 0.07, 0.22, this.plugCopper]] as const) {
+        const m = new Mesh(this.plugGeometry, material);
+        m.scale.set(r, len, r);
+        m.position.copy(at).addScaledVector(tangent, shift - 0.12);
+        m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), tangent);
+        this.root.add(m);
       }
-      if (i) index.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
-    });
-    const geo = new BufferGeometry();
-    geo.setAttribute('position', new Float32BufferAttribute(position, 3));
-    geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-    geo.setIndex(index);
-    const m = new Mesh(geo, this.linkMaterial);
-    m.renderOrder = 2;
-    this.root.add(m);
+    }
   }
 
   private beam(from: Vector3, to: Vector3): void {
