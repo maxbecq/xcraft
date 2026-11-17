@@ -66,7 +66,8 @@ function drawnEdge(map: GameMap, x: number, y: number, edge: number): [number, n
   return [h[a], h[b]];
 }
 
-export function buildTerrain(map: GameMap): Group {
+/** `roads`: streets to paint on the ground, a texture over the whole map (see cityRoads). */
+export function buildTerrain(map: GameMap, roads?: Texture): Group {
   leanMap = map;
   const ground = new Builder();
   const cliffs = new Builder();
@@ -149,7 +150,7 @@ export function buildTerrain(map: GameMap): Group {
     groundMat.emissive = B.veins;
     groundMat.emissiveIntensity = B.style === 'city' ? 1.2 : 2.2;
   }
-  untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones || B.style ? 0x86888d : 0x8a8378), 0.55), B.style === 'city');
+  untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones || B.style ? 0x86888d : 0x8a8378), 0.55), B.style === 'city', roads, map);
   const groundMesh = ground.mesh(groundMat);
   const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
   weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock
@@ -271,14 +272,16 @@ class Builder {
 }
 
 /** Blends the colour texture with a second, rotated and larger sample of itself, so its repetition does not show. */
-function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = false): void {
+function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = false, roads?: Texture, map?: GameMap): void {
   // grid: deck plates, kept aligned (no rotated second sample, no bedrock slabs, only darker grimy plates).
-  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile');
+  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile') + (roads ? '-roads' : '');
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
     shader.uniforms.rockMap = { value: rock };
     shader.uniforms.slabColor = { value: slab };
+    shader.uniforms.roadMap = { value: roads ?? null };
+    shader.uniforms.mapSize = { value: new Vector2(map?.width ?? 1, map?.height ?? 1) };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGround;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGround = position.xz;');
@@ -288,6 +291,8 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
       varying vec2 vGround;
       uniform sampler2D rockMap;
       uniform vec3 slabColor;
+      uniform sampler2D roadMap;
+      uniform vec2 mapSize;
       float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float gNoise(vec2 p) {
         vec2 i = floor(p), f = fract(p);
@@ -309,6 +314,12 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
         texelColor.rgb *= 1.0 - rim * 0.55;
         // Small scattered gravel.
         texelColor.rgb *= 1.0 - smoothstep(0.82, 0.86, gNoise(vGround * 3.7)) * 0.25;
+        ${roads ? `// Streets: worn asphalt, faded white dashes and yellow edge lines, paint gone in patches.
+        vec3 road = texture2D(roadMap, vGround / mapSize).rgb;
+        float wear = smoothstep(0.3, 0.55, gNoise(vGround * 1.7));
+        texelColor.rgb = mix(texelColor.rgb, vec3(0.075, 0.08, 0.09) * (0.8 + texelColor.g * 0.5), road.r * 0.9);
+        texelColor.rgb = mix(texelColor.rgb, vec3(0.62, 0.62, 0.58), road.g * wear * 0.75);
+        texelColor.rgb = mix(texelColor.rgb, vec3(0.7, 0.55, 0.15), road.b * wear * 0.8);` : ''}
         diffuseColor *= texelColor;
       #endif`,
     ).replace(
@@ -317,6 +328,7 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
         // Glowing veins only in some areas: cracks (red) masked by large patches (green) sampled at another scale.
         vec2 patchUv = mat2(0.6, 0.8, -0.8, 0.6) * vEmissiveMapUv * 0.23 + 0.17;
         float glow = texture2D(emissiveMap, vEmissiveMapUv).r * smoothstep(0.58, 0.78, texture2D(emissiveMap, patchUv).g);
+        ${roads ? 'glow *= 1.0 - texture2D(roadMap, vGround / mapSize).r;' : ''}
         totalEmissiveRadiance *= glow;
       #endif`,
     );
