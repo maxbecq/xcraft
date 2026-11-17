@@ -143,7 +143,7 @@ def metal_texture(name, rusty):
     return img
 
 
-def foil_texture(name, dull=False):
+def foil_texture(name):
     """A tileable crinkled thermal blanket, like a lander's gold foil: creased facets catching the light in
     bright and dark streaks, tarnished with soot and rust-brown grime."""
     if name in bpy.data.images:
@@ -155,14 +155,10 @@ def foil_texture(name, dull=False):
     gy, gx = np.gradient(n)
     # Folds: the light rakes across, so each crease shows a bright face and a dark one.
     soot = _fbm(rng, S, 3, 4)
-    if dull:  # faint creases, deep soot: the foil gone dark and dull
-        lum = np.round((0.78 + 9.0 * (gx * 0.7 + gy * 0.3)) * 6) / 6
-        rgb = np.stack([lum, lum * 0.97, lum * 0.92], -1) * (0.7 + 0.3 * soot[..., None])
-    else:
-        g = gx * 0.7 + gy * 0.3
-        lum = 0.9 + 0.35 * g / (np.abs(g).max() * 0.4)
-        lum = np.clip(np.round(lum * 5) / 5, 0.35, 1.25)  # flattened facets rather than smooth bumps
-        rgb = np.stack([lum, lum * 0.97, lum * 0.92], -1) * (0.8 + 0.2 * soot[..., None])
+    g = gx * 0.7 + gy * 0.3
+    lum = 0.9 + 0.35 * g / (np.abs(g).max() * 0.4)
+    lum = np.clip(np.round(lum * 5) / 5, 0.35, 1.25)  # flattened facets rather than smooth bumps
+    rgb = np.stack([lum, lum * 0.97, lum * 0.92], -1) * (0.8 + 0.2 * soot[..., None])
     stain = np.clip((soot - 0.62) / 0.08, 0, 1)[..., None]
     rgb = rgb * (1 - stain) + np.array([0.45, 0.25, 0.14]) * stain
     rgb = np.clip(rgb, 0, 1)
@@ -266,7 +262,6 @@ def palette():
         "zrust": textured("zrust", 0x9A5430, metal_texture("zrust_tex", True), metallic=0.25, rough=0.95),
         "zcopper": mat("zcopper", 0xC07038, metallic=0.9, rough=0.35),
         "zfoil": textured("zfoil", 0xE0B050, foil_texture("zfoil_tex"), metallic=0.45, rough=0.4),
-        "zfoil_dull": textured("zfoil_dull", 0xC89A3A, foil_texture("zfoil_dull_tex", dull=True), metallic=0.85, rough=0.4),
         "zdark": textured("zdark", 0x6A6C72, metal_texture("zsteel_tex", False), metallic=0.5, rough=0.6),
     }
 
@@ -2020,65 +2015,65 @@ def rcs(p, loc, yaw, r=0.05):
         o.rotation_quaternion = (-d).to_track_quat("Z", "Y")
 
 
-def intelligence(p):
-    """Intelligence centrale: a rusted lunar lander come down to nest. An octagonal descent stage wrapped in
-    dull, sooted foil, on a landing pad, stands on four splayed, jacked legs with dish pads; on it the faceted command cabin,
-    triangular red windows for eyes, thruster quads, a docking tunnel, a dish and antennae. Coolant tanks and
-    pipes on its flanks, cable bundles and live wires spilling into the creep."""
-    cyl(p["zdark"], 2.3, 0.12, (0, 0, 0.06), verts=8)  # landing pad
-    cone(p["graphite"], 0.75, 0.7, (0, 0, 0.6), rot=(math.pi, 0, 0), verts=12)  # descent engine bell
-    cyl(p["purple_glow"], 0.45, 0.04, (0, 0, 0.27), verts=12)
-    # Descent stage: an octagonal box in foil, rusted steel frame at the corners, team panels.
-    cyl(p["zfoil_dull"], 1.55, 0.95, (0, 0, 1.3), verts=8, name="zfoil_body").rotation_euler = (0, 0, math.pi / 8)
-    for k in range(8):
-        a = k / 8 * math.tau
-        box(p["zrust"], (0.1, 0.1, 1.0), (math.cos(a) * 1.44, math.sin(a) * 1.44, 1.3), rot=(0, 0, a))
-    for z in (0.83, 1.77):
-        cyl(p["zsteel"], 1.47, 0.06, (0, 0, z), verts=8)
-    for k in (1, 3):
-        a = k / 4 * math.tau + math.pi / 4
-        box(p["team"], (0.08, 0.9, 0.55), (math.cos(a) * 1.42, math.sin(a) * 1.42, 1.3), rot=(0, 0, a))
-    ring(p["cyan_glow"], 1.52, 0.03, (0, 0, 0.9), seg=24)
-    for k in range(4):
-        hip, foot = lander_leg(p, k / 4 * math.tau + math.pi / 4, 1.3, 1.65, 2.25, r=0.09)
-    ladder(p, 0.05, -1.75, 0.2, 1.6)  # down the front leg
-    # Ascent stage: the faceted cabin, set back, its front sloped like a face.
-    box(p["zsteel"], (1.6, 1.3, 0.9), (0, 0.15, 2.25))
-    box(p["zsteel"], (1.3, 0.55, 0.75), (0, -0.62, 2.2), rot=(-0.35, 0, 0))  # front, leaning back
-    box(p["zrust"], (0.95, 0.5, 0.55), (0.55, 0.55, 2.55), rot=(0, 0.2, 0.3))  # off-centre equipment bay
-    for s in (-1, 1):  # cheek tanks
-        cyl(p["zrust"], 0.32, 0.75, (s * 0.95, 0.0, 2.15), rot=(math.pi / 2, 0, 0), verts=8)
-        for t in (-0.25, 0.25):
-            cyl(p["zsteel"], 0.335, 0.05, (s * 0.95, t, 2.15), rot=(math.pi / 2, 0, 0), verts=8)
-        cyl(p["red_glow"], 0.17, 0.04, (s * 0.3, -0.86, 2.4), rot=(math.radians(70), 0, math.pi / 2), verts=3)  # windows
-        cyl(p["zsteel"], 0.22, 0.03, (s * 0.3, -0.84, 2.4), rot=(math.radians(70), 0, math.pi / 2), verts=3)
-    eyes(p, 0, -0.95, 2.05, n=1, r=0.07)  # hatch light
-    box(p["zdark"], (0.42, 0.06, 0.45), (0, -0.9, 1.95))  # hatch
-    cyl(p["zsteel"], 0.28, 0.35, (0, 0.15, 2.85), verts=8)  # docking tunnel
-    cyl(p["zcopper"], 0.32, 0.06, (0, 0.15, 3.02), verts=8)
-    for k, (x, y) in enumerate(((0.85, -0.5), (-0.85, -0.5), (0.85, 0.75), (-0.85, 0.75))):  # thruster quads
-        pipe(p["zsteel"], (x * 0.85, y, 2.6), (x * 1.15, y, 2.75), r=0.03, verts=4)
-        rcs(p, (x * 1.2, y, 2.78), math.atan2(y, x), r=0.07)
-    # Dish on a mast, antennae.
-    pipe(p["zsteel"], (-0.5, 0.6, 2.7), (-0.75, 0.8, 3.4), r=0.04, verts=6)
-    o = cone(p["zsteel"], 0.38, 0.14, (-0.78, 0.83, 3.45), verts=10)
-    o.rotation_euler = (0.6, -0.5, 0)
-    ball(p["red_glow"], 0.05, (-0.78, 0.83, 3.5), seg=6, rings=4)
-    for s, h in ((-1, 0.9), (1, 0.6)):
-        pipe(p["zsteel"], (s * 0.6, -0.3, 2.7), (s * 0.9, -0.6, 2.7 + h), r=0.025, verts=4)
-        ball(p["red_glow"], 0.05, (s * 0.9, -0.6, 2.7 + h), seg=6, rings=4)
-    # Coolant pipes from the right tank down the stage, flanged.
-    run = [(1.2, 0.0, 2.0), (1.45, -0.2, 1.75), (1.6, -0.4, 0.9), (1.9, -0.55, 0.15)]
-    for u, v in zip(run, run[1:]):
-        pipe(p["zcopper"], u, v, r=0.055, verts=6)
-        d = (Vector(v) - Vector(u)).normalized()
-        pipe(p["zsteel"], Vector(u) - d * 0.04, Vector(u) + d * 0.04, r=0.09, verts=6)
-    # Cable bundles from the cabin over the stage down to the ground, and live wires into the creep.
-    for k, dy in enumerate((0.45, 0.62, 0.79)):
-        cable(p, (-0.8, dy, 1.95), (-2.3, dy + 0.3, 0.08), sag=-0.05 - 0.03 * k, r=0.045)
+def pipes_tanks(p, z):
+    """The previous design's coolant tanks, flanged pipes, cable bundle and exhaust stacks, at stage height z."""
+    for y in (-0.9, -0.25):
+        cyl(p["zrust"], 0.22, 0.9, (1.75, y, z), rot=(math.pi / 2, 0, 0.1), verts=10)
+        for t in (-0.3, 0.3):
+            cyl(p["zsteel"], 0.235, 0.05, (1.75, y + t, z), rot=(math.pi / 2, 0, 0.1), verts=10)
+        pipe(p["zcopper"], (1.75, y, z + 0.22), (1.35, y + 0.1, z + 0.55), r=0.04, verts=6)
+    for dx in (-1.1, -0.8):
+        run = [(dx, -2.3, 0.15), (dx, -1.9, z), (dx + 0.1, -1.4, z + 0.5), (dx + 0.2, -0.95, z + 0.95)]
+        for u, v in zip(run, run[1:]):
+            pipe(p["zcopper"], u, v, r=0.06, verts=6)
+            d = (Vector(v) - Vector(u)).normalized()
+            pipe(p["zsteel"], Vector(u) - d * 0.04, Vector(u) + d * 0.04, r=0.095, verts=6)
+    for k, dy in enumerate((0.3, 0.48, 0.66)):
+        cable(p, (1.0, dy, z + 1.2), (2.45, dy + 0.15, 0.08), sag=-0.12 - 0.03 * k, r=0.045)
     for k in range(6):
         a = k / 6 * math.tau + 0.1
-        cable(p, (math.cos(a) * 1.5, math.sin(a) * 1.5, 0.95), (math.cos(a + 0.35) * 2.45, math.sin(a + 0.35) * 2.45, 0.05), sag=0.2, r=0.05)
+        cable(p, (math.cos(a) * 1.5, math.sin(a) * 1.5, z - 0.3), (math.cos(a + 0.35) * 2.45, math.sin(a + 0.35) * 2.45, 0.05), sag=0.2, r=0.05)
+
+
+def intelligence(p):
+    """Intelligence centrale: an armoured lunar lander come down to nest. On a landing pad and four splayed,
+    jacked legs, an octagonal descent stage clad in riveted steel and rust plates; on it a faceted carapace for
+    a cabin, a red eye cluster, masts and a dish. Coolant tanks and flanged pipes on its flanks, cable bundles
+    and live wires spilling into the creep."""
+    cyl(p["zdark"], 2.3, 0.12, (0, 0, 0.06), verts=8)
+    cone(p["graphite"], 0.75, 0.7, (0, 0, 0.6), rot=(math.pi, 0, 0), verts=12)
+    cyl(p["purple_glow"], 0.45, 0.04, (0, 0, 0.27), verts=12)
+    o = cyl(p["zsteel"], 1.55, 0.95, (0, 0, 1.3), verts=8)
+    o.rotation_euler = (0, 0, math.pi / 8)
+    for k in range(8):  # plates on each face, alternating rust, and corner posts
+        a = k / 8 * math.tau + math.pi / 8
+        a2 = k / 8 * math.tau
+        box(p["zrust"] if k % 3 == 0 else p["zsteel"], (0.06, 0.95, 0.75), (math.cos(a) * 1.46, math.sin(a) * 1.46, 1.3), rot=(0, 0, a))
+        box(p["zrust"], (0.12, 0.12, 1.0), (math.cos(a2) * 1.5, math.sin(a2) * 1.5, 1.3), rot=(0, 0, a2))
+    for z in (0.83, 1.77):
+        cyl(p["zsteel"], 1.5, 0.06, (0, 0, z), verts=8)
+    for k in (1, 3):
+        a = k / 4 * math.tau + math.pi / 4
+        box(p["team"], (0.08, 0.6, 0.4), (math.cos(a) * 1.52, math.sin(a) * 1.52, 1.3), rot=(0, 0, a))
+    ring(p["cyan_glow"], 1.55, 0.03, (0, 0, 0.9), seg=24)
+    for k in range(4):
+        lander_leg(p, k / 4 * math.tau + math.pi / 4, 1.3, 1.65, 2.25, r=0.09)
+    # Cabin: two faceted shells instead of the box, eyes at the front, masts.
+    o = shell(p["zrust"], 1.05, (0, 0.1, 2.05), scale=(1.0, 1.1, 0.45), seg=10, rings=5)
+    ring(p["cyan_glow"], 1.02, 0.03, (0, 0.1, 2.0), seg=20)
+    o = shell(p["zsteel"], 0.75, (0.1, 0.2, 2.45), scale=(0.95, 1.1, 0.5), seg=10, rings=5)
+    o.rotation_euler = (0, 0, 0.3)
+    eyes(p, 0.05, -0.95, 2.15, n=3, r=0.1, spread=0.26)
+    for s, h in ((-1, 1.1), (1, 0.8)):
+        a, b = Vector((s * 0.35, -0.5, 2.6)), Vector((s * 0.75, -1.2, 2.6 + h))
+        pipe(p["zsteel"], a, b, r=0.04, verts=4)
+        ball(p["red_glow"], 0.06, b, seg=6, rings=4)
+    pipe(p["zsteel"], (-0.5, 0.6, 2.6), (-0.75, 0.8, 3.3), r=0.04, verts=6)
+    o = cone(p["zsteel"], 0.38, 0.14, (-0.78, 0.83, 3.35), verts=10)
+    o.rotation_euler = (0.6, -0.5, 0)
+    for x, y in ((1.0, -0.5), (-1.0, -0.5)):
+        rcs(p, (x * 1.0, y, 2.3), math.atan2(y, x), r=0.07)
+    pipes_tanks(p, 1.3)
 
 
 def pod(p):
