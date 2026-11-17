@@ -9,6 +9,9 @@ export class Overlay {
   readonly canvas = document.createElement('canvas');
   private readonly ctx: CanvasRenderingContext2D;
   private readonly v = new Vector3();
+  private readonly right = new Vector3();
+  private readonly a = new Vector3();
+  private readonly b = new Vector3();
   /** Order feedback: where the last right-clicks / taps landed, fading out. */
   private marks: { x: number; z: number; color: string; label: string; t0: number }[] = [];
 
@@ -31,6 +34,7 @@ export class Overlay {
     const ctx = this.ctx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    this.right.setFromMatrixColumn(camera.matrixWorld, 0); // the screen's horizontal, in the world
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp || e.inside) continue;
       if (!selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
@@ -43,18 +47,28 @@ export class Overlay {
       const sx = ((this.v.x + 1) / 2) * w;
       const sy = ((1 - this.v.y) / 2) * h;
       if (sx < -50 || sy < -20 || sx > w + 50 || sy > h + 20) continue;
-      const bw = size ? 14 * size : 26;
+      // A building's bar spans most of its footprint as drawn on screen (a size × size diamond, √2·size wide),
+      // so it scales with the building and the zoom; a unit's stays a fixed small bar.
+      let bw = 26;
+      if (size) {
+        const a = this.a.set(x, 0, z).project(camera);
+        const b = this.b.set(x, 0, z).add(this.right).project(camera);
+        const perTile = Math.hypot(((b.x - a.x) / 2) * w, ((b.y - a.y) / 2) * h); // pixels per world unit, across
+        bw = Math.max(30, 0.7 * Math.SQRT2 * size * perTile);
+      }
+      const bh = size ? Math.max(3, Math.min(6, bw / 30)) : 3; // thicker on the big ones
       const f = Math.max(0, e.hp / e.maxHp);
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(sx - bw / 2 - 1, sy - 1, bw + 2, 5);
+      ctx.fillRect(sx - bw / 2 - 1, sy - 1, bw + 2, bh + 2);
       ctx.fillStyle = f > 0.6 ? '#5fd35f' : f > 0.3 ? '#e0c04f' : '#e0503f';
-      ctx.fillRect(sx - bw / 2, sy, bw * f, 3);
+      ctx.fillRect(sx - bw / 2, sy, bw * f, bh);
       if (e.maxShield) {
         // Psychic shield: a blue bar above the hp bar.
+        const sh = Math.max(2, bh - 1);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(sx - bw / 2 - 1, sy - 5, bw + 2, 4);
+        ctx.fillRect(sx - bw / 2 - 1, sy - sh - 3, bw + 2, sh + 2);
         ctx.fillStyle = '#6ac8ff';
-        ctx.fillRect(sx - bw / 2, sy - 4, (bw * e.shield) / e.maxShield, 2);
+        ctx.fillRect(sx - bw / 2, sy - sh - 2, (bw * e.shield) / e.maxShield, sh);
       }
     }
     this.drawMarks(camera, w, h);
