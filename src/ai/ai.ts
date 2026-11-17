@@ -42,8 +42,11 @@ const EXPAND_EVERY = 5;
 /** Each team's target base, shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
-/** Isdaris extensions the AI researches, in order: druides, then ground vehicles, then flyers. */
-const EXTENSIONS = ['laboratoire', 'assembleur', 'balise'];
+/**
+ * Isdaris extensions the AI researches, in order: ground vehicles, druides, then flyers. Each waits for its host,
+ * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
+ */
+const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
 
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
@@ -128,7 +131,10 @@ export class AI {
     const bases = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length;
     const firstExtractor = count(f.extractor) === 0;
     if (count(f.barracks) >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
-    // The second one, later and only with a free well by a base: never ahead of supply or production.
+    // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
+    // Isdaris, whose research and advanced units starve without it.
+    const moreEnergy = !firstExtractor && count(f.extractor) < bases && !building(f.extractor) && !!this.spot(f.extractor, home);
+    if (moreEnergy && f === FACTIONS.isdaris) wants.push(f.extractor);
     let casernesWanted = this.plan.casernes.filter(([at]) => serfs.length >= at).reduce((m, [, n]) => Math.max(m, n), 0);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
@@ -146,8 +152,9 @@ export class AI {
     // The second production building, for heavier units, only with resources to spare: its units cost
     // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
     // Humans: the Créaturium mid-game (energy is kept for it), its saurians outlasting the Isdaris infantry.
-    const { humains: th, isdaris: ti } = BALANCE.ai.tech;
-    const techTime = f === FACTIONS.humains ? minute >= th.minute && count(f.barracks) >= th.barracks : count(f.barracks) >= ti.barracks && minerals > ti.minerals && p.energy > ti.energy;
+    // Isdaris: the Psycho-assembleur on a clock too: waiting for spare minerals and energy, it never came.
+    const tech = (BALANCE.ai.tech as Record<string, { minute: number; barracks: number }>)[p.faction];
+    const techTime = !!tech && minute >= tech.minute && count(f.barracks) >= tech.barracks;
     const techWanted = !!f.tech && count(f.tech) === 0 && techTime && !w.lacks(this.player, f.tech);
     if (techWanted) wants.push(f.tech!);
     // Energy kept back for the tech building, then for its units, so cheaper units do not eat it all.
@@ -162,9 +169,19 @@ export class AI {
     // research on a production building (Isdaris Portail) waits for spare resources instead.
     const nextResearch = army.length < this.plan.wave ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
-    const researchReserve = techWanted ? 0 : reserve;
+    // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
+    const researchReserve = techWanted && f !== FACTIONS.isdaris ? 0 : reserve;
     const unitReserve = reserve + (nextResearch ? (DEFS[nextResearch] as UpgradeDef).cost.energy : 0);
     let energy = p.energy - promisedEnergy;
+    // Isdaris: the gateways and the morphs keep the minerals of the advanced units whenever the Psycho-assembleur is
+    // idle, and, once a wave is out, of the second Récepteur and of the Psycho-assembleur itself (the gateways' cheap
+    // units otherwise spent every mineral: the advanced units never came and research starved of energy).
+    const techIdle = techUp && unlocked.length > 0 && buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0);
+    const gatewaysKeep =
+      f !== FACTIONS.isdaris
+        ? 0
+        : (techIdle ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
+          (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
     for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type)) wants.push(type);
@@ -180,7 +197,7 @@ export class AI {
     if (expand) wants.push(f.hq);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
-    if (!firstExtractor && count(f.extractor) < bases && !building(f.extractor) && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200 && this.spot(f.extractor, home)) wants.push(f.extractor);
+    if (moreEnergy && f !== FACTIONS.isdaris && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (minerals < def.cost.minerals) {
@@ -231,7 +248,7 @@ export class AI {
       const into = (b.def as BuildingDef).morphs?.find((m) => {
         const d = DEFS[m] as BuildingDef;
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
-        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
+        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
         return d.energyRate ? minute > 6 && have === 0 : minute > 9 && have < 2;
       });
@@ -273,7 +290,7 @@ export class AI {
       if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
-      if (minerals - keep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : reserve) < def.cost.energy) continue;
+      if (minerals - keep - gatewaysKeep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [c.id], type });
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
@@ -529,6 +546,18 @@ export class AI {
           if (u.hp * 100 < u.maxHp * (name === 'dephasage' ? 35 : 50)) cmd = self(u, name);
         } else if (name === 'manteau') {
           if (around(army, u.x, u.y, radius).length >= 6 && around(near, u.x, u.y, 7 * FP).length >= 4) cmd = self(u, name);
+        } else if (name === 'teleport') {
+          // Porte-disques, Chimère, Dragon: shields down and hurt, they jump out of the fight, away from the enemies.
+          if (u.hp + u.shield < (u.maxHp + u.maxShield) * 0.4) {
+            const cx = near.reduce((s, f) => s + f.x, 0) / near.length;
+            const cy = near.reduce((s, f) => s + f.y, 0) / near.length;
+            const d = dist(u.x, u.y, cx, cy) || 1;
+            const jump = ((ab.range ?? 0) - 1) * FP;
+            const clamp = (v: number, max: number) => Math.min(Math.max(v, FP), max * FP - FP);
+            const x = clamp(Math.trunc(u.x + ((u.x - cx) * jump) / d), w.map.width);
+            const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
+            cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
+          }
         } else if (name === 'decollage') {
           // Pégase: up against flyers only, down again once none is left.
           const air = near.some((f) => flies(f));

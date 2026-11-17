@@ -34,6 +34,11 @@ Retouches provisoires du 17 novembre, d'après [le rapport d'équilibrage](docs/
 - `creature` : `hp` 67 → 70 (Humains – Isdaris passe de 67 – 31 à 52 – 46).
 - `dronecombat` : `cost.minerals` 75 → 100, `buildTime` 15 → 18 (Z – Isdaris passe de 84 – 14 à 48 – 50 ; Z – Humains de 90 – 8 à 38 – 60, encore hors cible), puis `hp` 70 → 73 (Z – Humains 49 – 49, Z – Isdaris 52 – 46).
 
+Réglages d'IA provisoires du 17 novembre (l'IA Isdaris passe enfin au Psycho-assembleur), à valider par l'équilibreur :
+- `ai.tech.isdaris` : `{ barracks: 3, minerals: 900, energy: 400 }` → `{ minute: 8, barracks: 3 }`. L'énergie isdaris ne dépassait jamais 400 : le Psycho-assembleur et ses unités n'apparaissaient dans aucune partie.
+- `ai.research.isdaris` : `feucirculaire` ajouté après `totem`.
+- Mesure (`big.test.ts`, 98 parties par paire) : Humains – Isdaris 52 – 46 → 65 – 33, Z – Isdaris 52 – 46 → 71 – 27 ; l'IA fait 53 Porte-disques, 51 Balistes, 19 Chimères (aucun avant). Les unités du Psycho-assembleur coûtent cher pour leur force : à `minute` 12, Humains – Isdaris reste à 49 – 46 (3 nuls) et Z – Isdaris passe à 60 – 38, mais l'IA n'en fait presque plus (12). À l'équilibreur de juger leur prix.
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).
@@ -109,7 +114,7 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `maxCloaked` | Assassins au plus en même temps |
 | `antiAir` | une défense anti-air en plus par `per` volants ennemis vus, `max` au plus |
 | `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
-| `tech.isdaris` | Nano-assembleur avec `barracks` portails, plus de `minerals` minerai et `energy` énergie |
+| `tech.isdaris` | Psycho-assembleur à partir de `minute` avec `barracks` portails |
 | `army` | poids de chaque unité dans l'armée de l'IA |
 | `kits` | poids de chaque kit d'arme que l'IA Z monte sur ses socles |
 | `research` | recherches de chaque camp, par ordre de priorité ; l'IA lance la première possible sur un bâtiment libre |

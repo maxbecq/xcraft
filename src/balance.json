@@ -210,10 +210,10 @@
     "maxWave": 18,
     "maxCloaked": 3,
     "antiAir": { "per": 3, "max": 3 },
-    "tech": { "humains": { "minute": 8, "barracks": 2 }, "isdaris": { "barracks": 3, "minerals": 900, "energy": 400 } },
+    "tech": { "humains": { "minute": 8, "barracks": 2 }, "isdaris": { "minute": 8, "barracks": 3 } },
     "research": {
       "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
-      "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
+      "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
       "z": ["lanceroquettes", "zattaque1", "lanceflammes", "zblindage1", "zattaque2", "zblindage2", "zattaque3", "zblindage3"]
     },
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]] },

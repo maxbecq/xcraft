@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
+import { type BuildingDef, DEFS } from '../data';
 import { createMap } from '../map';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
-import { type Entity, World } from './world';
+import { type Command, type Entity, World } from './world';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
@@ -164,6 +165,28 @@ describe('Isdaris', () => {
       expect(w.winner).not.toBeNull();
     }
   }, 90_000);
+
+  it('the AI builds the Psycho-assembleur and fields its advanced units in a long game', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ais = [new AI(w, 0), new AI(w, 1)];
+    const advanced = (DEFS.nanoassembleur as BuildingDef).trains!;
+    const made = () => [...w.entities.values()].find((e) => e.owner === 0 && advanced.includes(e.type));
+    while (w.winner === null && w.tick < ticks(25 * 60) && !made()) w.step(ais.flatMap((a) => a.think()));
+    expect(made()?.type).toBeDefined();
+  }, 60_000);
+
+  it('the AI teleports a battered Porte-disques out of the fight', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ai = new AI(w, 0);
+    const d = w.spawn('discobole', 0, ...at(60, 60));
+    d.shield = 0;
+    d.hp = 60;
+    for (let i = 0; i < 3; i++) w.spawn('legionnaire', 1, ...at(62, 59 + i));
+    w.step([]); // vision updated
+    const cast = (ai['tactics']([d]) as Command[]).find((c) => c.kind === 'ability');
+    expect(cast).toMatchObject({ ids: [d.id], name: 'teleport' });
+    expect((cast as { x: number }).x).toBeLessThan(d.x); // away from the enemies
+  });
 
   it('beats an idle opponent as Isdaris', () => {
     const w = createMatch(['humains', 'isdaris']);
