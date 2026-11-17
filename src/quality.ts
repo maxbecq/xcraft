@@ -5,11 +5,14 @@ export type Quality = 'basse' | 'moyenne' | 'haute';
 export const QUALITY_NAMES: Record<Quality | 'auto', string> = { auto: 'Auto', basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute' };
 export const QUALITY_KEY = 'xcraft.quality';
 
-/** What each level costs: pixel density, post-processing (none, light, full) and sun shadows. */
-export const QUALITY: Record<Quality, { pixelRatio: number; post: 'off' | 'light' | 'full'; shadows: number }> = {
-  basse: { pixelRatio: 1, post: 'off', shadows: 0 },
-  moyenne: { pixelRatio: 1.25, post: 'light', shadows: 2048 },
-  haute: { pixelRatio: 2, post: 'full', shadows: 4096 },
+/**
+ * What each level costs: pixel density, post-processing (none, light, full), sun shadows, and the share of
+ * effect particles drawn (each one is a draw call: half of a big battle's on the basse level).
+ */
+export const QUALITY: Record<Quality, { pixelRatio: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number }> = {
+  basse: { pixelRatio: 1, post: 'off', shadows: 0, particles: 0.4 },
+  moyenne: { pixelRatio: 1.25, post: 'light', shadows: 2048, particles: 1 },
+  haute: { pixelRatio: 2, post: 'full', shadows: 4096, particles: 1 },
 };
 
 /**

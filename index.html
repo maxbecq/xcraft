@@ -52,6 +52,9 @@
       #loading.mini { inset: auto 0 0 0; padding: 0; background: none; pointer-events: none; }
       #loading.mini > :not(.track) { display: none; }
       #loading.mini .track { width: 100vw; height: 2px; border-radius: 0; }
+      /* No transition nor sheen on it: a bar easing at every model loaded kept phones from drawing the menu's answer to a tap. */
+      #loading.mini .fill { transition: none; }
+      #loading.mini .fill::after { animation: none; }
     </style>
     <div id="loading" role="status" aria-live="polite">
       <h1>XCRAFT</h1>

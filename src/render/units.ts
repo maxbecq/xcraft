@@ -524,6 +524,14 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (skin) {
+            // Culling bounds from the rest pose, widened so a lunge or a fall stays inside them; copies inherit them.
+            gltf.scene.updateMatrixWorld(true);
+            gltf.scene.traverse((o) => {
+              if (!(o instanceof SkinnedMesh)) return;
+              o.skeleton.update();
+              o.computeBoundingSphere();
+              o.boundingSphere!.radius *= 2.5;
+            });
             rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type))) });
             return;
           }
@@ -594,7 +602,6 @@ function model(type: string, team: Material, seed = 0): Group {
       o.material = r.skins[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? r.skins[0];
       o.castShadow = true;
       o.receiveShadow = true;
-      o.frustumCulled = false; // the bind-pose bounds do not follow the animation
     });
     g.add(character);
     g.userData.clips = r.clips;

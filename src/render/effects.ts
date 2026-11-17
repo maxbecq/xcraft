@@ -1,6 +1,6 @@
 import { TEAM_COLORS } from './units';
 import {
-  AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Color, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
+  AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
   type Scene, Sprite,
   SpriteMaterial, type Texture, Vector3,
 } from 'three';
@@ -101,6 +101,9 @@ export class Effects {
   };
   private readonly debrisGeo = new BoxGeometry(0.12, 0.12, 0.12);
   private readonly debrisMat = new MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 });
+
+  /** Share of particles spawned (src/quality.ts): fewer, each a draw call, on low-end graphics. */
+  density = 1;
 
   /** Sprites go to `fx` (drawn after ambient occlusion); debris, which casts shadows, to the main scene. */
   constructor(private readonly fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {}
@@ -369,9 +372,10 @@ export class Effects {
   }
 
   private spawn(tex: Texture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean): void {
+    if (this.density < 1 && Math.random() > this.density) return; // render only: the simulation never sees it
     let p = this.pool.find((q) => !q.active);
     if (!p) {
-      if (this.pool.length >= MAX_PARTICLES) return;
+      if (this.pool.length >= MAX_PARTICLES * this.density) return;
       // No depth test: the post pass does not keep scene depth. Effects are short-lived and drawn over the scene.
       const sprite = new Sprite(new SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
       this.fx.add(sprite);
@@ -379,10 +383,11 @@ export class Effects {
       this.pool.push(p);
     }
     const m = p.sprite.material;
+    // Only a sprite's first texture changes its shader; swapping textures, colour or blending needs no recompile check.
+    if (!m.map) m.needsUpdate = true;
     m.map = tex;
-    m.color = new Color(color);
+    m.color.set(color);
     m.blending = additive ? AdditiveBlending : NormalBlending;
-    m.needsUpdate = true;
     p.sprite.position.copy(pos);
     p.sprite.visible = true;
     p.vel.copy(vel);
