@@ -59,6 +59,128 @@ def mat(name, color, emission=None, metallic=0.0, rough=0.8):
     return m
 
 
+def _noise(rng, size, cells, stretch=(1, 1)):
+    """Tileable value noise: a random grid of `cells` (times stretch per axis), bilinear, wrapping."""
+    import numpy as np
+    gy, gx = cells * stretch[1], cells * stretch[0]
+    grid = rng.random((gy, gx))
+    y = np.arange(size) * gy / size
+    x = np.arange(size) * gx / size
+    y0, x0 = np.floor(y).astype(int), np.floor(x).astype(int)
+    fy, fx = (y - y0)[:, None], (x - x0)[None, :]
+    fy, fx = fy * fy * (3 - 2 * fy), fx * fx * (3 - 2 * fx)
+    y1, x1 = (y0 + 1) % gy, (x0 + 1) % gx
+    a = grid[y0][:, x0] * (1 - fx) + grid[y0][:, x1] * fx
+    b = grid[y1][:, x0] * (1 - fx) + grid[y1][:, x1] * fx
+    return a * (1 - fy) + b * fy
+
+
+def _fbm(rng, size, base, octaves=4, stretch=(1, 1)):
+    total, amp, norm = 0, 1.0, 0
+    for o in range(octaves):
+        total = total + _noise(rng, size, base * 2 ** o, stretch) * amp
+        norm += amp
+        amp *= 0.5
+    return total / norm
+
+
+def metal_texture(name, rusty):
+    """A tileable 512px plate texture, mostly neutral so the material's colour shows through: brushed metal
+    in riveted panels with scratches, grime and rust stains (`rusty`: a rusted plate, pitted and flaking, with
+    a little bare metal left)."""
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    import numpy as np
+    S = 512
+    rng = np.random.default_rng(7 if rusty else 3)
+    brushed = _noise(rng, S, 4, (32, 1)) * 0.5 + _noise(rng, S, 8, (16, 1)) * 0.5
+    fine = _fbm(rng, S, 32, 3)
+    blotch = _fbm(rng, S, 4, 5)
+    grime = _fbm(rng, S, 3, 4)
+    lum = 0.84 + 0.1 * (brushed - 0.5) + 0.08 * (fine - 0.5)
+    rgb = np.stack([lum, lum, lum], -1)
+    # Panel seams every quarter of the tile, rivets along them.
+    yy, xx = np.mgrid[0:S, 0:S]
+    seam = (np.minimum(yy % 128, 128 - yy % 128) < 2) | (np.minimum(xx % 128, 128 - xx % 128) < 2)
+    rivet = np.zeros((S, S), bool)
+    for c in (10, 118):
+        for k in range(8, 128, 24):
+            for (ry, rx) in ((c, k), (k, c)):
+                d = (yy % 128 - ry) ** 2 + (xx % 128 - rx) ** 2
+                rivet |= d < 9
+    rgb[seam] *= 0.45
+    rgb[rivet] = rgb[rivet] * 0.6 + 0.35
+    # Scratches: short bright strokes.
+    for _ in range(140):
+        x0, y0 = rng.integers(0, S, 2)
+        ang = rng.random() * np.pi
+        length = rng.integers(8, 40)
+        t = np.arange(length)
+        px = (x0 + np.cos(ang) * t).astype(int) % S
+        py = (y0 + np.sin(ang) * t).astype(int) % S
+        rgb[py, px] = np.minimum(1, rgb[py, px] + 0.18)
+    # Rust: stains with darker rims, pitting inside.
+    level = 0.42 if rusty else 0.72
+    m = np.clip((blotch + 0.25 * fine - level) / 0.1, 0, 1)[..., None]
+    rim = np.clip(1 - np.abs(blotch + 0.25 * fine - level - 0.03) / 0.03, 0, 1)[..., None]
+    if rusty:
+        # On the rust material, stay near neutral: pitting and flakes, bare metal where the rust is gone.
+        pits = (fine < 0.32)[..., None]
+        rust = np.ones(3) * (0.8 + 0.25 * (fine[..., None] - 0.5))
+        rgb = rgb * (1 - m) * np.array([1.25, 1.55, 1.8]) * 0.62 + rust * m
+        rgb = np.where(pits & (m > 0.5), rgb * 0.6, rgb)
+    else:
+        rust = np.array([0.95, 0.52, 0.28]) * (0.75 + 0.5 * fine[..., None])
+        rgb = rgb * (1 - m) + rust * m
+        rgb = rgb * (1 - 0.35 * rim)
+    rgb = rgb * (0.82 + 0.18 * grime[..., None])
+    rgb = np.clip(rgb, 0, 1)
+    img = bpy.data.images.new(name, S, S)
+    # A byte image stores its sRGB values as they are.
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(np.concatenate([rgb, np.ones((S, S, 1))], -1).astype(np.float32).ravel())
+    img.pack()
+    return img
+
+
+def textured(name, color, image, metallic, rough):
+    """A material whose base colour is an image texture times `color` (the vertex colours still multiply in
+    game, exported alongside)."""
+    if name in MATS:
+        return MATS[name]
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nodes = m.node_tree.nodes
+    b = nodes["Principled BSDF"]
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.blend_type = "MULTIPLY"
+    mix.inputs["Factor"].default_value = 1.0
+    m.node_tree.links.new(tex.outputs["Color"], mix.inputs[6])
+    mix.inputs[7].default_value = (*linear(color), 1)
+    m.node_tree.links.new(mix.outputs[2], b.inputs["Base Color"])
+    b.inputs["Metallic"].default_value = metallic
+    b.inputs["Roughness"].default_value = rough
+    MATS[name] = m
+    return m
+
+
+def box_uv(o, scale=1.2):
+    """World-scale box projection: each face takes the two coordinates across its main axis, one repeat of
+    the texture every `scale` units, so plates keep the same grain on a building and on a bolt."""
+    me = o.data
+    uv = me.uv_layers.active or me.uv_layers.new(name="UVMap")
+    for poly in me.polygons:
+        n = poly.normal
+        axis = max(range(3), key=lambda i: abs(n[i]))
+        a, b = [i for i in range(3) if i != axis]
+        for li in poly.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            uv.data[li].uv = (co[a] / scale, co[b] / scale)
+
+
 def palette():
     return {
         "team": mat("team", 0x3A7BD5, rough=0.6),
@@ -109,8 +231,8 @@ def palette():
         "graphite": mat("graphite", 0x4A505A, metallic=0.8, rough=0.35),
         "pink_glow": mat("pink_glow", 0xFF5AC8, emission=0xFF20A0),
         # Z: a light steel base, so the rust stains painted in paint() read as orange-brown.
-        "zsteel": mat("zsteel", 0x78736A, metallic=0.7, rough=0.55),
-        "zrust": mat("zrust", 0x9A5430, metallic=0.25, rough=0.95),
+        "zsteel": textured("zsteel", 0x8E8A80, metal_texture("zsteel_tex", False), metallic=0.7, rough=0.55),
+        "zrust": textured("zrust", 0x9A5430, metal_texture("zrust_tex", True), metallic=0.25, rough=0.95),
         "zcopper": mat("zcopper", 0xC07038, metallic=0.9, rough=0.35),
     }
 
@@ -1419,7 +1541,7 @@ def paint(o):
                 co = me.vertices[vi].co
                 streak = 0.5 + 0.5 * math.sin(co.x * 31 + co.y * 17 + math.sin(co.z * 9) * 2)
                 grain = ((vi * 2654435761) % 1000) / 1000
-                rust = min(1, max(0, (1 - h) * 0.7 + streak * 0.35 + grain * 0.3 - 0.3 - (0.4 if bevel else 0)))
+                rust = min(1, max(0, (1 - h) * 0.7 + streak * 0.35 + grain * 0.3 - 0.55 - (0.4 if bevel else 0)))
                 col.data[li].color = (min(1, shade), min(1, shade * (1 - 0.42 * rust)), min(1, shade * (1 - 0.65 * rust)), 1)
                 continue
             col.data[li].color = (min(1, shade * (1 + warm)), min(1, shade), min(1, shade * (1 - warm)), 1)
@@ -1434,6 +1556,7 @@ def join(objs, name):
     bpy.ops.object.join()
     o = bpy.context.active_object
     o.name = name
+    box_uv(o)
     paint(o)  # parts keep their own flat or smooth shading
     return o
 
@@ -1474,7 +1597,7 @@ def export(objs, path):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_vertex_color="ACTIVE")
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_vertex_color="ACTIVE", export_image_format="JPEG", export_jpeg_quality=85)
 
 
 def icon(objs, path):
