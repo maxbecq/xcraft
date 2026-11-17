@@ -33,9 +33,11 @@ import { countMatch, countTitle } from './stats';
 /** Scrolling settings for this computer (Options): speed and edge band width (1 = as designed), pointer held in the window. */
 const SCROLL_KEY = 'xcraft.scroll';
 const SCROLL: { speed: number; band: number; lock: boolean } = (() => {
-  const base = { speed: 1, band: 1, lock: true };
+  const base = { speed: 1, band: 1, lock: false };
   try {
-    return { ...base, ...JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}') };
+    // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
+    const { speed, band, lock2 } = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
+    return { ...base, ...(speed ? { speed } : {}), ...(band ? { band } : {}), lock: lock2 === true };
   } catch {
     return base;
   }
@@ -660,7 +662,7 @@ function showOptions(menu: HTMLElement): void {
       if (k === 'lock') SCROLL.lock = (field as HTMLInputElement).checked;
       else SCROLL[k] = Number(field.value);
       try {
-        localStorage.setItem(SCROLL_KEY, JSON.stringify(SCROLL));
+        localStorage.setItem(SCROLL_KEY, JSON.stringify({ speed: SCROLL.speed, band: SCROLL.band, lock2: SCROLL.lock }));
       } catch {
         // private browsing: kept for this page only
       }
