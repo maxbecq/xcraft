@@ -29,7 +29,9 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
   /** The cursor the page asks for at the target (a custom image with its hot spot, else a plain arrow). */
   const draw = (target: Element | null) => {
     const css = target ? getComputedStyle(target).cursor : '';
-    const m = /url\("?([^")]+)"?\)\s*(\d+)?\s*(\d+)?/.exec(css);
+    // The computed value is url("…") with any quote escaped; the game's SVG cursors hold brackets, so read up to
+    // the closing quote, not the first ")".
+    const m = /url\("((?:[^"\\]|\\.)*)"\)\s*(\d+)?\s*(\d+)?/.exec(css);
     const [img, hx, hy] = m ? [m[1], Number(m[2] ?? 0), Number(m[3] ?? 0)] : [ARROW, 1, 1];
     if (cursor.dataset.img !== img) {
       cursor.dataset.img = img;
