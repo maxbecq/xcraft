@@ -357,6 +357,7 @@ pause.innerHTML = `<div class="pause-box">
 <h2>Pause</h2>
 <button data-p="resume">Reprendre</button>
 <button data-p="help">Contrôles</button>
+<button data-p="fullscreen" hidden>Plein écran</button>
 <button data-p="restart">Recommencer</button>
 <button data-p="replay">Enregistrer le replay</button>
 <button data-p="quit">Quitter la partie</button>
@@ -399,6 +400,7 @@ document.addEventListener('click', (e) => {
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
+  else if (p === 'fullscreen') toggleFullscreen();
   else if (p === 'restart' && !net) location.reload();
   else if (p === 'replay') downloadReplay(record);
   else if (p === 'quit' || p === 'restart') {
@@ -494,6 +496,43 @@ function showHome(): void {
   };
 }
 
+/** Fullscreen: chosen in the options for this computer, toggled from the pause menu. */
+const FULLSCREEN_KEY = 'xcraft.fullscreen';
+function wantsFullscreen(): boolean {
+  try {
+    return localStorage.getItem(FULLSCREEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function toggleFullscreen(): void {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen().catch(() => {});
+}
+if (document.fullscreenEnabled && !TOUCH) {
+  const button = pause.querySelector<HTMLElement>('[data-p="fullscreen"]')!;
+  button.hidden = false;
+  document.addEventListener('fullscreenchange', () => {
+    const on = !!document.fullscreenElement;
+    button.textContent = on ? 'Quitter le plein écran' : 'Plein écran';
+    // Chrome and Edge let the game keep Escape (held down, it still leaves fullscreen); elsewhere it leaves at once.
+    const keyboard = (navigator as Navigator & { keyboard?: { lock?: (keys: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
+    if (on) void keyboard?.lock?.(['Escape']).catch(() => {});
+    else keyboard?.unlock?.();
+  });
+  // Browsers only go fullscreen on a click or key press, and loading a match reloads the page:
+  // with the option on, the first one in the match does it.
+  if (!ATTRACT && wantsFullscreen()) {
+    const enter = () => {
+      if (!document.fullscreenElement) toggleFullscreen();
+      window.removeEventListener('pointerdown', enter);
+      window.removeEventListener('keydown', enter);
+    };
+    window.addEventListener('pointerdown', enter);
+    window.addEventListener('keydown', enter);
+  }
+}
+
 /** The graphics level picked in the options, or 'auto'. */
 function storedQuality(): string {
   try {
@@ -513,10 +552,20 @@ function showOptions(menu: HTMLElement): void {
       <label>Graphismes <select data-k="quality">${Object.entries(options)
         .map(([v, label]) => `<option value="${v}"${v === before ? ' selected' : ''}>${label}</option>`)
         .join('')}</select></label>
+      ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.onchange = (e) => {
-    const v = (e.target as HTMLSelectElement).value;
+    const field = e.target as HTMLSelectElement | HTMLInputElement;
+    if (field.dataset.k === 'fullscreen') {
+      try {
+        localStorage.setItem(FULLSCREEN_KEY, (field as HTMLInputElement).checked ? '1' : '0');
+      } catch {
+        // private browsing: the pause menu's button still works
+      }
+      return;
+    }
+    const v = field.value;
     try {
       if (v === 'auto') localStorage.removeItem(QUALITY_KEY);
       else localStorage.setItem(QUALITY_KEY, v);
