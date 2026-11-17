@@ -279,7 +279,7 @@ let mouse: { x: number; y: number; onButton: boolean } | null = null;
 // Edge scrolling follows the mouse only: fingers drag the map instead. Not over a button (the Menu sits
 // in the top edge band): reaching for it must not move the view.
 window.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: !!(e.target as HTMLElement).closest?.('button, .tools, input') };
+  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: !!(e.target as HTMLElement).closest?.('button, .tools, input, .hud-toast') };
 });
 document.addEventListener('mouseleave', () => (mouse = null));
 // Wheel zooms. A trackpad's two-finger scroll (sideways or fractional pixel deltas) pans,
@@ -306,7 +306,7 @@ const EDGE_TOUCH_PX = 3;
 /** No edge scrolling this close to a button of the interface: the corners holding buttons stay calm. */
 const UI_CALM_PX = 40;
 const nearButton = (x: number, y: number) =>
-  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip')].some((b) => {
+  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip, .hud-toast.alert[title]')].some((b) => {
     const r = b.getBoundingClientRect();
     return r.width > 0 && x > r.left - UI_CALM_PX && x < r.right + UI_CALM_PX && y > r.top - UI_CALM_PX && y < r.bottom + UI_CALM_PX;
   });

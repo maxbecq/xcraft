@@ -26,6 +26,13 @@ type Order<C = Command> = C extends unknown ? Omit<C, 'player'> : never;
 
 const KEY_LABEL: Record<string, string> = { Escape: 'Échap' };
 
+/** The sign before each message: refused (no entry), done (a tick), under attack (a shield with a bang). */
+const SIGNS: Record<GameEvent['kind'], string> = {
+  error: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M5.5 14.5l9-9" stroke="currentColor" stroke-width="2.4"/></svg>',
+  done: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 10.5l4.2 4.2L16.5 5.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  alert: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5l7 2.6v5.2c0 4.4-3 7.6-7 9.2-4-1.6-7-4.8-7-9.2V4.1z" fill="currentColor"/><path d="M10 5.5v5.5M10 13.5v1.4" stroke="#1a0604" stroke-width="2.4" stroke-linecap="round"/></svg>',
+};
+
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
   private readonly bar = el('div', 'hud-bar');
@@ -278,6 +285,7 @@ export class Hud {
     for (const ev of events) {
       if (ev.player !== this.player) continue;
       const t = el('div', `hud-toast ${ev.kind}`);
+      t.innerHTML = SIGNS[ev.kind];
       if (ev.kind === 'alert' && hit) {
         const at = { x: hit.x / FP, y: hit.y / FP };
         this.alertAt = at;
@@ -286,11 +294,12 @@ export class Hud {
         t.addEventListener('click', () => this.focus(at.x, at.y));
       }
       this.audio.play(ev.kind);
-      t.textContent = ev.text;
+      t.append(ev.text);
       this.toasts.append(t);
-      setTimeout(() => t.classList.add('gone'), 2200);
-      setTimeout(() => t.remove(), 2500);
-      while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
+      const life = ev.kind === 'alert' ? 5000 : ev.kind === 'done' ? 3000 : 2200;
+      setTimeout(() => t.classList.add('gone'), life);
+      setTimeout(() => t.remove(), life + 300);
+      while (this.toasts.children.length > 4) this.toasts.firstChild!.remove();
     }
   }
 

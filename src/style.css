@@ -99,7 +99,14 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
 .res.sup.full { color: #ff7a6a; }
 .res.clock { color: #cfc6b0; }
 
-.hud-toasts { position: fixed; left: 50%; bottom: 214px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+/* Messages stack over the command card, at the right, newest at the bottom, each with a sign of its kind:
+   refused (amber), done (green), under attack (red, a click goes there). The centre stays on the fight. */
+.hud-toasts { position: fixed; right: 16px; bottom: calc(196px - var(--trim-top, -9px) + 10px); max-width: min(460px, 60vw); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; text-align: right; }
+.hud-toast { display: flex; align-items: center; gap: 7px; }
+.hud-toast .sign { flex: none; width: 1.15em; height: 1.15em; filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 4px rgba(0, 0, 0, 0.8)); }
+.hud-toast.error .sign { color: #ffb347; }
+.hud-toast.done .sign { color: #6fe39a; }
+.hud-toast.alert .sign { color: #ff5a3a; }
 .hud-toast { padding: 4px 12px; background: rgba(60, 20, 10, 0.88); color: #ffd2c4; border: 1px solid #7a3a22; border-radius: 3px; font-size: 15px; }
 .hud-toast.done { background: rgba(20, 50, 20, 0.88); color: #c8ffc4; border-color: #3a6a32; }
 .hud-toast.alert { background: rgba(130, 20, 10, 0.92); color: #fff; border-color: #ff6a4a; font-size: 17px; }
@@ -189,7 +196,7 @@ body.touch { -webkit-tap-highlight-color: transparent; }
   .cmd img { width: 26px; height: 26px; }
   .cmd kbd { display: none; }
   .hud-bar { font-size: 16px; gap: 10px; padding: 4px 10px 6px; right: 8px; }
-  .hud-toasts { bottom: 104px; }
+  .hud-toasts { bottom: 104px; right: 8px; }
   .tool { font-size: 15px; padding: 4px 9px; }
   .help { font-size: 12px; }
   .pause-box { padding: 14px 16px; max-width: 94vw; }
@@ -211,7 +218,8 @@ body.touch { -webkit-tap-highlight-color: transparent; }
   .map-slot { align-self: start; height: 84px; }
   .hud-card { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 40px; }
   .cmd img { width: 28px; height: 28px; }
-  .hud-toasts { bottom: calc(196px + env(safe-area-inset-bottom)); width: 90vw; }
+  .hud-toasts { bottom: calc(196px + env(safe-area-inset-bottom)); max-width: 80vw; }
+  body[class] .hud-toasts > .hud-toast[class] { font-size: 13px; } /* over each faction's lettering, alerts too */
   /* Watching the AI: no commands, so no row for them. */
   body.spectate .console { grid-template-rows: 84px; }
   body.spectate .hud-card { display: none; }
@@ -297,7 +305,6 @@ body.z .tool:hover { background: var(--phos); color: #04120a; text-shadow: none;
 
 /* Messages print like terminal lines. */
 body.z .hud-toast { font: 17px/1.1 var(--lcd); color: var(--phos); text-shadow: var(--glow); background: var(--scan), rgba(4, 14, 6, 0.9); border: 1px solid var(--phos-dim); border-radius: 0; }
-body.z .hud-toast::before { content: '> '; }
 body.z .hud-toast.alert { color: #ffb347; border-color: #a86a1e; text-shadow: 0 0 5px rgba(255, 179, 71, 0.7); font-size: 24px; }
 body.z .help { font: 15px/1.25 var(--lcd); color: var(--phos); text-shadow: var(--glow); }
 body.z .pause-box { background: var(--scan), var(--screen); border: 3px solid #4a4436; border-radius: 10px / 14px; box-shadow: inset 0 0 30px #000, 0 8px 30px rgba(0, 0, 0, 0.7); }
