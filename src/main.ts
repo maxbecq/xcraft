@@ -459,6 +459,7 @@ function showHome(): void {
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z</p>
     <button data-m="new">Nouvelle partie</button>
     <button data-m="join">Rejoindre une partie</button>
+    <button data-m="options">Options</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
@@ -468,18 +469,48 @@ function showHome(): void {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
     else if (m === 'join') showJoin(menu as HTMLElement);
+    else if (m === 'options') showOptions(menu as HTMLElement);
     else if (m === 'last-replay') playReplay(readReplay());
     else if (m === 'open-replay') openReplayFile();
   };
 }
 
-/** The graphics level picked in the menu, or 'auto'. */
+/** The graphics level picked in the options, or 'auto'. */
 function storedQuality(): string {
   try {
     return localStorage.getItem(QUALITY_KEY) ?? 'auto';
   } catch {
     return 'auto';
   }
+}
+
+/** Settings kept for this computer (its browser): graphics for now. A change reloads the page on the way back. */
+function showOptions(menu: HTMLElement): void {
+  const before = storedQuality();
+  const options = { ...QUALITY_NAMES, auto: `Auto (${QUALITY_NAMES[DETECTED].toLowerCase()} pour cet ordinateur)` };
+  menu.className = 'menu setup';
+  menu.innerHTML = `<h2>Options</h2>
+    <fieldset class="options"><legend>Affichage</legend>
+      <label>Graphismes <select data-k="quality">${Object.entries(options)
+        .map(([v, label]) => `<option value="${v}"${v === before ? ' selected' : ''}>${label}</option>`)
+        .join('')}</select></label>
+    </fieldset>
+    <div class="row"><button data-m="back">Retour</button></div>`;
+  menu.onchange = (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    try {
+      if (v === 'auto') localStorage.removeItem(QUALITY_KEY);
+      else localStorage.setItem(QUALITY_KEY, v);
+    } catch {
+      // private browsing: the detected level stays
+    }
+  };
+  menu.onclick = (e) => {
+    if ((e.target as HTMLElement).closest('button')?.dataset.m !== 'back') return;
+    // The renderer is set up once per page: a new level needs a reload.
+    if (storedQuality() !== before) location.reload();
+    else showHome();
+  };
 }
 
 /** The match setup screen: one row per player (on/off switch, dropdowns), then the planet; the match loads from the URL. */
@@ -512,7 +543,6 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     <fieldset class="options"><legend>Partie</legend>
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
-      <label>Graphismes ${select('quality', { ...QUALITY_NAMES, auto: `Auto (${QUALITY_NAMES[DETECTED].toLowerCase()})` }, storedQuality())}</label>
     </fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
   menu.onchange = (e) => {
@@ -520,15 +550,7 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
-    if (k === 'quality') {
-      // A choice for this browser, kept apart from the match: it takes effect when the match loads.
-      try {
-        if (v === 'auto') localStorage.removeItem(QUALITY_KEY);
-        else localStorage.setItem(QUALITY_KEY, v);
-      } catch {
-        // private browsing: the detected level stays
-      }
-    } else if (k === 'biome') s.biome = v;
+    if (k === 'biome') s.biome = v;
     else if (k === 'speed') s.speed = Number(v);
     else if (k.startsWith('on')) s.sides[Number(k[2])].control = (el as HTMLInputElement).checked ? 'normal' : 'none';
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
