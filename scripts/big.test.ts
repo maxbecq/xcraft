@@ -17,6 +17,8 @@ it.skipIf(!process.env.BIG)('big', () => {
   const researched: Record<string, Record<string, number>> = { humains: {}, isdaris: {}, z: {} };
   // Abilities cast, by name, over all games.
   const casts: Record<string, number> = {};
+  // Wins by start position, per pairing: p0 starts top left (player 1 in the map file), p1 opposite.
+  const sides: Record<string, { p0: number; p1: number }> = {};
   let minutes = 0;
   let games = 0;
   for (const [a, b] of pairs) {
@@ -38,11 +40,13 @@ it.skipIf(!process.env.BIG)('big', () => {
         for (const p of w.players) for (const [line, n] of Object.entries(p.upgrades)) if (n) researched[p.faction][line] = (researched[p.faction][line] ?? 0) + n;
         const won = w.winner === null || w.winner < 0 ? null : order[w.winner];
         wins[won ? `${won} (contre ${won === a ? b : a})` : `nul (${a}-${b})`]++;
+        const side = (sides[`${a}-${b}`] ??= { p0: 0, p1: 0 });
+        if (won) side[w.winner === 0 ? 'p0' : 'p1']++;
       }
     }
     console.log('BIG', `${a}-${b}`, JSON.stringify(Object.fromEntries(Object.entries(wins).filter(([k]) => k.includes(a) && k.includes(b)))));
   }
   const units = Object.fromEntries(Object.entries(made).map(([t, ids]) => [t, ids.size]));
   console.log('BIG', JSON.stringify(wins), JSON.stringify(units));
-  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, units, researched, casts, minutes: Math.round(minutes / games), games }));
+  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, sides, units, researched, casts, minutes: Math.round(minutes / games), games }));
 }, 5_400_000);
