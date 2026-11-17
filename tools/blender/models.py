@@ -1063,39 +1063,58 @@ def shell(m, r, loc, scale=(1, 1, 1), seg=8, rings=4):
     return o
 
 
-def cable(p, a, b, sag=0.15, r=0.02, plugs=True):
-    """A live wire: black rubber sheath hanging between two points, copper plugs at both ends."""
+def connector(p, at, toward, r):
+    """A cable end: a steel sleeve along the cable, a copper ring at its mouth, so no wire ends bare."""
+    at, toward = Vector(at), Vector(toward)
+    d = toward - at
+    d = d.normalized() if d.length > 1e-6 else Vector((0, 0, 1))
+    pipe(p["zsteel"], at, at + d * r * 4, r=r * 1.7, verts=6)
+    pipe(p["zcopper"], at + d * r * 0.6, at + d * r * 1.3, r=r * 1.9, verts=6)
+
+
+def cable(p, a, b, sag=0.15, r=0.02):
+    """A live wire: black rubber sheath hanging between two points, a connector at both ends."""
     a, b = Vector(a), Vector(b)
     n = 4
     pts = [a.lerp(b, k / n) - Vector((0, 0, sag * 4 * (k / n) * (1 - k / n))) for k in range(n + 1)]
     for u, v in zip(pts, pts[1:]):
         pipe(p["rubber"], u, v, r=r, verts=5)
-    if plugs:
-        for q in (a, b):
-            ball(p["zcopper"], r * 1.6, q, seg=6, rings=3)
+    connector(p, a, pts[1], r)
+    connector(p, b, pts[-2], r)
 
 
 def piston(p, a, b, r):
-    """A hydraulic jack: a steel sleeve and a bright chrome rod."""
+    """A hydraulic jack: a steel sleeve and a bright chrome rod, pinned at both ends."""
     a, b = Vector(a), Vector(b)
     mid = a.lerp(b, 0.55)
     pipe(p["zsteel"], a, mid, r=r, verts=6)
+    cyl(p["graphite"], r * 1.25, r * 0.6, mid, verts=6)  # gland where the rod leaves the sleeve
     pipe(p["chrome"], mid, b, r=r * 0.55, verts=6)
+    for q in (a, b):
+        ball(p["zsteel"], r * 1.3, q, seg=6, rings=3)
 
 
-def joint_leg(p, base, knee, foot, r=0.035):
+def joint_leg(p, base, knee, foot, r=0.035, part=None):
     """An insect leg built like a crane: a square rusted femur pushed by a hydraulic jack, an axle at the knee,
-    a steel shin ending in a claw."""
+    a steel shin ending in a claw. With `part`, the leg is its own object pivoting at the hip, for the walk."""
+    before = set(bpy.context.scene.objects)
     base, knee, foot = Vector(base), Vector(knee), Vector(foot)
     shell(p["zsteel"], r * 1.6, base, seg=6, rings=3)
     pipe(p["zrust"], base, knee, r=r, verts=4)
     up = Vector((0, 0, r * 2.2))
     piston(p, base + up * 0.6 + (base - knee) * 0.15, base.lerp(knee, 0.75) + up, r * 0.5)
-    cyl(p["zsteel"], r * 1.4, r * 2.6, knee, rot=(0, math.pi / 2, math.atan2(knee.y - base.y, knee.x - base.x) + math.pi / 2), verts=8)
+    yaw = math.atan2(knee.y - base.y, knee.x - base.x) + math.pi / 2
+    cyl(p["zsteel"], r * 1.4, r * 2.6, knee, rot=(0, math.pi / 2, yaw), verts=8)
+    cyl(p["zcopper"], r * 0.7, r * 2.9, knee, rot=(0, math.pi / 2, yaw), verts=6)  # axle caps
     pipe(p["zsteel"], knee, foot + Vector((0, 0, r * 2)), r=r * 0.7, verts=4)
+    cyl(p["zsteel"], r, r * 0.8, foot + Vector((0, 0, r * 2)), verts=6)  # ankle collar
     cone(p["zsteel"], r * 0.9, r * 3, (foot.x, foot.y, foot.z + r * 1.5), rot=(math.pi, 0, 0), verts=4)
     if r >= 0.035:
-        cable(p, base + Vector((0, 0, -r)), knee + Vector((0, 0, -r)), sag=r * 2.5, r=r * 0.3, plugs=False)
+        cable(p, base + Vector((0, 0, -r)), knee + Vector((0, 0, -r)), sag=r * 2.5, r=r * 0.3)
+    if part:
+        for o in set(bpy.context.scene.objects) - before:
+            o.name = part
+        JOINTS[part] = tuple(base)
 
 
 def legs(p, n, rx, ry, z, reach, lift, r=0.035):
@@ -1107,7 +1126,7 @@ def legs(p, n, rx, ry, z, reach, lift, r=0.035):
             base = (s * rx, y, z)
             knee = (s * (rx + reach * 0.55), y + t * reach * 0.6, z + lift)
             foot = (s * (rx + reach), y + t * reach * 1.1, 0.0)
-            joint_leg(p, base, knee, foot, r)
+            joint_leg(p, base, knee, foot, r, part=f"zleg_{i}_{'l' if s < 0 else 'r'}")
 
 
 def gun(p, loc, length=0.3, barrels=1, r=0.025):
@@ -1121,7 +1140,7 @@ def gun(p, loc, length=0.3, barrels=1, r=0.025):
         cyl(p["graphite"], r, length, (bx, y - length / 2 - 0.05, z), rot=(math.radians(90), 0, 0), verts=6)
         cyl(p["zsteel"], r * 1.5, length * 0.12, (bx, y - length - 0.03, z), rot=(math.radians(90), 0, 0), verts=6)
     box(p["cyan_glow"], (w * 0.6, 0.02, 0.02), (x, y - 0.085, z + 0.035))
-    cable(p, (x + w / 2, y + 0.06, z - 0.02), (x + w / 2 + 0.03, y + 0.16, z - 0.12), sag=0.03, r=0.01, plugs=False)
+    cable(p, (x + w / 2, y + 0.06, z - 0.02), (x + w / 2 + 0.03, y + 0.16, z - 0.12), sag=0.03, r=0.01)
 
 
 def eyes(p, x, y, z, n=2, r=0.03, spread=0.06):
@@ -1145,7 +1164,7 @@ def drone(p):
     eyes(p, 0, -0.245, 0.32, n=2, r=0.022, spread=0.06)
     box(p["team"], (0.1, 0.18, 0.03), (0, 0.0, 0.41))  # dorsal plate
     cell(p, (0, 0.18, 0.4), r=0.05, h=0.16, rot=(math.radians(90), 0, 0))
-    cable(p, (0.04, 0.1, 0.42), (0.05, -0.12, 0.38), sag=0.04, r=0.008, plugs=False)
+    cable(p, (0.04, 0.1, 0.42), (0.05, -0.12, 0.38), sag=0.04, r=0.008)
     pipe(p["graphite"], (0, -0.2, 0.36), (0.04, -0.28, 0.5), r=0.006, verts=4)  # antenna
     ball(p["red_glow"], 0.012, (0.04, -0.28, 0.5), seg=4, rings=3)
     for s in (-1, 1):
@@ -1175,7 +1194,7 @@ def quadripode(p):
     for s in (-1, 1):
         pipe(p["graphite"], (s * 0.08, 0.3, 0.62), (s * 0.1, 0.46, 0.78), r=0.03, verts=6)  # exhaust
         cyl(p["orange_glow"], 0.024, 0.02, (s * 0.1, 0.46, 0.79), rot=(0.9, 0, 0), verts=6)
-        cable(p, (s * 0.15, -0.1, 0.62), (s * 0.15, 0.2, 0.62), sag=0.05, r=0.01, plugs=False)
+        cable(p, (s * 0.15, -0.1, 0.62), (s * 0.15, 0.2, 0.62), sag=0.05, r=0.01)
     gun(p, (0, -0.3, 0.75), length=0.3)
     legs(p, 2, 0.14, 0.18, 0.58, 0.42, 0.18, r=0.03)
 
@@ -1214,7 +1233,7 @@ def coleoptere(p):
         box(p["cyan_glow"], (0.5, 0.012, 0.012), (s * 0.5, 0.22, 0.61), rot=(0, s * -0.15, s * 0.35))
         ring(p["zsteel"], 0.08, 0.02, (s * 0.14, 0.22, 0.27), seg=10)  # ducted fan
         cyl(p["cyan_glow"], 0.06, 0.02, (s * 0.14, 0.22, 0.27), verts=8)
-        cable(p, (s * 0.1, -0.1, 0.42), (s * 0.14, 0.2, 0.3), sag=0.04, r=0.01, plugs=False)
+        cable(p, (s * 0.1, -0.1, 0.42), (s * 0.14, 0.2, 0.3), sag=0.04, r=0.01)
     gun(p, (0, -0.3, 0.36), length=0.3)
 
 
@@ -1275,6 +1294,8 @@ def assimilateur(p):
         box(p["team"], (0.08, 0.35, 0.3), (math.cos(a) * 0.95, math.sin(a) * 0.95, 1.55), rot=(0, 0.6, a))
         b = a + math.pi / 3
         pipe(p["zrust"], (math.cos(b) * 0.4, math.sin(b) * 0.4, 1.2), (math.cos(b) * 0.55, math.sin(b) * 0.55, 0.2), r=0.06, verts=6)
+        cyl(p["zsteel"], 0.11, 0.06, (math.cos(b) * 0.55, math.sin(b) * 0.55, 0.23), verts=6)  # flange into the well
+        cyl(p["zsteel"], 0.09, 0.06, (math.cos(b) * 0.4, math.sin(b) * 0.4, 1.18), verts=6)
     shell(p["zsteel"], 0.55, (0, 0, 1.45), scale=(1, 1, 0.75), seg=10, rings=5)
     cyl(p["purple_glow"], 0.16, 1.2, (0, 0, 0.7), verts=10)  # drawn energy
     for z in (1.05, 1.13, 1.21):

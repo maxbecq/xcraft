@@ -651,11 +651,27 @@ interface View {
   seen: boolean;
   unit: boolean;
   /** Animated parts from the Blender model, if any. */
-  limbs: { legL?: Object3D; legR?: Object3D; armL?: Object3D; armR?: Object3D };
+  limbs: { legL?: Object3D; legR?: Object3D; armL?: Object3D; armR?: Object3D; insect?: InsectLeg[] };
   /** Skeletal animation of Meshy characters. */
   mixer?: AnimationMixer;
   clips?: Map<string, AnimationAction>;
   playing?: AnimationAction;
+}
+
+/** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip; legs of one group step together. */
+interface InsectLeg {
+  o: Object3D;
+  group: number;
+  side: number;
+}
+
+function insectLegs(body: Object3D): InsectLeg[] | undefined {
+  const legs: InsectLeg[] = [];
+  body.traverse((o) => {
+    const m = /^zleg_(\d+)_([lr])$/.exec(o.name);
+    if (m) legs.push({ o, group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
+  });
+  return legs.length ? legs : undefined;
 }
 
 /** Clip roles baked by tools/meshy/pack.py; only idle, walk and die are always there. */
@@ -986,6 +1002,12 @@ export class EntityRenderer {
     if (fighting && !melee) armR = -0.8 - (fired > 0.8 ? (fired - 0.8) * 2 : 0); // shouldered weapon, kick on each shot
     if (melee && fighting) armR = fired > 0.7 ? -2.4 * (1 - fired) / 0.3 + 0.6 : -2.2 * fired; // wind up, then hack down
     ease(v.limbs.armR, 'x', armR, melee ? 0.45 : 0.25);
+    // Insect gait: alternating tripods (diagonal pairs on four legs); a leg lifts while it swings forward.
+    for (const [i, l] of (v.limbs.insect ?? []).entries()) {
+      const ph = phase * 1.5 + l.group * Math.PI;
+      ease(l.o, 'y', moving ? Math.sin(ph) * 0.35 : Math.sin(t * 1.3 + i * 2.1 + e.id) * 0.03, 0.35);
+      ease(l.o, 'z', moving ? l.side * Math.max(0, Math.cos(ph)) * 0.4 : 0, 0.35);
+    }
     const body = v.model.children[0];
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
     // Hovering robots float; walkers bounce with their stride.
@@ -1132,7 +1154,7 @@ export class EntityRenderer {
       fx = well;
     }
     const v: View = { type: e.type, root, model: pivot, ring, scaffold, site, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
-      limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r') } };
+      limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect: insectLegs(body) } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
       v.mixer = new AnimationMixer(body);

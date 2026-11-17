@@ -213,7 +213,7 @@ const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 const overlay = new Overlay(map);
 overlay.hostile = (a, b) => world.hostile(a, b);
-const power = new PowerNet(scene, map);
+const power = new PowerNet(scene, map, (params.get('creep') ?? stored('xcraft.creep')) === 'circuit' ? 'circuit' : 'cables');
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
@@ -460,6 +460,7 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     <fieldset class="seats"><legend>Joueurs</legend>${row(0)}${row(1)}${row(2)}${row(3)}</fieldset>
     <fieldset class="options"><legend>Partie</legend>
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
+      ${s.sides.some((x) => x.control !== 'none' && x.faction === 'z') ? `<label>Creep Z ${select('creep', { cables: 'Câbles', circuit: 'Circuit imprimé' }, stored('xcraft.creep') ?? 'cables')}</label>` : ''}
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
@@ -468,7 +469,13 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
-    if (k === 'biome') s.biome = v;
+    if (k === 'creep') {
+      try {
+        localStorage.setItem('xcraft.creep', v);
+      } catch {
+        // display preference only
+      }
+    } else if (k === 'biome') s.biome = v;
     else if (k === 'speed') s.speed = Number(v);
     else if (k.startsWith('on')) s.sides[Number(k[2])].control = (el as HTMLInputElement).checked ? 'normal' : 'none';
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);

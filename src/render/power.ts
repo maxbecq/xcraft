@@ -1,4 +1,4 @@
-import { AdditiveBlending, CanvasTexture, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -116,6 +116,27 @@ function creepMap(): CanvasTexture {
     g.stroke();
     g.restore();
   };
+  /** A cable end or an inline coupler: a steel sleeve with a dark mouth, a copper band and pins. */
+  const plug = (x: number, y: number, ang: number, w: number, coupler = false) => {
+    const len = w * (coupler ? 2.6 : 2.2);
+    g.save();
+    g.translate(x, y);
+    g.rotate(ang);
+    g.fillStyle = 'rgba(0,0,0,0.85)';
+    g.fillRect(-len / 2 - 2, -w * 0.8 - 2, len + 4, w * 1.6 + 4);
+    g.fillStyle = '#7d786e';
+    g.fillRect(-len / 2, -w * 0.8, len, w * 1.6);
+    g.fillStyle = 'rgba(255,255,255,0.25)';
+    g.fillRect(-len / 2, -w * 0.8, len, w * 0.35);
+    g.fillStyle = '#b06a34';
+    g.fillRect(coupler ? -w * 0.25 : len / 2 - w * 0.6, -w * 0.8, w * 0.5, w * 1.6);
+    if (!coupler) {
+      // Pins sticking out of the mouth, plugged into the ground.
+      g.fillStyle = '#d8c070';
+      for (const k of [-0.4, 0, 0.4]) g.fillRect(-len / 2 - w * 0.5, k * w - 1, w * 0.5, 2);
+    }
+    g.restore();
+  };
   const bundles: Path[] = [];
   for (let i = 0; i < 46; i++) {
     // A bundle wanders out from near the centre to the rim.
@@ -133,7 +154,17 @@ function creepMap(): CanvasTexture {
       const off = (k - (n - 1) / 2) * w * 0.95;
       const nx = -Math.sin(a) * off;
       const ny = Math.cos(a) * off;
-      tube(path, nx, ny, w * (0.75 + rnd() * 0.4), sheaths[Math.floor(rnd() * sheaths.length)]);
+      const ww = w * (0.75 + rnd() * 0.4);
+      tube(path, nx, ny, ww, sheaths[Math.floor(rnd() * sheaths.length)]);
+      // No bare ends: a plug where each wire starts and ends, a coupler on some.
+      plug(path[0] + nx, path[1] + ny, Math.atan2(path[3] - path[1], path[2] - path[0]), ww);
+      plug(path[6] + nx, path[7] + ny, Math.atan2(path[5] - path[7], path[4] - path[6]), ww);
+      if (rnd() < 0.35) {
+        const t = 0.3 + rnd() * 0.4;
+        const [x, y] = along(path, t);
+        const [xb, yb] = along(path, t + 0.01);
+        plug(x + nx, y + ny, Math.atan2(yb - y, xb - x), ww, true);
+      }
     }
     // Cable ties across the bundle.
     if (n > 1)
@@ -182,6 +213,115 @@ function creepMap(): CanvasTexture {
   return creepTexture;
 }
 
+let pcbTexture: CanvasTexture | null = null;
+/**
+ * Z creep, circuit variant: a tileable printed circuit with no board under it, so the ground shows through.
+ * Copper traces routed at right angles and 45°, pads and vias, chips with their pins and status LEDs, and a
+ * faint solder-mask tint in patches. Laid in world space, so neighbouring zones join up.
+ */
+function pcbMap(): CanvasTexture {
+  if (pcbTexture) return pcbTexture;
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const G = 16; // routing grid
+  type Trace = { pts: [number, number][]; w: number };
+  const traces: Trace[] = [];
+  const DIRS: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  for (let i = 0; i < 70; i++) {
+    let x = Math.floor(rnd() * (S / G)) * G;
+    let y = Math.floor(rnd() * (S / G)) * G;
+    let d = Math.floor(rnd() * 4) * 2; // start straight
+    const pts: [number, number][] = [[x, y]];
+    const steps = 3 + Math.floor(rnd() * 5);
+    for (let k = 0; k < steps; k++) {
+      const n = 1 + Math.floor(rnd() * 5);
+      x += DIRS[d][0] * G * n;
+      y += DIRS[d][1] * G * n;
+      pts.push([x, y]);
+      d = (d + (rnd() < 0.5 ? 1 : 7)) % 8; // turn by 45°
+    }
+    traces.push({ pts, w: rnd() < 0.2 ? 5 : 2 + rnd() * 1.5 });
+  }
+  const chips = Array.from({ length: 7 }, () => ({ x: Math.floor(rnd() * (S / G)) * G, y: Math.floor(rnd() * (S / G)) * G, w: G * (2 + Math.floor(rnd() * 3)), h: G * (1 + Math.floor(rnd() * 2)), led: rnd() < 0.6 }));
+  const masks = Array.from({ length: 10 }, () => ({ x: rnd() * S, y: rnd() * S, r: 40 + rnd() * 90 }));
+  // Everything is drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
+  for (const ox of [-S, 0, S])
+    for (const oy of [-S, 0, S]) {
+      g.save();
+      g.translate(ox, oy);
+      for (const m of masks) {
+        const f = g.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
+        f.addColorStop(0, 'rgba(18,52,40,0.35)');
+        f.addColorStop(1, 'rgba(18,52,40,0)');
+        g.fillStyle = f;
+        g.fillRect(m.x - m.r, m.y - m.r, m.r * 2, m.r * 2);
+      }
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      for (const t of traces) {
+        g.beginPath();
+        t.pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.strokeStyle = 'rgba(0,0,0,0.4)';
+        g.lineWidth = t.w + 2;
+        g.stroke();
+        g.strokeStyle = '#9c6a2e';
+        g.lineWidth = t.w;
+        g.stroke();
+        g.strokeStyle = 'rgba(255,220,150,0.18)';
+        g.lineWidth = Math.max(1, t.w * 0.3);
+        g.stroke();
+        for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
+          // Pad with a drilled hole (via).
+          g.fillStyle = '#b07e3a';
+          g.beginPath();
+          g.arc(x, y, t.w + 3, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = '#16181a';
+          g.beginPath();
+          g.arc(x, y, (t.w + 3) * 0.4, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      for (const ch of chips) {
+        g.fillStyle = '#b8b2a4';
+        for (let px = ch.x + 4; px < ch.x + ch.w - 2; px += 6) {
+          g.fillRect(px, ch.y - 4, 3, ch.h + 8); // pins on both long sides
+        }
+        g.fillStyle = 'rgba(0,0,0,0.6)';
+        g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
+        g.fillStyle = '#1e2024';
+        g.fillRect(ch.x, ch.y, ch.w, ch.h);
+        g.fillStyle = 'rgba(255,255,255,0.12)';
+        g.fillRect(ch.x, ch.y, ch.w, 2);
+        g.fillStyle = '#3a3c40';
+        g.beginPath();
+        g.arc(ch.x + 5, ch.y + 5, 2, 0, Math.PI * 2);
+        g.fill();
+        if (ch.led) {
+          g.fillStyle = 'rgba(90,250,255,1)';
+          g.beginPath();
+          g.arc(ch.x + ch.w - 6, ch.y + ch.h - 6, 2.5, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      g.restore();
+    }
+  pcbTexture = new CanvasTexture(c);
+  pcbTexture.colorSpace = SRGBColorSpace;
+  pcbTexture.wrapS = pcbTexture.wrapT = RepeatWrapping;
+  pcbTexture.anisotropy = 4;
+  return pcbTexture;
+}
+
+/** How the Z creep is drawn: wire bundles out of each building, or a printed circuit over the ground. */
+export type CreepStyle = 'cables' | 'circuit';
+/** Tiles covered by one repeat of the circuit texture. */
+const PCB_TILE = 8;
+
 /**
  * Isdaris power network: the emission zone of each Obelisk and Emitter on the ground (where buildings
  * can be materialised), brighter while placing one, and beams of light linking emitters to each other
@@ -191,7 +331,7 @@ export class PowerNet {
   private readonly root = new Group();
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
-  private readonly creepMaterial = new MeshBasicMaterial({ map: creepMap(), transparent: true, depthWrite: false, side: DoubleSide });
+  private readonly creepMaterial: MeshBasicMaterial;
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -203,8 +343,12 @@ export class PowerNet {
   private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
   private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
-  constructor(scene: Object3D, private readonly map: GameMap) {
+  constructor(scene: Object3D, private readonly map: GameMap, private readonly creepStyle: CreepStyle = 'cables') {
     scene.add(this.root);
+    this.creepMaterial =
+      creepStyle === 'circuit'
+        ? new MeshBasicMaterial({ map: pcbMap(), transparent: true, depthWrite: false, side: DoubleSide, vertexColors: true })
+        : new MeshBasicMaterial({ map: creepMap(), transparent: true, depthWrite: false, side: DoubleSide });
   }
 
   /** `highlight`: an Isdaris building is being placed, or a power building is selected. */
@@ -215,7 +359,7 @@ export class PowerNet {
     if (key !== this.key) this.rebuild(nodes, world);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
-    this.creepMaterial.opacity = highlight ? 1 : 0.95;
+    this.creepMaterial.opacity = highlight ? 1 : this.creepStyle === 'circuit' ? 0.75 : 0.95;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.updateWarps(world, sees, t);
   }
@@ -288,6 +432,21 @@ export class PowerNet {
         pos.setXYZ(i, x, heightAt(this.map, x, z) + 0.08, z);
       }
       geo.computeBoundingSphere();
+      if (creep(e) && this.creepStyle === 'circuit') {
+        // World-space UVs, so overlapping zones line up; the rim frays out unevenly into the ground.
+        const uv = geo.getAttribute('uv');
+        const color = new Float32Array(pos.count * 4);
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i);
+          const z = pos.getZ(i);
+          uv.setXY(i, x / PCB_TILE, -z / PCB_TILE);
+          const d = Math.hypot(x - cx, z - cz) / r;
+          const ragged = 0.12 * Math.sin(x * 1.7 + z * 0.6) * Math.sin(z * 1.3 - x * 0.4);
+          const a = Math.min(1, Math.max(0, (1 - d + ragged) / 0.3));
+          color.set([1, 1, 1, a], i * 4);
+        }
+        geo.setAttribute('color', new BufferAttribute(color, 4));
+      }
       const disc = new Mesh(geo, creep(e) ? this.creepMaterial : this.fieldMaterial);
       disc.renderOrder = 1;
       this.root.add(disc);
