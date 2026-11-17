@@ -52,6 +52,8 @@ export class Hud {
   focus: (x: number, y: number) => void = () => {};
   /** Hit points (and shield) of our things at the last tick, to find where an attack lands. */
   private readonly lastHp = new Map<number, number>();
+  /** When each of ours was last hurt (ms), for the red edge on its picture in the selection. */
+  private readonly hitAt = new Map<number, number>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
@@ -277,11 +279,17 @@ export class Hud {
   notify(events: GameEvent[]): void {
     // The world's alert says only "attacked": the place is the last of ours that lost health this tick.
     let hit: Entity | undefined;
-    if (this.lastHp.size > 2 * this.world.entities.size + 64) this.lastHp.clear(); // forget the dead now and then
+    if (this.lastHp.size > 2 * this.world.entities.size + 64) {
+      this.lastHp.clear(); // forget the dead now and then
+      this.hitAt.clear();
+    }
     for (const e of this.world.entities.values()) {
       if (e.owner !== this.player) continue;
       const was = this.lastHp.get(e.id);
-      if (was !== undefined && e.hp + e.shield < was) hit = e;
+      if (was !== undefined && e.hp + e.shield < was) {
+        hit = e;
+        this.hitAt.set(e.id, performance.now());
+      }
       this.lastHp.set(e.id, e.hp + e.shield);
     }
     // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none.
@@ -374,7 +382,7 @@ export class Hud {
     if (sel.length > 1) {
       this.details.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
-        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
+        .map((e) => `<div class="tile${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
         .join('')}</div>`;
       return;
     }
