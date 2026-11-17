@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "id": "le-col",
+  "name": "Le Col",
+  "description": "Naturelle sur plateau gardée par une rampe étroite ; deux mesas coupent la carte en deux couloirs autour d'une colline centrale.",
+  "size": 96,
+  "players": [2],
+  "symmetry": "rot180",
+  "terrain": [
+    { "shape": "octagon", "at": [17, 28], "half": 15, "cut": 8, "ragged": 1, "level": 1 },
+    { "shape": "octagon", "at": [14, 14], "half": 11, "cut": 6, "ragged": 2, "level": 2 },
+    { "shape": "octagon", "at": [48, 48], "half": 8, "cut": 4, "ragged": 3, "level": 1 },
+    { "shape": "octagon", "at": [72, 20], "half": 7, "cut": 3, "ragged": 6, "level": 2 },
+    { "shape": "ramp", "at": [13, 26], "up": "N", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [33, 33], "up": "W", "width": 2, "level": 0 },
+    { "shape": "ramp", "at": [39, 48], "up": "E", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [48, 39], "up": "S", "width": 3, "level": 0 }
+  ],
+  "bases": [
+    {
+      "name": "principale",
+      "start": true,
+      "hq": [12, 12],
+      "minerals": [[7, 9], [7, 10], [7, 11], [7, 12], [8, 8], [9, 7], [10, 7], [11, 7]],
+      "wells": [[17, 6]]
+    },
+    {
+      "name": "naturelle",
+      "hq": [10, 32],
+      "minerals": [[5, 30], [5, 31], [5, 32], [5, 33], [5, 34], [5, 35], [5, 36]],
+      "wells": [[16, 39]]
+    },
+    {
+      "name": "nord",
+      "hq": [42, 7],
+      "minerals": [[40, 3], [41, 3], [42, 3], [43, 3], [44, 3], [45, 3], [46, 3]],
+      "wells": [[50, 4]]
+    },
+    {
+      "name": "coin",
+      "hq": [7, 64],
+      "minerals": [[3, 60], [3, 61], [3, 62], [3, 63], [3, 64], [3, 65], [3, 66]],
+      "wells": [[8, 71]]
+    }
+  ]
+}

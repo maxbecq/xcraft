@@ -1,3 +1,5 @@
+import { DEFAULT_MAP, buildMap, mapFile } from './maps';
+
 export type Dir = 'N' | 'E' | 'S' | 'W';
 
 /** Tile grid. x grows east (+X), y grows south (+Z). One tile = one world unit. */
@@ -12,6 +14,15 @@ export interface GameMap {
   rampStep: Uint8Array;
   /** Chasms (city map): tiles open on the void, impassable on foot, flown over. */
   chasm?: Uint8Array;
+  /** Base spots (from the map file), turned for each quarter of the map. */
+  sites?: Site[];
+}
+
+/** A base spot: its headquarters' top-left tile (5×5), the quarter turn it belongs to (-1: the middle, everyone's), and whether players start there. */
+export interface Site {
+  hq: [number, number];
+  turn: number;
+  start: boolean;
 }
 
 export const LEVEL_HEIGHT = 1.25;
@@ -22,86 +33,9 @@ export const SUB = 12;
 
 export const STEP: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 
-/** Square with cut corners, centred on (0,0). */
-function octagon(dx: number, dy: number, half: number, cut: number): boolean {
-  return Math.abs(dx) <= half && Math.abs(dy) <= half && Math.abs(dx) + Math.abs(dy) <= 2 * half - cut;
-}
-
-/** Quarter turns clockwise of a direction. */
-const TURN: Record<Dir, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' };
-
-/**
- * The V1 map: one base in the top-left corner, copied by rotation for every player — by 180° for two
- * players (the original map), by quarter turns for four (bases in all four corners).
- */
+/** The original map (public/maps/origine.json) for `players` players; `chasms`: as on the city planet. */
 export function createMap(players = 2, chasms = false): GameMap {
-  const width = 96;
-  const height = 96;
-  const map: GameMap = {
-    width, height, level: new Uint8Array(width * height), ramp: new Array(width * height).fill(null), rampStep: new Uint8Array(width * height),
-  };
-  const turns = players > 2 ? [0, 1, 2, 3] : [0, 2];
-
-  // Paints a tile and its rotated copies for the other players.
-  const set = (x: number, y: number, level: number, ramp: Dir | null = null, step = 0) => {
-    for (const q of turns) {
-      const [rx, ry] = rotateTile(width, x, y, q);
-      let r = ramp;
-      for (let k = 0; k < q && r; k++) r = TURN[r];
-      const i = ry * width + rx;
-      map.level[i] = level;
-      map.ramp[i] = r;
-      map.rampStep[i] = step;
-    }
-  };
-  /** A ramp RAMP_LENGTH tiles long, starting at (x, y) next to the higher ground on side `up`, `width` tiles wide. */
-  const ramp = (x: number, y: number, up: Dir, across: number, level: number) => {
-    const [dx, dy] = STEP[up];
-    for (let k = 0; k < RAMP_LENGTH; k++) {
-      for (let w = 0; w < across; w++) {
-        const tx = x - dx * k + (dx === 0 ? w : 0);
-        const ty = y - dy * k + (dy === 0 ? w : 0);
-        set(tx, ty, level, up, k);
-      }
-    }
-  };
-  const paint = (test: (x: number, y: number) => boolean, level: number) => {
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (test(x, y)) set(x, y, level);
-  };
-
-  // Plateaus: octagons with a ragged edge (a tile or two in or out), kept true round the ramps so they still connect.
-  const ramps: [number, number][] = [[24, 14], [29, 14], [20, 37], [20, 42], [37, 20], [42, 20], [47, 40], [47, 45]];
-  const ragged = (x: number, y: number, cx: number, cy: number, half: number, cut: number, seed: number) => {
-    const a = Math.atan2(y - cy, x - cx);
-    const calm = ramps.some(([rx, ry]) => Math.abs(x - rx) + Math.abs(y - ry) < 6);
-    const off = calm ? 0 : Math.round(Math.sin(a * 3 + seed) * 1.1 + Math.sin(a * 7 + seed * 2) * 0.7);
-    return octagon(x - cx, y - cy, half + off, cut);
-  };
-  paint((x, y) => ragged(x, y, 20, 20, 17, 8, 1), 1); // natural expansion plateau
-  paint((x, y) => ragged(x, y, 14, 14, 10, 5, 2), 2); // main base
-  paint((x, y) => ragged(x, y, 47.5, 47.5, 6, 3, 3), 1); // centre hill
-  if (chasms) {
-    // City map (as on SC2 space platforms): holes onto the void between the bases, round the centre, leaving lanes.
-    map.chasm = new Uint8Array(width * height);
-    for (const [cx, cy, seed] of [[48, 27, 4], [27, 48, 5]]) {
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          if (!ragged(x, y, cx, cy, 6, 3, seed)) continue;
-          for (const q of turns) {
-            const [rx, ry] = rotateTile(width, x, y, q);
-            map.chasm[ry * width + rx] = 1;
-          }
-        }
-      }
-    }
-  }
-
-  ramp(25, 13, 'W', 3, 1); // main -> natural
-  ramp(19, 38, 'N', 3, 0); // natural -> low ground (south)
-  ramp(38, 19, 'W', 3, 0); // natural -> low ground (east)
-  ramp(46, 41, 'S', 4, 0); // low ground -> centre hill
-
-  return map;
+  return buildMap(mapFile(DEFAULT_MAP), players, chasms ? 'ville' : '');
 }
 
 /** A tile turned `q` quarter turns clockwise around the centre of a square map `size` tiles wide. */

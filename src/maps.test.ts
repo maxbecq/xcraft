@@ -1,0 +1,86 @@
+import { describe, expect, it } from 'vitest';
+import { createMap } from './map';
+import { CORNERS, MAPS, buildMap } from './maps';
+import { createMatch, expansions } from './sim/setup';
+import type { World } from './sim/world';
+
+/** Tiles a ground unit reaches from (x, y), walking. */
+function reach(w: World, x: number, y: number): Uint8Array {
+  const g = w.grid;
+  const seen = new Uint8Array(g.width * g.height);
+  const todo = [y * g.width + x];
+  seen[todo[0]] = 1;
+  while (todo.length) {
+    const i = todo.pop()!;
+    const [ax, ay] = [i % g.width, Math.floor(i / g.width)];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const j = (ay + dy) * g.width + ax + dx;
+      if (g.inside(ax + dx, ay + dy) && !seen[j] && g.canStep(ax, ay, ax + dx, ay + dy, true)) {
+        seen[j] = 1;
+        todo.push(j);
+      }
+    }
+  }
+  return seen;
+}
+
+describe('map files', () => {
+  it('the original map is unchanged, tile for tile', () => {
+    const fingerprint = (players: number, chasms: boolean) => {
+      const m = createMap(players, chasms);
+      let h = 2166136261;
+      for (let i = 0; i < m.level.length; i++) h = Math.imul(h ^ (m.level[i] + 4 * m.rampStep[i] + 32 * ' NESW'.indexOf(m.ramp[i] ?? ' ') + 256 * (m.chasm?.[i] ?? 0)), 16777619);
+      return h >>> 0;
+    };
+    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([3352138273, 2794323201, 1881788961]);
+  });
+
+  for (const def of Object.values(MAPS)) {
+    for (const players of def.players) {
+      describe(`${def.id}, ${players} players`, () => {
+        const w = createMatch(Array(players).fill('humains'), undefined, def.id);
+        const hqs = [...w.entities.values()].filter((e) => e.type === 'conseil');
+
+        it('has every player on its start', () => {
+          expect(hqs.length).toBe(players);
+        });
+
+        it('lets every start reach every other start and every base spot on foot', () => {
+          const from = reach(w, hqs[0].tx + 2, hqs[0].ty + 5);
+          for (const h of hqs) expect(from[(h.ty + 5) * w.map.width + h.tx + 2], `start ${h.owner}`).toBe(1);
+          for (const s of w.map.sites!) expect(from[(s.hq[1] + 2) * w.map.width + s.hq[0] + 2], `site ${s.hq}`).toBe(1);
+        });
+
+        it('has room for a headquarters on every free base spot', () => {
+          for (const s of w.map.sites!) {
+            if (s.start && CORNERS.indexOf(s.turn) < players) continue;
+            expect(w.canPlace('conseil', s.hq[0], s.hq[1], 0), `site ${s.hq}`).toBe(true);
+          }
+        });
+
+        it('puts resources on flat ground, each in reach of its base', () => {
+          for (const e of w.entities.values()) {
+            if (e.def.kind !== 'resource') continue;
+            const size = e.type === 'puits' ? 3 : 1;
+            const [cx, cy] = [e.tx + (size >> 1), e.ty + (size >> 1)];
+            expect(w.grid.flatLevel(cx, cy), `${e.type} at ${cx},${cy}`).toBeGreaterThanOrEqual(0);
+            const near = w.map.sites!.some((s) => Math.hypot(s.hq[0] + 2.5 - (e.tx + size / 2), s.hq[1] + 2.5 - (e.ty + size / 2)) < 12);
+            expect(near, `${e.type} at ${e.tx},${e.ty}`).toBe(true);
+          }
+        });
+
+        it('gives every player somewhere to expand', () => {
+          for (let p = 0; p < players; p++) expect(expansions(w, p).length).toBeGreaterThan(0);
+        });
+      });
+    }
+  }
+
+  it('builds the same map twice', () => {
+    for (const def of Object.values(MAPS)) {
+      const a = buildMap(def, Math.max(...def.players));
+      const b = buildMap(def, Math.max(...def.players));
+      expect(Array.from(a.level)).toEqual(Array.from(b.level));
+    }
+  });
+});

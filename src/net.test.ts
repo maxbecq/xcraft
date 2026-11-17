@@ -6,9 +6,17 @@ describe('network match codes', () => {
     const room = newRoom();
     const code = matchCode(room, ['humains', 'isdaris'], 'lune');
     expect(code).toMatch(/^[A-Z0-9]{4}-HIL$/);
-    expect(readCode(code.toLowerCase(), ['desert', 'lune', 'alien'])).toEqual({ room, factions: ['humains', 'isdaris'], biome: 'lune' });
+    expect(readCode(code.toLowerCase(), ['desert', 'lune', 'alien'], ['origine', 'le-col'])).toEqual({ room, factions: ['humains', 'isdaris'], biome: 'lune', map: 'origine' });
     expect(readCode(`${room}HHD`, ['desert', 'lune', 'alien'])?.factions).toEqual(['humains', 'humains']);
     expect(readCode('ABCD-XIL', ['desert', 'lune', 'alien'])).toBeNull();
     expect(readCode('ABCD-HIZ', ['desert', 'lune', 'alien'])).toBeNull();
+  });
+
+  it('carry the map after the planet, none for the first map', () => {
+    const maps = ['origine', 'carrefour', 'le-col'];
+    const code = matchCode('ABCD', ['z', 'humains'], 'desert', 2);
+    expect(code).toBe('ABCD-ZHD2');
+    expect(readCode(code, ['desert'], maps)?.map).toBe('le-col');
+    expect(readCode('ABCD-ZHD9', ['desert'], maps)?.map).toBe('origine');
   });
 });

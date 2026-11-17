@@ -6,6 +6,7 @@ import { ticks } from '../src/sim/fixed';
 import { createMatch } from '../src/sim/setup';
 // Faction balance: 98 games per pairing (harvest handicaps 88 to 112 on both sides, each faction on both sides).
 // Pairings: BIG_MATCH=humains-isdaris,z-humains,z-isdaris (the default: all three). Wins are counted per pairing.
+// Map: BIG_MAP=le-col (an id from public/maps/; default the original map).
 // Run: npm run balance:big, or BIG=1 BIG_MATCH=z-humains npx vitest run scripts/big.test.ts --silent=false --reporter=verbose
 it.skipIf(!process.env.BIG)('big', () => {
   const pairs = (process.env.BIG_MATCH ?? 'humains-isdaris,z-humains,z-isdaris').split(',').map((m) => m.split('-') as [Faction, Faction]);
@@ -23,7 +24,7 @@ it.skipIf(!process.env.BIG)('big', () => {
     for (const order of [[a, b], [b, a]] as [Faction, Faction][]) {
       const hs = process.env.QUICK ? [92, 100, 108] : [88, 92, 96, 100, 104, 108, 112];
       for (const h0 of hs) for (const h1 of hs) {
-        const w = createMatch(order);
+        const w = createMatch(order, undefined, process.env.BIG_MAP);
         w.players[0].handicap = h0;
         w.players[1].handicap = h1;
         const ais = [new AI(w, 0), new AI(w, 1)];

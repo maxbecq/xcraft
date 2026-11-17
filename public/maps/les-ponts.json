@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "id": "les-ponts",
+  "name": "Les Ponts",
+  "description": "Un gouffre en diagonale qu'on ne passe à pied que par le grand pont central ou un pont étroit ; troisième base sur une île reliée à son seul propriétaire.",
+  "size": 96,
+  "players": [2],
+  "symmetry": "rot180",
+  "terrain": [
+    { "shape": "octagon", "at": [17, 24], "half": 15, "cut": 8, "level": 1 },
+    { "shape": "octagon", "at": [14, 14], "half": 11, "cut": 6, "level": 2 },
+    { "shape": "ramp", "at": [13, 26], "up": "N", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [26, 35], "up": "N", "width": 4, "level": 0 },
+    { "shape": "band", "diag": 1, "offset": 95, "half": 11, "chasm": true },
+    { "shape": "band", "diag": -1, "offset": 0, "half": 3, "fill": true },
+    { "shape": "band", "diag": -1, "offset": 62, "half": 2, "fill": true },
+    { "shape": "octagon", "at": [31, 64], "half": 6, "cut": 3, "fill": true },
+    { "shape": "rect", "from": [18, 63], "to": [26, 65], "fill": true }
+  ],
+  "bases": [
+    {
+      "name": "principale",
+      "start": true,
+      "hq": [12, 12],
+      "minerals": [[7, 9], [7, 10], [7, 11], [7, 12], [8, 8], [9, 7], [10, 7], [11, 7]],
+      "wells": [[17, 6]]
+    },
+    {
+      "name": "naturelle",
+      "hq": [7, 30],
+      "minerals": [[4, 27], [5, 28], [6, 27], [7, 28], [8, 27], [9, 28], [10, 27]],
+      "wells": [[10, 37]]
+    },
+    {
+      "name": "île",
+      "hq": [29, 59],
+      "minerals": [[35, 61], [36, 62], [36, 63], [36, 64], [35, 65], [34, 66], [33, 67]],
+      "wells": [[27, 65]]
+    },
+    {
+      "name": "nord",
+      "hq": [54, 7],
+      "minerals": [[52, 3], [53, 3], [54, 3], [55, 3], [56, 3], [57, 3], [58, 3]],
+      "wells": [[61, 5]]
+    }
+  ]
+}

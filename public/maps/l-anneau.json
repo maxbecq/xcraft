@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "id": "l-anneau",
+  "name": "L'Anneau",
+  "description": "Un grand gouffre au centre : deux routes en font le tour, chacune surplombée par une base ; la naturelle a deux sorties.",
+  "size": 96,
+  "players": [2],
+  "symmetry": "rot180",
+  "terrain": [
+    { "shape": "octagon", "at": [20, 20], "half": 16, "cut": 9, "ragged": 1, "level": 1 },
+    { "shape": "octagon", "at": [12, 12], "half": 9, "cut": 5, "ragged": 2, "level": 2 },
+    { "shape": "octagon", "at": [47, 13], "half": 7, "cut": 3, "ragged": 3, "level": 1 },
+    { "shape": "circle", "at": [47.5, 47.5], "r": 18, "chasm": true },
+    { "shape": "ramp", "at": [22, 11], "up": "W", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [18, 37], "up": "N", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [37, 24], "up": "W", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [47, 21], "up": "N", "width": 3, "level": 0 }
+  ],
+  "bases": [
+    {
+      "name": "principale",
+      "start": true,
+      "hq": [10, 10],
+      "minerals": [[6, 7], [6, 8], [6, 9], [6, 10], [6, 11], [6, 12], [6, 13], [8, 5], [9, 5], [10, 5], [11, 5]],
+      "wells": [[15, 5]]
+    },
+    {
+      "name": "naturelle",
+      "hq": [24, 24],
+      "minerals": [[22, 32], [23, 33], [24, 32], [25, 33], [26, 32], [27, 33], [28, 32]],
+      "wells": [[31, 27]]
+    },
+    {
+      "name": "marche",
+      "hq": [45, 10],
+      "minerals": [[42, 8], [42, 9], [42, 10], [42, 11], [42, 12], [42, 13], [42, 14], [42, 15]],
+      "wells": [[51, 13]]
+    },
+    {
+      "name": "coin",
+      "hq": [80, 10],
+      "minerals": [[88, 7], [88, 8], [88, 9], [88, 10], [88, 11], [88, 12], [88, 13]],
+      "wells": [[80, 4]]
+    }
+  ]
+}

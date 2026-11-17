@@ -38,7 +38,7 @@ const noise = (x: number, z: number, scale: number, seed: number) => fbm((x / sc
 
 /** Colour of a tile for the minimap. */
 export function tileColor(map: GameMap, x: number, y: number): Color {
-  if (map.chasm?.[y * map.width + x]) return new Color(0x050409);
+  if (map.chasm?.[y * map.width + x]) return B.chasm.floor.clone().lerp(new Color(0), B.chasm.glossy ? 0 : 0.4);
   const t = tileAt(map, x, y)!;
   const c = B.levels[t.level].clone();
   if (t.ramp) c.lerp(B.levels[t.level + 1], 0.5);
@@ -74,7 +74,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   const up = new Vector3(0, 1, 0);
 
   // Ground vertices: tinted by level and noise, darkened along cliff edges, gently bumped away from them.
-  const levelAt = (x: number, y: number) => tileAt(map, Math.min(map.width - 1, Math.max(0, x)), Math.min(map.height - 1, Math.max(0, y)))!.level;
+  const levelAt = (x: number, y: number) => drawnLevel(map, Math.min(map.width - 1, Math.max(0, x)), Math.min(map.height - 1, Math.max(0, y)));
   const around = (vx: number, vz: number) => [levelAt(vx, vz), levelAt(vx - 1, vz), levelAt(vx, vz - 1), levelAt(vx - 1, vz - 1)];
   const groundVertex = (vx: number, h: number, vz: number, level: number): [Vector3, Color] => {
     const ls = around(vx, vz);
@@ -93,9 +93,25 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   };
 
   const chasm = (x: number, y: number) => !!map.chasm?.[y * map.width + x];
+  // Natural chasms have a floor far below (city ones open onto the lower city).
+  const pit = B.style !== 'city';
+  const floorY = -B.chasm.depth * LEVEL_HEIGHT;
+  const floor = new Builder();
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      if (chasm(x, y)) continue; // open onto the void
+      if (chasm(x, y)) {
+        if (!pit) continue; // open onto the void
+        const v = CORNER_POS.map(([cx, cy]): [Vector3, Color] => {
+          const n = noise(x + cx, y + cy, 4, 61);
+          // Ice: drifts of snow and darker clear patches; rock: dark scree.
+          const c = B.chasm.glossy
+            ? B.chasm.floor.clone().lerp(new Color(0xf4f8fc), Math.max(0, noise(x + cx, y + cy, 7, 67) - 0.45) * 1.6).multiplyScalar(0.8 + n * 0.35)
+            : B.chasm.floor.clone().multiplyScalar(0.6 + n * 0.8);
+          return [new Vector3(x + cx, floorY + (B.chasm.glossy ? 0 : (n - 0.5) * 0.5), y + cy), c];
+        });
+        floor.quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
+        continue;
+      }
       const t = tileAt(map, x, y)!;
       const h = cornerHeights(map, x, y);
       const cut = cutCorner(map, x, y);
@@ -123,16 +139,16 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   // Straight cliff walls along tile edges, from each tile down to any lower neighbour (or off the map).
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      if (chasm(x, y)) continue;
+      if (chasm(x, y) && !pit) continue;
       for (let e = 0; e < 4; e++) {
         const { dx, dy, c } = EDGES[e];
-        const [ta, tb] = drawnEdge(map, x, y, e);
+        const [ta, tb] = chasm(x, y) ? [floorY, floorY] : drawnEdge(map, x, y, e);
         let ba: number;
         let bb: number;
-        // A chasm: only the deck's slab edge; the parking levels below are drawn by cityUnderdeck.
-        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = [-DECK_SLAB, -DECK_SLAB];
+        // A chasm: down to its floor, or (city) only the deck's slab edge; the parking levels below are drawn by cityUnderdeck.
+        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = pit ? [floorY, floorY] : [-DECK_SLAB, -DECK_SLAB];
         else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
-        else [ba, bb] = [-2.5, -2.5]; // skirt around the map
+        else [ba, bb] = [Math.min(ta, tb) - 2.5, Math.min(ta, tb) - 2.5]; // skirt around the map
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
         const p0 = new Vector2(x + CORNER_POS[c[0]][0], y + CORNER_POS[c[0]][1]);
         const p1 = new Vector2(x + CORNER_POS[c[1]][0], y + CORNER_POS[c[1]][1]);
@@ -160,10 +176,22 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   cliffMesh.castShadow = true;
   const g = new Group();
   g.add(groundMesh, cliffMesh);
+  if (pit && map.chasm) {
+    const { glow, glossy } = B.chasm;
+    const floorMat = new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
+    const floorMesh = floor.mesh(floorMat);
+    floorMesh.receiveShadow = true;
+    g.add(floorMesh);
+  }
   return g;
 }
 
 let leanMap: GameMap;
+
+/** A tile's level as drawn: a natural chasm counts as its floor, far below, so its rim and walls lean like a cliff's. */
+function drawnLevel(map: GameMap, x: number, y: number): number {
+  return B.style !== 'city' && map.chasm?.[y * map.width + x] ? -B.chasm.depth : tileAt(map, x, y)!.level;
+}
 
 /**
  * How far a cliff-top corner moves (outwards mostly, along the downhill direction): the ground's rim and the
@@ -178,7 +206,7 @@ function rimShift(vx: number, vz: number): Vector2 {
 /** Downhill direction at a grid vertex, from the levels of the four tiles around it: where cliffs lean. */
 function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
   const m = leanMap;
-  const lv = (x: number, y: number) => tileAt(m, Math.min(m.width - 1, Math.max(0, x)), Math.min(m.height - 1, Math.max(0, y)))!.level;
+  const lv = (x: number, y: number) => drawnLevel(m, Math.min(m.width - 1, Math.max(0, x)), Math.min(m.height - 1, Math.max(0, y)));
   const tiles: [number, number][] = [[vx - 1, vz - 1], [vx, vz - 1], [vx, vz], [vx - 1, vz]];
   const top = Math.max(...tiles.map(([x, y]) => lv(x, y)));
   const d = new Vector2();

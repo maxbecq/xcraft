@@ -14,6 +14,8 @@ import { EntityRenderer, MINERAL_VARIANTS, TEAM_COLORS, loadModels } from './ren
 import { type BuildingDef, DEFS, FACTIONS, type Faction } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
+import { DEFAULT_MAP, MAPS, mapFile } from './maps';
+import { mapCards, seatsOf } from './mappicker';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY, QUALITY_NAMES } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
@@ -75,6 +77,8 @@ const stored = (k: string) => {
   }
 };
 const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' ? v : 'humains');
+/** The map: a replay's, else from the URL, else the last one picked. */
+const MAP = mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
 /** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
 interface Slot {
   control: string;
@@ -97,9 +101,10 @@ const slots: Slot[] = REPLAY
         { control: NET_ROLE ? 'net' : (params.get(SPECTATE ? 'ai1' : 'ai') ?? 'normal'), faction: asFaction(params.get('adversaire') ?? stored('xcraft.adversaire')), team: 1 },
       ];
 if (slots.length < 2) slots.push({ control: 'normal', faction: 'humains', team: 1 });
+slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the map has starts
 const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction] = factions;
-const world = createMatch(factions, slots.map((s) => s.team), biome.style === 'city');
+const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
 // Title screen: a still scene, not a running match (no simulation, no AI, so no fights and no sound).
 if (ATTRACT) stageAttract(world);
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
@@ -114,7 +119,7 @@ const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.cont
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
-const record: Replay = { v: 1, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+const record: Replay = { v: 1, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
 const replayed = new Map(REPLAY?.ticks ?? []);
 // A game left before its end is kept too.
 window.addEventListener('pagehide', () => {
@@ -161,8 +166,8 @@ function showNet(status: string, detail?: string): void {
   }
   netBanner.hidden = false;
   if (status === 'waiting' && PLAYER === 0) {
-    const code = matchCode(ROOM, [factions[0], factions[1]], biome.id);
-    const link = `${location.origin}${location.pathname}?net=join&room=${ROOM}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}`;
+    const code = matchCode(ROOM, [factions[0], factions[1]], biome.id, Object.keys(MAPS).indexOf(MAP.id));
+    const link = `${location.origin}${location.pathname}?net=join&room=${ROOM}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}&map=${MAP.id}`;
     netBanner.innerHTML = `<h2>En attente de votre adversaire</h2>
       <p>Donnez-lui ce code (menu « Rejoindre une partie ») :</p><div class="net-code">${code}</div>
       <p>ou ce lien :</p><input class="net-link" readonly value="${link}"><button data-n="copy">Copier le lien</button>
@@ -178,7 +183,7 @@ netBanner.addEventListener('click', (e) => {
     navigator.clipboard?.writeText(field.value).catch(() => document.execCommand('copy'));
   } else if (n === 'quit') {
     net?.close();
-    location.search = `?biome=${biome.id}`;
+    location.search = `?biome=${biome.id}&map=${MAP.id}`;
   }
 });
 if (net) showNet('waiting');
@@ -405,7 +410,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'replay') downloadReplay(record);
   else if (p === 'quit' || p === 'restart') {
     net?.close();
-    location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}`;
+    location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`;
   }
 });
 // Captured first: while paused, game hotkeys do nothing; F1, F10 and Escape close the menu.
@@ -445,6 +450,8 @@ interface Setup {
   /** Four seats; `control` 'none' leaves a seat empty (the third and fourth by default). */
   sides: { faction: Faction; control: string; team: number }[];
   biome: string;
+  /** Map id (public/maps/). */
+  map: string;
   speed: number;
 }
 const CONTROLS: Record<string, string> = { none: 'Fermé', you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile', online: 'Ami en ligne' };
@@ -458,6 +465,7 @@ function readSetup(): Setup {
       { faction: 'isdaris', control: 'none', team: 3 },
     ],
     biome: biome.id,
+    map: MAP.id,
     speed: 2,
   };
   try {
@@ -466,6 +474,7 @@ function readSetup(): Setup {
       // Older saves had two seats and no teams.
       const old = s.sides;
       s.sides = [0, 1, 2, 3].map((i) => ({ ...fallback.sides[i], ...old[i], team: old[i]?.team ?? i }));
+      if (!MAPS[s.map]) s.map = fallback.map;
       return s;
     }
   } catch {
@@ -605,9 +614,12 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     </div>`;
   };
   const watching = s.sides[0].control !== 'you';
+  const chosen = mapFile(s.map);
   menu.className = 'menu setup';
   menu.innerHTML = `<h2>Nouvelle partie</h2>
-    <fieldset class="seats"><legend>Joueurs</legend>${row(0)}${row(1)}${row(2)}${row(3)}</fieldset>
+    <fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
+    <p class="map-about">${chosen.description ?? ''}</p>
+    <fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}</fieldset>
     <fieldset class="options"><legend>Partie</legend>
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
@@ -629,8 +641,14 @@ function showSetup(menu: HTMLElement, s: Setup): void {
     showSetup(menu, s);
   };
   menu.onclick = (e) => {
-    const m = (e.target as HTMLElement).closest('button')?.dataset.m;
-    if (m === 'back') showHome();
+    const button = (e.target as HTMLElement).closest('button');
+    const m = button?.dataset.m;
+    if (button?.dataset.map) {
+      s.map = button.dataset.map;
+      // Seats the map has no start for close.
+      for (let i = seatsOf(mapFile(s.map)); i < 4; i++) s.sides[i].control = 'none';
+      showSetup(menu, s);
+    } else if (m === 'back') showHome();
     else if (m === 'go') launch(s);
   };
 }
@@ -646,13 +664,13 @@ function showJoin(menu: HTMLElement): void {
   const error = menu.querySelector<HTMLElement>('.net-error')!;
   field.focus();
   const go = () => {
-    const c = readCode(field.value, Object.keys(BIOMES));
+    const c = readCode(field.value, Object.keys(BIOMES), Object.keys(MAPS));
     if (!c) {
       error.hidden = false;
       error.textContent = 'Code invalide : il ressemble à K7QX-HIL.';
       return;
     }
-    location.search = `?net=join&room=${c.room}&camp=${c.factions[0]}&adversaire=${c.factions[1]}&biome=${c.biome}`;
+    location.search = `?net=join&room=${c.room}&camp=${c.factions[0]}&adversaire=${c.factions[1]}&biome=${c.biome}&map=${c.map}`;
   };
   field.onkeydown = (e) => {
     e.stopPropagation();
@@ -672,10 +690,11 @@ function launch(s: Setup): void {
     localStorage.setItem('xcraft.camp', a.faction);
     localStorage.setItem('xcraft.adversaire', b.faction);
     localStorage.setItem('xcraft.biome', s.biome);
+    localStorage.setItem('xcraft.map', s.map);
   } catch {
     // the URL carries it all
   }
-  const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}`;
+  const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
   const seated = s.sides.filter((x) => x.control !== 'none');
   // With two players, each is its own team whatever was picked; with more, teams as chosen.
   const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);
@@ -803,6 +822,8 @@ function start(): void {
 /** A game as the commands the simulation took, tick by tick; replaying them rebuilds it exactly. */
 interface Replay {
   v: 1;
+  /** Map id; missing in replays from before map files (the original map). */
+  map?: string;
   factions: Faction[];
   /** Each player's team; missing in replays from before teams (everyone alone). */
   teams?: number[];

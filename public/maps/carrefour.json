@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "id": "carrefour",
+  "name": "Carrefour",
+  "description": "Quatre coins ; une base au milieu de chaque bord, entre deux voisins ; une base riche au centre, sur un plateau à quatre rampes.",
+  "size": 111,
+  "players": [2, 3, 4],
+  "symmetry": "rot90",
+  "terrain": [
+    { "shape": "octagon", "at": [17, 21], "half": 14, "cut": 7, "level": 1 },
+    { "shape": "octagon", "at": [14, 14], "half": 11, "cut": 6, "ragged": 2, "level": 2 },
+    { "shape": "octagon", "at": [55, 55], "half": 11, "cut": 5, "level": 1 },
+    { "shape": "octagon", "at": [36, 36], "half": 5, "cut": 2, "level": 2 },
+    { "shape": "ramp", "at": [26, 13], "up": "W", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [13, 33], "up": "N", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [32, 22], "up": "W", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [54, 43], "up": "S", "width": 3, "level": 0 }
+  ],
+  "bases": [
+    {
+      "name": "principale",
+      "start": true,
+      "hq": [12, 12],
+      "minerals": [[7, 9], [7, 10], [7, 11], [7, 12], [8, 8], [9, 7], [10, 7], [11, 7]],
+      "wells": [[17, 6]]
+    },
+    {
+      "name": "naturelle",
+      "hq": [21, 26],
+      "minerals": [[19, 33], [20, 32], [21, 33], [22, 32], [23, 33], [24, 32], [25, 33]],
+      "wells": [[28, 26]]
+    },
+    {
+      "name": "bord",
+      "hq": [53, 9],
+      "minerals": [[52, 5], [53, 5], [54, 5], [55, 5], [56, 5], [57, 5], [58, 5]],
+      "wells": [[48, 8], [60, 8]]
+    },
+    {
+      "name": "centre",
+      "hq": [53, 53],
+      "minerals": [[48, 53], [48, 51], [49, 49], [51, 48], [53, 48]],
+      "wells": []
+    }
+  ]
+}

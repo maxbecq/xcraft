@@ -1,7 +1,7 @@
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
-import { expansion } from '../sim/setup';
+import { expansions } from '../sim/setup';
 import { type Command, type Entity, type World, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -36,6 +36,9 @@ const EXTRA = BALANCE.ai.extra as unknown as Record<string, [string, number][]>;
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
 /** What the easy and hard AIs do differently (see the AI constructor). */
 const LEVELS = BALANCE.ai.levels;
+/** Bases an AI holds at most, and minutes between its expansions after the natural (maps with more bases). */
+const MAX_BASES = 4;
+const EXPAND_EVERY = 5;
 /** Each team's target base, shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
@@ -168,9 +171,12 @@ export class AI {
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
     const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
-    // Expand to the natural once the main is running.
+    // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
+    // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
-    const expand = councils < 2 && serfs.length >= this.plan.serfs && (w.tick > ticks((this.hard ? LEVELS.hard.expandMinute : 7) * 60) || this.fieldsLeft(home) < 5);
+    const firstAt = this.hard ? LEVELS.hard.expandMinute : 7;
+    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    const expand = councils < MAX_BASES && serfs.length >= this.plan.serfs && due && !!this.spot(f.hq, home);
     if (expand) wants.push(f.hq);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
@@ -192,7 +198,7 @@ export class AI {
 
     // Serfs, then soldiers.
     const free = supply.max - supply.used;
-    const serfTarget = this.plan.serfs * Math.min(2, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
+    const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
     const councilHome = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     if (serfs.length < serfTarget && councilHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply)) {
       out.push({ player: this.player, kind: 'train', ids: [councilHome.id], type: f.worker });
@@ -669,10 +675,7 @@ export class AI {
       }
       return best ? [best.tx, best.ty] : null;
     }
-    if (type === this.faction.hq) {
-      const [tx, ty] = expansion(w, this.player);
-      return w.canPlace(type, tx, ty, this.player) ? [tx, ty] : null;
-    }
+    if (type === this.faction.hq) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player)) ?? null;
     const cx = Math.floor((near ?? home).x / FP);
     const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.
@@ -731,6 +734,12 @@ export class AI {
       if ((e.type === 'minerai' || e.type === 'puits') && dist(cx, cy, e.x, e.y) < (size / 2 + 3) * FP) return true;
     }
     return false;
+  }
+
+  /** Mineral fields left within reach of any of our finished headquarters. */
+  private fieldsNear(buildings: Entity[]): number {
+    const hqs = buildings.filter((b) => b.type === this.faction.hq && b.buildLeft === 0);
+    return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP)).length;
   }
 
   /** Mineral fields left within reach of the council. */

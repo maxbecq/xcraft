@@ -33,6 +33,11 @@ export interface Biome {
   greyStones?: boolean;
   /** Built world instead of natural ground ('city': metal decks, wall cladding, neon, a void below). */
   style?: 'city';
+  /**
+   * Chasms on natural ground (the city has its own void): how deep the floor lies, in levels; its colour; a glow
+   * from below (or none); and a smooth, glossy floor (ice).
+   */
+  chasm: { depth: number; floor: Color; glow?: Color; glossy?: boolean };
 }
 
 export const BIOMES: Record<string, Biome> = {
@@ -51,6 +56,8 @@ export const BIOMES: Record<string, Biome> = {
     background: 0x0d0f12,
     exposure: 1.05,
     decorTint: new Color(1, 1, 1),
+    // A crevasse: sheer rock down into the dark.
+    chasm: { depth: 6, floor: new Color(0x2a1d14) },
   },
   // The desert's shapes under a black sky: grey regolith, dark maria, a hard white sun.
   lune: {
@@ -70,6 +77,8 @@ export const BIOMES: Record<string, Biome> = {
     decorTint: new Color(0.8, 0.82, 0.88),
     dunes: 1.0,
     greyStones: true,
+    // A rille: a deep trench of black regolith.
+    chasm: { depth: 6, floor: new Color(0x141518) },
   },
   alien: {
     id: 'alien',
@@ -86,6 +95,8 @@ export const BIOMES: Record<string, Biome> = {
     background: 0x07040e,
     exposure: 1.1,
     decorTint: new Color(0.55, 0.5, 0.75),
+    // A rift: a dark trench, a faint sheen of the cracks' colour at the bottom.
+    chasm: { depth: 6, floor: new Color(0x10302e) },
   },
   // Frozen world: blue-white ice, snow drifts for dunes, pale light in the cracks.
   glace: {
@@ -105,6 +116,8 @@ export const BIOMES: Record<string, Biome> = {
     decorTint: new Color(0.82, 0.92, 1.05),
     dunes: 0.6,
     greyStones: true,
+    // A glacier in a hollow: a smooth sheet of blue ice a level and a half down.
+    chasm: { depth: 1.6, floor: new Color(0x6aa2c8), glow: new Color(0x1c5a8a), glossy: true },
   },
   // An abandoned megacity: decks of riveted plates over a void, neon in the seams, rain-dark steel.
   ville: {
@@ -123,6 +136,7 @@ export const BIOMES: Record<string, Biome> = {
     exposure: 1.15,
     decorTint: new Color(0.7, 0.72, 0.8),
     style: 'city',
+    chasm: { depth: 6, floor: new Color(0x050409) }, // unused: the lower city fills the void (cityUnderdeck)
   },
 };
 
