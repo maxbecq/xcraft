@@ -430,46 +430,56 @@ function showHome(): void {
   };
 }
 
-/** The match setup screen: picks are toggled in place, then the match loads from the URL. */
+/** The match setup screen: one row per player (on/off switch, dropdowns), then the planet; the match loads from the URL. */
 function showSetup(menu: HTMLElement, s: Setup): void {
-  const pick = (key: string, options: Record<string, string>, now: string) =>
-    `<div class="pick">${Object.entries(options)
-      .map(([v, label]) => `<button data-k="${key}" data-v="${v}"${v === now ? ' class="on"' : ''}>${label}</button>`)
-      .join('')}</div>`;
+  const select = (key: string, options: Record<string, string>, now: string) =>
+    `<select data-k="${key}">${Object.entries(options)
+      .map(([v, label]) => `<option value="${v}"${v === now ? ' selected' : ''}>${label}</option>`)
+      .join('')}</select>`;
   const factions = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
-  const seated = s.sides.filter((x) => x.control !== 'none').length;
-  const side = (i: number) => {
+  const teams = { 0: 'Équipe 1', 1: 'Équipe 2', 2: 'Équipe 3', 3: 'Équipe 4' };
+  const row = (i: number) => {
     const controls: Record<string, string> = { ...CONTROLS };
+    delete controls.none; // closing a seat is the switch's job
     if (i > 0) delete controls.you; // the local player is always the first side
-    if (i < 2) delete controls.none; // at least two players
     // A friend online plays the second side, one against one only (for now).
     if (i !== 1 || s.sides[0].control !== 'you' || s.sides[2].control !== 'none' || s.sides[3].control !== 'none') delete controls.online;
     const color = `#${TEAM_COLORS[i].toString(16).padStart(6, '0')}`;
     const open = s.sides[i].control !== 'none';
-    const teams = seated > 2 && open ? pick(`t${i}`, { 0: 'Équipe 1', 1: 'Équipe 2', 2: 'Équipe 3', 3: 'Équipe 4' }, String(s.sides[i].team)) : '';
-    return `<fieldset><legend style="color:${color}">Joueur ${i + 1}</legend>${open ? pick(`f${i}`, factions, s.sides[i].faction) : ''}${pick(`c${i}`, controls, s.sides[i].control)}${teams}</fieldset>`;
+    // The first two seats are always taken; the others have an on/off switch.
+    const toggle = i < 2 ? '<span class="seat-fixed"></span>' : `<label class="switch"><input type="checkbox" data-k="on${i}"${open ? ' checked' : ''}><span></span></label>`;
+    return `<div class="seat${open ? '' : ' off'}">
+      <span class="chip" style="background:${color}"></span><span class="who">Joueur ${i + 1}</span>${toggle}
+      ${open ? `${select(`f${i}`, factions, s.sides[i].faction)}${select(`c${i}`, controls, s.sides[i].control)}${select(`t${i}`, teams, String(s.sides[i].team))}` : '<span class="closed">Emplacement fermé</span>'}
+    </div>`;
   };
   const watching = s.sides[0].control !== 'you';
   menu.className = 'menu setup';
   menu.innerHTML = `<h2>Nouvelle partie</h2>
-    ${side(0)}${side(1)}${side(2)}${side(3)}
-    <fieldset><legend>Planète</legend>${pick('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</fieldset>
-    ${watching ? `<fieldset><legend>Vitesse</legend>${pick('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</fieldset>` : ''}
+    <fieldset class="seats"><legend>Joueurs</legend>${row(0)}${row(1)}${row(2)}${row(3)}</fieldset>
+    <fieldset class="options"><legend>Partie</legend>
+      <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
+      ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
+    </fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
+  menu.onchange = (e) => {
+    const el = e.target as HTMLSelectElement | HTMLInputElement;
+    const k = el.dataset.k;
+    if (!k) return;
+    const v = el.value;
+    if (k === 'biome') s.biome = v;
+    else if (k === 'speed') s.speed = Number(v);
+    else if (k.startsWith('on')) s.sides[Number(k[2])].control = (el as HTMLInputElement).checked ? 'normal' : 'none';
+    else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
+    else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
+    else s.sides[Number(k[1])].control = v;
+    const crowd = s.sides[2].control !== 'none' || s.sides[3].control !== 'none';
+    if ((s.sides[0].control !== 'you' || crowd) && s.sides[1].control === 'online') s.sides[1].control = 'normal';
+    showSetup(menu, s);
+  };
   menu.onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button');
-    if (!b) return;
-    const { k, v, m } = b.dataset;
-    if (k && v) {
-      if (k === 'biome') s.biome = v;
-      else if (k === 'speed') s.speed = Number(v);
-      else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
-      else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
-      else s.sides[Number(k[1])].control = v;
-      const crowd = s.sides[2].control !== 'none' || s.sides[3].control !== 'none';
-      if ((s.sides[0].control !== 'you' || crowd) && s.sides[1].control === 'online') s.sides[1].control = 'normal';
-      showSetup(menu, s);
-    } else if (m === 'back') showHome();
+    const m = (e.target as HTMLElement).closest('button')?.dataset.m;
+    if (m === 'back') showHome();
     else if (m === 'go') launch(s);
   };
 }

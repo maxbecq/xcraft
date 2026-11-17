@@ -426,6 +426,27 @@ body.spectate .hud-card { visibility: hidden; }
 .menu .pick button:last-child { border-radius: 0 4px 4px 0; }
 .menu .pick button.on { opacity: 1; border-color: var(--amber); color: var(--amber); }
 .menu .row button.go { min-width: 200px; border-color: var(--amber); }
+.menu .seats { flex-direction: column; align-items: stretch; gap: 6px; }
+.menu .seat { display: grid; grid-template-columns: 16px 86px 44px 1fr 1fr 1fr; align-items: center; gap: 8px; }
+.menu .seat.off .who { opacity: 0.5; }
+.menu .seat .chip { width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px currentColor; }
+.menu .seat .who { font: 600 15px var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: #c9b896; }
+.menu .seat .closed { grid-column: span 3; font-size: 14px; opacity: 0.5; font-style: italic; }
+.menu select { width: 100%; padding: 6px 8px; font: 15px var(--ui); color: var(--ink); background: rgba(10, 14, 22, 0.85); border: 1px solid rgba(217, 164, 32, 0.45); border-radius: 4px; }
+.menu select:focus { outline: 1px solid var(--amber); }
+.menu .options { gap: 18px; align-items: center; }
+.menu .options label { display: flex; align-items: center; gap: 8px; font: 15px var(--ui); color: #c9b896; }
+.menu .options select { width: auto; min-width: 180px; }
+.menu .switch { position: relative; width: 40px; height: 22px; }
+.menu .switch input { opacity: 0; width: 0; height: 0; }
+.menu .switch span { position: absolute; inset: 0; border-radius: 11px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(217, 164, 32, 0.45); cursor: pointer; transition: background 0.15s; }
+.menu .switch span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #c9b896; transition: transform 0.15s; }
+.menu .switch input:checked + span { background: rgba(217, 164, 32, 0.5); }
+.menu .switch input:checked + span::after { transform: translateX(18px); background: var(--amber); }
+@media (max-width: 600px) {
+  .menu .seat { grid-template-columns: 14px 1fr 44px; }
+  .menu .seat select, .menu .seat .closed { grid-column: span 3; }
+}
 @media (max-width: 820px), (max-height: 600px) {
   .menu.setup { gap: 6px; overflow: auto; place-content: start center; padding: 12px 0; }
   .menu.setup h2 { font-size: 32px; }
