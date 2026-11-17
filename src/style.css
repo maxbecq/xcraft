@@ -722,5 +722,6 @@ body .hud-toast.gone { animation: toast-out 0.3s ease-in forwards; }
   .tools { flex-wrap: wrap; width: 96px; row-gap: 4px; }
   .tools .groups { flex: none; }
 }
-/* The menu button's three bars, drawn (the ≡ character is a hairline in the factions' lettering). */
+/* The menu's three bars and the army's crossed swords, drawn (≡ and ⚔ are hairlines in the factions' lettering). */
 .tool .burger { width: 0.85em; height: 0.7em; vertical-align: -0.05em; }
+.tool .swords { width: 0.85em; height: 0.85em; vertical-align: -0.1em; }
