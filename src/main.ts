@@ -274,10 +274,23 @@ const edgeGlow = document.createElement('div');
 edgeGlow.className = 'edge-glow';
 document.body.append(edgeGlow);
 let edgeShown = '';
+/** When the pointer entered an edge band (scrolling waits a moment, so crossing the band to a button does not scroll). */
+let edgeSince = 0;
+/** A pointer settled in a band this long starts scrolling; touching the screen's very edge scrolls at once. */
+const EDGE_DWELL_MS = 200;
+const EDGE_TOUCH_PX = 3;
+/** No edge scrolling this close to a button of the interface: the corners holding buttons stay calm. */
+const UI_CALM_PX = 40;
+const nearButton = (x: number, y: number) =>
+  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip')].some((b) => {
+    const r = b.getBoundingClientRect();
+    return r.width > 0 && x > r.left - UI_CALM_PX && x < r.right + UI_CALM_PX && y > r.top - UI_CALM_PX && y < r.bottom + UI_CALM_PX;
+  });
 function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
   let edge = '';
+  if (!mouse) edgeSince = 0;
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
     // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
     // screen's edge (eased, so the inner half stays slow and easy to control).
@@ -294,6 +307,12 @@ function scrollDirection(): [number, number] {
     if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
     // The glow along the edge brightens with the speed.
     edgeGlow.style.opacity = String(0.35 + 0.65 * Math.max(Math.abs(ex), Math.abs(ey)));
+    // Crossing the band on the way to a button, or near one: no scrolling.
+    const inBand = !!(ex || ey);
+    if (!inBand) edgeSince = 0;
+    else if (!edgeSince) edgeSince = performance.now();
+    const touching = mouse.x <= EDGE_TOUCH_PX || mouse.y <= EDGE_TOUCH_PX || mouse.x >= window.innerWidth - 1 - EDGE_TOUCH_PX;
+    if (inBand && (nearButton(mouse.x, mouse.y) || (!touching && performance.now() - edgeSince < EDGE_DWELL_MS))) ex = ey = 0;
     if (ex) dx = ex;
     if (ey) dy = ey;
     edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
