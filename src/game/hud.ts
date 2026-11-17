@@ -359,12 +359,13 @@ export class Hud {
     }
     if (e.def.kind === 'building') {
       const def = e.def as BuildingDef;
+      // Construction or production: a block of its own, set beside the rest on wide screens.
       if (e.buildLeft > 0) {
-        html += progress('Construction', 1 - e.buildLeft / ticks(def.buildTime));
+        html += `<div class="prod">${progress('Construction', 1 - e.buildLeft / ticks(def.buildTime))}</div>`;
       } else if (e.queue.length) {
         const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
-        html += progress(first.name, 1 - e.trainLeft / ticks(first.buildTime));
-        html += `<div class="queue">${e.queue.map((t) => `<span>${img(t, DEFS[t].name)}</span>`).join('')}</div>`;
+        html += `<div class="prod">${progress(first.name, 1 - e.trainLeft / ticks(first.buildTime))}`;
+        html += `<div class="queue">${e.queue.map((t) => `<span>${img(t, DEFS[t].name)}</span>`).join('')}</div></div>`;
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;

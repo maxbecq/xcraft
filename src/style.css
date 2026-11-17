@@ -752,6 +752,13 @@ body.humains { --trim-top: -34px; }
   .console::after { left: var(--wl); right: var(--wr); translate: 0 var(--notch); }
   .console > .hud-panel { margin-top: var(--notch); }
   .hud-panel .portrait { width: 92px; height: 92px; } /* fits the lowered panel */
+  /* Production fills the panel's empty right half instead of falling below its bottom edge. */
+  .hud-panel .details { position: relative; }
+  .hud-panel .details:has(> .prod) > :not(.prod) { margin-right: calc(min(46%, 440px) + 20px); }
+  .hud-panel .details > .prod { position: absolute; top: 0; right: 0; width: min(46%, 440px); }
+  .hud-panel .prod .info { margin-top: 0; }
+  .hud-panel .prod .bar { max-width: none; }
+  .hud-panel .prod .queue span:first-child { border-color: var(--amber); box-shadow: 0 0 6px var(--amber); }
   .tools { top: auto; left: calc(var(--wl) + 10px); bottom: calc(196px - var(--notch) - var(--trim-top) + 4px); }
   .tools .tool[data-t="menu"] { position: fixed; top: 8px; left: 12px; }
 }

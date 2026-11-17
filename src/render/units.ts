@@ -1039,19 +1039,58 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   };
 }
 
-/** Rally point marker: a pole with a green pennant, its cloth hinged on the pole. */
+const RALLY = 0x4dff6a;
+/**
+ * Rally point marker: a beacon planted in the ground. A dark steel spike on a hexagonal foot, two collars, a
+ * lamp on top that blinks twice a second, a holographic chevron turning round the mast, a faint beam and a
+ * ring of light spreading on the ground. Animated by `animateRally`.
+ */
 function rallyFlag(): Group {
   const flag = new Group();
-  const pole = new Mesh(new CylinderGeometry(0.03, 0.04, 1.5, 6), new MeshBasicMaterial({ color: 0x5a4630 }));
-  pole.position.y = 0.75;
-  const cloth = new Group();
-  cloth.position.y = 1.28;
-  const pennant = new Mesh(new BoxGeometry(0.6, 0.38, 0.02), new MeshBasicMaterial({ color: 0x4dff6a }));
-  pennant.position.x = 0.3;
-  cloth.add(pennant);
-  flag.add(pole, cloth);
+  const steel = new MeshStandardMaterial({ color: 0x2c333c, metalness: 0.75, roughness: 0.35 });
+  const glow = (opacity: number) => new MeshBasicMaterial({ color: RALLY, transparent: true, opacity, blending: AdditiveBlending, depthWrite: false, side: DoubleSide });
+  const foot = new Mesh(new CylinderGeometry(0.2, 0.26, 0.1, 6), steel);
+  foot.position.y = 0.05;
+  const mast = new Mesh(new CylinderGeometry(0.022, 0.05, 1.25, 6), steel);
+  mast.position.y = 0.72;
+  const collars = [0.42, 1.12].map((y) => {
+    const c = new Mesh(new CylinderGeometry(0.075, 0.075, 0.05, 8), new MeshBasicMaterial({ color: RALLY }));
+    c.position.y = y;
+    return c;
+  });
+  const lamp = new Mesh(new SphereGeometry(0.09, 10, 8), new MeshBasicMaterial({ color: 0xd8ffe0 }));
+  lamp.position.y = 1.4;
+  const halo = new Mesh(new SphereGeometry(0.26, 12, 10), glow(0.6));
+  halo.position.y = 1.4;
+  const beam = new Mesh(new CylinderGeometry(0.05, 0.13, 1.4, 10, 1, true), glow(0.28));
+  beam.position.y = 0.7;
+  // A chevron of light, hinged on the mast, turning.
+  const chevron = new Group();
+  chevron.position.y = 0.95;
+  const blade = new Mesh(new BufferGeometry().setFromPoints([new Vector3(0.06, 0.16, 0), new Vector3(0.42, 0, 0), new Vector3(0.18, 0, 0), new Vector3(0.18, 0, 0), new Vector3(0.42, 0, 0), new Vector3(0.06, -0.16, 0)]), new MeshBasicMaterial({ color: RALLY, side: DoubleSide }));
+  chevron.add(blade);
+  const ring = new Mesh(new RingGeometry(0.4, 0.52, 40), glow(0.8));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  flag.add(foot, mast, ...collars, beam, lamp, halo, chevron, ring);
+  flag.scale.setScalar(1.35); // reads at a glance among units
+  flag.userData.rally = { lamp, halo, chevron, ring };
   flag.traverse((o) => (o.userData.noPick = true));
   return flag;
+}
+
+/** The beacon's life: the lamp blinks twice a second, the chevron turns, a ring spreads from the foot and fades. */
+function animateRally(flag: Group, now: number, phase: number): void {
+  const { lamp, halo, chevron, ring } = flag.userData.rally as Record<'lamp' | 'halo' | 'chevron' | 'ring', Mesh>;
+  const t = now / 1000 + phase;
+  const blink = t % 1 < 0.08 || (t % 1 > 0.18 && t % 1 < 0.26) ? 1 : 0.25;
+  (lamp.material as MeshBasicMaterial).color.setHex(blink === 1 ? 0xffffff : 0x3d9a4c);
+  (halo.material as MeshBasicMaterial).opacity = 0.7 * blink;
+  halo.scale.setScalar(0.7 + 0.5 * blink);
+  chevron.rotation.y = t * 2.2;
+  const k = (t / 1.4) % 1;
+  ring.scale.setScalar(0.4 + 1.6 * k);
+  (ring.material as MeshBasicMaterial).opacity = 0.85 * (1 - k);
 }
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
@@ -1448,7 +1487,7 @@ export class EntityRenderer {
       const x = points[i].x / FP;
       const z = points[i].y / FP;
       flag.position.set(x, heightAt(this.map, x, z), z);
-      flag.children[1].rotation.y = Math.sin(now / 260 + i) * 0.25; // the cloth flutters
+      animateRally(flag, now, i * 0.37);
     });
   }
 
