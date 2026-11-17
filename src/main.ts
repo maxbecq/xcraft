@@ -294,7 +294,7 @@ function scrollDirection(): [number, number] {
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
     // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
     // screen's edge (eased, so the inner half stays slow and easy to control).
-    const depth = (d: number) => 0.12 + 0.88 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
+    const depth = (d: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
     let ex = mouse.x < EDGE_PX ? -depth(mouse.x) : mouse.x > window.innerWidth - EDGE_PX ? depth(window.innerWidth - mouse.x) : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
@@ -346,7 +346,7 @@ let acc = 0;
 let paused = false;
 /** Edge and arrow-key scrolling, eased: current speed per axis (-1..1), and how fast it changes per second. */
 const scroll = { x: 0, y: 0 };
-const SCROLL_ACCEL = 4;
+const SCROLL_ACCEL = 8;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
@@ -680,7 +680,7 @@ function start(): void {
       const across = Math.sin(t) * 9;
       rig.lookAt(map.width / 2 - (along - across) / Math.SQRT2, map.height / 2 - (along + across) / Math.SQRT2);
     } else {
-      // Eased scrolling: the view speeds up over a quarter second, then glides to a stop (slow, fast, slow).
+      // Eased scrolling: the view speeds up over an eighth of a second, then glides to a stop (slow, fast, slow).
       const step = SCROLL_ACCEL * dt;
       scroll.x += Math.max(-step, Math.min(step, dx - scroll.x));
       scroll.y += Math.max(-step, Math.min(step, dy - scroll.y));

@@ -7,7 +7,7 @@ export const PITCH = (35 * Math.PI) / 180;
 const MIN_VIEW = 12;
 const MAX_VIEW = 40;
 /** Pan speed, in screen heights per second. */
-const PAN_SPEED = 0.9;
+const PAN_SPEED = 1.4;
 
 /** Camera offset from the point it looks at, for a given distance. */
 export function isoOffset(distance: number): Vector3 {
