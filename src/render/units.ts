@@ -1224,6 +1224,9 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
 
 /** How far a ground ring may rise above its unit's feet to clear a ramp or a dune round it (world units). */
 const RING_RISE = 0.35;
+/** Ground this much higher than the owner's feet is a cliff, not a slope: the ring does not climb to it (it would
+ * float in mid-air, as by a building at a cliff's foot); the wall hides the part of the ring behind it. */
+const RING_CLIFF = 0.6;
 
 /** A struck unit shows white this long (s): who is under fire reads at a glance in a melee. */
 const HIT_FLASH = new MeshBasicMaterial({ color: 0xfff2e6 });
@@ -1561,7 +1564,7 @@ export class EntityRenderer {
           thread.scale.y = h;
           (thread.material as MeshBasicMaterial).opacity = 0.45 * (v.ring.userData.core as MeshBasicMaterial).opacity;
           (v.ring.userData.spot as Mesh).position.y = 0.06 - h;
-        } else this.drape(v.ring, x, z, v.root.position.y, e.def.kind === 'building' ? Infinity : RING_RISE);
+        } else this.drape(v.ring, x, z, v.root.position.y);
       }
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
@@ -1879,11 +1882,10 @@ export class EntityRenderer {
 
   /**
    * Lays a ground ring flat at its owner's height, never bent over the relief (by a cliff it would stretch up the
-   * wall). It rises over higher ground round it so it does not sink into it: a unit's a little (up to `rise`, a ramp
-   * or a dune; by a real cliff the wall hides part of it), a building's all the way, so a building by a cliff keeps
-   * its whole ring, drawn above the ground there (units and buildings in front still hide it).
+   * wall). It rises a little, up to RING_RISE, over a gentle rise round it (a ramp, a dune) so it does not sink into
+   * it; a cliff it ignores (RING_CLIFF), so it never floats at the cliff top: the wall hides what is behind it.
    */
-  private drape(ring: Object3D, x: number, z: number, baseY: number, rise: number): void {
+  private drape(ring: Object3D, x: number, z: number, baseY: number): void {
     const k = ring.scale.x;
     const at = `${x.toFixed(2)},${z.toFixed(2)},${k.toFixed(2)}`;
     if (ring.userData.at === at) return;
@@ -1894,9 +1896,10 @@ export class EntityRenderer {
     for (let i = 0; i < 32; i++) {
       const a = (i / 16) * Math.PI * 2; // two rounds: the outer edge, then halfway in
       const d = i < 16 ? r : r * 0.75;
-      top = Math.max(top, heightAt(this.map, x + d * Math.cos(a), z + d * Math.sin(a)) - baseY);
+      const h = heightAt(this.map, x + d * Math.cos(a), z + d * Math.sin(a)) - baseY;
+      if (h <= RING_CLIFF) top = Math.max(top, h); // a cliff beyond: not followed, it hides that bit instead
     }
-    ring.position.y = Math.min(top, rise);
+    ring.position.y = Math.min(top, RING_RISE);
     for (const m of ring.children as Mesh[]) {
       if (m.userData.air || m.userData.flat) continue; // the flyer's thread and ground spot; already flat
       const pos = m.geometry.getAttribute('position');
