@@ -40,10 +40,15 @@ interface Layer {
 
 /** Cursor image from layers: each a soft halo of its colour, a dark outline, then the colour; hotspot in the middle. */
 function cursorOf(...layers: Layer[]): string {
+  return cursorSized(32, ...layers);
+}
+
+/** A cursor drawn on the 32-unit grid and shown `px` pixels wide (browsers take up to 128; 48 shows everywhere we target). */
+function cursorSized(px: number, ...layers: Layer[]): string {
   const draw = ({ color, shape, opacity = 1 }: Layer) =>
     `<g opacity='${opacity.toFixed(2)}'><g stroke='${color}' stroke-width='5' opacity='.45' filter='url(#h)'>${shape}</g><g stroke='#000' stroke-width='3' opacity='.7'>${shape}</g><g stroke='${color}' stroke-width='1.5'>${shape}</g></g>`;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, default`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${px}' height='${px}' viewBox='0 0 32 32'><defs><filter id='h' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur stdDeviation='1.4'/></filter></defs><g fill='none' stroke-linecap='round' stroke-linejoin='round'>${layers.map(draw).join('')}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${px / 2} ${px / 2}, default`;
 }
 
 /** The game's arrow: bronze body, gold edge, its tip on the hotspot. */
@@ -103,11 +108,18 @@ const EDGE_ANGLE: Record<string, number> = { e: 0, se: 45, s: 90, sw: 135, w: 18
 const edgeFrames = (edge: string) =>
   cached(`edge${edge}`, () =>
     Array.from({ length: 6 }, (_, f) =>
-      cursorOf({ color: '#e8b64a', shape: `<g transform='rotate(${EDGE_ANGLE[edge]} 16 16) translate(${(f * 0.9).toFixed(1)} 0)'><path d='M10 9L17 16L10 23'/><path d='M3 11.5L7.5 16L3 20.5' opacity='.55'/></g>` }),
+      cursorSized(48, { color: '#e8b64a', shape: `<g transform='rotate(${EDGE_ANGLE[edge]} 16 16) translate(${(f * 0.9).toFixed(1)} 0)'><path d='M10 9L17 16L10 23'/><path d='M3 11.5L7.5 16L3 20.5' opacity='.55'/></g>` }),
     ),
   );
-/** Dragging the map (right or middle button held): four arrows round a gold hub. */
-const GRAB = cursorOf({ color: '#e8b64a', shape: "<path d='M16 4V28M4 16H28M12.5 7.5L16 4L19.5 7.5M12.5 24.5L16 28L19.5 24.5M7.5 12.5L4 16L7.5 19.5M24.5 12.5L28 16L24.5 19.5'/><circle cx='16' cy='16' r='3' fill='#2b2010'/>" });
+/**
+ * Dragging the map (right or middle button held): four arrows lying on the ground round a ring, in the 2:1
+ * isometric squash of the hover brackets and the attack reticle (half as long front to back as side to side).
+ */
+const GRAB = cursorSized(44, {
+  color: '#e8b64a',
+  shape:
+    "<path d='M21 16H30M27 14.2L30 16L27 17.8M11 16H2M5 14.2L2 16L5 17.8M16 13.6V8.5M12.4 10L16 8.5L19.6 10M16 18.4V23.5M12.4 22L16 23.5L19.6 22'/><ellipse cx='16' cy='16' rx='4.6' ry='2.3'/>",
+});
 /** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
 const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
