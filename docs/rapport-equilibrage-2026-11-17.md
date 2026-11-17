@@ -23,7 +23,7 @@ Ce ne sont pas des stats d'unités, mais ils changent les résultats :
 - L'IA garde une réserve pour ses recherches et utilise les capacités de combat.
 - Les niveaux de difficulté jouent différemment (facile : petites vagues, pas de recherche ; difficile : s'étend plus tôt, concentre le tir). Les mesures se font au niveau normal.
 - Z : un socle à la mitrailleuse lourde resté à la base passe au lance-flammes ou au lance-roquettes une fois recherchés (avant, l'IA ne montait jamais le lance-flammes). Victoires inchangées.
-- Isdaris : l'IA construit enfin le Psycho-assembleur et ses unités (`ai.tech.isdaris` → `{ minute: 8, barracks: 3 }`, `feucirculaire` ajouté aux recherches). Détail dans `BALANCE.md`.
+- Isdaris : l'IA construit enfin le Psycho-assembleur et ses unités (`ai.tech.isdaris` → `{ minute: 12, barracks: 3 }`, `feucirculaire` ajouté aux recherches). Détail dans `BALANCE.md`.
 
 ### 3. Cartes
 
@@ -33,11 +33,11 @@ Quatre nouvelles cartes (Le Col, Les Ponts, Carrefour, L'Anneau), mesurées dans
 
 | Paire | Au matin | Après les stats (§ 1) | Après l'IA Isdaris (§ 2, dernière mesure) |
 |---|---|---|---|
-| Humains – Isdaris | 67 – 31 | 52 – 46 | **65 – 33** |
+| Humains – Isdaris | 67 – 31 | 52 – 46 | 49 – 46 (3 nuls) |
 | Z – Humains | 90 – 8 | 49 – 49 | 49 – 49 (non concerné) |
-| Z – Isdaris | 84 – 14 | 52 – 46 | **71 – 27** |
+| Z – Isdaris | 84 – 14 | 52 – 46 | **60 – 38** |
 
-Depuis que l'IA Isdaris produit ses unités avancées (Porte-disques, Balistes, Chimères), les Isdaris perdent davantage : ces unités semblent trop chères pour leur force. C'est le premier point à régler.
+L'IA Isdaris passe au Psycho-assembleur à la minute 12 : elle produit quelques unités avancées (9 Porte-disques, 3 Balistes sur 196 parties). Plus tôt (minute 8), elle en fait bien plus (53 Porte-disques, 51 Balistes, 19 Chimères) mais perd davantage (65 – 33 contre les Humains, 71 – 27 contre Z) : ces unités semblent trop chères pour leur force. C'est le premier point à régler ; Z – Isdaris reste en défaveur des Isdaris.
 
 ### 5. Questions pour l'équilibreur
 

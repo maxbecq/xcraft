@@ -35,9 +35,9 @@ Retouches provisoires du 17 novembre, d'après [le rapport d'équilibrage](docs/
 - `dronecombat` : `cost.minerals` 75 → 100, `buildTime` 15 → 18 (Z – Isdaris passe de 84 – 14 à 48 – 50 ; Z – Humains de 90 – 8 à 38 – 60, encore hors cible), puis `hp` 70 → 73 (Z – Humains 49 – 49, Z – Isdaris 52 – 46).
 
 Réglages d'IA provisoires du 17 novembre (l'IA Isdaris passe enfin au Psycho-assembleur), à valider par l'équilibreur :
-- `ai.tech.isdaris` : `{ barracks: 3, minerals: 900, energy: 400 }` → `{ minute: 8, barracks: 3 }`. L'énergie isdaris ne dépassait jamais 400 : le Psycho-assembleur et ses unités n'apparaissaient dans aucune partie.
+- `ai.tech.isdaris` : `{ barracks: 3, minerals: 900, energy: 400 }` → `{ minute: 12, barracks: 3 }`. L'énergie isdaris ne dépassait jamais 400 : le Psycho-assembleur et ses unités n'apparaissaient dans aucune partie.
 - `ai.research.isdaris` : `feucirculaire` ajouté après `totem`.
-- Mesure (`big.test.ts`, 98 parties par paire) : Humains – Isdaris 52 – 46 → 65 – 33, Z – Isdaris 52 – 46 → 71 – 27 ; l'IA fait 53 Porte-disques, 51 Balistes, 19 Chimères (aucun avant). Les unités du Psycho-assembleur coûtent cher pour leur force : à `minute` 12, Humains – Isdaris reste à 49 – 46 (3 nuls) et Z – Isdaris passe à 60 – 38, mais l'IA n'en fait presque plus (12). À l'équilibreur de juger leur prix.
+- Mesure (`big.test.ts`, 98 parties par paire), à `minute` 12 : Humains – Isdaris 52 – 46 → 49 – 46 (3 nuls), Z – Isdaris 52 – 46 → 60 – 38 ; l'IA fait 9 Porte-disques et 3 Balistes (aucun avant). À `minute` 8, elle en fait bien plus (53 Porte-disques, 51 Balistes, 19 Chimères) mais les Isdaris perdent davantage (65 – 33, 71 – 27) : les unités du Psycho-assembleur coûtent cher pour leur force. À l'équilibreur de juger leur prix ; la minute pourra redescendre ensuite.
 
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.

@@ -168,6 +168,8 @@ describe('Isdaris', () => {
 
   it('the AI builds the Psycho-assembleur and fields its advanced units in a long game', () => {
     const w = createMatch(['isdaris', 'humains']);
+    // Humans harvesting a little less: a long, even game (the Psycho-assembleur only comes at minute 12).
+    w.players[1].handicap = 92;
     const ais = [new AI(w, 0), new AI(w, 1)];
     const advanced = (DEFS.nanoassembleur as BuildingDef).trains!;
     const made = () => [...w.entities.values()].find((e) => e.owner === 0 && advanced.includes(e.type));
