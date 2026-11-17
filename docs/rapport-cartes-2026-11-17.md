@@ -38,8 +38,8 @@ Les cartes sont parfaitement symétriques : relief, gouffres, rampes, ressources
 
 ### L'Anneau : p1 avantagé, Z écrase les Humains
 
-- **Les armées ne se croisent pas.** En suivant 6 parties, l'armée de p0 passe surtout par la route nord-est du gouffre (601 relevés contre 290), celle de p1 surtout par la route sud-ouest (1183 contre 192). Chacune prend la route « symétrique » de l'autre : elles se manquent et la partie devient une course à la destruction des bases.
-- Dans une course de ce genre, de petites asymétries du programme (ordre de traitement des unités, départage des chemins de même longueur) décident ; ici elles favorisent p1. Hypothèse, non prouvée.
+- **Les armées ne se croisent pas.** En suivant 6 parties, l'armée de p0 passe surtout par la route nord-est du gouffre (601 relevés contre 290), celle de p1 surtout par la route sud-ouest (1183 contre 192). Chacune prend la route « symétrique » de l'autre : les premières vagues (vers 4 à 8 min) se manquent et frappent chacune la base adverse.
+- Vérifié ensuite (6 parties suivies sur L'Anneau, 6 sur Origine) : l'IA rappelle déjà sa vague quand sa base est attaquée par plus fort que ses défenseurs (`src/ai/ai.ts`, « Outnumbered at home ») et ce rappel se déclenche bien ; ces attaques croisées ne coûtent que peu de bâtiments. À la fin des parties, l'armée du perdant n'est jamais au loin : elle a été détruite avant, et le gagnant rase une base vide. Ce n'est donc pas une course aux bases qui décide ; l'avantage de p1 reste inexpliqué (petites asymétries du programme : ordre de traitement des unités, départage des chemins de même longueur).
 - Z gagne 79 – 19 contre les Humains : Z se répare sur son creep et défend mieux sa base pendant que l'armée adverse est partie ; à vérifier.
 - **Retouche proposée** : un pont étroit au centre du gouffre (forme `fill` au centre, invariante par rotation), pour que les deux armées aient un chemin commun plus court ; ou des routes de longueurs différentes. À mesurer avant de l'adopter.
 
@@ -69,7 +69,7 @@ Aucune n'est appliquée. Retouches de carte, à mesurer chacune avant adoption :
 2. Le Col : rampe de la naturelle à 4 tuiles.
 3. Les Ponts : pont étroit élargi.
 
-Côté IA (séparé des stats et des cartes) : quand l'armée adverse passe par une autre route et attaque la base, l'IA pourrait rappeler sa vague ; cela réduirait les courses à la destruction des bases sur L'Anneau et Le Col.
+Côté IA : la proposition de rappeler la vague quand la base est attaquée par une autre route est sans objet, l'IA le fait déjà (voir L'Anneau ci-dessus).
 
 Côté équilibreur : les stats réglées sur Origine ne tiennent pas sur les autres cartes. Faut-il équilibrer sur une seule carte de référence, ou sur la moyenne des cartes ?
 
