@@ -76,6 +76,24 @@ describe('map files', () => {
     }
   }
 
+  it('Carrefour is also symmetric across its diagonal, so neighbouring corners fight on equal terms', () => {
+    // Quarter turns alone give each base a clockwise exit and a different anticlockwise one: in a four-player
+    // free-for-all the corner attacking clockwise won most games (26, 14, 5, 3 wins by seat out of 48).
+    const w = createMatch(['humains', 'humains', 'humains', 'humains'], undefined, 'carrefour');
+    const m = w.map;
+    const n = m.width;
+    const swap: Record<string, string> = { N: 'W', W: 'N', S: 'E', E: 'S' };
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const [a, b] = [y * n + x, x * n + y];
+        expect([m.level[b], m.ramp[b], m.rampStep[b]], `tile ${x},${y}`).toEqual([m.level[a], m.ramp[a] ? swap[m.ramp[a]!] : null, m.rampStep[a]]);
+      }
+    }
+    const resources = [...w.entities.values()].filter((e) => e.def.kind === 'resource');
+    const at = new Set(resources.map((e) => `${e.type} ${e.tx},${e.ty}`));
+    for (const e of resources) expect(at.has(`${e.type} ${e.ty},${e.tx}`), `${e.type} ${e.tx},${e.ty}`).toBe(true);
+  });
+
   it('builds the same map twice', () => {
     for (const def of Object.values(MAPS)) {
       const a = buildMap(def, Math.max(...def.players));

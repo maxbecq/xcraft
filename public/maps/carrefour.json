@@ -2,33 +2,34 @@
   "format": 1,
   "id": "carrefour",
   "name": "Carrefour",
-  "description": "Quatre coins ; une base au milieu de chaque bord, entre deux voisins ; une base riche au centre, sur un plateau à quatre rampes.",
+  "description": "Quatre coins, chaque base symétrique de part et d'autre de sa diagonale ; une base au milieu de chaque bord, entre deux voisins ; une base riche au centre, sur un plateau à quatre rampes.",
   "size": 111,
   "players": [2, 3, 4],
   "symmetry": "rot90",
   "terrain": [
-    { "shape": "octagon", "at": [17, 21], "half": 14, "cut": 7, "level": 1 },
-    { "shape": "octagon", "at": [14, 14], "half": 11, "cut": 6, "ragged": 2, "level": 2 },
+    { "shape": "octagon", "at": [19, 19], "half": 16, "cut": 9, "level": 1 },
+    { "shape": "octagon", "at": [13, 13], "half": 10, "cut": 5, "level": 2 },
     { "shape": "octagon", "at": [55, 55], "half": 11, "cut": 5, "level": 1 },
     { "shape": "octagon", "at": [36, 36], "half": 5, "cut": 2, "level": 2 },
-    { "shape": "ramp", "at": [26, 13], "up": "W", "width": 3, "level": 1 },
-    { "shape": "ramp", "at": [13, 33], "up": "N", "width": 3, "level": 0 },
-    { "shape": "ramp", "at": [32, 22], "up": "W", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [24, 12], "up": "W", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [12, 24], "up": "N", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [36, 24], "up": "W", "width": 3, "level": 0 },
+    { "shape": "ramp", "at": [24, 36], "up": "N", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [54, 43], "up": "S", "width": 3, "level": 0 }
   ],
   "bases": [
     {
       "name": "principale",
       "start": true,
-      "hq": [12, 12],
-      "minerals": [[7, 9], [7, 10], [7, 11], [7, 12], [8, 8], [9, 7], [10, 7], [11, 7]],
-      "wells": [[17, 6]]
+      "hq": [11, 11],
+      "minerals": [[6, 8], [6, 9], [6, 10], [6, 11], [7, 7], [8, 6], [9, 6], [10, 6], [11, 6]],
+      "wells": [[17, 17]]
     },
     {
       "name": "naturelle",
-      "hq": [21, 26],
-      "minerals": [[19, 33], [20, 32], [21, 33], [22, 32], [23, 33], [24, 32], [25, 33]],
-      "wells": [[28, 26]]
+      "hq": [24, 24],
+      "minerals": [[33, 27], [32, 28], [31, 29], [30, 30], [29, 31], [28, 32], [27, 33]],
+      "wells": [[31, 20], [20, 31]]
     },
     {
       "name": "bord",
