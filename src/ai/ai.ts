@@ -1,4 +1,4 @@
-import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansion } from '../sim/setup';
@@ -39,6 +39,11 @@ const focuses = new WeakMap<World, Map<number, number>>();
 const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
 /** Isdaris extensions the AI researches, in order: druides, then ground vehicles, then flyers. */
 const EXTENSIONS = ['laboratoire', 'assembleur', 'balise'];
+
+/** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
+const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
+/** Area abilities aimed at enemy crowds: least enemies under the blast. */
+const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2 };
 
 /** A computer player. It only acts through commands, like a human. */
 export class AI {
@@ -137,6 +142,13 @@ export class AI {
     const unlocked = techDef?.trains!.filter((t) => !w.lacks(this.player, t) && (DEFS[t] as UnitDef).attack) ?? [];
     const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x));
     const reserve = !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
+    // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
+    // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
+    // research on a production building (Isdaris Portail) waits for spare resources instead.
+    const nextResearch = army.length < this.plan.wave ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
+    // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
+    const researchReserve = techWanted ? 0 : reserve;
+    const unitReserve = reserve + (nextResearch ? (DEFS[nextResearch] as UpgradeDef).cost.energy : 0);
     let energy = p.energy - promisedEnergy;
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
@@ -180,7 +192,7 @@ export class AI {
       if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
       const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
       const cost = (DEFS[t] as UpgradeDef).cost;
-      if (!host || minerals < cost.minerals + ((host.def as BuildingDef).trains?.length ? 300 : 0) || energy - reserve < cost.energy) continue;
+      if (!host || minerals < cost.minerals + ((host.def as BuildingDef).trains?.length ? 300 : 0) || energy - researchReserve < cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [host.id], type: t });
       researching.add(host.id);
       minerals -= cost.minerals;
@@ -201,7 +213,7 @@ export class AI {
       const into = (b.def as BuildingDef).morphs?.find((m) => {
         const d = DEFS[m] as BuildingDef;
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
-        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || energy - reserve < d.cost.energy) return false;
+        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
         return d.energyRate ? minute > 6 && have === 0 : minute > 9 && have < 2;
       });
@@ -212,7 +224,8 @@ export class AI {
     }
     // A Marché evens out a lopsided bank: lots of one resource, almost none of the other.
     const market = buildings.find((b) => b.type === 'marche' && b.buildLeft === 0);
-    if (market && minerals > 800 && energy < 150) out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
+    // Minerals piling up while energy holds back the tech (the reserve and the next research): buy energy.
+    if (market && minerals > 500 && energy < unitReserve + 100) out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
     else if (market && energy > 250 && minerals < 150) out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
     // Man the Fortins with soldiers waiting at home.
     for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && o.buildLeft === 0)) {
@@ -220,6 +233,9 @@ export class AI {
       const crew = army.filter((u) => !this.wave.has(u.id) && (u.def as UnitDef).attack && (u.def as UnitDef).attack!.range > 1 && u.order?.kind !== 'enter').slice(0, Math.max(0, room));
       if (crew.length) out.push({ player: this.player, kind: 'smart', ids: crew.map((u) => u.id), x: b.x, y: b.y, target: b.id });
     }
+    // Its energy at hand, the next research also keeps its minerals from the units.
+    const researchCost = nextResearch && (DEFS[nextResearch] as UpgradeDef).cost;
+    const keep = researchCost && energy - researchReserve >= researchCost.energy ? researchCost.minerals : 0;
     // Heavier units from the other production buildings, one at a time, when affordable; a few of each support kind.
     for (const t of buildings.filter((b) => b.type !== f.barracks && b.type !== f.hq && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
       // The kind it has fewest of (Discobole and Chimère take turns); against flyers, only what can shoot them.
@@ -228,7 +244,7 @@ export class AI {
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains).slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
       const def = type && (DEFS[type] as UnitDef);
       if (!def || saving || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
-      if (minerals < def.cost.minerals || energy < def.cost.energy) continue;
+      if (minerals - keep < def.cost.minerals || energy < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [t.id], type });
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
@@ -237,9 +253,9 @@ export class AI {
     for (const c of buildings.filter((b) => b.type === f.barracks && b.buildLeft === 0)) {
       if (!c.rally) out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > 1 || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
-      const type = this.nextUnit(Math.max(0, energy - reserve), army, minerals);
+      const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
-      if (minerals < def.cost.minerals || energy - reserve < def.cost.energy) continue;
+      if (minerals - keep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : reserve) < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [c.id], type });
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
@@ -255,7 +271,7 @@ export class AI {
       let k = u.id % Math.max(1, total);
       const kit = kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
       const cost = kit && WEAPONS[kit].cost;
-      if (!cost || minerals < cost.minerals || energy - reserve < cost.energy) continue;
+      if (!cost || minerals - keep < cost.minerals || (cost.energy > 0 && energy - unitReserve < cost.energy)) continue;
       out.push({ player: this.player, kind: 'equip', ids: [u.id], weapon: kit });
       minerals -= cost.minerals;
       energy -= cost.energy;
@@ -304,12 +320,13 @@ export class AI {
     // Abilities: stimulant and charge when engaging, Peau de roc while healing in a fight.
     const casters = army.filter((u) => {
       const ab = (u.def as UnitDef).ability;
-      if (!ab || u.abilityCd > 0) return false;
+      if (!ab || u.abilityCd > 0 || !SIMPLE.includes(ab)) return false;
       if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    out.push(...this.tactics(army));
     const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
     const ability = caster && (caster.def as BuildingDef).ability!;
     if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy!) {
@@ -440,6 +457,68 @@ export class AI {
       // Workers are where the enemy headquarters are: the AI knows the start spots, like a player who scouted.
       const prey = this.nearest(r, (e) => this.world.hostile(e.owner, this.player) && !!(e.def as UnitDef).worker && e.hp > 0);
       if (prey) out.push({ player: this.player, kind: 'attack', ids: [r.id], x: prey.x, y: prey.y, target: prey.id });
+    }
+    return out;
+  }
+
+  /**
+   * Combat abilities, one per unit and think: blasts on enemy crowds, bolts and stuns on the toughest or the
+   * casters, heals and shields on hurt allies, self abilities when hurt or surrounded.
+   */
+  private tactics(army: Entity[]): Command[] {
+    const w = this.world;
+    const foes = [...w.entities.values()].filter((e) => e.def.kind === 'unit' && e.hp > 0 && !e.inside && w.hostile(e.owner, this.player) && w.sees(this.player, e));
+    if (!foes.length) return [];
+    const out: Command[] = [];
+    const around = (group: Entity[], x: number, y: number, r: number) => group.filter((e) => dist(e.x, e.y, x, y) <= r);
+    const at = (u: Entity, name: string, t: Entity): Command => ({ player: this.player, kind: 'ability', ids: [u.id], name, x: t.x, y: t.y });
+    const self = (u: Entity, name: string): Command => ({ player: this.player, kind: 'ability', ids: [u.id], name });
+    for (const u of army) {
+      if (u.abilityCd > 0 || u.held) continue;
+      const near = around(foes, u.x, u.y, 9 * FP);
+      if (!near.length) continue;
+      for (const name of abilitiesOf(u.def as UnitDef)) {
+        const ab = ABILITIES[name];
+        if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
+        const reach = ((ab.range ?? 0) + 1) * FP;
+        const radius = (ab.radius ?? 0) * FP;
+        const inReach = around(near, u.x, u.y, reach);
+        const allies = around(army, u.x, u.y, reach);
+        let cmd: Command | undefined;
+        if (CROWD[name]) {
+          // Silence only where enemy casters stand.
+          const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
+          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          if (best && best[1] >= CROWD[name]) cmd = at(u, name, best[0]);
+        } else if (name === 'deflagration' || name === 'chocmental') {
+          // The toughest enemy in reach (for the stun, a caster first).
+          const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
+          if (pick && pick.maxHp + pick.maxShield >= 100) cmd = at(u, name, pick);
+        } else if (name === 'regenerant') {
+          const hurt = allies.filter((a) => a.hp * 10 < a.maxHp * 7 && !flies(a));
+          const best = hurt.map((a) => [a, around(hurt, a.x, a.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          if (best && best[1] >= 3) cmd = at(u, name, best[0]);
+        } else if (name === 'renvoi' || name === 'double') {
+          // The biggest ally under fire (Renvoi), or simply the biggest one in the fight (Double).
+          const pick = allies.filter((a) => a !== u && a.type !== 'cadavre' && (name === 'double' || w.tick - a.lastHit < ticks(2))).sort((a, b) => b.maxHp + b.maxShield - (a.maxHp + a.maxShield) || a.id - b.id)[0];
+          if (pick) cmd = at(u, name, pick);
+        } else if (name === 'coupcirculaire' || name === 'feucirculaire') {
+          if (around(near, u.x, u.y, radius + u.radius).filter((f) => !flies(f)).length >= (name === 'feucirculaire' ? 3 : 2)) cmd = self(u, name);
+        } else if (name === 'camouflage' || name === 'dephasage') {
+          if (u.hp * 100 < u.maxHp * (name === 'dephasage' ? 35 : 50)) cmd = self(u, name);
+        } else if (name === 'manteau') {
+          if (around(army, u.x, u.y, radius).length >= 6 && around(near, u.x, u.y, 7 * FP).length >= 4) cmd = self(u, name);
+        } else if (name === 'decollage') {
+          // Pégase: up against flyers only, down again once none is left.
+          const air = near.some((f) => flies(f));
+          const ground = near.some((f) => !flies(f));
+          if (u.airborne ? !air : air && !ground) cmd = self(u, name);
+        }
+        if (cmd) {
+          out.push(cmd);
+          break;
+        }
+      }
     }
     return out;
   }

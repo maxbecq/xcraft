@@ -14,6 +14,8 @@ it.skipIf(!process.env.BIG)('big', () => {
   const made: Record<string, Set<string>> = {};
   // Upgrade lines each faction had researched at the end, summed over the games.
   const researched: Record<string, Record<string, number>> = { humains: {}, isdaris: {}, z: {} };
+  // Abilities cast, by name, over all games.
+  const casts: Record<string, number> = {};
   let minutes = 0;
   let games = 0;
   for (const [a, b] of pairs) {
@@ -27,6 +29,7 @@ it.skipIf(!process.env.BIG)('big', () => {
         const ais = [new AI(w, 0), new AI(w, 1)];
         while (w.winner === null && w.tick < ticks(35 * 60)) {
           w.step(ais.flatMap((ai) => ai.think()));
+          for (const c of w.casts) casts[c.kind] = (casts[c.kind] ?? 0) + 1;
           if (w.tick % 100 === 0) for (const e of w.entities.values()) if (e.def.kind === 'unit') (made[e.type] ??= new Set()).add(`${a}${b}${h0}${h1}${order[0]}:${e.id}`);
         }
         minutes += w.tick / ticks(60);
@@ -40,5 +43,5 @@ it.skipIf(!process.env.BIG)('big', () => {
   }
   const units = Object.fromEntries(Object.entries(made).map(([t, ids]) => [t, ids.size]));
   console.log('BIG', JSON.stringify(wins), JSON.stringify(units));
-  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, units, researched, minutes: Math.round(minutes / games), games }));
+  if (process.env.BIG_OUT) writeFileSync(process.env.BIG_OUT, JSON.stringify({ wins, units, researched, casts, minutes: Math.round(minutes / games), games }));
 }, 5_400_000);
