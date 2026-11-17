@@ -206,6 +206,7 @@
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },
     "difficulty": { "easy": 70, "normal": 100, "hard": 130 },
+    "levels": { "easy": { "waveBonus": -3 }, "hard": { "expandMinute": 5 } },
     "maxWave": 18,
     "maxCloaked": 3,
     "antiAir": { "per": 3, "max": 3 },

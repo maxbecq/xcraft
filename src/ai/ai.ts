@@ -34,6 +34,8 @@ const RESEARCH = BALANCE.ai.research as Record<string, string[]>;
 /** Late buildings, by faction: [type, from minute], one of each. */
 const EXTRA = BALANCE.ai.extra as unknown as Record<string, [string, number][]>;
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
+/** What the easy and hard AIs do differently (see the AI constructor). */
+const LEVELS = BALANCE.ai.levels;
 /** Each team's target base, shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
@@ -56,8 +58,18 @@ export class AI {
 
   private readonly faction: FactionDef;
 
-  constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL) {
+  private readonly easy: boolean;
+  private readonly hard: boolean;
+
+  /**
+   * `level` (menu: easy, normal, hard) changes how it plays, on top of the harvest handicap: the easy AI attacks
+   * with smaller waves and never researches, casts, kites nor falls back; the hard AI expands sooner and its
+   * soldiers focus their fire on the enemy they can finish.
+   */
+  constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal') {
     this.faction = FACTIONS[world.players[player].faction];
+    this.easy = level === 'easy';
+    this.hard = level === 'hard';
   }
 
   think(): Command[] {
@@ -158,7 +170,7 @@ export class AI {
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running.
     const councils = buildings.filter((b) => b.type === f.hq).length + serfs.filter((s) => s.order?.kind === 'build' && s.order.type === f.hq).length;
-    const expand = councils < 2 && serfs.length >= this.plan.serfs && (w.tick > ticks(7 * 60) || this.fieldsLeft(home) < 5);
+    const expand = councils < 2 && serfs.length >= this.plan.serfs && (w.tick > ticks((this.hard ? LEVELS.hard.expandMinute : 7) * 60) || this.fieldsLeft(home) < 5);
     if (expand) wants.push(f.hq);
     // Save up for the expansion once the base is defended.
     const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && minerals < 1000;
@@ -188,7 +200,7 @@ export class AI {
     }
     // Research in priority order on idle buildings; production buildings only with minerals to spare.
     const researching = new Set<number>();
-    for (const t of RESEARCH[p.faction] ?? []) {
+    for (const t of this.easy ? [] : (RESEARCH[p.faction] ?? [])) {
       if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
       const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
       const cost = (DEFS[t] as UpgradeDef).cost;
@@ -199,7 +211,7 @@ export class AI {
       energy -= cost.energy;
     }
     // Isdaris extensions (notice), in order, on the building that hosts each.
-    if (nextExtension && !saving) {
+    if (nextExtension && !saving && !this.easy) {
       const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0);
       const cost = (DEFS[nextExtension] as UpgradeDef).cost;
       if (host && minerals >= cost.minerals && energy >= cost.energy) {
@@ -313,7 +325,7 @@ export class AI {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-    } else if (atHome.length >= Math.min(MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190)) {
+    } else if (atHome.length >= Math.min(MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) + (this.easy ? LEVELS.easy.waveBonus : 0) || (atHome.length >= 6 && supply.used >= 190)) {
       atHome.forEach((u) => this.wave.add(u.id));
       this.waves++;
     }
@@ -325,8 +337,8 @@ export class AI {
       const d = this.engaged(u);
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
-    if (casters.length) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
-    out.push(...this.tactics(army));
+    if (casters.length && !this.easy) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    if (!this.easy) out.push(...this.tactics(army));
     const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
     const ability = caster && (caster.def as BuildingDef).ability!;
     if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy!) {
@@ -353,7 +365,7 @@ export class AI {
       }
     }
     // A wave group that would be massacred falls back to the rally point, to join the next, bigger wave.
-    const fleeing = this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
+    const fleeing = this.easy ? [] : this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
     if (fleeing.length) {
       fleeing.forEach((u) => this.wave.delete(u.id));
       const refuge = this.haven(buildings, rally) ?? rally;
@@ -361,13 +373,14 @@ export class AI {
     }
 
     out.push(...this.raid(raiders));
+    if (this.hard) out.push(...this.focus([...this.wave].map((id) => w.entities.get(id)!)));
     const target = this.enemyTarget(home);
     const waveUnits = [...this.wave].map((id) => w.entities.get(id)!);
     // Ranged units kite: a melee enemy at their throat while their weapon reloads, they step back.
     const kiters = new Set<number>();
     for (const u of waveUnits) {
       const a = w.weapon(u);
-      if (!a || a.range < 5 || u.cooldown < ticks(a.cooldown) / 3) continue;
+      if (this.easy || !a || a.range < 5 || u.cooldown < ticks(a.cooldown) / 3) continue;
       const biter = this.nearest(u, (e) => w.hostile(e.owner, this.player) && e.def.kind === 'unit' && !!(e.def as UnitDef).attack && (e.def as UnitDef).attack!.range < 1 && !(e.def as UnitDef).worker && w.sees(this.player, e));
       if (!biter || dist(biter.x, biter.y, u.x, u.y) > 2 * FP) continue;
       const d = dist(biter.x, biter.y, u.x, u.y) || 1;
@@ -521,6 +534,33 @@ export class AI {
       }
     }
     return out;
+  }
+
+  /**
+   * Focus fire (hard AI): a soldier already fighting switches to the enemy in its reach closest to death, when that
+   * one is much weaker than its current target.
+   */
+  private focus(wave: Entity[]): Command[] {
+    const w = this.world;
+    const picks = new Map<number, number[]>();
+    for (const u of wave) {
+      const a = w.weapon(u);
+      const o = u.order;
+      const current = o?.kind === 'attack' || o?.kind === 'attackMove' ? w.entities.get(o.target) : undefined;
+      if (!a || !current || current.def.kind !== 'unit') continue;
+      const reach = (a.range + 0.5) * FP + u.radius;
+      let best = current;
+      for (const e of w.entities.values()) {
+        if (e.def.kind !== 'unit' || e.hp <= 0 || e.inside || !w.hostile(e.owner, this.player) || !reaches(a, flies(e)) || !w.sees(this.player, e)) continue;
+        if (dist(e.x, e.y, u.x, u.y) - e.radius > reach) continue;
+        if (e.hp + e.shield < best.hp + best.shield || (e.hp + e.shield === best.hp + best.shield && e.id < best.id)) best = e;
+      }
+      if (best !== current && (best.hp + best.shield) * 10 < (current.hp + current.shield) * 6) picks.set(best.id, [...(picks.get(best.id) ?? []), u.id]);
+    }
+    return [...picks].map(([target, ids]) => {
+      const t = w.entities.get(target)!;
+      return { player: this.player, kind: 'attack', ids, x: t.x, y: t.y, target };
+    });
   }
 
   /** Distance to the enemy the unit is fighting, if it is close. */

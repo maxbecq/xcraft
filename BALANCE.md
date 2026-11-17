@@ -104,6 +104,8 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `plan.healerEvery` | une unité sur N est un Soigneur |
 | `plan.legionShare` | part de Légionnaires parmi les unités de base des Humains (0 à 1) |
 | `difficulty` | minerai encaissé par l'IA, en % (facile, normal, difficile) |
+| `levels.easy.waveBonus` | IA facile : unités en plus (ou en moins si négatif) avant de lancer une vague ; elle ne fait ni recherches, ni capacités, ni repli |
+| `levels.hard.expandMinute` | IA difficile : minute à partir de laquelle elle s'étend ; ses soldats concentrent aussi leurs tirs sur l'ennemi le plus entamé |
 | `maxCloaked` | Assassins au plus en même temps |
 | `antiAir` | une défense anti-air en plus par `per` volants ennemis vus, `max` au plus |
 | `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
