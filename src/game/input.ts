@@ -2,7 +2,7 @@ import { Raycaster, Vector2, Vector3, type Camera, type Object3D } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
-import { FLY_HEIGHT } from '../data';
+import { FLY_HEIGHT, type UnitDef } from '../data';
 
 const DRAG_PX = 5;
 const PICK_PX = 22;
@@ -221,7 +221,7 @@ export class Input {
       const now = performance.now();
       const all = !!kind && (e.ctrlKey || e.metaKey || (kind === this.lastClick.type && now - this.lastClick.time < DOUBLE_TAP_MS));
       this.lastClick = { time: all ? 0 : now, type: kind };
-      const picked = all ? this.sameOnScreen(kind) : click ? (hit ? [hit.id] : []) : this.inBox(r);
+      const picked = all ? this.sameOnScreen(kind) : click ? (hit ? [hit.id] : []) : this.inBox(r, e.shiftKey);
       if (!e.shiftKey) this.selected.clear();
       for (const id of picked) {
         if (e.shiftKey && click && !all && this.selected.has(id)) this.selected.delete(id);
@@ -573,14 +573,20 @@ export class Input {
   }
 
   /** Own units inside a screen rectangle. */
-  private inBox(r: { x: number; y: number; w: number; h: number }): number[] {
-    return [...this.world.entities.values()]
-      .filter((e) => e.owner === this.player && e.def.kind === 'unit' && !e.inside)
-      .filter((e) => {
-        const s = this.screenOf(e);
-        return s.x >= r.x && s.x <= r.x + r.w && s.y >= r.y && s.y <= r.y + r.h;
-      })
-      .map((e) => e.id);
+  /**
+   * Ours inside a dragged box. Soldiers come first: workers caught at the edge of a fight are left out unless
+   * the box holds nothing else (or `workers`, with Shift). A box with no unit at all picks our buildings.
+   */
+  private inBox(r: { x: number; y: number; w: number; h: number }, workers = false): number[] {
+    const inside = [...this.world.entities.values()].filter((e) => {
+      if (e.owner !== this.player || e.inside || (e.def.kind !== 'unit' && e.def.kind !== 'building')) return false;
+      const s = this.screenOf(e);
+      return s.x >= r.x && s.x <= r.x + r.w && s.y >= r.y && s.y <= r.y + r.h;
+    });
+    const units = inside.filter((e) => e.def.kind === 'unit');
+    const army = units.filter((e) => !(e.def as UnitDef).worker);
+    const picked = units.length ? (army.length && !workers ? army : units) : inside;
+    return picked.map((e) => e.id);
   }
 
   private groundAt(x: number, y: number): Vector3 | null {
