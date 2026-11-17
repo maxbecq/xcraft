@@ -122,9 +122,9 @@ export function matchCode(room: string, factions: [string, string], biome: strin
 
 /** Reads a code back; null if it is not one. */
 export function readCode(code: string, biomes: string[]): { room: string; factions: [string, string]; biome: string } | null {
-  const m = /^([A-Z0-9]{4})-?([HI])([HI])([A-Z])$/.exec(code.trim().toUpperCase());
+  const m = /^([A-Z0-9]{4})-?([HIZ])([HIZ])([A-Z])$/.exec(code.trim().toUpperCase());
   const biome = m && biomes.find((b) => b[0].toUpperCase() === m[4]);
   if (!m || !biome) return null;
-  const f = (c: string) => (c === 'H' ? 'humains' : 'isdaris');
+  const f = (c: string) => (c === 'H' ? 'humains' : c === 'Z' ? 'z' : 'isdaris');
   return { room: m[1], factions: [f(m[2]), f(m[3])], biome };
 }

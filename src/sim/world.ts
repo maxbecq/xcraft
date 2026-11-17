@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, abilitiesOf, type Attack, type BuildingDef, type Cost, DEFS, type Def, type Faction, HARVEST, OBSERVATION, RAPPEL, reaches, SKIN_RANGE, SKIN_REDUCTION, STIM_HP, type UnitDef, type UpgradeDef, type UpgradeLine, WEAPONS } from '../data';
 import type { GameMap } from '../map';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -103,6 +103,8 @@ export interface Entity {
   /** Ticks left: phased out, unhurt and unable to fight (Module déphasant, Porte de déphasage); sending damage back (Sphère de renvoi). */
   phased: number;
   reflect: number;
+  /** Z socle: weapon kit fitted (key of WEAPONS), or '' for the light machine gun it came with. */
+  kit: string;
 }
 
 export interface Player {
@@ -132,6 +134,8 @@ export type Command =
   | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number; name?: string }
   /** Marché: sells some of one resource for some of the other. */
   | { player: number; kind: 'trade'; ids: number[]; sell: 'minerals' | 'energy' }
+  /** Z: fits the weapon kit on each selected socle that takes it (paid per socle). */
+  | { player: number; kind: 'equip'; ids: number[]; weapon: string }
   /** Attack a target, or attack-move to a point when there is none. */
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean };
 
@@ -185,6 +189,8 @@ export interface GameEvent {
 }
 
 const REACH = FP / 4;
+/** Why a building cannot go there: out of the power field (Isdaris), off the creep (Z), or simply blocked. */
+const misplaced = (def: BuildingDef): string => (!def.needsPower ? 'Emplacement invalide.' : def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.");
 /** How close (tiles) an Isdaris worker must be to beam a building down. */
 const WARP_RANGE = 6;
 
@@ -240,7 +246,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -303,6 +309,7 @@ export class World {
       if (e.def.kind === 'unit') this.think(e);
       else if (e.def.kind === 'building') this.operate(e);
     }
+    if (this.tick % TICK_RATE === 0) this.repairOnCreep();
     this.bury();
     this.separate();
     if (this.tick % 20 === 0) this.judge();
@@ -478,7 +485,7 @@ export class World {
         if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
         const lack = this.lacks(c.player, c.type);
         if (lack) return void this.say(c.player, lack);
-        if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, bdef.needsPower ? "Hors d'un champ d'énergie." : 'Emplacement invalide.');
+        if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, misplaced(bdef));
         this.setOrder(worker, { kind: 'build', type: c.type, tx: c.tx, ty: c.ty });
         return;
       }
@@ -540,6 +547,22 @@ export class World {
         if (p[c.sell] < give) return void this.say(c.player, c.sell === 'minerals' ? 'Pas assez de minerai.' : "Pas assez d'énergie.");
         p[c.sell] -= give;
         p[c.sell === 'minerals' ? 'energy' : 'minerals'] += get;
+        return;
+      }
+      case 'equip': {
+        const kit = WEAPONS[c.weapon];
+        if (!kit) return;
+        if (kit.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
+        if (![...this.entities.values()].some((b) => b.owner === c.player && b.type === 'plateforme' && b.buildLeft === 0)) return void this.say(c.player, `Requiert : ${DEFS.plateforme.name}`);
+        // The socle stops a moment while the kit is mounted.
+        for (const e of units) {
+          if (!(e.def as UnitDef).weapons?.includes(c.weapon) || e.kit === c.weapon) continue;
+          if (!this.pay(c.player, kit)) return;
+          e.kit = c.weapon;
+          e.cooldown = 0;
+          e.held = ticks(BALANCE.rules.equipSeconds);
+          this.setOrder(e, null);
+        }
         return;
       }
       case 'ability': {
@@ -815,7 +838,7 @@ export class World {
         this.setOrder(e, { kind: 'heal', target: t.id });
       } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
         this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
-      } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp) {
+      } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp && !(t.def as BuildingDef).absorbs) {
         this.setOrder(e, { kind: 'construct', target: t.id });
       } else if (!worker && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
         this.setOrder(e, { kind: 'enter', target: t.id });
@@ -922,6 +945,18 @@ export class World {
     return linked;
   }
 
+  /** Z units on their own creep are repaired by the cables, a few hp each second. */
+  private repairOnCreep(): void {
+    for (const p of this.players) {
+      if (p.faction !== 'z') continue;
+      const net = this.powerNetwork(p.id);
+      for (const u of this.entities.values()) {
+        if (u.owner !== p.id || u.def.kind !== 'unit' || u.hp <= 0 || u.hp >= u.maxHp || flies(u)) continue;
+        if (net.some((b) => dist(b.x, b.y, u.x, u.y) <= (b.def as BuildingDef).power! * FP)) u.hp = Math.min(u.maxHp, u.hp + BALANCE.rules.creepRepair);
+      }
+    }
+  }
+
   /** Near one of its player's finished Conseils (or the Grand Conseil). */
   private nearCouncil(e: Entity): boolean {
     const r = toFp(BALANCE.rules.upgrades.conseilAura.radius);
@@ -932,6 +967,7 @@ export class World {
   /** Which attack upgrade line a weapon follows: Forge melee or ranged (Humans), Portail or Assembleur (Isdaris). */
   private attackLine(e: Entity, a: Attack): UpgradeLine {
     if (this.players[e.owner].faction === 'isdaris') return (e.def as UnitDef).mechanical ? 'assembleuratk' : 'portailatk';
+    if (this.players[e.owner].faction === 'z') return 'zattaque';
     return a.range < 1 ? 'melee' : 'ranged';
   }
 
@@ -953,7 +989,8 @@ export class World {
   /** Armour from research: Armure infanterie for foot soldiers, Blindage véhicules for machines, Peau épaisse for saurians, and unit ones. */
   private armorBonus(t: Entity): number {
     const d = t.def as UnitDef;
-    let bonus = this.players[t.owner].faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+    const faction = this.players[t.owner].faction;
+    let bonus = faction === 'z' ? this.level(t.owner, 'zblindage') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
     if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
     if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
     if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
@@ -969,6 +1006,7 @@ export class World {
 
   /** The weapon a unit fights with now: Scarabées get one by research, a Char Pégase in the air shoots only at flyers. */
   weapon(e: Entity): Attack | undefined {
+    if (e.kit) return WEAPONS[e.kit].attack;
     if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
     const a = (e.def as UnitDef | BuildingDef).attack;
     return a && e.airborne ? { ...a, air: true, ground: false } : a;
@@ -1127,7 +1165,7 @@ export class World {
           return;
         }
         if (!this.canPlace(o.type, o.tx, o.ty, e.owner)) {
-          this.say(e.owner, def.needsPower ? "Hors d'un champ d'énergie." : 'Emplacement invalide.');
+          this.say(e.owner, misplaced(def));
           return this.setOrder(e, null);
         }
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);
@@ -1135,6 +1173,12 @@ export class World {
         b.buildLeft = ticks(def.buildTime);
         b.hp = Math.max(1, idiv(b.maxHp, 10));
         b.shield = 0;
+        if (def.absorbs) {
+          // The drone becomes part of the structure, which then assembles itself.
+          this.setOrder(e, null);
+          this.remove(e);
+          return;
+        }
         this.setOrder(e, def.warp ? null : { kind: 'construct', target: b.id });
         return;
       }
@@ -1440,14 +1484,14 @@ export class World {
 
   private operate(b: Entity): void {
     if (b.buildLeft > 0) {
-      if (!(b.def as BuildingDef).warp) return;
-      // Materialising: builds itself, hp and shield filling up.
+      if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
+      // Materialising (Isdaris) or assembling (Z): builds itself, hp and shield filling up.
       const total = ticks((b.def as BuildingDef).buildTime);
       b.buildLeft--;
       this.grow(b, total);
       if (b.buildLeft === 0) {
         b.shield = b.maxShield;
-        this.say(b.owner, `Matérialisation terminée : ${b.def.name}.`, 'done');
+        this.say(b.owner, `${(b.def as BuildingDef).absorbs ? 'Assemblage' : 'Matérialisation'} terminé${(b.def as BuildingDef).absorbs ? '' : 'e'} : ${b.def.name}.`, 'done');
       }
       return;
     }

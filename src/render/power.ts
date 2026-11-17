@@ -70,6 +70,61 @@ function fieldMap(): CanvasTexture {
   return fieldTexture;
 }
 
+let creepTexture: CanvasTexture | null = null;
+/** Z creep (notice): a chaotic but working mesh of black carbon cables with neon beads, fading at the rim. */
+function creepMap(): CanvasTexture {
+  if (creepTexture) return creepTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d')!;
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  g.lineCap = 'round';
+  for (let i = 0; i < 140; i++) {
+    // Cables run out from the centre, wandering.
+    const a = rnd() * Math.PI * 2;
+    const r0 = rnd() * 60;
+    const r1 = 120 + rnd() * 120;
+    const bend = (rnd() - 0.5) * 1.6;
+    const x0 = 256 + Math.cos(a) * r0;
+    const y0 = 256 + Math.sin(a) * r0;
+    const x1 = 256 + Math.cos(a + bend) * r1;
+    const y1 = 256 + Math.sin(a + bend) * r1;
+    const mx = 256 + Math.cos(a + bend / 2 + (rnd() - 0.5)) * (r0 + r1) * 0.5;
+    const my = 256 + Math.sin(a + bend / 2 + (rnd() - 0.5)) * (r0 + r1) * 0.5;
+    g.strokeStyle = i % 3 ? 'rgba(18,20,26,0.92)' : 'rgba(44,48,58,0.92)';
+    g.lineWidth = 2 + rnd() * 5;
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.quadraticCurveTo(mx, my, x1, y1);
+    g.stroke();
+    if (i % 4 === 0) {
+      // A neon thread along some of them.
+      g.strokeStyle = i % 8 ? 'rgba(60,240,255,0.7)' : 'rgba(255,60,200,0.6)';
+      g.lineWidth = 1;
+      g.stroke();
+    }
+  }
+  for (let i = 0; i < 60; i++) {
+    g.fillStyle = i % 5 ? 'rgba(90,250,255,0.9)' : 'rgba(255,80,210,0.9)';
+    const a = rnd() * Math.PI * 2;
+    const r = rnd() * 230;
+    g.beginPath();
+    g.arc(256 + Math.cos(a) * r, 256 + Math.sin(a) * r, 1.5 + rnd() * 2, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Ragged rim: fade the outer ring out.
+  g.globalCompositeOperation = 'destination-in';
+  const fade = g.createRadialGradient(256, 256, 150, 256, 256, 256);
+  fade.addColorStop(0, 'rgba(0,0,0,1)');
+  fade.addColorStop(0.8, 'rgba(0,0,0,0.7)');
+  fade.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fade;
+  g.fillRect(0, 0, 512, 512);
+  creepTexture = new CanvasTexture(c);
+  return creepTexture;
+}
+
 /**
  * Isdaris power network: the emission zone of each Obelisk and Emitter on the ground (where buildings
  * can be materialised), brighter while placing one, and beams of light linking emitters to each other
@@ -78,6 +133,8 @@ function fieldMap(): CanvasTexture {
 export class PowerNet {
   private readonly root = new Group();
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
+  /** Z: the same field, drawn as creep on the ground. */
+  private readonly creepMaterial = new MeshBasicMaterial({ map: creepMap(), transparent: true, depthWrite: false, side: DoubleSide });
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -98,9 +155,10 @@ export class PowerNet {
     // Only the linked network powers anything; a cut-off emitter shows no zone and no beam.
     const nodes = world.players.flatMap((p) => world.powerNetwork(p.id)).filter(sees);
     const key = nodes.map((e) => e.id).join(',');
-    if (key !== this.key) this.rebuild(nodes);
+    if (key !== this.key) this.rebuild(nodes, world);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
+    this.creepMaterial.opacity = highlight ? 1 : 0.85;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.updateWarps(world, sees, t);
   }
@@ -154,7 +212,8 @@ export class PowerNet {
     this.warpGlow.uniforms.opacity.value = 0.2 + 0.07 * Math.sin(t * 5.3);
   }
 
-  private rebuild(nodes: Entity[]): void {
+  private rebuild(nodes: Entity[], world: World): void {
+    const creep = (e: Entity) => world.players[e.owner].faction === 'z';
     this.key = nodes.map((e) => e.id).join(',');
     this.root.clear();
     const at = (e: Entity) => new Vector3(e.x / FP, heightAt(this.map, e.x / FP, e.y / FP), e.y / FP);
@@ -172,13 +231,13 @@ export class PowerNet {
         pos.setXYZ(i, x, heightAt(this.map, x, z) + 0.08, z);
       }
       geo.computeBoundingSphere();
-      const disc = new Mesh(geo, this.fieldMaterial);
+      const disc = new Mesh(geo, creep(e) ? this.creepMaterial : this.fieldMaterial);
       disc.renderOrder = 1;
       this.root.add(disc);
     }
     // Per player, a tree grown from the main buildings: each emitter links to the nearest node already
     // in the network whose zone touches its own.
-    for (const owner of new Set(nodes.map((e) => e.owner))) {
+    for (const owner of new Set(nodes.filter((e) => !creep(e)).map((e) => e.owner))) {
       const own = nodes.filter((e) => e.owner === owner);
       const linked = own.filter((e) => e.type === 'obelisque');
       const rest = own.filter((e) => e.type !== 'obelisque');

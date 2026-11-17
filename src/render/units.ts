@@ -449,7 +449,7 @@ export async function loadModels(types: string[]): Promise<void> {
         // Rust, damp and grime: heavy on buildings, light on soldiers, none on crystals.
         // Isdaris technology stays almost pristine.
         const d = DEFS[type];
-        const isdaris = !!d && 'faction' in d && d.faction === 'isdaris';
+        const isdaris = !!d && 'faction' in d && d.faction !== 'humains'; // Isdaris and Z
         const amount = type.startsWith('minerai') || type === 'puits' ? 0 : (d?.kind === 'unit' ? 0.35 : 1) * (isdaris ? 0.15 : 1);
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
         // Bright silhouette edges on everything but crystals, stronger on units.

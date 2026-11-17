@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -244,6 +244,7 @@ export class Hud {
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
+    if ((e.def as UnitDef).weapons) html += `<div class="info">Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse légère'}</div>`;
     this.details.innerHTML = html;
     this.portrait.render();
   }
@@ -294,6 +295,13 @@ export class Hud {
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
+      }
+      // Z socles: a weapon kit to fit on those that take it and do not carry it yet.
+      for (const [k, kit] of Object.entries(WEAPONS)) {
+        const takers = units.filter((u) => (u.def as UnitDef).weapons?.includes(k) && u.kit !== k);
+        if (!units.some((u) => (u.def as UnitDef).weapons?.includes(k))) continue;
+        const reason = kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : takers.length ? undefined : 'Déjà équipé';
+        list.push({ label: kit.name, key: kit.hotkey, cost: kit.cost, reason, action: () => cmd({ kind: 'equip', ids: takers.map((u) => u.id), weapon: k }) });
       }
       return list;
     }

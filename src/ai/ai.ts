@@ -1,4 +1,4 @@
-import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansion } from '../sim/setup';
@@ -30,7 +30,7 @@ const THINK_EVERY = 10; // ticks
 const DEFEND_RADIUS = 14 * FP;
 const MAX_WAVE = BALANCE.ai.maxWave;
 /** Forge lines in research order. */
-const RESEARCH = ['ranged', 'armor', 'melee'];
+const RESEARCH = ['ranged', 'armor', 'melee', 'lanceroquettes', 'zattaque', 'lanceflammes', 'zblindage'];
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
 /** Isdaris extensions the AI researches, in order: druides, then ground vehicles, then flyers. */
 const EXTENSIONS = ['laboratoire', 'assembleur', 'balise'];
@@ -87,7 +87,7 @@ export class AI {
     }
 
     // Abandoned construction sites (builder killed) get a new serf. Warped buildings build themselves.
-    for (const site of buildings.filter((b) => b.buildLeft > 0 && !(b.def as BuildingDef).warp)) {
+    for (const site of buildings.filter((b) => b.buildLeft > 0 && !(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs)) {
       if (serfs.some((s) => s.order?.kind === 'construct' && s.order.target === site.id)) continue;
       const s = this.builder(serfs, [site.tx, site.ty]);
       if (s) out.push({ player: this.player, kind: 'smart', ids: [s.id], x: site.x, y: site.y, target: site.id });
@@ -227,6 +227,21 @@ export class AI {
       minerals -= def.cost.minerals;
       energy -= def.cost.energy;
       this.trained++;
+    }
+
+    // Z: socles waiting at home get a weapon kit, in a weighted rotation (only kits that hit flyers against them).
+    for (const u of army) {
+      const allowed = (u.def as UnitDef).weapons;
+      if (!allowed || u.kit || (u.order && u.order.kind !== 'move') || this.wave.has(u.id)) continue;
+      const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => allowed.includes(k) && !(WEAPONS[k].research && !w.level(this.player, WEAPONS[k].research!)) && (!this.enemyAir || reaches(WEAPONS[k].attack, true)));
+      const total = kits.reduce((n, [, wgt]) => n + wgt, 0);
+      let k = u.id % Math.max(1, total);
+      const kit = kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
+      const cost = kit && WEAPONS[kit].cost;
+      if (!cost || minerals < cost.minerals || energy - reserve < cost.energy) continue;
+      out.push({ player: this.player, kind: 'equip', ids: [u.id], weapon: kit });
+      minerals -= cost.minerals;
+      energy -= cost.energy;
     }
 
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.

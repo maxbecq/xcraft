@@ -1,11 +1,11 @@
-// Faction data (Humans, Isdaris), from XC Mod 1.53 (SC2) where it exists.
+// Faction data (Humans, Isdaris, Z), from XC Mod 1.53 (SC2) where it exists.
 // Times are in SC "Normal" seconds; the simulation runs at "Faster" (see GAME_SPEED).
 // Every balance number (hp, costs, damage, ability timings, AI thresholds) lives in balance.json, owned by the
 // balance designer (see BALANCE.md); this file holds what each thing is and does.
 
 import BALANCE from './balance.json';
 
-export type Faction = 'humains' | 'isdaris';
+export type Faction = 'humains' | 'isdaris' | 'z';
 
 export interface Cost {
   minerals: number;
@@ -73,6 +73,8 @@ export interface UnitDef {
   lifetime?: number;
   /** Units it can carry (Scarabée): they shoot from inside. */
   bunker?: number;
+  /** Z socle: weapon kits (keys of WEAPONS) it can be fitted with, in place of the light machine gun of `attack`. */
+  weapons?: string[];
   faction: Faction;
   hotkey: string;
 }
@@ -101,8 +103,10 @@ export interface BuildingDef {
   warp?: boolean;
   /** Isdaris: radius (tiles) of the power field it projects; other warped buildings must stand inside one. */
   power?: number;
-  /** Isdaris: must be placed inside a power field. */
+  /** Isdaris: must be placed inside a power field (Z: on its creep, the same field drawn as cables). */
   needsPower?: boolean;
+  /** Z: the drone that builds it merges into it (it is gone), and the building then grows by itself. */
+  absorbs?: boolean;
   /** Recharges the shields of friendly units within this radius (tiles), fast. */
   shieldAura?: number;
   /** Further abilities, after `ability`. */
@@ -427,6 +431,32 @@ const BASE: Record<string, object> = {
   relais: extension('Relais de canon orbital', 'R', "Le Trône frappe depuis l'espace un point visé par un Espion."),
   porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris."),
 
+  // ---------------------------------------------------------------- Z (notice 1.2-1): a nest of metal insects
+  // Drones merge into the buildings they raise; every building but the Intelligence centrale and the Assimilateur
+  // stands on the creep of cables spread by the Intelligence centrale and the Pods (the Isdaris power field, drawn
+  // as cables). Socles leave the Plate-forme with a light machine gun; weapon kits are fitted afterwards (equip).
+  drone: { kind: 'unit', name: 'Drone', radius: 0.375, worker: true, mechanical: true, faction: 'z', hotkey: 'D' },
+  dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
+  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, weapons: ['lourde', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
+  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, weapons: ['lourde', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
+  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { armement: 1 }, weapons: ['lourde', 'roquettes'], faction: 'z', hotkey: 'L' },
+  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone'], dropoff: true, absorbs: true, faction: 'z', hotkey: 'I' },
+  pod: { kind: 'building', name: 'Pod', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'P' },
+  // Notice: needs only 3 drones (supply) where the others need 4.
+  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, faction: 'z', hotkey: 'A' },
+  // Notice: a Pod add-on that builds the socles; here a building of its own on the creep.
+  plateforme: { kind: 'building', name: 'Plate-forme', size: 3, needsPower: true, absorbs: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
+  armement: {
+    kind: 'building', name: "Centre d'armement", size: 3, needsPower: true, absorbs: true, requires: { plateforme: 1 }, faction: 'z', hotkey: 'R',
+    researches: ['zattaque1', 'zattaque2', 'zattaque3', 'zblindage1', 'zblindage2', 'zblindage3', 'lanceflammes', 'lanceroquettes'],
+  },
+  // Notice: a Pod add-on, a small metal tower fitted with a weapon; here a heavy machine gun that sees cloaked units.
+  tourelle: { kind: 'building', name: 'Tourelle', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'T' },
+  ...upgrades('zattaque', 'Attaque physique', 'K', undefined, 'z'),
+  ...upgrades('zblindage', 'Blindage des socles', 'B', undefined, 'z'),
+  lanceflammes: research('Lance-flammes', 'F', 'Kit lance-flammes pour les socles terrestres.', undefined, 'z'),
+  lanceroquettes: research('Lance-roquettes', 'R', 'Kit lance-roquettes, contre les véhicules et les bâtiments.', undefined, 'z'),
+
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
 };
@@ -452,6 +482,21 @@ function extension(name: string, hotkey: string, effect: string, requires?: Reco
 function isd(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
   return research(name, hotkey, effect, requires, 'isdaris');
 }
+
+/** Z weapon kits (notice), fitted on a socle in place of its light machine gun: stats and cost in balance.json. */
+export interface WeaponDef {
+  name: string;
+  hotkey: string;
+  attack: Attack;
+  cost: Cost;
+  /** Research needed first. */
+  research?: string;
+}
+export const WEAPONS: Record<string, WeaponDef> = {
+  lourde: { name: 'Mitrailleuse lourde', hotkey: 'M', ...BALANCE.weapons.lourde },
+  flammes: { name: 'Lance-flammes', hotkey: 'F', research: 'lanceflammes', ...BALANCE.weapons.flammes },
+  roquettes: { name: 'Lance-roquettes', hotkey: 'R', research: 'lanceroquettes', ...BALANCE.weapons.roquettes },
+};
 
 const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(
@@ -514,5 +559,12 @@ export const FACTIONS: Record<Faction, FactionDef> = {
     buildable: ['obelisque', 'emetteur', 'reservepsy', 'portail', 'recepteur', 'orbe', 'nanoassembleur', 'orbecommandement', 'trone'],
     advanced: ['nanoassembleur', 'orbecommandement', 'trone'],
     army: Object.entries(BALANCE.ai.army.isdaris),
+  },
+  z: {
+    name: 'Z', worker: 'drone', hq: 'intelligence', supply: 'pod', barracks: 'plateforme', extractor: 'assimilateur',
+    forge: 'armement', detector: 'tourelle', defense: 'tourelle',
+    buildable: ['intelligence', 'pod', 'assimilateur', 'plateforme', 'tourelle', 'armement'],
+    advanced: ['armement'],
+    army: Object.entries(BALANCE.ai.army.z),
   },
 };

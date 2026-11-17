@@ -61,7 +61,7 @@ const stored = (k: string) => {
     return null;
   }
 };
-const asFaction = (v: string | null): Faction => (v === 'isdaris' ? 'isdaris' : 'humains');
+const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' ? v : 'humains');
 /** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
 interface Slot {
   control: string;
@@ -413,7 +413,7 @@ function readSetup(): Setup {
 function showHome(): void {
   const menu = document.querySelector('.menu') ?? document.body.appendChild(document.createElement('div'));
   menu.className = 'menu';
-  menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris</p>
+  menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z</p>
     <button data-m="new">Nouvelle partie</button>
     <button data-m="join">Rejoindre une partie</button>
     <div class="row">
