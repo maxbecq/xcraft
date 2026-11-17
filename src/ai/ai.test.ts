@@ -12,6 +12,18 @@ function play(world: World, ais: AI[], minutes: number): { winner: number | null
 }
 
 describe('AI', () => {
+  it('never orders a building where its workers cannot get (L\'Anneau: low ground at the foot of the main\'s cliff)', () => {
+    const w = createMatch(['humains', 'isdaris'], undefined, 'l-anneau');
+    w.players.forEach((p) => (p.handicap = 130));
+    const ais = [new AI(w, 0, undefined, 'hard'), new AI(w, 1, undefined, 'hard')];
+    let failed = 0;
+    while (w.winner === null && w.tick < ticks(14 * 60)) {
+      w.step(ais.flatMap((ai) => ai.think()));
+      failed += w.events.filter((e) => e.text === 'Emplacement inaccessible.').length;
+    }
+    expect(failed).toBe(0);
+  }, 60_000);
+
   it('spreads its attacks in a four-player free-for-all: two opponents never pick the same first target', () => {
     // Carrefour: four corners, each at the same distance from its two neighbours.
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], undefined, 'carrefour');

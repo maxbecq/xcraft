@@ -764,6 +764,9 @@ function ghost(body: Object3D): void {
 interface View {
   /** Entity type it was built for: a building turned into another gets a new view. */
   type: string;
+  /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
+  hp?: number;
+  flash?: { left: number; saved: [Mesh, Material | Material[]][] };
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
@@ -1085,6 +1088,10 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   };
 }
 
+/** A struck unit shows white this long (s): who is under fire reads at a glance in a melee. */
+const HIT_FLASH = new MeshBasicMaterial({ color: 0xfff2e6 });
+const FLASH_S = 0.09;
+
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', -1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** How long a unit takes to fall when it dies, and its death burst lasts (s). */
@@ -1182,6 +1189,12 @@ function toCorpse(root: Object3D): void {
   });
 }
 
+/** Ends a hit flash: the unit's own materials go back on. */
+function unflash(v: View): void {
+  for (const [o, m] of v.flash?.saved ?? []) o.material = m;
+  v.flash = undefined;
+}
+
 /** Frees the corpse's own materials once it has sunk. */
 function dropCorpse(root: Object3D): void {
   root.traverse((o) => {
@@ -1238,6 +1251,7 @@ export class EntityRenderer {
             die.timeScale = die.getClip().duration / DIE_S;
             v.playing = die;
           }
+          unflash(v);
           toCorpse(v.model);
           const d = DEFS[v.type] as UnitDef | undefined;
           this.burst(v.root.position.clone().setY(v.root.position.y + (v.model.position.y > 0.5 ? v.model.position.y : 0) + 0.5), !!d?.mechanical || d?.faction === 'z');
@@ -1351,6 +1365,19 @@ export class EntityRenderer {
       const ground = heightAt(this.map, x, z);
       v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
       v.root.position.set(x, v.ground, z);
+      const hp = e.hp + e.shield;
+      if (e.def.kind === 'unit' && v.hp !== undefined && hp < v.hp && !v.flash) {
+        const saved: [Mesh, Material | Material[]][] = [];
+        v.model.traverse((o) => {
+          if (o instanceof Mesh && o.visible && !(o.material as Material).transparent) {
+            saved.push([o, o.material]);
+            o.material = HIT_FLASH;
+          }
+        });
+        v.flash = { left: FLASH_S, saved };
+      }
+      v.hp = hp;
+      if (v.flash && (v.flash.left -= dt) <= 0) unflash(v);
       if (v.emerge) {
         // Off the deck: a ramp down from where it was built to where the simulation put it.
         v.emerge.age += dt;

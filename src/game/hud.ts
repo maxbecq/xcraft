@@ -52,6 +52,8 @@ export class Hud {
   focus: (x: number, y: number) => void = () => {};
   /** Hit points (and shield) of our things at the last tick, to find where an attack lands. */
   private readonly lastHp = new Map<number, number>();
+  /** When each of ours was last hurt (ms), for the red edge on its picture in the selection. */
+  private readonly hitAt = new Map<number, number>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
@@ -87,6 +89,8 @@ export class Hud {
     scene: Scene,
     private readonly issue: (c: Command) => void,
     private readonly audio: Audio,
+    /** Watching (AI against AI, a replay): the players' own messages are not shown. */
+    private readonly spectator = false,
   ) {
     this.panel.classList.add('slot');
     this.panel.append(this.portrait.canvas, this.details);
@@ -275,17 +279,43 @@ export class Hud {
   notify(events: GameEvent[]): void {
     // The world's alert says only "attacked": the place is the last of ours that lost health this tick.
     let hit: Entity | undefined;
-    if (this.lastHp.size > 2 * this.world.entities.size + 64) this.lastHp.clear(); // forget the dead now and then
+    if (this.lastHp.size > 2 * this.world.entities.size + 64) {
+      this.lastHp.clear(); // forget the dead now and then
+      this.hitAt.clear();
+    }
     for (const e of this.world.entities.values()) {
       if (e.owner !== this.player) continue;
       const was = this.lastHp.get(e.id);
-      if (was !== undefined && e.hp + e.shield < was) hit = e;
+      if (was !== undefined && e.hp + e.shield < was) {
+        hit = e;
+        this.hitAt.set(e.id, performance.now());
+      }
       this.lastHp.set(e.id, e.hp + e.shield);
     }
+    // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none.
+    if (this.spectator) return;
     for (const ev of events) {
       if (ev.player !== this.player) continue;
+      // The same message again: its line counts up (×2, ×3…) and stays on, instead of piling up.
+      const same = [...this.toasts.children].find((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('gone') && c.dataset.kind === ev.kind && c.dataset.text === ev.text);
+      if (same) {
+        const n = Number(same.dataset.n) + 1;
+        same.dataset.n = String(n);
+        same.querySelector('.times')!.textContent = `×${n}`;
+        same.classList.remove('bump');
+        void same.offsetWidth; // restart the bump
+        same.classList.add('bump');
+        this.toasts.append(same); // newest at the bottom
+        this.expire(same, ev.kind);
+        if (performance.now() - Number(same.dataset.sound) > 400) {
+          this.audio.play(ev.kind);
+          same.dataset.sound = String(performance.now());
+        }
+        continue;
+      }
       const t = el('div', `hud-toast ${ev.kind}`);
       t.innerHTML = SIGNS[ev.kind];
+      Object.assign(t.dataset, { kind: ev.kind, text: ev.text, n: '1', sound: String(performance.now()) });
       if (ev.kind === 'alert' && hit) {
         const at = { x: hit.x / FP, y: hit.y / FP };
         this.alertAt = at;
@@ -294,13 +324,20 @@ export class Hud {
         t.addEventListener('click', () => this.focus(at.x, at.y));
       }
       this.audio.play(ev.kind);
-      t.append(ev.text);
+      t.append(ev.text, el('b', 'times'));
       this.toasts.append(t);
-      const life = ev.kind === 'alert' ? 5000 : ev.kind === 'done' ? 3000 : 2200;
-      setTimeout(() => t.classList.add('gone'), life);
-      setTimeout(() => t.remove(), life + 300);
+      this.expire(t, ev.kind);
       while (this.toasts.children.length > 4) this.toasts.firstChild!.remove();
     }
+  }
+
+  /** (Re)starts a message's life: it fades after a while, shorter for a refusal, longer for an attack. */
+  private expire(t: HTMLElement, kind: GameEvent['kind']): void {
+    const life = kind === 'alert' ? 5000 : kind === 'done' ? 3000 : 2200;
+    clearTimeout(Number(t.dataset.fade));
+    clearTimeout(Number(t.dataset.drop));
+    t.dataset.fade = String(setTimeout(() => t.classList.add('gone'), life));
+    t.dataset.drop = String(setTimeout(() => t.remove(), life + 300));
   }
 
   /** Space: the view goes to the last attack. */
@@ -345,7 +382,7 @@ export class Hud {
     if (sel.length > 1) {
       this.details.innerHTML = `<div class="grid">${sel
         .slice(0, 24)
-        .map((e) => `<div class="tile" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
+        .map((e) => `<div class="tile${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
         .join('')}</div>`;
       return;
     }
