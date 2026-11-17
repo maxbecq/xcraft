@@ -21,8 +21,8 @@ export function armillaries(body: Object3D, seed: number): { group: Group; updat
 
 /**
  * GLSL for the Human Meshy skins, after the team paint: needs `paint` (the texture colour), `vLife` (offset
- * from the building's origin, world units), `vSeed` and `veinTime`. Lit windows (warm orange in the texture)
- * switch on and off one by one, each on its own slow cycle; green vats breathe and send up bubbles.
+ * from the building's origin, world units), `vSeed` and `veinTime`. Warm lamps and windows (orange in the
+ * texture) breathe and flicker, dimming now and then; green vats breathe and send up bubbles.
  * Returns the light to add (rgb) and how much of the paint stays (a: dark windows are dimmed).
  */
 export const LIFE_GLSL = `
@@ -30,15 +30,19 @@ export const LIFE_GLSL = `
   vec4 lifeGlow(vec3 paint, vec3 local, float seed, float t) {
     vec3 glow = vec3(0.0);
     float dim = 1.0;
-    // Windows: one cell per half tile, on for most of a 9-25 s cycle.
+    // Warm glass (lamps, lanterns, the Conseil's dome, a few windows): always lit, a slow breath and a faint
+    // flame flicker; below the roofs, now and then one dims to half for a moment, as if someone passed by it.
     float warm = smoothstep(0.12, 0.25, paint.r - paint.b) * smoothstep(0.45, 0.6, paint.r) * step(paint.g, paint.r * 0.85);
     if (warm > 0.0) {
-      vec3 cell = floor(local * 2.0);
+      // The breath is the building's own, so a big lamp never splits into patches; dips go by whole tiles.
+      float breath = 0.8 + 0.2 * sin(t * (0.4 + 0.3 * seed) + seed * 6.28) + 0.04 * sin(t * 11.0 + seed * 40.0);
+      vec3 cell = floor(local);
       float h = lifeHash(cell + seed);
-      float cycle = fract(t / (9.0 + 16.0 * h) + lifeHash(cell + seed + 7.0));
-      float on = smoothstep(0.0, 0.03, cycle) * (1.0 - smoothstep(0.66 + 0.2 * h, 0.69 + 0.2 * h, cycle));
-      glow += vec3(1.0, 0.55, 0.18) * warm * on * 0.9;
-      dim = 1.0 - warm * (1.0 - on) * 0.6;
+      float cycle = fract(t / (14.0 + 16.0 * h) + lifeHash(cell + seed + 7.0));
+      float dip = smoothstep(0.0, 0.04, cycle) * (1.0 - smoothstep(0.08, 0.12, cycle)) * (1.0 - step(2.0, local.y));
+      float lit = breath * (1.0 - 0.5 * dip);
+      glow += vec3(1.0, 0.55, 0.18) * warm * lit * 0.8;
+      dim = 1.0 - warm * 0.3 * dip;
     }
     // Green vats: a slow breath, and bubbles rising in columns.
     float green = smoothstep(0.08, 0.2, paint.g - max(paint.r, paint.b)) * smoothstep(0.3, 0.45, paint.g);
