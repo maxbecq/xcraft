@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, RAPPEL, SKIN_RANGE, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, RAPPEL, SKIN_RANGE, spell, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -52,7 +52,7 @@ export function land(this: World, r: World['recalls'][number]): void {
 /** Uses an ability on the spot (by default the unit's first one); aimed ones go through castAt. */
 export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability): void {
   const def = e.def as UnitDef;
-  const ab = name && ABILITIES[name];
+  const ab = name && spell(name, e.lvl);
   if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'enfouissement') {
@@ -110,7 +110,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
 
 /** An aimed ability, the caster in range of (x, y). False when there is nothing there to use it on. */
 export function castAt(this: World, e: Entity, name: string, x: number, y: number): boolean {
-  const ab = ABILITIES[name];
+  const ab = spell(name, e.lvl);
   const near = (test: (t: Entity) => boolean) =>
     [...this.entities.values()]
       .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))

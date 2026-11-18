@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, spell, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -593,7 +593,7 @@ export class World {
     }
     switch (o.kind) {
       case 'cast': {
-        const ab = ABILITIES[o.ability];
+        const ab = spell(o.ability, e.lvl);
         if (e.abilityCd > 0) return this.setOrder(e, null);
         if (dist(e.x, e.y, o.x, o.y) > toFp(ab.range ?? 0)) {
           if (this.goTo(e, o.x, o.y)) this.setOrder(e, null);

@@ -109,6 +109,27 @@ describe('Dieux', () => {
     expect(p.minerals).toBe(before);
   });
 
+  it('the spells grow with the god: Pluie de feu harder, Courroux sends a shock wave once Thor evolved', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = w.spawn('apollon', 0, 30 * FP, 30 * FP);
+    apollon.lvl = 3;
+    const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
+    const before = foe.hp;
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    run(w, 1);
+    expect(before - foe.hp).toBeGreaterThanOrEqual(ABILITIES.pluiedefeu.levels!.damage![2] - 10);
+    const thor = w.spawn('thor', 0, 50 * FP, 30 * FP);
+    thor.lvl = 2;
+    const target = w.spawn('grenier', 1, 51 * FP, 27 * FP);
+    const near = w.spawn('legionnaire', 1, 54 * FP, 28 * FP);
+    const nearHp = near.hp;
+    thor.charged = 100;
+    w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: target.x, y: target.y, target: target.id }]);
+    run(w, 3);
+    expect(target.hp).toBeLessThan(target.maxHp);
+    expect(near.hp).toBeLessThan(nearHp);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);

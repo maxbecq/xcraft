@@ -204,6 +204,23 @@ export interface AbilityDef {
   damage?: number;
   /** Most units it moves at once. */
   max?: number;
+  /** Dieux: values at the caster god's levels 1 to 5, in place of the plain ones (the spells grow with the god). */
+  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown', number[]>>;
+}
+
+/** An ability as cast by a caster of that level (a god's spells grow with it); the same object for the same level. */
+const SPELLS = new Map<string, AbilityDef>();
+export function spell(name: string, lvl: number): AbilityDef {
+  const ab = ABILITIES[name];
+  if (!ab?.levels || lvl <= 1) return ab;
+  const key = `${name}:${lvl}`;
+  let out = SPELLS.get(key);
+  if (!out) {
+    out = { ...ab };
+    for (const [k, v] of Object.entries(ab.levels)) out[k as 'damage'] = v[lvl - 1];
+    SPELLS.set(key, out);
+  }
+  return out;
 }
 
 /** Every active ability of a unit or building def. */

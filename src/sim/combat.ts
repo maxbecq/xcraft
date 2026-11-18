@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, type UnitDef, type UpgradeLine, WEAPONS } from '../data';
+import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type UpgradeLine, WEAPONS } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -258,6 +258,14 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (e.charged > 0 && a.range < 1) {
     damage *= U.courroux;
     e.charged = 0;
+    // Thor evolved (notice): the blow sends a shock wave through the enemies on the ground round the target.
+    const wave = spell('courroux', e.lvl).radius ?? 0;
+    if (wave > 0) {
+      for (const o of [...this.entities.values()]) {
+        if (o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner) || this.gap(t, o) > toFp(wave)) continue;
+        this.hurt(o, a.damage);
+      }
+    }
   }
   this.hurt(t, damage);
   t.lastAttacker = e.id;
