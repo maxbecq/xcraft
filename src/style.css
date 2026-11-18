@@ -716,6 +716,13 @@ body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, n
 .pause-options legend { font: 600 13px var(--ui); color: #ffd58a; letter-spacing: 0.06em; }
 .pause-options label { display: flex; align-items: center; gap: 8px; font: 14px var(--ui); color: #c9b896; }
 .pause-options input[type='range'] { flex: 1; min-width: 120px; }
+/* Option sliders drawn alike in every engine (WebKit's own has no visible rail on these panels). */
+:is(.options, .pause-options) input[type='range'] { appearance: none; -webkit-appearance: none; height: 18px; margin: 0; background: transparent; cursor: pointer; }
+:is(.options, .pause-options) input[type='range']::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(217, 164, 32, 0.6); }
+:is(.options, .pause-options) input[type='range']::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(217, 164, 32, 0.6); }
+:is(.options, .pause-options) input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #ffd58a; border: 1px solid #000; box-shadow: 0 0 4px rgba(0, 0, 0, 0.8); }
+:is(.options, .pause-options) input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #ffd58a; border: 1px solid #000; box-shadow: 0 0 4px rgba(0, 0, 0, 0.8); }
+:is(.options, .pause-options) input[type='range']:focus-visible { outline: 1px solid #ffd58a; outline-offset: 2px; }
 .menu .switch { position: relative; width: 40px; height: 22px; }
 .menu .switch input { opacity: 0; width: 0; height: 0; }
 .menu .switch span { position: absolute; inset: 0; border-radius: 11px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(217, 164, 32, 0.45); cursor: pointer; transition: background 0.15s; }

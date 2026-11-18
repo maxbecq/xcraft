@@ -37,7 +37,8 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
     failures++;
     retryAt = performance.now() + 3000;
   };
-  /** Moves right after the lock is taken: Safari sends one or two huge jumps then, which are dropped. */
+  /** Moves right after the lock is taken. The first is always dropped (Firefox's carries a stale offset, 13 px down,
+   * so the cursor would leap off where the press was); the next is dropped if it is a huge jump (Safari sends one). */
   let settling = 0;
   const locked = () => document.pointerLockElement === canvas;
 
@@ -153,7 +154,7 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
       const dx = src.movementX || 0;
       const dy = src.movementY || 0;
       const jump = Math.hypot(dx, dy) > 0.25 * Math.max(window.innerWidth, window.innerHeight);
-      if (settling > 0 && jump) {
+      if (settling > 0 && (settling === 2 || jump)) {
         settling--;
         return;
       }
