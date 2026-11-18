@@ -491,10 +491,10 @@ const BASE: Record<string, object> = {
   // its own troops at its feet. Gaïa (given at the start, back by herself when she falls) calls the buildings down:
   // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
   esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
-  gaia: { kind: 'unit', name: 'Gaïa', radius: 1.3, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
-  thor: { kind: 'unit', name: 'Thor', radius: 1.2, trains: ['nain'], unique: true, ability: 'courroux', faction: 'dieux', hotkey: 'T' },
-  apollon: { kind: 'unit', name: 'Apollon', radius: 1.1, trains: ['minotaure'], unique: true, ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
-  seth: { kind: 'unit', name: 'Seth', radius: 1.1, trains: ['sphinx'], unique: true, ability: 'tempete', faction: 'dieux', hotkey: 'S' },
+  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
+  thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, ability: 'courroux', faction: 'dieux', hotkey: 'T' },
+  apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
+  seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
