@@ -20,6 +20,7 @@ import buildings as B  # noqa: E402
 import gods  # noqa: E402
 import kit  # noqa: E402
 import units  # noqa: E402
+import rank2  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else "public/models"
@@ -33,6 +34,9 @@ TYPES = {
     "esprit": (units.esprit, 0.8, 4000), "nain": (units.nain, 0.75, 9000), "minotaure": (units.minotaure, 0.8, 10000), "sphinx": (units.sphinx, 0.85, 10000),
     "asgaard": (B.porte, 1.0, 30000), "branche": (B.branche, 1.0, 14000), "protecteur": (B.protecteur, 0.85, 18000),
     "antre": (B.antre, 1.0, 12000), "puitsdivin": (B.puits, 1.0, 12000), "temple": (B.temple, 0.72, 24000),
+    "odin": (rank2.odin, GOD, 20000), "athena": (rank2.athena, GOD, 20000), "isis": (rank2.isis, GOD, 20000),
+    "corbeau": (rank2.corbeau, 0.8, 4000), "drake": (rank2.drake, 1.0, 9000), "elementaire": (rank2.elementaire, 0.8, 6000),
+    "pretresse": (rank2.pretresse, 0.8, 6000),
 }
 
 #: The look picked on 2026-11-18 (recherches-visuelles/dieux/planches/selection.jpg): palette slots a model's sculpt
