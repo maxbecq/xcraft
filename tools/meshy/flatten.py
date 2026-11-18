@@ -13,7 +13,7 @@ import sys
 
 from PIL import Image, ImageFilter
 
-BLUE, STEEL, DARK, SKIN, OTHER, COPPER, IVORY = range(7)
+BLUE, STEEL, DARK, SKIN, OTHER, COPPER, IVORY, KHAKI = range(8)
 TONES = {
     BLUE: (34, 78, 196),  # read as team paint by the game (blue well above red and green)
     STEEL: (150, 154, 160),  # neutral grey: the game polishes it as bare steel
@@ -21,6 +21,7 @@ TONES = {
     SKIN: (214, 160, 120),
     COPPER: (178, 102, 50),  # the alchemists' brass and copper
     IVORY: (226, 216, 196),
+    KHAKI: (122, 116, 64),  # olive drab uniforms
 }
 
 
@@ -29,8 +30,10 @@ def vivid(r, g, b):
     a vial, a gem, a lamp. Never repainted, never swallowed."""
     h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
     hue = h * 360
-    if 55 < hue < 170 and s > 0.27 and v > 0.5:
-        return True  # greens, pale ones too (a vial's glass): no soldier is painted green
+    if 75 < hue < 170 and s > 0.27 and v > 0.5:
+        return True  # greens: no soldier is painted green
+    if 45 < hue <= 75 and s < 0.46 and v > 0.58:
+        return True  # a pale yellow-green vial's glass; khaki cloth is darker or more saturated
     if s < 0.45 or v < 0.55 or 190 < hue < 255:
         return False
     return not 10 < hue < 45 or (v > 0.9 and s > 0.75)  # orange too when it glows
@@ -43,6 +46,9 @@ def classify(r, g, b):
         return BLUE  # the plates' shaded navy too, or it would turn brown
     if vivid(r, g, b):
         return OTHER  # before the pale and warm tests below: a light yellow-green vial passed as ivory
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    if 45 < h * 360 <= 75 and s > 0.3 and v > 0.3:
+        return KHAKI
     if (g > r + 20 and g > b + 15) or (r > 140 and g < 70 and b < 70):
         return OTHER  # green vials and glows, red gems and lamps: kept as painted
     if r > 150 and r > g + 25 and g > b + 15 and lum > 120 and r - g < 70:
@@ -77,7 +83,7 @@ def main(src, dst):
                         cls[y][x] = BLUE
     # Soft shading: the original's brightness, blurred, relative to its class's mean.
     lum = im.convert("L").filter(ImageFilter.GaussianBlur(1.5)).load()
-    sums, counts = [0.0] * 7, [0] * 7
+    sums, counts = [0.0] * 8, [0] * 8
     for y in range(h):
         for x in range(w):
             c = cls[y][x]
@@ -97,7 +103,7 @@ def main(src, dst):
     # Lossless, over a 256-colour palette (plenty for flat masses): lossy WebP halves the colour resolution,
     # and small glows bled into their dark neighbours.
     out.quantize(256, method=Image.Quantize.MAXCOVERAGE).convert("RGB").save(dst, lossless=True, method=6, quality=100)
-    print(f"{src} -> {dst}: " + ", ".join(f"{n} {counts[i] * 100 // (w * h)}%" for i, n in enumerate(["blue", "steel", "dark", "skin", "other", "copper", "ivory"])))
+    print(f"{src} -> {dst}: " + ", ".join(f"{n} {counts[i] * 100 // (w * h)}%" for i, n in enumerate(["blue", "steel", "dark", "skin", "other", "copper", "ivory", "khaki"])))
 
 
 if __name__ == "__main__":
