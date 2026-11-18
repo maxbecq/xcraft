@@ -192,7 +192,7 @@ body.touch { -webkit-tap-highlight-color: transparent; }
   .console { height: 94px; grid-template-columns: 90px minmax(110px, 1fr) minmax(200px, 36vw); gap: 6px; padding: 8px 8px calc(4px + env(safe-area-inset-bottom)); }
   .minimap { width: 80px; height: 80px; }
   .hud-panel { padding: 6px 8px; font-size: 12px; }
-  .hud-panel .portrait { display: none; }
+  .hud-panel .portrait { width: 64px; height: 64px; margin: 0 8px 0 0; } /* small, but there: phones on their side too */
   .hud-panel .name { font-size: 18px; margin: 0 0 2px; }
   .hud-panel .queue span, .hud-panel .tile { width: 30px; height: 30px; }
   .hud-panel .queue img, .hud-panel .tile img { width: 28px; height: 28px; }
