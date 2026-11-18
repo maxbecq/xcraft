@@ -119,7 +119,7 @@ function tileNoise(size: number, cells: number, seed: number): Float32Array {
  * Z creep: worn electronics grown into the ground. Traces at free angles, never running straight across or
  * up the screen (they would read as things standing up), branching off each other, ending in pads, with
  * light points here and there; a dark, uneven film under them, the ground showing through. The traces'
- * phosphor green is in the emissive texture only, so the film takes the scene's light like the ground.
+ * neon cyan (the Z screens' #6ff4ff) is in the emissive texture only, so the film takes the scene's light like the ground.
  */
 function pcbTextures(): NonNullable<typeof pcb> {
   if (pcb) return pcb;
@@ -255,7 +255,7 @@ function pcbTextures(): NonNullable<typeof pcb> {
         ctx.translate(ox, oy);
       }
       // The film: dark, thin, so the ground's colour and grain stay under it.
-      g.fillStyle = 'rgba(8,20,10,0.55)';
+      g.fillStyle = 'rgba(8,19,20,0.55)';
       g.fillRect(0, 0, S, S);
       for (const t of traces) {
         const path = (ctx: CanvasRenderingContext2D) => {
@@ -263,14 +263,14 @@ function pcbTextures(): NonNullable<typeof pcb> {
           t.pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         };
         path(g);
-        g.strokeStyle = 'rgba(2,8,3,0.55)'; // a groove either side
+        g.strokeStyle = 'rgba(2,7,8,0.55)'; // a groove either side
         g.lineWidth = t.w + 2.5;
         g.stroke();
-        g.strokeStyle = '#16521d';
+        g.strokeStyle = '#164c52';
         g.lineWidth = t.w;
         g.stroke();
         path(eg);
-        eg.strokeStyle = `rgba(40,${Math.round(150 + 60 * t.glow)},60,${0.45 + 0.4 * t.glow})`;
+        eg.strokeStyle = `rgba(40,${Math.round(139 + 54 * t.glow)},${Math.round(150 + 60 * t.glow)},${0.45 + 0.4 * t.glow})`;
         eg.lineWidth = Math.max(1.2, t.w * 0.7);
         eg.stroke();
         path(tg);
@@ -278,15 +278,15 @@ function pcbTextures(): NonNullable<typeof pcb> {
         tg.stroke();
         for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
           const r = t.w * 0.6 + 1.6;
-          g.fillStyle = '#1d6a26';
+          g.fillStyle = '#1d626a';
           g.beginPath();
           g.arc(x, y, r, 0, Math.PI * 2);
           g.fill();
-          g.fillStyle = '#030a04';
+          g.fillStyle = '#03090a';
           g.beginPath();
           g.arc(x, y, r * 0.42, 0, Math.PI * 2);
           g.fill();
-          eg.strokeStyle = `rgba(60,${Math.round(170 + 60 * t.glow)},70,0.8)`;
+          eg.strokeStyle = `rgba(60,${Math.round(159 + 54 * t.glow)},${Math.round(170 + 60 * t.glow)},0.8)`;
           eg.lineWidth = 1.2;
           eg.beginPath();
           eg.arc(x, y, r * 0.75, 0, Math.PI * 2);
@@ -294,20 +294,20 @@ function pcbTextures(): NonNullable<typeof pcb> {
         }
       }
       for (const ch of chips) {
-        g.fillStyle = '#2f6a34';
+        g.fillStyle = '#2f646a';
         for (let px = ch.x + U / 2; px < ch.x + ch.w; px += U) g.fillRect(px - 1.2, ch.y - 7, 2.4, ch.h + 14); // pins
-        g.fillStyle = 'rgba(2,8,3,0.7)';
+        g.fillStyle = 'rgba(2,7,8,0.7)';
         g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
-        g.fillStyle = '#0c140d';
+        g.fillStyle = '#0c1314';
         g.fillRect(ch.x, ch.y, ch.w, ch.h);
-        eg.fillStyle = 'rgba(150,255,150,0.9)';
+        eg.fillStyle = 'rgba(150,244,255,0.9)';
         eg.fillRect(ch.x + ch.w - 7, ch.y + ch.h - 7, 3, 3); // status LED
       }
       for (const l of lights) {
         const f = eg.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 3);
-        f.addColorStop(0, 'rgba(190,255,190,1)');
-        f.addColorStop(0.3, 'rgba(70,230,90,0.8)');
-        f.addColorStop(1, 'rgba(20,120,30,0)');
+        f.addColorStop(0, 'rgba(190,248,255,1)');
+        f.addColorStop(0.3, 'rgba(70,214,230,0.8)');
+        f.addColorStop(1, 'rgba(20,110,120,0)');
         eg.fillStyle = f;
         eg.fillRect(l.x - l.r * 3, l.y - l.r * 3, l.r * 6, l.r * 6);
       }
@@ -395,7 +395,7 @@ export class PowerNet {
           totalEmissiveRadiance *= fray * mix(0.55, 1.0, smoothstep(0.3, 0.7, nz.y));
           float w = fract(vDist / 6.0 - time * 0.2);
           float band = smoothstep(0.75, 0.97, w) * (1.0 - smoothstep(0.97, 1.0, w));
-          totalEmissiveRadiance += vec3(0.4, 1.0, 0.45) * trace * band * 0.3 * fray;`,
+          totalEmissiveRadiance += vec3(0.4, 0.94, 1.0) * trace * band * 0.3 * fray;`,
         )}`;
     };
   }
