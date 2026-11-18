@@ -410,7 +410,7 @@ export class AI {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || (atHome.length > 0 && this.mapDry()))) {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       this.waves++;
@@ -846,6 +846,12 @@ export class AI {
       if ((e.type === 'minerai' || e.type === 'puits') && dist(cx, cy, e.x, e.y) < (size / 2 + 3) * FP) return true;
     }
     return false;
+  }
+
+  /** No mineral left anywhere on the map: the army will not grow any more, so it goes with what it has. */
+  private mapDry(): boolean {
+    for (const e of this.world.entities.values()) if (e.type === 'minerai') return false;
+    return true;
   }
 
   /** Mineral fields left within reach of any of our finished headquarters. */

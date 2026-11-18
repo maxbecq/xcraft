@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { START } from '../data';
-import { ticks } from './fixed';
+import { type BuildingDef, DEFS, START } from '../data';
+import { createMap } from '../map';
+import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
-import type { Command, Entity, World } from './world';
+import { type Command, type Entity, World } from './world';
 
 const of = (w: World, owner: number, type: string): Entity[] =>
   [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
@@ -35,6 +36,20 @@ describe('economy', () => {
     // 6 serfs, 10 per trip, a trip is a few seconds: expect a steady income.
     expect(gained).toBeGreaterThan(400);
     expect(new Set(of(w, 0, 'serf').map((s) => (s.order?.kind === 'gather' ? s.order.target : 0))).size).toBeGreaterThan(3);
+  });
+
+  it('sends a builder to a tile outside the site, coming from the west as from the east', () => {
+    // A site's west and north edges used to be planned as a tile inside it (tiles are floor(x)): workers coming
+    // from the west or north took another way than those from the east or south, which favoured one start.
+    for (const [from, side] of [[36, -1], [52, 1]] as const) {
+      const w = new World(createMap());
+      w.players[0].minerals = 1000;
+      const serf = w.spawn('serf', 0, from * FP + FP / 2, 60 * FP + FP / 2);
+      w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx: 44, ty: 60 }]);
+      w.step([]);
+      const goal = Math.floor(serf.goal!.x / FP);
+      expect(side < 0 ? goal < 44 : goal >= 44 + (DEFS.grenier as BuildingDef).size, `from ${from}: goal tile ${goal}`).toBe(true);
+    }
   });
 
   it('builds a granary with one serf, faster with three', () => {

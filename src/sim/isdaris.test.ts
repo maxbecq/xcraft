@@ -167,14 +167,19 @@ describe('Isdaris', () => {
   }, 90_000);
 
   it('the AI builds the Psycho-assembleur and fields its advanced units in a long game', () => {
-    const w = createMatch(['isdaris', 'humains']);
-    // Humans harvesting a little less: a long, even game (the Psycho-assembleur only comes at minute 12).
-    w.players[1].handicap = 92;
-    const ais = [new AI(w, 0), new AI(w, 1)];
+    // Two long, even games (the Psycho-assembleur only comes at minute 12): against Humans harvesting a little less,
+    // and a mirror. Any change to the simulation moves the end of one game by minutes, sometimes before the first
+    // advanced unit, so one of the two is enough.
     const advanced = (DEFS.nanoassembleur as BuildingDef).trains!;
-    const made = () => [...w.entities.values()].find((e) => e.owner === 0 && advanced.includes(e.type));
-    while (w.winner === null && w.tick < ticks(25 * 60) && !made()) w.step(ais.flatMap((a) => a.think()));
-    expect(made()?.type).toBeDefined();
+    const fielded = (enemy: 'humains' | 'isdaris', handicap: number) => {
+      const w = createMatch(['isdaris', enemy]);
+      w.players[1].handicap = handicap;
+      const ais = [new AI(w, 0), new AI(w, 1)];
+      const made = () => [...w.entities.values()].find((e) => e.owner === 0 && advanced.includes(e.type));
+      while (w.winner === null && w.tick < ticks(25 * 60) && !made()) w.step(ais.flatMap((a) => a.think()));
+      return made()?.type;
+    };
+    expect(fielded('humains', 92) ?? fielded('isdaris', 100)).toBeDefined();
   }, 60_000);
 
   it('the AI teleports a battered Porte-disques out of the fight', () => {

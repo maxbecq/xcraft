@@ -1897,7 +1897,16 @@ export class World {
   private goNear(e: Entity, tx: number, ty: number, size: number): void {
     const nx = Math.max(tx * FP, Math.min(e.x, (tx + size) * FP));
     const ny = Math.max(ty * FP, Math.min(e.y, (ty + size) * FP));
-    if (!e.goal) this.plan(e, nx, ny);
+    // Plan to the tile just outside the edge: a point on the left or top edge belongs to the tile inside the
+    // rectangle (tiles are floor(x)), on the right or bottom edge to the one outside; aiming inside from one side
+    // only made units coming from the west or north take another path than those from the east or south.
+    // When that tile is blocked (a neighbouring mineral at a corner), aim inside: the nearest open tile to the
+    // rectangle itself, not to its neighbour, which may be on the far side of it.
+    if (!e.goal) {
+      const [ox, oy] = [nx === tx * FP ? nx - 1 : nx, ny === ty * FP ? ny - 1 : ny];
+      if (this.grid.open(tileOf(ox), tileOf(oy))) this.plan(e, ox, oy);
+      else this.plan(e, Math.min(nx, (tx + size) * FP - 1), Math.min(ny, (ty + size) * FP - 1));
+    }
     if (!this.follow(e)) return;
     // Path done (it ends on the open tile beside the rectangle): step straight at the edge.
     const d = dist(e.x, e.y, nx, ny);
