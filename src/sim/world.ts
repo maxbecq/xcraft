@@ -1563,6 +1563,9 @@ export class World {
         }
       }
       if (!t || t.hp <= 0 || !this.sees(e.owner, t) || this.gap(e, t) > (def.sight + 2) * FP) {
+        // Lost to distance while still in view (fled, or the path to it winds away round a cliff): leave it be for a
+        // while, else the unit walks back to its goal, sees it again and turns round, for ever.
+        if (t && t.hp > 0 && this.sees(e.owner, t)) [e.ignore, e.ignoreUntil] = [t.id, this.tick + ticks(10)];
         t = (this.tick + e.id) % 4 === 0 && this.tick >= e.calmUntil ? this.enemyNear(e, def.sight * FP) : undefined;
         o.target = t?.id ?? 0;
         if (!t && this.goTo(e, o.x, o.y)) {
