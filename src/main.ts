@@ -968,7 +968,9 @@ function start(): void {
   const frame = (elapsed: number) => {
     mark = performance.now();
     const dt = Math.min(elapsed, 0.25);
-    if (!ATTRACT) acc += dt * gameSpeed();
+    // The pause menu stops the match on this machine (alone, or watching a replay); online both sides step together,
+    // so it pauses nothing there.
+    if (!ATTRACT && !(paused && !net)) acc += dt * gameSpeed();
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && !net.ready(world.tick)) {
