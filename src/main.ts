@@ -308,10 +308,12 @@ window.addEventListener('keydown', (e) => {
 });
 
 let mouse: { x: number; y: number; onButton: boolean } | null = null;
-// Edge scrolling follows the mouse only: fingers drag the map instead. Not over a button (the Menu sits
-// in the top edge band): reaching for it must not move the view.
+// Edge scrolling follows the mouse only: fingers drag the map instead. Only over the map itself: over any piece of
+// the interface (console, minimap, command card, top bar, menus, messages) the view stays put. The element really
+// under the pointer decides, so the Dieux console's cut-out shape and the dip of the others count as they are drawn
+// (a held pointer replays its moves there too, see game/pointerlock.ts).
 window.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: !!(e.target as HTMLElement).closest?.('button, .tools, input, .hud-toast') };
+  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: e.target !== renderer.domElement };
 });
 document.addEventListener('mouseleave', () => (mouse = null));
 // Wheel zooms. A trackpad's two-finger scroll (sideways or fractional pixel deltas) pans,
