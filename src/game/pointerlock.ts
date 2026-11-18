@@ -25,6 +25,9 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
     cursor.hidden = !locked();
     if (locked()) draw(document.elementFromPoint(x, y));
   });
+  // The map picks what lies under the cursor a frame after a move (and animates its brackets): redraw then too, not
+  // only at the next move.
+  new MutationObserver(() => locked() && over === canvas && draw(canvas)).observe(canvas, { attributes: true, attributeFilter: ['style'] });
 
   /** The cursor the page asks for at the target (a custom image with its hot spot, else a plain arrow). */
   const draw = (target: Element | null) => {

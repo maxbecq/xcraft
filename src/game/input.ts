@@ -511,14 +511,28 @@ export class Input {
   private fadeFrom: Layer | undefined;
   private fadeStart = 0;
 
-  /** Owner colour of what is under the cursor (SC1 lens), checked at most every 50 ms. */
+  /**
+   * Owner colour of what is under the cursor (SC1 lens). Picked at most once a frame (16 ms), the last move of a
+   * burst picked on the next frame, and a change shown at once rather than at the cursor's next animation tick.
+   */
   private hoverCursor(x: number, y: number): void {
-    const now = performance.now();
-    if (now - this.lastHoverPick < 50) return;
-    this.lastHoverPick = now;
-    const e = this.dragStart || this.grab ? undefined : this.entityAt(x, y);
-    this.hoverColor = !e ? '' : e.owner === this.player ? '#4dff6a' : e.owner < 0 ? '#ffe27a' : this.world.hostile(e.owner, this.player) ? '#ff4a3a' : '#5ad8ff';
+    this.hoverAt = { x, y };
+    if (this.hoverQueued) return;
+    const pick = () => {
+      this.hoverQueued = false;
+      this.lastHoverPick = performance.now();
+      const e = this.dragStart || this.grab ? undefined : this.entityAt(this.hoverAt.x, this.hoverAt.y);
+      const color = !e ? '' : e.owner === this.player ? '#4dff6a' : e.owner < 0 ? '#ffe27a' : this.world.hostile(e.owner, this.player) ? '#ff4a3a' : '#5ad8ff';
+      if (color === this.hoverColor) return;
+      this.hoverColor = color;
+      this.animateCursor();
+    };
+    if (performance.now() - this.lastHoverPick >= 16) return pick();
+    this.hoverQueued = true;
+    requestAnimationFrame(pick);
   }
+  private hoverAt = { x: 0, y: 0 };
+  private hoverQueued = false;
 
   /**
    * Animated cursors, by priority: aiming (red, gold for an ability), a right-click order just given, hovering,
@@ -545,8 +559,8 @@ export class Input {
       const layer = this.hoverColor ? hoverLayers(this.hoverColor)[f % HOVER_FRAMES] : ARROW;
       const key = this.hoverColor || 'arrow';
       if (key !== this.cursorKey) {
-        // Fade from what was on screen; straight in after an aim or an order.
-        this.fadeFrom = this.shown;
+        // Onto something: its brackets at once. Back to the arrow: a short fade. Straight in after an aim or an order.
+        this.fadeFrom = this.hoverColor ? undefined : this.shown;
         this.fadeStart = performance.now();
         this.cursorKey = key;
       }
