@@ -358,6 +358,10 @@ export const ABILITIES: Record<string, AbilityDef> = {
   armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
   nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
+  /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
+  transe: { name: 'Transe enragée', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
+  /** Sphinx (notice, Peau de roc): turned to stone, slower and slower to shoot, but heavily armoured, mending. */
+  statue: { name: 'Forme de statue', hotkey: 'R', target: 'self', research: 'peauroc', ...BALANCE.abilities.statue },
   /** Athéna (notice): her owl flies over a zone and shows it a while. */
   chouette: { name: 'Chouette', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
   /** Prêtresse (notice): on an ally, ends what harms it; on an enemy, what helps it, and hurts summoned ones badly. */
@@ -674,9 +678,9 @@ const BASE: Record<string, object> = {
   /** Isis's priestess: heals, no attack; Dissipation. */
   pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'P' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
-  minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
+  minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, ability: 'transe', faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
-  sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, faction: 'dieux', hotkey: 'X' },
+  sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, ability: 'statue', faction: 'dieux', hotkey: 'X' },
   asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
   // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
   branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], faction: 'dieux', hotkey: 'B' },
@@ -695,12 +699,18 @@ const BASE: Record<string, object> = {
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
     kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
-    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes'],
+    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'armurezodiacale'],
   },
   ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
   ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
   ...upgrades('armor', 'Amélioration armure', 'A', undefined, 'dieux', 3, 'darmor'),
   celerite: research('Célérité naine', 'N', 'Les Nains bondissent sur un ennemi proche.', undefined, 'dieux'),
+  // The rest of the Temple de vénération's research (notice); XC.doc: the god of the mythology needed.
+  coupuissant: { ...research('Coup puissant', 'U', 'Minotaures : un coup sur quatre fait double dégâts.', undefined, 'dieux'), requiresAny: { of: ['apollon', 'athena', 'hades'], count: 1 } },
+  peauroc: { ...research('Peau de roc', 'R', 'Sphinx : Forme de statue, lent et tirant moins vite, mais très blindé et qui se répare.', undefined, 'dieux'), requiresAny: { of: ['seth', 'isis', 'osiris'], count: 1 } },
+  prescience: research("Prescience d'Yggdrasill", 'Y', 'Les Yggdrasill détectent les unités camouflées.', undefined, 'dieux'),
+  drakegeant: research('Drake géant', 'G', 'Drakes : plus de vie, et ils transportent des unités dans leur gueule.', { odin: 1 }, 'dieux'),
+  armurezodiacale: research('Armure zodiacale', 'Z', 'Titans : plus de vie et de blindage.', { hades: 1 }, 'dieux'),
   offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
   // Artefacterie (notice, Frigg): a god buys up to 4 improvements, where it stands, the same one several times if it likes.
   artforce: research('Force', 'Y', 'Le dieu frappe plus fort.', { artefacterie: 1 }, 'dieux'),

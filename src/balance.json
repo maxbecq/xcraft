@@ -227,6 +227,11 @@
     "darmor2": { "cost": { "minerals": 350, "energy": 350 }, "buildTime": 90 },
     "darmor3": { "cost": { "minerals": 450, "energy": 450 }, "buildTime": 100 },
     "celerite": { "cost": { "minerals": 150, "energy": 150 }, "buildTime": 60 },
+    "coupuissant": { "cost": { "minerals": 200, "energy": 0 }, "buildTime": 30 },
+    "peauroc": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 40 },
+    "prescience": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 40 },
+    "drakegeant": { "cost": { "minerals": 300, "energy": 100 }, "buildTime": 60 },
+    "armurezodiacale": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 40 },
     "offrandes": { "cost": { "minerals": 150, "energy": 0 }, "buildTime": 20 },
     "artforce": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
     "artresistance": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
@@ -298,6 +303,8 @@
     "jormungand": { "cooldown": 1, "duration": 60, "range": 8, "radius": 1 },
     "tempetezeus": { "cooldown": 1, "duration": 0, "range": 10, "radius": 5, "damage": 30 },
     "amonra": { "cooldown": 1, "duration": 15, "range": 10, "radius": 5, "max": 6 },
+    "transe": { "cooldown": 30, "duration": 8, "damage": 50 },
+    "statue": { "cooldown": 15, "duration": 15 },
     "chouette": { "cooldown": 40, "duration": 15, "range": 25, "radius": 8 },
     "dissipation": { "cooldown": 6, "duration": 0, "range": 5, "radius": 1, "damage": 100 },
     "mutation": { "cooldown": 20, "duration": 0 },
@@ -311,7 +318,7 @@
     "peauDeRoc": { "range": 4, "reduction": 5 },
     "stimulantHp": 10,
     "trade": { "give": 100, "get": 50 },
-    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 }, "artefacts": { "force": 20, "resistance": 2, "agilite": 15, "vitesse": 10, "max": 4 } },
+    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 }, "artefacts": { "force": 20, "resistance": 2, "agilite": 15, "vitesse": 10, "max": 4 }, "statue": { "armor": 6, "regen": 4, "speed": 40, "rate": 200 }, "drakegeant": { "hp": 50, "room": 4 }, "zodiacale": { "hp": 150, "armor": 3 }, "prescience": 7 },
     "creepRepair": 1,
     "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "repairHp": 4, "repairPercent": 25, "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
   },
@@ -327,7 +334,7 @@
       "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
       "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem"],
-      "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
+      "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3", "coupuissant", "peauroc", "drakegeant", "armurezodiacale", "prescience"]
     },
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17], ["artefacterie", 19]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },

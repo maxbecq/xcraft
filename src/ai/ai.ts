@@ -63,7 +63,7 @@ const GANG_UP = (30 * FP) / 20;
 const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
 
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
-const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
+const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
 const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, tempete: 2 };
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
@@ -475,7 +475,8 @@ export class AI {
       // the summons it has queued (Thor, who always has two, never levelled otherwise).
       // Not Gaïa: her levels only speed up buildings, and measured, they ate the minerals the next gods were saved with.
       // Only once the first-rank gods are out; the minerals saved for the next god due are already set aside above.
-      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t));
+      // (or from minute 12 anyway: short of energy, Apollon may never come).
+      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) || minute >= 12;
       for (const g of allGods ? gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau')) : []) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
@@ -547,7 +548,7 @@ export class AI {
       if (!ab || u.abilityCd > 0 || !SIMPLE.includes(ab)) return false;
       if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
-      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
+      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
     });
     if (casters.length && !this.easy) out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
     if (!this.easy) out.push(...this.tactics([...army, ...gods]));
@@ -784,6 +785,9 @@ export class AI {
           if (this.engaged(u) !== undefined) cmd = self(u, name);
         } else if (name === 'nuee') {
           if (around(near, u.x, u.y, radius + u.radius).length >= 2) cmd = self(u, name);
+        } else if (name === 'statue') {
+          // To stone while hurt under fire, back once mended.
+          if (u.statue === 0 ? u.hp * 2 < u.maxHp && w.tick - u.lastHit < ticks(2) : u.hp * 10 > u.maxHp * 9) cmd = self(u, name);
         } else if (name === 'cridegueurre') {
           if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 4) cmd = self(u, name);
         } else if (name === 'soinsdivins') {

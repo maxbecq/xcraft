@@ -137,6 +137,13 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
     return;
+  } else if (name === 'transe') {
+    e.war = ticks(ab.duration);
+    e.warPct = ab.damage!;
+  } else if (name === 'statue') {
+    // To stone, or back (each way once its cooldown is over).
+    e.statue = e.statue > 0 ? 0 : ticks(ab.duration);
+    e.speed = this.baseSpeed(e);
   } else if (name === 'nuee') {
     e.swarm = ticks(ab.duration);
   } else if (name === 'resurrection') {

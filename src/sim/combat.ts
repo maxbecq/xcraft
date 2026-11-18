@@ -29,6 +29,11 @@ export function empower(this: World, u: Entity, type: string): void {
     const extra = idiv((u.def.shield ?? 0) * U.cerclePercent, 100);
     u.maxShield += extra;
     u.shield += extra;
+  } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'armurezodiacale' && u.type === 'titan')) {
+    // Drake géant, Armure zodiacale: more health, the wounds kept.
+    const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.zodiacale.hp;
+    u.maxHp += extra;
+    u.hp += extra;
   } else if (type === 'boostgenetique' && u.type === 'creature') {
     const extra = idiv((u.def as UnitDef).hp * U.boost.hp, 100);
     u.maxHp += extra;
@@ -47,6 +52,8 @@ export function armorBonus(this: World, t: Entity): number {
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
   bonus += t.arts.filter((a) => a === 'artresistance').length * BALANCE.rules.upgrades.artefacts.resistance;
+  if (t.statue > 0) bonus += BALANCE.rules.upgrades.statue.armor;
+  if (t.type === 'titan' && this.level(t.owner, 'armurezodiacale')) bonus += BALANCE.rules.upgrades.zodiacale.armor;
   // Athéna's protection aura, the strongest of her side's in reach.
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
@@ -124,7 +131,8 @@ export function baseSpeed(this: World, e: Entity): number {
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
   if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
-  return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast)) / 100);
+  const stone = e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100;
+  return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */
@@ -162,6 +170,7 @@ export function pulse(this: World, e: Entity): void {
     }
     e.hp = Math.min(e.maxHp, e.hp + taken);
   }
+  if (e.statue > 0) e.hp = Math.min(e.maxHp, e.hp + U.statue.regen);
   if (e.type === 'jormungandr' && e.abilityCd === 0) {
     // Festin: it devours a body near it and heals.
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, e.x, e.y) <= 3 * FP);
@@ -326,6 +335,7 @@ export function strike(this: World, e: Entity, t: Entity): void {
   // The Artefacterie's Agilité: each one a share off the time between blows.
   const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
+  if (e.statue > 0) e.cooldown = idiv(e.cooldown * BALANCE.rules.upgrades.statue.rate, 100);
   this.hit(e, t, a);
 }
 
@@ -358,6 +368,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   let damage = a.damage + bonus + upgrade;
   // Cri de guerre: much harder for a while; the Artefacterie's Force, for good.
   if (e.war > 0) damage += idiv(damage * e.warPct, 100);
+  // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
+  if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
   const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * U.artefacts.force : 0;
   if (force) damage += idiv(damage * force, 100);
   if (e.charged > 0 && a.range < 1) {

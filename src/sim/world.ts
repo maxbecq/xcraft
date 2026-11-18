@@ -143,11 +143,16 @@ export interface Entity {
   charmOwner: number;
   /** Nuée nauséabonde (Osiris): ticks left of the swarm round it. */
   swarm: number;
+  /** Sphinx: ticks left in its Forme de statue. */
+  statue: number;
   /** Dieux: the Artefacterie's improvements this god bought (ARTEFACTS), in order. */
   arts: string[];
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
+
+/** The Yggdrasill's three forms (Prescience d'Yggdrasill makes them detectors). */
+const YGGDRASILL = ['branche', 'protecteur', 'furieux'];
 
 /** Bac à sable, « Ressources illimitées »: each resource topped up to this at every tick. */
 const UNLIMITED = 99999;
@@ -316,7 +321,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -330,7 +335,7 @@ export class World {
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
     if (owner >= 0 && e.type === 'drone' && this.level(owner, 'sonderobuste')) this.fortify(e);
     if (owner >= 0 && e.type === 'zespion' && this.level(owner, 'megaespion')) this.fortify(e);
-    if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
+    if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique', 'drakegeant', 'armurezodiacale']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
   }
 
@@ -381,6 +386,7 @@ export class World {
       if (e.charged > 0) e.charged--;
       if (e.war > 0) e.war--;
       if (e.swarm > 0) e.swarm--;
+      if (e.statue > 0 && --e.statue === 0) e.speed = this.baseSpeed(e);
       if (e.charm > 0 && --e.charm === 0) {
         e.owner = e.charmOwner;
         this.setOrder(e, null);
@@ -433,7 +439,7 @@ export class World {
       if (!this.hidden(e)) continue;
       for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= toFp(s.radius ?? OBSERVATION.radius)) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       for (const s of this.entities.values()) {
-        const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : s.support & KIT.detection ? (s.def as UnitDef).sight : 0);
+        const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : YGGDRASILL.includes(s.type) && this.level(s.owner, 'prescience') ? BALANCE.rules.upgrades.prescience : s.support & KIT.detection ? (s.def as UnitDef).sight : 0);
         if (r && this.hostile(s.owner, e.owner) && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       }
     }

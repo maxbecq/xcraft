@@ -113,6 +113,7 @@ export function repairOnCreep(this: World): void {
 
 /** Room in a bunker or carrier: Fortin, Scarabée, and Bourdons with Chargement. */
 export function room(this: World, b: Entity): number {
+  if (b.type === 'drake') return this.level(b.owner, 'drakegeant') ? BALANCE.rules.upgrades.drakegeant.room : 0;
   return (b.def as BuildingDef | UnitDef).bunker ?? (b.type === 'bourdon' && this.level(b.owner, 'chargement') ? BALANCE.rules.upgrades.chargement : 0);
 }
 
@@ -120,7 +121,7 @@ export function room(this: World, b: Entity): number {
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
   if (d.worker || d.mechanical || d.beast) return false;
-  return b.type === 'bourdon' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
+  return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
 
 /** Training time in ticks, the Caserne's shortened by Entraînement groupé. */
@@ -197,7 +198,7 @@ export function produce(this: World, b: Entity): void {
       if (type === 'megaespion') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'zespion') this.fortify(u);
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'drone') this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
-      if (type.startsWith('cercle') || type === 'boostgenetique') for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
+      if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'armurezodiacale'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
       if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UpgradeDef).buildTime);
       return;
     }

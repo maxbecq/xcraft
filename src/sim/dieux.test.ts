@@ -337,6 +337,42 @@ describe('Dieux', () => {
     expect(of(w, 0, 'elemterre').length + of(w, 0, 'elemeau').length).toBe(0);
   });
 
+  it("the Temple de vénération's other research: Coup puissant, Peau de roc, Prescience, Drake géant, Armure zodiacale; the Transe", () => {
+    const w = createMatch(['dieux', 'humains']);
+    const up = w.players[0].upgrades;
+    // Peau de roc: the Sphinx turns to stone, armoured and mending.
+    const sphinx = w.spawn('sphinx', 0, 30 * FP, 30 * FP);
+    const bare = w.armorBonus(sphinx);
+    w.step([{ player: 0, kind: 'ability', ids: [sphinx.id], name: 'statue' }]);
+    expect(sphinx.statue).toBe(0); // not researched
+    up.peauroc = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [sphinx.id], name: 'statue' }]);
+    expect(w.armorBonus(sphinx)).toBe(bare + BALANCE.rules.upgrades.statue.armor);
+    // Coup puissant: some blows double.
+    up.coupuissant = 1;
+    const mino = w.spawn('minotaure', 0, 50 * FP, 30 * FP);
+    const dummy = w.spawn('grenier', 1, 50 * FP, 32 * FP);
+    const blows = new Set<number>();
+    for (let i = 0; i < 12; i++) {
+      const before = dummy.hp;
+      w.hit(mino, dummy, (DEFS.minotaure as UnitDef).attack!);
+      blows.add(before - dummy.hp);
+      w.step([]);
+    }
+    expect(blows.size).toBe(2);
+    // Drake géant and Armure zodiacale, on those standing and to come.
+    const drake = w.spawn('drake', 0, 60 * FP, 50 * FP);
+    up.drakegeant = 1;
+    w.empower(drake, 'drakegeant');
+    expect(drake.maxHp).toBeGreaterThan((DEFS.drake as UnitDef).hp);
+    expect(w.room(drake)).toBe(BALANCE.rules.upgrades.drakegeant.room);
+    up.armurezodiacale = 1;
+    expect(w.spawn('titan', 0, 64 * FP, 50 * FP).maxHp).toBe((DEFS.titan as UnitDef).hp + BALANCE.rules.upgrades.zodiacale.hp);
+    // Transe enragée.
+    w.step([{ player: 0, kind: 'ability', ids: [mino.id], name: 'transe' }]);
+    expect(mino.war).toBeGreaterThan(0);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
@@ -414,14 +450,16 @@ describe('Dieux', () => {
 
   it('gods bought up by the AI replay the same from the recorded commands (levels in the hash)', () => {
     const record: [number, Command[]][] = [];
+    let levelled = false;
     const live = createMatch(['dieux', 'humains']);
     const ais = [new AI(live, 0), new AI(live, 1)];
     while (live.tick < ticks(21 * 60)) {
       const cmds = ais.flatMap((ai) => ai.think());
       if (cmds.length) record.push([live.tick, cmds]);
       live.step(cmds);
+      if (live.tick % 60 === 0) levelled ||= [...live.entities.values()].some((e) => e.owner === 0 && e.def.kind === 'unit' && e.lvl > 1);
     }
-    expect([...live.entities.values()].some((e) => e.owner === 0 && e.lvl > 1)).toBe(true);
+    expect(levelled).toBe(true); // a god levelled (it may have fallen since)
     const played = new Map<number, Command[]>(JSON.parse(JSON.stringify(record)));
     const again = createMatch(['dieux', 'humains']);
     while (again.tick < live.tick) again.step(played.get(again.tick) ?? []);
