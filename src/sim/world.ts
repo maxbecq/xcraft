@@ -121,6 +121,11 @@ export interface Entity {
   /** Cri de guerre (Athéna): ticks left, and the damage it adds, in percent. */
   war: number;
   warPct: number;
+  /** Soumission divine (Frigg): ticks left under another's control, and the owner it goes back to. */
+  charm: number;
+  charmOwner: number;
+  /** Nuée nauséabonde (Osiris): ticks left of the swarm round it. */
+  swarm: number;
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -288,7 +293,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -350,6 +355,13 @@ export class World {
       if (e.skin > 0) e.skin--;
       if (e.charged > 0) e.charged--;
       if (e.war > 0) e.war--;
+      if (e.swarm > 0) e.swarm--;
+      if (e.charm > 0 && --e.charm === 0) {
+        e.owner = e.charmOwner;
+        this.setOrder(e, null);
+      }
+      // Once a second, staggered: Osiris's putrid aura and swarm, the Fontaine du Nil.
+      if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       this.regenerate(e);
     }

@@ -94,6 +94,34 @@ export function ascend(this: World, g: Entity): void {
   this.say(g.owner, `${g.def.name} passe au niveau ${g.lvl}.`, 'done');
 }
 
+/**
+ * Once a second: Osiris's putrid aura (and the Immortel's, at his first level) hurts the living enemies round him;
+ * his Nuée nauséabonde hurts the enemies round him and gives him what it takes; the Fontaine du Nil heals the living
+ * allies round it.
+ */
+export function pulse(this: World, e: Entity): void {
+  const U = BALANCE.rules.upgrades;
+  const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical;
+  if (e.type === 'osiris' || e.type === 'immortel') {
+    const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
+    for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
+  }
+  if (e.swarm > 0) {
+    const ab = spell('nuee', e.lvl);
+    let taken = 0;
+    for (const t of this.entities.values()) {
+      if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || !this.hostile(t.owner, e.owner) || this.gap(e, t) > toFp(ab.radius!)) continue;
+      const before = t.hp;
+      this.hurt(t, ab.damage!);
+      taken += before - Math.max(0, t.hp);
+    }
+    e.hp = Math.min(e.maxHp, e.hp + taken);
+  }
+  if (e.type === 'fontaine' && e.buildLeft === 0) {
+    for (const t of this.entities.values()) if (living(t) && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
+  }
+}
+
 /** Croissance économique: serfs and the Caserne's soldiers. */
 export function grows(this: World, u: Entity): boolean {
   return u.def.kind === 'unit' && (u.type === 'serf' || !!(DEFS.caserne as BuildingDef).trains?.includes(u.type));

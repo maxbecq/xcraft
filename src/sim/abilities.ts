@@ -98,6 +98,23 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       t.hp = Math.min(t.maxHp, t.hp + ab.damage!);
       this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
     }
+  } else if (name === 'voile') {
+    for (const t of around(ab.radius!, (t) => t.owner === e.owner)) t.camo = Math.max(t.camo, ticks(ab.duration));
+  } else if (name === 'rayonmort') {
+    // Every enemy unit Hadès sees, within his sight.
+    const seen = [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, e.owner) && this.sees(e.owner, t) && dist(t.x, t.y, e.x, e.y) <= toFp((e.def as UnitDef).sight));
+    if (!seen.length) return;
+    for (const t of seen) {
+      this.hit(e, t, { damage: ab.damage!, range: 99, cooldown: 0 });
+      this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
+    }
+  } else if (name === 'armeeenfers') {
+    for (let i = 0; i < (ab.max ?? 1); i++) {
+      const g = this.spawnBeside('fantome', e);
+      g.invuln = g.ttl; // unhurt for all their short life
+    }
+  } else if (name === 'nuee') {
+    e.swarm = ticks(ab.duration);
   } else if (name === 'resurrection') {
     // The side's own fallen of the last `duration` seconds round her, nearest first, back at full health.
     const fallen = this.corpses
@@ -166,6 +183,16 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.hit(e, t, { damage: ab.damage!, range: 7, cooldown: 0 });
   } else if (name === 'silence') {
     this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+  } else if (name === 'soumission') {
+    // The enemy unit nearest the point (not a god, not a worker) changes side for a while.
+    const t = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).unique && !(t.def as UnitDef).worker && t.charm === 0)[0];
+    if (!t) return false;
+    t.charmOwner = t.owner;
+    t.owner = e.owner;
+    t.charm = ticks(ab.duration);
+    this.setOrder(t, null);
+  } else if (name === 'voyage') {
+    this.place(e, x, y);
   } else if (name === 'foudre') {
     const t = near((t) => this.hostile(t.owner, e.owner))[0];
     if (!t) return false;

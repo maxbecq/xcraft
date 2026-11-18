@@ -383,8 +383,8 @@ export class AI {
       // Minerals to spare (a margin kept for the troops), once every god is out: a god buys its next level behind
       // the summons it has queued (Thor, who always has two, never levelled otherwise).
       // Not Gaïa: her levels only speed up buildings, and measured, they ate the minerals the next gods were saved with.
-      // Only once the first-rank gods are out, and not while the next god due can be summoned: it comes first.
-      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) && (!next || !!w.lacks(this.player, next[0]));
+      // Only once the first-rank gods are out; the minerals saved for the next god due are already set aside above.
+      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t));
       for (const g of allGods ? gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau')) : []) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
@@ -668,6 +668,18 @@ export class AI {
             const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
             cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
           }
+        } else if (name === 'soumission') {
+          // The toughest enemy soldier in reach that can change side.
+          const pick = inReach.filter((f) => !(f.def as UnitDef).worker && !(f.def as UnitDef).unique && f.charm === 0).sort((a, b) => b.maxHp - a.maxHp || a.id - b.id)[0];
+          if (pick && pick.maxHp >= 150) cmd = at(u, name, pick);
+        } else if (name === 'voile') {
+          if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 5) cmd = self(u, name);
+        } else if (name === 'rayonmort') {
+          if (around(near, u.x, u.y, (u.def as UnitDef).sight * FP).length >= 4) cmd = self(u, name);
+        } else if (name === 'armeeenfers') {
+          if (this.engaged(u) !== undefined) cmd = self(u, name);
+        } else if (name === 'nuee') {
+          if (around(near, u.x, u.y, radius + u.radius).length >= 2) cmd = self(u, name);
         } else if (name === 'cridegueurre') {
           if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 4) cmd = self(u, name);
         } else if (name === 'soinsdivins') {

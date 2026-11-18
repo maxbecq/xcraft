@@ -174,3 +174,132 @@ def pretresse(p):
     along(p["gold"], (0.16, -0.12, 0.03), (0.16, -0.12, 1.0), 0.012)
     torus(p["turq"], 0.04, 0.01, (0.16, -0.12, 1.06), rot=(math.pi / 2, 0, 0))
     ball(p["ether"], 0.02, (0.16, -0.12, 1.06))
+
+
+# ------------------------------------------------------------------ third rank
+def frigg(p):
+    """Frigg, lady of the clouds: she floats on a cloud, veiled, a distaff of light."""
+    for k in range(7):
+        a = k / 7 * math.tau
+        ball(p["white"], 0.28, (math.cos(a) * 0.38, math.sin(a) * 0.38, 0.32), (1, 1, 0.55))
+    ball(p["white"], 0.4, (0, 0, 0.4), (1, 1, 0.5))
+    skirt(p["lapis"], 1.3, 0.45, 0.2, 0.42, pleats=20, depth=0.02)
+    head, LW, RW = _figure(p, "skin", 1.84, 0.82)
+    meta(p["lapis"], blobs=[((0, 0, 1.4), 0.24, (1.0, 0.72, 0.85), (0, 0, 0))])
+    sheet(p["white"], 1, 1, lambda u, t: (math.cos(u * math.pi) * 0.2, 0.05 + math.sin(u * math.pi) * 0.12, head[2] + 0.12 - t * 1.1), cuts=10, thick=0.012)
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.16, -0.2 - 0.02 * t, 1.2 - 0.5 * t), cuts=6, thick=0.015)
+    torus(p["gold"], 0.11, 0.015, (0, 0, head[2] + 0.1))
+    halo(p, (0, 0.06, head[2] + 0.14), 0.36, "ether")
+    along(p["gold"], (RW[0], RW[1], RW[2] - 0.3), (RW[0], RW[1], RW[2] + 0.5), 0.016)
+    ball(p["ether"], 0.06, (RW[0], RW[1], RW[2] + 0.55))
+    ball(p["ether_veil"], 0.14, (RW[0], RW[1], RW[2] + 0.55))
+    motes(p["ether"], (0, 0, 0.6), 0.9, 20, 11, size=0.012, zmin=0.2, zmax=2.2)
+
+
+def hades(p):
+    """Hadès, lord below: dark armour, a crown of black flames, the bident, a three-headed shadow at his feet."""
+    god_circle(p, 0.9, "amber")
+    _legs(p, "iron")
+    skirt(p["shadow"], 1.6, 0.05, 0.3, 0.55, pleats=16, depth=0.03, gap=1.6)
+    head, LW, RW = _figure(p, "bronze_skin")
+    meta(p["iron"], blobs=[((0, 0, 1.42), 0.29, (1.05, 0.76, 0.82), (0, 0, 0)), ((0, -0.02, 1.2), 0.21, (1.0, 0.8, 0.6), (0, 0, 0))])
+    for s in (-1, 1):
+        ball(p["iron"], 0.13, (s * 0.34, 0, 1.62), (1, 1.1, 0.55), (0, s * 0.4, 0))
+        cyl(p["horn"], 0.03, 0.18, (s * 0.38, 0, 1.75), rot=(0, s * 0.5, 0), v=6, r2=0.0)
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.2, -0.25 - 0.03 * t, 1.0 - 0.45 * t), cuts=6, thick=0.015)
+    meta(p["shadow"], blobs=[((0, -0.08, 1.72), 0.09, (1.0, 0.7, 1.4), (0.3, 0, 0))])
+    for k in range(7):
+        a = math.radians(-60 + k * 20)
+        strand(p["amber"], [(math.sin(a) * 0.1, 0.0, head[2] + 0.1), (math.sin(a) * 0.14, 0.0, head[2] + 0.25 + (k % 2) * 0.06)], 0.025, 0.004)
+    halo(p, (0, 0.06, head[2] + 0.16), 0.38, "amber")
+    along(p["iron"], (RW[0], RW[1], 0.1), (RW[0], RW[1], 2.45), 0.025)
+    for x in (-0.06, 0.06):
+        cyl(p["iron"], 0.025, 0.25, (RW[0] + x, RW[1], 2.55), v=4, r2=0.0)
+    box(p["iron"], (0.16, 0.03, 0.03), (RW[0], RW[1], 2.43))
+    for k, x in enumerate((-0.5, -0.3, -0.1)):
+        ball(p["shadow"], 0.09, (x - 0.2, -0.45, 0.3 + 0.04 * k), (0.9, 1.3, 0.9))
+        ball(p["amber"], 0.015, (x - 0.2, -0.56, 0.33 + 0.04 * k))
+
+
+def osiris(p):
+    """Osiris, judge of the dead: green skin, mummy wrappings, the white crown with plumes, crook and flail."""
+    god_circle(p, 0.9, "jade")
+    meta(p["white"], caps=[((-0.13, 0, 0.97), (-0.15, 0, 0.1), 0.1), ((0.13, 0, 0.97), (0.15, 0, 0.1), 0.1)],
+         blobs=[((0, 0, 0.6), 0.25, (1.1, 0.9, 1.8), (0, 0, 0))])
+    for z in range(8):
+        torus(p["sand"], 0.24 - abs(z - 4) * 0.01, 0.012, (0, 0, 0.2 + z * 0.12)).scale = (1.1, 0.9, 1)
+    head, LW, RW = _figure(p, "jade")
+    meta(p["white"], blobs=[((0, 0, 1.4), 0.26, (1.0, 0.74, 0.85), (0, 0, 0))])
+    torus(p["gold"], 0.22, 0.035, (0, -0.01, 1.6)).scale = (1.2, 0.9, 1)
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.18, -0.24 - 0.02 * t, 1.1 - 0.5 * t), cuts=6, thick=0.015)
+    cyl(p["white"], 0.11, 0.35, (0, 0, head[2] + 0.25), v=24, r2=0.05)
+    ball(p["white"], 0.06, (0, 0, head[2] + 0.43))
+    for s in (-1, 1):
+        sheet(p["white"], 1, 1, lambda u, t, s=s: (s * (0.12 + 0.03 * u), 0.0, head[2] + 0.05 + t * 0.4), cuts=4, thick=0.01)
+    halo(p, (0, 0.08, head[2] + 0.2), 0.4, "jade")
+    strand(p["gold"], [(LW[0] + 0.05, LW[1], LW[2] - 0.2), (LW[0] + 0.05, LW[1], LW[2] + 0.4), (LW[0] - 0.03, LW[1], LW[2] + 0.5), (LW[0] - 0.08, LW[1], LW[2] + 0.42)], 0.016, 0.014)
+    along(p["gold"], (RW[0], RW[1], RW[2] - 0.1), (RW[0], RW[1], RW[2] + 0.35), 0.016)
+    for k in range(3):
+        strand(p["lapis"], [(RW[0], RW[1], RW[2] + 0.35), (RW[0] + 0.05 + k * 0.03, RW[1] - 0.05, RW[2] + 0.2)], 0.012, 0.01)
+
+
+def walkyrie(p):
+    """A valkyrie in flight: winged helm, mail, white wings, the double sword."""
+    meta(p["skin"], caps=[((0, 0, 0.45), (0, 0, 0.72), 0.07), ((-0.1, 0, 0.68), (-0.2, -0.1, 0.52), 0.03), ((0.1, 0, 0.68), (0.22, -0.12, 0.6), 0.03)],
+         blobs=[((0, 0, 0.82), 0.07, (0.9, 1, 1.1), (0, 0, 0))])
+    skirt(p["steel"], 0.6, 0.3, 0.08, 0.14, pleats=10, depth=0.008)
+    ball(p["steel"], 0.075, (0, 0, 0.85), (1, 1.05, 0.8))
+    for s in (-1, 1):
+        box(p["white"], (0.015, 0.04, 0.09), (s * 0.08, 0.02, 0.9), (0, s * 0.4, 0))
+        sheet(p["white"], 1, 1, lambda u, t, s=s: (s * (0.08 + u * 0.45), 0.08 + t * 0.12, 0.72 + math.sin(u * math.pi) * 0.1 - t * 0.25 * (1 - 0.5 * u)), cuts=8, thick=0.012)
+    meta(p["leather"], blobs=[((0, 0, 0.3), 0.06, (1, 1, 2.5), (0, 0, 0))])
+    along(p["steel"], (0.22, -0.12, 0.35), (0.22, -0.12, 0.9), 0.012)
+    box(p["gold"], (0.1, 0.02, 0.02), (0.22, -0.12, 0.62))
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.08, -0.09, 0.62 - 0.2 * t), cuts=4, thick=0.01)
+
+
+def titan(p):
+    """A demigod of bronze, crowned with lightning, a bolt in the raised hand."""
+    meta(p["bronze_skin"], caps=[((0, 0, 0.6), (0, 0, 1.05), 0.16), ((-0.2, 0, 1.0), (-0.3, -0.1, 0.7), 0.06), ((0.2, 0, 1.0), (0.32, -0.05, 1.3), 0.06),
+                                 ((-0.1, 0, 0.6), (-0.13, 0, 0.08), 0.08), ((0.1, 0, 0.6), (0.13, 0, 0.08), 0.08)],
+         blobs=[((0, 0, 1.2), 0.11, (0.9, 1, 1.1), (0, 0, 0)), ((0, 0, 0.92), 0.22, (1.1, 0.8, 0.9), (0, 0, 0))])
+    skirt(p["white"], 0.7, 0.35, 0.16, 0.22, pleats=14, depth=0.01)
+    meta(p["gold"], blobs=[((0, 0, 0.95), 0.2, (1.1, 0.8, 0.85), (0, 0, 0))])
+    for k in range(5):
+        a = math.radians(-50 + k * 25)
+        strand(p["bolt"], [(math.sin(a) * 0.1, 0.0, 1.28), (math.sin(a) * 0.15, 0.0, 1.42)], 0.015, 0.004)
+    strand(p["bolt"], [(0.32, -0.05, 1.32), (0.36, -0.05, 1.5), (0.3, -0.05, 1.6), (0.36, -0.05, 1.78)], 0.025, 0.008)
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.14, -0.17, 0.85 - 0.3 * t), cuts=4, thick=0.012)
+
+
+def immortel(p):
+    """A giant mummy, wrapped and hunched, a cloud of green rot round it."""
+    meta(p["sand"], caps=[((0, 0.05, 0.55), (0, -0.05, 1.05), 0.2), ((-0.25, 0, 0.98), (-0.35, -0.2, 0.6), 0.08), ((0.25, 0, 0.98), (0.35, -0.22, 0.62), 0.08),
+                          ((-0.13, 0, 0.55), (-0.16, 0, 0.06), 0.1), ((0.13, 0, 0.55), (0.16, 0, 0.06), 0.1)],
+         blobs=[((0, -0.12, 1.15), 0.12, (0.9, 1, 1.0), (0, 0, 0))])
+    for z in range(10):
+        torus(p["white"], 0.21 - abs(z - 5) * 0.01, 0.012, (0, 0, 0.15 + z * 0.09)).scale = (1.1, 0.95, 1)
+    for x in (-0.04, 0.04):
+        ball(p["jade"], 0.016, (x, -0.23, 1.17))
+    torus(p["gold"], 0.13, 0.02, (0, -0.02, 1.0))
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.16, -0.22, 0.9 - 0.3 * t), cuts=4, thick=0.012)
+    motes(p["jade"], (0, 0, 0.6), 0.55, 18, 13, size=0.03, zmin=0.1, zmax=1.2)
+
+
+def fontaine(p):
+    """The Fontaine d'eau du Nil: a basin of carved stone round a lotus fountain of light."""
+    cyl(p["marble"], 0.85, 0.3, (0, 0, 0.15), v=40)
+    cyl(p["turq"], 0.75, 0.05, (0, 0, 0.29), v=40)
+    torus(p["gold"], 0.85, 0.03, (0, 0, 0.3))
+    cyl(p["marble2"], 0.16, 0.7, (0, 0, 0.6), v=20, r2=0.1)
+    for k in range(8):
+        a = k / 8 * math.tau
+        ball(p["lapis"], 0.12, (math.cos(a) * 0.16, math.sin(a) * 0.16, 1.0), (0.5, 0.2, 1.0), (0.6, 0, a + math.pi / 2))
+    ball(p["ether"], 0.08, (0, 0, 1.1))
+    for k in range(6):
+        a = k / 6 * math.tau
+        strand(p["ether_soft"], [(0, 0, 1.1), (math.cos(a) * 0.35, math.sin(a) * 0.35, 1.0), (math.cos(a) * 0.6, math.sin(a) * 0.6, 0.35)], 0.025, 0.01)
+    for k in range(4):
+        a = k / 4 * math.tau + 0.4
+        box(p["team"], (0.12, 0.04, 0.1), (math.cos(a) * 0.86, math.sin(a) * 0.86, 0.22), (0, 0, a))
+    motes(p["ether"], (0, 0, 0.6), 0.8, 14, 17, size=0.015, zmin=0.3, zmax=1.4)

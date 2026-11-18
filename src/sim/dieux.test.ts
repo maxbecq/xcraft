@@ -190,6 +190,66 @@ describe('Dieux', () => {
     expect(of(w, 0, 'nain').filter((n) => Math.abs(n.x - 71 * FP) < 2 * FP)).toHaveLength(1);
   });
 
+  it('the third rank: Soumission, Voile, Rayon de mort, Voyage, Armée des enfers, Nuée, putrid aura, Fontaine, Yggdrasill furieux', () => {
+    const w = createMatch(['dieux', 'humains']);
+    expect(w.lacks(0, 'frigg')).toMatch(/2 parmi/);
+    w.spawn('odin', 0, 20 * FP, 20 * FP);
+    w.spawn('isis', 0, 24 * FP, 20 * FP);
+    expect(w.lacks(0, 'hades')).toBe('');
+    // Soumission: the foe changes side, then comes back to its own.
+    const frigg = w.spawn('frigg', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'soumission', x: foe.x, y: foe.y }]);
+    run(w, 0.5);
+    expect(foe.owner).toBe(0);
+    run(w, ABILITIES.soumission.duration + 1);
+    expect(foe.owner).toBe(1);
+    frigg.abilityCd = 0;
+    const nain = w.spawn('nain', 0, 31 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'voile' }]);
+    expect(nain.camo).toBeGreaterThan(0);
+    // Rayon de mort on every enemy Hadès sees; the ghosts of his army cannot be hurt.
+    const w2 = createMatch(['dieux', 'humains']);
+    const hades = w2.spawn('hades', 0, 30 * FP, 30 * FP);
+    const a = w2.spawn('legionnaire', 1, 34 * FP, 30 * FP);
+    const b = w2.spawn('legionnaire', 1, 31 * FP, 33 * FP);
+    run(w2, 0.5);
+    const [ha, hb] = [a.hp, b.hp];
+    w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'rayonmort' }]);
+    expect(a.hp).toBeLessThan(ha);
+    expect(b.hp).toBeLessThan(hb);
+    hades.abilityCd = 0;
+    w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'armeeenfers' }]);
+    const ghosts = of(w2, 0, 'fantome');
+    expect(ghosts).toHaveLength(ABILITIES.armeeenfers.max!);
+    w2.hurt(ghosts[0], 100);
+    expect(ghosts[0].hp).toBe(ghosts[0].maxHp);
+    hades.abilityCd = 0;
+    w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'voyage', x: 45 * FP, y: 30 * FP }]);
+    run(w2, 6);
+    expect(Math.abs(hades.x - 45 * FP)).toBeLessThan(3 * FP);
+    // Osiris's aura and swarm.
+    const osiris = w.spawn('osiris', 0, 40 * FP, 80 * FP);
+    const c = w.spawn('legionnaire', 1, 41.5 * FP, 80 * FP);
+    const hc = c.hp;
+    run(w, 1.1);
+    expect(c.hp).toBeLessThan(hc);
+    osiris.hp = 1000;
+    w.step([{ player: 0, kind: 'ability', ids: [osiris.id], name: 'nuee' }]);
+    run(w, 2.1);
+    expect(osiris.hp).toBeGreaterThan(1000 - 200);
+    // The Fontaine heals; the Protecteur turns furieux with Hadès.
+    const fontaine = w.spawn('fontaine', 0, 20 * FP, 60 * FP);
+    const wounded = w.spawn('nain', 0, 22 * FP, 63 * FP);
+    wounded.hp = 20;
+    run(w, 2.1);
+    expect(wounded.hp).toBeGreaterThan(20);
+    void fontaine;
+    expect(w.lacks(0, 'furieux')).toMatch(/Hadès/);
+    w.spawn('hades', 0, 70 * FP, 20 * FP);
+    expect(w.lacks(0, 'furieux')).toBe('');
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);

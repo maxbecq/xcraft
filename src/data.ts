@@ -308,6 +308,18 @@ export const ABILITIES: Record<string, AbilityDef> = {
   soinsdivins: { name: 'Soins divins', hotkey: 'S', target: 'self', ...BALANCE.abilities.soinsdivins },
   /** Isis (notice): raises allies fallen lately round her (`max` of them). */
   resurrection: { name: 'Résurrection', hotkey: 'R', target: 'self', ...BALANCE.abilities.resurrection },
+  /** Frigg (notice): takes control of the enemy nearest the point for a while. */
+  soumission: { name: 'Soumission divine', hotkey: 'S', target: 'point', ...BALANCE.abilities.soumission },
+  /** Frigg (notice): she and the troops round her vanish from sight, long. */
+  voile: { name: 'Voile de nuage', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
+  /** Hadès (notice): a ray that splits to strike every enemy unit he sees. */
+  rayonmort: { name: 'Rayon de mort', hotkey: 'R', target: 'self', ...BALANCE.abilities.rayonmort },
+  /** Hadès (notice): travels under ground to the point. */
+  voyage: { name: 'Voyage souterrain', hotkey: 'V', target: 'point', ...BALANCE.abilities.voyage },
+  /** Hadès (notice): ghosts that cannot be hurt rise round him, for a while. */
+  armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
+  /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
+  nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
   /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
   pluiedefeu: { name: 'Pluie de feu', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
   /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
@@ -545,16 +557,33 @@ const BASE: Record<string, object> = {
   drake: { kind: 'unit', name: 'Drake', radius: 0.9, flying: true, beast: true, faction: 'dieux', hotkey: 'D' },
   /** A small shapeshifter (notice); here its fire form only, which also shoots flyers. */
   elementaire: { kind: 'unit', name: 'Élémentaire', radius: 0.45, faction: 'dieux', hotkey: 'E' },
+  // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
+  /** Frigg ignores the ground (cliffs, water): she flies. */
+  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, flying: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
+  hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
+  osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, trains: ['sphinx', 'immortel'], unique: true, ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
+  /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */
+  walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflage', faction: 'dieux', hotkey: 'W' },
+  /** Hadès's demigod: lightning from afar, razes buildings. */
+  titan: { kind: 'unit', name: 'Titan', radius: 0.9, faction: 'dieux', hotkey: 'T' },
+  /** Osiris's giant mummy: a melee beyond match, very slow, a toxic cloud round it (rules.putride, level 1). */
+  immortel: { kind: 'unit', name: 'Immortel', radius: 0.8, faction: 'dieux', hotkey: 'I' },
+  /** Hadès's Armée des enfers: ghosts that cannot be hurt, for a while. */
+  fantome: { kind: 'unit', name: 'Fantôme', radius: 0.4, lifetime: 20, faction: 'dieux', hotkey: 'F' },
   /** Isis's priestess: heals, no attack (Dispell to come). */
   pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, faction: 'dieux', hotkey: 'P' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
   sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, faction: 'dieux', hotkey: 'X' },
-  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
+  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
   // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
   branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], faction: 'dieux', hotkey: 'B' },
-  protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
+  protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, morphs: ['furieux'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
+  /** Hadès on the field: the Yggdrasill draws on the world tree, destruction and range « à peine concevables ». */
+  furieux: { kind: 'building', name: 'Yggdrasill furieux', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['hades'], count: 1 }, faction: 'dieux', hotkey: 'F' },
+  /** Osiris's Fontaine d'eau du Nil: the living allies round it heal fast (rules.fontaine). */
+  fontaine: { kind: 'building', name: 'Fontaine du Nil', size: 2, warp: true, requires: { osiris: 1 }, faction: 'dieux', hotkey: 'F' },
   antre: { kind: 'building', name: 'Antre', size: 3, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
@@ -616,9 +645,9 @@ export const DEFS = Object.fromEntries(
 ) as Record<string, Def>;
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1 };
+export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
@@ -685,9 +714,9 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   },
   dieux: {
     name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
-    forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis'],
-    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple'],
-    advanced: ['temple'],
+    forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'],
+    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine'],
+    advanced: ['temple', 'fontaine'],
     army: Object.entries(BALANCE.ai.army.dieux),
   },
 };

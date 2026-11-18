@@ -160,6 +160,15 @@
     "drake": { "hp": 600, "armor": 3, "speed": 1.6, "sight": 9, "supply": 3, "cost": { "minerals": 400, "energy": 100 }, "buildTime": 50, "attack": { "damage": 40, "range": 3, "cooldown": 3, "splash": 1.5 } },
     "elementaire": { "hp": 200, "armor": 0, "speed": 2.4, "sight": 8, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 15, "range": 3.5, "cooldown": 1.4, "air": true } },
     "pretresse": { "hp": 100, "armor": 0, "speed": 2.4, "sight": 8, "supply": 1, "cost": { "minerals": 100, "energy": 75 }, "buildTime": 25, "heal": 8 },
+    "frigg": { "hp": 2000, "armor": 3, "speed": 2.4, "sight": 11, "supply": 4, "cost": { "minerals": 650, "energy": 400 }, "buildTime": 75, "attack": { "damage": 30, "range": 5, "cooldown": 2 }, "detector": 10, "levels": { "hp": [2000, 2200, 2600, 3200, 4000], "armor": [3, 4, 5, 6, 7], "speed": [2.4, 2.45, 2.5, 2.55, 2.6], "damage": [30, 36, 48, 66, 90], "cost": [{ "minerals": 390, "energy": 240 }, { "minerals": 455, "energy": 280 }, { "minerals": 520, "energy": 320 }, { "minerals": 585, "energy": 360 }], "time": [45, 50, 55, 60] } },
+    "hades": { "hp": 2400, "armor": 3, "speed": 1.9, "sight": 11, "supply": 4, "cost": { "minerals": 750, "energy": 450 }, "buildTime": 85, "attack": { "damage": 60, "range": 7, "cooldown": 2.2 }, "detector": 10, "levels": { "hp": [2400, 2640, 3120, 3840, 4800], "armor": [3, 4, 5, 6, 7], "speed": [1.9, 1.95, 2.0, 2.05, 2.1], "damage": [60, 72, 96, 132, 180], "cost": [{ "minerals": 450, "energy": 270 }, { "minerals": 525, "energy": 315 }, { "minerals": 600, "energy": 360 }, { "minerals": 675, "energy": 405 }], "time": [45, 50, 55, 60] } },
+    "osiris": { "hp": 3000, "armor": 4, "speed": 1.7, "sight": 10, "supply": 4, "cost": { "minerals": 750, "energy": 200 }, "buildTime": 85, "attack": { "damage": 70, "range": 0.1, "cooldown": 2.5 }, "detector": 10, "levels": { "hp": [3000, 3290, 3860, 4710, 5860], "armor": [4, 5, 6, 7, 8], "speed": [1.7, 1.78, 1.86, 1.94, 2.0], "damage": [70, 79, 98, 126, 163], "cost": [{ "minerals": 450, "energy": 120 }, { "minerals": 525, "energy": 140 }, { "minerals": 600, "energy": 160 }, { "minerals": 675, "energy": 180 }], "time": [45, 50, 55, 60] } },
+    "walkyrie": { "hp": 250, "armor": 2, "speed": 2.7, "sight": 10, "supply": 2, "cost": { "minerals": 225, "energy": 175 }, "buildTime": 35, "attack": { "damage": 25, "range": 3, "cooldown": 1.25, "air": true } },
+    "titan": { "hp": 700, "armor": 4, "speed": 2.0, "sight": 9, "supply": 4, "cost": { "minerals": 550, "energy": 300 }, "buildTime": 55, "attack": { "damage": 50, "range": 6, "cooldown": 1.5, "vsMechanical": 30, "air": true } },
+    "immortel": { "hp": 650, "armor": 2, "speed": 1.6, "sight": 8, "supply": 2, "cost": { "minerals": 425, "energy": 150 }, "buildTime": 45, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.5 } },
+    "fantome": { "hp": 200, "armor": 0, "speed": 2.6, "sight": 8, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 20, "range": 0.1, "cooldown": 1 } },
+    "furieux": { "hp": 1200, "armor": 3, "sight": 13, "supply": 10, "cost": { "minerals": 150, "energy": 400 }, "buildTime": 40, "attack": { "damage": 140, "range": 12, "cooldown": 3.5, "splash": 1.5 } },
+    "fontaine": { "hp": 1000, "armor": 1, "sight": 8, "supply": 0, "cost": { "minerals": 150, "energy": 275 }, "buildTime": 40 },
     "nain": { "hp": 150, "armor": 2, "speed": 2.1, "sight": 8, "supply": 1, "cost": { "minerals": 125, "energy": 0 }, "buildTime": 22, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.2 } },
     "minotaure": { "hp": 380, "armor": 1, "speed": 2.2, "sight": 8, "supply": 2, "cost": { "minerals": 300, "energy": 100 }, "buildTime": 35, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.6 } },
     "sphinx": { "hp": 320, "armor": 3, "speed": 2.7, "sight": 9, "supply": 2, "cost": { "minerals": 275, "energy": 150 }, "buildTime": 38, "attack": { "damage": 22, "range": 5, "cooldown": 1.4 } },
@@ -231,7 +240,13 @@
     "foudre": { "cooldown": 20, "duration": 2, "range": 7, "radius": 1, "damage": 120, "levels": { "damage": [120, 180, 240, 300, 360], "duration": [2, 3, 3, 4, 5] } },
     "cridegueurre": { "cooldown": 45, "duration": 10, "radius": 3, "damage": 25, "levels": { "damage": [25, 50, 75, 100, 125], "duration": [10, 12, 14, 16, 18], "radius": [3, 3.3, 3.6, 3.9, 4.2] } },
     "soinsdivins": { "cooldown": 12, "duration": 0, "radius": 5, "damage": 60, "levels": { "damage": [60, 80, 100, 120, 140] } },
-    "resurrection": { "cooldown": 60, "duration": 20, "radius": 7, "max": 1, "levels": { "radius": [7, 7.5, 8, 8.5, 9], "max": [1, 3, 6, 9, 12] } }
+    "resurrection": { "cooldown": 60, "duration": 20, "radius": 7, "max": 1, "levels": { "radius": [7, 7.5, 8, 8.5, 9], "max": [1, 3, 6, 9, 12] } },
+    "soumission": { "cooldown": 60, "duration": 10, "range": 7, "radius": 1, "levels": { "duration": [10, 13, 16, 19, 22] } },
+    "voile": { "cooldown": 65, "duration": 20, "radius": 2, "levels": { "duration": [20, 25, 30, 35, 40], "radius": [2, 3, 3.5, 4, 4.5] } },
+    "rayonmort": { "cooldown": 45, "duration": 0, "damage": 80, "levels": { "damage": [80, 110, 150, 200, 260] } },
+    "voyage": { "cooldown": 40, "duration": 0, "range": 30, "levels": { "cooldown": [40, 35, 30, 25, 20] } },
+    "armeeenfers": { "cooldown": 90, "duration": 20, "radius": 2, "max": 3, "levels": { "max": [3, 4, 5, 6, 8] } },
+    "nuee": { "cooldown": 40, "duration": 10, "radius": 3, "damage": 8, "levels": { "damage": [8, 10, 12, 15, 18] } }
   },
   "rules": {
     "start": { "minerals": 200, "energy": 0, "serfs": 6 },
@@ -241,7 +256,7 @@
     "peauDeRoc": { "range": 4, "reduction": 5 },
     "stimulantHp": 10,
     "trade": { "give": 100, "get": 50 },
-    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] } },
+    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 } },
     "equipSeconds": 2,
     "creepRepair": 2
   },
@@ -259,9 +274,9 @@
       "z": ["lanceroquettes", "zattaque1", "lanceflammes", "zblindage1", "zattaque2", "zblindage2", "zattaque3", "zblindage3"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
-    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]] },
-    "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1 } },
-    "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13]],
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "dieux": [["fontaine", 16]] },
+    "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
+    "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,
     "kits": { "lourde": 2, "flammes": 1, "roquettes": 2 }
   }
