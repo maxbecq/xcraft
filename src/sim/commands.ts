@@ -12,6 +12,13 @@ export function owned(this: World, c: Command): Entity[] {
   return [...new Set(c.ids)].map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.owner === c.player);
 }
 
+/** Into a producer's queue, already paid for, with the weapon chosen for a Z socle; it starts at once when first. */
+export function enqueue(this: World, b: Entity, type: string, kit = ''): void {
+  b.queue.push(type);
+  b.kits.push(kit);
+  if (b.queue.length === 1) b.trainLeft = this.trainTime(b, type);
+}
+
 export function apply(this: World, c: Command): void {
   // Commands will come from other machines one day: reject malformed numbers.
   if (!Array.isArray(c.ids) || ('x' in c && !(Number.isSafeInteger(c.x) && Number.isSafeInteger(c.y)))) return;
@@ -89,9 +96,7 @@ export function apply(this: World, c: Command): void {
         if (!g) return void this.say(c.player, `${max} améliorations au plus par dieu.`);
         const up = DEFS[c.type] as UpgradeDef;
         if (!this.pay(c.player, up)) return;
-        g.queue.push(c.type);
-        g.kits.push('');
-        if (g.queue.length === 1) g.trainLeft = this.trainTime(g, c.type);
+        this.enqueue(g, c.type);
         return;
       }
       if (c.type === 'niveau') {
@@ -102,9 +107,7 @@ export function apply(this: World, c: Command): void {
         const lv = (g.def as UnitDef).levels!;
         if (g.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
         if (!this.pay(c.player, { cost: lv.cost[g.lvl - 1] })) return;
-        g.queue.push('niveau');
-        g.kits.push('');
-        if (g.queue.length === 1) g.trainLeft = this.trainTime(g, 'niveau');
+        this.enqueue(g, 'niveau');
         return;
       }
       // Gods summon too (Dieux). The least busy producer takes it: shortest queue, then the one whose current item
@@ -123,9 +126,7 @@ export function apply(this: World, c: Command): void {
           }
           const up = DEFS[c.type] as UpgradeDef;
           if (!this.pay(c.player, up)) return;
-          b.queue.push(c.type);
-          b.kits.push('');
-          if (b.queue.length === 1) b.trainLeft = ticks(up.buildTime);
+          this.enqueue(b, c.type);
           return;
         }
         if (def.morphs?.includes(c.type)) {
@@ -135,9 +136,7 @@ export function apply(this: World, c: Command): void {
           if (lack) return void this.say(c.player, lack);
           const into = DEFS[c.type] as BuildingDef;
           if (!this.pay(c.player, into)) return;
-          b.queue.push(c.type);
-          b.kits.push('');
-          b.trainLeft = ticks(into.buildTime);
+          this.enqueue(b, c.type);
           return;
         }
         if (def.addons?.includes(c.type)) {
@@ -170,9 +169,7 @@ export function apply(this: World, c: Command): void {
         const s = this.supply(c.player);
         if (s.used + unit.supply > s.max) return void this.say(c.player, `Logistique insuffisante : construisez des ${SUPPLY_NAMES[this.players[c.player].faction]}.`);
         if (!this.pay(c.player, { cost: withKit(unit, c.weapon) })) return;
-        b.queue.push(c.type);
-        b.kits.push(c.weapon ?? '');
-        if (b.queue.length === 1) b.trainLeft = this.trainTime(b, c.type);
+        this.enqueue(b, c.type, c.weapon);
         return; // one building per command, like SC
       }
       if (full) this.say(c.player, "File d'attente pleine.");
