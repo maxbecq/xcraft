@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -555,6 +555,10 @@ export class Hud {
         html += `<div class="queue">${e.queue.map((t, i) => `<span>${img(t, e.kits[i] ? `${DEFS[t].name} : ${WEAPONS[e.kits[i]].name}` : DEFS[t].name)}</span>`).join('')}</div></div>`;
       }
     }
+    // The Temple primordial: each mythology's ultimate, charging while its three gods stand.
+    if (e.type === 'primordial' && e.buildLeft === 0 && e.owner === this.player) {
+      html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => progress(`${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})`, this.ultimatePct(m) / 100)).join('')}</div>`;
+    }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
     if ((e.def as UnitDef).weapons) {
       const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
@@ -564,6 +568,11 @@ export class Hud {
     if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
     this.portrait.render();
+  }
+
+  /** How far a mythology's ultimate has charged, in percent. */
+  private ultimatePct(m: Mythology): number {
+    return Math.floor((100 * (this.world.players[this.player].ultimates?.[m] ?? 0)) / ticks(BALANCE.units.primordial.charge));
   }
 
   /**
@@ -649,7 +658,7 @@ export class Hud {
         const casters = units.filter((u) => abilitiesOf(u.def as UnitDef).includes(ab));
         const ready = casters.filter((u) => u.abilityCd === 0).length;
         const a = ABILITIES[ab];
-        const reason = a.research && !this.world.level(this.player, a.research) ? `Requiert : ${DEFS[a.research].name}` : undefined;
+        const reason = a.research && !this.world.level(this.player, a.research) ? `Requiert : ${DEFS[a.research].name}` : a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined;
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });

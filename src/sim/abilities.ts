@@ -158,6 +158,13 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
       .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
       .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
   if (this.silenced(e.x, e.y)) return false;
+  if (ab.ultimate) {
+    if (!this.ultimateReady(e.owner, ab.ultimate)) {
+      this.say(e.owner, `${ab.name} : pas encore chargé au Temple primordial.`);
+      return true;
+    }
+    this.players[e.owner].ultimates![ab.ultimate] = 0;
+  }
   if (name === 'balisez') {
     // An invulnerable beacon: sight of the zone for 50 s.
     this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
@@ -190,6 +197,19 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.hit(e, t, { damage: ab.damage!, range: 7, cooldown: 0 });
   } else if (name === 'silence') {
     this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+  } else if (name === 'jormungand') {
+    const u = this.spawn('jormungandr', e.owner, x, y);
+    this.place(u, x, y);
+  } else if (name === 'tempetezeus') {
+    // Everyone under it, allies too, loses a share of its full health: the mightier, the harder hit.
+    for (const t of [...this.entities.values()]) {
+      if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || dist(t.x, t.y, x, y) > toFp(ab.radius!)) continue;
+      this.hurt(t, Math.max(1, idiv((t.maxHp + t.maxShield) * ab.damage!, 100)));
+      this.shots.push({ x1: x, y1: y - 8 * FP, x2: t.x, y2: t.y, kind: 'ranged' });
+    }
+  } else if (name === 'amonra') {
+    // Blinded and held where they stand; machines shake it off sooner.
+    for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
   } else if (name === 'soumission') {
     // The enemy unit nearest the point (not a god, not a worker) changes side for a while.
     const t = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).unique && !(t.def as UnitDef).worker && t.charm === 0)[0];

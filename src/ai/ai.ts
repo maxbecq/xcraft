@@ -707,7 +707,13 @@ export class AI {
         const inReach = around(near, u.x, u.y, reach);
         const allies = around(army, u.x, u.y, reach);
         let cmd: Command | undefined;
-        if (CROWD[name]) {
+        if (ab.ultimate) {
+          // Ultimates, once charged: on the thickest enemy crowd in reach (the Tempête spares where our own stand).
+          if (!w.ultimateReady(this.player, ab.ultimate)) continue;
+          const pool = inReach.filter((f) => !flies(f) || name !== 'jormungand');
+          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length - (name === 'tempetezeus' ? 2 * around(army, f.x, f.y, radius).length : 0)] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          if (best && best[1] >= (name === 'jormungand' ? 2 : 5)) cmd = at(u, name, best[0]);
+        } else if (CROWD[name]) {
           // Silence only where enemy casters stand.
           const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
           const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];

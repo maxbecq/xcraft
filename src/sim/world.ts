@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, spell, KIT, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, MYTHS, type Mythology, OBSERVATION, spell, KIT, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -159,6 +159,8 @@ export interface Player {
   handicap: number;
   /** Levels researched, by upgrade line (a one-off research is its own line, at level 1). */
   upgrades: Record<UpgradeLine, number>;
+  /** Dieux: ticks charged of each mythology's ultimate spell at the Temple primordial (full: ready to cast). */
+  ultimates?: Partial<Record<Mythology, number>>;
   /** Players on the same team share their sight and never fight each other. */
   team: number;
   /** Bac à sable (a match with one player), its options: resources never run out; buildings, training and research
@@ -391,6 +393,7 @@ export class World {
       this.regenerate(e);
     }
     this.revive();
+    this.chargeUltimates();
     this.storms = this.storms.filter((z) => z.until > this.tick);
     this.index();
     for (const e of [...this.entities.values()]) {
@@ -464,6 +467,36 @@ export class World {
       if (e.def.kind === 'unit' && e.def.respawn) this.respawns.push({ owner: e.owner, type: e.type, at: this.tick + ticks(e.def.respawn) });
       this.remove(e);
     }
+  }
+
+  /**
+   * The Temple primordial charges each mythology's ultimate while its three gods stand (notice: the charge stops,
+   * and keeps what it had, when one is missing); full, any of the three can cast it.
+   */
+  private chargeUltimates(): void {
+    const full = ticks(BALANCE.units.primordial.charge);
+    for (const p of this.players) {
+      if (p.faction !== 'dieux') continue;
+      let temple = false;
+      const standing = new Set<string>();
+      for (const e of this.entities.values()) {
+        if (e.owner !== p.id || e.hp <= 0) continue;
+        if (e.type === 'primordial' && e.buildLeft === 0) temple = true;
+        else if (e.def.kind === 'unit' && (e.def as UnitDef).unique) standing.add(e.type);
+      }
+      if (!temple) continue;
+      for (const [m, my] of Object.entries(MYTHS) as [Mythology, (typeof MYTHS)[Mythology]][]) {
+        const now = p.ultimates?.[m] ?? 0;
+        if (now >= full || !my.gods.every((g) => standing.has(g))) continue;
+        (p.ultimates ??= {})[m] = now + 1;
+        if (now + 1 === full) this.say(p.id, `Sort ultime ${my.name} chargé : ${ABILITIES[my.spell].name}.`, 'done');
+      }
+    }
+  }
+
+  /** Whether that mythology's ultimate is charged for the player. */
+  ultimateReady(player: number, m: Mythology): boolean {
+    return (this.players[player].ultimates?.[m] ?? 0) >= ticks(BALANCE.units.primordial.charge);
   }
 
   /** Gaïa comes back by her side's headquarters once her time is up (later, if it has none standing). */
@@ -791,6 +824,7 @@ export class World {
       mix(p.minerals);
       mix(p.energy);
       for (const line of Object.keys(p.upgrades).sort()) mix(p.upgrades[line] * (line.length + 1));
+      for (const m of Object.keys(p.ultimates ?? {}).sort()) mix(p.ultimates![m as Mythology]! * (m.length + 7));
     }
     return h >>> 0;
   }

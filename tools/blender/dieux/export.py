@@ -40,6 +40,7 @@ TYPES = {
     "frigg": (rank2.frigg, GOD, 20000), "hades": (rank2.hades, GOD, 20000), "osiris": (rank2.osiris, GOD, 20000),
     "walkyrie": (rank2.walkyrie, 0.85, 6000), "titan": (rank2.titan, 1.0, 8000), "immortel": (rank2.immortel, 0.95, 8000),
     "fontaine": (rank2.fontaine, 1.0, 10000),
+    "primordial": (rank2.primordial, 1.0, 20000), "jormungandr": (rank2.jormungandr, 1.0, 9000),
 }
 
 #: The look picked on 2026-11-18 (recherches-visuelles/dieux/planches/selection.jpg): palette slots a model's sculpt

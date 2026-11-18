@@ -220,9 +220,19 @@ export interface AbilityDef {
   damage?: number;
   /** Most units it moves at once. */
   max?: number;
+  /** Dieux: an ultimate spell, cast free once the Temple primordial has charged it for this mythology. */
+  ultimate?: Mythology;
   /** Dieux: values at the caster god's levels 1 to 5, in place of the plain ones (the spells grow with the god). */
   levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max', number[]>>;
 }
+
+/** Dieux: the three mythologies, each three gods (notice 1.2-1); all three standing charge its ultimate spell. */
+export type Mythology = 'scandinave' | 'grec' | 'egyptien';
+export const MYTHS: Record<Mythology, { gods: string[]; spell: string; name: string }> = {
+  scandinave: { gods: ['thor', 'odin', 'frigg'], spell: 'jormungand', name: 'scandinave' },
+  grec: { gods: ['apollon', 'athena', 'hades'], spell: 'tempetezeus', name: 'grec' },
+  egyptien: { gods: ['seth', 'isis', 'osiris'], spell: 'amonra', name: 'égyptien' },
+};
 
 /** An ability as cast by a caster of that level (a god's spells grow with it); the same object for the same level. */
 const SPELLS = new Map<string, AbilityDef>();
@@ -345,6 +355,13 @@ export const ABILITIES: Record<string, AbilityDef> = {
   armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
   nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
+  // Ultimate spells (notice): charged at the Temple primordial while the mythology's three gods stand, cast by any of them.
+  /** Scandinave: an avatar of the serpent Jörmungandr fights by the god a while, and feeds on the dead. */
+  jormungand: { name: 'Appel de Jörmungand', hotkey: 'U', target: 'point', ultimate: 'scandinave', ...BALANCE.abilities.jormungand },
+  /** Grec: lightning over a wide zone, allies too; the mightier a unit, the more it suffers. */
+  tempetezeus: { name: 'Tempête de Zeus', hotkey: 'U', target: 'point', ultimate: 'grec', ...BALANCE.abilities.tempetezeus },
+  /** Égyptien: the enemies of the zone blinded and held long (machines more briefly). */
+  amonra: { name: "Flamboiement d'Amon-Râ", hotkey: 'U', target: 'point', ultimate: 'egyptien', ...BALANCE.abilities.amonra },
   /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
   pluiedefeu: { name: 'Pluie de feu', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
   /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
@@ -605,14 +622,14 @@ const BASE: Record<string, object> = {
   // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
   esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
   gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
-  thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, ability: 'courroux', faction: 'dieux', hotkey: 'T' },
-  apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
-  seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, ability: 'tempete', faction: 'dieux', hotkey: 'S' },
+  thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
+  apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, abilities: ['tempetezeus'], ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
+  seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
   // passive (rules.auraguerre, rules.auraprotection).
-  odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
-  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elementaire'], unique: true, ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
-  isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['soinsdivins', 'resurrection'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
+  odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
+  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elementaire'], unique: true, abilities: ['tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
+  isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['soinsdivins', 'resurrection', 'amonra'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
   /** Odin's ravens: fast flying scouts, invisible, that see the invisible. */
   corbeau: { kind: 'unit', name: 'Corbeau', radius: 0.35, flying: true, beast: true, cloaked: true, faction: 'dieux', hotkey: 'C' },
   /** A slow flying beast, very hardy, breathing fire on an area. */
@@ -621,9 +638,9 @@ const BASE: Record<string, object> = {
   elementaire: { kind: 'unit', name: 'Élémentaire', radius: 0.45, faction: 'dieux', hotkey: 'E' },
   // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
   /** Frigg ignores the ground (cliffs, water): she flies. */
-  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, flying: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
-  hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
-  osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, trains: ['sphinx', 'immortel'], unique: true, ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
+  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, flying: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
+  hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
+  osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
   /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */
   walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflage', faction: 'dieux', hotkey: 'W' },
   /** Hadès's demigod: lightning from afar, razes buildings. */
@@ -646,6 +663,10 @@ const BASE: Record<string, object> = {
   furieux: { kind: 'building', name: 'Yggdrasill furieux', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['hades'], count: 1 }, faction: 'dieux', hotkey: 'F' },
   /** Osiris's Fontaine d'eau du Nil: the living allies round it heal fast (rules.fontaine). */
   fontaine: { kind: 'building', name: 'Fontaine du Nil', size: 2, warp: true, requires: { osiris: 1 }, faction: 'dieux', hotkey: 'F' },
+  /** Gaïa's Temple primordial (unique): charges the ultimate spells (MYTHS). */
+  primordial: { kind: 'building', name: 'Temple primordial', size: 4, warp: true, unique: true, faction: 'dieux', hotkey: 'P' },
+  /** Avatar of Jörmungand (ultimate): a giant serpent for a while; eats the dead to heal. */
+  jormungandr: { kind: 'unit', name: 'Avatar de Jörmungand', radius: 1.2, lifetime: 60, faction: 'dieux', hotkey: 'J' },
   antre: { kind: 'building', name: 'Antre', size: 3, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
@@ -828,8 +849,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   dieux: {
     name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
     forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'],
-    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine'],
-    advanced: ['temple', 'fontaine'],
+    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine', 'primordial'],
+    advanced: ['temple', 'fontaine', 'primordial'],
     army: Object.entries(BALANCE.ai.army.dieux),
   },
 };

@@ -197,6 +197,8 @@
     "fantome": { "hp": 200, "armor": 0, "speed": 2.6, "sight": 8, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 20, "range": 0.1, "cooldown": 1 } },
     "furieux": { "hp": 1200, "armor": 3, "sight": 13, "supply": 10, "cost": { "minerals": 150, "energy": 400 }, "buildTime": 40, "attack": { "damage": 140, "range": 12, "cooldown": 3.5, "splash": 1.5 } },
     "fontaine": { "hp": 1000, "armor": 1, "sight": 8, "supply": 0, "cost": { "minerals": 150, "energy": 275 }, "buildTime": 40 },
+    "primordial": { "hp": 3000, "armor": 3, "sight": 10, "supply": 0, "cost": { "minerals": 450, "energy": 450 }, "buildTime": 90, "charge": 300 },
+    "jormungandr": { "hp": 1500, "armor": 4, "speed": 2.2, "sight": 10, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 60, "range": 1, "cooldown": 1.5, "splash": 1.5 } },
     "nain": { "hp": 150, "armor": 2, "speed": 2.1, "sight": 8, "supply": 1, "cost": { "minerals": 125, "energy": 0 }, "buildTime": 22, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.2 } },
     "minotaure": { "hp": 380, "armor": 1, "speed": 2.2, "sight": 8, "supply": 2, "cost": { "minerals": 300, "energy": 100 }, "buildTime": 35, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.6 } },
     "sphinx": { "hp": 320, "armor": 3, "speed": 2.7, "sight": 9, "supply": 2, "cost": { "minerals": 275, "energy": 150 }, "buildTime": 38, "attack": { "damage": 22, "range": 5, "cooldown": 1.4 } },
@@ -283,7 +285,10 @@
     "rayonmort": { "cooldown": 45, "duration": 0, "damage": 80, "levels": { "damage": [80, 110, 150, 200, 260] } },
     "voyage": { "cooldown": 40, "duration": 0, "range": 30, "levels": { "cooldown": [40, 35, 30, 25, 20] } },
     "armeeenfers": { "cooldown": 90, "duration": 20, "radius": 2, "max": 3, "levels": { "max": [3, 4, 5, 6, 8] } },
-    "nuee": { "cooldown": 40, "duration": 10, "radius": 3, "damage": 8, "levels": { "damage": [8, 10, 12, 15, 18] } }
+    "nuee": { "cooldown": 40, "duration": 10, "radius": 3, "damage": 8, "levels": { "damage": [8, 10, 12, 15, 18] } },
+    "jormungand": { "cooldown": 1, "duration": 60, "range": 8, "radius": 1 },
+    "tempetezeus": { "cooldown": 1, "duration": 0, "range": 10, "radius": 5, "damage": 30 },
+    "amonra": { "cooldown": 1, "duration": 15, "range": 10, "radius": 5, "max": 6 }
   },
   "rules": {
     "start": { "minerals": 200, "energy": 0, "serfs": 6 },
@@ -311,7 +316,7 @@
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
-    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16]] },
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,

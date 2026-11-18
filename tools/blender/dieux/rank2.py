@@ -303,3 +303,46 @@ def fontaine(p):
         a = k / 4 * math.tau + 0.4
         box(p["team"], (0.12, 0.04, 0.1), (math.cos(a) * 0.86, math.sin(a) * 0.86, 0.22), (0, 0, a))
     motes(p["ether"], (0, 0, 0.6), 0.8, 14, 17, size=0.015, zmin=0.3, zmax=1.4)
+
+
+# ------------------------------------------------------------------ end of the game
+def primordial(p):
+    """The Temple primordial: a round stepped temple, three shrines of the mythologies round a well of light."""
+    for k, (r, h) in enumerate(((1.9, 0.18), (1.7, 0.16), (1.5, 0.14))):
+        cyl(p["marble"], r, h, (0, 0, 0.09 + k * 0.16), v=48)
+    torus(p["gold"], 1.5, 0.03, (0, 0, 0.47))
+    for i in range(12):
+        a = i / 12 * math.tau
+        cyl(p["marble2"], 0.09, 1.6, (math.cos(a) * 1.3, math.sin(a) * 1.3, 1.25), v=12)
+        box(p["gold"], (0.22, 0.22, 0.06), (math.cos(a) * 1.3, math.sin(a) * 1.3, 2.08), (0, 0, a))
+    torus(p["marble"], 1.3, 0.1, (0, 0, 2.15))
+    ball(p["gold"], 0.9, (0, 0, 2.15), (1, 1, 0.5))
+    cyl(p["ether"], 0.35, 0.05, (0, 0, 0.5), v=32)
+    ball(p["ether_veil"], 0.5, (0, 0, 1.1), (1, 1, 1.6))
+    for (a, glow, m) in ((math.radians(90), "bolt", "navy"), (math.radians(210), "sun", "white"), (math.radians(330), "turq", "lapis")):
+        x, y = math.cos(a) * 0.8, math.sin(a) * 0.8
+        box(p[m], (0.3, 0.3, 0.5), (x, y, 0.75), (0, 0, a))
+        ball(p[glow], 0.09, (x, y, 1.12))
+    for i in range(4):
+        a = i / 4 * math.tau + 0.4
+        box(p["team"], (0.3, 0.05, 0.12), (math.cos(a) * 1.92, math.sin(a) * 1.92, 0.2), (0, 0, a + math.pi / 2))
+    motes(p["ether"], (0, 0, 1.2), 1.4, 24, 23, size=0.018, zmin=0.6, zmax=2.6)
+
+
+def jormungandr(p):
+    """The avatar of the world serpent: coils rising from the ground, a horned head over them."""
+    pts = []
+    for i in range(40):
+        t = i / 39
+        a = t * math.tau * 1.6
+        r = 0.9 - 0.5 * t
+        pts.append((math.cos(a) * r, math.sin(a) * r, 0.15 + t * 1.4))
+    strand(p["jade"], pts, 0.26, 0.16, res=8)
+    hx, hy, hz = pts[-1]
+    meta(p["jade"], blobs=[((hx, hy - 0.2, hz + 0.1), 0.25, (0.9, 1.6, 0.7), (0, 0, 0))])
+    for s in (-1, 1):
+        strand(p["horn"], [(hx + s * 0.12, hy, hz + 0.2), (hx + s * 0.25, hy + 0.15, hz + 0.45), (hx + s * 0.2, hy + 0.35, hz + 0.55)], 0.05, 0.01)
+        ball(p["amber"], 0.04, (hx + s * 0.12, hy - 0.42, hz + 0.18))
+    for i in range(0, 40, 3):
+        x, y, z = pts[i]
+        ball(p["team"] if i % 9 == 0 else p["moss"], 0.08, (x, y, z + 0.2), (1, 1, 0.5))

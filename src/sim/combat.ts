@@ -160,6 +160,15 @@ export function pulse(this: World, e: Entity): void {
     }
     e.hp = Math.min(e.maxHp, e.hp + taken);
   }
+  if (e.type === 'jormungandr' && e.abilityCd === 0) {
+    // Festin: it devours a body near it and heals.
+    const i = this.corpses.findIndex((c) => dist(c.x, c.y, e.x, e.y) <= 3 * FP);
+    if (i >= 0) {
+      this.corpses.splice(i, 1);
+      e.hp = Math.min(e.maxHp, e.hp + 75);
+      e.abilityCd = ticks(7);
+    }
+  }
   if (e.type === 'fontaine' && e.buildLeft === 0) {
     for (const t of this.entities.values()) if (living(t) && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
   }

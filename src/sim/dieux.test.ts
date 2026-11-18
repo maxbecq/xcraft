@@ -250,6 +250,44 @@ describe('Dieux', () => {
     expect(w.lacks(0, 'furieux')).toBe('');
   });
 
+  it('the Temple primordial charges an ultimate while its three gods stand; any of them casts it once', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const full = ticks(BALANCE.units.primordial.charge);
+    w.spawn('primordial', 0, 20 * FP, 20 * FP);
+    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
+    w.spawn('isis', 0, 32 * FP, 34 * FP);
+    run(w, 2);
+    expect(w.players[0].ultimates?.egyptien ?? 0).toBe(0); // Osiris missing
+    const osiris = w.spawn('osiris', 0, 36 * FP, 34 * FP);
+    run(w, 10);
+    const charged = w.players[0].ultimates!.egyptien!;
+    expect(charged).toBeGreaterThan(0);
+    osiris.hp = 0;
+    run(w, 5);
+    expect(w.players[0].ultimates!.egyptien).toBe(charged); // stopped, not lost
+    w.players[0].ultimates!.egyptien = full;
+    const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [seth.id], name: 'amonra', x: foe.x, y: foe.y }]);
+    run(w, 1);
+    expect(foe.held).toBeGreaterThan(ticks(5));
+    expect(w.players[0].ultimates!.egyptien).toBe(0);
+    // Tempête de Zeus: a share of each one's full health, allies too; Jörmungand comes.
+    w.players[0].ultimates!.grec = full;
+    w.players[0].ultimates!.scandinave = full;
+    const apollon = w.spawn('apollon', 0, 50 * FP, 50 * FP);
+    const mine = w.spawn('nain', 0, 54 * FP, 50 * FP);
+    const theirs = w.spawn('legionnaire', 1, 55 * FP, 51 * FP);
+    const [hm, ht] = [mine.hp, theirs.hp];
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'tempetezeus', x: 54 * FP, y: 50 * FP }]);
+    run(w, 1);
+    expect(mine.hp).toBeLessThan(hm);
+    expect(theirs.hp).toBeLessThan(ht);
+    const thor = w.spawn('thor', 0, 30 * FP, 50 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: 33 * FP, y: 50 * FP }]);
+    run(w, 1);
+    expect(of(w, 0, 'jormungandr')).toHaveLength(1);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
