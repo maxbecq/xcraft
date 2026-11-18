@@ -18,6 +18,7 @@ import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
 import { DEFAULT_MAP, MAPS, mapFile } from './maps';
 import { mapCards, seatsOf } from './mappicker';
+import { PerfHud } from './perf';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY, QUALITY_NAMES } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity } from './sim/world';
@@ -78,6 +79,7 @@ const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('
 const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
 
 const renderer = new WebGLRenderer({ antialias: true });
+const perf = new PerfHud(renderer);
 renderer.localClippingEnabled = true; // Z buildings are fabricated layer by layer (render/units.ts)
 /** Phones and tablets: touch controls, lighter rendering. */
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -577,7 +579,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'options') {
     // Built on opening, so the fields show the values in force.
-    if (pauseOptions.hidden) pauseOptions.innerHTML = controlFields(true) || '<p>Rien à régler sur un écran tactile.</p>';
+    if (pauseOptions.hidden) pauseOptions.innerHTML = controlFields(true) + perf.field();
     pauseOptions.hidden = !pauseOptions.hidden;
   }
   else if (p === 'fullscreen') toggleFullscreen();
@@ -758,6 +760,10 @@ function controlFields(inMatch: boolean): string {
 const fmt = (v: number, unit: string) => (unit === '×' ? `×${+v.toFixed(2)}` : `${+v.toFixed(2)}${unit}`);
 /** A control field changed: kept, and live in the match. False for any other field. */
 function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
+  if (field.dataset.k === 'debug') {
+    perf.toggle((field as HTMLInputElement).checked);
+    return true;
+  }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
   if (k === 'lock' || k === 'grid') {
@@ -795,6 +801,7 @@ function showOptions(menu: HTMLElement): void {
       ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
     ${controlFields(false)}
+    ${perf.field()}
     <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.oninput = (e) => controlChange(e.target as HTMLInputElement);
@@ -1110,6 +1117,7 @@ function start(): void {
     // A network game never pauses: the other player is still playing.
     if (paused && !net) post.render();
     else frame(dt);
+    perf.frame(world.tick);
   });
 }
 
