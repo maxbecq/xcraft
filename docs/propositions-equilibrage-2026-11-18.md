@@ -92,6 +92,35 @@ Lecture :
 
 Méthode : variantes codées dans une copie jetable du jeu, sur le commit c5ade6f. A : quand l'invocation en tête de file se termine, un dieu fait sortir avec elle jusqu'à 2 autres unités de même type déjà en file, et l'IA garde jusqu'à 4 unités en file au lieu de 2. B : le temps d'invocation des unités de Thor, Seth et Apollon passe à 60 %. C : Thor n'est plus unique, et l'IA invoque un second Thor à partir de la 2e minute.
 
+### La règle de 2008 : niveaux de dieu, mesurée
+
+Le document de conception de 2008 (`docs/fiche-z-2010-et-donnees-2008.md`, section 3) donne une autre réponse : les dieux montent de niveau, et « les temps de construction de base des unités et bâtiments sont divisés par le niveau actuel de la divinité les créant ». Rien n'est dans le jeu ; essai dans une copie jetable, sur le commit 993b4dd, qui a déjà les nouvelles stats Z.
+
+Ce qui a été codé :
+- Thor, Seth et Apollon montent au niveau 2 puis 3. Chaque niveau se paie au dieu lui-même : environ 60 % puis 75 % de son prix, en 40 puis 50 s. Thor : 240 puis 300 minerais.
+- Le temps d'invocation est divisé par le niveau : deux fois plus rapide au niveau 2, trois fois au niveau 3.
+- Un dieu tué revient au niveau 1.
+- L'IA achète le niveau suivant quand il lui reste au moins 300 minerais de marge.
+- En 2008, les niveaux augmentaient aussi les PV, l'armure et les dégâts du dieu. Ce n'est pas codé ici.
+
+Deux variantes : avec le deuil actuel (un dieu tué attend avant d'être réinvoqué), et sans deuil, comme en 2008. Victoires des Dieux, puis de l'adversaire, puis nuls ; 98 parties par paire.
+
+| Règle | Carte | Dieux – Humains | Dieux – Isdaris | Dieux – Z |
+|---|---|---|---|---|
+| Actuelle (référence sur 993b4dd) | Origine | 18 – 51, 29 nuls | 3 – 85, 10 nuls | 27 – 48, 23 nuls |
+| | Le Col | 55 – 36, 7 nuls | 1 – 97 | 54 – 25, 19 nuls |
+| Niveaux, deuil gardé | Origine | 6 – 57, 35 nuls | 4 – 93, 1 nul | 13 – 55, 30 nuls |
+| | Le Col | 33 – 52, 13 nuls | 0 – 97, 1 nul | 44 – 34, 20 nuls |
+| Niveaux, sans deuil | Origine | 20 – 53, 25 nuls | 6 – 65, 27 nuls | 17 – 55, 26 nuls |
+| | Le Col | 37 – 41, 20 nuls | 2 – 94, 2 nuls | 48 – 31, 19 nuls |
+
+Lecture :
+- Les niveaux seuls n'aident pas : les minerais qui partent dans les niveaux ne font pas d'unités, et les Dieux font plutôt moins bien.
+- Contre les Isdaris, les parties durent 16 à 19 minutes et l'IA n'achète presque aucun niveau : les Dieux perdent avant d'avoir des minerais en trop. Le problème contre les Isdaris est le **début de partie**, pas la limite d'invocation. Les variantes B et C ne le corrigent pas non plus ; seule A, beaucoup trop forte, le fait.
+- Supprimer le deuil aide un peu contre les Isdaris sur la carte d'origine (6 – 65 avec 27 nuls, contre 3 – 85).
+
+Piste suivante, non mesurée : des Dieux plus forts en début de partie (Nain, ou premier dieu plus tôt ou moins cher), avec les niveaux de 2008 complets (stats du dieu comprises) pour la fin de partie.
+
 ## 5. Questions
 
 1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
