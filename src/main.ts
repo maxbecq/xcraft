@@ -2,7 +2,7 @@ import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight,
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
-import { CameraRig } from './camera';
+import { CameraRig, MAX_VIEW } from './camera';
 import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
@@ -341,9 +341,9 @@ window.addEventListener('wheel', (e) => {
   if (!(e.target instanceof HTMLCanvasElement)) return;
   e.preventDefault();
   const trackpad = e.deltaMode === 0 && (e.deltaX !== 0 || !Number.isInteger(e.deltaY));
-  if (e.ctrlKey) rig.zoomBy(Math.exp(e.deltaY * 0.01));
+  if (e.ctrlKey) rig.zoomBy(Math.exp(e.deltaY * 0.01), e.clientX, e.clientY);
   else if (trackpad) rig.panPixels(-e.deltaX, -e.deltaY);
-  else rig.zoomBy(Math.exp(e.deltaY * 0.001));
+  else rig.zoomBy(Math.exp(e.deltaY * 0.001), e.clientX, e.clientY);
 }, { passive: false });
 
 // Glowing edge and arrow cursor while the mouse scrolls the map.
@@ -465,7 +465,7 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 <kbd>S</kbd> stop · <kbd>H</kbd> maintenir la position · <kbd>P</kbd> puis clic : patrouille · <kbd>B</kbd> construire (serf) · <kbd>Échap</kbd> annuler<br>
 <kbd>Ctrl</kbd> ou <kbd>Alt</kbd> (<kbd>⌥</kbd> sur Mac)+<kbd>1</kbd>…<kbd>9</kbd> : créer ou remplacer le groupe, <kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> : ajouter au groupe, <kbd>1</kbd>…<kbd>9</kbd> ou son icône en haut : rappel (×2 : centrer)<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
-Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
+Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom vers le curseur, jusqu'à la carte entière<br>
 <kbd>Tab</kbd> : type actif d'une sélection mixte (ses capacités) · <kbd>Maj</kbd> maintenu : voir les ordres en file<br>
 <kbd>Espace</kbd>, <kbd>Entrée</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Espace</kbd> maintenu en bougeant la souris : faire glisser la carte · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
 <kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir<br>
@@ -904,6 +904,8 @@ function start(): void {
       const boost = SCROLL.speed * (1 + 0.8 * Math.min(1, Math.max(0, scrollHeld - 0.4) / 1.2));
       if (scroll.x || scroll.y) rig.pan(ease(scroll.x) * boost, ease(scroll.y) * boost, dt);
     }
+    // A computer can zoom out to the whole map (phones keep the near view, lighter to draw).
+    if (!TOUCH) rig.maxView = rig.overview(window.innerWidth / window.innerHeight);
     rig.update(window.innerWidth / window.innerHeight);
     input.prune();
     // Our units answer when picked: once per selection that gains one of them (not when one dies out of it).
@@ -959,6 +961,12 @@ function start(): void {
     lap('minimap');
     sun.target.position.copy(rig.target);
     sun.position.copy(rig.target).add(SUN_OFFSET);
+    // Zoomed out past the usual range, the shadow box widens with the view (softer shadows, none cut off).
+    const reach = 34 * Math.max(1, rig.viewHeight / MAX_VIEW);
+    if (sun.shadow.camera.right !== reach) {
+      Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, far: 140 * reach / 34 });
+      sun.shadow.camera.updateProjectionMatrix();
+    }
     post.render();
     lap('render');
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { Plane, Raycaster, Vector2, Vector3 } from 'three';
 import { CameraRig, FLING_TAU, PITCH, isoOffset, screenToGround } from './camera';
 
 describe('isoOffset', () => {
@@ -58,6 +58,31 @@ describe('CameraRig', () => {
     const end = rig.target.clone();
     rig.coast(1 / 60);
     expect(rig.target.equals(end)).toBe(true);
+  });
+
+  it('zooms towards the pointer: the ground under it stays put', () => {
+    Object.assign(globalThis, { window: { innerWidth: 1600, innerHeight: 900 } });
+    const rig = new CameraRig(96, 96);
+    rig.lookAt(48, 48);
+    rig.update(1600 / 900);
+    const under = (px: number, py: number) => {
+      const r = new Raycaster();
+      r.setFromCamera(new Vector2((px / 1600) * 2 - 1, 1 - (py / 900) * 2), rig.camera);
+      return r.ray.intersectPlane(new Plane(new Vector3(0, 1, 0), 0), new Vector3())!;
+    };
+    const before = under(1200, 250);
+    rig.zoomBy(0.8, 1200, 250);
+    rig.update(1600 / 900);
+    expect(rig.viewHeight).toBeCloseTo(17 * 0.8);
+    expect(under(1200, 250).distanceTo(before)).toBeLessThan(1e-6);
+  });
+
+  it('zooms out to the whole map, at most', () => {
+    const rig = new CameraRig(96, 96);
+    rig.maxView = rig.overview(16 / 9);
+    rig.zoomBy(100);
+    expect(rig.viewHeight).toBeGreaterThan(((96 * Math.SQRT2) / (16 / 9)) * 1.1); // the map's width fits, with a margin
+    expect(rig.viewHeight).toBeLessThan(100);
   });
 
   it('bounds the zoom', () => {

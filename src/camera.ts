@@ -5,7 +5,7 @@ export const YAW = Math.PI / 4;
 export const PITCH = (35 * Math.PI) / 180;
 
 const MIN_VIEW = 12;
-const MAX_VIEW = 40;
+export const MAX_VIEW = 40;
 /** Pan speed, in screen heights per second. */
 const PAN_SPEED = 1.4;
 /** A flung view coasts this long (time constant, s): it travels its launch speed × FLING_TAU further. */
@@ -37,6 +37,8 @@ export class CameraRig {
   readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
   readonly target = new Vector3();
   viewHeight = 17;
+  /** Farthest zoom out (view height in tiles): raised on desktop to an overview of the whole map. */
+  maxView = MAX_VIEW;
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   /** Speed the view keeps after a finger lets go of a drag, in screen pixels per second. */
@@ -75,8 +77,21 @@ export class CameraRig {
     if (this.drift.length() < 15) this.drift.set(0, 0);
   }
 
-  zoomBy(factor: number): void {
-    this.viewHeight = clamp(this.viewHeight * factor, MIN_VIEW, MAX_VIEW);
+  /** Zooms by a factor; given a screen point (pixels), the ground under it stays put, as maps do. */
+  zoomBy(factor: number, px?: number, py?: number): void {
+    const before = this.viewHeight;
+    this.viewHeight = clamp(this.viewHeight * factor, MIN_VIEW, this.maxView);
+    if (px === undefined || py === undefined) return;
+    const perUnit = window.innerHeight / before;
+    const g = screenToGround((px - window.innerWidth / 2) / perUnit, (window.innerHeight / 2 - py) / perUnit);
+    const k = 1 - this.viewHeight / before;
+    this.lookAt(this.target.x + g.x * k, this.target.z + g.z * k);
+  }
+
+  /** The view height that shows the whole map at this screen shape (a margin for the console). */
+  overview(aspect: number): number {
+    const diagonal = (this.width + this.height) / Math.SQRT2;
+    return Math.max(MAX_VIEW, Math.ceil(Math.max(diagonal / aspect, diagonal * Math.sin(PITCH)) * 1.15));
   }
 
   update(aspect: number): void {
