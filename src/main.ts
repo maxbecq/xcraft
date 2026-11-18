@@ -32,12 +32,12 @@ import { countMatch, countTitle, SKIPPED } from './stats';
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 /** Scrolling settings for this computer (Options): speed and edge band width (1 = as designed), pointer held in the window. */
 const SCROLL_KEY = 'xcraft.scroll';
-const SCROLL: { speed: number; band: number; lock: boolean } = (() => {
-  const base = { speed: 1, band: 1, lock: false };
+const SCROLL: { speed: number; band: number; lock: boolean; grid: boolean } = (() => {
+  const base = { speed: 1, band: 1, lock: false, grid: false };
   try {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
-    const { speed, band, lock2 } = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
-    return { ...base, ...(speed ? { speed } : {}), ...(band ? { band } : {}), lock: lock2 === true };
+    const { speed, band, lock2, grid } = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
+    return { ...base, ...(speed ? { speed } : {}), ...(band ? { band } : {}), lock: lock2 === true, grid: grid === true };
   } catch {
     return base;
   }
@@ -261,6 +261,7 @@ function answer(kind: 'ack' | 'go'): void {
   audio.play(`${kind}${factions[PLAYER]}` as Sfx, 0.8);
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
+hud.gridKeys = SCROLL.grid && !TOUCH;
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 hud.ping = (x, y) => minimap.ping(x, y);
@@ -677,17 +678,20 @@ function showOptions(menu: HTMLElement): void {
       <label>Vitesse <input type="range" data-k="speed" min="0.5" max="2" step="0.1" value="${SCROLL.speed}"></label>
       <label>Largeur des bords <input type="range" data-k="band" min="0.6" max="1.6" step="0.1" value="${SCROLL.band}"></label>
       <label><input type="checkbox" data-k="lock"${SCROLL.lock ? ' checked' : ''}> Garder la souris dans la fenêtre (hors plein écran)</label>
+    </fieldset>
+    <fieldset class="options"><legend>Raccourcis</legend>
+      <label><input type="checkbox" data-k="grid"${SCROLL.grid ? ' checked' : ''}> Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom</label>
     </fieldset>`}
     <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.onchange = (e) => {
     const field = e.target as HTMLSelectElement | HTMLInputElement;
     const k = field.dataset.k;
-    if (k === 'speed' || k === 'band' || k === 'lock') {
-      if (k === 'lock') SCROLL.lock = (field as HTMLInputElement).checked;
+    if (k === 'speed' || k === 'band' || k === 'lock' || k === 'grid') {
+      if (k === 'lock' || k === 'grid') SCROLL[k] = (field as HTMLInputElement).checked;
       else SCROLL[k] = Number(field.value);
       try {
-        localStorage.setItem(SCROLL_KEY, JSON.stringify({ speed: SCROLL.speed, band: SCROLL.band, lock2: SCROLL.lock }));
+        localStorage.setItem(SCROLL_KEY, JSON.stringify({ speed: SCROLL.speed, band: SCROLL.band, lock2: SCROLL.lock, grid: SCROLL.grid }));
       } catch {
         // private browsing: kept for this page only
       }

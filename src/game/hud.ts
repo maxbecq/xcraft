@@ -26,6 +26,21 @@ type Order<C = Command> = C extends unknown ? Omit<C, 'player'> : never;
 
 const KEY_LABEL: Record<string, string> = { Escape: 'Échap' };
 
+/** Grid hotkeys (Options): the keys under the left hand, row by row, in the command card's order (4 to a row). Physical
+ * keys, so the same places on any layout: A Z E R / Q S D F / W X C V in AZERTY, Q W E R / A S D F / Z X C V in QWERTY. */
+const GRID_CODES = ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyZ', 'KeyX', 'KeyC', 'KeyV'];
+/** What each grid key prints on this keyboard: a guess from the language, then what the keys really typed. */
+const gridLabel: Record<string, string> = Object.fromEntries(
+  GRID_CODES.map((c, i) => [c, (navigator.language?.startsWith('fr') ? 'AZERQSDFWXCV' : 'QWERASDFZXCV')[i]]),
+);
+void (navigator as Navigator & { keyboard?: { getLayoutMap(): Promise<Map<string, string>> } }).keyboard
+  ?.getLayoutMap()
+  .then((m) => GRID_CODES.forEach((c) => m.get(c) && (gridLabel[c] = m.get(c)!.toUpperCase())))
+  .catch(() => {});
+window.addEventListener('keydown', (e) => {
+  if (GRID_CODES.includes(e.code) && /^\p{L}$/u.test(e.key)) gridLabel[e.code] = e.key.toUpperCase();
+}, true);
+
 /** The sign before each message: refused (no entry), done (a tick), under attack (a shield with a bang). */
 const SIGNS: Record<GameEvent['kind'], string> = {
   error: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M5.5 14.5l9-9" stroke="currentColor" stroke-width="2.4"/></svg>',
@@ -66,6 +81,13 @@ export class Hud {
   readonly groups = el('div', 'groups');
   private groupsKey = '';
   private buttons: Button[] = [];
+  /** Hotkeys by place in the card rather than by name (Options). */
+  gridKeys = false;
+  /** The key printed on a button (and the grid key that presses it, in grid mode). */
+  private keyLabel(b: Button): string {
+    const i = this.buttons.indexOf(b);
+    return this.gridKeys && b.key !== 'Escape' && i >= 0 && i < GRID_CODES.length ? gridLabel[GRID_CODES[i]] : (KEY_LABEL[b.key] ?? b.key);
+  }
   private cardKey = '';
   /** Last button pressed and how it reacted, so the card rebuilt by that press keeps the animation. */
   private pressed = { key: '', anim: '', at: -Infinity };
@@ -167,7 +189,9 @@ export class Hud {
         return;
       }
       const key = e.key === 'Escape' ? 'Escape' : e.key.toUpperCase();
-      const b = this.buttons.find((x) => x.key === key);
+      const slot = this.gridKeys ? GRID_CODES.indexOf(e.code) : -1;
+      // In grid mode a letter only presses the buttons past the grid (and Escape still cancels).
+      const b = slot >= 0 ? this.buttons[slot] : this.buttons.find((x, i) => x.key === key && (!this.gridKeys || key === 'Escape' || i >= GRID_CODES.length));
       if (b) {
         e.preventDefault();
         if (!e.repeat) this.press(b);
@@ -625,7 +649,7 @@ export class Hud {
   private updateCard(): void {
     this.buttons = this.buttonsFor();
     const p = this.world.players[this.player];
-    const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|');
+    const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + this.gridKeys;
     if (key === this.cardKey) return;
     this.cardKey = key;
     this.tip.hidden = true; // its button may be gone
@@ -635,7 +659,7 @@ export class Hud {
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const pic = b.icon ? img(b.icon, '') : '';
         const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
-        return `<button class="cmd${off}${anim}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+        return `<button class="cmd${off}${anim}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
   }
@@ -646,7 +670,7 @@ export class Hud {
     if (!b) return;
     const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
     const p = this.world.players[this.player];
-    const lines: string[] = [`<b>${b.label}</b> <kbd>${KEY_LABEL[b.key] ?? b.key}</kbd>`];
+    const lines: string[] = [`<b>${b.label}</b> <kbd>${this.keyLabel(b)}</kbd>`];
     if (b.cost) {
       const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
       if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
