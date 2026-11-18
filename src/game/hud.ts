@@ -658,7 +658,7 @@ export class Hud {
         const casters = units.filter((u) => this.world.abilitiesFor(u).includes(ab));
         const ready = casters.filter((u) => u.abilityCd === 0).length;
         const a = ABILITIES[ab];
-        const reason = a.research && !this.world.level(this.player, a.research) ? `Requiert : ${DEFS[a.research].name}` : a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined;
+        const reason = this.world.needs(this.player, a.research) ?? (a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined);
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
@@ -687,7 +687,7 @@ export class Hud {
       const buyers = units.filter((u) => (u.def as UnitDef).levels);
       if (buyers.length && [...this.world.entities.values()].some((b) => b.owner === this.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
         const max = BALANCE.rules.upgrades.artefacts.max;
-        const free = buyers.find((u) => u.arts.length + u.queue.filter((q) => ARTEFACTS.includes(q)).length < max);
+        const free = buyers.find((u) => this.world.artefacts(u) < max);
         for (const t of ARTEFACTS) {
           const d = DEFS[t] as UpgradeDef;
           list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: free ? undefined : `${max} améliorations au plus par dieu`, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
@@ -718,7 +718,7 @@ export class Hud {
         { label: `${d.name} : Mitrailleuse`, icon: t, key: 'M', cost: d.cost, reason: lack, action: queue() },
         ...d.weapons!.map((k) => {
           const kit = WEAPONS[k];
-          const reason = lack ?? (kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : undefined);
+          const reason = lack ?? this.world.needs(this.player, kit.research);
           return { label: `${d.name} : ${kit.name}`, icon: t, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
         }),
         { label: 'Retour', key: 'Escape', action: () => (this.weaponMenu = null) },
@@ -747,7 +747,7 @@ export class Hud {
       const bare = same.filter((o) => !o.kit && o.buildLeft === 0);
       for (const k of (b.def as BuildingDef).weapons!) {
         const kit = WEAPONS[k];
-        const reason = kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : bare.length ? undefined : 'Déjà armé';
+        const reason = this.world.needs(this.player, kit.research) ?? (bare.length ? undefined : 'Déjà armé');
         list.push({ label: kit.name, key: kit.hotkey, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
       }
     }

@@ -12,6 +12,16 @@ export function owned(this: World, c: Command): Entity[] {
   return [...new Set(c.ids)].map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.owner === c.player);
 }
 
+/** « Requiert : … » while the research is not done, for a message or a greyed button; nothing once it is. */
+export function needs(this: World, player: number, research?: string): string | undefined {
+  return research && !this.level(player, research) ? `Requiert : ${DEFS[research].name}` : undefined;
+}
+
+/** A god's improvements from the Artefacterie, those bought and those queued. */
+export function artefacts(this: World, g: Entity): number {
+  return g.arts.length + g.queue.filter((q) => ARTEFACTS.includes(q)).length;
+}
+
 /** Into a producer's queue, already paid for, with the weapon chosen for a Z socle; it starts at once when first. */
 export function enqueue(this: World, b: Entity, type: string, kit = ''): void {
   b.queue.push(type);
@@ -92,7 +102,7 @@ export function apply(this: World, c: Command): void {
         const lack = this.lacks(c.player, c.type);
         if (lack) return void this.say(c.player, lack);
         const max = BALANCE.rules.upgrades.artefacts.max;
-        const g = units.find((u) => (u.def as UnitDef).levels && u.arts.length + u.queue.filter((q) => ARTEFACTS.includes(q)).length < max && u.queue.length < 5);
+        const g = units.find((u) => (u.def as UnitDef).levels && this.artefacts(u) < max && u.queue.length < 5);
         if (!g) return void this.say(c.player, `${max} améliorations au plus par dieu.`);
         const up = DEFS[c.type] as UpgradeDef;
         if (!this.pay(c.player, up)) return;
@@ -165,7 +175,8 @@ export function apply(this: World, c: Command): void {
         // Z: the socle's weapon is chosen here, for good, and paid on top of it (Z.doc: « Arme adaptable »).
         const kit = c.weapon ? WEAPONS[c.weapon] : undefined;
         if (c.weapon && (!kit || !unit.weapons?.includes(c.weapon))) return;
-        if (kit?.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
+        const need = this.needs(c.player, kit?.research);
+        if (need) return void this.say(c.player, need);
         const s = this.supply(c.player);
         if (s.used + unit.supply > s.max) return void this.say(c.player, `Logistique insuffisante : construisez des ${SUPPLY_NAMES[this.players[c.player].faction]}.`);
         if (!this.pay(c.player, { cost: withKit(unit, c.weapon) })) return;
@@ -202,7 +213,8 @@ export function apply(this: World, c: Command): void {
     case 'arm': {
       const kit = WEAPONS[c.weapon];
       if (!kit) return;
-      if (kit.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
+      const need = this.needs(c.player, kit.research);
+      if (need) return void this.say(c.player, need);
       for (const b of buildings) {
         if (!(b.def as BuildingDef).weapons?.includes(c.weapon) || b.kit || b.buildLeft > 0) continue;
         if (!this.pay(c.player, kit)) return;
@@ -234,7 +246,8 @@ export function apply(this: World, c: Command): void {
         // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
         const ab = ABILITIES[c.name];
         if (!ab) return;
-        if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
+        const need = this.needs(c.player, ab.research);
+        if (need) return void this.say(c.player, need);
         const casters = units.filter((e) => this.abilitiesFor(e).includes(c.name!) && e.abilityCd === 0);
         if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
         if (c.x === undefined || c.y === undefined || !casters.length) return;
@@ -250,11 +263,13 @@ export function apply(this: World, c: Command): void {
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];
       if (b.type === 'centrek') {
-        if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
+        const need = this.needs(c.player, ab.research);
+        if (need) return void this.say(c.player, need);
         return void this.centreK(b, kind, c.x, c.y);
       }
       if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
-      if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
+      const need = this.needs(c.player, ab.research);
+      if (need) return void this.say(c.player, need);
       if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
       if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');
       if (kind === 'observation') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration) });
