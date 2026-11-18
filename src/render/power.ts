@@ -170,13 +170,13 @@ function pcbTextures(): NonNullable<typeof pcb> {
     for (let yy = y; yy <= y + h; yy += C) pts.push([x, yy], [x + w, yy]);
     return pts;
   };
-  type Trace = { pts: P[]; w: number; glow: number };
+  type Trace = { pts: P[]; w: number; glow: number; vias: boolean; start: boolean };
   const traces: Trace[] = [];
   type Chip = { x: number; y: number; w: number; h: number };
   const chips: Chip[] = [];
-  for (let i = 0; i < 60 && chips.length < 12; i++) {
+  for (let i = 0; i < 120 && chips.length < 16; i++) {
     const ch = { x: Math.floor(rnd() * (S / U)) * U, y: Math.floor(rnd() * (S / U)) * U, w: U * (4 + Math.floor(rnd() * 6)), h: 14 + Math.floor(rnd() * 3) * 6 };
-    const cells = cellsOf(rect(ch.x - 9, ch.y - 9, ch.w + 18, ch.h + 18), 2);
+    const cells = cellsOf(rect(ch.x - 9, ch.y - 16, ch.w + 18, ch.h + 32), 2);
     if (!free(cells)) continue;
     take(cellsOf(rect(ch.x - 2, ch.y - 2, ch.w + 4, ch.h + 4), 2));
     chips.push(ch);
@@ -215,17 +215,54 @@ function pcbTextures(): NonNullable<typeof pcb> {
       const k = o / (1 + n1[0] * n2[0] + n1[1] * n2[1]);
       return [x + (n1[0] + n2[0]) * k, y + (n1[1] + n2[1]) * k];
     });
-  const bus = (start: P, d: P, k: number, w: number) => {
-    const base = route(start, d, 2 + Math.floor(rnd() * 4));
+  const lay = (base: P[], k: number, w: number, skip = 0, vias = true) => {
+    base = base.filter((q, i) => !i || Math.hypot(q[0] - base[i - 1][0], q[1] - base[i - 1][1]) > 0.5); // no zero-length legs
+    if (base.length < 2) return false;
     const lines = Array.from({ length: k }, (_, i) => offset(base, (i - (k - 1) / 2) * U));
-    const cells = lines.map((l) => cellsOf(l, w / 2 + 1.2));
+    // A branch starts on the trace it leaves: its first few px are not checked against it.
+    const from = (l: P[]): P[] => {
+      if (!skip) return l;
+      const d = unit([l[1][0] - l[0][0], l[1][1] - l[0][1]]);
+      return [[l[0][0] + d[0] * skip, l[0][1] + d[1] * skip], ...l.slice(1)];
+    };
+    const cells = lines.map((l) => cellsOf(from(l), w / 2 + 1.2));
     if (!cells.every(free)) return false;
     cells.forEach(take);
     const glow = 0.35 + rnd() * 0.65;
-    for (const pts of lines) traces.push({ pts, w, glow });
-    take(lines.flatMap((l) => cellsOf([l[l.length - 1], l[l.length - 1]], 4))); // room for the vias
+    for (const pts of lines) traces.push({ pts, w, glow, vias, start: vias && !skip });
+    if (vias) take(lines.flatMap((l) => cellsOf([l[l.length - 1], l[l.length - 1]], 4))); // room for the vias
     return true;
   };
+  const bus = (start: P, d: P, k: number, w: number, skip = 0) => lay(route(start, d, 2 + Math.floor(rnd() * 4)), k, w, skip);
+  // A connected board: buses run from chip to chip (out of one's pins, across, into the other's), and the rest
+  // of the traces branch off them, so everything belongs to one network.
+  const pinRow = (ch: Chip, side: number) => (side < 0 ? ch.y - 11 : ch.y + ch.h + 11);
+  for (const a of chips) {
+    const near = chips
+      .filter((b) => b !== a)
+      .map((b) => {
+        // The nearest copy of b on the wrapping tile.
+        const dx = ((b.x - a.x + S * 1.5) % S) - S / 2;
+        const dy = ((b.y - a.y + S * 1.5) % S) - S / 2;
+        return { ...b, x: a.x + dx, y: a.y + dy };
+      })
+      .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))
+      .slice(0, 4);
+    for (const b of near) {
+      const side = b.y < a.y ? -1 : 1;
+      const k = Math.min(Math.floor(a.w / U), Math.floor(b.w / U), 2 + Math.floor(rnd() * 3));
+      for (let tries = 0; tries < 6; tries++) {
+        const ax = a.x + U * (Math.floor(rnd() * (Math.floor(a.w / U) - k + 1)) + (k - 1) / 2 + 0.5);
+        const bx = b.x + U * (Math.floor(rnd() * (Math.floor(b.w / U) - k + 1)) + (k - 1) / 2 + 0.5);
+        const y0 = pinRow(a, side);
+        const y1 = pinRow(b, -side);
+        if ((y1 - y0) * side < U * 4) break; // overlapping in depth: no clean route
+        const my = Math.round((y0 + (y1 - y0) * (0.3 + rnd() * 0.4)) / U) * U;
+        // Out of a's pins, across, into b's: the bus keeps its order, as the pins face each other.
+        if (lay([[ax, y0], [ax, my], [bx, my], [bx, y1]], k, 2, 0, false)) break;
+      }
+    }
+  }
   // Buses out of the chips' long sides, from groups of neighbouring pins.
   for (const ch of chips)
     for (const side of [-1, 1]) {
@@ -234,18 +271,25 @@ function pcbTextures(): NonNullable<typeof pcb> {
         const k = Math.min(pins, 2 + Math.floor(rnd() * 4));
         const first = Math.floor(rnd() * (pins - k + 1));
         const cx = ch.x + U * (first + (k - 1) / 2 + 0.5);
-        const y = side < 0 ? ch.y - 7 : ch.y + ch.h + 7;
+        const y = pinRow(ch, side);
         if (bus([cx, y], [0, side], k, 2)) done++;
       }
     }
-  // Free-standing buses and a few thick power traces filling the rest of the board.
-  for (let i = 0; i < 4000; i++) {
-    const p: P = [Math.floor(rnd() * (S / U)) * U, Math.floor(rnd() * (S / U)) * U];
-    const d: P = [[1, 0], [0, 1], [-1, 0], [0, -1]][Math.floor(rnd() * 4)] as P;
-    if (rnd() < 0.12) bus(p, d, 1, 4);
-    else bus(p, d, 1 + Math.floor(rnd() * 4), 2);
+  // Branches off the network: from a point on a trace, out sideways, ending in vias; a few thick power lines.
+  for (let i = 0; i < 20000 && traces.length < 320; i++) {
+    if (!traces.length) break;
+    const t = traces[Math.floor(rnd() * traces.length)];
+    const j = Math.floor(rnd() * (t.pts.length - 1));
+    const [a, b] = [t.pts[j], t.pts[j + 1]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < U * 3) continue;
+    const f = (U * (1 + Math.floor(rnd() * (len / U - 1)))) / len;
+    const p: P = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    const along = unit([b[0] - a[0], b[1] - a[1]]);
+    const d: P = rnd() < 0.5 ? [-along[1], along[0]] : [along[1], -along[0]];
+    lay(route(p, d, 1 + Math.floor(rnd() * 3)), rnd() < 0.25 ? 2 : 1, rnd() < 0.1 ? 4 : 2, t.w / 2 + 10);
   }
-  const ends = traces.flatMap((t) => [t.pts[0], t.pts[t.pts.length - 1]]);
+  const ends = traces.filter((t) => t.vias).map((t) => t.pts[t.pts.length - 1]);
   const lights = ends.filter(() => rnd() < 0.05).map(([x, y]) => ({ x, y, r: 1.4 + rnd() * 1.4 }));
   // Drawn nine times, shifted by the tile size, so the pattern wraps seamlessly.
   for (const ox of [-S, 0, S])
@@ -276,7 +320,7 @@ function pcbTextures(): NonNullable<typeof pcb> {
         path(tg);
         tg.lineWidth = t.w;
         tg.stroke();
-        for (const [x, y] of [t.pts[0], t.pts[t.pts.length - 1]]) {
+        for (const [x, y] of t.vias ? (t.start ? [t.pts[0], t.pts[t.pts.length - 1]] : [t.pts[t.pts.length - 1]]) : []) {
           const r = t.w * 0.6 + 1.6;
           g.fillStyle = '#1d626a';
           g.beginPath();
@@ -295,7 +339,7 @@ function pcbTextures(): NonNullable<typeof pcb> {
       }
       for (const ch of chips) {
         g.fillStyle = '#2f646a';
-        for (let px = ch.x + U / 2; px < ch.x + ch.w; px += U) g.fillRect(px - 1.2, ch.y - 7, 2.4, ch.h + 14); // pins
+        for (let px = ch.x + U / 2; px < ch.x + ch.w; px += U) g.fillRect(px - 1.2, ch.y - 11, 2.4, ch.h + 22); // pins
         g.fillStyle = 'rgba(2,7,8,0.7)';
         g.fillRect(ch.x - 1, ch.y - 1, ch.w + 2, ch.h + 2);
         g.fillStyle = '#0c1314';
