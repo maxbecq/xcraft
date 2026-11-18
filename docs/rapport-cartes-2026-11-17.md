@@ -89,6 +89,7 @@ Règle d'adoption : une retouche est gardée seulement si elle rapproche les tro
 | **v3 : passerelle anti-diagonale (`band diag 1 offset 95 half 1`)** | **52 – 46** | **67 – 29** (2 nuls) | **57 – 35** (6 nuls) | **121 / 165 (+44 p1)** | **adoptée** |
 | v4 : passerelle anti-diagonale large (half 2) | 51 – 47 | 80 – 18 | 71 – 23 (4 nuls) | 133 / 157 | rejetée : Z – Humains et Z – Isdaris empirent |
 
+- Mise à jour du 18 novembre 2026 : la passerelle est retirée à la demande de l'utilisateur, qui la trouvait absurde et laide. Le gouffre se contourne de nouveau par les deux routes, et seuls les volants le traversent. Mesure sur les stats du mod 1.53, méthode corrigée (98 parties distinctes par paire). Avec la passerelle : Humains – Isdaris 16 – 81, Z – Humains 80 – 17, Z – Isdaris 86 – 11, p0 / p1 161 / 130. Sans la passerelle : 12 – 86, 81 – 16, 83 – 14, p0 / p1 162 / 130. La passerelle ne change donc presque plus rien.
 - La passerelle adoptée traverse le gouffre du coin haut droit au coin bas gauche. Elle relie les deux routes par le milieu, sans raccourcir le chemin d'une base à l'autre. Les armées qui partent chacune sur une route peuvent donc se rejoindre au centre.
 - Les trois paires se rapprochent de 49, mais Z – Humains (67 – 29) reste hors de la cible. L'avantage de p1 baisse (+44 au lieu de +58), mais reste significatif.
 - Un pont direct d'une base à l'autre (v1, v2) aggrave tout : la partie devient une course frontale, que Z gagne.
