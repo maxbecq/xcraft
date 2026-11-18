@@ -542,7 +542,7 @@ body.humains .cmd-tip b { font: 700 15px var(--carve); letter-spacing: 0.1em; co
 }
 
 /* Spectating: the AI plays both sides, so no command buttons. */
-body.spectate .hud-card { visibility: hidden; }
+body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, not a bare patch of console */
 
 /* ---------------------------------------------------------------- match setup */
 
