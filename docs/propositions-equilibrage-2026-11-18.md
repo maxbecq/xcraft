@@ -144,6 +144,8 @@ Gaïa est gratuite dans le jeu : ses prix de niveau sont provisoires, la moitié
 
 Équilibre : les mesures complètes attendent que les mécaniques de tous les camps soient en place (règle du programmeur). Une seule mesure indicative a été faite, sur la première version (f3876bd), avant que l'IA cesse d'acheter les niveaux de Gaïa trop tôt. Elle n'est plus représentative : Dieux – Humains 0 – 76 sur la carte d'origine, contre 18 – 51 juste avant les niveaux.
 
+Bug corrigé le 19 novembre (commit 0fa1bc9) : un bâtiment posé par une Gaïa de niveau N produisait N fois plus vite, et le gardait pour toujours. Le bug n'existait qu'avec les niveaux de Gaïa, donc depuis fb95697. Les mesures des sections 2 et 4 faites avant les niveaux ne sont pas touchées : Gaïa y restait au niveau 1. La mesure indicative sur f3876bd l'est : l'IA y achetait les niveaux de Gaïa, et le bug jouait en faveur des Dieux. Ils perdaient pourtant 0 – 76. Depuis 6ec5456, l'IA n'achète plus les niveaux de Gaïa ; un joueur humain le pouvait encore. Toute mesure des Dieux faite avant 0fa1bc9 avec des niveaux de Gaïa est donc biaisée en leur faveur.
+
 ## 5. Questions
 
 1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
