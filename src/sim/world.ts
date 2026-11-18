@@ -1,9 +1,10 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, HARVEST, OBSERVATION, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
 import * as commands from './commands';
+import * as economy from './economy';
 import * as movement from './movement';
 import * as buildings from './buildings';
 import * as combat from './combat';
@@ -209,7 +210,7 @@ const WARP_RANGE = 6;
 
 /** World's methods kept in other files (commands.ts…), called as its own. */
 type Methods<M> = { [K in keyof M]: OmitThisParameter<M[K]> };
-export interface World extends Methods<typeof commands>, Methods<typeof abilities>, Methods<typeof combat>, Methods<typeof buildings>, Methods<typeof movement> {}
+export interface World extends Methods<typeof commands>, Methods<typeof abilities>, Methods<typeof combat>, Methods<typeof buildings>, Methods<typeof movement>, Methods<typeof economy> {}
 
 export class World {
   tick = 0;
@@ -658,81 +659,6 @@ export class World {
     }
   }
 
-  private gather(e: Entity, o: Extract<Order, { kind: 'gather' }>): void {
-    if (o.phase === 'return' || e.carry > 0) {
-      o.phase = 'return';
-      const home = this.nearestDropoff(e);
-      if (!home) return this.setOrder(e, null);
-      const size = (home.def as BuildingDef).size;
-      if (!this.reachRect(e, home.tx, home.ty, size)) return void this.goNear(e, home.tx, home.ty, size);
-      const p = this.players[e.owner];
-      p.minerals += idiv(e.carry * p.handicap, 100);
-      e.carry = 0;
-      o.phase = 'go';
-      e.goal = null;
-    }
-    let field = this.entities.get(o.target);
-    if (!field || field.amount <= 0 || (field.miner && field.miner !== e.id && this.near(e, field, 3))) {
-      // Depleted or busy: switch to the closest free field.
-      const other = this.nearestField(e, field, !!field && field.amount > 0);
-      if (other) {
-        if (field) this.release(e, field.id);
-        field = other;
-        o.target = other.id;
-        e.goal = null;
-      } else if (!field || field.amount <= 0) {
-        return this.setOrder(e, null);
-      }
-    }
-    if (o.phase === 'go') {
-      if (!this.reachRect(e, field.tx, field.ty, 1)) return void this.goNear(e, field.tx, field.ty, 1);
-      if (field.miner && field.miner !== e.id) return; // wait for the field
-      field.miner = e.id;
-      o.phase = 'mine';
-      o.timer = ticks(HARVEST.seconds);
-    }
-    if (o.phase === 'mine' && --o.timer <= 0) {
-      const n = Math.min(HARVEST.amount, field.amount);
-      field.amount -= n;
-      e.carry = n;
-      field.miner = 0;
-      o.phase = 'return';
-      if (field.amount <= 0) this.remove(field);
-    }
-  }
-
-  release(e: Entity, target: number): void {
-    const f = this.entities.get(target);
-    if (f?.miner === e.id) f.miner = 0;
-  }
-
-  private near(e: Entity, f: Entity, tiles: number): boolean {
-    return dist(e.x, e.y, f.x, f.y) <= tiles * FP;
-  }
-
-  /** Closest mineral field; with `freeOnly`, only fields nobody is mining. */
-  nearestField(e: Entity, except?: Entity, freeOnly = false): Entity | undefined {
-    let best: Entity | undefined;
-    let bestD = 12 * FP;
-    for (const f of this.entities.values()) {
-      if (f.type !== 'minerai' || f === except || f.amount <= 0 || (freeOnly && f.miner)) continue;
-      const d = dist(e.x, e.y, f.x, f.y) + (f.miner ? 3 * FP : 0);
-      if (d < bestD) [best, bestD] = [f, d];
-    }
-    return best;
-  }
-
-  private nearestDropoff(e: Entity): Entity | undefined {
-    let best: Entity | undefined;
-    let bestD = Infinity;
-    for (const b of this.entities.values()) {
-      if (b.owner !== e.owner || b.buildLeft > 0 || !(b.def as BuildingDef).dropoff) continue;
-      const d = dist(e.x, e.y, b.x, b.y);
-      if (d < bestD) [best, bestD] = [b, d];
-    }
-    return best;
-  }
-
   // ---------------------------------------------------------------- combat
 
   /**
@@ -769,4 +695,4 @@ export class World {
 }
 
 // Installed like the class's own methods: on the prototype, not enumerable.
-for (const m of [commands, abilities, combat, buildings, movement]) for (const [k, f] of Object.entries(m)) Object.defineProperty(World.prototype, k, { value: f, writable: true, configurable: true });
+for (const m of [commands, abilities, combat, buildings, movement, economy]) for (const [k, f] of Object.entries(m)) Object.defineProperty(World.prototype, k, { value: f, writable: true, configurable: true });
