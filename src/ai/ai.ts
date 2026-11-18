@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, spell, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, spell, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -347,9 +347,11 @@ export class AI {
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
       if (minerals - keep - gatewaysKeep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
-      out.push({ player: this.player, kind: 'train', ids: [c.id], type });
-      minerals -= def.cost.minerals;
-      energy -= def.cost.energy;
+      const weapon = this.weaponFor(def, minerals - keep - gatewaysKeep, energy - unitReserve);
+      const cost = withKit(def, weapon);
+      out.push({ player: this.player, kind: 'train', ids: [c.id], type, weapon });
+      minerals -= cost.minerals;
+      energy -= cost.energy;
       this.trained++;
     }
 
@@ -393,23 +395,6 @@ export class AI {
         minerals -= cost.minerals;
         energy -= cost.energy;
       }
-    }
-
-    // Z: socles waiting at home get a weapon kit, in a weighted rotation (only kits that hit flyers against them).
-    // A socle with a kit that needs no research is refitted once researched kits come into the rotation:
-    // researches land late, when most socles already carry the heavy machine gun.
-    for (const u of army) {
-      const allowed = (u.def as UnitDef).weapons;
-      if (!allowed || (u.kit && WEAPONS[u.kit].research) || (u.order && u.order.kind !== 'move') || this.wave.has(u.id)) continue;
-      const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => allowed.includes(k) && !(WEAPONS[k].research && !w.level(this.player, WEAPONS[k].research!)) && (!this.enemyAir || reaches(WEAPONS[k].attack, true)));
-      const total = kits.reduce((n, [, wgt]) => n + wgt, 0);
-      let k = u.id % Math.max(1, total);
-      const kit = kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
-      const cost = kit && kit !== u.kit && WEAPONS[kit].cost;
-      if (!cost || minerals - keep < cost.minerals || (cost.energy > 0 && energy - unitReserve < cost.energy)) continue;
-      out.push({ player: this.player, kind: 'equip', ids: [u.id], weapon: kit });
-      minerals -= cost.minerals;
-      energy -= cost.energy;
     }
 
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
@@ -746,6 +731,22 @@ export class AI {
     const target = [...this.world.entities.values()].find((e) => this.world.hostile(e.owner, this.player) && e.def.kind === 'building');
     if (!army.length || !target) return [];
     return [{ player: this.player, kind: 'attack', ids: army.map((u) => u.id), x: target.x, y: target.y }];
+  }
+
+  /**
+   * Z: the weapon a socle is built with, for good: a weighted rotation through the researched ones it can afford
+   * on top of the socle (only those that hit flyers against them); the machine gun ('') otherwise.
+   */
+  private weaponFor(def: UnitDef, minerals: number, energy: number): string | undefined {
+    if (!def.weapons) return undefined;
+    const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => {
+      const kit = WEAPONS[k];
+      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || reaches(kit.attack, true))
+        && minerals >= def.cost.minerals + kit.cost.minerals && energy >= def.cost.energy + kit.cost.energy;
+    });
+    const total = kits.reduce((n, [, wgt]) => n + wgt, 0);
+    let k = this.trained % Math.max(1, total);
+    return kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
   }
 
   private nextUnit(energy: number, own: Entity[], minerals: number): string {

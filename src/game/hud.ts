@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -100,6 +100,8 @@ export class Hud {
   private pressed = { key: '', anim: '', at: -Infinity };
   /** Open build menu: basic buildings, or the advanced (tech) ones. */
   private buildMenu: false | 'basic' | 'advanced' = false;
+  /** Z Plate-forme: the socle whose weapon is being picked before it is queued. */
+  private weaponMenu: string | null = null;
   private placing: string | null = null;
   /** The building type being placed, if any. */
   get placingType(): string | null {
@@ -550,11 +552,11 @@ export class Hud {
       } else if (e.queue.length) {
         const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
         html += `<div class="prod">${progress(first.name, 1 - e.trainLeft / ticks(first.buildTime))}`;
-        html += `<div class="queue">${e.queue.map((t) => `<span>${img(t, DEFS[t].name)}</span>`).join('')}</div></div>`;
+        html += `<div class="queue">${e.queue.map((t, i) => `<span>${img(t, e.kits[i] ? `${DEFS[t].name} : ${WEAPONS[e.kits[i]].name}` : DEFS[t].name)}</span>`).join('')}</div></div>`;
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
-    if ((e.def as UnitDef).weapons) html += `<div class="info">Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse légère'}</div>`;
+    if ((e.def as UnitDef).weapons) html += `<div class="info">Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse'}</div>`;
     if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
     this.portrait.render();
@@ -619,7 +621,7 @@ export class Hud {
         ];
       }
       const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
-      // Stop and Attack go to everyone; abilities and weapon kits to the active kind only, once Tab picked one.
+      // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
       const all = units;
       const sub = units.filter((u) => u.type === this.activeType);
       if (sub.length) units = sub;
@@ -662,13 +664,6 @@ export class Hud {
       if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
       const summoning = units.find((u) => u.queue.length);
       if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
-      // Z socles: a weapon kit to fit on those that take it and do not carry it yet.
-      for (const [k, kit] of Object.entries(WEAPONS)) {
-        const takers = units.filter((u) => (u.def as UnitDef).weapons?.includes(k) && u.kit !== k);
-        if (!units.some((u) => (u.def as UnitDef).weapons?.includes(k))) continue;
-        const reason = kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : takers.length ? undefined : 'Déjà équipé';
-        list.push({ label: kit.name, key: kit.hotkey, cost: kit.cost, reason, action: () => cmd({ kind: 'equip', ids: takers.map((u) => u.id), weapon: k }) });
-      }
       return list;
     }
     this.buildMenu = false;
@@ -676,11 +671,32 @@ export class Hud {
     if (!b || b.def.kind !== 'building') return [];
     const same = own.filter((o) => o.type === b.type);
     if (b.buildLeft > 0) return [{ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [b.id] }) }];
+    // Queue in the least busy of the selected buildings.
+    const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
+    // Z: a socle's weapon is picked before it is queued, for good; the machine gun comes free.
+    if (this.weaponMenu && !b.def.trains?.includes(this.weaponMenu)) this.weaponMenu = null;
+    if (this.weaponMenu) {
+      const t = this.weaponMenu;
+      const d = DEFS[t] as UnitDef;
+      const lack = this.world.lacks(this.player, t) || undefined;
+      const queue = (weapon?: string) => () => {
+        cmd({ kind: 'train', ids: order, type: t, weapon });
+        this.weaponMenu = null;
+      };
+      return [
+        { label: `${d.name} : Mitrailleuse`, icon: t, key: 'M', cost: d.cost, reason: lack, action: queue() },
+        ...d.weapons!.map((k) => {
+          const kit = WEAPONS[k];
+          const reason = lack ?? (kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : undefined);
+          return { label: `${d.name} : ${kit.name}`, icon: t, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
+        }),
+        { label: 'Retour', key: 'Escape', action: () => (this.weaponMenu = null) },
+      ];
+    }
     const list: Button[] = (b.def.trains ?? []).map((t) => {
       const d = DEFS[t] as UnitDef;
-      // Queue in the least busy of the selected buildings.
-      const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) };
+      const action = d.weapons ? () => (this.weaponMenu = t) : () => cmd({ kind: 'train', ids: order, type: t });
+      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action };
     });
     if (b.def.bunker) {
       const ids = same.map((o) => o.id);

@@ -1,6 +1,6 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, flies, type Entity, type Command, type World } from './world';
 
@@ -88,6 +88,7 @@ export function apply(this: World, c: Command): void {
         if (g.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
         if (!this.pay(c.player, { cost: lv.cost[g.lvl - 1] })) return;
         g.queue.push('niveau');
+        g.kits.push('');
         if (g.queue.length === 1) g.trainLeft = this.trainTime(g, 'niveau');
         return;
       }
@@ -108,6 +109,7 @@ export function apply(this: World, c: Command): void {
           const up = DEFS[c.type] as UpgradeDef;
           if (!this.pay(c.player, up)) return;
           b.queue.push(c.type);
+          b.kits.push('');
           if (b.queue.length === 1) b.trainLeft = ticks(up.buildTime);
           return;
         }
@@ -119,6 +121,7 @@ export function apply(this: World, c: Command): void {
           const into = DEFS[c.type] as BuildingDef;
           if (!this.pay(c.player, into)) return;
           b.queue.push(c.type);
+          b.kits.push('');
           b.trainLeft = ticks(into.buildTime);
           return;
         }
@@ -130,10 +133,15 @@ export function apply(this: World, c: Command): void {
           continue;
         }
         const unit = DEFS[c.type] as UnitDef;
+        // Z: the socle's weapon is chosen here, for good, and paid on top of it (Z.doc: « Arme adaptable »).
+        const kit = c.weapon ? WEAPONS[c.weapon] : undefined;
+        if (c.weapon && (!kit || !unit.weapons?.includes(c.weapon))) return;
+        if (kit?.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
         const s = this.supply(c.player);
         if (s.used + unit.supply > s.max) return void this.say(c.player, `Logistique insuffisante : construisez des ${SUPPLY_NAMES[this.players[c.player].faction]}.`);
-        if (!this.pay(c.player, unit)) return;
+        if (!this.pay(c.player, { cost: withKit(unit, c.weapon) })) return;
         b.queue.push(c.type);
+        b.kits.push(c.weapon ?? '');
         if (b.queue.length === 1) b.trainLeft = this.trainTime(b, c.type);
         return; // one building per command, like SC
       }
@@ -148,7 +156,8 @@ export function apply(this: World, c: Command): void {
           this.remove(b);
         } else if (b.queue.length) {
           const t = b.queue.pop()!;
-          this.refund(c.player, t === 'niveau' ? { cost: (b.def as UnitDef).levels!.cost[b.lvl - 1] } : (DEFS[t] as UnitDef | UpgradeDef));
+          const kit = b.kits.pop();
+          this.refund(c.player, t === 'niveau' ? { cost: (b.def as UnitDef).levels!.cost[b.lvl - 1] } : { cost: withKit(DEFS[t] as UnitDef | UpgradeDef, kit) });
           if (b.queue.length) b.trainLeft = Math.max(b.trainLeft, 1);
         }
       }
@@ -161,22 +170,6 @@ export function apply(this: World, c: Command): void {
       if (p[c.sell] < give) return void this.say(c.player, c.sell === 'minerals' ? 'Pas assez de minerai.' : "Pas assez d'énergie.");
       p[c.sell] -= give;
       p[c.sell === 'minerals' ? 'energy' : 'minerals'] += get;
-      return;
-    }
-    case 'equip': {
-      const kit = WEAPONS[c.weapon];
-      if (!kit) return;
-      if (kit.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
-      if (![...this.entities.values()].some((b) => b.owner === c.player && b.type === 'plateforme' && b.buildLeft === 0)) return void this.say(c.player, `Requiert : ${DEFS.plateforme.name}`);
-      // The socle stops a moment while the kit is mounted.
-      for (const e of units) {
-        if (!(e.def as UnitDef).weapons?.includes(c.weapon) || e.kit === c.weapon) continue;
-        if (!this.pay(c.player, kit)) return;
-        e.kit = c.weapon;
-        e.cooldown = 0;
-        e.held = ticks(BALANCE.rules.equipSeconds);
-        this.setOrder(e, null);
-      }
       return;
     }
     case 'ability': {

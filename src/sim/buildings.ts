@@ -154,6 +154,7 @@ export function operate(this: World, b: Entity): void {
 export function produce(this: World, b: Entity): void {
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
+    const kit = b.kits.shift() ?? '';
     if (type === 'niveau') {
       this.ascend(b);
       if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
@@ -170,6 +171,7 @@ export function produce(this: World, b: Entity): void {
       return;
     }
     const u = this.spawnBeside(type, b);
+    u.kit = kit;
     // Cuve génétique: Créatures come in pairs.
     if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
       const twin = this.spawnBeside(type, b);

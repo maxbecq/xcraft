@@ -103,7 +103,7 @@ Champs ajoutés :
 
 ## Armes du camp Z (`weapons`)
 
-Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec la mitrailleuse légère de leur fiche `units` (`attack`). On leur monte ensuite un kit qui la remplace, payé à chaque socle : `attack` (mêmes champs que pour les unités) et `cost`. Le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; le Lance-flammes ne va pas sur le Coléoptère, et le Drone de combat ne prend aucun kit.
+Les socles Z (Quadripode, Hexapode, Coléoptère) se commandent à la Plate-forme avec leur arme, choisie une fois pour toutes (`Z.doc`) : la Mitrailleuse de leur fiche `units` (`attack`), gratuite, ou une arme de `weapons` qui la remplace : `attack` (mêmes champs que pour les unités) et `cost`, payé en plus du socle et rendu avec lui si on annule. Le Laser, le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; tous les socles les prennent, et le Drone de combat garde sa mitrailleuse.
 
 ## Capacités (`abilities`)
 
@@ -119,7 +119,6 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `rappel` | rayon de ramassage, unités rappelées au plus, secondes d'étourdissement à l'arrivée |
 | `peauDeRoc` | portée et réduction de dégâts de Peau de roc |
 | `stimulantHp` | PV coûtés par le Stimulant |
-| `equipSeconds` | secondes pendant lesquelles un socle Z reste immobile quand on lui monte un kit |
 | `creepRepair` | PV rendus chaque seconde aux unités Z au sol sur leur creep |
 | `upgrades.courroux` | Courroux du marteau (Thor) : multiplicateur de son prochain coup au corps à corps |
 | `upgrades.celerite` | Célérité naine : un Nain bondit vers l'ennemi à moins de `range` cases, vitesse ×`speed` pendant `seconds`, une fois toutes les `cooldown` secondes |
@@ -146,7 +145,7 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) sortent de la Plate-forme avec
 | `tech.humains` | Créaturium à partir de `minute` avec `barracks` casernes |
 | `tech.isdaris` | Psycho-assembleur à partir de `minute` avec `barracks` portails |
 | `army` | poids de chaque unité dans l'armée de l'IA |
-| `kits` | poids de chaque kit d'arme que l'IA Z monte sur ses socles |
+| `kits` | poids de chaque arme que l'IA Z choisit pour ses socles, parmi celles recherchées et payables |
 | `gods` | Dieux : `[dieu, minute]`, la Porte d'Asgaard invoque chaque dieu à partir de sa minute, dans l'ordre |
 | `godLevelMargin` | Dieux : minerai gardé en plus du prix avant qu'un dieu inoccupé n'achète son niveau suivant |
 | `research` | recherches de chaque camp, par ordre de priorité ; l'IA lance la première possible sur un bâtiment libre |

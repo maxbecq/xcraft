@@ -4,11 +4,11 @@ import { ticks } from './fixed';
 import { createMatch } from './setup';
 import type { Command, World } from './world';
 
-const state = (w: World) => JSON.stringify([...w.entities.values()].map((e) => [e.id, e.type, e.owner, e.x, e.y, e.hp]).concat(w.players.map((p) => [p.minerals, p.energy])));
+const state = (w: World) => JSON.stringify([...w.entities.values()].map((e) => [e.id, e.type, e.owner, e.x, e.y, e.hp, e.kit, e.kits]).concat(w.players.map((p) => [p.minerals, p.energy])));
 
 describe('replays', () => {
   it('rebuild a game from its recorded commands alone', () => {
-    for (const factions of [['humains', 'isdaris'], ['isdaris', 'isdaris']] as const) {
+    for (const factions of [['humains', 'isdaris'], ['isdaris', 'isdaris'], ['z', 'humains']] as const) {
       const live = createMatch([...factions]);
       const ais = [new AI(live, 0), new AI(live, 1)];
       const record: [number, Command[]][] = [];

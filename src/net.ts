@@ -308,7 +308,7 @@ export function every(ms: number, fn: () => void): () => void {
 
 /**
  * A fingerprint of the game state, compared between the two sides of a network game: the world's own (positions,
- * health, shields, resources, research) and every unit's order and queue, so a difference shows up before it moves anything.
+ * health, shields, resources, research) and every unit's order, queue and Z weapon, so a difference shows up before it moves anything.
  */
 export function stateHash(world: World): number {
   let h = world.hash();
@@ -320,6 +320,9 @@ export function stateHash(world: World): number {
     mix(o?.x ?? 0);
     mix(o?.y ?? 0);
     mix(e.queue.length);
+    // Z: the socle's weapon, and those chosen for the socles in the queue.
+    mix(e.kit.length);
+    for (const k of e.kits) mix(k.length);
   }
   return h >>> 0;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
-import { WEAPONS } from '../data';
+import { DEFS, type UnitDef, WEAPONS } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
@@ -36,32 +36,38 @@ describe('Z', () => {
     expect(w.supply(0).max).toBe(20);
   });
 
-  it('fits a weapon kit on a socle: paid, needs a Plate-forme and the research, replaces the light machine gun', () => {
+  it("chooses a socle's weapon when it is queued: paid on top, researched first, for good", () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
     p.minerals = 2000;
     p.energy = 2000;
-    const hexa = w.spawn('hexapode', 0, 20 * FP, 20 * FP);
-    const equip = (weapon: string) => w.step([{ player: 0, kind: 'equip', ids: [hexa.id], weapon }]);
-    equip('lourde');
-    expect(hexa.kit).toBe(''); // no Plate-forme yet
-    w.spawn('plateforme', 0, 22 * FP, 14 * FP);
-    equip('roquettes');
-    expect(hexa.kit).toBe(''); // not researched
-    equip('lourde');
-    expect(hexa.kit).toBe('lourde');
-    expect(p.minerals).toBe(2000 - WEAPONS.lourde.cost.minerals);
-    expect(w.weapon(hexa)).toEqual(WEAPONS.lourde.attack);
-    expect(hexa.held).toBeGreaterThan(0);
-    // The drone de combat is too small for kits.
-    const small = w.spawn('dronecombat', 0, 21 * FP, 20 * FP);
-    w.step([{ player: 0, kind: 'equip', ids: [small.id], weapon: 'lourde' }]);
-    expect(small.kit).toBe('');
-    // Flame throwers are ground weapons: a Coléoptère cannot take one.
+    const [ic] = of(w, 0, 'intelligence');
+    w.spawn('pod', 0, ic.x + 6 * FP, ic.y + 6 * FP);
+    const pf = w.spawn('plateforme', 0, ic.x + 8 * FP, ic.y);
+    const train = (type: string, weapon?: string) => w.step([{ player: 0, kind: 'train', ids: [pf.id], type, weapon }]);
+    train('quadripode', 'roquettes');
+    expect(pf.queue).toHaveLength(0); // not researched
+    p.upgrades.lanceroquettes = 1;
     p.upgrades.lanceflammes = 1;
-    const beetle = w.spawn('coleoptere', 0, 21 * FP, 21 * FP);
-    w.step([{ player: 0, kind: 'equip', ids: [beetle.id], weapon: 'flammes' }]);
-    expect(beetle.kit).toBe('');
+    train('dronecombat', 'roquettes');
+    expect(pf.queue).toHaveLength(0); // the drone de combat keeps its machine gun
+    train('quadripode', 'roquettes');
+    expect(pf.kits).toEqual(['roquettes']);
+    expect(p.minerals).toBe(2000 - (DEFS.quadripode as UnitDef).cost.minerals - WEAPONS.roquettes.cost.minerals);
+    expect(p.energy).toBe(2000 - WEAPONS.roquettes.cost.energy);
+    // Cancelled: both paid back.
+    w.step([{ player: 0, kind: 'cancel', ids: [pf.id] }]);
+    expect(p.minerals).toBe(2000);
+    expect(p.energy).toBe(2000);
+    // Z.doc: every socle takes any weapon, the Coléoptère a flame thrower too.
+    w.spawn('armement', 0, ic.x - 8 * FP, ic.y);
+    train('coleoptere', 'flammes');
+    train('quadripode');
+    expect(pf.kits).toEqual(['flammes', '']);
+    run(w, (DEFS.coleoptere as { buildTime: number }).buildTime + 1);
+    const [beetle] = of(w, 0, 'coleoptere');
+    expect(beetle.kit).toBe('flammes');
+    expect(w.weapon(beetle)).toEqual(WEAPONS.flammes.attack);
   });
 
   it('the creep repairs Z units standing on it', () => {
@@ -77,26 +83,24 @@ describe('Z', () => {
     expect(far.hp).toBe(100);
   });
 
-  it('the AI refits heavy machine guns with researched kits', () => {
+  it('the AI builds socles with the researched weapons', () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
-    p.minerals = 5000;
-    p.energy = 5000;
+    p.minerals = 20000;
+    p.energy = 20000;
+    p.upgrades.laser = 1;
     p.upgrades.lanceflammes = 1;
     p.upgrades.lanceroquettes = 1;
     const [ic] = of(w, 0, 'intelligence');
+    for (let i = 0; i < 4; i++) w.spawn('pod', 0, ic.x + (i - 2) * 3 * FP, ic.y + 6 * FP);
     w.spawn('plateforme', 0, ic.x + 8 * FP, ic.y);
-    const socles = [0, 1, 2, 3, 4].map((i) => {
-      const s = w.spawn('hexapode', 0, ic.x + 5 * FP, ic.y + (i - 2) * FP);
-      s.kit = 'lourde';
-      return s;
-    });
     const ai = new AI(w, 0);
-    for (let i = 0; i < ticks(10); i++) w.step(ai.think());
-    const kits = socles.map((s) => s.kit);
+    for (let i = 0; i < ticks(240); i++) w.step(ai.think());
+    const kits = new Set([...w.entities.values()].filter((e) => e.owner === 0 && DEFS[e.type].kind === 'unit' && (DEFS[e.type] as { weapons?: string[] }).weapons).map((s) => s.kit));
     expect(kits).toContain('flammes');
     expect(kits).toContain('roquettes');
-  });
+    expect(kits).toContain('laser');
+  }, 60_000);
 
   it('the AI builds a Z base and an armed army', () => {
     const w = createMatch(['z', 'humains']);
@@ -106,6 +110,5 @@ describe('Z', () => {
     expect(of(w, 0, 'assimilateur').length).toBeGreaterThan(0);
     const army = [...w.entities.values()].filter((e) => e.owner === 0 && ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'].includes(e.type));
     expect(army.length).toBeGreaterThan(5);
-    expect(army.some((u) => u.kit)).toBe(true);
   }, 60_000);
 });

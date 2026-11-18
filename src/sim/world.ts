@@ -69,6 +69,8 @@ export interface Entity {
   ty: number;
   buildLeft: number;
   queue: string[];
+  /** Z Plate-forme: the weapon chosen for each socle of the queue (key of WEAPONS, '' for the machine gun). */
+  kits: string[];
   trainLeft: number;
   rally: { x: number; y: number } | null;
   /** Rally on a mineral field: new workers start mining it. */
@@ -112,7 +114,7 @@ export interface Entity {
   /** Ticks left: phased out, unhurt and unable to fight (Module déphasant, Porte de déphasage); sending damage back (Sphère de renvoi). */
   phased: number;
   reflect: number;
-  /** Z socle: weapon kit fitted (key of WEAPONS), or '' for the light machine gun it came with. */
+  /** Z socle: weapon chosen when it was built, for good (key of WEAPONS), or '' for the machine gun. */
   kit: string;
   /** Thor's Courroux du marteau: ticks left in which his next blow hits several times as hard. */
   charged: number;
@@ -161,7 +163,7 @@ export type Command =
   /** Patrol between where each unit stands and (x, y), fighting what comes into sight on the way. */
   | { player: number; kind: 'patrol'; ids: number[]; x: number; y: number; queue?: boolean }
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number; queue?: boolean }
-  | { player: number; kind: 'train'; ids: number[]; type: string }
+  | { player: number; kind: 'train'; ids: number[]; type: string; weapon?: string }
   | { player: number; kind: 'cancel'; ids: number[] }
   /** Every unit in the given bunkers walks out. */
   | { player: number; kind: 'unload'; ids: number[] }
@@ -169,8 +171,6 @@ export type Command =
   | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number; name?: string }
   /** Marché: sells some of one resource for some of the other. */
   | { player: number; kind: 'trade'; ids: number[]; sell: 'minerals' | 'energy' }
-  /** Z: fits the weapon kit on each selected socle that takes it (paid per socle). */
-  | { player: number; kind: 'equip'; ids: number[]; weapon: string }
   /** Attack a target, or attack-move to a point when there is none. */
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
   /** Bac à sable only (a match with one player): one of its options turned on or off. Orders like any other, so a
@@ -291,7 +291,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };

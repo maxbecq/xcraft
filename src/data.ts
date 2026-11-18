@@ -73,7 +73,7 @@ export interface UnitDef {
   lifetime?: number;
   /** Units it can carry (Scarabée): they shoot from inside. */
   bunker?: number;
-  /** Z socle: weapon kits (keys of WEAPONS) it can be fitted with, in place of the light machine gun of `attack`. */
+  /** Z socle: weapons (keys of WEAPONS) it can be built with, in place of the machine gun of `attack`. */
   weapons?: string[];
   /** Dieux: a god that summons these units at its feet, through its own queue, while it stands still. */
   trains?: string[];
@@ -514,12 +514,12 @@ const BASE: Record<string, object> = {
   // ---------------------------------------------------------------- Z (notice 1.2-1): a nest of metal insects
   // Drones merge into the buildings they raise; every building but the Intelligence centrale and the Assimilateur
   // stands on the creep of cables spread by the Intelligence centrale and the Pods (the Isdaris power field, drawn
-  // as cables). Socles leave the Plate-forme with a light machine gun; weapon kits are fitted afterwards (equip).
+  // as cables). Socles leave the Plate-forme with the weapon chosen when they were queued, for good (Z.doc).
   drone: { kind: 'unit', name: 'Drone', radius: 0.375, worker: true, mechanical: true, faction: 'z', hotkey: 'D' },
   dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
-  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, weapons: ['lourde', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
-  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, weapons: ['lourde', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
-  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { armement: 1 }, weapons: ['lourde', 'roquettes'], faction: 'z', hotkey: 'L' },
+  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
+  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
+  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { armement: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'L' },
   intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone'], dropoff: true, absorbs: true, faction: 'z', hotkey: 'I' },
   pod: { kind: 'building', name: 'Pod', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'P' },
   // Notice: needs only 3 drones (supply) where the others need 4.
@@ -528,14 +528,15 @@ const BASE: Record<string, object> = {
   plateforme: { kind: 'building', name: 'Plate-forme', size: 3, needsPower: true, absorbs: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
   armement: {
     kind: 'building', name: "Centre d'armement", size: 3, needsPower: true, absorbs: true, requires: { plateforme: 1 }, faction: 'z', hotkey: 'R',
-    researches: ['zattaque1', 'zattaque2', 'zattaque3', 'zblindage1', 'zblindage2', 'zblindage3', 'lanceflammes', 'lanceroquettes'],
+    researches: ['zattaque1', 'zattaque2', 'zattaque3', 'zblindage1', 'zblindage2', 'zblindage3', 'laser', 'lanceflammes', 'lanceroquettes'],
   },
   // Notice: a Pod add-on, a small metal tower fitted with a weapon; here a heavy machine gun that sees cloaked units.
   tourelle: { kind: 'building', name: 'Tourelle', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'T' },
   ...upgrades('zattaque', 'Attaque physique', 'K', undefined, 'z'),
   ...upgrades('zblindage', 'Blindage des socles', 'B', undefined, 'z'),
-  lanceflammes: research('Lance-flammes', 'F', 'Kit lance-flammes pour les socles terrestres.', undefined, 'z'),
-  lanceroquettes: research('Lance-roquettes', 'R', 'Kit lance-roquettes, contre les véhicules et les bâtiments.', undefined, 'z'),
+  laser: research('Laser', 'L', 'Arme laser pour les socles, choisie à leur construction.', undefined, 'z'),
+  lanceflammes: research('Lance-flammes', 'F', 'Lance-flammes pour les socles, choisi à leur construction.', undefined, 'z'),
+  lanceroquettes: research('Lance-roquettes', 'R', 'Lance-roquettes pour les socles, contre les machines et les bâtiments.', undefined, 'z'),
 
   // ---------------------------------------------------------------- Dieux (notice 1.2-1): gods that summon their armies
   // The gods stand in for production buildings: building-sized, unique, summoned at the Porte d'Asgaard, each summons
@@ -624,7 +625,7 @@ function isd(name: string, hotkey: string, effect: string, requires?: Record<str
   return research(name, hotkey, effect, requires, 'isdaris');
 }
 
-/** Z weapon kits (notice), fitted on a socle in place of its light machine gun: stats and cost in balance.json. */
+/** Z weapons (Z.doc), chosen for a socle when it is built, in place of its machine gun: stats and cost in balance.json. */
 export interface WeaponDef {
   name: string;
   hotkey: string;
@@ -634,7 +635,7 @@ export interface WeaponDef {
   research?: string;
 }
 export const WEAPONS: Record<string, WeaponDef> = {
-  lourde: { name: 'Mitrailleuse lourde', hotkey: 'M', ...BALANCE.weapons.lourde },
+  laser: { name: 'Laser', hotkey: 'L', research: 'laser', ...BALANCE.weapons.laser },
   flammes: { name: 'Lance-flammes', hotkey: 'F', research: 'lanceflammes', ...BALANCE.weapons.flammes },
   roquettes: { name: 'Lance-roquettes', hotkey: 'R', research: 'lanceroquettes', ...BALANCE.weapons.roquettes },
 };
@@ -643,6 +644,12 @@ const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(
   Object.entries(BASE).map(([type, d]) => [type, { ...d, ...STATS[type], ...((d as { line?: string }).line === '' ? { line: type } : {}) }]),
 ) as Record<string, Def>;
+
+/** What a unit costs with its weapon (Z socles), or alone. */
+export function withKit(def: { cost: Cost }, weapon?: string): Cost {
+  const kit = weapon ? WEAPONS[weapon]?.cost : undefined;
+  return kit ? { minerals: def.cost.minerals + kit.minerals, energy: def.cost.energy + kit.energy } : def.cost;
+}
 
 /** Types drawn with another's model and icon until they get their own (render only). */
 export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
