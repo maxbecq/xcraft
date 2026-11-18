@@ -164,3 +164,44 @@ Résultat complet avec les trois retouches : Humains – Isdaris 52 – 46, Z �
 - à ce moment, presque tous ses socles portent déjà la mitrailleuse lourde, et un socle équipé ne changeait jamais de kit.
 
 Correction côté IA (pas de stat) : un socle à la mitrailleuse lourde resté à la base est rééquipé d'un kit recherché. Mesure après correction : Humains – Isdaris 52 – 46, Z – Humains 49 – 49, Z – Isdaris 52 – 46, inchangés (les kits recherchés n'arrivent que dans les parties de plus de 17 min). Pour que le lance-flammes et le lance-roquettes pèsent dans l'équilibre, il faudrait qu'ils arrivent plus tôt : coût ou durée de `lanceflammes` / `lanceroquettes` (150/150, 50 s), ou le Centre d'armement, à l'appréciation de l'équilibreur.
+
+## Mise à jour du 18 novembre
+
+### Origine sur `4c1ced4`
+
+Depuis la mesure précédente (`be29c11`), la simulation a changé : `goNear` vise la case juste devant un rectangle de tous les côtés, et la séparation des unités larges porte plus loin. Même méthode, 98 parties par paire (mais voir « Limite de la méthode » ci-dessous).
+
+| Paire | `be29c11` | `4c1ced4` | p0 / p1 (`4c1ced4`) |
+|---|---|---|---|
+| Humains – Isdaris | 53 – 43 | 59 – 39 | 58 / 40 |
+| Z – Humains | 52 – 44 | 52 – 46 | 49 / 49 |
+| Z – Isdaris | **60 – 38** | 51 – 47 | 30 / 68 |
+
+Au total, 137 victoires pour p0 et 157 pour p1. L'avantage de p0 mesuré sur `c3a60a9` (173 / 121) disparaît. Durée moyenne : 14 à 15 min.
+
+### Limite de la méthode : 98 parties, mais 32 parties différentes
+
+Le handicap de récolte est appliqué à un voyage de 10 minerais, arrondi à l'entier inférieur (`idiv(carry × handicap, 100)` dans `src/sim/world.ts`). Les sept handicaps de `big.test.ts` (88 à 112) ne donnent donc que quatre récoltes réelles : 8, 9, 10 et 11 minerais par voyage. La simulation n'a aucun hasard : deux réglages qui tombent sur la même récolte jouent exactement la même partie.
+
+Sur les 98 parties d'une paire, il n'y a donc que 16 parties différentes par ordre des camps, 32 en tout, chacune comptée de 1 à 9 fois. Vérification faite : avec les handicaps 89 à 113, les 98 parties de Z – Isdaris sont identiques une à une à celles de 88 à 112.
+
+Conséquences :
+- Les écarts de ce rapport et du rapport des cartes paraissent plus significatifs qu'ils ne le sont. Le « ±5 sur 98 » sous-estime le bruit, à peu près d'un facteur 1,7.
+- Un réglage qui ne change qu'une des 32 parties peut déplacer jusqu'à 9 victoires.
+- À corriger dans `big.test.ts` : choisir des handicaps qui donnent 7 récoltes différentes, ou faire varier autre chose (voir ci-dessous). Ce n'est pas fait.
+
+### Z – Isdaris : l'avantage du départ p1
+
+Sur `4c1ced4`, Z – Isdaris donnait 30 / 68 pour p1. Sur les 32 parties distinctes, cela fait 11 / 21 : environ 1,8 σ, pas significatif.
+
+Pour avoir des parties vraiment différentes, j'ai rejoué la paire en décalant le démarrage de chaque IA de 0, 7 ou 13 ticks, avec des handicaps de 90, 100 et 110 (9, 10 et 11 minerais par voyage). Cela fait 162 parties, dont 145 différentes. Ce réglage n'a servi qu'à la mesure et n'est pas dans `main`.
+
+| Départ de Z | Z gagne | Isdaris gagne |
+|---|---|---|
+| p0 (haut gauche) | 43 | 38 |
+| p1 (bas droite) | 55 | 26 |
+| Total | 98 | 64 |
+
+- **Avantage de p1** : 93 victoires contre 69, soit +24 sur 162 parties (1,9 σ). La pente existe probablement, mais elle est bien plus faible que le 30 / 68 de la mesure normale.
+- **Équilibre de la paire** : Z gagne 60 % des parties (98 – 64). Le 51 – 47 de la mesure normale venait surtout du petit nombre de parties distinctes. Z – Isdaris reste en faveur de Z, comme le 60 – 38 de `be29c11`.
+- **Cause** : non cherchée. La pente est trop faible pour qu'on suive des parties une à une.
