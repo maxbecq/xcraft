@@ -22,6 +22,8 @@ MODEL = 'flux_2_klein_4b_q8p.ckpt'
 LOOK = ('stylized hand-painted fantasy game art, cartoon-like with clean simple shapes and soft cel shading, painterly brush textures, '
         'warm ivory stone with pale gold trims, magical: faint glowing turquoise runes and a soft ethereal halo of light, '
         'not photorealistic, game interface asset')
+LOOK_Z = ('stylized hand-painted sci-fi game art, cartoon-like with clean simple shapes and soft cel shading, painterly brush textures, '
+          'rusted industrial machinery, gunmetal steel and orange rust, a few small glowing cyan lights, not photorealistic, game interface asset')
 CUT = 'strict front orthographic elevation view, symmetrical, isolated on a plain pure white background, nothing behind it'
 
 # name: (width, height, prompt, how to prepare: 'cut' = remove the white background, 'tile' = seamless both ways, 'tile-x' = seamless sideways,
@@ -32,6 +34,11 @@ MATERIALS = {
         'arche-carte': (1024, 832, f'A single wide Romanesque round stone arch, perfect semicircle of carved limestone voussoirs with a keystone, springing from two very short Corinthian columns with acanthus capitals, the arch almost as wide as tall, ivy climbing one column and draping over the arch, {CUT}, {LOOK}', 'cut'),
         'arche-commandes': (1024, 576, f'A very wide and low segmental stone arch of carved limestone voussoirs with a keystone, its span five times wider than its supports, resting on two slender Corinthian columns with acanthus capitals at the far left and far right edges, thin ivy draping over one end, {CUT}, {LOOK}', 'cut'),
         'frise': (1536, 256, f'Seamless horizontal frieze band of small Romanesque blind arches on carved corbels, a Lombard band, limestone, a course of dressed stones above, a few ivy tendrils, orthographic front view, {LOOK}', 'tile-x'),
+    },
+    # Z: the machines' consoles, in the rusted, riveted steel of their buildings, with hydraulics and plugged cables.
+    'z': {
+        'plaques': (1024, 1024, f'Seamless texture of riveted steel armour plates, worn grey-brown gunmetal panels with rows of round rivets along the seams, patches of orange-brown rust and streaks of grime running down, scratches on the edges, orthographic flat front view, evenly lit, {LOOK_Z}', 'tile'),
+        'hublot': (1024, 1024, f'A single heavy round porthole frame of thick rusted riveted steel, an empty dark circular opening in the middle, a ring of big bolts around it, two small hydraulic pistons on its sides, copper-ended cables plugged into it, {CUT}, {LOOK_Z}', 'cut'),
     },
 }
 

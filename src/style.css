@@ -363,6 +363,16 @@ body.z .hud-panel img, body.z .hud-panel canvas.portrait, body.z .cmd img { filt
 body.z .cmd:is(:hover, .vhover) img { filter: brightness(0.3); }
 body.z .res i { background: var(--phos) !important; }
 
+/* Z console: the rusted, riveted armour plate of their buildings; a faint circuit, on the creep's angles, under the
+   screens' glass; the minimap behind a bolted porthole; command labels small enough to be read whole. */
+body.z .console { background: url('/hud/z/plaques.webp') 0 0 / 300px auto, #4a4038; }
+body.z .slot { background: url('/hud/z/circuit.svg') 0 0 / 240px 140px, var(--screen); }
+body.z .cmd span { max-width: 100%; font-size: 12px; letter-spacing: -0.03em; }
+@media (min-height: 561px) and (min-width: 821px) {
+  body.z .map-slot { overflow: visible; border-radius: 50%; border: 0; margin: 4px 14px 0 18px; }
+  body.z .map-slot::before { content: ''; position: absolute; z-index: 2; inset: -40px -34px -30px; background: url('/hud/z/hublot.webp') center / 100% 100% no-repeat; pointer-events: none; }
+}
+
 /* Phones: the console keeps one height whatever is selected. Health shows as its bar, production as
    its bar and a row of small icons (the first is the one in progress), names stay on one line. */
 @media (max-height: 560px), (max-width: 820px) {
