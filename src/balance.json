@@ -288,7 +288,7 @@
     "research": {
       "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
       "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
-      "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "zdist1", "zblindage1", "lanceflammes", "zproxi1", "zdist2", "zblindage2", "zdist3", "zblindage3"],
+      "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rcoleoptere", "zdist1", "podsuperieur", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6]], "dieux": [["fontaine", 16]] },

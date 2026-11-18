@@ -321,6 +321,9 @@ export class AI {
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
         if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
+        // Z: the Intelligence suprême and the Pods supérieurs are where its spare energy goes (Z.doc).
+        if (m === 'supreme') return have === 0 && minute > 6;
+        if (m === 'podsup') return minute > 8 && have < 3;
         return d.energyRate ? minute > 6 && have === 0 : f.gods ? minute > 6 && have < 4 : minute > 9 && have < 2;
       });
       if (!into || saving) continue;
@@ -362,8 +365,10 @@ export class AI {
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
       if (minerals - keep - gatewaysKeep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
-      const weapon = this.weaponFor(def, minerals - keep - gatewaysKeep, energy - unitReserve);
+      // Z: a socle waits until its weapon is affordable too, rather than leave with the machine gun.
+      const weapon = this.weaponFor(def, energy - unitReserve);
       const cost = withKit(def, weapon);
+      if (minerals - keep - gatewaysKeep < cost.minerals || energy < cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [c.id], type, weapon });
       minerals -= cost.minerals;
       energy -= cost.energy;
@@ -749,19 +754,20 @@ export class AI {
   }
 
   /**
-   * Z: the weapon a socle is built with, for good: a weighted rotation through the researched ones it can afford
-   * on top of the socle (only those that hit flyers against them); the machine gun ('') otherwise.
+   * Z: the weapon a socle is built with, for good: a weighted rotation through the researched ones (only those that
+   * hit flyers against them); the machine gun (undefined) before any is researched.
    */
-  private weaponFor(def: UnitDef, minerals: number, energy: number): string | undefined {
+  private weaponFor(def: UnitDef, energy: number): string | undefined {
     if (!def.weapons) return undefined;
     const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => {
       const kit = WEAPONS[k];
-      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || reaches(kit.attack, true))
-        && minerals >= def.cost.minerals + kit.cost.minerals && energy >= def.cost.energy + kit.cost.energy;
+      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || reaches(kit.attack, true));
     });
-    const total = kits.reduce((n, [, wgt]) => n + wgt, 0);
+    // Energy piling up: the weapons that spend it weigh three times as much.
+    const weighted = kits.map(([k, wgt]): [string, number] => [k, energy >= 300 && WEAPONS[k].cost.energy > 0 ? wgt * 3 : wgt]);
+    const total = weighted.reduce((n, [, wgt]) => n + wgt, 0);
     let k = this.trained % Math.max(1, total);
-    return kits.find(([, wgt]) => (k -= wgt) < 0)?.[0];
+    return weighted.find(([, wgt]) => (k -= wgt) < 0)?.[0];
   }
 
   private nextUnit(energy: number, own: Entity[], minerals: number): string {
