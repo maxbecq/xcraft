@@ -18,6 +18,8 @@ interface Button {
   reason?: string;
   /** What it makes or researches, for the tooltip's details (defaults to the icon). */
   type?: string;
+  /** Its time in seconds, when not the type's own (a god's level). */
+  seconds?: number;
   action: () => void;
 }
 
@@ -651,12 +653,13 @@ export class Hud {
       for (const t of new Set(units.flatMap((u) => (u.def as UnitDef).trains ?? []))) {
         const d = DEFS[t] as UnitDef;
         const order = units.filter((u) => (u.def as UnitDef).trains?.includes(t)).sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-        list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+        const lvl = this.world.entities.get(order[0])?.lvl ?? 1;
+        list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, seconds: Math.round(d.buildTime / lvl), reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
       }
       // Dieux: the next level of a selected god, bought at the god (the lowest-levelled first).
       const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
       const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
-      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
+      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
       const summoning = units.find((u) => u.queue.length);
       if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
       // Z socles: a weapon kit to fit on those that take it and do not carry it yet.
@@ -748,7 +751,7 @@ export class Hud {
     if (b.cost) {
       const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
       if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
-      if (d && 'buildTime' in d) parts.push(`⏱ ${d.buildTime} s`);
+      if (d && 'buildTime' in d) parts.push(`⏱ ${b.seconds ?? d.buildTime} s`);
       lines.push(parts.filter(Boolean).join(' · '));
     }
     if (d?.kind === 'unit' || d?.kind === 'building') {
