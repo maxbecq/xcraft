@@ -325,6 +325,9 @@ export function stateHash(world: World): number {
     mix(e.tier * 4096 + e.evolving);
     mix(e.support * 65536 + e.seizedLeft);
     for (const k of e.kits) mix(k.length);
+    // Who holds it (Soumission, Canon IEM) and what carries it.
+    mix(e.owner * 65536 + e.charm);
+    mix(e.inside);
   }
   return h >>> 0;
 }
