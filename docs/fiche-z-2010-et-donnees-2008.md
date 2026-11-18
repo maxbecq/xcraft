@@ -1,6 +1,8 @@
 # Fiche Z de 2010 et « Données générales » de 2008
 
-Analyse du 18 novembre 2026 de deux documents renvoyés par l'équilibreur. Aucune stat du jeu n'a été modifiée : les valeurs proposées ici attendent l'accord du programmeur et l'avis de l'équilibreur.
+Analyse du 18 novembre 2026 de deux documents renvoyés par l'équilibreur.
+
+**`Z.doc` est désormais la référence du camp Z**, pour ses chiffres comme pour son fonctionnement (décision du programmeur, 18 novembre). Les cinq unités Z de la section 2 sont **appliquées au jeu** avec des dégâts ajustés ; l'équilibreur peut revenir dessus. Le fonctionnement modulaire décrit en section 2 bis reste à implémenter.
 
 ## Les documents
 
@@ -91,7 +93,7 @@ Lecture :
 - Les coûts, temps et PV de 2010 rendent les socles plus chers. Sans les dégâts de 2010 qui vont avec, Z s'effondre.
 - Avec la fiche entière, Z reste dans la cible contre les Humains mais domine les Isdaris.
 - **Proposition** : la fiche de 2010 pour les cinq unités, avec des dégâts à 12 (Sonde de combat, Quadrupode, Coléoptère) et 15 (Hexapode). Les deux paires sont alors dans la cible. C'est la même démarche que pour l'Auxiliaire, ramené de 15 à 10. Le passage de 12 à 13 bascule le match contre les Isdaris (76 – 22) ; l'écart contre les Humains à 13 (46 – 52) reste dans le bruit.
-- Valeurs proposées, à écrire dans `src/balance.json` si le programmeur l'accepte :
+- Valeurs **appliquées** dans `src/balance.json` le 18 novembre (accord du programmeur) :
 
 | Unité | `hp` | `armor` | `speed` | `supply` | `cost` | `buildTime` | `attack.damage` | `attack.cooldown` |
 |---|---|---|---|---|---|---|---|---|
@@ -102,6 +104,41 @@ Lecture :
 | `coleoptere` | 185 | 0 | 2,5 | 1 | 200/150 | 36 | **12** | 1 |
 
 Non mesuré : les autres cartes, et les kits, recherches et bâtiments de 2010.
+
+Pour revenir en arrière, remettre les anciennes valeurs du jeu :
+
+| Unité | `hp` | `armor` | `speed` | `supply` | `cost` | `buildTime` | `attack.damage` | `attack.cooldown` |
+|---|---|---|---|---|---|---|---|---|
+| `drone` | 90 | 0 | 2,4 | 1 | 75/0 | 12 | 5 | 1,5 |
+| `dronecombat` | 73 | 0 | 2,6 | 1 | 100/0 | 18 | 7 | 1 |
+| `quadripode` | 120 | 0 | 3,2 | 2 | 125/25 | 22 | 7 | 1 |
+| `hexapode` | 240 | 2 | 2,3 | 2 | 200/75 | 30 | 7 | 1 |
+| `coleoptere` | 160 | 0 | 3 | 2 | 175/100 | 30 | 6 | 1 |
+
+## 2 bis. Le fonctionnement modulaire des Z selon `Z.doc`
+
+En 2010, une unité Z de combat est **un socle plus une arme** :
+- Le **socle** donne le corps : PV, armure, vitesse, logistique, terrestre ou volant. Les socles se recherchent au Centre de socles et se construisent à la Plate-forme, une annexe du Pod.
+- L'**arme** donne l'attaque : dégâts par classe de cible, cadence, portée, vision. Chaque socle part avec la **Mitrailleuse**, gratuite. Les autres armes se recherchent au Centre d'armement. L'arme se choisit **à la construction du socle** et coûte en plus du socle. Ce choix est **définitif**.
+- La **puissance de l'arme suit le niveau du socle**. Elle a 4 niveaux (N1 à N4) : Quadrupode T1 porte une arme N1, T2 N2, T3 N3 ; Hexapode T1 commence en N2 ; Octopode et Mastodonte montent jusqu'à N4. Par exemple, la Mitrailleuse fait 14, 17, 19, puis 22 contre le biologique léger.
+- Un socle **évolue sur le champ de bataille** vers le niveau suivant (T1 vers T2, puis T3), en quelques secondes et pour un coût réduit. Il gagne des PV, de la vitesse et un niveau d'arme. La recherche Optimisation perfectionnée accélère ces évolutions de 50 %.
+- Les **kits de soutien** sont autre chose que les armes. Le Centre K les vend et les pose n'importe où sur le terrain : Détection, Invisibilité, Auto-réparateur, Balise offensive. Ils s'ajoutent à l'arme sans la remplacer.
+- L'**arme adaptable** vaut aussi pour la Tourelle et l'Assimilateur : on leur achète une arme comme pour un socle.
+- La **Sonde** se transforme en bâtiment et ne revient pas. Le **creep** répare 1 PV/s les unités et bâtiments posés dessus.
+
+Dans le jeu aujourd'hui :
+- Les socles sortent de la Plate-forme avec une mitrailleuse légère. On leur monte ensuite un **kit d'arme** qui la remplace : Mitrailleuse lourde, Lance-flammes ou Lance-roquettes. Le kit est payé à chaque socle.
+- Le kit se monte **à tout moment**, partout, s'il existe une Plate-forme. Le socle reste immobile 2 s pendant le montage, et le kit **peut être changé** plus tard.
+- Les dégâts ne dépendent pas du socle, il n'y a pas de niveaux, et pas de Centre K ni de kits de soutien.
+
+Écarts à résorber pour suivre `Z.doc`, du plus simple au plus lourd :
+1. Arme choisie à la construction, sans changement ensuite. L'ordre `equip` serait remplacé par un choix dans la file de la Plate-forme.
+2. Dégâts des armes par niveau, liés au niveau du socle, avec les valeurs de 2010 converties comme pour les unités (dégâts contre le biologique léger, ajustés par la mesure).
+3. Évolution des socles T1 → T2 → T3 sur le terrain.
+4. Centre K et kits de soutien, puis Canon IEM.
+5. Armes et socles absents : Laser, Déchiqueteur, Jet sonique, Arc électrique, Réparateur, Accumulateur, Canon X-04 ; Octopode, Barge, Mastodonte ; Espion, Intelligence Suprême, Pod supérieur.
+
+Chaque étape change le jeu et demande donc l'accord du programmeur. Chacune devra aussi être mesurée, comme les stats.
 
 ## 3. « Données générales » de 2008 : ce qu'elles apportent
 
@@ -152,6 +189,6 @@ Ces éléments sont des pistes pour plus tard, à discuter avec l'équilibreur. 
 
 ## 4. Questions pour l'équilibreur
 
-1. Le camp Z doit-il reprendre les chiffres de la fiche de 2010 pour ses unités, avec les dégâts ajustés de la section 2 ?
+1. Les unités Z reprennent maintenant la fiche de 2010, avec des dégâts ramenés à 12 (15 pour l'Hexapode). Ces valeurs vous conviennent-elles ?
 2. Les socles doivent-ils pouvoir monter de niveau (T1 à T3) sur le terrain, comme en 2010 ?
 3. Pour les Dieux : la règle de 2008 (temps d'invocation divisé par le niveau du dieu, niveaux achetés) vous convient-elle comme réponse à la question de l'invocation ?

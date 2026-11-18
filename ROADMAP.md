@@ -2,7 +2,7 @@
 
 ## 1. Ce qu'on garde de l'existant
 
-**Source de vérité gameplay : `Old_Project/notice 1.2-1 - RÉFÉRENCE.doc`** (la notice 1.2 n'en diffère que par trois mots ; chiffres des Humains et des Isdaris : fiches de 2010, voir `docs/fiches-2010-comparaison.md`)
+**Source de vérité gameplay : `Old_Project/notice 1.2-1 - RÉFÉRENCE.doc`** (la notice 1.2 n'en diffère que par trois mots ; chiffres des Humains et des Isdaris : fiches de 2010, voir `docs/fiches-2010-comparaison.md` ; **camp Z : `Old_Project/Version mod starcraft2/Fiches préparatoires 2010 (équilibreur)/Z.doc`**, chiffres et fonctionnement, voir `docs/fiche-z-2010-et-donnees-2008.md`)
 - 4 camps : **Humains** (antique + alchimie), **Isdaris** (high-tech, boucliers psy, téléportation), **Dieux** (divinités qui invoquent les unités), **Z** (nid d'insectes métalliques, socles + armes modulaires, creep).
 - 2 ressources : **minerai** et **énergie** (puits énergétique → Mine / Récepteur / Puits / Assimilateur).
 - Logistique (supply) : Grenier / Réserve psy / Branche d'Yggdrasill / Pod.
