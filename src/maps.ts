@@ -67,8 +67,9 @@ export const MAPS: Record<string, MapFile> = Object.fromEntries(
 );
 export const DEFAULT_MAP = 'origine';
 
-/** The map with this id, or the original map. */
+/** The map with this id, or the original map (said in the console when an id was given: a network game checks it first). */
 export function mapFile(id: string | null | undefined): MapFile {
+  if (id && !MAPS[id]) console.warn(`Carte inconnue : ${id}, remplacée par ${DEFAULT_MAP}`);
   return MAPS[id ?? ''] ?? MAPS[DEFAULT_MAP];
 }
 

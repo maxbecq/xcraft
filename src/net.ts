@@ -15,16 +15,19 @@ export const START = 4;
 /** The input delay, in ticks, stays within these; it follows the measured round trip. */
 const MIN_DELAY = 2;
 const MAX_DELAY = 15;
+/** This page's build: two different ones may not simulate alike, so they never play together. */
+const VERSION = typeof __COMMIT__ === 'string' ? __COMMIT__ : 'dev';
+const OTHER_VERSION = 'Votre ami a une autre version du jeu : rechargez la page (tous les deux).';
 /** Room codes avoid letters that read alike (0/O, 1/I/L). */
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 /**
  * `t`: our orders for tick t; `a`: the first tick of theirs we still miss (everything before it arrived), on every
  * message, so each side forgets what the other has. `h`/`v`: a state fingerprint. `p`/`q`: ping and its echo.
- * `hi`: who this page is, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
+ * `hi`: who this page is and its build, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
  * asked for; `go`: the host's room for it, once both asked.
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string } | { bye: 1 } | { again: 1 } | { go: string };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -208,10 +211,14 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     set('reconnecting');
   };
   const attach = (c: DataConnection) => {
-    c.on('open', () => c.send({ hi: me } satisfies Message));
+    c.on('open', () => c.send({ hi: me, v: VERSION } satisfies Message));
     c.on('data', (d) => {
       const m = d as Message;
       if ('hi' in m) {
+        if (m.v !== VERSION) {
+          c.close();
+          return set('error', OTHER_VERSION);
+        }
         if (them !== null && m.hi !== them) {
           c.close();
           // The host only ever takes its own guest back; to the guest, a new host page means the match is gone.
@@ -287,12 +294,22 @@ export function every(ms: number, fn: () => void): () => void {
   }
 }
 
-/** A cheap fingerprint of the game state, compared between the two sides of a network game. */
+/**
+ * A fingerprint of the game state, compared between the two sides of a network game: the world's own (positions,
+ * health, shields, resources, research) and every unit's order and queue, so a difference shows up before it moves anything.
+ */
 export function stateHash(world: World): number {
-  let h = world.tick;
-  for (const e of world.entities.values()) h = (Math.imul(h, 31) + e.id * 7 + e.x * 3 + e.y * 5 + e.hp) | 0;
-  for (const p of world.players) h = (Math.imul(h, 31) + p.minerals + p.energy * 3) | 0;
-  return h;
+  let h = world.hash();
+  const mix = (v: number) => (h = Math.imul(h ^ (v | 0), 16777619));
+  for (const e of world.entities.values()) {
+    const o = e.order as { kind: string; x?: number; y?: number; target?: number } | null;
+    mix(o ? o.kind.charCodeAt(0) * 64 + o.kind.length : 0);
+    mix(o?.target ?? 0);
+    mix(o?.x ?? 0);
+    mix(o?.y ?? 0);
+    mix(e.queue.length);
+  }
+  return h >>> 0;
 }
 
 const peerId = (room: string) => `xcraft-game-${room}`;
@@ -315,7 +332,7 @@ export interface LobbySetup {
   biome: string;
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match. */
-type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: 1 };
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: 1 } | { v: string };
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'error';
 
 /**
@@ -334,9 +351,19 @@ export function openLobby(
     c.on('open', () => {
       if (conn?.open && conn !== c) return c.close(); // the room is full
       conn = c;
+      c.send({ v: VERSION });
       on.status('here');
     });
-    c.on('data', (d) => c === conn && on.message(d as LobbyMessage));
+    c.on('data', (d) => {
+      if (c !== conn) return;
+      const m = d as LobbyMessage;
+      if (!('v' in m)) return on.message(m);
+      if (m.v === VERSION) return;
+      // Turned away, and said so on both sides; the host's room stays open for the friend once reloaded.
+      conn = null;
+      c.close();
+      on.status('error', OTHER_VERSION);
+    });
     const gone = () => {
       if (c !== conn) return;
       conn = null;

@@ -193,7 +193,9 @@ netBanner.className = 'net-banner';
 netBanner.hidden = true;
 document.body.append(netBanner);
 const ROOM = params.get('room') ?? '';
-const link = NET_ROLE ? connect(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
+/** A map or planet this build does not have would be swapped for the default one, on this side only: the two games would differ. */
+const UNKNOWN = !!NET_ROLE && (!MAPS[params.get('map') ?? ''] || !BIOMES[params.get('biome') ?? '']);
+const link = NET_ROLE && !UNKNOWN ? connect(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
 const net = link?.lock ?? null;
 /** The other side has been here: the match runs (before, nobody's clock starts). */
 let netStarted = false;
@@ -283,7 +285,8 @@ netBanner.addEventListener('click', (e) => {
     location.search = `?biome=${biome.id}&map=${MAP.id}`;
   }
 });
-if (net) showNet(PLAYER === 0 ? 'waiting' : 'connecting');
+if (UNKNOWN) showNet('error', 'Carte ou planète inconnue de cette version du jeu : rechargez la page (tous les deux).');
+else if (net) showNet(PLAYER === 0 ? 'waiting' : 'connecting');
 // Leaving the page tells the other side at once, rather than after the silence timeout.
 window.addEventListener('pagehide', () => link?.leave());
 
@@ -1052,6 +1055,8 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
     }
     location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${setup.camps[0]}&adversaire=${setup.camps[1]}&biome=${setup.biome}&map=${setup.map}`;
   };
+  /** The host's map or planet is not in this build: no match. */
+  let unknown = false;
   const lobby = openLobby(room, host, {
     status: (s, detail) => {
       here = s === 'here';
@@ -1064,11 +1069,15 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
       draw();
     },
     message: (m) => {
-      if ('setup' in m && !host) Object.assign(setup, m.setup);
+      if ('setup' in m && !host) {
+        Object.assign(setup, m.setup);
+        unknown = !MAPS[setup.map] || !BIOMES[setup.biome];
+        if (unknown) status = 'Votre ami a choisi une carte ou une planète que votre version du jeu n\'a pas : rechargez la page (tous les deux).';
+      }
       else if ('camp' in m && host) {
         setup.camps[1] = asFaction(m.camp);
         lobby.send({ setup });
-      } else if ('go' in m && !host) return play();
+      } else if ('go' in m && !host && !unknown) return play();
       draw();
     },
   });

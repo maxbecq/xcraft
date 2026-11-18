@@ -146,6 +146,27 @@ describe('lockstep between two browsers', () => {
     expect(b.started).toBe(true);
   });
 
+  it('fingerprints shields, research and orders too, cheaply', () => {
+    const [a] = play(600, { latency: () => 30, lost: () => false });
+    const other = replay(a.log, 600);
+    expect(stateHash(other)).toBe(stateHash(a.world));
+    const unit = [...other.entities.values()].find((e) => e.def.kind === 'unit' && e.owner === 1)!;
+    const was = { shield: unit.shield, order: unit.order };
+    unit.shield += 1;
+    expect(stateHash(other)).not.toBe(stateHash(a.world));
+    unit.shield = was.shield;
+    unit.order = { kind: 'move', x: unit.x + 1000, y: unit.y, arrive: 0 } as typeof unit.order;
+    expect(stateHash(other)).not.toBe(stateHash(a.world));
+    unit.order = was.order;
+    other.players[1].upgrades = { ...other.players[1].upgrades, test: 1 };
+    expect(stateHash(other)).not.toBe(stateHash(a.world));
+    // Every 100 ticks (5 s): it must stay far below a frame.
+    const t0 = performance.now();
+    for (let i = 0; i < 200; i++) stateHash(a.world);
+    const each = (performance.now() - t0) / 200;
+    expect(each).toBeLessThan(2);
+  });
+
   it('hears a deliberate leave', () => {
     const b = new Lockstep(1, () => {});
     b.receive({ bye: 1 });
