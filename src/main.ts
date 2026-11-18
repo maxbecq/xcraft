@@ -326,7 +326,7 @@ const effects = new Effects(fxScene, scene, map, audio);
 effects.density = GFX.particles;
 const overlay = new Overlay(map);
 overlay.hostile = (a, b) => world.hostile(a, b);
-const power = new PowerNet(scene, map);
+const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
@@ -1074,7 +1074,7 @@ function start(): void {
     overlay.showQueue = keys.has('Shift');
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
-    power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power));
+    power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power), (o) => !SPECTATE && world.hostile(o, PLAYER));
     paving.update(world, sees);
     audio.frame();
     lap('fx+overlay');

@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, MeshLambertMaterial, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, MeshLambertMaterial, type DataTexture, type Material, Vector2, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -338,6 +338,9 @@ function pcbTextures(): NonNullable<typeof pcb> {
   return pcb;
 }
 
+/** The creep's material, before its shader patch. */
+const creepLook = () => new MeshLambertMaterial({ map: pcbTextures().map, emissiveMap: pcbTextures().glow, emissive: 0xffffff, emissiveIntensity: 1.6, transparent: true, depthWrite: false, side: DoubleSide });
+
 /** Tiles covered by one repeat of the circuit texture. */
 const PCB_TILE = 8;
 
@@ -350,13 +353,20 @@ export class PowerNet {
   private readonly root = new Group();
   private readonly fieldMaterial = new MeshBasicMaterial({ map: fieldMap(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffe2a0, side: DoubleSide });
   /** Z: the same field, drawn as creep on the ground. */
-  private readonly creepMaterial = new MeshLambertMaterial({ map: pcbTextures().map, emissiveMap: pcbTextures().glow, emissive: 0xffffff, emissiveIntensity: 1.6, transparent: true, depthWrite: false, side: DoubleSide });
+  private readonly creepMaterial = creepLook();
+  /** An enemy's creep, wires and plugs: cut away wherever the player has no vision now (fog of war). */
+  private readonly creepFoe = creepLook();
   private readonly creepTime = { value: 0 };
   /** Wires between Z buildings: dark rubber. */
   private readonly wireMaterial = new MeshStandardMaterial({ color: 0x17181c, metalness: 0.1, roughness: 0.55 });
   private readonly plugGeometry = new CylinderGeometry(1, 1, 1, 8);
   private readonly plugSteel = new MeshStandardMaterial({ color: 0x7d786e, metalness: 0.6, roughness: 0.5 });
   private readonly plugCopper = new MeshStandardMaterial({ color: 0xb06a34, metalness: 0.8, roughness: 0.35 });
+  private readonly wireFoe = this.wireMaterial.clone();
+  private readonly plugSteelFoe = this.plugSteel.clone();
+  private readonly plugCopperFoe = this.plugCopper.clone();
+  /** Whether an owner is the viewer's enemy (set at each update). */
+  private foe: (owner: number) => boolean = () => false;
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
   private key = '';
@@ -368,10 +378,10 @@ export class PowerNet {
   private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
   private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
-  constructor(scene: Object3D, private readonly map: GameMap) {
+  constructor(scene: Object3D, private readonly map: GameMap, private readonly fog: DataTexture) {
     scene.add(this.root);
     // Faint waves of current rolling out from each building over the traces (aDist: tiles from its centre).
-    this.creepMaterial.onBeforeCompile = (sh) => {
+    const creepPatch = (sh: Parameters<Material['onBeforeCompile']>[0]) => {
       sh.uniforms.time = this.creepTime;
       sh.uniforms.traces = { value: pcbTextures().traces };
       sh.uniforms.noise = { value: pcbTextures().noise };
@@ -398,10 +408,30 @@ export class PowerNet {
           totalEmissiveRadiance += vec3(0.4, 0.94, 1.0) * trace * band * 0.3 * fray;`,
         )}`;
     };
+    this.creepMaterial.onBeforeCompile = creepPatch;
+    this.creepFoe.onBeforeCompile = creepPatch;
+    for (const [m, key] of [[this.creepFoe, 'creep'], [this.wireFoe, 'wire'], [this.plugSteelFoe, 'plug-steel'], [this.plugCopperFoe, 'plug-copper']] as const) {
+      // Cut away where the fog texture (1 visible, 0.5 explored, 0 never seen) says the player sees nothing now.
+      const prev = m.onBeforeCompile;
+      m.onBeforeCompile = (sh, r) => {
+        prev.call(m, sh, r);
+        sh.uniforms.fogMap = { value: this.fog };
+        sh.uniforms.mapSize = { value: new Vector2(this.map.width, this.map.height) };
+        sh.vertexShader = sh.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform vec2 mapSize;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFogUv = (modelMatrix * vec4(transformed, 1.0)).xz / mapSize;');
+        sh.fragmentShader = sh.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
+          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (texture2D(fogMap, vFogUv).r < 0.9) discard;');
+      };
+      m.customProgramCacheKey = () => `foe-${key}`;
+    }
   }
 
-  /** `highlight`: an Isdaris building is being placed, or a power building is selected. */
-  update(world: World, sees: (e: Entity) => boolean, highlight: boolean): void {
+  /** `highlight`: an Isdaris building is being placed, or a power building is selected. `foe`: whether an owner is the
+   * viewer's enemy, whose creep and wires show only where the viewer sees now. */
+  update(world: World, sees: (e: Entity) => boolean, highlight: boolean, foe: (owner: number) => boolean = () => false): void {
+    this.foe = foe;
     // Only the linked network powers anything; a cut-off emitter shows no zone and no beam.
     const nodes = world.players.flatMap((p) => world.powerNetwork(p.id)).filter(sees);
     // Z buildings outside the network's nodes get a powered link too, so they join the key.
@@ -410,7 +440,7 @@ export class PowerNet {
     if (key !== this.key) this.rebuild(nodes, world, fed, key);
     const t = performance.now() / 1000;
     this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
-    this.creepMaterial.opacity = highlight ? 1 : 0.75;
+    this.creepMaterial.opacity = this.creepFoe.opacity = highlight ? 1 : 0.75;
     this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.creepTime.value = t;
     this.updateWarps(world, sees, t);
@@ -505,20 +535,29 @@ export class PowerNet {
         geo.setAttribute('aRim', new BufferAttribute(rim, 1));
         geo.setAttribute('aDist', new BufferAttribute(dist, 1));
       }
-      const disc = new Mesh(geo, creep(e) ? this.creepMaterial : this.fieldMaterial);
+      const disc = new Mesh(geo, creep(e) ? (this.foe(e.owner) ? this.creepFoe : this.creepMaterial) : this.fieldMaterial);
       disc.renderOrder = 1;
       disc.receiveShadow = creep(e); // lit and shaded like the ground it lies on
       this.root.add(disc);
     }
-    // Z: a wire from each node to the nearest node already linked, and from every other building
-    // to its nearest node.
+    // Z: a wire from each node to the nearest node already linked whose creep touches its own, and from every
+    // other building to the nearest node whose creep it stands on. A far expansion gets no wire home: nothing
+    // across open ground gives it away.
+    const radius = (e: Entity) => (e.def as BuildingDef).power! * FP;
+    const far = (a: Entity, b: Entity) => Math.hypot(b.x - a.x, b.y - a.y);
     for (const owner of new Set(nodes.filter(creep).map((e) => e.owner))) {
       const own = nodes.filter((e) => e.owner === owner);
       const linked = [own.find((e) => (e.def as BuildingDef).dropoff) ?? own[0]];
       for (const e of own) if (e !== linked[0]) linked.push(e);
-      const nearest = (e: Entity, among: Entity[]) => among.reduce((a, b) => (Math.hypot(b.x - e.x, b.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y) ? b : a));
-      for (let i = 1; i < linked.length; i++) this.link(linked[i], nearest(linked[i], linked.slice(0, i)));
-      for (const e of fed) if (e.owner === owner) this.link(e, nearest(e, own));
+      const nearest = (e: Entity, among: Entity[]) => among.reduce((a, b) => (far(e, b) < far(e, a) ? b : a));
+      for (let i = 1; i < linked.length; i++) {
+        const touching = linked.slice(0, i).filter((b) => far(linked[i], b) <= radius(linked[i]) + radius(b));
+        if (touching.length) this.link(linked[i], nearest(linked[i], touching));
+      }
+      for (const e of fed) {
+        const under = own.filter((b) => far(e, b) <= radius(b));
+        if (e.owner === owner && under.length) this.link(e, nearest(e, under));
+      }
     }
     // Per player, a tree grown from the main buildings: each emitter links to the nearest node already
     // in the network whose zone touches its own.
@@ -578,6 +617,7 @@ export class PowerNet {
    * plug at its edge.
    */
   private wire(a: Entity, b: Entity, pts: [number, number][]): void {
+    const foe = this.foe(a.owner);
     const edge = (e: Entity) => ((e.def as BuildingDef).size / 2) * 0.8;
     const out = (x: number, z: number, e: Entity) => Math.hypot(x - e.x / FP, z - e.y / FP) > edge(e);
     const kept = pts.filter(([x, z]) => out(x, z, a) && out(x, z, b));
@@ -587,11 +627,11 @@ export class PowerNet {
     const curve = new CatmullRomCurve3(kept.filter((_, i) => i % 2 === 0 || i === kept.length - 1).map(([x, z]) => new Vector3(x, heightAt(this.map, x, z) + radius + 0.03, z)));
     const length = curve.getLength();
     const geo = new TubeGeometry(curve, Math.ceil(length * 4), radius, 6);
-    this.root.add(new Mesh(geo, this.wireMaterial));
+    this.root.add(new Mesh(geo, foe ? this.wireFoe : this.wireMaterial));
     for (const [t, dir] of [[0, 1], [1, -1]] as const) {
       const at = curve.getPointAt(t);
       const tangent = curve.getTangentAt(t).multiplyScalar(dir);
-      for (const [r, len, shift, material] of [[radius * 1.7, 0.32, 0.12, this.plugSteel], [radius * 1.95, 0.07, 0.22, this.plugCopper]] as const) {
+      for (const [r, len, shift, material] of [[radius * 1.7, 0.32, 0.12, foe ? this.plugSteelFoe : this.plugSteel], [radius * 1.95, 0.07, 0.22, foe ? this.plugCopperFoe : this.plugCopper]] as const) {
         const m = new Mesh(this.plugGeometry, material);
         m.scale.set(r, len, r);
         m.position.copy(at).addScaledVector(tangent, shift - 0.12);
