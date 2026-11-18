@@ -2275,6 +2275,22 @@ def optimisation(p):
     cable(p, (0.9, 0.9, 1.0), (0.4, 0.2, 1.1), sag=0.1, r=0.04)
 
 
+
+def centrek(p):
+    """Centre K (sketch): an armoured bunker stacked with kit crates, under a long electromagnetic cannon (Canon IEM)."""
+    box(p["zsteel"], (2.7, 2.7, 0.8), (0, 0, 0.4))
+    box(p["zdark"], (2.0, 1.6, 0.5), (0, 0.3, 1.05))
+    for k in range(4):  # kit crates
+        box(p["hazard"] if k % 2 else p["zrust"], (0.35, 0.35, 0.3), (-1.0 + k * 0.45, -1.05, 0.95))
+    cyl(p["zsteel"], 0.45, 0.3, (0.2, 0.3, 1.45), verts=10)  # turret ring
+    cyl(p["zdark"], 0.12, 2.2, (0.2, -0.6, 1.75), rot=(math.radians(80), 0, 0), verts=8)  # barrel
+    for k in range(5):  # coils along it
+        ring(p["zcopper"], 0.17, 0.04, (0.2, -0.05 - k * 0.3, 1.7 - k * 0.05), rot=(math.radians(80), 0, 0), seg=10)
+    ball(p["cyan_glow"], 0.1, (0.2, -1.65, 1.95), seg=8, rings=4)
+    box(p["team"], (2.72, 0.18, 0.3), (0, 1.3, 0.3))
+    cable(p, (-1.2, 1.0, 0.8), (-0.3, 0.6, 1.3), sag=0.15, r=0.05)
+
+
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
     "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
@@ -2288,7 +2304,7 @@ MODELS = {
     "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
     "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
     "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
-    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation,
+    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek,
 }
 
 

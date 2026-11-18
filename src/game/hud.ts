@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -558,7 +558,8 @@ export class Hud {
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
     if ((e.def as UnitDef).weapons) {
       const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
-      html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}</div>`;
+      const kits = [[KIT.detection, 'Détection'], [KIT.invisibilite, 'Invisibilité'], [KIT.reparateur, 'Auto-réparateur'], [KIT.balise, 'Balise offensive']].filter(([bit]) => e.support & (bit as number)).map(([, n]) => n);
+      html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}${kits.length ? ` · Kits : ${kits.join(', ')}` : ''}${e.seizedLeft ? ' · Capturé (Canon IEM)' : ''}</div>`;
     }
     if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
@@ -718,9 +719,9 @@ export class Hud {
     for (const name of abilitiesOf(b.def as BuildingDef)) {
       const a = ABILITIES[name];
       if (a.research && !this.world.level(this.player, a.research)) continue;
-      const ready = same.some((o) => o.abilityCd === 0);
+      const ready = same.some((o) => (name === 'canoniem' ? o.iemCd : o.abilityCd) === 0);
       const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: go });
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go });
     }
     // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
     if ((b.def as BuildingDef).weapons) {

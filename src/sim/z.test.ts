@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
-import { DEFS, type UnitDef, WEAPONS } from '../data';
+import { DEFS, KIT, type UnitDef, WEAPONS } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
@@ -137,6 +137,48 @@ describe('Z', () => {
     expect(p.minerals).toBe(1000 - 2 * 70);
     w.step([{ player: 0, kind: 'arm', ids: [turret.id], weapon: 'roquettes' }]);
     expect(turret.kit).toBe('laser'); // once
+  });
+
+  it('the Centre K fits support kits on a socle anywhere, and its Canon IEM takes an enemy machine for 50 s', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    p.energy = 5000;
+    const k = w.spawn('centrek', 0, 20 * FP, 20 * FP);
+    const quad = w.spawn('quadripode', 0, 50 * FP, 50 * FP);
+    const ability = (name: string, x: number, y: number) => w.step([{ player: 0, kind: 'ability', ids: [k.id], name, x, y }]);
+    ability('kitinvisibilite', quad.x, quad.y);
+    expect(quad.support).toBe(KIT.invisibilite);
+    expect(w.hidden(quad)).toBe(true);
+    expect(p.minerals).toBe(5000 - 50);
+    ability('kitreparateur', quad.x, quad.y);
+    expect(quad.support).toBe(KIT.invisibilite); // the Centre K recharges 10 s
+    run(w, 10);
+    ability('kitreparateur', quad.x, quad.y);
+    quad.hp = 100;
+    run(w, 3);
+    expect(quad.hp).toBeGreaterThanOrEqual(106); // 3 hp a second, away from any creep
+    run(w, 10);
+    ability('kitbalise', quad.x, quad.y);
+    expect(w.weapon(quad)!.splash).toBe(3);
+    expect(w.beacon(0)).toBe(true);
+    // Canon IEM: researched first, on an enemy machine in sight.
+    const foe = w.spawn('drone', 1, 22 * FP, 22 * FP);
+    run(w, 10);
+    ability('canoniem', foe.x, foe.y);
+    expect(foe.owner).toBe(1);
+    p.upgrades.canoniem = 1;
+    ability('canoniem', foe.x, foe.y);
+    expect(foe.owner).toBe(0);
+    run(w, 51);
+    expect(foe.owner).toBe(1);
+    // Back at once when the Centre K falls.
+    k.iemCd = 0;
+    ability('canoniem', foe.x, foe.y);
+    expect(foe.owner).toBe(0);
+    k.hp = 0;
+    run(w, 1);
+    expect(foe.owner).toBe(1);
   });
 
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {

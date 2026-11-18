@@ -218,7 +218,7 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'ability': {
-      const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && b.abilityCd === 0);
+      const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && (c.name === 'canoniem' ? b.iemCd : b.abilityCd) === 0);
       if (c.name && !named) {
         // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
         const ab = ABILITIES[c.name];
@@ -237,6 +237,10 @@ export function apply(this: World, c: Command): void {
       if (!b || c.x === undefined || c.y === undefined) return;
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];
+      if (b.type === 'centrek') {
+        if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
+        return void this.centreK(b, kind, c.x, c.y);
+      }
       if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
       if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
       if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");

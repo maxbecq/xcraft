@@ -323,6 +323,7 @@ export function stateHash(world: World): number {
     // Z: the socle's weapon, and those chosen for the socles in the queue.
     mix(e.kit.length);
     mix(e.tier * 4096 + e.evolving);
+    mix(e.support * 65536 + e.seizedLeft);
     for (const k of e.kits) mix(k.length);
   }
   return h >>> 0;

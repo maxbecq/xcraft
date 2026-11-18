@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, RAPPEL, SKIN_RANGE, spell, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -328,10 +328,48 @@ export function transmute(this: World, e: Entity, type: string, tx = 0, ty = 0):
 
 /** Unseen by enemies without detection: invisible units, and Belluaires under Camouflage. */
 export function hidden(this: World, e: Entity): boolean {
-  return !!(e.def as UnitDef).cloaked || e.camo > 0 || e.burrowed || this.shrouded.has(e.id);
+  return !!(e.def as UnitDef).cloaked || e.camo > 0 || e.burrowed || this.shrouded.has(e.id) || !!(e.support & KIT.invisibilite);
 }
 
 /** Inside a Silence des ions zone: no ability can be used there. */
 export function silenced(this: World, x: number, y: number): boolean {
   return this.silences.some((z) => z.until > this.tick && dist(z.x, z.y, x, y) <= z.r);
+}
+
+/**
+ * Z Centre K (Z.doc): fits a support kit on the own socle nearest the point, anywhere on the map, or fires the Canon
+ * IEM at the enemy machine nearest it, which fights for its player 50 s.
+ */
+export function centreK(this: World, b: Entity, kind: string, x: number, y: number): void {
+  const ab = ABILITIES[kind];
+  const near = (ok: (t: Entity) => boolean) =>
+    [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && ok(t) && dist(t.x, t.y, x, y) <= toFp(ab.radius!)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+  if (kind === 'canoniem') {
+    if (b.iemCd > 0) return void this.say(b.owner, 'Canon IEM en recharge.');
+    const t = near((t) => this.hostile(t.owner, b.owner) && !!(t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && this.sees(b.owner, t) && !t.seizedLeft);
+    if (!t) return void this.say(b.owner, 'Aucune machine ennemie visée.');
+    t.seizedFrom = t.owner;
+    t.owner = b.owner;
+    t.seizedBy = b.id;
+    t.seizedLeft = ticks(ab.duration);
+    this.setOrder(t, null);
+    b.iemCd = ticks(ab.cooldown);
+    this.casts.push({ kind, x: t.x, y: t.y });
+    return;
+  }
+  const bit = { kitdetection: KIT.detection, kitinvisibilite: KIT.invisibilite, kitreparateur: KIT.reparateur, kitbalise: KIT.balise }[kind] ?? 0;
+  const t = near((t) => t.owner === b.owner && !!(t.def as UnitDef).weaponLevel && !(t.support & bit));
+  if (!t) return void this.say(b.owner, 'Aucun socle sans ce kit à cet endroit.');
+  if (!this.pay(b.owner, { cost: { minerals: ab.minerals ?? 0, energy: ab.energy ?? 0 } })) return;
+  t.support |= bit;
+  b.abilityCd = ticks(ab.cooldown);
+  this.casts.push({ kind, x: t.x, y: t.y });
+}
+
+/** A machine taken by the Canon IEM goes back to its player. */
+export function unseize(this: World, e: Entity): void {
+  e.owner = e.seizedFrom;
+  e.seizedBy = 0;
+  e.seizedLeft = 0;
+  this.setOrder(e, null);
 }

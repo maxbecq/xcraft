@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, spell, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
+import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, FACTIONS, OBSERVATION, spell, KIT, type UnitDef, type UpgradeDef, type UpgradeLine } from '../data';
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
@@ -69,6 +69,14 @@ export interface Entity {
   ty: number;
   buildLeft: number;
   queue: string[];
+  /** Z socle: support kits fitted by the Centre K (bits of KIT). */
+  support: number;
+  /** Z Centre K: ticks before the Canon IEM fires again. */
+  iemCd: number;
+  /** Taken over by a Canon IEM: the Centre K holding it, its true owner, and ticks left. */
+  seizedBy: number;
+  seizedFrom: number;
+  seizedLeft: number;
   /** Z socle: its tier (1 to 3, Z.doc), and ticks left while it evolves into the next, standing still. */
   tier: number;
   evolving: number;
@@ -300,7 +308,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, trainLeft: 0, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -374,6 +382,9 @@ export class World {
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       if (e.evolving > 0 && --e.evolving === 0) this.evolved(e);
+      if (e.iemCd > 0) e.iemCd--;
+      // Canon IEM: the machine goes back when its time is up or when the Centre K holding it falls.
+      if (e.seizedLeft > 0 && (--e.seizedLeft === 0 || this.entities.get(e.seizedBy)?.owner !== e.owner)) this.unseize(e);
       this.regenerate(e);
     }
     this.revive();
@@ -414,7 +425,7 @@ export class World {
       if (!this.hidden(e)) continue;
       for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= toFp(s.radius ?? OBSERVATION.radius)) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       for (const s of this.entities.values()) {
-        const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : 0);
+        const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : s.support & KIT.detection ? (s.def as UnitDef).sight : 0);
         if (r && this.hostile(s.owner, e.owner) && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
       }
     }
@@ -577,6 +588,10 @@ export class World {
   }
 
   /** While applying a shift-command: new orders go to the end of each unit's list. */
+  /** Players with a Balise offensive standing, as of tick `beaconsAt` (Z). */
+  beacons = new Set<number>();
+  beaconsAt = -1;
+
   queueing = false;
 
   // ---------------------------------------------------------------- placement

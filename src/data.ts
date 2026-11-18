@@ -208,6 +208,8 @@ export interface AbilityDef {
   duration: number;
   /** Energy taken from the player's stock (building abilities). */
   energy?: number;
+  /** Minerals taken too (Z Centre K kits). */
+  minerals?: number;
   /** Research needed before it can be used. */
   research?: string;
   /** Aimed at a point of the map, within `range` tiles of the caster (the others are used on the spot). */
@@ -250,6 +252,13 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
   peauderoc: { name: 'Peau de roc', hotkey: 'R', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
+  /** Z Centre K (Z.doc): support kits fitted on an own socle anywhere on the map, on top of its weapon. */
+  kitdetection: { name: 'Kit Détection', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
+  kitinvisibilite: { name: 'Kit Invisibilité', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
+  kitreparateur: { name: 'Kit Auto-réparateur', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
+  kitbalise: { name: 'Kit Balise offensive', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
+  /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
+  canoniem: { name: 'Canon IEM', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
   observation: { name: 'Observation céleste', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
   /**
    * Obélisque (mod « Rappel », a Prisme ability): after a 4 s channel, up to 8 army units within 5 tiles of
@@ -555,6 +564,12 @@ const BASE: Record<string, object> = {
     researches: ['zproxi1', 'zproxi2', 'zproxi3', 'zdist1', 'zdist2', 'zdist3', 'zblindage1', 'zblindage2', 'zblindage3', 'titane', 'deploiement', 'sonderobuste', 'podsuperieur'],
   },
   optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, researches: ['optimisationp'], faction: 'z', hotkey: 'O' },
+  // Z.doc: sells support kits anywhere on the battlefield and fires the Canon IEM; one per player.
+  centrek: {
+    kind: 'building', name: 'Centre K', size: 3, absorbs: true, unique: true, requires: { optimisation: 1 }, faction: 'z', hotkey: 'K',
+    abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise', 'canoniem'], researches: ['canoniem'],
+  },
+  canoniem: research('Canon IEM', 'C', "Le Centre K prend le contrôle d'une machine ennemie pendant 50 s.", undefined, 'z'),
   rquadripode: research('Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
   rhexapode: research('Hexapode', 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
   rcoleoptere: research('Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
@@ -666,6 +681,9 @@ function extension(name: string, hotkey: string, effect: string, requires?: Reco
 function isd(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
   return research(name, hotkey, effect, requires, 'isdaris');
 }
+
+/** Z support kits (Centre K, Z.doc), as bits of an entity's `support`. */
+export const KIT = { detection: 1, invisibilite: 2, reparateur: 4, balise: 8 } as const;
 
 /** A Z socle's next tier: what evolving costs and takes, and its new hit points, armour and speed. */
 export interface TierStats {
@@ -794,8 +812,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   z: {
     name: 'Z', worker: 'drone', hq: 'intelligence', supply: 'pod', barracks: 'plateforme', extractor: 'assimilateur',
     forge: 'centrerecherche', defense: 'tourelle',
-    buildable: ['intelligence', 'pod', 'assimilateur', 'centresocles', 'armement', 'centrerecherche', 'optimisation'],
-    advanced: ['centresocles', 'armement', 'centrerecherche', 'optimisation'],
+    buildable: ['intelligence', 'pod', 'assimilateur', 'centresocles', 'armement', 'centrerecherche', 'optimisation', 'centrek'],
+    advanced: ['centresocles', 'armement', 'centrerecherche', 'optimisation', 'centrek'],
     army: Object.entries(BALANCE.ai.army.z),
   },
   dieux: {

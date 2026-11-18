@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, spell, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -205,7 +205,11 @@ export class AI {
     // Its first unit unlocked: the tech building trains it before researching anything else (the Balise held it a minute).
     const firstTech = f === FACTIONS.isdaris && unlocked.length > 0 && !this.fielded;
     const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x) && !(firstTech && techDef!.researches?.includes(x)));
-    const reserve = !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
+    // Z: once its prerequisites stand, the energy of the next step of its tech (Intelligence suprême, Centre
+    // d'optimisation, Centre K) is kept from everything else.
+    const zTech = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
+    const wantSupreme = zTech === 'supreme' && !w.lacks(this.player, 'supreme');
+    const reserve = zTech && !w.lacks(this.player, zTech) ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
     // research on a production building (Isdaris Portail) waits for spare resources instead.
@@ -285,7 +289,8 @@ export class AI {
     const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
     const councilHome = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
-    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply)) {
+    // Z: the Intelligence centrale turns into the Intelligence suprême only with an empty queue: no drone then.
+    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
       out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       minerals -= 100;
     }
@@ -320,7 +325,8 @@ export class AI {
       const into = (b.def as BuildingDef).morphs?.find((m) => {
         const d = DEFS[m] as BuildingDef;
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
-        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && energy - unitReserve < d.cost.energy)) return false;
+        // The Intelligence suprême comes before the energy kept for units: the Z tech waits on it.
+        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && energy - (m === 'supreme' ? 0 : unitReserve) < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
         // Z: the Intelligence suprême and the Pods supérieurs are where its spare energy goes (Z.doc).
         if (m === 'supreme') return have === 0 && minute > 6;
@@ -365,7 +371,9 @@ export class AI {
       if (saving || c.queue.length > (this.easy ? 0 : 1) || free - out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, energy - unitReserve), army, minerals);
       const def = DEFS[type] as UnitDef;
-      if (minerals - keep - gatewaysKeep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
+      // Z: the minerals of the Intelligence suprême are kept once its energy is there (the units ate them all).
+      const supreme = wantSupreme && p.energy >= 300 ? 300 : 0;
+      if (minerals - keep - gatewaysKeep - supreme < def.cost.minerals || energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
       // Z: a socle waits until its weapon is affordable too, rather than leave with the machine gun.
       const weapon = this.weaponFor(def, energy - unitReserve);
       const cost = withKit(def, weapon);
@@ -396,6 +404,30 @@ export class AI {
       out.push({ player: this.player, kind: 'arm', ids: [b.id], weapon: k });
       minerals -= cost.minerals;
       energy -= cost.energy;
+    }
+
+    // Z Centre K: kits on socles of the army (Détection against invisible enemies, Auto-réparateur on evolved socles,
+    // one Balise offensive), and the Canon IEM at the costliest enemy machine in sight.
+    const centrek = buildings.find((b) => b.type === 'centrek' && b.buildLeft === 0);
+    if (centrek) {
+      const socles = army.filter((u) => (u.def as UnitDef).weaponLevel && u.hp > 0);
+      const kit = (name: string, who: Entity | undefined) => {
+        const ab = ABILITIES[name];
+        if (!who || centrek.abilityCd || minerals - keep < (ab.minerals ?? 0) || energy - unitReserve < (ab.energy ?? 0)) return false;
+        out.push({ player: this.player, kind: 'ability', ids: [centrek.id], name, x: who.x, y: who.y });
+        minerals -= ab.minerals ?? 0;
+        energy -= ab.energy ?? 0;
+        return true;
+      };
+      const has = (bit: number) => mine.some((u) => u.support & bit);
+      if (!(enemyCloaks && !has(KIT.detection) && kit('kitdetection', socles[0])) && !(!has(KIT.balise) && kit('kitbalise', socles.find((u) => u.tier > 1) ?? socles[0]))) {
+        kit('kitreparateur', socles.find((u) => u.tier > 1 && !(u.support & KIT.reparateur)));
+      }
+      if (!centrek.iemCd && w.level(this.player, 'canoniem')) {
+        const prey = [...w.entities.values()].filter((t) => w.hostile(t.owner, this.player) && t.def.kind === 'unit' && (t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && !t.seizedLeft && w.sees(this.player, t))
+          .sort((a, b) => (DEFS[b.type] as UnitDef).cost.minerals + (DEFS[b.type] as UnitDef).cost.energy - (DEFS[a.type] as UnitDef).cost.minerals - (DEFS[a.type] as UnitDef).cost.energy || a.id - b.id)[0];
+        if (prey) out.push({ player: this.player, kind: 'ability', ids: [centrek.id], name: 'canoniem', x: prey.x, y: prey.y });
+      }
     }
 
     // Dieux: the Porte summons the next god when its time has come; each god summons its troops, when affordable.

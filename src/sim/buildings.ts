@@ -1,6 +1,6 @@
 /** Buildings: placement, power network, production, research, morphs, bunkers and carriers. */
 import BALANCE from '../balance.json';
-import { type BuildingDef, DEFS, reaches, type UnitDef, type UpgradeDef } from '../data';
+import { type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -103,6 +103,8 @@ export function repairOnCreep(this: World): void {
     if (p.faction !== 'z') continue;
     const net = this.powerNetwork(p.id);
     for (const u of this.entities.values()) {
+      // Kit Auto-réparateur (Centre K): 3 hp a second anywhere, flyers too.
+      if (u.owner === p.id && u.support & KIT.reparateur && u.hp > 0) u.hp = Math.min(u.maxHp, u.hp + BALANCE.rules.z.kitRepair);
       if (u.owner !== p.id || u.def.kind === 'resource' || u.buildLeft > 0 || u.hp <= 0 || u.hp >= u.maxHp || flies(u)) continue;
       if (net.some((b) => dist(b.x, b.y, u.x, u.y) <= (b.def as BuildingDef).power! * FP)) u.hp = Math.min(u.maxHp, u.hp + BALANCE.rules.creepRepair);
     }

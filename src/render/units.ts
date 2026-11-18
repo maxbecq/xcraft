@@ -983,6 +983,8 @@ interface View {
   type: string;
   /** Z socle: the tier it is drawn at (each one a little larger). */
   tier?: number;
+  /** Player whose colours it wears: a machine taken by a Canon IEM gets a new view. */
+  owner: number;
   /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
   hp?: number;
   flash?: { left: number; saved: [Mesh, Material | Material[]][] };
@@ -1691,7 +1693,7 @@ export class EntityRenderer {
     this.hostile = (a, b) => world.hostile(a, b);
     for (const e of world.entities.values()) {
       const old = this.views.get(e.id);
-      if (old && old.type !== e.type) {
+      if (old && (old.type !== e.type || old.owner !== e.owner)) {
         this.scene.remove(old.root);
         this.release(old);
         this.views.delete(e.id);
@@ -2300,7 +2302,7 @@ export class EntityRenderer {
       pivot.add(hit);
     }
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
