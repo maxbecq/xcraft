@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -58,7 +58,11 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   const ab = name && spell(name, e.lvl);
   if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
-  if (name === 'invistemp') {
+  if (name === 'cone') {
+    // Allies round the caster unhurt for a while (an aura: out of it, no more).
+    if (e.cone === 0) this.cones++;
+    e.cone = ticks(ab.duration);
+  } else if (name === 'invistemp') {
     e.camo = ticks(ab.duration);
   } else if (name === 'enfouissement') {
     e.burrowed = !e.burrowed;
@@ -194,7 +198,15 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     }
     this.players[e.owner].ultimates![ab.ultimate] = 0;
   }
-  if (name === 'balisez') {
+  if (name === 'gel') {
+    // The enemy building nearest the point: no attack, no production, unhurt for a while.
+    const b = [...this.entities.values()].filter((t) => t.def.kind === 'building' && this.hostile(t.owner, e.owner) && t.hp > 0 && dist(t.x, t.y, x, y) <= toFp(ab.radius! + (t.def as BuildingDef).size / 2)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+    if (!b) return false;
+    b.frozen = ticks(ab.duration);
+  } else if (name === 'vacarme') {
+    const v = this.spawn('vacarme', e.owner, x - FP / 2, y - FP / 2);
+    v.ttl = ticks(ab.duration);
+  } else if (name === 'balisez') {
     // An invulnerable beacon: sight of the zone for 50 s.
     this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
   } else if (name === 'impulsion') {
@@ -470,4 +482,10 @@ export function unseize(this: World, e: Entity): void {
   e.seizedBy = 0;
   e.seizedLeft = 0;
   this.setOrder(e, null);
+}
+
+/** A unit's abilities: its own, and those its Z weapon brings (Accumulateur). */
+export function abilitiesFor(this: World, e: Entity): string[] {
+  const own = abilitiesOf(e.def as UnitDef);
+  return e.kit && WEAPON_ABILITIES[e.kit] ? [...own, ...WEAPON_ABILITIES[e.kit]] : own;
 }

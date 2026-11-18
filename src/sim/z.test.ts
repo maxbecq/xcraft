@@ -225,6 +225,55 @@ describe('Z', () => {
     expect(w.spawn('zespion', 0, 34 * FP, 30 * FP).maxHp).toBe(200);
   });
 
+  it("Z.doc's other weapons: Déchiqueteur, Jet sonique, Arc électrique, Canon X-04, Réparateur, Accumulateur", () => {
+    const w = createMatch(['z', 'humains']);
+    const at = (type: string, owner: number, x: number, y: number, kit = '') => {
+      const u = w.spawn(type, owner, x * FP, y * FP);
+      u.kit = kit;
+      return u;
+    };
+    // Déchiqueteur: melee, against flyers when a flyer carries it.
+    expect(w.weapon(at('quadripode', 0, 20, 20, 'dechiqueteur'))).toMatchObject({ damage: 41, range: 0.1, air: false });
+    expect(w.weapon(at('coleoptere', 0, 20, 22, 'dechiqueteur'))).toMatchObject({ air: true, ground: false });
+    // Jet sonique: the auxiliaire between the shooter and its target is hit too.
+    const jet = at('hexapode', 0, 30, 30, 'jetsonique');
+    const between = at('auxiliaire', 1, 31.5, 30);
+    const target = at('auxiliaire', 1, 33, 30);
+    const hp = between.hp;
+    w.strike(jet, target);
+    expect(target.hp).toBeLessThan(target.maxHp);
+    expect(between.hp).toBeLessThan(hp);
+    // Arc électrique: up to three targets in front.
+    const arc = at('quadripode', 0, 40, 40, 'arc');
+    const foes = [at('auxiliaire', 1, 43, 40), at('auxiliaire', 1, 43, 41), at('auxiliaire', 1, 43, 39), at('auxiliaire', 1, 37, 40)];
+    w.step([]); // vision
+    for (const f of foes) f.hp = f.maxHp;
+    arc.cooldown = 0;
+    w.strike(arc, foes[0]);
+    expect(foes.filter((f) => f.hp < f.maxHp)).toHaveLength(3);
+    expect(foes[3].hp).toBe(foes[3].maxHp); // behind it
+    // Canon X-04: a blast in contact hurts the shooter too; no Coléoptère takes it.
+    const cannon = at('quadripode', 0, 50, 50, 'canonx04');
+    w.strike(cannon, at('auxiliaire', 1, 50.8, 50));
+    expect(cannon.hp).toBeLessThan(cannon.maxHp);
+    expect(DEFS.coleoptere as UnitDef).toMatchObject({ weapons: expect.not.arrayContaining(['canonx04']) });
+    // Réparateur: no attack, mends machines.
+    const medic = at('quadripode', 0, 60, 60, 'reparateur');
+    expect(w.weapon(medic)).toBeUndefined();
+    const hurt = at('hexapode', 0, 61, 60);
+    hurt.hp = 100;
+    run(w, 2);
+    expect(hurt.hp).toBeGreaterThan(110);
+    // Accumulateur: Cône de protection keeps the allies round the caster unhurt.
+    const acc = at('quadripode', 0, 70, 70, 'accumulateur');
+    expect(w.abilitiesFor(acc)).toEqual(['gel', 'vacarme', 'cone']);
+    const guarded = at('hexapode', 0, 71, 70);
+    w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'cone' }]);
+    const before = guarded.hp;
+    w.hurt(guarded, 50);
+    expect(guarded.hp).toBe(before);
+  });
+
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

@@ -38,7 +38,7 @@ export function apply(this: World, c: Command): void {
       });
       return;
     case 'patrol': {
-      const fighters = units.filter((e) => this.weapon(e) || (e.def as UnitDef).heal);
+      const fighters = units.filter((e) => this.weapon(e) || this.healRate(e));
       const [ox, oy] = this.formation(fighters);
       for (const [i, e] of fighters.entries()) this.setOrder(e, { kind: 'attackMove', x: c.x + ox[i], y: c.y + oy[i], target: 0, back: [e.x, e.y] });
       return;
@@ -237,7 +237,7 @@ export function apply(this: World, c: Command): void {
         const ab = ABILITIES[c.name];
         if (!ab) return;
         if (ab.research && !this.level(c.player, ab.research)) return void this.say(c.player, `Requiert : ${DEFS[ab.research].name}`);
-        const casters = units.filter((e) => abilitiesOf(e.def as UnitDef).includes(c.name!) && e.abilityCd === 0);
+        const casters = units.filter((e) => this.abilitiesFor(e).includes(c.name!) && e.abilityCd === 0);
         if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
         if (c.x === undefined || c.y === undefined || !casters.length) return;
         const [x, y] = [c.x, c.y];

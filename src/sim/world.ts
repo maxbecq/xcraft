@@ -71,6 +71,11 @@ export interface Entity {
   ty: number;
   buildLeft: number;
   queue: string[];
+  /** Z Gel électronique: ticks a building stays frozen (no attack, no production, unhurt); a unit by a Balise de
+   * vacarme, unable to attack. */
+  frozen: number;
+  /** Z Accumulateur: ticks its Cône de protection lasts. */
+  cone: number;
   /** Z socle: support kits fitted by the Centre K (bits of KIT). */
   support: number;
   /** Z Centre K: ticks before the Canon IEM fires again. */
@@ -319,7 +324,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -396,6 +401,8 @@ export class World {
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       if (e.evolving > 0 && --e.evolving === 0) this.evolved(e);
       if (e.iemCd > 0) e.iemCd--;
+      if (e.frozen > 0) e.frozen--;
+      if (e.cone > 0 && --e.cone === 0) this.cones--;
       // Canon IEM: the machine goes back when its time is up or when the Centre K holding it falls.
       if (e.seizedLeft > 0 && (--e.seizedLeft === 0 || this.entities.get(e.seizedBy)?.owner !== e.owner)) this.unseize(e);
       this.regenerate(e);
@@ -632,6 +639,9 @@ export class World {
   }
 
   /** While applying a shift-command: new orders go to the end of each unit's list. */
+  /** Cônes de protection active (Z Accumulateur): when none, no one looks for one. */
+  cones = 0;
+
   /** Players with a Balise offensive standing, as of tick `beaconsAt` (Z). */
   beacons = new Set<number>();
   beaconsAt = -1;

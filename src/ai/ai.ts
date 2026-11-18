@@ -65,7 +65,7 @@ const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
-const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, tempete: 2 };
+const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, tempete: 2, impulsion: 3, vacarme: 3 };
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
 const GODS = BALANCE.ai.gods as [string, number][];
 
@@ -719,7 +719,7 @@ export class AI {
       if (u.abilityCd > 0 || u.held) continue;
       const near = around(foes, u.x, u.y, 9 * FP);
       if (!near.length) continue;
-      for (const name of abilitiesOf(u.def as UnitDef)) {
+      for (const name of w.abilitiesFor(u)) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
         const reach = ((ab.range ?? 0) + 1) * FP;
@@ -864,7 +864,7 @@ export class AI {
     if (!def.weapons) return undefined;
     const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => {
       const kit = WEAPONS[k];
-      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || reaches(kit.attack, true));
+      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(kit.attack, true));
     });
     // Energy piling up: the weapons that spend it weigh three times as much.
     const weighted = kits.map(([k, wgt]): [string, number] => [k, energy >= 300 && WEAPONS[k].cost.energy > 0 ? wgt * 3 : wgt]);

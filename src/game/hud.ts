@@ -654,8 +654,8 @@ export class Hud {
         list.push({ label: 'Avancé', key: 'V', action: () => (this.buildMenu = 'advanced') });
       }
       // One button per active ability among the selected units; each ready unit uses it.
-      for (const ab of new Set(units.flatMap((u) => abilitiesOf(u.def as UnitDef)))) {
-        const casters = units.filter((u) => abilitiesOf(u.def as UnitDef).includes(ab));
+      for (const ab of new Set(units.flatMap((u) => this.world.abilitiesFor(u)))) {
+        const casters = units.filter((u) => this.world.abilitiesFor(u).includes(ab));
         const ready = casters.filter((u) => u.abilityCd === 0).length;
         const a = ABILITIES[ab];
         const reason = a.research && !this.world.level(this.player, a.research) ? `Requiert : ${DEFS[a.research].name}` : a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined;

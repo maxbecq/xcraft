@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt } from '../data';
+import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -109,7 +109,7 @@ export function ownWeapon(this: World, e: Entity): Attack | undefined {
   // Z socles: the weapon chosen at the Plate-forme, or the machine gun, as strong as the socle's level.
   // Z Tourelle and Assimilateur: the weapon bought for them, or the Tourelle's machine gun, at their level.
   const level = (e.def as UnitDef | BuildingDef).weaponLevel;
-  if (level && (e.kit || e.def.kind === 'unit' || (e.def as BuildingDef).attack)) return weaponAt(e.kit || 'mitrailleuse', level + e.tier - 1);
+  if (level && (e.kit || e.def.kind === 'unit' || (e.def as BuildingDef).attack)) return weaponAt(e.kit || 'mitrailleuse', level + e.tier - 1, e.def.kind === 'unit' && flies(e));
   if (level) return undefined;
   if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
   const a = (e.def as UnitDef | BuildingDef).attack;
@@ -204,6 +204,9 @@ export function fortify(this: World, u: Entity): void {
 export function hurt(this: World, t: Entity, damage: number): void {
   t.lastHit = this.tick;
   if (t.invuln > 0 || t.phased > 0) return;
+  // Z Gel électronique: a frozen building is unhurt; Cône de protection: allies round its caster too.
+  if (t.frozen > 0 && t.def.kind === 'building') return;
+  if (t.def.kind === 'unit' && this.coned(t)) return;
   if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
   const absorbed = Math.min(t.shield, damage);
   t.shield -= absorbed;
@@ -237,13 +240,26 @@ export function nearShieldAura(this: World, e: Entity): boolean {
   return false;
 }
 
+/** Hit points a second a unit gives back: a healer's, or a Z socle's Réparateur (machines only). */
+export function healRate(this: World, e: Entity): number {
+  return (e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0;
+}
+
+/** Inside a Cône de protection (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
+export function coned(this: World, t: Entity): boolean {
+  if (!this.cones) return false;
+  const r = toFp(ABILITIES.cone.radius!);
+  for (const c of this.entities.values()) if (c.cone > 0 && c !== t && c.owner === t.owner && c.hp > 0 && dist(c.x, c.y, t.x, t.y) <= r) return true;
+  return false;
+}
+
 /** Idle units pick a fight (or a patient) in sight. Workers only fight when told to. */
 export function acquire(this: World, e: Entity): void {
   const def = e.def as UnitDef;
   if (def.worker) return;
-  const patient = def.heal ? this.patient(e) : undefined;
+  const patient = this.healRate(e) ? this.patient(e) : undefined;
   if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
-  if (!def.attack) return;
+  if (!def.attack || !this.weapon(e)) return;
   // Holding position: only what is already within reach.
   const t = this.enemyNear(e, e.stand ? toFp(def.attack.range) + e.radius + FP : def.sight * FP);
   if (t) this.setOrder(e, { kind: 'attack', target: t.id, auto: true, lx: e.x, ly: e.y });
@@ -253,25 +269,25 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   const def = e.def as UnitDef;
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !def.heal) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
     if (this.gap(e, t) > 2 * FP) return this.chase(e, t);
     e.goal = null;
     if (e.cooldown === 0) {
       t.hp = Math.min(t.maxHp, t.hp + 1);
-      e.cooldown = ticks(1 / def.heal);
+      e.cooldown = ticks(1 / this.healRate(e));
       if ((this.tick + e.id) % 8 === 0) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
     }
     return;
   }
   if (o.kind === 'attackMove') {
     // Heal on the way if needed, otherwise engage what comes into sight, then carry on.
-    if (def.heal && (this.tick + e.id) % 4 === 0) {
+    if (this.healRate(e) && (this.tick + e.id) % 4 === 0) {
       const p = this.patient(e);
       if (p) {
         if (this.gap(e, p) > 2 * FP) return this.chase(e, p);
         if (e.cooldown === 0) {
           p.hp = Math.min(p.maxHp, p.hp + 1);
-          e.cooldown = ticks(1 / def.heal);
+          e.cooldown = ticks(1 / this.healRate(e));
         }
         return;
       }
@@ -325,7 +341,7 @@ export function strike(this: World, e: Entity, t: Entity): void {
   e.shortTicks = 0;
   e.goal = null;
   e.path = [];
-  if (e.cooldown > 0) return;
+  if (e.cooldown > 0 || e.frozen > 0) return;
   // Stimulant: attacks 50 % faster.
   if (e.phased > 0) return;
   // Inside an enemy Tempête de sable, ranged weapons are useless.
@@ -337,6 +353,22 @@ export function strike(this: World, e: Entity, t: Entity): void {
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
   if (e.statue > 0) e.cooldown = idiv(e.cooldown * BALANCE.rules.upgrades.statue.rate, 100);
   this.hit(e, t, a);
+  // Z Arc électrique: more enemies in reach, in front of the shooter (within 67.5° of its line to the target).
+  if (a.targets && a.targets > 1) {
+    const [fx, fy] = [t.x - e.x, t.y - e.y];
+    const reach = toFp(a.range) + e.radius;
+    const front = (o: Entity) => {
+      const [ox, oy] = [o.x - e.x, o.y - e.y];
+      const dot = fx * ox + fy * oy;
+      // cos² 67.5° ≈ 0.146, in floats only to compare (the result is a yes or no, the same everywhere).
+      return dot > 0 && dot * dot >= 0.146 * (fx * fx + fy * fy) * (ox * ox + oy * oy);
+    };
+    const more = [...this.entities.values()]
+      .filter((o) => o !== t && o.def.kind === 'unit' && o.hp > 0 && !o.inside && this.hostile(o.owner, e.owner) && reaches(a, flies(o)) && this.sees(e.owner, o) && dist(e.x, e.y, o.x, o.y) <= reach + o.radius && front(o))
+      .sort((x, y) => dist(e.x, e.y, x.x, x.y) - dist(e.x, e.y, y.x, y.y) || x.id - y.id)
+      .slice(0, a.targets - 1);
+    for (const o of more) this.hit(e, o, a);
+  }
 }
 
 /** Deals one attack's damage (with the attacker's Forge upgrades), alerts the victim and lets it fight back. */
@@ -385,6 +417,20 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     }
   }
   this.hurt(t, damage);
+  // Z Jet sonique: every ground unit on the line from the shooter to its target is hit too, friend or foe (Z.doc).
+  if (a.line) {
+    const [lx, ly] = [t.x - e.x, t.y - e.y];
+    const len2 = lx * lx + ly * ly || 1;
+    for (const o of [...this.entities.values()]) {
+      if (o === e || o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o)) continue;
+      const k = (o.x - e.x) * lx + (o.y - e.y) * ly;
+      if (k <= 0 || k >= len2) continue;
+      const cross = Math.abs((o.x - e.x) * ly - (o.y - e.y) * lx);
+      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, damage);
+    }
+  }
+  // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).
+  if (a.selfHit && this.gap(e, t) <= FP / 2) this.hurt(e, damage);
   t.lastAttacker = e.id;
   t.lastHitBy = e.owner;
   // Sphère de renvoi: part of the blow goes back to the attacker.
@@ -503,9 +549,11 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
 export function patient(this: World, e: Entity): Entity | undefined {
   let best: Entity | undefined;
   let worst = 1;
-  const range = (e.def as UnitDef).sight * FP;
+  const mender = !(e.def as UnitDef).heal;
+  const range = (mender ? WEAPONS[e.kit].healRange! + 2 : (e.def as UnitDef).sight) * FP;
   for (const t of this.entities.values()) {
     if (t === e || t.owner !== e.owner || t.def.kind !== 'unit' || t.hp >= t.maxHp || t.hp <= 0) continue;
+    if (mender && !(t.def as UnitDef).mechanical) continue;
     if (dist(e.x, e.y, t.x, t.y) > range) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];

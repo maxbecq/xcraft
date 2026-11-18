@@ -12,6 +12,10 @@ export interface Cost {
   energy: number;
 }
 
+/** Every Z weapon a socle can be built with; the ones that fight, for the Tourelle and the Assimilateur. */
+const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04', 'reparateur', 'accumulateur'];
+const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04'];
+
 export interface Attack {
   damage: number;
   /** Extra range beyond touching, in tiles (melee: ~0.1). */
@@ -25,6 +29,12 @@ export interface Attack {
   ground?: boolean;
   /** Area weapon: half damage to the enemy ground units within this radius (tiles) of the target. */
   splash?: number;
+  /** Z Jet sonique: also hurts every unit, friend or foe, between the shooter and its target. */
+  line?: boolean;
+  /** Z Arc électrique: strikes up to this many enemies at once, in front of the shooter. */
+  targets?: number;
+  /** Z Canon X-04: fired at a target in contact, the shooter takes the blast too. */
+  selfHit?: boolean;
 }
 
 /** Can this attack reach that target, flying or not? */
@@ -269,6 +279,11 @@ export const ABILITIES: Record<string, AbilityDef> = {
   balisez: { name: 'Balise de révélation', hotkey: 'B', ...(BALANCE.abilities.balisez as object) } as AbilityDef,
   impulsion: { name: 'Impulsion magnétique', hotkey: 'I', research: 'impulsion', ...(BALANCE.abilities.impulsion as object) } as AbilityDef,
   invistemp: { name: 'Invisibilité temporaire', hotkey: 'N', research: 'invistemp', ...(BALANCE.abilities.invistemp as object) } as AbilityDef,
+  /** Z Accumulateur (Z.doc): an enemy building frozen 20 s (no attack, no production, unhurt); a beacon that deafens
+   * living units; allies round the caster unhurt. Energy costs (55, 130, 170) become cooldowns. */
+  gel: { name: 'Gel électronique', hotkey: 'G', ...(BALANCE.abilities.gel as object) } as AbilityDef,
+  vacarme: { name: 'Balise de vacarme', hotkey: 'V', ...(BALANCE.abilities.vacarme as object) } as AbilityDef,
+  cone: { name: 'Cône de protection', hotkey: 'O', ...(BALANCE.abilities.cone as object) } as AbilityDef,
   /** Z Centre K (Z.doc): support kits fitted on an own socle anywhere on the map, on top of its weapon. */
   kitdetection: { name: 'Détection', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
   kitinvisibilite: { name: 'Invisibilité', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
@@ -580,9 +595,9 @@ const BASE: Record<string, object> = {
   // leave the Plate-forme with the weapon chosen when they were queued, for good.
   drone: { kind: 'unit', name: 'Drone', radius: 0.375, worker: true, mechanical: true, faction: 'z', hotkey: 'D' },
   dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
-  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
-  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, requires: { rhexapode: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
-  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'L' },
+  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'Q' },
+  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, requires: { rhexapode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'H' },
+  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: SOCLE_WEAPONS.filter((k) => k !== 'canonx04'), faction: 'z', hotkey: 'L' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
   zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
   intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], faction: 'z', hotkey: 'I' },
@@ -591,16 +606,16 @@ const BASE: Record<string, object> = {
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
-  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'A' },
+  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'A' },
   plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
-  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'T' },
+  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'T' },
   centresocles: {
     kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
     researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3'],
   },
   armement: {
     kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
-    researches: ['laser', 'lanceflammes', 'lanceroquettes'],
+    researches: ['laser', 'lanceflammes', 'lanceroquettes', 'rdechiqueteur', 'rjetsonique', 'rarc', 'rreparateur', 'raccumulateur', 'rcanonx04'],
   },
   centrerecherche: {
     kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
@@ -634,6 +649,14 @@ const BASE: Record<string, object> = {
   podsuperieur: research('Pod supérieur', 'U', 'Les Pods peuvent évoluer en Pods supérieurs.', undefined, 'z'),
   laser: research('Laser', 'L', 'Arme laser pour les socles, choisie à leur construction.', undefined, 'z'),
   lanceflammes: research('Lance-flammes', 'F', 'Lance-flammes pour les socles, choisi à leur construction.', undefined, 'z'),
+  rdechiqueteur: research('Déchiqueteur', 'D', 'Lame de corps à corps pour les socles (contre les volants sur un socle volant).', undefined, 'z'),
+  rjetsonique: research('Jet sonique', 'J', 'Onde qui frappe tout sur sa ligne, alliés compris.', { supreme: 1 }, 'z'),
+  rarc: research('Arc électrique', 'A', 'Frappe trois cibles à la fois devant le socle.', { supreme: 1 }, 'z'),
+  rreparateur: research('Réparateur', 'P', 'Nanites qui réparent les machines alliées proches.', { supreme: 1 }, 'z'),
+  raccumulateur: research('Accumulateur', 'C', 'Gel électronique, Balise de vacarme, Cône de protection.', { supreme: 1, optimisation: 1 }, 'z'),
+  rcanonx04: research('Canon X-04', 'X', 'Artillerie de zone à longue portée pour les socles terrestres.', { supreme: 1, optimisation: 1 }, 'z'),
+  // Z Accumulateur: the Balise de vacarme, a small invulnerable-free beacon that deafens living units around it.
+  vacarme: { kind: 'building', name: 'Balise de vacarme', size: 1, faction: 'z', hotkey: 'V', morphOnly: true },
   lanceroquettes: research('Lance-roquettes', 'R', 'Lance-roquettes pour les socles, contre les machines et les bâtiments.', undefined, 'z'),
 
   // ---------------------------------------------------------------- Dieux (notice 1.2-1): gods that summon their armies
@@ -775,8 +798,13 @@ export interface TierStats {
 export interface WeaponDef {
   name: string;
   hotkey: string;
-  /** At level 1 (the weakest socle): what the AI and the cards go by. */
-  attack: Attack;
+  /** At level 1 (the weakest socle): what the AI and the cards go by; none for the Réparateur and the Accumulateur. */
+  attack?: Attack;
+  /** Z Réparateur: hp a second it gives back to machines, and within what range. */
+  heal?: number;
+  healRange?: number;
+  /** Only ground socles take it (Canon X-04). */
+  ground?: boolean;
   cost: Cost;
   /** Research needed first. */
   research?: string;
@@ -789,7 +817,14 @@ interface WeaponStats {
   ranges?: number[];
   cooldown: number;
   air?: boolean;
+  /** Déchiqueteur: a melee weapon that hits flyers instead when a flying socle carries it. */
+  airIfFlying?: boolean;
   splash?: number;
+  line?: boolean;
+  targets?: number;
+  selfHit?: boolean;
+  heal?: number;
+  healRange?: number;
   cost: Cost;
 }
 const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
@@ -797,22 +832,40 @@ const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
  * A Z weapon at a level (1 to 4: the socle's, Z.doc). Z.doc's damage, scaled by `rules.z.weaponDamage` % as the
  * socles' was (14 → 12), the gap against machines as `vsMechanical`.
  */
-export function weaponAt(key: string, level: number): Attack {
+export function weaponAt(key: string, level: number, flying = false): Attack | undefined {
   const w = WEAPON_STATS[key];
+  if (!w.levels.length) return undefined;
   const [light, machine] = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1];
   const scale = (n: number) => Math.round((n * BALANCE.rules.z.weaponDamage) / 100);
   const a: Attack = { damage: scale(light), range: w.ranges ? w.ranges[Math.min(w.ranges.length, Math.max(1, level)) - 1] : w.range!, cooldown: w.cooldown };
   if (scale(machine) !== a.damage) a.vsMechanical = scale(machine) - a.damage;
   if (w.air !== undefined) a.air = w.air;
+  if (w.airIfFlying && flying) {
+    a.air = true;
+    a.ground = false;
+  }
   if (w.splash) a.splash = w.splash;
+  if (w.line) a.line = true;
+  if (w.targets) a.targets = w.targets;
+  if (w.selfHit) a.selfHit = true;
   return a;
 }
-const weaponDef = (key: string, name: string, hotkey: string, research?: string): WeaponDef => ({ name, hotkey, research, attack: weaponAt(key, 1), cost: WEAPON_STATS[key].cost });
+const weaponDef = (key: string, name: string, hotkey: string, research?: string, ground?: boolean): WeaponDef => ({
+  name, hotkey, research, ground, attack: weaponAt(key, 1), cost: WEAPON_STATS[key].cost, heal: WEAPON_STATS[key].heal, healRange: WEAPON_STATS[key].healRange,
+});
 export const WEAPONS: Record<string, WeaponDef> = {
   laser: weaponDef('laser', 'Laser', 'L', 'laser'),
   flammes: weaponDef('flammes', 'Lance-flammes', 'F', 'lanceflammes'),
   roquettes: weaponDef('roquettes', 'Lance-roquettes', 'R', 'lanceroquettes'),
+  dechiqueteur: weaponDef('dechiqueteur', 'Déchiqueteur', 'D', 'rdechiqueteur'),
+  jetsonique: weaponDef('jetsonique', 'Jet sonique', 'J', 'rjetsonique'),
+  arc: weaponDef('arc', 'Arc électrique', 'A', 'rarc'),
+  canonx04: weaponDef('canonx04', 'Canon X-04', 'X', 'rcanonx04', true),
+  reparateur: weaponDef('reparateur', 'Réparateur', 'P', 'rreparateur'),
+  accumulateur: weaponDef('accumulateur', 'Accumulateur', 'C', 'raccumulateur'),
 };
+/** Z weapons that bring abilities rather than an attack (Accumulateur, Z.doc). */
+export const WEAPON_ABILITIES: Record<string, string[]> = { accumulateur: ['gel', 'vacarme', 'cone'] };
 
 const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(
@@ -826,9 +879,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod', vacarme: 'tourelle' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
+export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15, vacarme: 0.5 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
