@@ -140,6 +140,49 @@ Dans le jeu aujourd'hui :
 
 Chaque étape change le jeu et demande donc l'accord du programmeur. Chacune devra aussi être mesurée, comme les stats.
 
+## 2 ter. Bâtiments et armes de `Z.doc` dans le jeu : mesures
+
+La session camp Z a repris `Z.doc` par étapes : commits locaux sur la branche `claude/z-2010`, non poussés. Décision du programmeur : attendre l'équilibreur, sans compensation entre-temps.
+
+| Étape | Z – Humains | Z – Isdaris | Z – Dieux |
+|---|---|---|---|
+| Unités de `Z.doc` seules | 52 – 42 | 50 – 46 | non mesuré |
+| + arme choisie à la construction et coûts des armes de `Z.doc` (b06d049) | 48 – 43 (7 nuls) | 58 – 39 | non mesuré |
+| + bâtiments, annexes, recherches et prérequis de `Z.doc` (7b776b3) | 19 – 78 | 20 – 78 | 50 – 16 (32 nuls) |
+
+Durée moyenne de la dernière ligne : 15 min contre Humains et Isdaris, 26 min contre Dieux. 98 parties par paire.
+
+Ce que change la dernière étape :
+- Intelligence centrale : 800 minerais, 120 s, 3000 PV, armure 6.
+- Pod : 300 au lieu de 150. Plate-forme (200) et Tourelle deviennent des annexes du Pod, ce qui demande un Pod de plus.
+- Assimilateur : 100 au lieu de 500, sans coût de logistique.
+- Les socles se débloquent par recherche au Centre de socles (250) :
+  - Quadripode : 100, en 25 s ;
+  - Hexapode : 300/200, après le Centre de recherche ;
+  - Coléoptère : 100/100, après l'Intelligence suprême.
+- Creep : il ne vient plus que de l'IC, de l'Intelligence suprême et du Pod supérieur, et répare 1 PV/s au lieu de 2.
+- Plus aucune détection Z avant le Centre K.
+- Les recherches coûtent plus cher (Blindage des socles 400/400 à 700/700).
+
+Essais rapides, 18 parties par paire, Z – Humains puis Z – Isdaris :
+
+| Essai | Z – Humains | Z – Isdaris |
+|---|---|---|
+| Creep d'avant | 7 – 11 | 4 – 13 |
+| Quadripode sans recherche | 1 – 16 | 7 – 11 |
+| Attaque de proximité réservée au Lance-flammes | 3 – 14 | 3 – 15 |
+
+Aucune cause n'explique seule le recul : c'est la somme des coûts d'entrée qui retarde la première armée. Dans une partie suivie contre les Humains :
+- à 6 min, Z a 8 unités contre 13 pour les Humains ;
+- Z perd sa première vague vers 7 min ;
+- Z manque de minerai (0 à 300) pendant que son énergie monte jusqu'à 840.
+
+Pistes pour l'équilibreur, non appliquées :
+- coûts et temps des bâtiments Z, rajustés comme ceux des autres camps entre 2010 et le mod ;
+- coût d'entrée des socles ;
+- réparation du creep ;
+- une détection Z avant le Centre K.
+
 ## 3. « Données générales » de 2008 : ce qu'elles apportent
 
 Document de la version Warcraft 3, antérieur à la notice de référence. Ses chiffres ne sont pas transposables tels quels : dégâts typés (normal, perçant, énergie, magie, explosif, siège) contre six types d'armure, mana, distances Warcraft 3 (vision 750 à 1250). Ils ne servent pas à régler `balance.json`. Le document apporte surtout des intentions de conception.
