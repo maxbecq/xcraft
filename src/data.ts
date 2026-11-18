@@ -358,6 +358,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
   armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
   nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
+  /** Yggdrasill (notice, Déracinement): uproots to walk, and takes root again at the point. */
+  deraciner: { name: 'Déraciner', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
+  enraciner: { name: 'Enraciner', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
   /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
   transe: { name: 'Transe enragée', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
   /** Sphinx (notice, Peau de roc): turned to stone, slower and slower to shoot, but heavily armoured, mending. */
@@ -683,10 +686,14 @@ const BASE: Record<string, object> = {
   sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, ability: 'statue', faction: 'dieux', hotkey: 'X' },
   asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
   // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
-  branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], faction: 'dieux', hotkey: 'B' },
-  protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, morphs: ['furieux'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
+  branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], ability: 'deraciner', faction: 'dieux', hotkey: 'B' },
+  protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, morphs: ['furieux'], ability: 'deraciner', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
   /** Hadès on the field: the Yggdrasill draws on the world tree, destruction and range « à peine concevables ». */
-  furieux: { kind: 'building', name: 'Yggdrasill furieux', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['hades'], count: 1 }, faction: 'dieux', hotkey: 'F' },
+  furieux: { kind: 'building', name: 'Yggdrasill furieux', size: 2, warp: true, morphOnly: true, ability: 'deraciner', requiresAny: { of: ['hades'], count: 1 }, faction: 'dieux', hotkey: 'F' },
+  /** Déracinement (notice): an Yggdrasill walking, any form; it cannot fight until it takes root again. */
+  branchemob: { kind: 'unit', name: "Branche d'Yggdrasill (déracinée)", radius: 0.9, ability: 'enraciner', faction: 'dieux', hotkey: 'B' },
+  protecteurmob: { kind: 'unit', name: 'Yggdrasill protecteur (déraciné)', radius: 0.9, ability: 'enraciner', faction: 'dieux', hotkey: 'P' },
+  furieuxmob: { kind: 'unit', name: 'Yggdrasill furieux (déraciné)', radius: 0.9, ability: 'enraciner', faction: 'dieux', hotkey: 'F' },
   /** Osiris's Fontaine d'eau du Nil: the living allies round it heal fast (rules.fontaine). */
   fontaine: { kind: 'building', name: 'Fontaine du Nil', size: 2, warp: true, requires: { osiris: 1 }, faction: 'dieux', hotkey: 'F' },
   /** Gaïa's Temple primordial (unique): charges the ultimate spells (MYTHS). */
@@ -699,7 +706,7 @@ const BASE: Record<string, object> = {
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
     kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
-    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'armurezodiacale'],
+    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'armurezodiacale', 'deracinement'],
   },
   ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
   ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
@@ -710,6 +717,7 @@ const BASE: Record<string, object> = {
   peauroc: { ...research('Peau de roc', 'R', 'Sphinx : Forme de statue, lent et tirant moins vite, mais très blindé et qui se répare.', undefined, 'dieux'), requiresAny: { of: ['seth', 'isis', 'osiris'], count: 1 } },
   prescience: research("Prescience d'Yggdrasill", 'Y', 'Les Yggdrasill détectent les unités camouflées.', undefined, 'dieux'),
   drakegeant: research('Drake géant', 'G', 'Drakes : plus de vie, et ils transportent des unités dans leur gueule.', { odin: 1 }, 'dieux'),
+  deracinement: research('Déracinement', 'E', 'Les Yggdrasill peuvent se déraciner et marcher ; ils ne combattent qu’une fois enracinés.', undefined, 'dieux'),
   armurezodiacale: research('Armure zodiacale', 'Z', 'Titans : plus de vie et de blindage.', { hades: 1 }, 'dieux'),
   offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
   // Artefacterie (notice, Frigg): a god buys up to 4 improvements, where it stands, the same one several times if it likes.
@@ -818,7 +826,7 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
 export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 

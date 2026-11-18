@@ -44,7 +44,7 @@ Le camp des **Dieux** (V1, rang 1, d'après la notice 1.2-1 et `docs/camp-dieux.
   - dieux : `odin`, `athena`, `isis`, `frigg`, `hades`, `osiris` (stats, `levels`, prix et temps d'invocation choisis entre ceux du rang 1 et les ressources de milieu de partie) ;
   - unités : `corbeau`, `drake`, `elementaire`, `elemeau`, `elemterre`, `elemair`, `golem`, `pretresse`, `walkyrie`, `titan`, `immortel`, `fantome`, `jormungandr` ;
   - bâtiments : `furieux`, `fontaine`, `primordial` (`charge` : 300 s, de XC.doc), `artefacterie` ;
-  - recherches : `artforce`, `artresistance`, `artagilite`, `artvitesse`, `coupuissant`, `peauroc`, `prescience`, `drakegeant`, `armurezodiacale` ;
+  - recherches : `artforce`, `artresistance`, `artagilite`, `artvitesse`, `coupuissant`, `peauroc`, `prescience`, `drakegeant`, `armurezodiacale`, `deracinement`, `branchemob`, `protecteurmob`, `furieuxmob` (Yggdrasill déracinés : vitesse 1,2, ne combattent pas) ;
   - sorts : `foudre`, `cridegueurre`, `soinsdivins`, `resurrection`, `soumission`, `voile`, `rayonmort`, `voyage`, `armeeenfers`, `nuee`, `jormungand`, `tempetezeus`, `amonra`, `chouette`, `dissipation`, `mutation`, `fusion`, `transe`, `statue` ;
   - règles : `rules.upgrades.auraguerre`, `auraprotection`, `putride`, `fontaine`, `artefacts`, `statue`, `drakegeant`, `zodiacale`, `prescience` ;
   - choix de règle pris sans la notice : les sorts d'un même dieu partagent une seule recharge ; Coup puissant double un coup sur quatre par un tirage fixe (la simulation n'a pas de hasard) ; Tempête de Zeus retire 30 % de la vie maximale à tous, alliés compris ; Amon-Râ immobilise 15 s (machines 5 s) ; le Golem se forme en 15 s ; une Soumission sur une unité aussi prise par le Charme ou le Canon IEM de Z n'est pas gérée.

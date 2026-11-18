@@ -247,6 +247,7 @@ export function apply(this: World, c: Command): void {
       for (const e of units) this.cast(e);
       const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
       if (b && c.name === 'envol') return void this.takeOff(b);
+      if (b && c.name === 'deraciner') return void this.uproot(b);
       if (!b || c.x === undefined || c.y === undefined) return;
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];

@@ -373,6 +373,23 @@ describe('Dieux', () => {
     expect(mino.war).toBeGreaterThan(0);
   });
 
+  it('Déracinement: an Yggdrasill walks, then takes root again elsewhere', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const b = w.spawn('protecteur', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'deraciner' }]);
+    expect(b.type).toBe('protecteur'); // not researched
+    w.players[0].upgrades.deracinement = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'deraciner' }]);
+    expect(b.type).toBe('protecteurmob');
+    run(w, 4);
+    // A spot the ground allows, a few tiles off.
+    const [tx, ty] = [...Array(64).keys()].map((i) => [30 + (i % 8), 26 + (i >> 3)]).find(([x, y]) => w.canPlace('protecteur', x, y, 0) && Math.abs(x - 30) > 2)!;
+    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'enraciner', x: (tx + 1) * FP, y: (ty + 1) * FP }]);
+    run(w, 10);
+    expect(b.type).toBe('protecteur');
+    expect(b.tx).toBe(tx);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);

@@ -239,6 +239,17 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'amonra') {
     // Blinded and held where they stand; machines shake it off sooner.
     for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
+  } else if (name === 'enraciner') {
+    // Back into its own form at the point, where the ground allows; it fights again a few seconds later.
+    const into = e.type.replace(/mob$/, '');
+    const size = (DEFS[into] as BuildingDef).size;
+    const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
+    if (!this.canPlace(into, tx, ty, e.owner)) {
+      this.say(e.owner, 'Impossible de prendre racine ici.');
+      return true;
+    }
+    this.transmute(e, into, tx, ty);
+    e.cooldown = ticks(ab.duration);
   } else if (name === 'chouette') {
     this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
   } else if (name === 'dissipation') {
@@ -379,6 +390,13 @@ export function walled(this: World, x1: number, y1: number, x2: number, y2: numb
 export function takeOff(this: World, b: Entity): void {
   if (b.queue.length) return void this.say(b.owner, 'Production en cours.');
   this.transmute(b, 'casernevol');
+}
+
+/** Déracinement: an Yggdrasill (any form) becomes a walking tree, which cannot fight. */
+export function uproot(this: World, b: Entity): void {
+  if (!this.level(b.owner, 'deracinement') || b.buildLeft > 0) return;
+  if (b.queue.length) return void this.say(b.owner, 'Transformation en cours.');
+  this.transmute(b, `${b.type}mob`);
 }
 
 /** A building that becomes a unit, or back (at tiles tx, ty), keeping its id, rally and share of hit points. */
