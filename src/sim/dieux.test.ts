@@ -390,6 +390,18 @@ describe('Dieux', () => {
     expect(b.tx).toBe(tx);
   });
 
+  it("the Élémentaire d'eau's icy shot slows what it hits", () => {
+    const w = createMatch(['dieux', 'humains']);
+    const water = w.spawn('elemeau', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('legionnaire', 1, 33 * FP, 30 * FP);
+    const speed = foe.speed;
+    w.hit(water, foe, (DEFS.elemeau as UnitDef).attack!);
+    expect(foe.speed).toBeLessThan(speed);
+    water.hp = 0; // no more shots
+    run(w, BALANCE.rules.upgrades.glace.seconds + 0.5);
+    expect(foe.chill).toBe(0);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);

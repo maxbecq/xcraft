@@ -131,7 +131,7 @@ export function baseSpeed(this: World, e: Entity): number {
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
   if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
-  const stone = e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100;
+  const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) / 100;
   return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
 }
 
@@ -431,6 +431,11 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).
   if (a.selfHit && this.gap(e, t) <= FP / 2) this.hurt(e, damage);
+  // The Élémentaire d'eau's icy shot slows what it hits.
+  if (e.type === 'elemeau' && t.def.kind === 'unit') {
+    t.chill = ticks(BALANCE.rules.upgrades.glace.seconds);
+    if (t.boost === 0) t.speed = this.baseSpeed(t);
+  }
   t.lastAttacker = e.id;
   t.lastHitBy = e.owner;
   // Sphère de renvoi: part of the blow goes back to the attacker.
