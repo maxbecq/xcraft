@@ -404,7 +404,7 @@ function pool(radius: number, color: number): Mesh {
   }
   const m = new Mesh(
     new PlaneGeometry(radius * 2, radius * 2).rotateX(-Math.PI / 2),
-    new MeshBasicMaterial({ map: poolTexture, color, transparent: true, opacity: 0.45, blending: AdditiveBlending, depthWrite: false }),
+    owned(new MeshBasicMaterial({ map: poolTexture, color, transparent: true, opacity: 0.45, blending: AdditiveBlending, depthWrite: false })),
   );
   m.renderOrder = 1;
   return m;
@@ -412,6 +412,46 @@ function pool(radius: number, color: number): Mesh {
 
 /** Models built by tools/blender/models.py, by entity type. */
 const templates = new Map<string, Group>();
+/**
+ * Geometries and skeletons shared between views (the models' own, halo shells, mined-out geode slices): never
+ * freed with a view.
+ */
+const SHARED = new WeakSet<object>();
+function share<T extends Object3D>(root: T): T {
+  root.traverse((o) => {
+    if ((o as Mesh).geometry) SHARED.add((o as Mesh).geometry);
+    if ((o as SkinnedMesh).isSkinnedMesh) SHARED.add((o as SkinnedMesh).skeleton);
+  });
+  return root;
+}
+/**
+ * Frees what a view, or a part of one, allocated for itself: its geometries but the shared ones, the bone textures
+ * of its cloned skeletons, and the materials (with their textures) marked owned, on it or in `extra`.
+ */
+function free(root: Object3D, extra: (Material | Material[])[] = []): void {
+  const materials = new Set<Material>();
+  const add = (m: Material | Material[]) => {
+    for (const x of Array.isArray(m) ? m : [m]) if (x.userData.owned) materials.add(x);
+  };
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (m.geometry && !SHARED.has(m.geometry)) m.geometry.dispose();
+    if (m.material) add(m.material);
+    const skeleton = (o as SkinnedMesh).isSkinnedMesh ? (o as SkinnedMesh).skeleton : undefined;
+    if (skeleton && !SHARED.has(skeleton)) skeleton.dispose();
+  });
+  extra.forEach(add);
+  for (const m of materials) {
+    for (const t of Object.values(m)) if ((t as Texture | null)?.isTexture && (t as Texture).userData.owned) (t as Texture).dispose();
+    m.dispose();
+  }
+}
+
+/** Marks a material or texture as a view's own copy, freed with the view (see EntityRenderer.release). Clones keep the mark. */
+function owned<T extends { userData: Record<string, unknown> }>(x: T): T {
+  x.userData.owned = true;
+  return x;
+}
 
 /**
  * Models made with Meshy (tools/meshy), `<type>-meshy.glb`, preferred over the Blender ones
@@ -535,7 +575,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
           holder.add(gltf.scene);
-          templates.set(type, STATIC_YAW[type] ? holder : gltf.scene);
+          templates.set(type, share(STATIC_YAW[type] ? holder : gltf.scene));
           return;
         } catch {
           // no Meshy model: use the Blender one
@@ -564,7 +604,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
               o.computeBoundingSphere();
               o.boundingSphere!.radius *= 2.5;
             });
-            rigged.set(type, { scene: gltf.scene, clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type))) });
+            rigged.set(type, { scene: share(gltf.scene), clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type))) });
             return;
           }
         } catch {
@@ -582,7 +622,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         // Bright silhouette edges on everything but mineral fields, stronger on units.
         if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
         if (isdaris && d.faction === 'z' && d.kind === 'unit') rigidSkin(gltf.scene);
-        templates.set(type, type.startsWith('minerai') ? mergeGeodes(gltf.scene) : gltf.scene);
+        templates.set(type, share(type.startsWith('minerai') ? mergeGeodes(gltf.scene) : gltf.scene));
       } catch {
         // keep the placeholder
       }
@@ -796,6 +836,7 @@ function haloShape(geo: BufferGeometry): BufferGeometry {
     shape = mergeVertices(bare, 1e-3);
     shape.computeVertexNormals();
     haloShapes.set(geo, shape);
+    SHARED.add(shape);
   }
   return shape;
 }
@@ -886,7 +927,7 @@ function placeholder(type: string, team: Material): Group {
 function ghost(body: Object3D): void {
   body.traverse((o) => {
     if (!(o instanceof Mesh)) return;
-    const m = (o.material as Material).clone();
+    const m = owned((o.material as Material).clone());
     m.transparent = true;
     m.opacity = 0.3;
     m.depthWrite = false;
@@ -1128,7 +1169,7 @@ function reserveFx(body: Object3D, seed: number): { group: Group; update(dt: num
   }
   const halo = new Mesh(
     new CylinderGeometry(0.9, 0.9, 0.7, 32, 1, true),
-    new MeshBasicMaterial({ map: haloTexture, color: 0x5ae0ff, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }),
+    owned(new MeshBasicMaterial({ map: haloTexture, color: 0x5ae0ff, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending, side: DoubleSide })),
   );
   halo.position.y = 0.46;
   halo.userData.noPick = true;
@@ -1159,14 +1200,14 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
     if (!(o instanceof Mesh)) return;
     const m = o.material as MeshStandardMaterial;
     if (m.emissive && m.emissive.getHex() !== 0) {
-      o.material = m.clone();
+      o.material = owned(m.clone());
       glows.push(o.material as MeshStandardMaterial);
     }
   });
   const base = glows.map((m) => m.emissiveIntensity);
-  const swirl = eddies().clone();
+  const swirl = owned(eddies().clone());
   swirl.needsUpdate = true;
-  const eddy = new Mesh(new PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2), new MeshBasicMaterial({ map: swirl, transparent: true, opacity: 0.35, depthWrite: false, blending: AdditiveBlending, color: 0xd8a0ff }));
+  const eddy = new Mesh(new PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2), owned(new MeshBasicMaterial({ map: swirl, transparent: true, opacity: 0.35, depthWrite: false, blending: AdditiveBlending, color: 0xd8a0ff })));
   eddy.position.y = 0.09;
   group.add(eddy);
   // Particles: n stars drifting up, and a geyser of the same sparks from time to time.
@@ -1189,7 +1230,7 @@ function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number
   }
   const geom = new BufferGeometry();
   geom.setAttribute('position', new BufferAttribute(pos, 3));
-  const stars = new Points(geom, new PointsMaterial({ map: spark(), size: 0.16, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xe8c8ff }));
+  const stars = new Points(geom, owned(new PointsMaterial({ map: spark(), size: 0.16, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xe8c8ff })));
   stars.frustumCulled = false;
   group.add(stars);
   let nextGeyser = 1 + rand() * 4;
@@ -1323,6 +1364,7 @@ function toCorpse(root: Object3D): void {
       }
       k.emissive?.setRGB(0, 0, 0);
       c.userData.corpse = true;
+      if (m.userData.owned) m.dispose(); // a cloaked unit's own copy, replaced
       return c;
     };
     o.material = Array.isArray(o.material) ? o.material.map(dull) : dull(o.material);
@@ -1401,6 +1443,11 @@ export class EntityRenderer {
 
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
+  /** A view gone for good: what it allocated for itself (not what it shares with the models) is freed. */
+  private release(v: View): void {
+    free(v.root, v.flash?.saved.map(([, m]) => m) ?? []);
+  }
+
   /** All entity roots, for picking; each carries its entity id in userData. */
   get roots(): Object3D[] {
     return [...this.views.values()].map((v) => v.root);
@@ -1470,7 +1517,10 @@ export class EntityRenderer {
           const d = DEFS[v.type] as UnitDef | undefined;
           this.burst(v.root.position.clone().setY(v.root.position.y + (v.model.position.y > 0.5 ? v.model.position.y : 0) + 0.5), !!d?.mechanical || d?.faction === 'z');
           this.dying.push({ v, age: 0, side: id % 2 ? 1 : -1 });
-        } else this.scene.remove(v.root);
+        } else {
+          this.scene.remove(v.root);
+          this.release(v);
+        }
       }
     }
     this.merging = this.merging.filter((m) => {
@@ -1481,6 +1531,7 @@ export class EntityRenderer {
       const b = world.entities.get(m.building);
       if (!b || b.buildLeft === 0) {
         this.scene.remove(m.v.root);
+        this.release(m.v);
         return false;
       }
       const walk = Math.min(1, m.age / DEPLOY_WALK);
@@ -1538,6 +1589,7 @@ export class EntityRenderer {
       if (d.age < 4) return true;
       this.scene.remove(d.v.root);
       dropCorpse(d.v.model);
+      this.release(d.v);
       return false;
     });
     this.bursts = this.bursts.filter((b) => {
@@ -1560,6 +1612,7 @@ export class EntityRenderer {
       const old = this.views.get(e.id);
       if (old && old.type !== e.type) {
         this.scene.remove(old.root);
+        this.release(old);
         this.views.delete(e.id);
       }
       const v = this.views.get(e.id) ?? this.create(e, player);
@@ -1658,6 +1711,7 @@ export class EntityRenderer {
           for (const [name, a] of Object.entries(m.geometry.attributes)) g.setAttribute(name, a);
           if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
           g.boundingSphere = m.geometry.boundingSphere;
+          SHARED.add(g); // its buffers are the template's
           m.geometry = g;
           return m;
         });
@@ -2024,7 +2078,7 @@ export class EntityRenderer {
     // Flat on the ground (rotation baked in), so its vertices can follow the terrain (see drape).
     // Own copies of the materials: the halo fades and the ring dims after selection (see sync).
     for (const [inner, outer, m, role] of [[r, r + 0.09, core, 'core'], [r + 0.09, r + 0.3, halo, 'halo']] as const) {
-      const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), m.clone());
+      const mesh = new Mesh(new RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), owned(m.clone()));
       mesh.userData.lift = lift;
       mesh.renderOrder = 2;
       ring.add(mesh);
@@ -2034,8 +2088,8 @@ export class EntityRenderer {
     // A ring, not a square: a flat quad shows up in the ambient occlusion and ink passes as a pale rectangle.
     // RingGeometry's planar UVs line the round tick texture up with it.
     // It turns by turning its texture, so the mesh itself can follow the terrain too.
-    const dialMat = dialMaterial(core).clone();
-    dialMat.map = dialMat.map!.clone();
+    const dialMat = owned(dialMaterial(core).clone());
+    dialMat.map = owned(dialMat.map!.clone());
     dialMat.map.center.set(0.5, 0.5);
     dialMat.map.needsUpdate = true;
     const dial = new Mesh(new RingGeometry((r + 0.42) * 0.74, r + 0.42, 64).rotateX(-Math.PI / 2), dialMat);
@@ -2071,7 +2125,7 @@ export class EntityRenderer {
         const plane = new Plane(new Vector3(0, -1, 0), 0);
         // The armature: the building's own edges in cyan, rising ahead of the plates.
         const frame = new Plane(new Vector3(0, -1, 0), 0);
-        const frameMaterial = new LineBasicMaterial({ color: 0x7ff5ff, transparent: true, opacity: 0.8, depthWrite: false, clippingPlanes: [frame] });
+        const frameMaterial = owned(new LineBasicMaterial({ color: 0x7ff5ff, transparent: true, opacity: 0.8, depthWrite: false, clippingPlanes: [frame] }));
         const originals: [Mesh, Material | Material[]][] = [];
         const meshes: Mesh[] = [];
         body.traverse((o) => {
@@ -2087,7 +2141,7 @@ export class EntityRenderer {
           originals.push([mesh, mesh.material]);
           // Its own copies, cut by the plane; inner faces drawn so the cut reads as solid, not hollow.
           const cut = (m: Material) => {
-            const c = m.clone();
+            const c = owned(m.clone());
             c.clippingPlanes = [plane];
             c.clipShadows = true;
             c.side = DoubleSide;
@@ -2098,7 +2152,7 @@ export class EntityRenderer {
         print = { plane, frame, frameMaterial, lines, bottom: box.min.y, top: box.max.y, originals };
         const half = (e.def as BuildingDef).size / 2;
         // A square outline round the footprint (a four-sided ring turned by 45°).
-        seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+        seam = new Mesh(new RingGeometry(half * 0.98, half * 1.04, 4, 1), owned(new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide })));
         seam.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
         seam.scale.setScalar(Math.SQRT2);
         seam.userData.noPick = true;
