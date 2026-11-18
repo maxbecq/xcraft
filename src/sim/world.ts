@@ -1118,11 +1118,28 @@ export class World {
         level = l;
       }
     }
-    return true;
+    return !this.underCliff(tx, ty, def.size, level);
+  }
+
+  /**
+   * A tile of ground at its own level all round a building on the sides where a cliff rises: built right against
+   * the wall, its back would sink into the rock as drawn. A plateau's edge falling away is no matter.
+   */
+  private underCliff(tx: number, ty: number, size: number, level: number): boolean {
+    const g = this.grid;
+    for (let y = ty - 1; y <= ty + size; y++) {
+      for (let x = tx - 1; x <= tx + size; x++) {
+        if ((x >= tx && x < tx + size && y >= ty && y < ty + size) || !g.inside(x, y)) continue;
+        if (g.topLevel(x, y) > level) return true;
+      }
+    }
+    return false;
   }
 
   /** Why a building cannot go there: out of the power field (Isdaris), off the creep (Z), or simply blocked. */
   private misplaced(def: BuildingDef, tx: number, ty: number, player: number): string {
+    const level = this.grid.flatLevel(tx, ty);
+    if (level >= 0 && !def.energyRate && this.underCliff(tx, ty, def.size, level)) return 'Trop près de la falaise.';
     if (!def.needsPower || this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return 'Emplacement invalide.';
     return def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.";
   }

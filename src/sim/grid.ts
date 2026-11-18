@@ -44,6 +44,12 @@ export class Grid {
     return this.corners[c + 1] === l && this.corners[c + 2] === l && this.corners[c + 3] === l ? l : -1;
   }
 
+  /** Highest corner level of a tile: a cliff rising from its neighbour shows there. */
+  topLevel(x: number, y: number): number {
+    const c = (y * this.width + x) * 4;
+    return Math.max(this.corners[c], this.corners[c + 1], this.corners[c + 2], this.corners[c + 3]);
+  }
+
   /** Lowest corner level of a tile, for line-of-sight and fog. */
   level(x: number, y: number): number {
     const c = (y * this.width + x) * 4;
