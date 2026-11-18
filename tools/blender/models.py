@@ -2307,6 +2307,52 @@ def zespion(p):
     cone(p["cyan_glow"], 0.12, 0.15, (0, 0, 0.33), rot=(math.pi, 0, 0), verts=8)  # levitation glow
 
 
+
+def octopode(p):
+    """Octopode (sketch): a massive walking fortress on eight heavy legs, stacked armour, a turret with a long gun."""
+    z = 0.95
+    shell(p["zsteel"], 0.55, (0, 0.05, z), scale=(1.1, 1.35, 0.55), seg=12, rings=6)
+    for k in range(5):  # dorsal plates
+        y = -0.4 + k * 0.2
+        box(p["zrust"] if k % 2 else p["zsteel"], (0.8 - abs(k - 2) * 0.1, 0.22, 0.06), (0, y, z + 0.3 - abs(k - 2) * 0.04), rot=(0.25, 0, 0))
+    box(p["team"], (0.5, 0.15, 0.05), (0, 0.6, z + 0.25), rot=(0.4, 0, 0))
+    box(p["zrust"], (0.45, 0.3, 0.28), (0, -0.66, z - 0.05), rot=(0.15, 0, 0))  # head
+    eyes(p, 0, -0.82, z - 0.02, n=4, r=0.04, spread=0.1)
+    cyl(p["zsteel"], 0.26, 0.2, (0, -0.05, z + 0.42), verts=10)  # turret
+    gun(p, (0, -0.25, z + 0.5), length=0.7, barrels=2, r=0.05)
+    stout_legs(p, [((0.45, y, 0.8), (0.8, y * 1.05, 0.88), (0.86, y * 1.15, 0)) for y in (-0.5, -0.17, 0.17, 0.5)], 0.07)
+
+
+def mastodonte(p):
+    """Mastodonte (sketch): a heavy flying hull, four lift fans, two big thrusters, a belly gun turret."""
+    shell(p["zsteel"], 0.55, (0, 0.05, 0.75), scale=(1.2, 1.5, 0.5), seg=12, rings=6)
+    box(p["team"], (0.6, 0.18, 0.05), (0, 0.55, 0.98), rot=(0.3, 0, 0))
+    box(p["zrust"], (0.4, 0.3, 0.25), (0, -0.78, 0.72), rot=(0.15, 0, 0))
+    eyes(p, 0, -0.93, 0.74, n=3, r=0.04, spread=0.1)
+    for sx in (-1, 1):
+        cyl(p["zsteel"], 0.16, 0.5, (sx * 0.4, 0.8, 0.72), rot=(math.pi / 2, 0, 0), verts=10)  # thruster
+        cyl(p["orange_glow"], 0.12, 0.03, (sx * 0.4, 1.06, 0.72), rot=(math.pi / 2, 0, 0), verts=10)
+        for sy in (-1, 1):
+            ring(p["zsteel"], 0.18, 0.035, (sx * 0.62, sy * 0.4, 0.55), seg=14)  # lift fan
+            cyl(p["cyan_glow"], 0.15, 0.02, (sx * 0.62, sy * 0.4, 0.55), verts=10)
+    cyl(p["zdark"], 0.18, 0.12, (0, -0.2, 0.42), verts=10)
+    gun(p, (0, -0.4, 0.38), length=0.5, barrels=2, r=0.04)
+
+
+def barge(p):
+    """Barge (sketch): a flat flying cargo hull with an open hold, four lift fans and a small cockpit."""
+    box(p["zsteel"], (1.0, 1.5, 0.22), (0, 0, 0.6))
+    box(p["zdark"], (0.8, 1.1, 0.06), (0, 0.1, 0.72))  # hold floor
+    for sx in (-1, 1):
+        box(p["zrust"], (0.06, 1.1, 0.2), (sx * 0.43, 0.1, 0.8))  # hold walls
+        for sy in (-1, 1):
+            ring(p["zsteel"], 0.16, 0.03, (sx * 0.6, sy * 0.55, 0.55), seg=12)
+            cyl(p["cyan_glow"], 0.13, 0.02, (sx * 0.6, sy * 0.55, 0.55), verts=10)
+    box(p["zrust"], (0.4, 0.3, 0.25), (0, -0.82, 0.78))  # cockpit
+    box(p["cyan_glow"], (0.3, 0.02, 0.08), (0, -0.98, 0.84))
+    box(p["team"], (1.02, 0.15, 0.1), (0, 0.76, 0.6))
+
+
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
     "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
@@ -2320,7 +2366,7 @@ MODELS = {
     "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
     "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
     "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
-    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek, "zespion": zespion,
+    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek, "zespion": zespion, "octopode": octopode, "mastodonte": mastodonte, "barge": barge,
 }
 
 
