@@ -74,7 +74,14 @@ export class Post {
     const fxPass = new RenderPass(fx, camera);
     fxPass.clear = false;
     composer.addPass(fxPass);
-    composer.addPass(new UnrealBloomPass(light ? size.clone().multiplyScalar(0.5) : size, 0.5, 0.4, 0.9));
+    const bloom = new UnrealBloomPass(size, 0.5, 0.4, 0.9);
+    // Light mode: the bloom at half resolution. The composer sizes every pass to the screen (on addPass and on
+    // resize), so the halving goes in the pass's own setSize.
+    if (light) {
+      const full = bloom.setSize.bind(bloom);
+      bloom.setSize = (w, h) => full(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
+    }
+    composer.addPass(bloom);
     composer.addPass(new OutputPass());
     if (!light) composer.addPass(new SMAAPass());
     this.composer = composer;
