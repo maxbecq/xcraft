@@ -67,6 +67,8 @@ const GODS = BALANCE.ai.gods as [string, number][];
 export class AI {
   private waves = 0;
   private trained = 0;
+  /** The tech building has fielded a unit of its own once (the first one comes before anything else it holds up). */
+  private fielded = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
   private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
@@ -186,7 +188,10 @@ export class AI {
     const techUp = buildings.some((b) => b.type === f.tech && b.buildLeft === 0);
     // Isdaris units come with extensions researched on their building (notice): keep energy for the next one.
     const unlocked = techDef?.trains!.filter((t) => !w.lacks(this.player, t) && (DEFS[t] as UnitDef).attack) ?? [];
-    const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x));
+    this.fielded ||= !!techDef && mine.some((u) => techDef.trains!.includes(u.type));
+    // Its first unit unlocked: the tech building trains it before researching anything else (the Balise held it a minute).
+    const firstTech = f === FACTIONS.isdaris && unlocked.length > 0 && !this.fielded;
+    const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x) && !(firstTech && techDef!.researches?.includes(x)));
     const reserve = !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
@@ -200,15 +205,18 @@ export class AI {
     // Isdaris: the gateways and the morphs keep the minerals of the advanced units whenever the Psycho-assembleur is
     // idle, and, once a wave is out, of the second Récepteur and of the Psycho-assembleur itself (the gateways' cheap
     // units otherwise spent every mineral: the advanced units never came and research starved of energy).
-    const techIdle = techUp && unlocked.length > 0 && buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0);
+    // Also while it researches the extension that unlocks its first unit, so the unit starts the moment it can.
+    const techIdle = techUp && (unlocked.length > 0 ? buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0) : !this.fielded);
+    const techUnits = unlocked.length ? unlocked : techDef?.trains!.filter((t) => (DEFS[t] as UnitDef).attack) ?? [];
     const gatewaysKeep =
       f !== FACTIONS.isdaris
         ? 0
-        : (techIdle ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
+        : (techIdle ? Math.min(...techUnits.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
           (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
     if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
-    for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type)) wants.push(type);
+    // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
+    for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
     const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
@@ -268,7 +276,8 @@ export class AI {
       energy -= cost.energy;
     }
     // Isdaris extensions (notice), in order, on the building that hosts each.
-    if (nextExtension && !saving && !this.easy) {
+    // The extension that unlocks the first tech unit does not wait for the expansion's savings (they held it three minutes).
+    if (nextExtension && (!saving || (techUp && !unlocked.length)) && !this.easy) {
       const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0);
       const cost = (DEFS[nextExtension] as UpgradeDef).cost;
       if (host && minerals >= cost.minerals && energy >= cost.energy) {
@@ -312,7 +321,7 @@ export class AI {
       const antiAirTrains = trains.filter((u) => reaches((DEFS[u] as UnitDef).attack!, true));
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains).slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
       const def = type && (DEFS[type] as UnitDef);
-      if (!def || saving || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
+      if (!def || (saving && !(firstTech && t.type === f.tech)) || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
       if (minerals - keep < def.cost.minerals || energy < def.cost.energy) continue;
       out.push({ player: this.player, kind: 'train', ids: [t.id], type });
       minerals -= def.cost.minerals;
@@ -485,7 +494,9 @@ export class AI {
       if (leading.length) out.push({ player: this.player, kind: 'attack', ids: leading.map((u) => u.id), x: back.x, y: back.y });
       for (const u of leading) kiters.add(u.id);
     }
-    const waiting = waveUnits.filter((u) => !kiters.has(u.id) && (!u.order || u.order.kind === 'move'));
+    // Also those still walking to an old target's spot, which may never be reached (below a cliff): the target moved on.
+    const stale = (u: Entity) => !!target && u.order?.kind === 'attackMove' && !u.order.target && dist(u.order.x, u.order.y, target.x, target.y) > 10 * FP;
+    const waiting = waveUnits.filter((u) => !kiters.has(u.id) && (!u.order || u.order.kind === 'move' || stale(u)));
     if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
     return out;
   }
