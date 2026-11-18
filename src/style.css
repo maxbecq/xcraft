@@ -729,6 +729,8 @@ body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, n
 @media (max-width: 820px), (max-height: 600px) {
   /* Centred while it fits, from the top once it scrolls ('safe'); browsers without it keep it at the top. */
   .menu.setup { gap: 12px; overflow: auto; place-content: start center; place-content: safe center center; padding: 20px 0; }
+  /* Every row its full height, the menu scrolling instead: a row of map cards (itself scrolling) was squeezed to a sliver. */
+  .menu.setup { grid-auto-rows: max-content; }
   .menu.setup h2 { font-size: 32px; }
   .menu fieldset { padding: 4px 8px 8px; }
   .menu .pick button { font-size: 14px; padding: 5px 9px; }
@@ -964,4 +966,7 @@ body.humains { --trim-top: -34px; }
 .menu.lobby .lobby-other { font: 15px var(--ui); color: var(--ink); }
 .menu.lobby .maps.fixed .map-card:not(.chosen) { opacity: 0.35; }
 .menu.lobby .maps.fixed .map-card { cursor: default; }
+/* Fingers: the buttons along the bottom of the setup screens (lobby, joining, new game) and the lobby's lists at
+   least 44 px high. */
+body.touch .menu.setup > .row button, body.touch .menu.lobby .row button, body.touch .menu.lobby select { min-height: 44px; }
 .menu button:disabled { opacity: 0.45; cursor: default; }
