@@ -35,6 +35,83 @@ TYPES = {
     "antre": (B.antre, 1.0, 12000), "puitsdivin": (B.puits, 1.0, 12000), "temple": (B.temple, 0.72, 24000),
 }
 
+#: The look picked on 2026-11-18 (recherches-visuelles/dieux/planches/selection.jpg): palette slots a model's sculpt
+#: uses, swapped for another material. Models listed here also get their painted materials baked into a texture.
+MARBLE = {"skin": "statue", "white": "statue2", "leather": "gold", "embroid": "gold"}
+LOOKS = {
+    "apollon": {**MARBLE, "leaf": "gold"},
+    "minotaure": {"fur": "statue", "fur_light": "statue2", "jackal": "statue2", "leather": "gold", "steel": "gold", "bark": "gold"},
+    "temple": {"marble": "statue", "marble2": "statue2"},
+}
+BAKE_SIZE = 1024
+
+
+def bake(parts, typ):
+    """Every painted part but the team colour and the lights joined into one mesh, unwrapped, and its procedural
+    materials baked into one colour texture: the game keeps the marble veins, brush grain and painted cavities."""
+    keep = [o for o in parts if o.data.materials and (o.data.materials[0].name == "team" or o.data.materials[0].name in kit.GLOWS)]
+    body = [o for o in parts if o not in keep]
+    if not body:
+        return parts
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in body:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = body[0]
+    if len(body) > 1:
+        bpy.ops.object.join()
+    o = bpy.context.active_object
+    o.name = "body"
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.004)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    sc = bpy.context.scene
+    sc.render.engine = "CYCLES"
+    sc.cycles.samples = 16
+    sc.render.bake.margin = 6
+    mats = list(o.data.materials)
+    specs = [kit.FLAT.get(m.name, (0, 0.0, 0.8, None, 0, 1)) for m in mats]
+
+    def target(name, data):
+        img = bpy.data.images.new(f"{typ}_{name}", BAKE_SIZE, BAKE_SIZE, is_data=data)
+        for m in mats:
+            node = m.node_tree.nodes.new("ShaderNodeTexImage")
+            node.image = img
+            m.node_tree.nodes.active = node
+        return img
+    # colour: metal counts as its own colour (a diffuse bake of metal comes out black)
+    for m in mats:
+        m.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value = 0.0
+    albedo = target("albedo", False)
+    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"})
+    # glTF metal-roughness map (green roughness, blue metal), one flat value per painted material
+    for m, (_, metallic, rough, *_r) in zip(mats, specs):
+        nt = m.node_tree
+        e = nt.nodes.new("ShaderNodeEmission")
+        e.inputs["Color"].default_value = (0, rough, metallic, 1)
+        out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
+        nt.links.new(e.outputs[0], out.inputs["Surface"])
+    mr = target("metalrough", True)
+    bpy.ops.object.bake(type="EMIT")
+    mat = bpy.data.materials.new("body")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    b = nt.nodes["Principled BSDF"]
+    t = nt.nodes.new("ShaderNodeTexImage")
+    t.image = albedo
+    nt.links.new(t.outputs["Color"], b.inputs["Base Color"])
+    t2 = nt.nodes.new("ShaderNodeTexImage")
+    t2.image = mr
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(t2.outputs["Color"], sep.inputs[0])
+    nt.links.new(sep.outputs["Green"], b.inputs["Roughness"])
+    nt.links.new(sep.outputs["Blue"], b.inputs["Metallic"])
+    o.data.materials.clear()
+    o.data.materials.append(mat)
+    albedo.pack()
+    mr.pack()
+    return keep + [o]
+
 
 def flatten():
     """Replace every procedural material with a plain one of its colour (what glTF keeps)."""
@@ -131,15 +208,20 @@ for typ, (fn, scale, limit) in TYPES.items():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     kit.MATS.clear()
     kit.FLAT.clear()
+    kit.GLOWS.clear()
     p = kit.palette()
+    for slot, name in LOOKS.get(typ, {}).items():
+        p[slot] = p[name]
     objs = kit.group(fn, p, scale=scale)
     # The icon keeps the painted materials; the game model gets flat ones.
     icon([o for o in objs if o.type == "MESH"], os.path.join(ICONS, f"{typ}.png"))
     bpy.context.scene.render.film_transparent = False
     parts, tris = merged(objs, limit)
+    if typ in LOOKS:
+        parts = bake(parts, typ)
     flatten()
     bpy.ops.object.select_all(action="DESELECT")
     for o in parts:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"{typ}.glb"), export_format="GLB", use_selection=True, export_apply=True, export_yup=True)
+    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"{typ}.glb"), export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_image_format="JPEG", export_image_quality=88)
     print(f"DIEUX {typ}: {tris} triangles, {len(parts)} meshes")

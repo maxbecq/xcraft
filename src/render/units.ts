@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -828,7 +828,44 @@ function model(type: string, team: Material, seed = 0): Group {
     halo.userData.noPick = true;
     o.add(halo);
   }
+  const d = DEFS[type];
+  if (d && 'faction' in d && d.faction === 'dieux' && d.kind === 'unit' && d.unique) godAura(g, t);
   return g;
+}
+
+/**
+ * A god's halo: a soft disc of gold light behind the head and a fainter glow round the body, always facing the
+ * camera, so the four gods read as gods among their troops (the user's rule for the Dieux).
+ */
+const godTop = new WeakMap<Object3D, number>();
+let auraTexture: CanvasTexture | undefined;
+function godAura(g: Object3D, template: Object3D): void {
+  let top = godTop.get(template);
+  if (top === undefined) godTop.set(template, (top = new Box3().setFromObject(template).max.y));
+  if (!auraTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const x = c.getContext('2d')!;
+    const grad = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,240,200,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,214,130,0.45)');
+    grad.addColorStop(0.7, 'rgba(120,240,220,0.15)');
+    grad.addColorStop(1, 'rgba(120,240,220,0)');
+    x.fillStyle = grad;
+    x.fillRect(0, 0, 128, 128);
+    auraTexture = new CanvasTexture(c);
+    auraTexture.colorSpace = SRGBColorSpace;
+  }
+  const glow = (size: number, y: number, opacity: number) => {
+    const s = new Sprite(owned(new SpriteMaterial({ map: auraTexture, transparent: true, opacity, depthWrite: false, blending: AdditiveBlending })));
+    s.scale.set(size, size, 1);
+    s.position.set(0, y, -0.05 * top!);
+    s.userData.noPick = true;
+    s.raycast = () => {};
+    g.add(s);
+  };
+  glow(top * 0.6, top * 0.86, 0.75); // behind the head
+  glow(top * 0.85, top * 0.55, 0.12); // round the body
 }
 
 const haloShapes = new WeakMap<BufferGeometry, BufferGeometry>();

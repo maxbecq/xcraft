@@ -1,4 +1,4 @@
-import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, Vector2, type WebGLRenderer } from 'three';
+import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, type Sprite, Vector2, type WebGLRenderer } from 'three';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { inkPass } from './ink';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -52,7 +52,7 @@ export class Post {
       hideLines();
       scene.traverse((o) => {
         const m = (o as Mesh).material as Material | undefined;
-        if (o.visible && (o as Mesh).isMesh && m && !Array.isArray(m) && m.transparent && !m.depthWrite) {
+        if (o.visible && ((o as Mesh).isMesh || (o as Sprite).isSprite) && m && !Array.isArray(m) && m.transparent && !m.depthWrite) {
           o.visible = false;
           ao._visibilityCache.push(o);
         }

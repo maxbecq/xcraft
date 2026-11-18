@@ -10,6 +10,8 @@ from mathutils import Vector
 MATS = {}
 #: Flat stand-in of every material for the game export: name -> (colour, metallic, roughness, emission, strength, alpha).
 FLAT = {}
+#: Names of the light materials (glow()): kept as their own meshes, not baked into the texture.
+GLOWS = set()
 
 
 def lin(h):
@@ -112,6 +114,12 @@ def paint(name, color, metallic=0.0, rough=0.8, dark=0.55, light=1.1, grain=0.2,
         vo = tex("ShaderNodeTexVoronoi", Scale=16.0 * scale)
         pattern = math_node("ADD", math_node("MULTIPLY", vo.outputs["Distance"], 0.6), math_node("MULTIPLY", fine.outputs["Fac"], 0.4))
         height, depth, bump_s = vo.outputs["Distance"], 0.6, 0.6
+    elif kind == "marble":
+        # sculpture marble: fine veins wandering through a soft cloudy ground
+        v = tex("ShaderNodeTexWave", Scale=2.5 * scale, Distortion=14.0, Detail=6.0, **{"Detail Scale": 2.0})
+        vein = math_node("POWER", math_node("ABSOLUTE", math_node("SUBTRACT", v.outputs["Fac"], 0.5)), 0.35)
+        pattern = math_node("ADD", math_node("MULTIPLY", vein, 0.55), math_node("MULTIPLY", broad.outputs["Fac"], 0.45))
+        height, depth, bump_s = fine.outputs["Fac"], 0.2, 0.06
     elif kind == "skin":
         pattern = math_node("ADD", math_node("MULTIPLY", broad.outputs["Fac"], 0.6), 0.4)
         height, depth, bump_s = fine.outputs["Fac"], 0.25, 0.08
@@ -156,6 +164,7 @@ def paint(name, color, metallic=0.0, rough=0.8, dark=0.55, light=1.1, grain=0.2,
 def glow(name, color, strength=6.0, alpha=1.0):
     if name in MATS:
         return MATS[name]
+    GLOWS.add(name)
     FLAT[name] = (color, 0.0, 0.3, color, min(strength * 0.3, 1.2), alpha)  # the game blooms: glows kept soft
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -200,6 +209,8 @@ def palette():
         "sand": paint("sand", 0xCDA868, kind="stone", rough=0.95, grain=0.2, scale=1.5),
         "jackal": paint("jackal", 0x23222E, kind="fur", rough=0.9, dark=0.6, light=1.5, grain=0.2, scale=2.0),
         "leather": paint("leather", 0x5E3A24, kind="cloth", rough=0.85, grain=0.2, scale=0.5),
+        "statue": paint("statue", 0xF0E9DC, kind="marble", rough=0.55, dark=0.72, light=1.04, grain=0.18, scale=1.2),
+        "statue2": paint("statue2", 0xE2D8C4, kind="marble", rough=0.6, dark=0.66, light=1.04, grain=0.2, scale=1.6),
         "team": paint("team", 0xB83232, kind="cloth", dark=0.5, light=1.12, grain=0.22),
         "stone": paint("stone", 0xC4B496, kind="stone", rough=0.95, grain=0.22),
         "wood_dark": paint("wood_dark", 0x3E2A1E, kind="wood", rough=0.9, grain=0.3, scale=4.0),
