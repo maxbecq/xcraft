@@ -41,7 +41,9 @@ const params = new URLSearchParams(location.search);
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
 /** `?net=host|join&room=ABCD`: a two-player game over the network (the host is player 0). */
 const NET_ROLE = params.get('net');
-const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE;
+/** `?sandbox&camp=…&map=…&biome=…`: Bac à sable, one player alone on the map, no opponent, with test switches. */
+const SANDBOX = params.has('sandbox') && !params.has('replay') && !NET_ROLE;
+const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE && !SANDBOX;
 /** The game just played has been kept as the last game. */
 let saved = false;
 /** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
@@ -50,7 +52,7 @@ const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 /** Alone against the AI, the game's speed is a setting (never online: both machines must step alike). */
-const SOLO = params.has('play') && !NET_ROLE;
+const SOLO = (params.has('play') || SANDBOX) && !NET_ROLE;
 const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
 const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
 const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
@@ -94,6 +96,8 @@ interface Slot {
  */
 const slots: Slot[] = REPLAY
   ? REPLAY.factions.map((faction, i) => ({ control: 'replay', faction, team: REPLAY.teams?.[i] ?? i }))
+  : SANDBOX
+    ? [{ control: 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 }]
   : params.has('p')
     ? params.get('p')!.split(',').slice(0, 4).map((s, i) => {
         const [control, faction, team] = s.split('.');
@@ -103,10 +107,11 @@ const slots: Slot[] = REPLAY
         { control: NET_ROLE ? 'net' : SPECTATE ? (params.get('ai0') ?? 'normal') : 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 },
         { control: NET_ROLE ? 'net' : (params.get(SPECTATE ? 'ai1' : 'ai') ?? 'normal'), faction: asFaction(params.get('adversaire') ?? stored('xcraft.adversaire')), team: 1 },
       ];
-if (slots.length < 2) slots.push({ control: 'normal', faction: 'humains', team: 1 });
+// A Bac à sable (or its replay) has one player.
+if (slots.length < 2 && !SANDBOX && !REPLAY) slots.push({ control: 'normal', faction: 'humains', team: 1 });
 slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the map has starts
 const factions = slots.map((s) => s.faction);
-const [myFaction, foeFaction] = factions;
+const [myFaction, foeFaction = asFaction(stored('xcraft.adversaire'))] = factions; // a Bac à sable has no opponent
 const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
 // Title screen: a still scene, not a running match (no simulation, no AI, so no fights and no sound).
 if (ATTRACT) stageAttract(world);
@@ -116,8 +121,10 @@ document.body.classList.toggle('dieux', factions[PLAYER] === 'dieux');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
-const sees = (e: Entity) => SPECTATE || world.sees(PLAYER, e);
-const seenAt = (x: number, y: number) => SPECTATE || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
+/** No fog: spectating, or the Bac à sable's « Carte révélée ». */
+const revealed = () => SPECTATE || !!world.players[PLAYER].reveal;
+const sees = (e: Entity) => revealed() || world.sees(PLAYER, e);
+const seenAt = (x: number, y: number) => revealed() || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 // Every player not played by someone is an AI, its difficulty a harvesting handicap.
 const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i, undefined, s.control)]));
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
@@ -364,7 +371,7 @@ document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
 function updateFog(): void {
-  const tiles = SPECTATE ? world.vision[PLAYER].tiles.map(() => 2) : world.vision[PLAYER].tiles;
+  const tiles = revealed() ? world.vision[PLAYER].tiles.map(() => 2) : world.vision[PLAYER].tiles;
   const data = fog.image.data as Uint8Array;
   for (let i = 0; i < tiles.length; i++) data[i] = tiles[i] === 2 ? 255 : tiles[i] === 1 ? 128 : 0;
   fog.needsUpdate = true;
@@ -451,7 +458,7 @@ const EDGE_TOUCH_PX = 3;
  * the edge they touch does not scroll along them, nor a band's width past their ends, which takes in the corner they
  * sit in. The way from the middle of the screen to any of them crosses no scrolling band (as in StarCraft II, where the
  * console's edge is no scrolling edge). */
-const EDGE_PANELS = '.map-slot, .hud-card, .tools > *, .prod-panel';
+const EDGE_PANELS = '.map-slot, .hud-card, .tools > *, .prod-panel, .sandbox-tools';
 /** A panel this close to an edge is set against it. */
 const ATTACH_PX = 48;
 /** Whether the edge `side` (l, r, t, b: the bottom one runs along the console's top, at `bottom`) is calm at `along`
@@ -550,6 +557,19 @@ let scrollHeld = 0;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
+// Bac à sable: its test tools in a panel of their own (orders to the simulation, so a replay plays them back too).
+const sandboxTools = document.createElement('div');
+sandboxTools.className = 'sandbox-tools';
+if (SANDBOX) {
+  sandboxTools.innerHTML = '<b>Bac à sable</b><button class="tool sandbox" data-t="money" title="10 000 minerai et 10 000 énergie">+10 000</button><button class="tool sandbox" data-t="instant" title="Construction, production et recherche instantanées">Instantané</button><button class="tool sandbox" data-t="reveal" title="Toute la carte visible">Carte révélée</button>';
+  document.body.append(sandboxTools);
+  const mark = () => {
+    const p = world.players[PLAYER];
+    sandboxTools.querySelector('[data-t="instant"]')!.classList.toggle('on', !!p.instant);
+    sandboxTools.querySelector('[data-t="reveal"]')!.classList.toggle('on', !!p.reveal);
+  };
+  setInterval(mark, 250);
+}
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
@@ -592,6 +612,10 @@ const setPaused = (on: boolean) => {
 const pauseOptions = pause.querySelector<HTMLElement>('.pause-options')!;
 pauseOptions.addEventListener('input', (e) => controlChange(e.target as HTMLInputElement));
 pauseOptions.addEventListener('change', (e) => controlChange(e.target as HTMLInputElement));
+sandboxTools.addEventListener('click', (e) => {
+  const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
+  if (t === 'money' || t === 'instant' || t === 'reveal') issue({ player: PLAYER, kind: 'sandbox', ids: [], tool: t });
+});
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);

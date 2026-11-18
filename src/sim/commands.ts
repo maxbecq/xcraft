@@ -23,6 +23,17 @@ export function apply(this: World, c: Command): void {
     for (const e of units) e.stand = c.kind === 'hold';
   }
   switch (c.kind) {
+    case 'sandbox': {
+      // Never in a real match: only a match with one player has these tools.
+      const p = this.players[c.player];
+      if (this.players.length !== 1 || !p) return;
+      if (c.tool === 'money') {
+        p.minerals += 10000;
+        p.energy += 10000;
+      } else if (c.tool === 'instant') p.instant = !p.instant;
+      else if (c.tool === 'reveal') p.reveal = !p.reveal;
+      return;
+    }
     case 'stop':
     case 'hold':
       units.forEach((e) => {

@@ -131,6 +131,9 @@ export interface Player {
   upgrades: Record<UpgradeLine, number>;
   /** Players on the same team share their sight and never fight each other. */
   team: number;
+  /** Bac à sable (a match with one player): buildings, training and research finish at once; the whole map shows. */
+  instant?: boolean;
+  reveal?: boolean;
 }
 
 export type Command =
@@ -154,7 +157,10 @@ export type Command =
   /** Z: fits the weapon kit on each selected socle that takes it (paid per socle). */
   | { player: number; kind: 'equip'; ids: number[]; weapon: string }
   /** Attack a target, or attack-move to a point when there is none. */
-  | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean };
+  | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
+  /** Bac à sable only (a match with one player): 10 000 of each resource, or a test switch turned over. Orders like
+   * any other, so a replay plays them back. */
+  | { player: number; kind: 'sandbox'; ids: number[]; tool: 'money' | 'instant' | 'reveal' };
 
 export interface Shot {
   /** Shooter and target centres (fixed-point). */
@@ -317,6 +323,7 @@ export class World {
       this.apply(c);
       this.queueing = false;
     }
+    for (const e of this.entities.values()) if (e.owner >= 0 && this.players[e.owner].instant) this.hurry(e);
     for (const e of this.entities.values()) {
       e.px = e.x;
       e.py = e.y;
@@ -440,9 +447,21 @@ export class World {
     return this.players.filter((p) => p.team === this.players[player].team);
   }
 
-  /** A player with no building left is defeated; the last team standing wins (`winner` is one of its players). */
+  /** Bac à sable: a building site stands finished, and what a queue is making comes out at the next tick. */
+  private hurry(e: Entity): void {
+    if (e.def.kind === 'building' && e.buildLeft > 0) {
+      e.buildLeft = 0;
+      e.hp = e.maxHp;
+      e.shield = e.maxShield;
+      this.say(e.owner, `Construction terminée : ${e.def.name}.`, 'done');
+    }
+    if (e.queue.length && e.trainLeft > 1) e.trainLeft = 1;
+  }
+
+  /** A player with no building left is defeated; the last team standing wins (`winner` is one of its players). A
+   * match with one player (Bac à sable) never ends. */
   private judge(): void {
-    if (this.winner !== null) return;
+    if (this.winner !== null || this.players.length < 2) return;
     const alive = this.players.filter((p) => [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
     if (alive.length === 0) this.winner = -1;
     else if (alive.every((p) => p.team === alive[0].team)) this.winner = alive[0].id;

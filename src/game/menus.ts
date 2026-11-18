@@ -74,6 +74,7 @@ export function showHome(): void {
     <button data-m="new">Nouvelle partie</button>
     <button data-m="friend">Jouer avec un ami</button>
     <button data-m="join">Rejoindre un ami</button>
+    <button data-m="sandbox">Bac à sable</button>
     <button data-m="options">Options</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
@@ -83,6 +84,7 @@ export function showHome(): void {
   (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
+    else if (m === 'sandbox') showSetup(menu as HTMLElement, readSetup(), 'map', true);
     else if (m === 'friend') showLobby(menu as HTMLElement, newRoom(), true);
     else if (m === 'join') showJoin(menu as HTMLElement);
     else if (m === 'options') showOptions(menu as HTMLElement);
@@ -149,9 +151,10 @@ const COMPACT = matchMedia('(max-width: 820px), (max-height: 600px)');
 
 /**
  * The match setup screen: the maps, one row per player (on/off switch, dropdowns), then the planet; the match
- * loads from the URL. On small screens `step` shows the maps alone, then the rest.
+ * loads from the URL. On small screens `step` shows the maps alone, then the rest. `sandbox`: Bac à sable, the
+ * player's faction alone.
  */
-function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map'): void {
+function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map', sandbox = false): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
     `<select data-k="${key}">${Object.entries(options)
       .map(([v, label]) => `<option value="${v}"${v === now ? ' selected' : ''}>${label}</option>`)
@@ -171,19 +174,24 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
       ${open ? `${select(`f${i}`, factions, s.sides[i].faction)}${select(`c${i}`, controls, s.sides[i].control)}${select(`t${i}`, teams, String(s.sides[i].team))}` : '<span class="closed">Emplacement fermé</span>'}
     </div>`;
   };
-  const watching = s.sides[0].control !== 'you';
+  if (sandbox) s.sides[0].control = 'you';
   const chosen = mapFile(s.map);
+  const watching = s.sides[0].control !== 'you';
+  const title = sandbox ? 'Bac à sable' : 'Nouvelle partie';
+  const seats = sandbox
+    ? `<fieldset class="seats"><legend>Votre camp</legend><div class="seat"><span class="chip" style="background:#${TEAM_COLORS[0].toString(16).padStart(6, '0')}"></span><span class="who">Joueur 1</span><span class="seat-fixed"></span>${select('f0', factions, s.sides[0].faction)}</div></fieldset>`
+    : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}</fieldset>`;
   const compact = COMPACT.matches;
   const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
     <p class="map-about">${chosen.description ?? ''}</p>`;
   menu.className = `menu setup${compact ? ' compact' : ''}`;
   if (compact && step === 'map') {
-    menu.innerHTML = `<h2>Nouvelle partie</h2>${maps}
+    menu.innerHTML = `<h2>${title}</h2>${maps}
       <div class="row"><button data-m="back">Retour</button><button data-m="next" class="go">Suivant</button></div>`;
   } else
-    menu.innerHTML = `<h2>Nouvelle partie</h2>
+    menu.innerHTML = `<h2>${title}</h2>
     ${compact ? '' : maps}
-    <fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}</fieldset>
+    ${seats}
     <fieldset class="options"><legend>Partie</legend>
       ${compact ? `<label>Carte <button type="button" data-m="maps" class="map-change">${chosen.name}</button></label>` : ''}
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
@@ -201,7 +209,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
     else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
     else s.sides[Number(k[1])].control = v;
-    showSetup(menu, s, step);
+    showSetup(menu, s, step, sandbox);
   };
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
@@ -210,11 +218,11 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
       s.map = button.dataset.map;
       // Seats the map has no start for close.
       for (let i = seatsOf(mapFile(s.map)); i < 4; i++) s.sides[i].control = 'none';
-      showSetup(menu, s, step);
-    } else if (m === 'next') showSetup(menu, s, 'players');
-    else if (m === 'maps' || (m === 'back' && compact && step === 'players')) showSetup(menu, s, 'map');
+      showSetup(menu, s, step, sandbox);
+    } else if (m === 'next') showSetup(menu, s, 'players', sandbox);
+    else if (m === 'maps' || (m === 'back' && compact && step === 'players')) showSetup(menu, s, 'map', sandbox);
     else if (m === 'back') showHome();
-    else if (m === 'go') launch(s);
+    else if (m === 'go') launch(s, sandbox);
   };
 }
 
@@ -379,7 +387,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   };
 }
 
-function launch(s: Setup): void {
+function launch(s: Setup, sandbox = false): void {
   const [a, b] = s.sides;
   try {
     localStorage.setItem('xcraft.setup', JSON.stringify(s));
@@ -391,6 +399,7 @@ function launch(s: Setup): void {
     // the URL carries it all
   }
   const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
+  if (sandbox) return void (location.search = `?sandbox&${keep}`);
   const seated = s.sides.filter((x) => x.control !== 'none');
   // With two players, each is its own team whatever was picked; with more, teams as chosen.
   const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);
