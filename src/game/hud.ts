@@ -371,7 +371,7 @@ export class Hud {
         const to = at;
         this.alertAt = to;
         this.ping(to.x, to.y);
-        t.title = 'Aller voir (Espace)';
+        t.title = 'Aller voir (Espace ou Entrée)';
         t.addEventListener('click', () => this.focus(to.x, to.y));
       }
       this.audio.play(ev.kind);

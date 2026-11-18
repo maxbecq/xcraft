@@ -289,13 +289,18 @@ const keys = new Set<string>();
 window.addEventListener('keydown', (e) => keys.add(e.key));
 window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
-// Space: to the last attack. F5…F8: saved views (Ctrl, Cmd or Shift + the key saves the current one).
+// Space held: the map follows the mouse (handy on a touchpad); Space tapped without moving, or Enter: to the last
+// attack. F5…F8: saved views (Ctrl, Cmd or Shift + the key saves the current one).
 const views = new Map<string, { x: number; z: number }>();
+/** Space held: where the mouse was last seen, and whether it dragged the map (then letting go jumps nowhere). */
+let spaceDrag: { x: number; y: number; moved: boolean } | null = null;
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest?.('input, textarea, select')) return;
   if (e.key === 'Alt') e.preventDefault(); // held to show every health bar, not to open the browser's menu
   if (e.code === 'Space') {
     e.preventDefault();
+    if (!e.repeat) spaceDrag = { x: mouse?.x ?? -1, y: mouse?.y ?? -1, moved: false };
+  } else if (e.key === 'Enter') {
     hud.toAlert();
   } else if (/^F[5-8]$/.test(e.key)) {
     e.preventDefault();
@@ -313,8 +318,22 @@ let mouse: { x: number; y: number; onButton: boolean } | null = null;
 // under the pointer decides, so the Dieux console's cut-out shape and the dip of the others count as they are drawn
 // (a held pointer replays its moves there too, see game/pointerlock.ts).
 window.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, onButton: e.target !== renderer.domElement };
+  if (e.pointerType !== 'mouse') return;
+  mouse = { x: e.clientX, y: e.clientY, onButton: e.target !== renderer.domElement };
+  if (spaceDrag && !paused) {
+    // Positions, not movementX: a held pointer replays its moves without it.
+    if (spaceDrag.x >= 0) rig.panPixels(e.clientX - spaceDrag.x, e.clientY - spaceDrag.y);
+    if (spaceDrag.x >= 0 && (e.clientX !== spaceDrag.x || e.clientY !== spaceDrag.y)) spaceDrag.moved = true;
+    spaceDrag.x = e.clientX;
+    spaceDrag.y = e.clientY;
+  }
 });
+window.addEventListener('keyup', (e) => {
+  if (e.code !== 'Space' || !spaceDrag) return;
+  if (!spaceDrag.moved) hud.toAlert();
+  spaceDrag = null;
+});
+window.addEventListener('blur', () => (spaceDrag = null));
 document.addEventListener('mouseleave', () => (mouse = null));
 // Wheel zooms. A trackpad's two-finger scroll (sideways or fractional pixel deltas) pans,
 // and its pinch (sent as ctrl+wheel) zooms.
@@ -448,7 +467,7 @@ Clic droit : déplacer, récolter, attaquer, point de ralliement<br>
 Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom<br>
 <kbd>Tab</kbd> : type actif d'une sélection mixte (ses capacités) · <kbd>Maj</kbd> maintenu : voir les ordres en file<br>
-<kbd>Espace</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
+<kbd>Espace</kbd>, <kbd>Entrée</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Espace</kbd> maintenu en bougeant la souris : faire glisser la carte · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
 <kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
