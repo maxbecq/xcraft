@@ -1,23 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { pointerGain } from './pointerlock';
+import { despike, MoveScale } from './pointerlock';
 
-describe('held cursor acceleration', () => {
-  it('crawls at the set speed, grows with the move speed up to a ceiling', () => {
-    expect(pointerGain(1, 16, 1, 1)).toBeCloseTo(1, 2); // slow: about one pixel per count
-    const mid = pointerGain(24, 16, 1, 1); // 1.5 counts/ms
-    expect(mid).toBeGreaterThan(1.5);
-    expect(mid).toBeLessThan(4);
-    expect(pointerGain(80, 16, 1, 1)).toBeCloseTo(4, 5); // fast flick: the ceiling, 1 + 3 × accel
-    expect(pointerGain(200, 16, 1, 1)).toBeCloseTo(4, 5);
+describe('held cursor', () => {
+  it('learns how movement counts compare with the system cursor', () => {
+    const s = new MoveScale();
+    expect(s.value).toBe(1);
+    for (let i = 0; i < 40; i++) s.add(10, 20); // device pixels on a 2× screen: half a pixel per count
+    expect(s.value).toBeCloseTo(0.5, 5);
+    s.add(500, 1); // a jump, ignored
+    s.add(10, 0); // no movement given, ignored
+    expect(s.value).toBeCloseTo(0.5, 5);
   });
 
-  it('scales with the speed setting, and is flat without acceleration', () => {
-    expect(pointerGain(80, 16, 2, 1)).toBeCloseTo(8, 5);
-    expect(pointerGain(1, 16, 1.5, 0)).toBe(1.5);
-    expect(pointerGain(80, 16, 1.5, 0)).toBe(1.5);
+  it('keeps steady moves whole and cuts a lone spike down', () => {
+    const recent: number[] = [];
+    for (const size of [3, 5, 8, 12, 20, 30]) expect(despike(size, recent)).toBe(1);
+    expect(despike(80, recent)).toBe(1); // within four times the last moves: a real flick
+    expect(despike(900, recent)).toBeCloseTo(320 / 900, 5); // a stray spike: down to 4 × the largest recent
   });
 
-  it('a move after a pause counts as one frame long', () => {
-    expect(pointerGain(24, 5000, 1, 1)).toBe(pointerGain(24, 16, 1, 1));
+  it('lets a first move from rest through up to 60 px', () => {
+    expect(despike(50, [])).toBe(1);
+    expect(despike(120, [])).toBe(0.5);
   });
 });

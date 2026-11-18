@@ -31,17 +31,17 @@ import { countMatch, countTitle, SKIPPED } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 /** Control settings for this computer (Options, also from the pause menu): edge scrolling's speed, band width (1 = as
- * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed and acceleration
+ * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed (one to one with the system cursor at 1)
  * (game/pointerlock.ts); the pointer held in the window; grid hotkeys; the game's speed against the AI. */
 const SCROLL_KEY = 'xcraft.scroll';
-const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, mouseAccel: 1, lock: false, grid: false, game: 1 };
+const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, game: 1 };
 type Controls = typeof SCROLL_BASE;
 const SCROLL: Controls = (() => {
   const base = { ...SCROLL_BASE };
   try {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
-    for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'mouseAccel', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
+    for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
     return { ...base, lock: stored.lock2 === true, grid: stored.grid === true };
   } catch {
     return base;
@@ -271,7 +271,7 @@ let fullscreenAsked = -Infinity;
 const pointer = holdPointer(
   renderer.domElement,
   () => SCROLL.lock && !TOUCH && !paused && !ATTRACT && performance.now() - fullscreenAsked > 1500,
-  () => ({ speed: SCROLL.mouse, accel: SCROLL.mouseAccel }),
+  () => SCROLL.mouse,
 );
 const audio = new Audio();
 /** Our units' wordless answer, at most every 0.3 s so a burst of clicks does not chatter. */
@@ -748,8 +748,7 @@ function controlFields(inMatch: boolean): string {
     </fieldset>
     <fieldset class="options"><legend>Souris</legend>
       ${check('lock', 'Garder la souris dans la fenêtre (hors plein écran)')}
-      ${range('mouse', 'Vitesse du curseur gardé', 0.5, 3, 0.1, '×')}
-      ${range('mouseAccel', 'Accélération du curseur gardé', 0, 2, 0.1, '×')}
+      ${range('mouse', 'Vitesse du curseur gardé', 0.5, 2, 0.05, '×')}
     </fieldset>
     <fieldset class="options"><legend>Raccourcis</legend>
       ${check('grid', `Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom`)}

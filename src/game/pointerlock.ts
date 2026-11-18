@@ -4,7 +4,7 @@
  * own, draw the cursor of whatever lies under it, and replay the mouse events there, so the game and its interface
  * work as before. The browser's Escape frees it (so does pausing); the next click in the map takes it again.
  */
-export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, feel: () => { speed: number; accel: number }): { release(): void } {
+export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, speed: () => number): { release(): void } {
   const cursor = document.createElement('div');
   cursor.className = 'vcursor';
   cursor.hidden = true;
@@ -13,8 +13,19 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, fe
   let y = 0;
   let over: Element | null = null;
   let pressed: Element | null = null;
-  /** When the last move came (ms), for its speed. */
-  let lastMove = 0;
+  /** Locked moves in screen pixels (see MoveScale), and the size of the last few, to catch a stray spike. */
+  const scale = new MoveScale();
+  const recent: number[] = [];
+  let lastX = NaN;
+  let lastY = NaN;
+  // Unlocked, the browser gives both the pointer's position and its movement: how they compare tells how movement
+  // counts (already accelerated by the system, in CSS or device pixels) turn into the system cursor's pixels.
+  window.addEventListener('mousemove', (e) => {
+    if (!e.isTrusted || locked()) return;
+    if (lastX === lastX) scale.add(Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY), Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0));
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }, { capture: true, passive: true });
   /** Failed tries in a row (refused, or no answer within a second: WebKit can leave the request pending for good),
    * and no new try before `retryAt`; after three, none on this page: the plain cursor stays. */
   let failures = 0;
@@ -60,7 +71,8 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, fe
       retryAt = 0;
     }
     settling = 2;
-    lastMove = 0;
+    recent.length = 0;
+    lastX = NaN;
     if (!locked()) {
       hover(null);
       over = null;
@@ -121,12 +133,10 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, fe
         return;
       }
       settling = 0;
-      // The browser gives the mouse's own counts, without the system's acceleration: ours, so that a slow move aims
-      // finely and a quick one crosses the screen.
-      const dt = lastMove ? e.timeStamp - lastMove : 16;
-      lastMove = e.timeStamp;
-      const { speed, accel } = feel();
-      const g = pointerGain(Math.hypot(dx, dy), dt, speed, accel);
+      // The movement is the system's, acceleration included (unadjustedMovement is not asked for): one to one with
+      // the system cursor, times the speed setting, with no acceleration of our own on top. A lone spike (Chrome sends
+      // some) is cut down to the moves around it.
+      const g = scale.value * speed() * despike(Math.hypot(dx, dy) * scale.value, recent);
       x = Math.min(window.innerWidth - 1, Math.max(0, x + dx * g));
       y = Math.min(window.innerHeight - 1, Math.max(0, y + dy * g));
     }
@@ -162,15 +172,40 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, fe
 }
 
 /**
- * How far the held cursor goes per count of the mouse, from the move's speed (counts per millisecond), like the
- * system's pointer acceleration: about `speed` when crawling, growing smoothly with the speed (eased in, so aiming
- * stays steady) up to `speed × (1 + 3 × accel)` past 3 counts/ms. `accel` 0 is a plain constant gain.
+ * Screen pixels per unit of movementX/Y, learnt from unlocked moves (where the pointer's position shows how far the
+ * system cursor really went). 1 until enough has been seen: browsers mostly give CSS pixels, some device pixels.
  */
-export function pointerGain(dist: number, dt: number, speed: number, accel: number): number {
-  // A move after a pause (or two in the same instant) has no meaningful time: a frame's worth.
-  const v = dist / (dt > 0 && dt < 100 ? Math.max(dt, 4) : 16);
-  const t = Math.min(1, Math.max(0, (v - 0.1) / 2.9));
-  return speed * (1 + 3 * accel * t * t * (3 - 2 * t));
+export class MoveScale {
+  private moved = 0;
+  private counted = 0;
+  value = 1;
+  add(moved: number, counted: number): void {
+    // Moves without movement (synthetic, or the first after a jump) say nothing; a wildly off one is a jump too.
+    if (!counted || !moved || moved > 8 * counted || counted > 8 * moved) return;
+    this.moved += moved;
+    this.counted += counted;
+    // Learnt once a few hundred pixels were seen, then refined; a fresh ratio a long way off resets the tally (a
+    // window moved to another screen).
+    if (this.moved < 300) return;
+    const r = this.moved / this.counted;
+    this.value = Math.min(4, Math.max(0.25, r));
+    if (this.moved > 20000) {
+      this.moved /= 2;
+      this.counted /= 2;
+    }
+  }
+}
+
+/**
+ * The share of a move to keep: all of it, unless it is far beyond the last few (`recent`, updated here), as no real
+ * hand speeds up that much from one event to the next; then cut down to that bound.
+ */
+export function despike(size: number, recent: number[]): number {
+  const limit = Math.max(60, 4 * Math.max(0, ...recent));
+  const kept = Math.min(size, limit);
+  recent.push(kept);
+  if (recent.length > 4) recent.shift();
+  return size > limit ? limit / size : 1;
 }
 
 const ARROW = `data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M2 2l7 19 3-8 8-3z' fill='#e8f2ff' stroke='#000' stroke-width='1.5' stroke-linejoin='round'/></svg>")}`;
