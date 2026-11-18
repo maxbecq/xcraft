@@ -1,96 +1,105 @@
 import Peer, { type DataConnection } from 'peerjs';
-import type { Command } from './sim/world';
+import type { Command, World } from './sim/world';
 
 /**
- * Two-player lockstep over WebRTC. Both browsers run the same deterministic simulation; each tick,
- * each side sends the orders it gave, to be carried out `DELAY` ticks later on both sides. A tick is only
- * simulated once the other side's orders for it have arrived, so a slow connection stalls the game
- * rather than letting it drift apart. PeerJS's public server only introduces the two browsers to each other.
+ * Two-player lockstep over WebRTC. Both browsers run the same deterministic simulation; each tick, each side sends
+ * the orders it gave, to be carried out a few ticks later on both sides. A tick is only simulated once the other
+ * side's orders for it have arrived, so a slow connection stalls the game rather than letting it drift apart.
+ * PeerJS's public server only introduces the two browsers to each other.
+ *
+ * `Lockstep` is the protocol alone (no network: `send` and `receive`), so tests can run two of them over a link that
+ * delays, drops and reorders; `connect` plugs it into PeerJS, reconnecting after a cut.
  */
-export const DELAY = 4;
+/** The first ticks carry nobody's orders: both sides start them at once. */
+export const START = 4;
+/** The input delay, in ticks, stays within these; it follows the measured round trip. */
+const MIN_DELAY = 2;
+const MAX_DELAY = 15;
 /** Room codes avoid letters that read alike (0/O, 1/I/L). */
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-type Message = { t: number; c: Command[] } | { h: number; v: number } | { ping: 1 };
-/** Silence after which the other side is taken as gone (it pings every 2 s, even from a background tab). */
-const TIMEOUT_MS = 10_000;
-
-export type NetStatus = 'waiting' | 'connected' | 'lost' | 'error';
+/**
+ * `t`: our orders for tick t; `a`: the first tick of theirs we still miss (everything before it arrived), on every
+ * message, so each side forgets what the other has. `h`/`v`: a state fingerprint. `p`/`q`: ping and its echo.
+ * `hi`: who this page is, first thing on every connection. `bye`: leaving the match on purpose.
+ */
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string } | { bye: 1 };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
   private readonly theirs = new Map<number, Command[]>();
   /** Our orders, by the tick they will run at. */
   private readonly ours = new Map<number, Command[]>();
-  /** Our state checksums, by tick, until the other side's arrive. */
-  private readonly sums = new Map<number, number>();
-  private conn: DataConnection | null = null;
-  private heard = 0;
-  status: NetStatus = 'waiting';
-  desync = false;
+  /** Our orders the other side has not confirmed yet, with when they were last sent. */
+  private readonly unacked = new Map<number, { c: Command[]; at: number }>();
+  /** Orders given while the delay shrinks, waiting for the next free tick. */
+  private held: Command[] = [];
+  /** The next tick our orders go to. */
+  private next = START;
+  /** The first tick of theirs not received yet. */
+  private missing = START;
+  private readonly mine = new Map<number, number>();
+  private readonly their = new Map<number, number>();
+  /** Recent round trips, ms. */
+  private readonly trips: number[] = [];
+  private pinged = -Infinity;
+  /** When the other side was last heard from (any message). */
+  heard: number;
+  /** Ticks between giving an order and carrying it out. */
+  delay = START;
+  /** The first tick where the two games were found to differ. */
+  desync: number | null = null;
+  /** The other side left the match on purpose. */
+  left = false;
 
   /** `player`: 0 hosts the room, 1 joins it. */
   constructor(
     readonly player: number,
-    readonly room: string,
-    private readonly onStatus: (s: NetStatus, detail?: string) => void,
+    private readonly send: (m: Message) => void,
+    private readonly now: () => number = () => performance.now(),
   ) {
-    const peer = player === 0 ? new Peer(peerId(room)) : new Peer();
-    peer.on('error', (e) => this.set('error', e.type === 'peer-unavailable' ? 'Partie introuvable : vérifiez le code.' : e.type === 'unavailable-id' ? 'Ce code de partie est déjà pris.' : String(e.message)));
-    if (player === 0) peer.on('connection', (c) => (this.conn ? c.close() : this.attach(c)));
-    else peer.on('open', () => this.attach(peer.connect(peerId(room), { reliable: true, serialization: 'json' })));
+    this.heard = now();
   }
 
-  private attach(c: DataConnection): void {
-    this.conn = c;
-    c.on('open', () => {
-      this.heard = performance.now();
-      this.set('connected');
-      const beat = setInterval(() => {
-        if (this.status !== 'connected') return clearInterval(beat);
-        if (performance.now() - this.heard > TIMEOUT_MS) {
-          clearInterval(beat);
-          this.set('lost');
-          return;
-        }
-        c.send({ ping: 1 } satisfies Message);
-      }, 2000);
-    });
-    c.on('close', () => this.set('lost'));
-    c.on('error', () => this.set('lost'));
-    c.on('data', (d) => {
-      this.heard = performance.now();
-      const m = d as Message;
-      if ('t' in m) {
-        // Trust boundary: the other side only ever orders its own units.
-        this.theirs.set(m.t, (Array.isArray(m.c) ? m.c : []).map((cmd) => ({ ...cmd, player: 1 - this.player })));
-      } else if ('h' in m) {
-        const mine = this.sums.get(m.h);
-        if (mine !== undefined && mine !== m.v) this.desync = true;
-        this.sums.delete(m.h);
-      }
-    });
+  receive(m: Message): void {
+    this.heard = this.now();
+    if ('a' in m) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
+    if ('t' in m) {
+      if (m.t < this.missing || this.theirs.has(m.t)) return; // sent again: already here
+      // Trust boundary: the other side only ever orders its own units.
+      this.theirs.set(m.t, (Array.isArray(m.c) ? m.c : []).map((cmd) => ({ ...cmd, player: 1 - this.player })));
+      while (this.theirs.has(this.missing)) this.missing++;
+    } else if ('h' in m) {
+      this.their.set(m.h, m.v);
+      this.compare(m.h);
+    } else if ('p' in m) this.send({ q: m.p });
+    else if ('q' in m) {
+      this.trips.push(this.now() - m.q);
+      if (this.trips.length > 8) this.trips.shift();
+      // The orders must arrive before their tick comes, a full round trip later at worst: the slowest recent one, plus a tick.
+      this.delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, Math.ceil(Math.max(...this.trips) / 50) + 1));
+    } else if ('bye' in m) this.left = true;
   }
 
-  private set(s: NetStatus, detail?: string): void {
-    if (this.status === 'lost' || this.status === 'error') return;
-    this.status = s;
-    this.onStatus(s, detail);
-  }
-
-  /** Whether tick `t` can run: connected, and the other side's orders for it are in. */
+  /** Whether tick `t` can run: the other side's orders for it are in. */
   ready(t: number): boolean {
-    return this.status === 'connected' && (t < DELAY || this.theirs.has(t));
+    return t < START || this.theirs.has(t);
   }
 
   /**
-   * Runs at tick `t`: sends the orders given since the last tick (they run at `t + DELAY`), and returns
-   * both sides' orders for `t`, the host's first, so both browsers apply them in the same order.
+   * Runs at tick `t`: sends the orders given since the last tick (they run `delay` ticks later), and returns both
+   * sides' orders for `t`, the host's first, so both browsers apply them in the same order.
    */
   step(t: number, given: Command[]): Command[] {
-    const later = given.map((c) => ({ ...c, player: this.player }));
-    this.ours.set(t + DELAY, later);
-    this.conn?.send({ t: t + DELAY, c: later } satisfies Message);
+    this.held.push(...given.map((c) => ({ ...c, player: this.player })));
+    // A shorter delay than the ticks already filled: the orders wait for the next free tick, so none runs early.
+    if (t + this.delay >= this.next) {
+      const at = Math.max(this.next, t + this.delay);
+      // A longer delay: the ticks skipped get no orders, and say so.
+      for (; this.next < at; this.next++) this.post(this.next, []);
+      this.post(this.next++, this.held);
+      this.held = [];
+    }
     const mine = this.ours.get(t) ?? [];
     const theirs = this.theirs.get(t) ?? [];
     this.ours.delete(t);
@@ -98,15 +107,165 @@ export class Lockstep {
     return this.player === 0 ? [...mine, ...theirs] : [...theirs, ...mine];
   }
 
-  /** Compares the game state with the other side's every so often: they should never differ. */
-  check(t: number, sum: number): void {
-    this.sums.set(t, sum);
-    this.conn?.send({ h: t, v: sum } satisfies Message);
+  private post(t: number, c: Command[]): void {
+    this.ours.set(t, c);
+    this.unacked.set(t, { c, at: this.now() });
+    this.send({ t, c, a: this.missing });
   }
 
-  close(): void {
-    this.conn?.close();
+  /** Compares the game state with the other side's every so often: they should never differ. */
+  check(t: number, sum: number): void {
+    this.mine.set(t, sum);
+    this.send({ h: t, v: sum });
+    this.compare(t);
   }
+
+  private compare(t: number): void {
+    const a = this.mine.get(t);
+    const b = this.their.get(t);
+    if (a === undefined || b === undefined) return;
+    if (a !== b && this.desync === null) this.desync = t;
+    this.mine.delete(t);
+    this.their.delete(t);
+  }
+
+  /** Called often (a few times a second at least): pings every second, sends again what seems lost. */
+  poll(): void {
+    const now = this.now();
+    if (now - this.pinged >= 1000) {
+      this.pinged = now;
+      this.send({ p: now, a: this.missing });
+    }
+    const late = Math.max(250, 1.5 * Math.max(0, ...this.trips));
+    for (const [t, u] of this.unacked) if (now - u.at > late) this.resend(t, u, now);
+  }
+
+  /** A new connection: everything not confirmed goes again at once. */
+  reconnected(): void {
+    const now = this.now();
+    this.heard = now;
+    for (const [t, u] of this.unacked) this.resend(t, u, now);
+  }
+
+  private resend(t: number, u: { c: Command[]; at: number }, now: number): void {
+    u.at = now;
+    this.send({ t, c: u.c, a: this.missing });
+  }
+}
+
+export type NetStatus = 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'left' | 'error';
+/** Silence after which the link is taken as cut (each side pings every second, even from a background tab). */
+const SILENCE_MS = 5000;
+/** A first connection to a room nobody has opened is tried again for this long. */
+const FIND_MS = 60_000;
+
+/**
+ * Plays `player`'s side of the match in `room` over PeerJS. A cut link is mended: the host keeps its room open and
+ * takes the same guest back, the guest calls again; the orders lost meanwhile are sent again. `onStatus` hears every
+ * change; 'left' (the other side quit, or another page took its place) and 'error' are final.
+ */
+export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void } {
+  let conn: DataConnection | null = null;
+  const lock = new Lockstep(player, (m) => {
+    if (conn?.open) conn.send(m);
+  });
+  /** This page, and the other side's page once known: a page reloaded is a new one, its game started over. */
+  const me = Math.random().toString(36).slice(2);
+  let them: string | null = null;
+  let status: NetStatus = player === 0 ? 'waiting' : 'connecting';
+  const set = (s: NetStatus, detail?: string) => {
+    if (status === 'left' || status === 'error' || (s === status && !detail)) return;
+    status = s;
+    onStatus(s, detail);
+  };
+  const peer = player === 0 ? new Peer(peerId(room)) : new Peer();
+  const began = performance.now();
+  let dialed = -Infinity;
+  const dial = () => {
+    dialed = performance.now();
+    attach(peer.connect(peerId(room), { reliable: true, serialization: 'json' }));
+  };
+  const drop = (c: DataConnection) => {
+    if (c !== conn) return;
+    conn = null;
+    c.close();
+    set('reconnecting');
+  };
+  const attach = (c: DataConnection) => {
+    c.on('open', () => c.send({ hi: me } satisfies Message));
+    c.on('data', (d) => {
+      const m = d as Message;
+      if ('hi' in m) {
+        if (them !== null && m.hi !== them) {
+          c.close();
+          // The host only ever takes its own guest back; to the guest, a new host page means the match is gone.
+          if (player === 1) set('left', "L'hôte a quitté la partie.");
+          return;
+        }
+        them = m.hi;
+        if (conn && conn !== c) conn.close();
+        conn = c;
+        lock.reconnected();
+        set('connected');
+      } else if (c === conn) {
+        lock.receive(m);
+        if (lock.left) set('left', "L'adversaire a quitté la partie.");
+      }
+    });
+    c.on('close', () => drop(c));
+    c.on('error', () => drop(c));
+  };
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') set('error', 'Ce code de partie est déjà pris.');
+    else if (e.type === 'browser-incompatible') set('error', 'Ce navigateur ne permet pas le jeu en ligne.');
+    else if (e.type === 'peer-unavailable' && them === null && performance.now() - began > FIND_MS) set('error', 'Partie introuvable : vérifiez le lien ou le code.');
+    else if (e.type === 'peer-unavailable' && them === null) set('connecting', "L'hôte n'est pas encore là, nouvel essai…");
+    // Anything else (the introduction server unreachable, a call that failed): the watch below tries again.
+  });
+  if (player === 0) peer.on('connection', attach);
+  else peer.on('open', dial);
+  // The watch: cut links, calls again, pings. A worker's clock, so it keeps time in a background tab.
+  const stop = every(250, () => {
+    if (status === 'left' || status === 'error') return stop();
+    if (peer.disconnected && !peer.destroyed) peer.reconnect();
+    if (conn && performance.now() - lock.heard > SILENCE_MS) drop(conn);
+    if (!conn && player === 1 && peer.open && performance.now() - dialed > 3000) dial();
+    if (conn) lock.poll();
+  });
+  return {
+    lock,
+    /** Leaving on purpose: the other side is told at once. */
+    leave: () => {
+      if (conn?.open) conn.send({ bye: 1 } satisfies Message);
+      stop();
+      peer.destroy();
+    },
+  };
+}
+
+/**
+ * Calls `fn` every `ms` on a worker's clock: browsers slow a background tab's own timers to once a second or less,
+ * not a worker's. Falls back to a plain timer. Returns the stop.
+ */
+export function every(ms: number, fn: () => void): () => void {
+  try {
+    const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${ms})`], { type: 'text/javascript' }));
+    const worker = new Worker(url);
+    URL.revokeObjectURL(url);
+    worker.onmessage = fn;
+    return () => worker.terminate();
+  } catch {
+    const id = setInterval(fn, ms);
+    return () => clearInterval(id);
+  }
+}
+
+/** A cheap fingerprint of the game state, compared between the two sides of a network game. */
+export function stateHash(world: World): number {
+  let h = world.tick;
+  for (const e of world.entities.values()) h = (Math.imul(h, 31) + e.id * 7 + e.x * 3 + e.y * 5 + e.hp) | 0;
+  for (const p of world.players) h = (Math.imul(h, 31) + p.minerals + p.energy * 3) | 0;
+  return h;
 }
 
 const peerId = (room: string) => `xcraft-game-${room}`;
