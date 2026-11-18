@@ -1396,10 +1396,9 @@ function dropCorpse(root: Object3D): void {
  * normals and seen from inside (back faces), so only a fringe past the silhouette shows, brightest at the edge and
  * fading outwards. No outline or full-screen pass; added on top, never writing depth.
  */
-const haloStrength = { value: 0 };
 const HALO_PUSH = 0.22; // world units the shell stands out from the walls
 const haloMaterial = new ShaderMaterial({
-  uniforms: { strength: haloStrength, color: { value: new Color(0xffd9a0) } },
+  uniforms: { strength: { value: 0 }, color: { value: new Color(0xffd9a0) } },
   vertexShader: `#include <clipping_planes_pars_vertex>
 varying vec3 vNormal;
 void main() {
@@ -1428,10 +1427,48 @@ void main() {
   clipping: true,
 });
 
+const HALO_FADE = 0.13; // seconds to fade a hover halo in or out
+const smooth = (t: number) => t * t * (3 - 2 * t);
+
+/** One building's hover halo: its shell meshes, their own material (its own strength), and how far it has faded in. */
+type Halo = { id: number; model: Object3D; meshes: Mesh[]; strength: { value: number }; level: number };
+
+function makeHalo(id: number, model: Object3D): Halo {
+  const strength = { value: 0 };
+  const base = haloMaterial.clone();
+  base.uniforms.strength = strength;
+  base.uniforms.color = haloMaterial.uniforms.color;
+  const pairs: [Mesh, Mesh][] = [];
+  model.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh || (m as SkinnedMesh).isSkinnedMesh || m.userData.noPick || !m.geometry.attributes.position) return;
+    // A building being fabricated (Z) is cut by a plane: the halo is cut with it.
+    const planes = (Array.isArray(m.material) ? m.material[0] : m.material)?.clippingPlanes;
+    const material = planes?.length ? Object.assign(base.clone(), { clippingPlanes: planes }) : base;
+    if (material !== base) Object.assign(material.uniforms, { strength, color: base.uniforms.color });
+    const halo = new Mesh(haloShape(m.geometry), material);
+    halo.userData.noPick = true;
+    halo.renderOrder = 2;
+    halo.layers.mask = m.layers.mask;
+    pairs.push([m, halo]);
+  });
+  // Children of their mesh, so they follow it and hide with it; added after the walk, which they would join.
+  for (const [m, halo] of pairs) m.add(halo);
+  return { id, model, meshes: pairs.map(([, h]) => h), strength, level: 0 };
+}
+
+function dropHalo(h: Halo): void {
+  const materials = new Set(h.meshes.map((m) => m.material as Material));
+  for (const m of h.meshes) m.removeFromParent();
+  for (const m of materials) m.dispose();
+}
+
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
-  /** The building wearing the hover halo, and the halo meshes laid over its own. */
-  private halo: { id: number; model: Object3D; meshes: Mesh[] } | null = null;
+  /** The building wearing the hover halo, and the one whose halo is fading out (see glow). */
+  private halo: Halo | null = null;
+  private fading: Halo | null = null;
+  private glowAt = 0;
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
   /** Death bursts: a few dark drops for the living, sparks for machines. */
@@ -1458,38 +1495,38 @@ export class EntityRenderer {
     return [...this.views.values()].map((v) => v.root);
   }
 
-  /** The hover halo on this building (null: none), one at a time; its pulse follows the clock. */
+  /** The hover halo on this building (null: none); its pulse follows the clock. It fades in and out over HALO_FADE,
+   * so moving from one building to the next fades the old one out while the new one comes in: two at most. */
   glow(id: number | null, now: number): void {
+    const dt = Math.min(0.1, Math.max(0, (now - this.glowAt) / 1000));
+    this.glowAt = now;
     const v = id === null ? undefined : this.views.get(id);
-    if (this.halo && (this.halo.id !== id || this.halo.model !== v?.model)) {
-      for (const m of this.halo.meshes) {
-        m.removeFromParent();
-        if (m.material !== haloMaterial) (m.material as Material).dispose();
-      }
+    const same = (h: Halo | null) => !!h && h.id === id && h.model === v?.model;
+    if (this.halo && !same(this.halo)) {
+      if (this.fading) dropHalo(this.fading);
+      this.fading = this.halo;
       this.halo = null;
     }
-    if (!v) return;
-    if (!this.halo) {
-      const pairs: [Mesh, Mesh][] = [];
-      v.model.traverse((o) => {
-        const m = o as Mesh;
-        if (!m.isMesh || (m as SkinnedMesh).isSkinnedMesh || m.userData.noPick || !m.geometry.attributes.position) return;
-        // A building being fabricated (Z) is cut by a plane: the halo is cut with it.
-        const planes = (Array.isArray(m.material) ? m.material[0] : m.material)?.clippingPlanes;
-        const material = planes?.length ? Object.assign(haloMaterial.clone(), { clippingPlanes: planes }) : haloMaterial;
-        if (material !== haloMaterial) (material as ShaderMaterial).uniforms.strength = haloStrength;
-        const halo = new Mesh(haloShape(m.geometry), material);
-        halo.userData.noPick = true;
-        halo.renderOrder = 2;
-        halo.layers.mask = m.layers.mask;
-        pairs.push([m, halo]);
-      });
-      // Children of their mesh, so they follow it and hide with it; added after the walk, which they would join.
-      for (const [m, halo] of pairs) m.add(halo);
-      this.halo = { id: id!, model: v.model, meshes: pairs.map(([, h]) => h) };
+    if (v && !this.halo) {
+      // Back onto the one fading out: it comes back from where it was.
+      if (same(this.fading)) [this.halo, this.fading] = [this.fading, null];
+      else this.halo = makeHalo(id!, v.model);
     }
     // Gentle: between 0.7 and 1.3 of its strength, once a second.
-    haloStrength.value = 0.3 * (1 + 0.3 * Math.sin(now / 1000 * Math.PI * 2));
+    const pulse = 0.3 * (1 + 0.3 * Math.sin(now / 1000 * Math.PI * 2));
+    const step = dt / HALO_FADE;
+    if (this.halo) {
+      this.halo.level = Math.min(1, this.halo.level + step);
+      this.halo.strength.value = pulse * smooth(this.halo.level);
+    }
+    if (this.fading) {
+      this.fading.level -= step;
+      this.fading.strength.value = pulse * smooth(Math.max(0, this.fading.level));
+      if (this.fading.level <= 0) {
+        dropHalo(this.fading);
+        this.fading = null;
+      }
+    }
   }
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {

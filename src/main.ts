@@ -1251,9 +1251,9 @@ function start(): void {
     if (picked.some((id) => !lastPicked.has(id))) answer('ack');
     lastPicked = new Set(picked);
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
-    // The hover halo: a building in sight under the mouse (none on a touch screen, which has no hover).
+    // The hover halo: a building in sight under the mouse, not already selected (none on a touch screen, which has no hover).
     const hovered = input.hovered;
-    units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
+    units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && !input.selected.has(hovered.id) && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
     lap('units');
     hud.update();
     lap('hud');
