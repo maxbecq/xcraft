@@ -212,6 +212,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'impulsion') {
     for (const t of near((t) => !flies(t))) t.held = Math.max(t.held, ticks(ab.duration));
   } else if (name === 'atterrissage') {
+    // Taken for a while (Soumission, Canon IEM): it may not settle and train for its holder.
+    if (e.charm || e.seizedLeft) {
+      this.say(e.owner, 'Pas tant qu’elle est prise.');
+      return true;
+    }
     const size = (DEFS.casernevolante as BuildingDef).size;
     const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
     if (!this.canPlace('casernevolante', tx, ty, e.owner)) {
@@ -253,6 +258,10 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
   } else if (name === 'enraciner') {
     // Back into its own form at the point, where the ground allows; it fights again a few seconds later.
+    if (e.charm || e.seizedLeft) {
+      this.say(e.owner, 'Pas tant qu’elle est prise.');
+      return true;
+    }
     const into = e.type.replace(/mob$/, '');
     const size = (DEFS[into] as BuildingDef).size;
     const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
@@ -288,12 +297,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
   } else if (name === 'soumission') {
     // The enemy unit nearest the point (not a god, not a worker) changes side for a while.
-    const t = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).unique && !(t.def as UnitDef).worker && t.charm === 0)[0];
+    const t = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).unique && !(t.def as UnitDef).worker && t.charm === 0 && !t.seizedLeft)[0];
     if (!t) return false;
     t.charmOwner = t.owner;
-    t.owner = e.owner;
     t.charm = ticks(ab.duration);
-    this.setOrder(t, null);
+    this.turn(t, e.owner);
   } else if (name === 'voyage') {
     this.place(e, x, y);
   } else if (name === 'foudre') {
@@ -456,13 +464,12 @@ export function centreK(this: World, b: Entity, kind: string, x: number, y: numb
     [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && ok(t) && dist(t.x, t.y, x, y) <= toFp(ab.radius!)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
   if (kind === 'canoniem') {
     if (b.iemCd > 0) return void this.say(b.owner, 'Canon IEM en recharge.');
-    const t = near((t) => this.hostile(t.owner, b.owner) && !!(t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && this.sees(b.owner, t) && !t.seizedLeft);
+    const t = near((t) => this.hostile(t.owner, b.owner) && !!(t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && this.sees(b.owner, t) && !t.seizedLeft && !t.charm);
     if (!t) return void this.say(b.owner, 'Aucune machine ennemie visée.');
     t.seizedFrom = t.owner;
-    t.owner = b.owner;
     t.seizedBy = b.id;
     t.seizedLeft = ticks(ab.duration);
-    this.setOrder(t, null);
+    this.turn(t, b.owner);
     b.iemCd = ticks(ab.cooldown);
     this.casts.push({ kind, x: t.x, y: t.y });
     return;
@@ -478,10 +485,25 @@ export function centreK(this: World, b: Entity, kind: string, x: number, y: numb
 
 /** A machine taken by the Canon IEM goes back to its player. */
 export function unseize(this: World, e: Entity): void {
-  e.owner = e.seizedFrom;
   e.seizedBy = 0;
   e.seizedLeft = 0;
+  this.turn(e, e.seizedFrom);
+}
+
+/**
+ * A unit changing side (Soumission, Canon IEM, and back): its orders and queued orders are dropped, what it carries
+ * gets out, and the units attacking it let it go.
+ */
+export function turn(this: World, e: Entity, owner: number): void {
+  e.owner = owner;
+  e.next = [];
   this.setOrder(e, null);
+  for (const u of this.entities.values()) {
+    if (u.inside === e.id) this.leave(u);
+    const o = u.order;
+    if (o?.kind === 'attackMove' && o.target === e.id) o.target = 0;
+    else if (o?.kind === 'attack' && o.target === e.id) this.setOrder(u, null);
+  }
 }
 
 /** A unit's abilities: its own, and those its Z weapon brings (Accumulateur). */

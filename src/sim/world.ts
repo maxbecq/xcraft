@@ -395,10 +395,7 @@ export class World {
       if (e.swarm > 0) e.swarm--;
       if (e.statue > 0 && --e.statue === 0) e.speed = this.baseSpeed(e);
       if (e.chill > 0 && --e.chill === 0 && e.boost === 0) e.speed = this.baseSpeed(e);
-      if (e.charm > 0 && --e.charm === 0) {
-        e.owner = e.charmOwner;
-        this.setOrder(e, null);
-      }
+      if (e.charm > 0 && --e.charm === 0) this.turn(e, e.charmOwner);
       // Once a second, staggered: Osiris's putrid aura and swarm, the Fontaine du Nil.
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
@@ -472,9 +469,11 @@ export class World {
     this.corpses = this.corpses.filter((c) => this.tick - c.tick < ticks(20));
     for (const e of [...this.entities.values()]) {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
-      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner, air: flies(e) });
+      // A unit taken for a while (Soumission, Canon IEM) dies its own player's.
+      const owner = e.charm ? e.charmOwner : e.seizedLeft ? e.seizedFrom : e.owner;
+      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e) });
       // Living units leave a body an Alchimiste can raise for a while.
-      if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner: e.owner, type: e.type });
+      if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner, type: e.type });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
       if (e.def.kind === 'building' && e.lastHitBy >= 0 && this.hostile(e.lastHitBy, e.owner) && this.level(e.lastHitBy, 'pillage')) {
         const share = BALANCE.rules.upgrades.pillageShare;
