@@ -57,7 +57,7 @@ export class Hud {
   private readonly panel = el('div', 'hud-panel');
   /** Selection text, beside the live portrait. */
   private readonly details = el('div', 'details');
-  private readonly portrait = new Portrait();
+  readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   private readonly toasts = el('div', 'hud-toasts');
   /** Where the last attack alert happened (tiles): Space or a click on its message goes there. */

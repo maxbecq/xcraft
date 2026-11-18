@@ -625,7 +625,9 @@ const ready = Promise.all([
 ]);
 ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {
-  ready.then(start);
+  // Every portrait the match can show is readied behind the loading screen (render/portrait.ts).
+  const portraits = world.players.flatMap((p, i) => shown.filter((t) => (!('faction' in DEFS[t]) ? i === 0 : DEFS[t].faction === p.faction)).map((t): [string, number] => [t, 'faction' in DEFS[t] ? i : -1]));
+  ready.then(() => hud.portrait.prewarm(portraits).catch(() => {})).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();

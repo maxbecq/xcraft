@@ -1,4 +1,4 @@
-import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
+import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, Mesh, PerspectiveCamera, Scene, Texture, Vector3, WebGLRenderer } from 'three';
 import { preview } from './units';
 
 /**
@@ -49,6 +49,33 @@ export class Portrait {
     this.camera.position.copy(focus).add(new Vector3(0, unit ? 0.05 * size.y : reach * 0.45, 1).normalize().multiplyScalar(dist));
     this.camera.lookAt(focus);
     this.holder.rotation.y = unit ? 0.35 : 0.8;
+  }
+
+  /**
+   * Readies the portraits of these (type, owner) pairs behind the loading screen: the portrait's own WebGL
+   * context, its shader programs (compiled side by side where the browser can) and its textures. Without it the
+   * first click on a type froze the game for a third to half a second while its portrait's programs were built.
+   */
+  async prewarm(entries: [string, number][]): Promise<void> {
+    this.renderer ??= new WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    // A scene of its own, lit as the portrait's (the same programs), so nothing of it ever shows.
+    const warm = new Scene();
+    warm.add(...this.scene.children.filter((o) => o !== this.holder).map((o) => o.clone()));
+    for (const [type, owner] of entries) warm.add(preview(type, owner).object);
+    warm.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) this.renderer!.initTexture(v);
+    });
+    try {
+      await this.renderer.compileAsync(warm, this.camera);
+      // A first draw through an empty scissor: the programs' first use (uniforms, link check) is paid now too.
+      this.renderer.setScissorTest(true);
+      this.renderer.setScissor(0, 0, 0, 0);
+      this.renderer.render(warm, this.camera);
+      this.renderer.setScissorTest(false);
+    } catch {
+      // a lost context: the first click builds them as before
+    }
   }
 
   /** Draws a frame when the portrait is on screen. */
