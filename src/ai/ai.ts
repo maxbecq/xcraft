@@ -218,7 +218,7 @@ export class AI {
     // d'optimisation, Centre K) is kept from everything else.
     const zTech = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
     const wantSupreme = zTech === 'supreme' && !w.lacks(this.player, 'supreme');
-    const reserve = zTech && !w.lacks(this.player, zTech) ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
+    const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
     // research on a production building (Isdaris Portail) waits for spare resources instead.
@@ -435,12 +435,43 @@ export class AI {
       };
       const has = (bit: number) => mine.some((u) => u.support & bit);
       if (!(enemyCloaks && !has(KIT.detection) && kit('kitdetection', socles[0])) && !(!has(KIT.balise) && kit('kitbalise', socles.find((u) => u.tier > 1) ?? socles[0]))) {
-        kit('kitreparateur', socles.find((u) => u.tier > 1 && !(u.support & KIT.reparateur)));
+        // Spare energy (nothing else takes it late on): Auto-réparateur on any socle, then Invisibilité.
+        if (!kit('kitreparateur', socles.find((u) => (u.tier > 1 || energy > 600) && !(u.support & KIT.reparateur))) && energy > 600) kit('kitinvisibilite', socles.find((u) => !(u.support & KIT.invisibilite)));
       }
       if (!centrek.iemCd && w.level(this.player, 'canoniem')) {
         const prey = [...w.entities.values()].filter((t) => w.hostile(t.owner, this.player) && t.def.kind === 'unit' && (t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && !t.seizedLeft && w.sees(this.player, t))
           .sort((a, b) => (DEFS[b.type] as UnitDef).cost.minerals + (DEFS[b.type] as UnitDef).cost.energy - (DEFS[a.type] as UnitDef).cost.minerals - (DEFS[a.type] as UnitDef).cost.energy || a.id - b.id)[0];
         if (prey) out.push({ player: this.player, kind: 'ability', ids: [centrek.id], name: 'canoniem', x: prey.x, y: prey.y });
+      }
+    }
+
+    // Z Barge: one, once researched, kept out of the waves; it ferries the ground units of a leaving wave that stand
+    // by it, flies them to the target and lets them out 7 tiles short, then comes back.
+    const barge = mine.find((u) => u.type === 'barge' && u.hp > 0);
+    const deck = buildings.find((b) => (b.def as BuildingDef).trains?.includes('barge') && b.buildLeft === 0 && b.queue.length === 0);
+    if (!barge && deck && minute > 14 && !w.lacks(this.player, 'barge') && !buildings.some((b) => b.queue.includes('barge')) && minerals - keep >= (DEFS.barge as UnitDef).cost.minerals + 100) {
+      out.push({ player: this.player, kind: 'train', ids: [deck.id], type: 'barge' });
+      minerals -= (DEFS.barge as UnitDef).cost.minerals;
+    }
+    if (barge) {
+      this.wave.delete(barge.id);
+      const aboard = mine.filter((u) => u.inside === barge.id);
+      const goal = this.enemyTarget(home);
+      if (aboard.length && goal) {
+        if (dist(barge.x, barge.y, goal.x, goal.y) > 7 * FP) out.push({ player: this.player, kind: 'move', ids: [barge.id], x: goal.x, y: goal.y });
+        else out.push({ player: this.player, kind: 'unload', ids: [barge.id] });
+      } else if (dist(barge.x, barge.y, rally.x, rally.y) > 5 * FP) {
+        if (barge.order?.kind !== 'move') out.push({ player: this.player, kind: 'move', ids: [barge.id], x: rally.x, y: rally.y });
+      } else if (goal) {
+        let room = w.room(barge) - w.load(barge);
+        const riders: number[] = [];
+        for (const id of this.wave) {
+          const u = w.entities.get(id);
+          if (!u || u.inside || flies(u) || u.order?.kind === 'enter' || dist(u.x, u.y, barge.x, barge.y) > 6 * FP || (u.def as UnitDef).supply > room) continue;
+          room -= (u.def as UnitDef).supply;
+          riders.push(u.id);
+        }
+        if (riders.length) out.push({ player: this.player, kind: 'smart', ids: riders, x: barge.x, y: barge.y, target: barge.id });
       }
     }
 
