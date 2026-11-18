@@ -69,6 +69,9 @@ export interface Entity {
   ty: number;
   buildLeft: number;
   queue: string[];
+  /** Z socle: its tier (1 to 3, Z.doc), and ticks left while it evolves into the next, standing still. */
+  tier: number;
+  evolving: number;
   /** Z add-on (Plate-forme, Tourelle): the Pod that raised it, or 0. */
   host: number;
   /** Z Plate-forme: the weapon chosen for each socle of the queue (key of WEAPONS, '' for the machine gun). */
@@ -166,6 +169,8 @@ export type Command =
   | { player: number; kind: 'patrol'; ids: number[]; x: number; y: number; queue?: boolean }
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number; queue?: boolean }
   | { player: number; kind: 'train'; ids: number[]; type: string; weapon?: string }
+  /** Z: each selected socle evolves into its next tier, in place (paid per socle). */
+  | { player: number; kind: 'evolve'; ids: number[] }
   | { player: number; kind: 'cancel'; ids: number[] }
   /** Every unit in the given bunkers walks out. */
   | { player: number; kind: 'unload'; ids: number[] }
@@ -293,7 +298,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, trainLeft: 0, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -366,6 +371,7 @@ export class World {
       // Once a second, staggered: Osiris's putrid aura and swarm, the Fontaine du Nil.
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
+      if (e.evolving > 0 && --e.evolving === 0) this.evolved(e);
       this.regenerate(e);
     }
     this.revive();

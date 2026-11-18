@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type UpgradeLine, weaponAt } from '../data';
+import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type TierStats, type UpgradeLine, weaponAt } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -50,7 +50,26 @@ export function armorBonus(this: World, t: Entity): number {
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
   if (faction === 'dieux') for (const g of this.entities.values()) if (g.type === 'athena' && g.owner === t.owner && g.hp > 0 && dist(g.x, g.y, t.x, t.y) <= toFp(A.radius[g.lvl - 1])) aura = Math.max(aura, A.armor[g.lvl - 1]);
+  // Z socles: the armour their tier adds (Z.doc).
+  if (t.tier > 1) bonus += d.tiers![t.tier - 2].armor - d.armor;
   return bonus + aura;
+}
+
+/** A Z socle's next tier, if it has one. */
+export function nextTier(this: World, e: Entity): TierStats | undefined {
+  return (e.def as UnitDef).tiers?.[e.tier - 1];
+}
+
+/** A Z socle done evolving: one tier up, with the hit points it gains (its wounds kept), its speed and armour. */
+export function evolved(this: World, e: Entity): void {
+  const next = this.nextTier(e)!;
+  const gain = next.hp - (e.tier > 1 ? (e.def as UnitDef).tiers![e.tier - 2].hp : (e.def as UnitDef).hp);
+  e.tier++;
+  e.maxHp += gain;
+  e.hp += gain;
+  e.speed = this.baseSpeed(e);
+  e.cooldown = 0;
+  this.say(e.owner, `Évolution terminée : ${e.def.name} T${e.tier}.`, 'done');
 }
 
 /** Extra range from research (Canons sciés: Auxiliaires; Trébuchet intégré: Ankylosaures against buildings). */
@@ -64,7 +83,7 @@ export function rangeBonus(this: World, e: Entity, t?: Entity): number {
 export function weapon(this: World, e: Entity): Attack | undefined {
   // Z socles: the weapon chosen at the Plate-forme, or the machine gun, as strong as the socle's level.
   const level = (e.def as UnitDef).weaponLevel;
-  if (level) return weaponAt(e.kit || 'mitrailleuse', level);
+  if (level) return weaponAt(e.kit || 'mitrailleuse', level + e.tier - 1);
   if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
   const a = (e.def as UnitDef | BuildingDef).attack;
   const lv = (e.def as UnitDef).levels;
@@ -82,7 +101,8 @@ function levelled(a: Attack, damage: number): Attack {
 /** Walking speed per tick out of any boost: a god's that of its level. */
 export function baseSpeed(this: World, e: Entity): number {
   const d = e.def as UnitDef;
-  return speedPerTick(d.levels ? d.levels.speed[e.lvl - 1] : d.speed);
+  // Z socles: the speed of their tier (Z.doc).
+  return speedPerTick(d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */

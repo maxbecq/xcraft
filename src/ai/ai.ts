@@ -293,8 +293,9 @@ export class AI {
     const researching = new Set<number>();
     for (const t of this.easy ? [] : (RESEARCH[p.faction] ?? [])) {
       if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
-      // Z: Attaque de proximité only serves the flame thrower.
+      // Z: Attaque de proximité only serves the flame thrower; the socles' tiers wait for the first weapon.
       if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
+      if ((DEFS[t] as UpgradeDef).level > 1 && /^r(quadripode|hexapode|coleoptere)$/.test((DEFS[t] as UpgradeDef).line) && !w.level(this.player, 'lanceroquettes')) continue;
       const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
       const cost = (DEFS[t] as UpgradeDef).cost;
       if (!host || minerals < cost.minerals + ((host.def as BuildingDef).trains?.length ? 300 : 0) || energy - researchReserve < cost.energy) continue;
@@ -373,6 +374,16 @@ export class AI {
       minerals -= cost.minerals;
       energy -= cost.energy;
       this.trained++;
+    }
+
+    // Z: socles resting at home evolve into their next tier once it is researched (Z.doc), when affordable.
+    for (const u of army) {
+      const next = w.nextTier(u);
+      if (!next || u.evolving || this.wave.has(u.id) || (u.order && u.order.kind !== 'move') || w.level(this.player, `r${u.type}`) <= u.tier) continue;
+      if (minerals - keep < next.cost.minerals || energy - unitReserve < next.cost.energy) continue;
+      out.push({ player: this.player, kind: 'evolve', ids: [u.id] });
+      minerals -= next.cost.minerals;
+      energy -= next.cost.energy;
     }
 
     // Dieux: the Porte summons the next god when its time has come; each god summons its troops, when affordable.

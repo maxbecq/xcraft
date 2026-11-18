@@ -74,8 +74,10 @@ export interface UnitDef {
   /** Units it can carry (Scarabée): they shoot from inside. */
   bunker?: number;
   /** Z socle: weapons (keys of WEAPONS) it can be built with, in place of the machine gun of `attack`. */
-  /** Z socle: the level of its weapon (Z.doc: Quadripode and Coléoptère T1 1, Hexapode T1 2). */
+  /** Z socle: the level of its weapon (Z.doc: Quadripode and Coléoptère T1 1, Hexapode T1 2), one more per tier. */
   weaponLevel?: number;
+  /** Z socle: what it becomes in the field, T2 then T3 (Z.doc), each unlocked by the next level of its research `r<type>`. */
+  tiers?: TierStats[];
   weapons?: string[];
   /** Dieux: a god that summons these units at its feet, through its own queue, while it stands still. */
   trains?: string[];
@@ -537,7 +539,7 @@ const BASE: Record<string, object> = {
   tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, faction: 'z', hotkey: 'T' },
   centresocles: {
     kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
-    researches: ['rquadripode', 'rhexapode', 'rcoleoptere'],
+    researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3'],
   },
   armement: {
     kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
@@ -547,10 +549,16 @@ const BASE: Record<string, object> = {
     kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
     researches: ['zproxi1', 'zproxi2', 'zproxi3', 'zdist1', 'zdist2', 'zdist3', 'zblindage1', 'zblindage2', 'zblindage3', 'titane', 'deploiement', 'sonderobuste', 'podsuperieur'],
   },
-  optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, faction: 'z', hotkey: 'O' },
+  optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, researches: ['optimisationp'], faction: 'z', hotkey: 'O' },
   rquadripode: research('Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
   rhexapode: research('Hexapode', 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
   rcoleoptere: research('Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
+  rquadripode2: tier('rquadripode', 'Quadripode', 2, 'Q'),
+  rquadripode3: tier('rquadripode', 'Quadripode', 3, 'Q'),
+  rhexapode2: tier('rhexapode', 'Hexapode', 2, 'H'),
+  rcoleoptere2: tier('rcoleoptere', 'Coléoptère', 2, 'L'),
+  rcoleoptere3: tier('rcoleoptere', 'Coléoptère', 3, 'L'),
+  optimisationp: research('Optimisation perfectionnée', 'P', 'Les socles évoluent 50 % plus vite.', undefined, 'z'),
   ...upgrades('zproxi', 'Attaque de proximité', 'P', undefined, 'z'),
   ...upgrades('zdist', 'Attaque à distance', 'D', undefined, 'z'),
   ...upgrades('zblindage', 'Blindage des socles', 'B', undefined, 'z'),
@@ -640,6 +648,11 @@ function research(name: string, hotkey: string, effect: string, requires?: Recor
   return { kind: 'upgrade', name, effect, line: '', level: 1, requires, faction, hotkey };
 }
 
+/** A Z socle research's next level (Z.doc): the socle may evolve into this tier in the field. */
+function tier(line: string, socle: string, level: number, hotkey: string): object {
+  return { kind: 'upgrade', name: `${socle} T${level}`, effect: `Les ${socle}s peuvent évoluer en T${level} sur le terrain.`, line, level, faction: 'z', hotkey };
+}
+
 /** An Isdaris extension (notice): built onto a major building, here researched there; unlocks units and research. */
 function extension(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
   return research(`Extension : ${name}`, hotkey, effect, requires, 'isdaris');
@@ -647,6 +660,15 @@ function extension(name: string, hotkey: string, effect: string, requires?: Reco
 /** An Isdaris research (notice). */
 function isd(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
   return research(name, hotkey, effect, requires, 'isdaris');
+}
+
+/** A Z socle's next tier: what evolving costs and takes, and its new hit points, armour and speed. */
+export interface TierStats {
+  cost: Cost;
+  buildTime: number;
+  hp: number;
+  armor: number;
+  speed: number;
 }
 
 /** Z weapons (Z.doc), chosen for a socle when it is built, in place of its machine gun: stats and cost in balance.json. */

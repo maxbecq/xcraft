@@ -188,6 +188,23 @@ export function apply(this: World, c: Command): void {
       p[c.sell === 'minerals' ? 'energy' : 'minerals'] += get;
       return;
     }
+    case 'evolve': {
+      // Z.doc: in the field, for a reduced price, standing still a few seconds; Optimisation perfectionnée speeds it up.
+      for (const e of units) {
+        const next = this.nextTier(e);
+        if (!next || e.evolving) continue;
+        if (this.level(c.player, `r${e.type}`) <= e.tier) {
+          this.say(c.player, `Requiert : ${(DEFS[`r${e.type}${e.tier + 1}`] as UpgradeDef).name}`);
+          continue;
+        }
+        if (!this.pay(c.player, next)) return;
+        const t = ticks(next.buildTime);
+        e.evolving = this.level(c.player, 'optimisationp') ? idiv(t * 100, 100 + BALANCE.rules.z.optimisationSpeedup) : t;
+        e.held = e.evolving;
+        this.setOrder(e, null);
+      }
+      return;
+    }
     case 'ability': {
       const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && b.abilityCd === 0);
       if (c.name && !named) {

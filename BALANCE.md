@@ -105,6 +105,8 @@ Champs ajoutés :
 
 Les socles Z (Quadripode, Hexapode, Coléoptère) se commandent à la Plate-forme avec leur arme, choisie une fois pour toutes (`Z.doc`) : la Mitrailleuse de leur fiche `units` (`attack`), gratuite, ou une arme de `weapons` qui la remplace : `attack` (mêmes champs que pour les unités) et `cost`, payé en plus du socle et rendu avec lui si on annule. Le Laser, le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; tous les socles les prennent, et le Drone de combat garde sa mitrailleuse.
 
+Les socles évoluent sur le terrain (`tiers` dans `units`, `Z.doc`) : T2 puis T3, chacun avec `cost`, `buildTime` (secondes d'évolution, le socle reste immobile), `hp`, `armor` et `speed` ; l'arme monte d'un niveau à chaque évolution. Chaque niveau se débloque par le niveau suivant de la recherche du socle au Centre de socles (`rquadripode2`, `rquadripode3`, `rhexapode2`, `rcoleoptere2`, `rcoleoptere3`) ; Optimisation perfectionnée (`optimisationp`) accélère les évolutions de `rules.z.optimisationSpeedup` %.
+
 Chaque arme a quatre niveaux (`levels`, `Z.doc`) : pour chacun, les dégâts contre le biologique léger (les dégâts du jeu) puis contre les machines (l'écart devient `vsMechanical`, bâtiments compris). Le niveau est celui du socle (`weaponLevel` dans `units` : Quadripode et Coléoptère 1, Hexapode 2). `range` (ou `ranges` par niveau pour le Lance-roquettes), `cooldown`, `air`, `splash` comme pour une attaque. `mitrailleuse` est l'arme gratuite des socles. Tous les dégâts sont multipliés par `rules.z.weaponDamage` % (86 : 14 → 12, 17 → 15), la réduction déjà appliquée aux socles. Le Lance-flammes garde la petite zone du jeu (`splash`) pour la « double attaque » de la fiche.
 
 ## Capacités (`abilities`)
@@ -122,7 +124,7 @@ Chaque arme a quatre niveaux (`levels`, `Z.doc`) : pour chacun, les dégâts con
 | `peauDeRoc` | portée et réduction de dégâts de Peau de roc |
 | `stimulantHp` | PV coûtés par le Stimulant |
 | `creepRepair` | PV rendus chaque seconde aux unités et bâtiments Z au sol sur leur creep (`Z.doc` : 1) |
-| `z` | camp Z (`Z.doc`) : `weaponDamage` (% des dégâts des armes de la fiche), `titaneArmor` (blindage des bâtiments par Blindage de titane), `deploiementSpeedup` (% de vitesse de construction par Déploiement rapide), `sondeRobusteHp` (PV des drones par Sonde robuste), `supremeSpeedup` (% de temps de production des drones gagné à l'Intelligence suprême) |
+| `z` | camp Z (`Z.doc`) : `optimisationSpeedup` (% de vitesse d'évolution des socles par Optimisation perfectionnée), `weaponDamage` (% des dégâts des armes de la fiche), `titaneArmor` (blindage des bâtiments par Blindage de titane), `deploiementSpeedup` (% de vitesse de construction par Déploiement rapide), `sondeRobusteHp` (PV des drones par Sonde robuste), `supremeSpeedup` (% de temps de production des drones gagné à l'Intelligence suprême) |
 | `upgrades.courroux` | Courroux du marteau (Thor) : multiplicateur de son prochain coup au corps à corps |
 | `upgrades.celerite` | Célérité naine : un Nain bondit vers l'ennemi à moins de `range` cases, vitesse ×`speed` pendant `seconds`, une fois toutes les `cooldown` secondes |
 

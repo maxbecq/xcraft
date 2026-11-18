@@ -81,6 +81,45 @@ describe('Z', () => {
     expect(w.trainTime(ic, 'drone')).toBe(ticks(15));
   });
 
+  it('a socle evolves in the field into its next tier once researched: paid, standing still, stronger', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 1000;
+    p.energy = 1000;
+    const quad = w.spawn('quadripode', 0, 20 * FP, 20 * FP);
+    quad.hp = 100;
+    const evolve = () => w.step([{ player: 0, kind: 'evolve', ids: [quad.id] }]);
+    evolve();
+    expect(quad.evolving).toBe(0); // T2 not researched
+    p.upgrades.rquadripode = 2;
+    evolve();
+    expect(p.minerals).toBe(1000 - 85);
+    expect(quad.held).toBeGreaterThan(0);
+    run(w, 9);
+    expect(quad.tier).toBe(2);
+    expect(quad.maxHp).toBe(180);
+    expect(quad.hp).toBeGreaterThanOrEqual(140); // its 40 hp of wounds kept (and some repair)
+    expect(w.weapon(quad)!.damage).toBe(15); // machine gun N2
+    evolve();
+    expect(quad.evolving).toBe(0); // T3 not researched
+    // Optimisation perfectionnée: 50 % faster.
+    p.upgrades.rquadripode = 3;
+    p.upgrades.optimisationp = 1;
+    evolve();
+    expect(quad.evolving).toBe(Math.floor((ticks(10) * 100) / 150) - 1); // counted down once in the step
+    run(w, 7);
+    expect(quad.tier).toBe(3);
+    evolve();
+    expect(quad.evolving).toBe(0); // no T4
+    const hexa = w.spawn('hexapode', 0, 22 * FP, 20 * FP);
+    p.upgrades.rhexapode = 2;
+    w.step([{ player: 0, kind: 'evolve', ids: [hexa.id] }]);
+    run(w, 8);
+    expect(hexa.tier).toBe(2);
+    expect(w.armorBonus(hexa)).toBe(1); // armour 1 -> 2
+    expect(w.weapon(hexa)!.damage).toBe(16); // N3: 19
+  });
+
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

@@ -981,6 +981,8 @@ function ghost(body: Object3D): void {
 interface View {
   /** Entity type it was built for: a building turned into another gets a new view. */
   type: string;
+  /** Z socle: the tier it is drawn at (each one a little larger). */
+  tier?: number;
   /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
   hp?: number;
   flash?: { left: number; saved: [Mesh, Material | Material[]][] };
@@ -1695,6 +1697,11 @@ export class EntityRenderer {
         this.views.delete(e.id);
       }
       const v = this.views.get(e.id) ?? this.create(e, player);
+      if (e.tier !== (v.tier ?? 1)) {
+        // Z socle evolved: 12 % larger a tier.
+        v.model.children[0]?.scale.multiplyScalar((1 + 0.12 * (e.tier - 1)) / (1 + 0.12 * ((v.tier ?? 1) - 1)));
+        v.tier = e.tier;
+      }
       // In a bunker: not drawn (the Fortin shows its occupants in its command card).
       v.root.visible = !e.inside;
       if (e.inside) continue;

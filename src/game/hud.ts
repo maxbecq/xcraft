@@ -556,7 +556,7 @@ export class Hud {
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
-    if ((e.def as UnitDef).weapons) html += `<div class="info">Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse'}</div>`;
+    if ((e.def as UnitDef).weapons) html += `<div class="info">T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse'}</div>`;
     if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
     this.portrait.render();
@@ -649,6 +649,15 @@ export class Hud {
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
+      }
+      // Z socles: evolve into the next tier, in the field.
+      const evolvers = units.filter((u) => this.world.nextTier(u) && !u.evolving);
+      if (evolvers.length) {
+        const u = evolvers[0];
+        const next = this.world.nextTier(u)!;
+        const research = DEFS[`r${u.type}${u.tier + 1}`] as UpgradeDef;
+        const reason = this.world.level(this.player, `r${u.type}`) <= u.tier ? `Requiert : ${research.name}` : undefined;
+        list.push({ label: `Évoluer en T${u.tier + 1}`, key: 'E', cost: next.cost, reason, action: () => cmd({ kind: 'evolve', ids: evolvers.filter((o) => o.tier === u.tier).map((o) => o.id) }) });
       }
       // Dieux: the gods summon their troops (in the least busy of the selected ones that can).
       for (const t of new Set(units.flatMap((u) => (u.def as UnitDef).trains ?? []))) {
