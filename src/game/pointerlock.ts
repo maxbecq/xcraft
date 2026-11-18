@@ -81,7 +81,10 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
   });
   // The map picks what lies under the cursor a frame after a move (and animates its brackets): redraw then too, not
   // only at the next move.
-  new MutationObserver(() => locked() && over === canvas && draw(canvas)).observe(canvas, { attributes: true, attributeFilter: ['style'] });
+  // So does a mode set on the page (body.targeting after A: the crosshair), whatever lies under the cursor.
+  const restyle = new MutationObserver(() => locked() && over && draw(over));
+  restyle.observe(canvas, { attributes: true, attributeFilter: ['style'] });
+  restyle.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
   /** The cursor the page asks for at the target (a custom image with its hot spot, else a plain arrow). */
   const draw = (target: Element | null) => {
@@ -91,6 +94,7 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
     // Some browsers give it unquoted.
     const m = /url\("((?:[^"\\]|\\.)*)"\)\s*(\d+)?\s*(\d+)?/.exec(css) ?? /url\(([^\s"]+)\)\s*(\d+)?\s*(\d+)?/.exec(css);
     const [img, hx, hy] = m ? [m[1], Number(m[2] ?? 0), Number(m[3] ?? 0)] : [ARROW, 1, 1];
+    hot = [hx, hy];
     if (cursor.dataset.img !== img) {
       cursor.dataset.img = img;
       cursor.style.backgroundImage = `url("${img}")`;
@@ -101,7 +105,28 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
       };
       probe.src = img.replace(/\\(.)/g, '$1');
     }
-    cursor.style.transform = `translate(${x - hx}px, ${y - hy}px)`;
+    place();
+  };
+  /** The drawn cursor's hot spot, and its move: a transform only (composited, no layout), done at each mouse move. */
+  let hot = [1, 1];
+  const place = () => (cursor.style.transform = `translate(${x - hot[0]}px, ${y - hot[1]}px)`);
+
+  /** The moves since the last frame, replayed to the page once per frame (see replay). */
+  let moved: MouseEvent | null = null;
+  const flush = () => {
+    const src = moved;
+    moved = null;
+    if (!src || !locked()) return;
+    const target = pressed instanceof HTMLCanvasElement ? pressed : (document.elementFromPoint(x, y) ?? document.body);
+    if (target !== over) {
+      if (over) fire('pointerout', over, src);
+      fire('pointerover', target, src);
+      over = target;
+      hover(target);
+      // Its cursor style is read when it changes hands (the map's own changes come through the observer above).
+      draw(target);
+    }
+    fire('pointermove', target, src);
   };
 
   const fire = (type: string, target: Element, src: MouseEvent) => {
@@ -139,19 +164,21 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, sp
       const g = scale.value * speed() * despike(Math.hypot(dx, dy) * scale.value, recent);
       x = Math.min(window.innerWidth - 1, Math.max(0, x + dx * g));
       y = Math.min(window.innerHeight - 1, Math.max(0, y + dy * g));
+      // The cursor moves at once; what lies under it (a hit test, the page's hover, its cursor style: work that can
+      // force a layout) waits for the next frame, once however many moves came (Safari and Firefox send them at the
+      // mouse's own rate, up to 1000 a second).
+      place();
+      if (!moved) requestAnimationFrame(flush);
+      moved = src;
+      return;
     }
+    // The browser's own pointer events and clicks are swallowed only: the mouse ones are replayed.
+    if (e.type !== 'mousedown' && e.type !== 'mouseup' && e.type !== 'wheel') return;
+    // A press or a release lands where the cursor is now: the moves waiting are replayed first.
+    flush();
     // A press on a canvas (the map, the minimap) keeps its moves and release there, as pointer capture would.
     const target = pressed instanceof HTMLCanvasElement ? pressed : (document.elementFromPoint(x, y) ?? document.body);
-    if (e.type === 'mousemove') {
-      if (target !== over) {
-        if (over) fire('pointerout', over, src);
-        fire('pointerover', target, src);
-        over = target;
-        hover(target);
-      }
-      fire('pointermove', target, src);
-      draw(target);
-    } else if (e.type === 'mousedown') {
+    if (e.type === 'mousedown') {
       pressed = target;
       fire('pointerdown', target, src);
       fire('mousedown', target, src);
