@@ -200,9 +200,14 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     onStatus('go', next);
   };
   let dialed = -Infinity;
+  /** The guest's call under way; when a guest first knocked at the host without getting in; the network blamed once. */
+  let calling: DataConnection | null = null;
+  let knocked = 0;
+  let blamed = false;
   const dial = () => {
     dialed = performance.now();
-    attach(peer.connect(peerId(room), { reliable: true, serialization: 'json' }));
+    if (calling && calling !== conn) calling.close();
+    attach((calling = peer.connect(peerId(room), { reliable: true, serialization: 'json' })));
   };
   const drop = (c: DataConnection) => {
     if (c !== conn) return;
@@ -211,6 +216,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     set('reconnecting');
   };
   const attach = (c: DataConnection) => {
+    if (player === 0 && them === null) knocked ||= performance.now();
     c.on('open', () => c.send({ hi: me, v: VERSION } satisfies Message));
     c.on('data', (d) => {
       const m = d as Message;
@@ -259,6 +265,11 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     if (peer.disconnected && !peer.destroyed) peer.reconnect();
     if (conn && performance.now() - lock.heard > SILENCE_MS) drop(conn);
     if (!conn && player === 1 && peer.open && performance.now() - dialed > 3000) dial();
+    // Never connected after a while of calling, or of a guest knocking: the network is in the way.
+    if (them === null && !blamed && ((player === 1 && peer.open && performance.now() - began > DIRECT_MS) || (player === 0 && knocked && performance.now() - knocked > DIRECT_MS))) {
+      blamed = true;
+      set(player === 0 ? 'waiting' : 'connecting', NO_DIRECT);
+    }
     if (conn) lock.poll();
   });
   return {
@@ -333,11 +344,21 @@ export interface LobbySetup {
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match. */
 type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: 1 } | { v: string };
-export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'error';
+/** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
+export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
+/**
+ * The introduction server only passes the two browsers each other's addresses; they then connect directly. Some
+ * networks (a strict firewall, a box that will not loop back) never let that through, and the browser just keeps
+ * checking without ever failing: said after this long.
+ */
+const DIRECT_MS = 15_000;
+export const NO_DIRECT = "La connexion directe entre vos deux navigateurs n'aboutit pas : un réseau ou un pare-feu la bloque sans doute. Essayez un autre réseau (le partage de connexion d'un téléphone, par exemple), puis Réessayer.";
+const NO_SERVER = 'Serveur de mise en relation injoignable, nouvel essai…';
 
 /**
  * The waiting room, on the title screen: the host opens it, the guest comes in by the link or the code. The guest
- * may arrive before the room is open, or come back after a cut: it keeps calling. The host takes in one guest at a time.
+ * may arrive before the room is open, or come back after a cut: it keeps calling, a call that does not open within
+ * 8 s is dropped and made again. The host takes in one guest at a time.
  */
 export function openLobby(
   room: string,
@@ -345,12 +366,21 @@ export function openLobby(
   on: { status: (s: LobbyStatus, detail?: string) => void; message: (m: LobbyMessage) => void },
 ): { send: (m: LobbyMessage) => void; close: () => void } {
   let conn: DataConnection | null = null;
+  /** The guest's call under way, and when it was made; the host's: when a guest last knocked without getting in. */
+  let calling: DataConnection | null = null;
+  let calledAt = 0;
+  let knocked = 0;
+  let said = false;
   const peer = host ? new Peer(`xcraft-lobby-${room}`) : new Peer();
   const began = performance.now();
   const attach = (c: DataConnection) => {
+    if (host && !conn) knocked ||= performance.now();
     c.on('open', () => {
       if (conn?.open && conn !== c) return c.close(); // the room is full
       conn = c;
+      calling = null;
+      knocked = 0;
+      said = false;
       c.send({ v: VERSION });
       on.status('here');
     });
@@ -374,22 +404,36 @@ export function openLobby(
     c.on('error', gone);
   };
   const dial = () => {
-    if (conn || peer.destroyed) return;
-    attach(peer.connect(`xcraft-lobby-${room}`, { reliable: true, serialization: 'json' }));
+    if (conn || peer.destroyed || !peer.open) return;
+    calling?.close();
+    calledAt = performance.now();
+    attach((calling = peer.connect(`xcraft-lobby-${room}`, { reliable: true, serialization: 'json' })));
   };
   peer.on('error', (e) => {
-    if (e.type === 'unavailable-id') on.status('error', 'Ce code de partie est déjà pris : recommencez.');
+    if (e.type === 'unavailable-id') on.status('error', 'Ce code de partie est encore pris (une ancienne page ?) : Réessayer en ouvre un autre.');
     else if (e.type === 'browser-incompatible') on.status('error', 'Ce navigateur ne permet pas le jeu en ligne.');
     else if (e.type === 'peer-unavailable' && performance.now() - began > 60_000) on.status('error', 'Partie introuvable : vérifiez le lien ou le code.');
-    else if (e.type === 'peer-unavailable') setTimeout(dial, 2000);
+    else if (e.type === 'peer-unavailable') {
+      calling = null;
+      setTimeout(dial, 2000);
+    } else if (!conn && ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(e.type)) on.status('trouble', NO_SERVER);
   });
   if (host) {
     peer.on('open', () => on.status('waiting'));
     peer.on('connection', attach);
   } else peer.on('open', dial);
   const watch = setInterval(() => {
-    if (peer.disconnected && !peer.destroyed) peer.reconnect();
-  }, 2000);
+    if (peer.destroyed) return;
+    if (peer.disconnected) peer.reconnect();
+    if (conn) return;
+    const now = performance.now();
+    if (!host && calling && now - calledAt > 8000) dial();
+    // Called, or knocked, for a while without a connection: the network is in the way.
+    if (!said && ((host && knocked && now - knocked > DIRECT_MS) || (!host && calling && now - began > DIRECT_MS))) {
+      said = true;
+      on.status('trouble', NO_DIRECT);
+    }
+  }, 1000);
   return {
     send: (m) => conn?.open && conn.send(m),
     close: () => {

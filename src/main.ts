@@ -27,7 +27,7 @@ import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } fr
 import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
-import { connect, every, newRoom, openLobby, readRoom, stateHash, type LobbySetup, type NetStatus } from './net';
+import { connect, every, newRoom, NO_DIRECT, openLobby, readRoom, stateHash, type LobbySetup, type NetStatus } from './net';
 import { countMatch, countTitle, SKIPPED } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
@@ -224,8 +224,10 @@ function showNet(status: NetStatus, detail?: string): void {
   if (status === 'again' || status === 'go' || (status === 'left' && world.winner !== null)) return rematch(status, detail);
   if (status === 'left') return endNet('Victoire par abandon', detail ?? "L'adversaire a quitté la partie.");
   netBanner.hidden = false;
-  if (status === 'waiting') netBanner.innerHTML = '<h2>En attente de votre adversaire…</h2><button data-n="quit">Annuler</button>';
-  else if (status === 'connecting') netBanner.innerHTML = `<h2>Connexion à la partie…</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Annuler</button>`;
+  // The network in the way: a fresh try may go through (another network, the friend's page reloaded).
+  const retry = detail === NO_DIRECT ? '<button data-n="retry">Réessayer</button>' : '';
+  if (status === 'waiting') netBanner.innerHTML = `<h2>En attente de votre adversaire…</h2>${detail ? `<p>${detail}</p>` : ''}${retry}<button data-n="quit">Annuler</button>`;
+  else if (status === 'connecting') netBanner.innerHTML = `<h2>Connexion à la partie…</h2>${detail ? `<p>${detail}</p>` : ''}${retry}<button data-n="quit">Annuler</button>`;
   else netBanner.innerHTML = `<h2>Connexion impossible</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Menu principal</button>`;
 }
 /** After the end: the other side wants a rematch, both do (`room`: where), or it left and there will be none. */
@@ -280,6 +282,10 @@ function watchNet(): void {
 netBanner.addEventListener('click', (e) => {
   const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
   if (n === 'replay') downloadReplay(record);
+  else if (n === 'retry') {
+    link?.leave();
+    location.reload();
+  }
   else if (n === 'quit') {
     link?.leave();
     location.search = `?biome=${biome.id}&map=${MAP.id}`;
@@ -1018,6 +1024,8 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
   const me = host ? 0 : 1;
   let status = host ? 'Ouverture du salon…' : 'Connexion au salon…';
   let here = false;
+  /** Not getting through: a fresh try is offered (a new room for the host, which may shake off a stale one). */
+  let stuck = false;
   const link = `${location.origin}${location.pathname}?ami=${room}`;
   const names = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
   const draw = () => {
@@ -1043,7 +1051,7 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
           ? `<select data-k="biome">${Object.values(BIOMES).map((b) => `<option value="${b.id}"${b.id === setup.biome ? ' selected' : ''}>${b.name}</option>`).join('')}</select>`
           : `<span class="lobby-other">${BIOMES[setup.biome]?.name ?? ''}</span>`
       }</label></fieldset>
-      <div class="row"><button data-m="back">Retour</button>${host ? `<button data-m="go" class="go"${here ? '' : ' disabled'}>Lancer la partie</button>` : ''}</div>`;
+      <div class="row"><button data-m="back">Retour</button>${stuck ? '<button data-m="retry">Réessayer</button>' : ''}${host ? `<button data-m="go" class="go"${here ? '' : ' disabled'}>Lancer la partie</button>` : ''}</div>`;
   };
   /** Into the match: the host's page hosts it, the guest's joins it. */
   const play = () => {
@@ -1060,6 +1068,7 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
   const lobby = openLobby(room, host, {
     status: (s, detail) => {
       here = s === 'here';
+      stuck = s === 'trouble' || s === 'error';
       status = s === 'here' ? (host ? 'Votre ami est là. Lancez la partie quand vous êtes prêts.' : "Vous êtes dans le salon. Votre ami lance la partie.")
         : s === 'waiting' ? 'En attente de votre ami…'
         : s === 'gone' ? 'Votre ami est parti, reconnexion…'
@@ -1107,6 +1116,9 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
       lobby.send({ go: 1 });
       // A moment for the message to leave before the page does.
       setTimeout(play, 300);
+    } else if (m === 'retry') {
+      lobby.close();
+      showLobby(menu, host ? newRoom() : room, host);
     } else if (m === 'back') {
       lobby.close();
       history.replaceState(null, '', location.pathname);
