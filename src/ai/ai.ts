@@ -535,6 +535,9 @@ export class AI {
     } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || (atHome.length > 0 && this.mapDry()))) {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
+      // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
+      // the first rank stays home and summons.
+      for (const g of gods) if ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp) this.wave.add(g.id);
       this.waves++;
       this.via = this.sharedRoad(home);
     }
@@ -573,6 +576,12 @@ export class AI {
         for (const id of this.wave) if (dist(w.entities.get(id)!.x, w.entities.get(id)!.y, losing.x, losing.y) <= RAPPEL.radius * FP) this.wave.delete(id);
       }
     }
+    // A god badly hurt leaves the wave for home: losing it costs its levels and its troops.
+    const hurtGods = gods.filter((g) => this.wave.has(g.id) && g.hp * 10 < g.maxHp * 4);
+    if (hurtGods.length) {
+      hurtGods.forEach((g) => this.wave.delete(g.id));
+      out.push({ player: this.player, kind: 'move', ids: hurtGods.map((g) => g.id), x: rally.x, y: rally.y });
+    }
     // A wave group that would be massacred falls back to the rally point, to join the next, bigger wave.
     const fleeing = this.easy ? [] : this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
     if (fleeing.length) {
@@ -597,7 +606,7 @@ export class AI {
       kiters.add(u.id);
     }
     // Supports (healers, casters, fragile artillery) keep a few tiles behind the front instead of leading the charge.
-    const support = (u: Entity) => !!(u.def as UnitDef).heal || ['druide', 'alchimiste', 'cuve'].includes(u.type);
+    const support = (u: Entity) => !!(u.def as UnitDef).heal || ['druide', 'alchimiste', 'cuve', 'isis'].includes(u.type);
     const front = waveUnits.filter((u) => !support(u));
     if (target && front.length) {
       const cx = front.reduce((s, u) => s + u.x, 0) / front.length;
