@@ -969,4 +969,9 @@ body.humains { --trim-top: -34px; }
 /* Fingers: the buttons along the bottom of the setup screens (lobby, joining, new game) and the lobby's lists at
    least 44 px high. */
 body.touch .menu.setup > .row button, body.touch .menu.lobby .row button, body.touch .menu.lobby select { min-height: 44px; }
+/* The Options' boxes (debug readout, fullscreen) too: a whole 44 px row to tap, a box big enough to see. */
+body.touch fieldset.options label:has(input[type="checkbox"]) { min-height: 44px; }
+body.touch fieldset.options input[type="checkbox"] { width: 20px; height: 20px; }
+/* The end-of-match banner (back to the menu, play again, rematch online) too. */
+body.touch .hud-banner button { min-height: 44px; }
 .menu button:disabled { opacity: 0.45; cursor: default; }
