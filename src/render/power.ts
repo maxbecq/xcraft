@@ -408,12 +408,15 @@ export class PowerNet {
   private readonly plugSteel = new MeshStandardMaterial({ color: 0x7d786e, metalness: 0.6, roughness: 0.5 });
   private readonly plugCopper = new MeshStandardMaterial({ color: 0xb06a34, metalness: 0.8, roughness: 0.35 });
   private readonly wireFoe = this.wireMaterial.clone();
+  private readonly fieldFoe = this.fieldMaterial.clone();
   private readonly plugSteelFoe = this.plugSteel.clone();
   private readonly plugCopperFoe = this.plugCopper.clone();
   /** Whether an owner is the viewer's enemy (set at each update). */
   private foe: (owner: number) => boolean = () => false;
   private readonly beamMaterial = new MeshBasicMaterial({ color: 0xfff0c0, transparent: true, depthWrite: false, blending: AdditiveBlending });
   private readonly glowMaterial = new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, depthWrite: false, blending: AdditiveBlending });
+  private readonly beamFoe = this.beamMaterial.clone();
+  private readonly glowFoe = this.glowMaterial.clone();
   private key = '';
   /** Materialising buildings: a big pulsing beam from the nearest Obelisk to each, by building id. */
   private readonly warps = new Map<number, Group>();
@@ -455,7 +458,7 @@ export class PowerNet {
     };
     this.creepMaterial.onBeforeCompile = creepPatch;
     this.creepFoe.onBeforeCompile = creepPatch;
-    for (const [m, key] of [[this.creepFoe, 'creep'], [this.wireFoe, 'wire'], [this.plugSteelFoe, 'plug-steel'], [this.plugCopperFoe, 'plug-copper']] as const) {
+    for (const [m, key] of [[this.creepFoe, 'creep'], [this.wireFoe, 'wire'], [this.plugSteelFoe, 'plug-steel'], [this.plugCopperFoe, 'plug-copper'], [this.fieldFoe, 'field'], [this.beamFoe, 'beam'], [this.glowFoe, 'glow']] as const) {
       // Cut away where the fog texture (1 visible, 0.5 explored, 0 never seen) says the player sees nothing now.
       const prev = m.onBeforeCompile;
       m.onBeforeCompile = (sh, r) => {
@@ -484,9 +487,9 @@ export class PowerNet {
     const key = [...nodes, ...fed].map((e) => e.id).join(',');
     if (key !== this.key) this.rebuild(nodes, world, fed, key);
     const t = performance.now() / 1000;
-    this.fieldMaterial.opacity = highlight ? 0.95 : 0.2;
+    this.fieldMaterial.opacity = this.fieldFoe.opacity = highlight ? 0.95 : 0.2;
     this.creepMaterial.opacity = this.creepFoe.opacity = highlight ? 1 : 0.75;
-    this.beamMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
+    this.beamMaterial.opacity = this.beamFoe.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.creepTime.value = t;
     this.updateWarps(world, sees, t);
   }
@@ -503,7 +506,8 @@ export class PowerNet {
         const d = Math.hypot(o.x - b.x, o.y - b.y);
         if (d < best) [source, best] = [o, d];
       }
-      if (!source) continue;
+      // An enemy's shaft would point at an Obelisk hidden in the fog: drawn only while that Obelisk is seen too.
+      if (!source || (this.foe(b.owner) && !sees(source))) continue;
       live.add(b.id);
       let g = this.warps.get(b.id);
       if (!g) {
@@ -580,7 +584,7 @@ export class PowerNet {
         geo.setAttribute('aRim', new BufferAttribute(rim, 1));
         geo.setAttribute('aDist', new BufferAttribute(dist, 1));
       }
-      const disc = new Mesh(geo, creep(e) ? (this.foe(e.owner) ? this.creepFoe : this.creepMaterial) : this.fieldMaterial);
+      const disc = new Mesh(geo, creep(e) ? (this.foe(e.owner) ? this.creepFoe : this.creepMaterial) : this.foe(e.owner) ? this.fieldFoe : this.fieldMaterial);
       disc.renderOrder = 1;
       disc.receiveShadow = creep(e); // lit and shaded like the ground it lies on
       this.root.add(disc);
@@ -620,7 +624,7 @@ export class PowerNet {
             if (d <= reach && (!best || d < best[2])) best = [a, b, d];
           }
         if (!best) break;
-        this.beam(at(best[0]).add(new Vector3(0, BEAM_TOP[best[0].type] ?? 3, 0)), at(best[1]).add(new Vector3(0, BEAM_TOP[best[1].type] ?? 3, 0)));
+        this.beam(at(best[0]).add(new Vector3(0, BEAM_TOP[best[0].type] ?? 3, 0)), at(best[1]).add(new Vector3(0, BEAM_TOP[best[1].type] ?? 3, 0)), this.foe(owner));
         linked.push(best[0]);
         rest.splice(rest.indexOf(best[0]), 1);
       }
@@ -686,10 +690,10 @@ export class PowerNet {
     }
   }
 
-  private beam(from: Vector3, to: Vector3): void {
+  private beam(from: Vector3, to: Vector3, foe: boolean): void {
     const length = from.distanceTo(to);
     // A thin bright core in a wider soft glow.
-    for (const [radius, material] of [[0.05, this.beamMaterial], [0.16, this.glowMaterial]] as const) {
+    for (const [radius, material] of [[0.05, foe ? this.beamFoe : this.beamMaterial], [0.16, foe ? this.glowFoe : this.glowMaterial]] as const) {
       const m = new Mesh(new CylinderGeometry(radius, radius, length, 6, 1, true), material);
       m.position.copy(from).add(to).multiplyScalar(0.5);
       m.lookAt(to);
