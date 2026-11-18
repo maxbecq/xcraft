@@ -155,6 +155,15 @@ export class AI {
       if (s) out.push({ player: this.player, kind: 'smart', ids: [s.id], x: site.x, y: site.y, target: site.id });
     }
 
+    // Z: a drone repairs a building that has lost 40 % of its hit points, one drone each, with minerals to spare.
+    if (f === FACTIONS.z && p.minerals > 200) {
+      for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
+        if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
+        const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty]);
+        if (s) out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
+      }
+    }
+
     // Supply first, then production buildings, then the mine.
     const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
@@ -293,6 +302,11 @@ export class AI {
     if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && minerals >= 100 && free > 0 && !wants.includes(f.supply) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
       out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       minerals -= 100;
+    } else if (f === FACTIONS.z && minute > 8 && workerHome && workerHome.queue.length === 0 && free > 0 && minerals >= 150 && energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
+      // One Espion (Z.doc): it detects, and goes along with the waves.
+      out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: 'zespion' });
+      minerals -= 150;
+      energy -= 75;
     }
     // Research in priority order on idle buildings; production buildings only with minerals to spare.
     const researching = new Set<number>();

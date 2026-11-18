@@ -2291,6 +2291,22 @@ def centrek(p):
     cable(p, (-1.2, 1.0, 0.8), (-0.3, 0.6, 1.3), sag=0.15, r=0.05)
 
 
+
+def zespion(p):
+    """Espion Z (sketch): a levitating sensor probe, a riveted ball with a red eye, antennae and three stabiliser fins."""
+    ball(p["zsteel"], 0.28, (0, 0, 0.6), scale=(1, 1, 0.8), seg=12, rings=8)
+    ring(p["zrust"], 0.3, 0.04, (0, 0, 0.6), seg=16)
+    box(p["team"], (0.3, 0.06, 0.08), (0, 0.27, 0.62))
+    eyes(p, 0.0, -0.27, 0.62, n=1, r=0.07)
+    for k in range(3):
+        a = k / 3 * math.tau + 0.3
+        box(p["zdark"], (0.04, 0.22, 0.12), (math.cos(a) * 0.3, math.sin(a) * 0.3, 0.45), rot=(0, 0, a))
+    cyl(p["graphite"], 0.012, 0.35, (0.08, 0.05, 0.95), verts=5)
+    cyl(p["graphite"], 0.012, 0.25, (-0.1, 0.08, 0.9), verts=5)
+    ball(p["red_glow"], 0.03, (0.08, 0.05, 1.13), seg=6, rings=4)
+    cone(p["cyan_glow"], 0.12, 0.15, (0, 0, 0.33), rot=(math.pi, 0, 0), verts=8)  # levitation glow
+
+
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
     "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
@@ -2304,7 +2320,7 @@ MODELS = {
     "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
     "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
     "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
-    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek,
+    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek, "zespion": zespion,
 }
 
 

@@ -16,6 +16,8 @@ export type Order =
   | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number }
   | { kind: 'build'; type: string; tx: number; ty: number }
   | { kind: 'construct'; target: number }
+  /** Z drone (Z.doc): repairs an own machine or building, paying as it goes; `owed` in thousandths of a resource. */
+  | { kind: 'repair'; target: number; owedM: number; owedE: number }
   /** `auto`: picked by the unit itself; it gives up beyond its leash point (lx, ly). */
   | { kind: 'attack'; target: number; auto: boolean; lx: number; ly: number }
   /** `back`: a patrol, which turns round at (x, y) and heads back there, for ever. */
@@ -323,6 +325,7 @@ export class World {
     if (this.cells) this.file(e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
     if (owner >= 0 && e.type === 'drone' && this.level(owner, 'sonderobuste')) this.fortify(e);
+    if (owner >= 0 && e.type === 'zespion' && this.level(owner, 'megaespion')) this.fortify(e);
     if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
   }
@@ -409,7 +412,7 @@ export class World {
     for (const v of this.vision) v.begin();
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
-      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0);
+      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
       for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r, flies(e));
     }
     for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), s.radius ?? OBSERVATION.radius);
@@ -706,6 +709,36 @@ export class World {
           return;
         }
         this.setOrder(e, def.warp ? null : { kind: 'construct', target: b.id });
+        return;
+      }
+      case 'repair': {
+        const b = this.entities.get(o.target);
+        if (!b || b.owner !== e.owner || b.hp <= 0 || b.hp >= b.maxHp || e.stuck > 5) return this.setOrder(e, null);
+        const size = b.def.kind === 'building' ? (b.def as BuildingDef).size : 0;
+        if (size ? !this.reachRect(e, b.tx, b.ty, size) : dist(e.x, e.y, b.x, b.y) > e.radius + b.radius + FP) {
+          if (size) this.goNear(e, b.tx, b.ty, size);
+          else this.goTo(e, b.x, b.y);
+          return;
+        }
+        if (this.tick % TICK_RATE !== 0) return;
+        // A full repair costs a quarter of what it is worth (a proposal: Z.doc says « contre ressources »).
+        const R = BALANCE.rules.z;
+        const heal = Math.min(R.repairHp, b.maxHp - b.hp);
+        const cost = (b.def as { cost: Cost }).cost;
+        o.owedM += idiv(cost.minerals * R.repairPercent * heal * 10, b.maxHp);
+        o.owedE += idiv(cost.energy * R.repairPercent * heal * 10, b.maxHp);
+        const p = this.players[e.owner];
+        const m = idiv(o.owedM, 1000);
+        const en = idiv(o.owedE, 1000);
+        if (p.minerals < m || p.energy < en) {
+          this.say(e.owner, 'Pas assez de ressources pour réparer.');
+          return this.setOrder(e, null);
+        }
+        p.minerals -= m;
+        p.energy -= en;
+        o.owedM -= m * 1000;
+        o.owedE -= en * 1000;
+        b.hp += heal;
         return;
       }
       case 'construct': {

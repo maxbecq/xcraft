@@ -158,6 +158,10 @@
     "rcoleoptere2": {"cost": {"minerals": 150, "energy": 150}, "buildTime": 35},
     "rcoleoptere3": {"cost": {"minerals": 200, "energy": 200}, "buildTime": 40},
     "optimisationp": {"cost": {"minerals": 500, "energy": 500}, "buildTime": 120},
+    "zespion": { "hp": 140, "armor": 0, "speed": 2.5, "sight": 9, "supply": 1, "cost": { "minerals": 150, "energy": 75 }, "buildTime": 28, "detector": 9 },
+    "impulsion": {"cost": {"minerals": 200, "energy": 100}, "buildTime": 50},
+    "invistemp": {"cost": {"minerals": 150, "energy": 150}, "buildTime": 50},
+    "megaespion": {"cost": {"minerals": 250, "energy": 250}, "buildTime": 60},
     "centrek": { "hp": 3500, "armor": 4, "sight": 7, "supply": 0, "cost": { "minerals": 500, "energy": 600 }, "buildTime": 90 },
     "canoniem": {"cost": {"minerals": 300, "energy": 300}, "buildTime": 60},
     "zproxi1": {"cost": { "minerals": 150, "energy": 150 }, "buildTime": 80},
@@ -227,6 +231,9 @@
     "roquettes": { "levels": [[9, 37], [11, 43], [12, 48], [14, 55]], "ranges": [4, 5, 6, 7], "cooldown": 2, "cost": { "minerals": 70, "energy": 20 } }
   },
   "abilities": {
+    "balisez": { "cooldown": 10, "duration": 50, "radius": 4, "range": 6, "target": "point" },
+    "impulsion": { "cooldown": 40, "duration": 5, "radius": 2, "range": 3, "target": "point" },
+    "invistemp": { "cooldown": 40, "duration": 20 },
     "kitdetection": { "cooldown": 10, "duration": 0, "minerals": 0, "energy": 50, "target": "point", "radius": 2 },
     "kitinvisibilite": { "cooldown": 10, "duration": 0, "minerals": 50, "energy": 150, "target": "point", "radius": 2 },
     "kitreparateur": { "cooldown": 10, "duration": 0, "minerals": 100, "energy": 100, "target": "point", "radius": 2 },
@@ -288,7 +295,7 @@
     "trade": { "give": 100, "get": 50 },
     "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 } },
     "creepRepair": 1,
-    "z": { "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
+    "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "repairHp": 4, "repairPercent": 25, "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
   },
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },
@@ -304,7 +311,7 @@
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
-    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 14], ["centrek", 17]], "dieux": [["fontaine", 16]] },
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,

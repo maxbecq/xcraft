@@ -120,7 +120,8 @@ function levelled(a: Attack, damage: number): Attack {
 /** Walking speed per tick out of any boost: a god's that of its level. */
 export function baseSpeed(this: World, e: Entity): number {
   const d = e.def as UnitDef;
-  // Z socles: the speed of their tier (Z.doc).
+  // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
+  if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
   return speedPerTick(d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed);
 }
 
@@ -172,8 +173,9 @@ export function grows(this: World, u: Entity): boolean {
 
 /** Raises a unit's hp by the Croissance économique share, keeping its wounds. */
 export function fortify(this: World, u: Entity): void {
-  // Sonde robuste (Z): a flat 25 hp for drones; Croissance économique: a share for Humans.
-  const extra = u.type === 'drone' ? BALANCE.rules.z.sondeRobusteHp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
+  // Sonde robuste (Z): a flat 25 hp for drones; Mega-Espion: 60 hp and some speed; Croissance économique: a share for Humans.
+  if (u.type === 'zespion') u.speed = this.baseSpeed(u);
+  const extra = u.type === 'drone' ? BALANCE.rules.z.sondeRobusteHp : u.type === 'zespion' ? BALANCE.rules.z.megaEspion.hp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
   u.maxHp += extra;
   u.hp += extra;
 }

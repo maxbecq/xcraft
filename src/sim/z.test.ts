@@ -181,6 +181,50 @@ describe('Z', () => {
     expect(foe.owner).toBe(1);
   });
 
+  it('a drone repairs a Z building or machine, 4 hp a second, a quarter of its worth for a full repair', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 1000;
+    p.energy = 0;
+    const drone = of(w, 0, 'drone')[0];
+    const pod = w.spawn('pod', 0, 40 * FP, 40 * FP); // away from the creep
+    pod.hp = 1000;
+    w.step([{ player: 0, kind: 'smart', ids: [drone.id], x: pod.x, y: pod.y, target: pod.id }]);
+    expect(drone.order?.kind).toBe('repair');
+    run(w, 40);
+    expect(pod.hp).toBeGreaterThan(1000);
+    const healed = pod.hp - 1000;
+    // 300 minerals for 1500 hp at 25 %: a mineral every 20 hp.
+    expect(1000 - p.minerals).toBe(Math.floor((healed * 300 * 25) / 100 / 1500));
+  });
+
+  it("the Espion: trained at the Intelligence, detects, holds units with its Impulsion, hides, grows with Mega-Espion", () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 2000;
+    p.energy = 2000;
+    const [ic] = of(w, 0, 'intelligence');
+    w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'zespion' }]);
+    expect(ic.queue).toEqual(['zespion']);
+    const spy = w.spawn('zespion', 0, 30 * FP, 30 * FP);
+    expect(spy.maxHp).toBe(140);
+    const foe = w.spawn('auxiliaire', 1, 32 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'impulsion', x: foe.x, y: foe.y }]);
+    run(w, 1);
+    expect(foe.held).toBe(0); // not researched
+    p.upgrades.impulsion = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'impulsion', x: foe.x, y: foe.y }]);
+    run(w, 1);
+    expect(foe.held).toBeGreaterThan(0);
+    p.upgrades.invistemp = 1;
+    spy.abilityCd = 0; // one cooldown for all its abilities (in place of Z.doc's energy)
+    w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'invistemp' }]);
+    expect(w.hidden(spy)).toBe(true);
+    p.upgrades.megaespion = 1;
+    expect(w.spawn('zespion', 0, 34 * FP, 30 * FP).maxHp).toBe(200);
+  });
+
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

@@ -187,6 +187,7 @@ export function produce(this: World, b: Entity): void {
     if (up.kind === 'upgrade') {
       this.players[b.owner].upgrades[up.line] = up.level;
       this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');
+      if (type === 'megaespion') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'zespion') this.fortify(u);
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'drone') this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
       if (type.startsWith('cercle') || type === 'boostgenetique') for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);

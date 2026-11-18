@@ -279,6 +279,9 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
       this.setOrder(e, { kind: 'heal', target: t.id });
     } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
       this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
+    } else if (worker && e.type === 'drone' && t && t !== e && t.owner === e.owner && t.hp < t.maxHp && t.buildLeft === 0 && (t.def.kind === 'building' || (t.def as UnitDef).mechanical)) {
+      // Z.doc: a drone repairs Z buildings and machines, 4 hp a second, against resources.
+      this.setOrder(e, { kind: 'repair', target: t.id, owedM: 0, owedE: 0 });
     } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp && !(t.def as BuildingDef).absorbs) {
       this.setOrder(e, { kind: 'construct', target: t.id });
     } else if (!worker && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {

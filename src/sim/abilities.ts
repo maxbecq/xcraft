@@ -55,7 +55,9 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   const ab = name && spell(name, e.lvl);
   if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
-  if (name === 'enfouissement') {
+  if (name === 'invistemp') {
+    e.camo = ticks(ab.duration);
+  } else if (name === 'enfouissement') {
     e.burrowed = !e.burrowed;
     this.setOrder(e, null);
   } else if (name === 'feucirculaire') {
@@ -156,7 +158,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
       .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
       .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
   if (this.silenced(e.x, e.y)) return false;
-  if (name === 'atterrissage') {
+  if (name === 'balisez') {
+    // An invulnerable beacon: sight of the zone for 50 s.
+    this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
+  } else if (name === 'impulsion') {
+    for (const t of near((t) => !flies(t))) t.held = Math.max(t.held, ticks(ab.duration));
+  } else if (name === 'atterrissage') {
     const size = (DEFS.casernevolante as BuildingDef).size;
     const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
     if (!this.canPlace('casernevolante', tx, ty, e.owner)) {
