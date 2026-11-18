@@ -146,6 +146,18 @@ describe('Z', () => {
     expect(w.weapon(beetle)).toEqual(WEAPONS.flammes.attack);
   });
 
+  it("a weapon is as strong as its socle's level (Z.doc), damage scaled as the socles' was", () => {
+    const w = createMatch(['z', 'humains']);
+    const quad = w.spawn('quadripode', 0, 20 * FP, 20 * FP);
+    const hexa = w.spawn('hexapode', 0, 22 * FP, 20 * FP);
+    expect(w.weapon(quad)).toEqual({ damage: 12, range: 4, cooldown: 1, vsMechanical: -3 }); // machine gun N1: 14 / 11
+    expect(w.weapon(hexa)!.damage).toBe(15); // N2: 17
+    hexa.kit = 'roquettes';
+    expect(w.weapon(hexa)).toEqual({ damage: 9, range: 5, cooldown: 2, vsMechanical: 28 }); // N2: 11 / 43, range 5
+    quad.kit = 'laser';
+    expect(w.weapon(quad)!.damage).toBe(17); // N1: 20
+  });
+
   it('the creep repairs Z units standing on it', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

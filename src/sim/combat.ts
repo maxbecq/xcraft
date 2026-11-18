@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type UpgradeLine, WEAPONS } from '../data';
+import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type UpgradeLine, weaponAt } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -62,7 +62,9 @@ export function rangeBonus(this: World, e: Entity, t?: Entity): number {
 
 /** The weapon a unit fights with now: Scarabées get one by research, a Char Pégase in the air shoots only at flyers. */
 export function weapon(this: World, e: Entity): Attack | undefined {
-  if (e.kit) return WEAPONS[e.kit].attack;
+  // Z socles: the weapon chosen at the Plate-forme, or the machine gun, as strong as the socle's level.
+  const level = (e.def as UnitDef).weaponLevel;
+  if (level) return weaponAt(e.kit || 'mitrailleuse', level);
   if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
   const a = (e.def as UnitDef | BuildingDef).attack;
   const lv = (e.def as UnitDef).levels;

@@ -135,9 +135,9 @@
     "cercle2": {"cost": {"minerals": 400, "energy": 400}, "buildTime": 100},
     "drone": { "hp": 75, "armor": 0, "speed": 2.4, "sight": 8, "supply": 1, "cost": { "minerals": 100, "energy": 0 }, "buildTime": 20, "attack": { "damage": 5, "range": 0.1, "cooldown": 2 } },
     "dronecombat": { "hp": 75, "armor": 0, "speed": 2.4, "sight": 8, "supply": 1, "cost": { "minerals": 115, "energy": 0 }, "buildTime": 20, "attack": { "damage": 12, "range": 4, "cooldown": 1 } },
-    "quadripode": { "hp": 140, "armor": 0, "speed": 2.5, "accel": 8, "sight": 9, "supply": 1, "cost": { "minerals": 160, "energy": 0 }, "buildTime": 30, "attack": { "damage": 12, "range": 4, "cooldown": 1 } },
-    "hexapode": { "hp": 290, "armor": 1, "speed": 2.2, "accel": 5, "sight": 9, "supply": 2, "cost": { "minerals": 325, "energy": 50 }, "buildTime": 45, "attack": { "damage": 15, "range": 4, "cooldown": 1 } },
-    "coleoptere": { "hp": 185, "armor": 0, "speed": 2.5, "sight": 10, "supply": 1, "cost": { "minerals": 200, "energy": 150 }, "buildTime": 36, "attack": { "damage": 12, "range": 4, "cooldown": 1 } },
+    "quadripode": { "weaponLevel": 1, "hp": 140, "armor": 0, "speed": 2.5, "accel": 8, "sight": 9, "supply": 1, "cost": { "minerals": 160, "energy": 0 }, "buildTime": 30, "attack": { "damage": 12, "range": 4, "cooldown": 1 } },
+    "hexapode": { "weaponLevel": 2, "hp": 290, "armor": 1, "speed": 2.2, "accel": 5, "sight": 9, "supply": 2, "cost": { "minerals": 325, "energy": 50 }, "buildTime": 45, "attack": { "damage": 15, "range": 4, "cooldown": 1 } },
+    "coleoptere": { "weaponLevel": 1, "hp": 185, "armor": 0, "speed": 2.5, "sight": 10, "supply": 1, "cost": { "minerals": 200, "energy": 150 }, "buildTime": 36, "attack": { "damage": 12, "range": 4, "cooldown": 1 } },
     "intelligence": { "hp": 3000, "armor": 6, "sight": 13, "supply": 10, "cost": { "minerals": 800, "energy": 0 }, "buildTime": 120, "power": 10 },
     "supreme": { "hp": 4500, "armor": 6, "sight": 15, "supply": 15, "cost": { "minerals": 300, "energy": 400 }, "buildTime": 70, "power": 10 },
     "pod": { "hp": 1500, "armor": 2, "sight": 8, "supply": 15, "cost": { "minerals": 300, "energy": 0 }, "buildTime": 40 },
@@ -213,9 +213,10 @@
     "minerai": { "amount": 1500 }
   },
   "weapons": {
-    "laser": { "attack": { "damage": 11, "range": 5, "cooldown": 1 }, "cost": { "minerals": 70, "energy": 0 } },
-    "flammes": { "attack": { "damage": 10, "range": 1.2, "cooldown": 0.8, "air": false, "splash": 1.2 }, "cost": { "minerals": 50, "energy": 60 } },
-    "roquettes": { "attack": { "damage": 22, "range": 7, "cooldown": 2, "vsMechanical": 18 }, "cost": { "minerals": 70, "energy": 20 } }
+    "mitrailleuse": { "levels": [[14, 11], [17, 13], [19, 15], [22, 16]], "range": 4, "cooldown": 1, "cost": { "minerals": 0, "energy": 0 } },
+    "laser": { "levels": [[20, 15], [23, 17], [25, 19], [29, 22]], "range": 5, "cooldown": 1, "cost": { "minerals": 70, "energy": 0 } },
+    "flammes": { "levels": [[24, 31], [27, 36], [30, 39], [34, 45]], "range": 1.2, "cooldown": 1.5, "air": false, "splash": 1.2, "cost": { "minerals": 50, "energy": 60 } },
+    "roquettes": { "levels": [[9, 37], [11, 43], [12, 48], [14, 55]], "ranges": [4, 5, 6, 7], "cooldown": 2, "cost": { "minerals": 70, "energy": 20 } }
   },
   "abilities": {
     "stimulant": { "cooldown": 15, "duration": 8 },
@@ -274,7 +275,7 @@
     "trade": { "give": 100, "get": 50 },
     "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 } },
     "creepRepair": 1,
-    "z": { "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
+    "z": { "weaponDamage": 86, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
   },
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },

@@ -74,6 +74,8 @@ export interface UnitDef {
   /** Units it can carry (Scarabée): they shoot from inside. */
   bunker?: number;
   /** Z socle: weapons (keys of WEAPONS) it can be built with, in place of the machine gun of `attack`. */
+  /** Z socle: the level of its weapon (Z.doc: Quadripode and Coléoptère T1 1, Hexapode T1 2). */
+  weaponLevel?: number;
   weapons?: string[];
   /** Dieux: a god that summons these units at its feet, through its own queue, while it stands still. */
   trains?: string[];
@@ -651,15 +653,43 @@ function isd(name: string, hotkey: string, effect: string, requires?: Record<str
 export interface WeaponDef {
   name: string;
   hotkey: string;
+  /** At level 1 (the weakest socle): what the AI and the cards go by. */
   attack: Attack;
   cost: Cost;
   /** Research needed first. */
   research?: string;
 }
+interface WeaponStats {
+  /** Z.doc, levels 1 to 4: damage against light biological targets (the game's plain damage), then against machines. */
+  levels: [number, number][];
+  range?: number;
+  /** Range by level, when it grows with it (Lance-roquettes). */
+  ranges?: number[];
+  cooldown: number;
+  air?: boolean;
+  splash?: number;
+  cost: Cost;
+}
+const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
+/**
+ * A Z weapon at a level (1 to 4: the socle's, Z.doc). Z.doc's damage, scaled by `rules.z.weaponDamage` % as the
+ * socles' was (14 → 12), the gap against machines as `vsMechanical`.
+ */
+export function weaponAt(key: string, level: number): Attack {
+  const w = WEAPON_STATS[key];
+  const [light, machine] = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1];
+  const scale = (n: number) => Math.round((n * BALANCE.rules.z.weaponDamage) / 100);
+  const a: Attack = { damage: scale(light), range: w.ranges ? w.ranges[Math.min(w.ranges.length, Math.max(1, level)) - 1] : w.range!, cooldown: w.cooldown };
+  if (scale(machine) !== a.damage) a.vsMechanical = scale(machine) - a.damage;
+  if (w.air !== undefined) a.air = w.air;
+  if (w.splash) a.splash = w.splash;
+  return a;
+}
+const weaponDef = (key: string, name: string, hotkey: string, research?: string): WeaponDef => ({ name, hotkey, research, attack: weaponAt(key, 1), cost: WEAPON_STATS[key].cost });
 export const WEAPONS: Record<string, WeaponDef> = {
-  laser: { name: 'Laser', hotkey: 'L', research: 'laser', ...BALANCE.weapons.laser },
-  flammes: { name: 'Lance-flammes', hotkey: 'F', research: 'lanceflammes', ...BALANCE.weapons.flammes },
-  roquettes: { name: 'Lance-roquettes', hotkey: 'R', research: 'lanceroquettes', ...BALANCE.weapons.roquettes },
+  laser: weaponDef('laser', 'Laser', 'L', 'laser'),
+  flammes: weaponDef('flammes', 'Lance-flammes', 'F', 'lanceflammes'),
+  roquettes: weaponDef('roquettes', 'Lance-roquettes', 'R', 'lanceroquettes'),
 };
 
 const STATS: Record<string, object> = BALANCE.units;
