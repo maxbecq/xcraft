@@ -19,4 +19,4 @@ ${rows('units').join('\n')}
 
 </details>
 
-« Avant » : le \`balance.json\` de \`main\` ; « Après » : celui de cette PR, avec le même code. Équilibre visé : 49 victoires chacun dans chaque paire, ±5.`);
+« Avant » : le \`balance.json\` de \`main\` ; « Après » : celui de cette PR, avec le même code. Équilibre visé : 49 victoires chacun dans chaque paire ; un écart de moins de 10 victoires est dans le bruit.`);
