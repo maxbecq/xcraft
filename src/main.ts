@@ -27,7 +27,7 @@ import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pi
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { Lockstep, matchCode, newRoom, readCode } from './net';
-import { countMatch, countTitle } from './stats';
+import { countMatch, countTitle, SKIPPED } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 /** Scrolling settings for this computer (Options): speed and edge band width (1 = as designed), pointer held in the window. */
@@ -583,7 +583,7 @@ function showHome(): void {
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
       <button data-m="open-replay">Ouvrir un replay…</button>
     </div>
-    <div class="build">v${__VERSION__} · ${__COMMIT__} · ${new Date(__BUILT__).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>`;
+    <div class="build">v${__VERSION__} · ${__COMMIT__} · ${new Date(__BUILT__).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${SKIPPED ? ' · vos visites ne sont pas comptées' : ''}</div>`;
   (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
