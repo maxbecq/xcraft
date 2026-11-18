@@ -502,6 +502,8 @@ export class Input {
   /** Direction the map is scrolling at the screen's edge ('n', 'se'…), or '' (set each frame by the game loop). */
   scrollEdge = '';
   private lastHoverPick = 0;
+  /** What lies under the mouse, as last picked (at most once a frame). */
+  hovered: Entity | undefined;
   private hoverColor = '';
   private orderedAt = -Infinity;
   private cursorFrame = 0;
@@ -522,6 +524,7 @@ export class Input {
       this.hoverQueued = false;
       this.lastHoverPick = performance.now();
       const e = this.dragStart || this.grab ? undefined : this.entityAt(this.hoverAt.x, this.hoverAt.y);
+      this.hovered = e;
       const color = !e ? '' : e.owner === this.player ? '#4dff6a' : e.owner < 0 ? '#ffe27a' : this.world.hostile(e.owner, this.player) ? '#ff4a3a' : '#5ad8ff';
       if (color === this.hoverColor) return;
       this.hoverColor = color;

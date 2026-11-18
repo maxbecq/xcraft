@@ -35,7 +35,7 @@ import { countMatch, countTitle, SKIPPED } from './stats';
  * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed (one to one with the system cursor at 1)
  * (game/pointerlock.ts); the pointer held in the window; grid hotkeys; the game's speed against the AI. */
 const SCROLL_KEY = 'xcraft.scroll';
-const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, game: 1 };
+const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, game: 1 };
 type Controls = typeof SCROLL_BASE;
 const SCROLL: Controls = (() => {
   const base = { ...SCROLL_BASE };
@@ -43,7 +43,7 @@ const SCROLL: Controls = (() => {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
     for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
-    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true };
+    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false };
   } catch {
     return base;
   }
@@ -743,7 +743,7 @@ function controlFields(inMatch: boolean): string {
   if (TOUCH) return '';
   const range = (k: keyof Controls, label: string, min: number, max: number, step: number, unit = '') =>
     `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${min}" max="${max}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
-  const check = (k: 'lock' | 'grid', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
+  const check = (k: 'lock' | 'grid' | 'halo', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
   return `<fieldset class="options"><legend>Défilement par les bords</legend>
       ${range('speed', 'Vitesse', 0.5, 2, 0.1, '×')}
       ${range('band', 'Largeur des bords', 0.4, 1.6, 0.1, '×')}
@@ -753,6 +753,9 @@ function controlFields(inMatch: boolean): string {
     <fieldset class="options"><legend>Souris</legend>
       ${check('lock', 'Garder la souris dans la fenêtre (hors plein écran)')}
       ${range('mouse', 'Vitesse du curseur gardé', 0.5, 2, 0.05, '×')}
+    </fieldset>
+    <fieldset class="options"><legend>Interface</legend>
+      ${check('halo', 'Halo sur le bâtiment survolé')}
     </fieldset>
     <fieldset class="options"><legend>Raccourcis</legend>
       ${check('grid', `Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom`)}
@@ -768,7 +771,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid') {
+  if (k === 'lock' || k === 'grid' || k === 'halo') {
     SCROLL[k] = (field as HTMLInputElement).checked;
     hud.gridKeys = SCROLL.grid && !TOUCH;
     if (!SCROLL.lock) pointer.release();
@@ -1036,6 +1039,9 @@ function start(): void {
     if (picked.some((id) => !lastPicked.has(id))) answer('ack');
     lastPicked = new Set(picked);
     units.sync(world, acc / TICK, input.selected, PLAYER, sees);
+    // The hover halo: a building in sight under the mouse (none on a touch screen, which has no hover).
+    const hovered = input.hovered;
+    units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
     lap('units');
     hud.update();
     lap('hud');

@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -1343,8 +1343,48 @@ function dropCorpse(root: Object3D): void {
   });
 }
 
+/**
+ * The hover halo: a soft warm glow spilling out round the building under the cursor, swelling and ebbing once a
+ * second, to tell it can be picked. Drawn as a shell: the building's own meshes again, pushed out along smoothed
+ * normals and seen from inside (back faces), so only a fringe past the silhouette shows, brightest at the edge and
+ * fading outwards. No outline or full-screen pass; added on top, never writing depth.
+ */
+const haloStrength = { value: 0 };
+const HALO_PUSH = 0.22; // world units the shell stands out from the walls
+const haloMaterial = new ShaderMaterial({
+  uniforms: { strength: haloStrength, color: { value: new Color(0xffd9a0) } },
+  vertexShader: `#include <clipping_planes_pars_vertex>
+varying vec3 vNormal;
+void main() {
+  vec4 world = modelMatrix * vec4(position, 1.0);
+  vec3 n = normalize(mat3(modelMatrix) * normal);
+  world.xyz += n * ${HALO_PUSH.toFixed(2)};
+  vec4 mvPosition = viewMatrix * world;
+  vNormal = normalize((viewMatrix * vec4(n, 0.0)).xyz);
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
+}`,
+  // The camera is orthographic, looking along -z in view space: the shell is side-on (z near 0) at the silhouette.
+  fragmentShader: `#include <clipping_planes_pars_fragment>
+uniform float strength;
+uniform vec3 color;
+varying vec3 vNormal;
+void main() {
+  #include <clipping_planes_fragment>
+  float edge = pow(1.0 - abs(normalize(vNormal).z), 2.0);
+  gl_FragColor = vec4(color * strength * edge, 1.0);
+}`,
+  side: BackSide,
+  transparent: true,
+  depthWrite: false,
+  blending: AdditiveBlending,
+  clipping: true,
+});
+
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
+  /** The building wearing the hover halo, and the halo meshes laid over its own. */
+  private halo: { id: number; model: Object3D; meshes: Mesh[] } | null = null;
   private readonly views = new Map<number, View>();
   private dying: { v: View; age: number; side: number }[] = [];
   /** Death bursts: a few dark drops for the living, sparks for machines. */
@@ -1364,6 +1404,40 @@ export class EntityRenderer {
   /** All entity roots, for picking; each carries its entity id in userData. */
   get roots(): Object3D[] {
     return [...this.views.values()].map((v) => v.root);
+  }
+
+  /** The hover halo on this building (null: none), one at a time; its pulse follows the clock. */
+  glow(id: number | null, now: number): void {
+    const v = id === null ? undefined : this.views.get(id);
+    if (this.halo && (this.halo.id !== id || this.halo.model !== v?.model)) {
+      for (const m of this.halo.meshes) {
+        m.removeFromParent();
+        if (m.material !== haloMaterial) (m.material as Material).dispose();
+      }
+      this.halo = null;
+    }
+    if (!v) return;
+    if (!this.halo) {
+      const pairs: [Mesh, Mesh][] = [];
+      v.model.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh || (m as SkinnedMesh).isSkinnedMesh || m.userData.noPick || !m.geometry.attributes.position) return;
+        // A building being fabricated (Z) is cut by a plane: the halo is cut with it.
+        const planes = (Array.isArray(m.material) ? m.material[0] : m.material)?.clippingPlanes;
+        const material = planes?.length ? Object.assign(haloMaterial.clone(), { clippingPlanes: planes }) : haloMaterial;
+        if (material !== haloMaterial) (material as ShaderMaterial).uniforms.strength = haloStrength;
+        const halo = new Mesh(haloShape(m.geometry), material);
+        halo.userData.noPick = true;
+        halo.renderOrder = 2;
+        halo.layers.mask = m.layers.mask;
+        pairs.push([m, halo]);
+      });
+      // Children of their mesh, so they follow it and hide with it; added after the walk, which they would join.
+      for (const [m, halo] of pairs) m.add(halo);
+      this.halo = { id: id!, model: v.model, meshes: pairs.map(([, h]) => h) };
+    }
+    // Gentle: between 0.7 and 1.3 of its strength, once a second.
+    haloStrength.value = 0.3 * (1 + 0.3 * Math.sin(now / 1000 * Math.PI * 2));
   }
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
