@@ -169,6 +169,8 @@ export type Command =
   | { player: number; kind: 'patrol'; ids: number[]; x: number; y: number; queue?: boolean }
   | { player: number; kind: 'build'; ids: number[]; type: string; tx: number; ty: number; queue?: boolean }
   | { player: number; kind: 'train'; ids: number[]; type: string; weapon?: string }
+  /** Z: buys a weapon for each selected Tourelle or Assimilateur without one (Z.doc: « arme adaptable »). */
+  | { player: number; kind: 'arm'; ids: number[]; weapon: string }
   /** Z: each selected socle evolves into its next tier, in place (paid per socle). */
   | { player: number; kind: 'evolve'; ids: number[] }
   | { player: number; kind: 'cancel'; ids: number[] }

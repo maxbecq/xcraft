@@ -556,7 +556,10 @@ export class Hud {
       }
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
-    if ((e.def as UnitDef).weapons) html += `<div class="info">T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · Arme : ${e.kit ? WEAPONS[e.kit].name : 'Mitrailleuse'}</div>`;
+    if ((e.def as UnitDef).weapons) {
+      const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
+      html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}</div>`;
+    }
     if (e.def.kind !== 'resource') html += this.stats(e);
     this.details.innerHTML = html;
     this.portrait.render();
@@ -718,6 +721,15 @@ export class Hud {
       const ready = same.some((o) => o.abilityCd === 0);
       const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
       list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: go });
+    }
+    // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
+    if ((b.def as BuildingDef).weapons) {
+      const bare = same.filter((o) => !o.kit && o.buildLeft === 0);
+      for (const k of (b.def as BuildingDef).weapons!) {
+        const kit = WEAPONS[k];
+        const reason = kit.research && !this.world.level(this.player, kit.research) ? `Requiert : ${DEFS[kit.research].name}` : bare.length ? undefined : 'Déjà armé';
+        list.push({ label: kit.name, key: kit.hotkey, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
+      }
     }
     // Z Pods: one add-on each, raised beside it (Plate-forme, Tourelle).
     for (const t of (b.def as BuildingDef).addons ?? []) {

@@ -120,6 +120,25 @@ describe('Z', () => {
     expect(w.weapon(hexa)!.damage).toBe(16); // N3: 19
   });
 
+  it('the Tourelle and the Assimilateur take a weapon bought for them, at level 2', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 1000;
+    const turret = w.spawn('tourelle', 0, 30 * FP, 30 * FP);
+    const assim = w.spawn('assimilateur', 0, 34 * FP, 30 * FP);
+    expect(w.weapon(turret)).toEqual({ damage: 15, range: 4, cooldown: 1, vsMechanical: -4 }); // machine gun N2: 17 / 13
+    expect(w.weapon(assim)).toBeUndefined();
+    w.step([{ player: 0, kind: 'arm', ids: [assim.id], weapon: 'laser' }]);
+    expect(assim.kit).toBe(''); // not researched
+    p.upgrades.laser = 1;
+    w.step([{ player: 0, kind: 'arm', ids: [assim.id, turret.id], weapon: 'laser' }]);
+    expect(assim.kit).toBe('laser');
+    expect(w.weapon(assim)!.damage).toBe(20); // Laser N2: 23
+    expect(p.minerals).toBe(1000 - 2 * 70);
+    w.step([{ player: 0, kind: 'arm', ids: [turret.id], weapon: 'roquettes' }]);
+    expect(turret.kit).toBe('laser'); // once
+  });
+
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

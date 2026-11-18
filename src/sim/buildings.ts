@@ -1,6 +1,6 @@
 /** Buildings: placement, power network, production, research, morphs, bunkers and carriers. */
 import BALANCE from '../balance.json';
-import { type BuildingDef, DEFS, type UnitDef, type UpgradeDef } from '../data';
+import { type BuildingDef, DEFS, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -155,11 +155,12 @@ export function operate(this: World, b: Entity): void {
   }
   const def = b.def as BuildingDef;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
-  if (def.attack && b.cooldown === 0) {
-    const t = this.enemyNear(b, toFp(def.attack.range), true);
-    if (t) {
-      b.cooldown = ticks(def.attack.cooldown);
-      this.hit(b, t, def.attack);
+  const attack = this.weapon(b);
+  if (attack && b.cooldown === 0) {
+    const t = this.enemyNear(b, toFp(attack.range), true);
+    if (t && (!b.kit || reaches(attack, flies(t)))) {
+      b.cooldown = ticks(attack.cooldown);
+      this.hit(b, t, attack);
     }
   }
   if (def.energyRate && ++b.timer >= ticks(1 / def.energyRate)) {

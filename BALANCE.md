@@ -107,6 +107,8 @@ Les socles Z (Quadripode, Hexapode, Coléoptère) se commandent à la Plate-form
 
 Les socles évoluent sur le terrain (`tiers` dans `units`, `Z.doc`) : T2 puis T3, chacun avec `cost`, `buildTime` (secondes d'évolution, le socle reste immobile), `hp`, `armor` et `speed` ; l'arme monte d'un niveau à chaque évolution. Chaque niveau se débloque par le niveau suivant de la recherche du socle au Centre de socles (`rquadripode2`, `rquadripode3`, `rhexapode2`, `rcoleoptere2`, `rcoleoptere3`) ; Optimisation perfectionnée (`optimisationp`) accélère les évolutions de `rules.z.optimisationSpeedup` %.
 
+La Tourelle et l'Assimilateur ont aussi une « arme adaptable » (`Z.doc`) : une arme de `weapons` s'achète une fois pour eux, au prix de l'arme, au niveau `weaponLevel` (2, proposition faute de valeur dans la fiche). La Tourelle a d'office la mitrailleuse de ce niveau (son `attack`), l'Assimilateur aucune arme tant qu'on ne lui en achète pas.
+
 Chaque arme a quatre niveaux (`levels`, `Z.doc`) : pour chacun, les dégâts contre le biologique léger (les dégâts du jeu) puis contre les machines (l'écart devient `vsMechanical`, bâtiments compris). Le niveau est celui du socle (`weaponLevel` dans `units` : Quadripode et Coléoptère 1, Hexapode 2). `range` (ou `ranges` par niveau pour le Lance-roquettes), `cooldown`, `air`, `splash` comme pour une attaque. `mitrailleuse` est l'arme gratuite des socles. Tous les dégâts sont multipliés par `rules.z.weaponDamage` % (86 : 14 → 12, 17 → 15), la réduction déjà appliquée aux socles. Le Lance-flammes garde la petite zone du jeu (`splash`) pour la « double attaque » de la fiche.
 
 ## Capacités (`abilities`)

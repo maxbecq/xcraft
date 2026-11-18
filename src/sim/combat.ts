@@ -82,8 +82,10 @@ export function rangeBonus(this: World, e: Entity, t?: Entity): number {
 /** The weapon a unit fights with now: Scarabées get one by research, a Char Pégase in the air shoots only at flyers. */
 export function weapon(this: World, e: Entity): Attack | undefined {
   // Z socles: the weapon chosen at the Plate-forme, or the machine gun, as strong as the socle's level.
-  const level = (e.def as UnitDef).weaponLevel;
-  if (level) return weaponAt(e.kit || 'mitrailleuse', level + e.tier - 1);
+  // Z Tourelle and Assimilateur: the weapon bought for them, or the Tourelle's machine gun, at their level.
+  const level = (e.def as UnitDef | BuildingDef).weaponLevel;
+  if (level && (e.kit || e.def.kind === 'unit' || (e.def as BuildingDef).attack)) return weaponAt(e.kit || 'mitrailleuse', level + e.tier - 1);
+  if (level) return undefined;
   if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
   const a = (e.def as UnitDef | BuildingDef).attack;
   const lv = (e.def as UnitDef).levels;
@@ -426,7 +428,7 @@ export function gap(this: World, e: Entity, t: Entity): number {
 
 /** How urgent an enemy is to hit: 0 what shoots back (soldiers, defences), 1 other units (workers), 2 buildings. */
 export function rank(this: World, t: Entity): number {
-  const armed = !!(t.def as UnitDef | BuildingDef).attack && !(t.def as UnitDef).worker;
+  const armed = !!this.weapon(t) && !(t.def as UnitDef).worker;
   return armed ? 0 : t.def.kind === 'unit' ? 1 : 2;
 }
 

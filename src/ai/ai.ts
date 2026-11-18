@@ -386,6 +386,18 @@ export class AI {
       energy -= next.cost.energy;
     }
 
+    // Z: Tourelles, then from 10 min Assimilateurs, get a weapon of their own (Laser, rockets against flyers).
+    for (const b of buildings) {
+      const allowed = (b.def as BuildingDef).weapons;
+      if (!allowed || b.kit || b.buildLeft > 0 || (b.type === f.extractor && minute < 10)) continue;
+      const k = (this.enemyAir ? ['roquettes', 'laser'] : ['laser', 'roquettes']).find((o) => allowed.includes(o) && !(WEAPONS[o].research && !w.level(this.player, WEAPONS[o].research!)));
+      const cost = k && WEAPONS[k].cost;
+      if (!cost || minerals - keep < cost.minerals + 100 || energy - unitReserve < cost.energy) continue;
+      out.push({ player: this.player, kind: 'arm', ids: [b.id], weapon: k });
+      minerals -= cost.minerals;
+      energy -= cost.energy;
+    }
+
     // Dieux: the Porte summons the next god when its time has come; each god summons its troops, when affordable.
     if (f.gods && !saving) {
       const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));

@@ -188,6 +188,18 @@ export function apply(this: World, c: Command): void {
       p[c.sell === 'minerals' ? 'energy' : 'minerals'] += get;
       return;
     }
+    case 'arm': {
+      const kit = WEAPONS[c.weapon];
+      if (!kit) return;
+      if (kit.research && !this.level(c.player, kit.research)) return void this.say(c.player, `Requiert : ${DEFS[kit.research].name}`);
+      for (const b of buildings) {
+        if (!(b.def as BuildingDef).weapons?.includes(c.weapon) || b.kit || b.buildLeft > 0) continue;
+        if (!this.pay(c.player, kit)) return;
+        b.kit = c.weapon;
+        b.cooldown = 0;
+      }
+      return;
+    }
     case 'evolve': {
       // Z.doc: in the field, for a reduced price, standing still a few seconds; Optimisation perfectionnée speeds it up.
       for (const e of units) {

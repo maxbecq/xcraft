@@ -145,6 +145,10 @@ export interface BuildingDef {
   detector?: number;
   /** Bunker: how many units can shelter inside. */
   bunker?: number;
+  /** Z Tourelle and Assimilateur: weapons (keys of WEAPONS) that can be bought for it, once (Z.doc: « arme adaptable »). */
+  weapons?: string[];
+  /** Z: the level its weapon fights at. */
+  weaponLevel?: number;
   /** Z Pod: add-ons it raises beside it, one at a time (Plate-forme, Tourelle). */
   addons?: string[];
   /** Z: a Pod add-on, raised by a Pod, never by a drone. */
@@ -534,9 +538,10 @@ const BASE: Record<string, object> = {
   supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone'], dropoff: true, absorbs: true, morphOnly: true, requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
-  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, faction: 'z', hotkey: 'A' },
+  // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
+  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'A' },
   plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
-  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, faction: 'z', hotkey: 'T' },
+  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'T' },
   centresocles: {
     kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
     researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3'],
