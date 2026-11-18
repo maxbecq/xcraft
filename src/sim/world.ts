@@ -120,6 +120,9 @@ export interface Entity {
   absorbed?: number;
 }
 
+/** Bac à sable, « Ressources illimitées »: each resource topped up to this at every tick. */
+const UNLIMITED = 99999;
+
 export interface Player {
   id: number;
   faction: Faction;
@@ -131,7 +134,9 @@ export interface Player {
   upgrades: Record<UpgradeLine, number>;
   /** Players on the same team share their sight and never fight each other. */
   team: number;
-  /** Bac à sable (a match with one player): buildings, training and research finish at once; the whole map shows. */
+  /** Bac à sable (a match with one player), its options: resources never run out; buildings, training and research
+   * finish at once; the whole map shows. All off unless picked. */
+  unlimited?: boolean;
   instant?: boolean;
   reveal?: boolean;
 }
@@ -158,9 +163,11 @@ export type Command =
   | { player: number; kind: 'equip'; ids: number[]; weapon: string }
   /** Attack a target, or attack-move to a point when there is none. */
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
-  /** Bac à sable only (a match with one player): 10 000 of each resource, or a test switch turned over. Orders like
-   * any other, so a replay plays them back. */
-  | { player: number; kind: 'sandbox'; ids: number[]; tool: 'money' | 'instant' | 'reveal' };
+  /** Bac à sable only (a match with one player): one of its options turned on or off. Orders like any other, so a
+   * replay plays them back. */
+  | { player: number; kind: 'sandbox'; ids: number[]; tool: SandboxTool; on: boolean };
+
+export type SandboxTool = 'unlimited' | 'instant' | 'reveal';
 
 export interface Shot {
   /** Shooter and target centres (fixed-point). */
@@ -324,6 +331,7 @@ export class World {
       this.queueing = false;
     }
     for (const e of this.entities.values()) if (e.owner >= 0 && this.players[e.owner].instant) this.hurry(e);
+    for (const p of this.players) if (p.unlimited) [p.minerals, p.energy] = [Math.max(p.minerals, UNLIMITED), Math.max(p.energy, UNLIMITED)];
     for (const e of this.entities.values()) {
       e.px = e.x;
       e.py = e.y;

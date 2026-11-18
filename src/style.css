@@ -144,11 +144,6 @@ body .hud-toasts .hud-toast.bump { animation: toast-bump 0.25s ease-out; }
 .menu button:is(:hover, .vhover), .hud-banner button:is(:hover, .vhover), .pause-box button:is(:hover, .vhover) { border-color: var(--amber); color: var(--amber); }
 .tools { position: fixed; top: 8px; left: 12px; display: flex; align-items: center; gap: 6px; }
 .tool { min-width: 0; padding: 5px 12px; font-size: 18px; }
-/* Bac à sable: its tools in a small panel at the top right, under the resources; switches light up when on. */
-.sandbox-tools { position: fixed; top: 44px; right: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; background: rgba(10, 12, 16, 0.72); border: 1px solid rgba(255, 213, 138, 0.35); border-radius: 4px; }
-.sandbox-tools b { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd58a; text-align: center; }
-.tool.sandbox { font-size: 13px; padding: 3px 10px; white-space: nowrap; }
-.tool.sandbox.on { background: #ffd58a; color: #1a1206; text-shadow: none; }
 .pause { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }
 .pause-box {
   display: flex; flex-direction: column; align-items: center; gap: 10px; max-height: 86vh; overflow: auto; padding: 22px 30px; box-sizing: border-box;

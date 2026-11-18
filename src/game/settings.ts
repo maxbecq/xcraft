@@ -36,6 +36,9 @@ export const stored = (k: string) => {
   }
 };
 
+/** Bac à sable: its options, all off unless picked (before the match or in the pause menu's options). */
+export const SANDBOX_TOOLS = { unlimited: 'Ressources illimitées', instant: 'Construction, production et recherche instantanées', reveal: 'Carte révélée (sans brouillard)' } as const;
+
 export const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' || v === 'dieux' ? v : 'humains');
 
 /** Fullscreen: chosen in the options for this computer, toggled from the pause menu. */

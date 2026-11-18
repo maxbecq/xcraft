@@ -9,7 +9,7 @@ import { BIOMES, type Biome } from '../render/biome';
 import { TEAM_COLORS } from '../render/units';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
-import { asFaction, FULLSCREEN_KEY, stored, wantsFullscreen } from './settings';
+import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
 let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality, TOUCH: boolean;
@@ -154,6 +154,9 @@ const COMPACT = matchMedia('(max-width: 820px), (max-height: 600px)');
  * loads from the URL. On small screens `step` shows the maps alone, then the rest. `sandbox`: Bac à sable, the
  * player's faction alone.
  */
+/** Bac à sable: the options picked before the match (all off at first). */
+const sandboxPicked = new Set<string>();
+
 function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map', sandbox = false): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
     `<select data-k="${key}">${Object.entries(options)
@@ -197,9 +200,12 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
       <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
+    ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement | HTMLInputElement;
+    const tool = el.dataset.sandbox;
+    if (tool) return void ((el as HTMLInputElement).checked ? sandboxPicked.add(tool) : sandboxPicked.delete(tool));
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
@@ -399,7 +405,7 @@ function launch(s: Setup, sandbox = false): void {
     // the URL carries it all
   }
   const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
-  if (sandbox) return void (location.search = `?sandbox&${keep}`);
+  if (sandbox) return void (location.search = `?sandbox&${keep}${sandboxPicked.size ? `&outils=${[...sandboxPicked].join(',')}` : ''}`);
   const seated = s.sides.filter((x) => x.control !== 'none');
   // With two players, each is its own team whatever was picked; with more, teams as chosen.
   const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);

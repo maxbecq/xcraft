@@ -21,7 +21,7 @@ import { seatsOf } from './mappicker';
 import { PerfHud } from './perf';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
-import type { Command, Entity } from './sim/world';
+import type { Command, Entity, SandboxTool } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } from './terrain';
 import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
@@ -29,7 +29,7 @@ import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { connect, every, NO_DIRECT, readRoom, stateHash, type NetStatus } from './net';
 import { countMatch, countTitle } from './stats';
-import { asFaction, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, stored, toggleFullscreen, wantsFullscreen } from './game/settings';
+import { asFaction, SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, stored, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { downloadReplay, readReplay, type Replay, saveReplay } from './game/replay';
 
@@ -162,6 +162,8 @@ Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, n
 scene.add(sun, sun.target);
 
 let pending: Command[] = [];
+// Bac à sable: the options picked before the match (`&outils=unlimited,instant,reveal`), turned on at its first tick.
+if (SANDBOX) for (const tool of params.get('outils')?.split(',') ?? []) if (tool in SANDBOX_TOOLS) pending.push({ player: PLAYER, kind: 'sandbox', ids: [], tool: tool as SandboxTool, on: true });
 
 // Network game: a banner while waiting for the other player, or once the link is lost.
 const netBanner = document.createElement('div');
@@ -458,7 +460,7 @@ const EDGE_TOUCH_PX = 3;
  * the edge they touch does not scroll along them, nor a band's width past their ends, which takes in the corner they
  * sit in. The way from the middle of the screen to any of them crosses no scrolling band (as in StarCraft II, where the
  * console's edge is no scrolling edge). */
-const EDGE_PANELS = '.map-slot, .hud-card, .tools > *, .prod-panel, .sandbox-tools';
+const EDGE_PANELS = '.map-slot, .hud-card, .tools > *, .prod-panel';
 /** A panel this close to an edge is set against it. */
 const ATTACH_PX = 48;
 /** Whether the edge `side` (l, r, t, b: the bottom one runs along the console's top, at `bottom`) is calm at `along`
@@ -557,19 +559,6 @@ let scrollHeld = 0;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
-// Bac à sable: its test tools in a panel of their own (orders to the simulation, so a replay plays them back too).
-const sandboxTools = document.createElement('div');
-sandboxTools.className = 'sandbox-tools';
-if (SANDBOX) {
-  sandboxTools.innerHTML = '<b>Bac à sable</b><button class="tool sandbox" data-t="money" title="10 000 minerai et 10 000 énergie">+10 000</button><button class="tool sandbox" data-t="instant" title="Construction, production et recherche instantanées">Instantané</button><button class="tool sandbox" data-t="reveal" title="Toute la carte visible">Carte révélée</button>';
-  document.body.append(sandboxTools);
-  const mark = () => {
-    const p = world.players[PLAYER];
-    sandboxTools.querySelector('[data-t="instant"]')!.classList.toggle('on', !!p.instant);
-    sandboxTools.querySelector('[data-t="reveal"]')!.classList.toggle('on', !!p.reveal);
-  };
-  setInterval(mark, 250);
-}
 const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
@@ -612,10 +601,6 @@ const setPaused = (on: boolean) => {
 const pauseOptions = pause.querySelector<HTMLElement>('.pause-options')!;
 pauseOptions.addEventListener('input', (e) => controlChange(e.target as HTMLInputElement));
 pauseOptions.addEventListener('change', (e) => controlChange(e.target as HTMLInputElement));
-sandboxTools.addEventListener('click', (e) => {
-  const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
-  if (t === 'money' || t === 'instant' || t === 'reveal') issue({ player: PLAYER, kind: 'sandbox', ids: [], tool: t });
-});
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);
@@ -635,7 +620,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'options') {
     // Built on opening, so the fields show the values in force.
-    if (pauseOptions.hidden) pauseOptions.innerHTML = controlFields(true) + perf.field();
+    if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields() + controlFields(true) + perf.field();
     pauseOptions.hidden = !pauseOptions.hidden;
   }
   else if (p === 'fullscreen') toggleFullscreen();
@@ -756,8 +741,22 @@ function controlFields(inMatch: boolean): string {
     </fieldset>
     ${inMatch && SOLO ? `<fieldset class="options"><legend>Partie contre l'IA</legend>${range('game', 'Vitesse du jeu', 0.5, 2, 0.25, '×')}</fieldset>` : ''}`;
 }
+/** Bac à sable: its options in the pause menu, as they stand now (shown on touch screens too). */
+function sandboxFields(): string {
+  if (!SANDBOX) return '';
+  const p = world.players[PLAYER];
+  return `<fieldset class="options"><legend>Bac à sable</legend>${Object.entries(SANDBOX_TOOLS)
+    .map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${p[k as SandboxTool] ? ' checked' : ''}> ${label}</label>`)
+    .join('')}</fieldset>`;
+}
+
 /** A control field changed: kept, and live in the match. False for any other field. */
 function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
+  const tool = field.dataset.sandbox as SandboxTool | undefined;
+  if (tool && tool in SANDBOX_TOOLS) {
+    if (field.type === 'checkbox') issue({ player: PLAYER, kind: 'sandbox', ids: [], tool, on: (field as HTMLInputElement).checked });
+    return true;
+  }
   if (field.dataset.k === 'debug') {
     perf.toggle((field as HTMLInputElement).checked);
     return true;
