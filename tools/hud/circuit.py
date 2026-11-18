@@ -63,52 +63,98 @@ def offset(pts: list[tuple[float, float]], o: float) -> list[tuple[float, float]
     return out
 
 
-traces, vias, chips = [], [], []
+traces, vias, chips, owned = [], [], [], []
 
 
-def bus(x: float, y: float, d: tuple[int, int], k: int, w: float, skip: float = 0) -> bool:
-    base = route(x, y, d, random.randint(2, 3))
+def chamfer(pts: list[tuple[float, float]], c: float) -> list[tuple[float, float]]:
+    """Each inner corner cut by a 45° chamfer of c px, as on a real board."""
+    out = [pts[0]]
+    for (x0, y0), (x1, y1), (x2, y2) in zip(pts, pts[1:], pts[2:]):
+        l1, l2 = max(abs(x1 - x0), abs(y1 - y0)), max(abs(x2 - x1), abs(y2 - y1))
+        k = min(c, l1 / 2, l2 / 2)
+        out.append((x1 - (x1 - x0) / l1 * k, y1 - (y1 - y0) / l1 * k))
+        out.append((x1 + (x2 - x1) / l2 * k, y1 + (y2 - y1) / l2 * k))
+    return [*out, pts[-1]]
+
+
+def lay(base: list[tuple[float, float]], k: int, w: float, skip: float = 0, via: bool = True, own: frozenset = frozenset()) -> bool:
+    """k parallel traces along base; skip: the first px not checked (they start on a chip); own: the cells of the trace
+    a branch leaves, which it may touch (and no other)."""
+    base = [q for i, q in enumerate(base) if not i or abs(q[0] - base[i - 1][0]) + abs(q[1] - base[i - 1][1]) > 0.5]
+    if len(base) < 2:
+        return False
     lines = [offset(base, (i - (k - 1) / 2) * P) for i in range(k)]
-    # A bus out of a chip starts on its pins: the first few px are not checked against the chip itself.
-    occ = [cells([(l[0][0] + d[0] * skip, l[0][1] + d[1] * skip), *l[1:]], w / 2 + 1) for l in lines]
-    if any(c & taken for c in occ):
+    def trimmed(l):
+        dx, dy = l[1][0] - l[0][0], l[1][1] - l[0][1]
+        n = (dx * dx + dy * dy) ** 0.5
+        return [(l[0][0] + dx / n * skip, l[0][1] + dy / n * skip), *l[1:]] if skip else l
+    occ = [cells(trimmed(l), w / 2 + 1) for l in lines]
+    if any((c - own) & taken for c in occ):
         return False
     for l, c in zip(lines, occ):
         taken.update(c)
         traces.append((l, w))
-        vias.append(l[-1])
-        if skip:
-            vias.pop()  # out of a chip: the far end only
+        owned.append(frozenset(c))
+        if via:
             vias.append(l[-1])
-        taken.update(cells([l[-1], l[-1]], 4))
+            taken.update(cells([l[-1], l[-1]], 4))
     return True
 
 
-for _ in range(60):
-    if len(chips) >= 5:
+# Chips first, spread over the tile.
+for _ in range(300):
+    if len(chips) >= 8:
         break
     w, h = P * random.randint(4, 8), random.choice([16, 22])
-    x, y = random.randrange(10, W - w - 10, P), random.randrange(14, H - h - 14, P)
-    box = cells([(x - 10, y - 10), (x + w + 10, y - 10), (x + w + 10, y + h + 10), (x - 10, y + h + 10), (x - 10, y - 10)], 6)
-    inner = {(cx, cy) for cx in range((x - 2) // C, (x + w + 2) // C) for cy in range((y - 6) // C, (y + h + 6) // C)}
+    x, y = random.randrange(10, W - w - 10, P), random.randrange(18, H - h - 18, P)
+    box = cells([(x - 14, y - 16), (x + w + 14, y - 16), (x + w + 14, y + h + 16), (x - 14, y + h + 16), (x - 14, y - 16)], 6)
+    inner = {(cx, cy) for cx in range((x - 2) // C, (x + w + 2) // C) for cy in range((y - 4) // C, (y + h + 4) // C)}
     if (box | inner) & taken:
         continue
     taken.update(inner)
     chips.append((x, y, w, h))
-    for side in (-1, 1):
+pin = lambda ch, side: ch[1] - 8 if side < 0 else ch[1] + ch[3] + 8
+# A connected board: buses from chip to chip, out of one's pins and into the other's.
+for a in chips:
+    for b in sorted((c for c in chips if c is not a), key=lambda c: abs(c[0] - a[0]) + abs(c[1] - a[1]))[:3]:
+        side = -1 if b[1] < a[1] else 1
+        k = min(a[2] // P, b[2] // P, random.randint(2, 4))
         for _ in range(8):
-            k = random.randint(2, min(5, w // P))
-            first = random.randint(0, w // P - k)
-            cx = x + P * (first + (k - 1) / 2 + 0.5)
-            if bus(cx, y - 6 if side < 0 else y + h + 6, (0, side), k, 1.6, skip=4):
+            ax = a[0] + P * (random.randint(0, a[2] // P - k) + (k - 1) / 2 + 0.5)
+            bx = b[0] + P * (random.randint(0, b[2] // P - k) + (k - 1) / 2 + 0.5)
+            y0, y1 = pin(a, side), pin(b, -side)
+            if (y1 - y0) * side < P * 5:
                 break
-for _ in range(1500):
-    d = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
-    x, y = random.randrange(0, W, P), random.randrange(0, H, P)
-    if random.random() < 0.1:
-        bus(x, y, d, 1, 3.2)
-    else:
-        bus(x, y, d, random.randint(1, 4), 1.6)
+            my = round((y0 + (y1 - y0) * random.uniform(0.3, 0.7)) / P) * P
+            if lay(chamfer([(ax, y0), (ax, my), (bx, my), (bx, y1)], P * 2), k, 1.6, via=False):
+                break
+# A few more buses out of the chips' pins.
+for ch in chips:
+    for side in (-1, 1):
+        for _ in range(6):
+            k = random.randint(2, min(4, ch[2] // P))
+            cx = ch[0] + P * (random.randint(0, ch[2] // P - k) + (k - 1) / 2 + 0.5)
+            if lay(route(cx, pin(ch, side), (0, side), random.randint(2, 3)), k, 1.6):
+                break
+# Branches off the straight runs, out sideways, ending in vias; a few thick power lines.
+for _ in range(8000):
+    if len(traces) >= 110:
+        break
+    ti = random.randrange(len(traces))
+    pts, tw = traces[ti]
+    j = random.randrange(len(pts) - 1)
+    (x0, y0), (x1, y1) = pts[j], pts[j + 1]
+    if abs(x1 - x0) > 0.5 and abs(y1 - y0) > 0.5:
+        continue  # a chamfer: no branch at 45°
+    n = max(abs(x1 - x0), abs(y1 - y0))
+    if n < P * 4:
+        continue
+    f = P * random.randint(2, int(n / P) - 2) / n
+    px, py = x0 + (x1 - x0) * f, y0 + (y1 - y0) * f
+    ax, ay = (x1 - x0) / n, (y1 - y0) / n
+    d = random.choice([(-ay, ax), (ay, -ax)])
+    d = (round(d[0]), round(d[1]))
+    lay(route(px, py, d, random.randint(1, 3)), 1, 3.2 if random.random() < 0.1 else 1.6, own=owned[ti])
 
 # Drawn nine times, shifted by the tile size, so it wraps without a seam.
 g = []
@@ -120,7 +166,7 @@ for ox in (-W, 0, W):
             g.append(f'<circle class="v" cx="{x + ox:.1f}" cy="{y + oy:.1f}" r="2.2"/>')
         for x, y, w, h in chips:
             for px in range(x + P // 2, x + w, P):
-                g.append(f'<rect class="f" x="{px - 1.2 + ox}" y="{y - 6 + oy}" width="2.4" height="{h + 12}"/>')
+                g.append(f'<rect class="f" x="{px - 1.2 + ox}" y="{y - 8 + oy}" width="2.4" height="{h + 16}"/>')
             g.append(f'<rect class="c" x="{x + ox}" y="{y + oy}" width="{w}" height="{h}" rx="1.5"/>')
 svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
        '<style>polyline{fill:none;stroke:#6ff4ff;stroke-linejoin:round;stroke-linecap:round}'

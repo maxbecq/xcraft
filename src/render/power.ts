@@ -282,7 +282,8 @@ function pcbTextures(): NonNullable<typeof pcb> {
     const j = Math.floor(rnd() * (t.pts.length - 1));
     const [a, b] = [t.pts[j], t.pts[j + 1]];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (len < U * 3) continue;
+    // Only off a straight run along one of the texture's axes: a branch off a jog would leave at a fourth angle.
+    if (len < U * 3 || (Math.abs(b[0] - a[0]) > 0.5 && Math.abs(b[1] - a[1]) > 0.5)) continue;
     const f = (U * (1 + Math.floor(rnd() * (len / U - 1)))) / len;
     const p: P = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
     const along = unit([b[0] - a[0], b[1] - a[1]]);
