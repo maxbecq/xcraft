@@ -371,7 +371,10 @@ export class World {
     for (const c of commands) {
       // Shift: orders go after what the units are already doing; otherwise they replace it all.
       this.queueing = 'queue' in c && !!c.queue;
-      if (!this.queueing && 'ids' in c && Array.isArray(c.ids)) for (const id of c.ids) this.entities.get(id)?.next.splice(0);
+      if (!this.queueing && 'ids' in c && Array.isArray(c.ids)) for (const id of c.ids) {
+        const e = this.entities.get(id);
+        if (e?.owner === c.player) e.next.splice(0);
+      }
       this.apply(c);
       this.queueing = false;
     }
@@ -746,6 +749,12 @@ export class World {
         }
         if (!this.canPlace(o.type, o.tx, o.ty, e.owner)) {
           this.say(e.owner, this.misplaced(def, o.tx, o.ty, e.owner));
+          return this.setOrder(e, null);
+        }
+        // Checked again on the spot: another worker may have raised the one-per-player building since the order.
+        const lack = this.lacks(e.owner, o.type);
+        if (lack) {
+          this.say(e.owner, lack);
           return this.setOrder(e, null);
         }
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);

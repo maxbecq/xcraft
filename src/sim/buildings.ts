@@ -142,8 +142,9 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
 export function trainTime(this: World, b: Entity, type: string): number {
   const levels = (b.def as UnitDef).levels;
   if (type === 'niveau' && levels) return ticks(levels.time[b.lvl - 1]);
-  // A god summons in its base time divided by its level (XC.doc 2008).
-  const t = idiv(ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime), b.lvl);
+  // A god summons in its base time divided by its level (XC.doc 2008); a building raised by Gaïa keeps her level only
+  // to materialise faster.
+  const t = idiv(ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime), b.def.kind === 'unit' ? b.lvl : 1);
   if (DEFS[type].kind !== 'unit') return t;
   let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
   if (b.type === 'portail' && this.level(b.owner, 'miniportail')) speedup += BALANCE.rules.upgrades.miniportailSpeedup;
@@ -207,7 +208,11 @@ export function produce(this: World, b: Entity): void {
       return;
     }
     const up = DEFS[type];
-    if (up.kind === 'building') return this.morph(b, type);
+    if (up.kind === 'building') {
+      this.morph(b, type);
+      if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+      return;
+    }
     if (up.kind === 'upgrade') {
       this.players[b.owner].upgrades[up.line] = up.level;
       this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');

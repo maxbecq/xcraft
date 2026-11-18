@@ -90,6 +90,7 @@ export function apply(this: World, c: Command): void {
         const up = DEFS[c.type] as UpgradeDef;
         if (!this.pay(c.player, up)) return;
         g.queue.push(c.type);
+        g.kits.push('');
         if (g.queue.length === 1) g.trainLeft = this.trainTime(g, c.type);
         return;
       }
@@ -195,7 +196,7 @@ export function apply(this: World, c: Command): void {
       const market = buildings.find((b) => b.type === 'marche' && b.buildLeft === 0);
       const p = this.players[c.player];
       const { give, get } = BALANCE.rules.trade;
-      if (!market) return;
+      if (!market || (c.sell !== 'minerals' && c.sell !== 'energy')) return;
       if (p[c.sell] < give) return void this.say(c.player, c.sell === 'minerals' ? 'Pas assez de minerai.' : "Pas assez d'énergie.");
       p[c.sell] -= give;
       p[c.sell === 'minerals' ? 'energy' : 'minerals'] += get;
