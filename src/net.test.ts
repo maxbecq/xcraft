@@ -138,6 +138,14 @@ describe('lockstep between two browsers', () => {
     expect(b.desync).toBe(200);
   });
 
+  it("knows when the other side's match has begun, not merely its page", () => {
+    const b = new Lockstep(1, () => {});
+    b.receive({ hi: 'x' } as never);
+    expect(b.started).toBe(false);
+    b.receive({ t: START + 1, c: [], a: START }); // out of order: still a sign of life
+    expect(b.started).toBe(true);
+  });
+
   it('hears a deliberate leave', () => {
     const b = new Lockstep(1, () => {});
     b.receive({ bye: 1 });

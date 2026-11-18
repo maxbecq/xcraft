@@ -82,6 +82,11 @@ export class Lockstep {
     } else if ('bye' in m) this.left = true;
   }
 
+  /** The other side's match runs: its first orders came (before, its page may still be loading). */
+  get started(): boolean {
+    return this.missing > START || this.theirs.size > 0;
+  }
+
   /** Whether tick `t` can run: the other side's orders for it are in. */
   ready(t: number): boolean {
     return t < START || this.theirs.has(t);

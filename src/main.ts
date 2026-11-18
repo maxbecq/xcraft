@@ -248,10 +248,21 @@ function endNet(title: string, detail: string): void {
   netBanner.hidden = false;
   netBanner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>`;
 }
-/** Long waits for the other side, said with the time left before the forfeit. A few times a second, even in a background tab. */
+/**
+ * Long waits for the other side, said with the time left. While its match is still loading (none of its orders
+ * yet), it is only waited for. A link cut for good ends the match with no winner (each side would otherwise claim
+ * it); a side still linked but sending no orders loses by forfeit. A few times a second, even in a background tab.
+ */
 let warned = '';
 function watchNet(): void {
-  if (!netStarted || netOver || world.winner !== null) return;
+  if (!netStarted || netOver || !net || world.winner !== null) return;
+  const say = (text: string) => {
+    if (text === warned) return;
+    warned = text;
+    netBanner.hidden = false;
+    netBanner.innerHTML = text;
+  };
+  if (!net.started) return say('<h2>En attente de votre ami…</h2><p>Sa partie se charge.</p><button data-n="quit">Annuler</button>');
   const since = cutSince || stalledSince;
   const waited = since ? performance.now() - since : 0;
   if (waited < QUIET_MS) {
@@ -260,12 +271,9 @@ function watchNet(): void {
     return;
   }
   const left = Math.ceil((FORFEIT_MS - waited) / 1000);
+  if (left <= 0 && cutSince) return endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur ; le replay est enregistré.');
   if (left <= 0) return endNet('Victoire par abandon', "L'adversaire ne répond plus.");
-  const text = `<h2>L'adversaire ne répond plus</h2><p>${cutSince ? 'Connexion coupée, reconnexion…' : 'En attente de ses ordres…'}</p><p>Victoire par abandon dans ${left} s.</p><button data-n="quit">Quitter la partie</button>`;
-  if (text === warned) return;
-  warned = text;
-  netBanner.hidden = false;
-  netBanner.innerHTML = text;
+  say(`<h2>L'adversaire ne répond plus</h2><p>${cutSince ? 'Connexion coupée, reconnexion…' : 'En attente de ses ordres…'}</p><p>${cutSince ? 'Partie interrompue' : 'Victoire par abandon'} dans ${left} s.</p><button data-n="quit">Quitter la partie</button>`);
 }
 netBanner.addEventListener('click', (e) => {
   const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
@@ -1131,7 +1139,7 @@ function start(): void {
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && (netOver || !netStarted || !net.ready(world.tick))) {
-        if (netStarted && !stalledSince) stalledSince = performance.now();
+        if (netStarted && net.started && !stalledSince) stalledSince = performance.now();
         acc = Math.min(acc, TICK);
         break;
       }
