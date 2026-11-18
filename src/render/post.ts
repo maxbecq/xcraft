@@ -22,9 +22,15 @@ export class Post {
   /** `light` (phones and tablets): fewer occlusion samples, half-size bloom, no SMAA (the ink line already hides most jaggies). */
   constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean, light = false) {
     // Soft image-based light so metal and glass pick up reflections.
-    const pmrem = new PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const environment = () => new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environment();
     scene.environmentIntensity = 0.35;
+    // It lives in a render target, which comes back empty after a lost GPU context (a heavy job on the same GPU,
+    // a driver reset): without it buildings and units turned flat dark grey. Baked again once the context is back.
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      scene.environment?.dispose();
+      scene.environment = environment();
+    });
     // Shadows are drawn once per frame, in render(): the ambient occlusion pass renders the scene again
     // and would otherwise redraw the whole shadow map, every skinned unit included.
     renderer.shadowMap.autoUpdate = false;
