@@ -83,8 +83,20 @@ export interface UnitDef {
   builder?: boolean;
   /** Comes back by itself at its side's headquarters this many seconds after dying (Gaïa). */
   respawn?: number;
+  /** Dieux: the god's 5 levels (XC.doc 2008), bought at the god. Stats by level (index 0 = level 1); price and time of
+   * levels 2 to 5 (index 0 = level 2). What a god summons or calls down takes its base time divided by its level. */
+  levels?: GodLevels;
   faction: Faction;
   hotkey: string;
+}
+
+export interface GodLevels {
+  hp: number[];
+  armor: number[];
+  speed: number[];
+  damage?: number[];
+  cost: Cost[];
+  time: number[];
 }
 
 export interface BuildingDef {
@@ -513,6 +525,8 @@ const BASE: Record<string, object> = {
   ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
   ...upgrades('armor', 'Amélioration armure', 'A', undefined, 'dieux', 3, 'darmor'),
   celerite: research('Célérité naine', 'N', 'Les Nains bondissent sur un ennemi proche.', undefined, 'dieux'),
+  // A god's next level, queued at the god itself; its price and time are the god's own (UnitDef.levels).
+  niveau: research('Niveau divin', 'L', 'Le dieu monte d’un niveau : vie, armure, dégâts et vitesse ; il invoque et bâtit plus vite.', undefined, 'dieux'),
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
   puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },

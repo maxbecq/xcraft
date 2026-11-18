@@ -263,8 +263,8 @@ export class Hud {
       const e = this.world.entities.get(Number(bar.dataset.id));
       const fill = bar.querySelector<HTMLElement>('.now i');
       if (!e || !fill || !e.queue.length) continue;
-      const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
-      fill.style.width = `${Math.round(100 * (1 - e.trainLeft / ticks(first.buildTime)))}%`;
+      // The world's time for it: a god's level shortens it.
+      fill.style.width = `${Math.round(100 * (1 - e.trainLeft / this.world.trainTime(e, e.queue[0])))}%`;
     }
   }
 
@@ -533,7 +533,7 @@ export class Hud {
       return;
     }
     const e = sel[0];
-    let html = `<div class="name">${e.def.name}</div>`;
+    let html = `<div class="name">${e.def.name}${(e.def as UnitDef).levels ? ` <small>niveau ${e.lvl}</small>` : ''}</div>`;
     if (e.def.kind === 'resource') {
       html += `<div class="info">${Number.isFinite(e.amount) ? `${e.amount} restants` : 'Inépuisable'}</div>`;
     } else {
@@ -582,7 +582,7 @@ export class Hud {
       const bonus = e.def.kind === 'unit' && e.owner >= 0 ? (this.world['armorBonus'] as (t: Entity) => number).call(this.world, e) : 0;
       parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
     }
-    if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).speed)}</span>`);
+    if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed)}</span>`);
     if ('sight' in e.def) parts.push(`<span>Vue ${e.def.sight}</span>`);
     return parts.length ? `<div class="stats">${parts.join('')}</div>` : '';
   }
@@ -653,6 +653,10 @@ export class Hud {
         const order = units.filter((u) => (u.def as UnitDef).trains?.includes(t)).sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
         list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
       }
+      // Dieux: the next level of a selected god, bought at the god (the lowest-levelled first).
+      const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
+      const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
+      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
       const summoning = units.find((u) => u.queue.length);
       if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
       // Z socles: a weapon kit to fit on those that take it and do not carry it yet.

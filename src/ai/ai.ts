@@ -377,6 +377,15 @@ export class AI {
         energy -= def.cost.energy;
         this.trained++;
       }
+      // Minerals to spare (a margin kept for the troops): an idle god, Gaïa included, buys its next level.
+      for (const g of mine.filter((e) => (e.def as UnitDef).levels && e.queue.length === 0 && !out.some((o) => o.kind === 'train' && o.ids.includes(e.id)))) {
+        const lv = (g.def as UnitDef).levels!;
+        const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
+        if (!cost || minerals - keep - BALANCE.ai.godLevelMargin < cost.minerals || energy - reserve < cost.energy) continue;
+        out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
+        minerals -= cost.minerals;
+        energy -= cost.energy;
+      }
     }
 
     // Z: socles waiting at home get a weapon kit, in a weighted rotation (only kits that hit flyers against them).

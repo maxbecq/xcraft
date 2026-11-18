@@ -44,6 +44,7 @@ export function armorBonus(this: World, t: Entity): number {
   if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
+  if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
   return bonus;
 }
 
@@ -59,7 +60,34 @@ export function weapon(this: World, e: Entity): Attack | undefined {
   if (e.kit) return WEAPONS[e.kit].attack;
   if (e.type === 'scarabee') return this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeAttack : undefined;
   const a = (e.def as UnitDef | BuildingDef).attack;
+  const lv = (e.def as UnitDef).levels;
+  if (a && lv?.damage && e.lvl > 1) return levelled(a, lv.damage[e.lvl - 1]);
   return a && e.airborne ? { ...a, air: true, ground: false } : a;
+}
+
+/** A god's attack at a higher level: the same, harder (one object per attack and damage, not one per call). */
+const LEVELLED = new Map<Attack, Map<number, Attack>>();
+function levelled(a: Attack, damage: number): Attack {
+  const by = LEVELLED.get(a) ?? LEVELLED.set(a, new Map()).get(a)!;
+  return by.get(damage) ?? by.set(damage, { ...a, damage }).get(damage)!;
+}
+
+/** Walking speed per tick out of any boost: a god's that of its level. */
+export function baseSpeed(this: World, e: Entity): number {
+  const d = e.def as UnitDef;
+  return speedPerTick(d.levels ? d.levels.speed[e.lvl - 1] : d.speed);
+}
+
+/** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */
+export function ascend(this: World, g: Entity): void {
+  const lv = (g.def as UnitDef).levels;
+  if (!lv || g.lvl >= lv.hp.length) return;
+  g.lvl++;
+  const extra = lv.hp[g.lvl - 1] - lv.hp[g.lvl - 2];
+  g.maxHp += extra;
+  g.hp += extra;
+  if (g.boost === 0) g.speed = this.baseSpeed(g);
+  this.say(g.owner, `${g.def.name} passe au niveau ${g.lvl}.`, 'done');
 }
 
 /** Croissance économique: serfs and the Caserne's soldiers. */

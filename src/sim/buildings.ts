@@ -106,7 +106,10 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
 
 /** Training time in ticks, the Caserne's shortened by Entraînement groupé. */
 export function trainTime(this: World, b: Entity, type: string): number {
-  const t = ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime);
+  const levels = (b.def as UnitDef).levels;
+  if (type === 'niveau' && levels) return ticks(levels.time[b.lvl - 1]);
+  // A god summons in its base time divided by its level (XC.doc 2008).
+  const t = idiv(ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime), b.lvl);
   if (DEFS[type].kind !== 'unit') return t;
   let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
   if (b.type === 'portail' && this.level(b.owner, 'miniportail')) speedup += BALANCE.rules.upgrades.miniportailSpeedup;
@@ -120,8 +123,11 @@ export function operate(this: World, b: Entity): void {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
     // Materialising (Isdaris) or assembling (Z): builds itself, hp and shield filling up.
     const total = ticks((b.def as BuildingDef).buildTime);
-    b.buildLeft--;
-    this.grow(b, total);
+    // Called down by Gaïa at level N: N steps a tick.
+    for (let s = 0; s < b.lvl && b.buildLeft > 0; s++) {
+      b.buildLeft--;
+      this.grow(b, total);
+    }
     if (b.buildLeft === 0) {
       b.shield = b.maxShield;
       this.say(b.owner, `${(b.def as BuildingDef).absorbs ? 'Assemblage' : 'Matérialisation'} terminé${(b.def as BuildingDef).absorbs ? '' : 'e'} : ${b.def.name}.`, 'done');
@@ -148,6 +154,11 @@ export function operate(this: World, b: Entity): void {
 export function produce(this: World, b: Entity): void {
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
+    if (type === 'niveau') {
+      this.ascend(b);
+      if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+      return;
+    }
     const up = DEFS[type];
     if (up.kind === 'building') return this.morph(b, type);
     if (up.kind === 'upgrade') {

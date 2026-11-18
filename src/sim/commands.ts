@@ -79,6 +79,18 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'train': {
+      if (c.type === 'niveau') {
+        // A god's next level, paid and queued at the god itself; one at a time, up to the last.
+        const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau'));
+        const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
+        if (!g) return void (gods.length && this.say(c.player, `${gods[0].def.name} est déjà au niveau maximal.`));
+        const lv = (g.def as UnitDef).levels!;
+        if (g.queue.length >= 5) return void this.say(c.player, "File d'attente pleine.");
+        if (!this.pay(c.player, { cost: lv.cost[g.lvl - 1] })) return;
+        g.queue.push('niveau');
+        if (g.queue.length === 1) g.trainLeft = this.trainTime(g, 'niveau');
+        return;
+      }
       // Gods summon too (Dieux). The least busy producer takes it: shortest queue, then the one whose current item
       // ends first, then the lowest id (deterministic); full ones are skipped.
       const producers = [...buildings, ...units.filter((u) => (u.def as UnitDef).trains)].sort((a, b) => a.queue.length - b.queue.length || a.trainLeft - b.trainLeft || a.id - b.id);
@@ -135,7 +147,8 @@ export function apply(this: World, c: Command): void {
           this.refund(c.player, b.def);
           this.remove(b);
         } else if (b.queue.length) {
-          this.refund(c.player, DEFS[b.queue.pop()!] as UnitDef | UpgradeDef);
+          const t = b.queue.pop()!;
+          this.refund(c.player, t === 'niveau' ? { cost: (b.def as UnitDef).levels!.cost[b.lvl - 1] } : (DEFS[t] as UnitDef | UpgradeDef));
           if (b.queue.length) b.trainLeft = Math.max(b.trainLeft, 1);
         }
       }

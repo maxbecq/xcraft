@@ -116,6 +116,8 @@ export interface Entity {
   kit: string;
   /** Thor's Courroux du marteau: ticks left in which his next blow hits several times as hard. */
   charged: number;
+  /** Dieux: a god's level (1 to 5); a building called down by Gaïa, the level she had (it materialises that many times faster). 1 for the rest. */
+  lvl: number;
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -255,8 +257,6 @@ export class World {
   storms: { owner: number; x: number; y: number; r: number; until: number }[] = [];
   /** Units coming back by themselves at their side's headquarters (Gaïa), at a tick. */
   private respawns: { owner: number; type: string; at: number }[] = [];
-  /** Gods fallen lately, by "player:type": tick from which they can be summoned again. */
-  private mourning = new Map<string, number>();
   /** Units hidden this tick by a Déflecteur's aura. */
   shrouded = new Set<number>();
   /** Winning player once the game is over. */
@@ -285,7 +285,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -346,7 +346,7 @@ export class World {
       if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
       if (e.skin > 0) e.skin--;
       if (e.charged > 0) e.charged--;
-      if (e.boost > 0 && --e.boost === 0) e.speed = speedPerTick((e.def as UnitDef).speed);
+      if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       this.regenerate(e);
     }
     this.revive();
@@ -421,7 +421,6 @@ export class World {
       }
       if (e.order?.kind === 'gather') this.release(e, e.order.target);
       if (e.def.kind === 'unit' && e.def.respawn) this.respawns.push({ owner: e.owner, type: e.type, at: this.tick + ticks(e.def.respawn) });
-      else if (e.def.kind === 'unit' && e.def.unique) this.mourning.set(`${e.owner}:${e.type}`, this.tick + ticks(BALANCE.rules.upgrades.mourning));
       this.remove(e);
     }
   }
@@ -534,8 +533,6 @@ export class World {
 
   lacks(player: number, type: string): string {
     if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
-    const mourn = this.mourning.get(`${player}:${type}`) ?? 0;
-    if (mourn > this.tick) return `En deuil : réinvocation dans ${Math.ceil((mourn - this.tick) / ticks(1))} s.`;
     const any = (DEFS[type] as BuildingDef).requiresAny;
     if (any && [...this.entities.values()].filter((b) => b.owner === player && any.of.includes(b.type) && b.buildLeft === 0).length < any.count) {
       return `Requiert : ${any.count} parmi ${any.of.map((t) => DEFS[t].name).join(', ')}`;
@@ -655,6 +652,7 @@ export class World {
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);
         const b = this.spawn(o.type, e.owner, o.tx * FP, o.ty * FP);
         b.buildLeft = ticks(def.buildTime);
+        b.lvl = e.lvl;
         b.hp = Math.max(1, idiv(b.maxHp, 10));
         b.shield = 0;
         if (def.absorbs) {
@@ -711,6 +709,7 @@ export class World {
       mix(e.y);
       mix(e.hp);
       mix(e.shield);
+      if (e.lvl > 1) mix(e.lvl); // only then: replays recorded before the levels keep their hashes
     }
     for (const p of this.players) {
       mix(p.minerals);

@@ -3,7 +3,7 @@ import { AI } from '../ai/ai';
 import { ABILITIES, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
-import { type Entity, World } from './world';
+import { type Command, type Entity, World } from './world';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const run = (w: World, seconds: number) => {
@@ -63,21 +63,63 @@ describe('Dieux', () => {
     expect(Math.hypot(nain.x - thor.x, nain.y - thor.y)).toBeLessThan(4 * FP);
   });
 
-  it('a fallen god can only come back after his mourning; Gaïa comes back by herself', () => {
+  it('a fallen god can be summoned again at once, back at level 1; Gaïa comes back by herself', () => {
     const w = createMatch(['dieux', 'humains']);
     const p = w.players[0];
     p.minerals = 5000;
     p.energy = 5000;
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    thor.lvl = 3;
     thor.hp = 0;
     const [gaia] = of(w, 0, 'gaia');
     gaia.hp = 0;
     run(w, 1);
-    expect(w.lacks(0, 'thor')).toMatch(/deuil/);
+    expect(w.lacks(0, 'thor')).toBe('');
+    const [porte] = of(w, 0, 'asgaard');
+    w.step([{ player: 0, kind: 'train', ids: [porte.id], type: 'thor' }]);
+    run(w, (DEFS.thor as UnitDef).buildTime + 1);
+    expect(of(w, 0, 'thor')[0].lvl).toBe(1);
     run(w, 46);
     expect(of(w, 0, 'gaia')).toHaveLength(1);
-    run(w, 20);
-    expect(w.lacks(0, 'thor')).toBe('');
+  });
+
+  it('a god bought up a level gains its stats and summons that many times faster', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    w.spawn('branche', 0, 36 * FP, 14 * FP);
+    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const lv = (DEFS.thor as UnitDef).levels!;
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
+    expect(thor.queue).toEqual(['niveau']); // one at a time
+    expect(p.minerals).toBe(5000 - lv.cost[0].minerals);
+    run(w, lv.time[0] + 1);
+    expect(thor.lvl).toBe(2);
+    expect(thor.maxHp).toBe(lv.hp[1]);
+    expect(w.weapon(thor)!.damage).toBe(lv.damage![1]);
+    expect(w.armorBonus(thor)).toBe(lv.armor[1] - (DEFS.thor as UnitDef).armor);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }]);
+    run(w, (DEFS.nain as UnitDef).buildTime / 2 + 1);
+    expect(of(w, 0, 'nain')).toHaveLength(1);
+    // Cancelling a level gives its price back.
+    const before = p.minerals;
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
+    w.step([{ player: 0, kind: 'cancel', ids: [thor.id] }]);
+    expect(p.minerals).toBe(before);
+  });
+
+  it('a building Gaïa calls down at level 2 materialises twice as fast', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].minerals = 2000;
+    const [gaia] = of(w, 0, 'gaia');
+    gaia.lvl = 2;
+    w.step([{ player: 0, kind: 'build', ids: [gaia.id], type: 'branche', tx: 22, ty: 18 }]);
+    run(w, 10);
+    const [branche] = of(w, 0, 'branche');
+    run(w, (DEFS.branche as UnitDef).buildTime / 2);
+    expect(branche.buildLeft).toBe(0);
+    expect(branche.hp).toBeGreaterThan(branche.maxHp * 0.85);
   });
 
   it('the Yggdrasill protecteur needs two first-rank gods', () => {
@@ -130,4 +172,21 @@ describe('Dieux', () => {
     expect(of(w, 0, 'branche').length + of(w, 0, 'protecteur').length).toBeGreaterThan(0);
     expect(of(w, 0, 'nain').length + of(w, 0, 'minotaure').length + of(w, 0, 'sphinx').length).toBeGreaterThan(5);
   });
+
+  it('gods bought up by the AI replay the same from the recorded commands (levels in the hash)', () => {
+    const record: [number, Command[]][] = [];
+    const live = createMatch(['dieux', 'humains']);
+    const ais = [new AI(live, 0), new AI(live, 1)];
+    while (live.tick < ticks(14 * 60)) {
+      const cmds = ais.flatMap((ai) => ai.think());
+      if (cmds.length) record.push([live.tick, cmds]);
+      live.step(cmds);
+    }
+    expect([...live.entities.values()].some((e) => e.owner === 0 && e.lvl > 1)).toBe(true);
+    const played = new Map<number, Command[]>(JSON.parse(JSON.stringify(record)));
+    const again = createMatch(['dieux', 'humains']);
+    while (again.tick < live.tick) again.step(played.get(again.tick) ?? []);
+    expect(again.hash()).toBe(live.hash());
+    expect([...again.entities.values()].map((e) => e.lvl)).toEqual([...live.entities.values()].map((e) => e.lvl));
+  }, 60_000);
 });

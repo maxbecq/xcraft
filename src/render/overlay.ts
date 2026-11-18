@@ -1,5 +1,5 @@
 import { Vector3, type Camera } from 'three';
-import { type BuildingDef, FLY_HEIGHT } from '../data';
+import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type Order, type World, flies } from '../sim/world';
@@ -67,6 +67,11 @@ export class Overlay {
       ctx.fillRect(sx - bw / 2 - 1, sy - 1, bw + 2, bh + 2);
       ctx.fillStyle = f > 0.6 ? '#5fd35f' : f > 0.3 ? '#e0c04f' : '#e0503f';
       ctx.fillRect(sx - bw / 2, sy, bw * f, bh);
+      if ((e.def as UnitDef).levels) {
+        // A god's level: as many gold notches after the bar.
+        ctx.fillStyle = '#f2c14e';
+        for (let i = 0; i < e.lvl; i++) ctx.fillRect(sx + bw / 2 + 3 + i * 4, sy - 1, 2, bh + 2);
+      }
       if (e.maxShield) {
         // Psychic shield: a blue bar above the hp bar.
         const sh = Math.max(2, bh - 1);

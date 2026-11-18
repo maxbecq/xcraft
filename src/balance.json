@@ -156,10 +156,10 @@
     "nain": { "hp": 150, "armor": 2, "speed": 2.1, "sight": 8, "supply": 1, "cost": { "minerals": 125, "energy": 0 }, "buildTime": 22, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.2 } },
     "minotaure": { "hp": 380, "armor": 1, "speed": 2.2, "sight": 8, "supply": 2, "cost": { "minerals": 300, "energy": 100 }, "buildTime": 35, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.6 } },
     "sphinx": { "hp": 320, "armor": 3, "speed": 2.7, "sight": 9, "supply": 2, "cost": { "minerals": 275, "energy": 150 }, "buildTime": 38, "attack": { "damage": 22, "range": 5, "cooldown": 1.4 } },
-    "gaia": { "hp": 3000, "armor": 6, "speed": 2.0, "sight": 11, "supply": 4, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "detector": 10, "respawn": 45 },
-    "thor": { "hp": 2200, "armor": 3, "speed": 1.8, "sight": 10, "supply": 4, "cost": { "minerals": 400, "energy": 0 }, "buildTime": 45, "attack": { "damage": 45, "range": 0.1, "cooldown": 1.5 }, "detector": 10 },
-    "apollon": { "hp": 1500, "armor": 1, "speed": 2.6, "sight": 10, "supply": 4, "cost": { "minerals": 500, "energy": 250 }, "buildTime": 50, "attack": { "damage": 25, "range": 6, "cooldown": 1.5 }, "detector": 10 },
-    "seth": { "hp": 1700, "armor": 2, "speed": 2.5, "sight": 10, "supply": 4, "cost": { "minerals": 500, "energy": 200 }, "buildTime": 50, "attack": { "damage": 35, "range": 0.1, "cooldown": 1.2 }, "detector": 10 },
+    "gaia": { "hp": 3000, "armor": 6, "speed": 2.0, "sight": 11, "supply": 4, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "detector": 10, "respawn": 45, "levels": { "hp": [3000, 3190, 3560, 4120, 4880], "armor": [6, 7, 8, 9, 10], "speed": [2.0, 2.04, 2.08, 2.12, 2.17], "cost": [{ "minerals": 360, "energy": 0 }, { "minerals": 450, "energy": 0 }, { "minerals": 540, "energy": 0 }, { "minerals": 630, "energy": 0 }], "time": [40, 50, 60, 70] } },
+    "thor": { "hp": 2200, "armor": 3, "speed": 1.8, "sight": 10, "supply": 4, "cost": { "minerals": 400, "energy": 0 }, "buildTime": 45, "attack": { "damage": 45, "range": 0.1, "cooldown": 1.5 }, "detector": 10, "levels": { "hp": [2200, 2340, 2610, 3020, 3580], "armor": [3, 4, 5, 6, 7], "speed": [1.8, 1.84, 1.94, 2.07, 2.25], "damage": [45, 49, 56, 67, 81], "cost": [{ "minerals": 240, "energy": 0 }, { "minerals": 300, "energy": 0 }, { "minerals": 360, "energy": 0 }, { "minerals": 420, "energy": 0 }], "time": [40, 50, 60, 70] } },
+    "apollon": { "hp": 1500, "armor": 1, "speed": 2.6, "sight": 10, "supply": 4, "cost": { "minerals": 500, "energy": 250 }, "buildTime": 50, "attack": { "damage": 25, "range": 6, "cooldown": 1.5 }, "detector": 10, "levels": { "hp": [1500, 1640, 1920, 2340, 2910], "armor": [1, 2, 3, 4, 5], "speed": [2.6, 2.66, 2.71, 2.77, 2.82], "damage": [25, 30, 40, 55, 75], "cost": [{ "minerals": 300, "energy": 150 }, { "minerals": 380, "energy": 190 }, { "minerals": 450, "energy": 220 }, { "minerals": 520, "energy": 260 }], "time": [40, 50, 60, 70] } },
+    "seth": { "hp": 1700, "armor": 2, "speed": 2.5, "sight": 10, "supply": 4, "cost": { "minerals": 500, "energy": 200 }, "buildTime": 50, "attack": { "damage": 35, "range": 0.1, "cooldown": 1.2 }, "detector": 10, "levels": { "hp": [1700, 1980, 2550, 3400, 4530], "armor": [2, 3, 4, 5, 6], "speed": [2.5, 2.55, 2.6, 2.66, 2.71], "damage": [35, 48, 74, 114, 166], "cost": [{ "minerals": 300, "energy": 120 }, { "minerals": 380, "energy": 150 }, { "minerals": 450, "energy": 180 }, { "minerals": 520, "energy": 210 }], "time": [40, 50, 60, 70] } },
     "asgaard": { "hp": 4500, "armor": 3, "sight": 13, "supply": 14, "cost": { "minerals": 1200, "energy": 0 }, "buildTime": 90 },
     "branche": { "hp": 600, "armor": 1, "sight": 8, "supply": 10, "cost": { "minerals": 200, "energy": 0 }, "buildTime": 25, "attack": { "damage": 12, "range": 1, "cooldown": 1.2, "air": false } },
     "protecteur": { "hp": 800, "armor": 2, "sight": 10, "supply": 10, "cost": { "minerals": 150, "energy": 100 }, "buildTime": 30, "attack": { "damage": 60, "range": 9, "cooldown": 3 } },
@@ -176,6 +176,7 @@
     "darmor2": { "cost": { "minerals": 350, "energy": 350 }, "buildTime": 90 },
     "darmor3": { "cost": { "minerals": 450, "energy": 450 }, "buildTime": 100 },
     "celerite": { "cost": { "minerals": 150, "energy": 150 }, "buildTime": 60 },
+    "niveau": { "cost": { "minerals": 0, "energy": 0 }, "buildTime": 40 },
     "minerai": { "amount": 1500 }
   },
   "weapons": {
@@ -228,7 +229,7 @@
     "peauDeRoc": { "range": 4, "reduction": 5 },
     "stimulantHp": 10,
     "trade": { "give": 100, "get": 50 },
-    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "mourning": 60 },
+    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 } },
     "equipSeconds": 2,
     "creepRepair": 2
   },
@@ -249,6 +250,7 @@
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5]],
+    "godLevelMargin": 300,
     "kits": { "lourde": 2, "flammes": 1, "roquettes": 2 }
   }
 }
