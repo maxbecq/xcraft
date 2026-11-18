@@ -199,6 +199,7 @@
     "fontaine": { "hp": 1000, "armor": 1, "sight": 8, "supply": 0, "cost": { "minerals": 150, "energy": 275 }, "buildTime": 40 },
     "primordial": { "hp": 3000, "armor": 3, "sight": 10, "supply": 0, "cost": { "minerals": 450, "energy": 450 }, "buildTime": 90, "charge": 300 },
     "jormungandr": { "hp": 1500, "armor": 4, "speed": 2.2, "sight": 10, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 60, "range": 1, "cooldown": 1.5, "splash": 1.5 } },
+    "artefacterie": { "hp": 1600, "armor": 2, "sight": 9, "supply": 0, "cost": { "minerals": 400, "energy": 400 }, "buildTime": 50 },
     "nain": { "hp": 150, "armor": 2, "speed": 2.1, "sight": 8, "supply": 1, "cost": { "minerals": 125, "energy": 0 }, "buildTime": 22, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.2 } },
     "minotaure": { "hp": 380, "armor": 1, "speed": 2.2, "sight": 8, "supply": 2, "cost": { "minerals": 300, "energy": 100 }, "buildTime": 35, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.6 } },
     "sphinx": { "hp": 320, "armor": 3, "speed": 2.7, "sight": 9, "supply": 2, "cost": { "minerals": 275, "energy": 150 }, "buildTime": 38, "attack": { "damage": 22, "range": 5, "cooldown": 1.4 } },
@@ -223,6 +224,10 @@
     "darmor3": { "cost": { "minerals": 450, "energy": 450 }, "buildTime": 100 },
     "celerite": { "cost": { "minerals": 150, "energy": 150 }, "buildTime": 60 },
     "offrandes": { "cost": { "minerals": 150, "energy": 0 }, "buildTime": 20 },
+    "artforce": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
+    "artresistance": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
+    "artagilite": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
+    "artvitesse": { "cost": { "minerals": 100, "energy": 100 }, "buildTime": 10 },
     "niveau": { "cost": { "minerals": 0, "energy": 0 }, "buildTime": 40 },
     "minerai": { "amount": 1500 }
   },
@@ -298,7 +303,7 @@
     "peauDeRoc": { "range": 4, "reduction": 5 },
     "stimulantHp": 10,
     "trade": { "give": 100, "get": 50 },
-    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 } },
+    "upgrades": { "croissanceHp": 10, "pillageShare": 10, "entrainementSpeedup": 25, "poison": { "damage": 3, "seconds": 5 }, "chemicalSplash": 1.2, "scieassautBonus": 15, "charlourd": { "damage": 15, "armor": 2 }, "oeilpercant": 8, "acideBonus": 30, "conseilAura": { "radius": 8, "percent": 10 }, "grandConseilSpeedup": 10, "chargement": 4, "scarabeAttack": { "damage": 15, "range": 4, "cooldown": 1 }, "trebuchetRange": 6, "miniportailSpeedup": 25, "robots": 1, "cerclePercent": 25, "boost": { "hp": 20, "speed": 20, "rate": 20 }, "renvoiPercent": 30, "omniscience": 6, "canonlourdRange": 6, "teleportrapide": 50, "boucliersRegen": 1, "courroux": 3, "celerite": { "range": 5, "speed": 3, "seconds": 1, "cooldown": 8 }, "auraguerre": { "damage": [1, 2, 4, 7, 11], "radius": [6, 7, 8, 9, 10] }, "auraprotection": { "armor": [1, 2, 3, 4, 5], "radius": [4, 5, 6, 7, 8] }, "putride": { "damage": [6, 8, 10, 12, 16], "radius": 1.8 }, "fontaine": { "radius": 6, "hp": 4 }, "artefacts": { "force": 20, "resistance": 2, "agilite": 15, "vitesse": 10, "max": 4 } },
     "creepRepair": 1,
     "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "repairHp": 4, "repairPercent": 25, "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
   },
@@ -316,7 +321,7 @@
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
-    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17]] },
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 6], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17], ["artefacterie", 19]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,

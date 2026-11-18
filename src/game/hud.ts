@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, ticks } from '../sim/fixed';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
@@ -683,6 +683,16 @@ export class Hud {
       const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
       const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
       if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
+      // The Artefacterie's improvements, once there is one, for a selected god with room left.
+      const buyers = units.filter((u) => (u.def as UnitDef).levels);
+      if (buyers.length && [...this.world.entities.values()].some((b) => b.owner === this.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
+        const max = BALANCE.rules.upgrades.artefacts.max;
+        const free = buyers.find((u) => u.arts.length + u.queue.filter((q) => ARTEFACTS.includes(q)).length < max);
+        for (const t of ARTEFACTS) {
+          const d = DEFS[t] as UpgradeDef;
+          list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: free ? undefined : `${max} améliorations au plus par dieu`, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
+        }
+      }
       const summoning = units.find((u) => u.queue.length);
       if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
       return list;

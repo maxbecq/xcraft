@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import BALANCE from '../balance.json';
-import { ABILITIES, DEFS, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, type UnitDef, type UpgradeDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Command, type Entity, World } from './world';
@@ -286,6 +286,26 @@ describe('Dieux', () => {
     w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: 33 * FP, y: 50 * FP }]);
     run(w, 1);
     expect(of(w, 0, 'jormungandr')).toHaveLength(1);
+  });
+
+  it('the Artefacterie: a god buys up to 4 improvements where it stands, the same one several times', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const p = w.players[0];
+    p.minerals = p.energy = 5000;
+    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'artforce' }]);
+    expect(thor.queue).toEqual([]); // no Artefacterie yet
+    w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
+    for (const t of ['artforce', 'artforce', 'artresistance', 'artvitesse', 'artagilite']) w.step([{ player: 0, kind: 'train', ids: [thor.id], type: t }]);
+    expect(thor.queue).toHaveLength(4);
+    run(w, 4 * (DEFS.artforce as UpgradeDef).buildTime + 1);
+    expect(thor.arts).toEqual(['artforce', 'artforce', 'artresistance', 'artvitesse']);
+    expect(w.armorBonus(thor)).toBe(BALANCE.rules.upgrades.artefacts.resistance);
+    const dummy = w.spawn('grenier', 1, 30 * FP, 32 * FP);
+    const before = dummy.hp;
+    w.hit(thor, dummy, (DEFS.thor as UnitDef).attack!);
+    const plain = (DEFS.thor as UnitDef).attack!.damage;
+    expect(before - dummy.hp).toBe(plain + Math.trunc((plain * 2 * BALANCE.rules.upgrades.artefacts.force) / 100) - (DEFS.grenier as BuildingDef).armor);
   });
 
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {

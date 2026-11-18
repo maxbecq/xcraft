@@ -46,6 +46,7 @@ export function armorBonus(this: World, t: Entity): number {
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
+  bonus += t.arts.filter((a) => a === 'artresistance').length * BALANCE.rules.upgrades.artefacts.resistance;
   // Athéna's protection aura, the strongest of her side's in reach.
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
@@ -122,7 +123,8 @@ export function baseSpeed(this: World, e: Entity): number {
   const d = e.def as UnitDef;
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
   if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
-  return speedPerTick(d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed);
+  const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
+  return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast)) / 100);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */
@@ -321,6 +323,9 @@ export function strike(this: World, e: Entity, t: Entity): void {
   if (a.range >= 1 && this.storms.some((z) => this.hostile(z.owner, e.owner) && dist(z.x, z.y, e.x, e.y) <= z.r)) return;
   e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
   if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = idiv(e.cooldown * (100 - BALANCE.rules.upgrades.boost.rate), 100);
+  // The Artefacterie's Agilité: each one a share off the time between blows.
+  const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
+  if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
   this.hit(e, t, a);
 }
 
@@ -351,8 +356,10 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (e.owner >= 0 && this.players[e.owner].faction === 'z' && this.beacon(e.owner)) upgrade += idiv((a.damage + bonus) * BALANCE.rules.z.beaconPercent, 100);
   // Courroux du marteau: the charged blow.
   let damage = a.damage + bonus + upgrade;
-  // Cri de guerre: much harder for a while.
+  // Cri de guerre: much harder for a while; the Artefacterie's Force, for good.
   if (e.war > 0) damage += idiv(damage * e.warPct, 100);
+  const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * U.artefacts.force : 0;
+  if (force) damage += idiv(damage * force, 100);
   if (e.charged > 0 && a.range < 1) {
     damage *= U.courroux;
     e.charged = 0;

@@ -143,6 +143,8 @@ export interface Entity {
   charmOwner: number;
   /** Nuée nauséabonde (Osiris): ticks left of the swarm round it. */
   swarm: number;
+  /** Dieux: the Artefacterie's improvements this god bought (ARTEFACTS), in order. */
+  arts: string[];
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -314,7 +316,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -819,6 +821,7 @@ export class World {
       mix(e.hp);
       mix(e.shield);
       if (e.lvl > 1) mix(e.lvl); // only then: replays recorded before the levels keep their hashes
+      if (e.arts.length) mix(e.arts.length * 31);
     }
     for (const p of this.players) {
       mix(p.minerals);

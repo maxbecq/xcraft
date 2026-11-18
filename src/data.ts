@@ -227,6 +227,9 @@ export interface AbilityDef {
 }
 
 /** Dieux: the three mythologies, each three gods (notice 1.2-1); all three standing charge its ultimate spell. */
+/** The Artefacterie's improvements, bought at a god (4 at most per god). */
+export const ARTEFACTS = ['artforce', 'artresistance', 'artagilite', 'artvitesse'];
+
 export type Mythology = 'scandinave' | 'grec' | 'egyptien';
 export const MYTHS: Record<Mythology, { gods: string[]; spell: string; name: string }> = {
   scandinave: { gods: ['thor', 'odin', 'frigg'], spell: 'jormungand', name: 'scandinave' },
@@ -667,6 +670,8 @@ const BASE: Record<string, object> = {
   primordial: { kind: 'building', name: 'Temple primordial', size: 4, warp: true, unique: true, faction: 'dieux', hotkey: 'P' },
   /** Avatar of Jörmungand (ultimate): a giant serpent for a while; eats the dead to heal. */
   jormungandr: { kind: 'unit', name: 'Avatar de Jörmungand', radius: 1.2, lifetime: 60, faction: 'dieux', hotkey: 'J' },
+  /** Frigg's Artefacterie (unique): the gods buy improvements wherever they are (ARTEFACTS). */
+  artefacterie: { kind: 'building', name: 'Artefacterie', size: 3, warp: true, unique: true, requires: { frigg: 1 }, faction: 'dieux', hotkey: 'R' },
   antre: { kind: 'building', name: 'Antre', size: 3, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
@@ -678,6 +683,11 @@ const BASE: Record<string, object> = {
   ...upgrades('armor', 'Amélioration armure', 'A', undefined, 'dieux', 3, 'darmor'),
   celerite: research('Célérité naine', 'N', 'Les Nains bondissent sur un ennemi proche.', undefined, 'dieux'),
   offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
+  // Artefacterie (notice, Frigg): a god buys up to 4 improvements, where it stands, the same one several times if it likes.
+  artforce: research('Force', 'Y', 'Le dieu frappe plus fort.', { artefacterie: 1 }, 'dieux'),
+  artresistance: research('Résistance', 'J', 'Le dieu gagne de l’armure.', { artefacterie: 1 }, 'dieux'),
+  artagilite: research('Agilité', 'K', 'Le dieu frappe plus vite.', { artefacterie: 1 }, 'dieux'),
+  artvitesse: research('Vitesse', 'Q', 'Le dieu se déplace plus vite.', { artefacterie: 1 }, 'dieux'),
   // A god's next level, queued at the god itself; its price and time are the god's own (UnitDef.levels).
   niveau: research('Niveau divin', 'L', 'Le dieu monte d’un niveau : vie, armure, dégâts et vitesse ; il invoque et bâtit plus vite.', undefined, 'dieux'),
 
@@ -849,8 +859,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   dieux: {
     name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
     forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'],
-    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine', 'primordial'],
-    advanced: ['temple', 'fontaine', 'primordial'],
+    buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine', 'primordial', 'artefacterie'],
+    advanced: ['temple', 'fontaine', 'primordial', 'artefacterie'],
     army: Object.entries(BALANCE.ai.army.dieux),
   },
 };

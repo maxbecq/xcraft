@@ -1,6 +1,6 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, flies, type Entity, type Command, type World } from './world';
 
@@ -80,6 +80,19 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'train': {
+      if (ARTEFACTS.includes(c.type)) {
+        // An improvement from the Artefacterie, bought at a god anywhere; 4 at most per god, queued ones counted.
+        const lack = this.lacks(c.player, c.type);
+        if (lack) return void this.say(c.player, lack);
+        const max = BALANCE.rules.upgrades.artefacts.max;
+        const g = units.find((u) => (u.def as UnitDef).levels && u.arts.length + u.queue.filter((q) => ARTEFACTS.includes(q)).length < max && u.queue.length < 5);
+        if (!g) return void this.say(c.player, `${max} améliorations au plus par dieu.`);
+        const up = DEFS[c.type] as UpgradeDef;
+        if (!this.pay(c.player, up)) return;
+        g.queue.push(c.type);
+        if (g.queue.length === 1) g.trainLeft = this.trainTime(g, c.type);
+        return;
+      }
       if (c.type === 'niveau') {
         // A god's next level, paid and queued at the god itself; one at a time, up to the last.
         const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau'));

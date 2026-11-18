@@ -346,3 +346,23 @@ def jormungandr(p):
     for i in range(0, 40, 3):
         x, y, z = pts[i]
         ball(p["team"] if i % 9 == 0 else p["moss"], 0.08, (x, y, z + 0.2), (1, 1, 0.5))
+
+
+def artefacterie(p):
+    """Frigg's Artefacterie: a forge-sanctuary of stone and gold, weapons and armour hung on its pillars."""
+    box(p["stone"], (2.4, 2.4, 0.3), (0, 0, 0.15), bevel=0.4)
+    box(p["marble"], (1.9, 1.6, 1.0), (0, 0.15, 0.8), bevel=0.4)
+    for x in (-0.9, 0.9):
+        cyl(p["marble2"], 0.13, 1.6, (x, -0.75, 1.1), v=12)
+        box(p["gold"], (0.32, 0.32, 0.08), (x, -0.75, 1.92))
+    box(p["marble"], (2.2, 0.5, 0.18), (0, -0.6, 2.0), bevel=0.4)
+    cyl(p["navy"], 1.15, 0.6, (0, 0.15, 1.55), rot=(0, math.pi / 2, 0), v=4, r2=0.0)
+    box(p["iron"], (0.5, 0.35, 0.35), (0, -0.85, 0.48), bevel=0.5)
+    ball(p["sun"], 0.12, (0, -0.85, 0.75))
+    ball(p["sun_veil"], 0.25, (0, -0.85, 0.75))
+    for x, m in ((-0.55, "steel"), (0.55, "gold")):
+        along(p["wood_dark"], (x, -0.82, 0.3), (x, -0.82, 1.5), 0.02)
+        cyl(p[m], 0.12, 0.04, (x, -0.86, 1.15), rot=(math.pi / 2, 0, 0), v=20)
+    for k in range(3):
+        box(p["gold"], (0.06, 0.02, 0.4), (-0.3 + k * 0.3, -0.72, 1.35), (0, math.radians(-20 + 20 * k), 0))
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.6, -0.76, 1.95 - 0.5 * t), cuts=6, thick=0.02)

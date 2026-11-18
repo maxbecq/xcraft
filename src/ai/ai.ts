@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -481,6 +481,16 @@ export class AI {
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
         if (!cost || minerals - keep - BALANCE.ai.godLevelMargin < cost.minerals || energy - reserve < cost.energy) continue;
         out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
+        minerals -= cost.minerals;
+        energy -= cost.energy;
+      }
+      // With an Artefacterie and resources to spare: Force, Résistance, Force, Vitesse for each god in turn.
+      const arte = buildings.some((b) => b.type === 'artefacterie' && b.buildLeft === 0);
+      for (const g of arte ? gods.filter((e) => e.arts.length + e.queue.filter((q) => ARTEFACTS.includes(q)).length < BALANCE.rules.upgrades.artefacts.max && e.queue.length <= 2) : []) {
+        const t = ['artforce', 'artresistance', 'artforce', 'artvitesse'][g.arts.length + g.queue.filter((q) => ARTEFACTS.includes(q)).length];
+        const cost = (DEFS[t] as UpgradeDef).cost;
+        if (minerals - keep - BALANCE.ai.godLevelMargin < cost.minerals || energy - reserve < cost.energy) break;
+        out.push({ player: this.player, kind: 'train', ids: [g.id], type: t });
         minerals -= cost.minerals;
         energy -= cost.energy;
       }
