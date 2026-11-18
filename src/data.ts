@@ -83,6 +83,8 @@ export interface UnitDef {
   builder?: boolean;
   /** Comes back by itself at its side's headquarters this many seconds after dying (Gaïa). */
   respawn?: number;
+  /** Needs `count` of these units standing, any of them (second-rank gods: two of the first rank). */
+  requiresAny?: { of: string[]; count: number };
   /** Dieux: the god's 5 levels (XC.doc 2008), bought at the god. Stats by level (index 0 = level 1); price and time of
    * levels 2 to 5 (index 0 = level 2). What a god summons or calls down takes its base time divided by its level. */
   levels?: GodLevels;
@@ -205,7 +207,7 @@ export interface AbilityDef {
   /** Most units it moves at once. */
   max?: number;
   /** Dieux: values at the caster god's levels 1 to 5, in place of the plain ones (the spells grow with the god). */
-  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown', number[]>>;
+  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max', number[]>>;
 }
 
 /** An ability as cast by a caster of that level (a god's spells grow with it); the same object for the same level. */
@@ -298,6 +300,14 @@ export const ABILITIES: Record<string, AbilityDef> = {
   flechegaia: { name: 'Flèche de Gaïa', hotkey: 'F', target: 'point', ...BALANCE.abilities.flechegaia },
   /** Thor (notice, « Courroux du marteau »): his next blow hits several times as hard. */
   courroux: { name: 'Courroux du marteau', hotkey: 'C', target: 'self', ...BALANCE.abilities.courroux },
+  /** Odin (notice, « Foudre puissante »): a bolt on the enemy nearest the point, which it stuns. */
+  foudre: { name: 'Foudre puissante', hotkey: 'F', target: 'point', ...BALANCE.abilities.foudre },
+  /** Athéna (notice): she and the troops round her hit much harder for a while. */
+  cridegueurre: { name: 'Cri de guerre', hotkey: 'C', target: 'self', ...BALANCE.abilities.cridegueurre },
+  /** Isis (notice): heals every wounded living ally round her. */
+  soinsdivins: { name: 'Soins divins', hotkey: 'S', target: 'self', ...BALANCE.abilities.soinsdivins },
+  /** Isis (notice): raises allies fallen lately round her (`max` of them). */
+  resurrection: { name: 'Résurrection', hotkey: 'R', target: 'self', ...BALANCE.abilities.resurrection },
   /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
   pluiedefeu: { name: 'Pluie de feu', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
   /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
@@ -524,11 +534,24 @@ const BASE: Record<string, object> = {
   thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, ability: 'courroux', faction: 'dieux', hotkey: 'T' },
   apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
   seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, ability: 'tempete', faction: 'dieux', hotkey: 'S' },
+  // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
+  // passive (rules.auraguerre, rules.auraprotection).
+  odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
+  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elementaire'], unique: true, ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
+  isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['soinsdivins', 'resurrection'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
+  /** Odin's ravens: fast flying scouts, invisible, that see the invisible. */
+  corbeau: { kind: 'unit', name: 'Corbeau', radius: 0.35, flying: true, beast: true, cloaked: true, faction: 'dieux', hotkey: 'C' },
+  /** A slow flying beast, very hardy, breathing fire on an area. */
+  drake: { kind: 'unit', name: 'Drake', radius: 0.9, flying: true, beast: true, faction: 'dieux', hotkey: 'D' },
+  /** A small shapeshifter (notice); here its fire form only, which also shoots flyers. */
+  elementaire: { kind: 'unit', name: 'Élémentaire', radius: 0.45, faction: 'dieux', hotkey: 'E' },
+  /** Isis's priestess: heals, no attack (Dispell to come). */
+  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, faction: 'dieux', hotkey: 'P' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
   sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, faction: 'dieux', hotkey: 'X' },
-  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
+  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
   // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
   branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], faction: 'dieux', hotkey: 'B' },
   protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
@@ -662,7 +685,7 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   },
   dieux: {
     name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
-    forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth'],
+    forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis'],
     buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple'],
     advanced: ['temple'],
     army: Object.entries(BALANCE.ai.army.dieux),

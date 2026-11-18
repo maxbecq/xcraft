@@ -86,6 +86,29 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     e.camo = ticks(ab.duration);
   } else if (name === 'courroux') {
     e.charged = ticks(ab.duration);
+  } else if (name === 'cridegueurre') {
+    for (const t of around(ab.radius!, (t) => t.owner === e.owner)) {
+      t.warPct = Math.max(t.war > 0 ? t.warPct : 0, ab.damage!);
+      t.war = ticks(ab.duration);
+    }
+  } else if (name === 'soinsdivins') {
+    const hurt = around(ab.radius!, (t) => t.owner === e.owner && !(t.def as UnitDef).mechanical && t.hp < t.maxHp);
+    if (!hurt.length) return;
+    for (const t of hurt) {
+      t.hp = Math.min(t.maxHp, t.hp + ab.damage!);
+      this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
+    }
+  } else if (name === 'resurrection') {
+    // The side's own fallen of the last `duration` seconds round her, nearest first, back at full health.
+    const fallen = this.corpses
+      .filter((c) => c.owner === e.owner && this.tick - c.tick < ticks(ab.duration) && dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!) && !(DEFS[c.type] as UnitDef).unique)
+      .sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)
+      .slice(0, ab.max);
+    if (!fallen.length) return;
+    for (const c of fallen) {
+      this.corpses.splice(this.corpses.indexOf(c), 1);
+      this.spawn(c.type, e.owner, c.x, c.y);
+    }
   } else if (name === 'peauderoc') {
     // The most wounded ally in range (itself included) not already protected.
     let best: Entity | undefined;
@@ -143,6 +166,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.hit(e, t, { damage: ab.damage!, range: 7, cooldown: 0 });
   } else if (name === 'silence') {
     this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
+  } else if (name === 'foudre') {
+    const t = near((t) => this.hostile(t.owner, e.owner))[0];
+    if (!t) return false;
+    this.hit(e, t, { damage: ab.damage!, range: ab.range!, cooldown: 0 });
+    t.held = Math.max(t.held, ticks(ab.duration));
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'flechegaia') {

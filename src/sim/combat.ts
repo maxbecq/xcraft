@@ -45,7 +45,11 @@ export function armorBonus(this: World, t: Entity): number {
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
-  return bonus;
+  // Athéna's protection aura, the strongest of her side's in reach.
+  const A = BALANCE.rules.upgrades.auraprotection;
+  let aura = 0;
+  if (faction === 'dieux') for (const g of this.entities.values()) if (g.type === 'athena' && g.owner === t.owner && g.hp > 0 && dist(g.x, g.y, t.x, t.y) <= toFp(A.radius[g.lvl - 1])) aura = Math.max(aura, A.armor[g.lvl - 1]);
+  return bonus + aura;
 }
 
 /** Extra range from research (Canons sciés: Auxiliaires; Trébuchet intégré: Ankylosaures against buildings). */
@@ -253,8 +257,17 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
   // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
   if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((a.damage + bonus) * U.conseilAura.percent, 100));
+  // Odin's war aura: the Dieux units round him (him too) hit harder, by his level; the strongest one counts.
+  if (e.def.kind === 'unit' && this.players[e.owner]?.faction === 'dieux') {
+    const G = U.auraguerre;
+    let aura = 0;
+    for (const g of this.entities.values()) if (g.type === 'odin' && g.owner === e.owner && g.hp > 0 && dist(g.x, g.y, e.x, e.y) <= toFp(G.radius[g.lvl - 1])) aura = Math.max(aura, G.damage[g.lvl - 1]);
+    upgrade += aura;
+  }
   // Courroux du marteau: the charged blow.
   let damage = a.damage + bonus + upgrade;
+  // Cri de guerre: much harder for a while.
+  if (e.war > 0) damage += idiv(damage * e.warPct, 100);
   if (e.charged > 0 && a.range < 1) {
     damage *= U.courroux;
     e.charged = 0;

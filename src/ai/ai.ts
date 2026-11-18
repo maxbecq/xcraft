@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, abilitiesOf, spell, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -368,7 +368,10 @@ export class AI {
       }
       for (const g of gods) {
         if (g.queue.length > (this.easy ? 0 : 1)) continue;
-        const type = (g.def as UnitDef).trains!.find((t) => !w.lacks(this.player, t));
+        // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
+        const share = BALANCE.ai.army.dieux as Record<string, number>;
+        const have = (t: string) => mine.filter((e) => e.type === t).length + gods.reduce((n, o) => n + o.queue.filter((q) => q === t).length, 0);
+        const type = (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || a.localeCompare(b))[0];
         const def = type && (DEFS[type] as UnitDef);
         if (!def || free - out.filter((o) => o.kind === 'train').length < def.supply) continue;
         if (minerals - keep < def.cost.minerals || energy - (def.cost.energy ? unitReserve : reserve) < def.cost.energy) continue;
@@ -380,7 +383,8 @@ export class AI {
       // Minerals to spare (a margin kept for the troops), once every god is out: a god buys its next level behind
       // the summons it has queued (Thor, who always has two, never levelled otherwise).
       // Not Gaïa: her levels only speed up buildings, and measured, they ate the minerals the next gods were saved with.
-      const allGods = GODS.every(([g]) => gods.some((e) => e.type === g));
+      // Only once the first-rank gods are out, and not while the next god due can be summoned: it comes first.
+      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) && (!next || !!w.lacks(this.player, next[0]));
       for (const g of allGods ? gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau')) : []) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
@@ -622,7 +626,7 @@ export class AI {
       const near = around(foes, u.x, u.y, 9 * FP);
       if (!near.length) continue;
       for (const name of abilitiesOf(u.def as UnitDef)) {
-        const ab = ABILITIES[name];
+        const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
         const reach = ((ab.range ?? 0) + 1) * FP;
         const radius = (ab.radius ?? 0) * FP;
@@ -634,7 +638,7 @@ export class AI {
           const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
           const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
           if (best && best[1] >= CROWD[name]) cmd = at(u, name, best[0]);
-        } else if (name === 'deflagration' || name === 'chocmental') {
+        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre') {
           // The toughest enemy in reach (for the stun, a caster first).
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
           if (pick && pick.maxHp + pick.maxShield >= 100) cmd = at(u, name, pick);
@@ -664,6 +668,13 @@ export class AI {
             const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
             cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
           }
+        } else if (name === 'cridegueurre') {
+          if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 4) cmd = self(u, name);
+        } else if (name === 'soinsdivins') {
+          if (around(army, u.x, u.y, radius).filter((a) => a.hp * 10 < a.maxHp * 7 && !(a.def as UnitDef).mechanical).length >= 3) cmd = self(u, name);
+        } else if (name === 'resurrection') {
+          const fallen = w.corpses.filter((c) => c.owner === this.player && w.tick - c.tick < ticks(ab.duration) && dist(c.x, c.y, u.x, u.y) <= radius).length;
+          if (fallen >= Math.min(2, ab.max ?? 1)) cmd = self(u, name);
         } else if (name === 'courroux') {
           const d = this.engaged(u);
           if (d !== undefined && d < 3 * FP) cmd = self(u, name);

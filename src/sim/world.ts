@@ -118,6 +118,9 @@ export interface Entity {
   charged: number;
   /** Dieux: a god's level (1 to 5); a building called down by Gaïa, the level she had (it materialises that many times faster). 1 for the rest. */
   lvl: number;
+  /** Cri de guerre (Athéna): ticks left, and the damage it adds, in percent. */
+  war: number;
+  warPct: number;
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -285,7 +288,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -346,6 +349,7 @@ export class World {
       if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
       if (e.skin > 0) e.skin--;
       if (e.charged > 0) e.charged--;
+      if (e.war > 0) e.war--;
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       this.regenerate(e);
     }
@@ -404,7 +408,7 @@ export class World {
   }
 
   /** Recent bodies (Réanimation), dropped after 20 s. */
-  corpses: { x: number; y: number; tick: number }[] = [];
+  corpses: { x: number; y: number; tick: number; owner: number; type: string }[] = [];
 
   private bury(): void {
     this.corpses = this.corpses.filter((c) => this.tick - c.tick < ticks(20));
@@ -412,7 +416,7 @@ export class World {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       this.deaths.push({ x: e.x, y: e.y, type: e.type, owner: e.owner, air: flies(e) });
       // Living units leave a body an Alchimiste can raise for a while.
-      if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick });
+      if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner: e.owner, type: e.type });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
       if (e.def.kind === 'building' && e.lastHitBy >= 0 && this.hostile(e.lastHitBy, e.owner) && this.level(e.lastHitBy, 'pillage')) {
         const share = BALANCE.rules.upgrades.pillageShare;

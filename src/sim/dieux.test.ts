@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
+import BALANCE from '../balance.json';
 import { ABILITIES, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
@@ -130,6 +131,65 @@ describe('Dieux', () => {
     expect(near.hp).toBeLessThan(nearHp);
   });
 
+  it('the second rank opens with two first-rank gods; Odin, Athéna and Isis summon their own troops', () => {
+    const w = createMatch(['dieux', 'humains']);
+    expect(w.lacks(0, 'odin')).toMatch(/2 parmi/);
+    w.spawn('thor', 0, 30 * FP, 30 * FP);
+    w.spawn('seth', 0, 34 * FP, 30 * FP);
+    expect(w.lacks(0, 'odin')).toBe('');
+    w.players[0].minerals = 5000;
+    w.players[0].energy = 5000;
+    w.spawn('branche', 0, 36 * FP, 14 * FP);
+    w.spawn('branche', 0, 39 * FP, 14 * FP);
+    const odin = w.spawn('odin', 0, 30 * FP, 40 * FP);
+    const isis = w.spawn('isis', 0, 40 * FP, 40 * FP);
+    w.step([{ player: 0, kind: 'train', ids: [odin.id], type: 'drake' }, { player: 0, kind: 'train', ids: [isis.id], type: 'pretresse' }]);
+    run(w, (DEFS.drake as UnitDef).buildTime + 1);
+    expect(of(w, 0, 'drake')).toHaveLength(1);
+    expect(of(w, 0, 'pretresse')).toHaveLength(1);
+  });
+
+  it("Odin's aura and Athéna's: harder blows and more armour round them", () => {
+    const w = createMatch(['dieux', 'humains']);
+    const nain = w.spawn('nain', 0, 30 * FP, 30 * FP);
+    const bare = w.armorBonus(nain);
+    w.spawn('athena', 0, 32 * FP, 30 * FP);
+    expect(w.armorBonus(nain)).toBe(bare + BALANCE.rules.upgrades.auraprotection.armor[0]);
+    const dummy = w.spawn('grenier', 1, 30 * FP, 32 * FP);
+    const hit = () => {
+      const before = dummy.hp;
+      w.hit(nain, dummy, (DEFS.nain as UnitDef).attack!);
+      return before - dummy.hp;
+    };
+    const plain = hit();
+    w.spawn('odin', 0, 34 * FP, 34 * FP);
+    expect(hit()).toBe(plain + BALANCE.rules.upgrades.auraguerre.damage[0]);
+  });
+
+  it('Foudre stuns, Cri de guerre strengthens, Soins divins heals, Résurrection raises the fallen', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const odin = w.spawn('odin', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [odin.id], name: 'foudre', x: foe.x, y: foe.y }]);
+    run(w, 0.5);
+    expect(foe.held).toBeGreaterThan(0);
+    const athena = w.spawn('athena', 0, 50 * FP, 50 * FP);
+    const nain = w.spawn('nain', 0, 51 * FP, 50 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [athena.id], name: 'cridegueurre' }]);
+    expect(nain.war).toBeGreaterThan(0);
+    const isis = w.spawn('isis', 0, 70 * FP, 50 * FP);
+    const hurt = w.spawn('nain', 0, 71 * FP, 50 * FP);
+    hurt.hp = 50;
+    w.step([{ player: 0, kind: 'ability', ids: [isis.id], name: 'soinsdivins' }]);
+    expect(hurt.hp).toBe(50 + ABILITIES.soinsdivins.damage!);
+    hurt.hp = 0;
+    run(w, 1);
+    expect(of(w, 0, 'nain').filter((n) => Math.abs(n.x - 71 * FP) < FP)).toHaveLength(0);
+    isis.abilityCd = 0; // her spells share one cooldown
+    w.step([{ player: 0, kind: 'ability', ids: [isis.id], name: 'resurrection' }]);
+    expect(of(w, 0, 'nain').filter((n) => Math.abs(n.x - 71 * FP) < 2 * FP)).toHaveLength(1);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
@@ -209,7 +269,7 @@ describe('Dieux', () => {
     const record: [number, Command[]][] = [];
     const live = createMatch(['dieux', 'humains']);
     const ais = [new AI(live, 0), new AI(live, 1)];
-    while (live.tick < ticks(17 * 60)) {
+    while (live.tick < ticks(21 * 60)) {
       const cmds = ais.flatMap((ai) => ai.think());
       if (cmds.length) record.push([live.tick, cmds]);
       live.step(cmds);
