@@ -686,7 +686,10 @@ ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {
   // Every portrait the match can show is readied behind the loading screen (render/portrait.ts).
   const portraits = world.players.flatMap((p, i) => shown.filter((t) => (!('faction' in DEFS[t]) ? i === 0 : DEFS[t].faction === p.faction)).map((t): [string, number] => [t, 'faction' in DEFS[t] ? i : -1]));
-  ready.then(() => hud.portrait.prewarm(portraits).catch(() => {})).then(start);
+  // Never waited for more than 3 s: a page the browser does not draw (a tab opened behind, never shown) may never
+  // finish compiling shaders, and its match, so the other player's too, would not start until it is shown.
+  const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, 3000))]);
+  ready.then(() => warmed(hud.portrait.prewarm(portraits))).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();
