@@ -29,6 +29,7 @@ import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { connect, every, newRoom, NO_DIRECT, openLobby, readRoom, stateHash, type LobbySetup, type NetStatus } from './net';
 import { countMatch, countTitle, SKIPPED } from './stats';
+import { downloadReplay, openReplayFile, playReplay, readReplay, type Replay, REPLAY_KEY, saveReplay } from './game/replay';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
 /** Control settings for this computer (Options, also from the pause menu): edge scrolling's speed, band width (1 = as
@@ -64,7 +65,6 @@ const params = new URLSearchParams(location.search);
 /** `?net=host|join&room=ABCD`: a two-player game over the network (the host is player 0). */
 const NET_ROLE = params.get('net');
 const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE;
-const REPLAY_KEY = 'xcraft.replay';
 /** The game just played has been kept as the last game. */
 let saved = false;
 /** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
@@ -1336,74 +1336,4 @@ function start(): void {
     else frame(dt);
     perf.frame(world.tick);
   });
-}
-
-// ---------------------------------------------------------------- replays
-
-/** A game as the commands the simulation took, tick by tick; replaying them rebuilds it exactly. */
-interface Replay {
-  v: 1;
-  /** Map id; missing in replays from before map files (the original map). */
-  map?: string;
-  factions: Faction[];
-  /** Each player's team; missing in replays from before teams (everyone alone). */
-  teams?: number[];
-  biome: string;
-  handicap: number[];
-  ticks: [number, Command[]][];
-}
-
-/** The replay to play: one opened from a file this session, else the last saved game. */
-function readReplay(): Replay | null {
-  for (const read of [() => sessionStorage.getItem(REPLAY_KEY), () => localStorage.getItem(REPLAY_KEY)]) {
-    try {
-      const r = JSON.parse(read() ?? 'null') as Replay | null;
-      if (r?.v === 1 && Array.isArray(r.ticks)) return r;
-    } catch {
-      // unavailable or not a replay: try the next place
-    }
-  }
-  return null;
-}
-
-/** Keeps the game as the "last game" (games that do not fit in storage are just not kept). */
-function saveReplay(r: Replay): boolean {
-  try {
-    localStorage.setItem(REPLAY_KEY, JSON.stringify(r));
-  } catch {
-    // storage full or blocked
-  }
-  return true;
-}
-
-function playReplay(r: Replay | null): void {
-  if (r) location.search = `?replay&speed=2&biome=${r.biome}`;
-}
-
-function downloadReplay(r: Replay): void {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(r)], { type: 'application/json' }));
-  a.download = `xcraft-${r.factions.join('-')}-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-/** Lets the player pick a replay file, then plays it. */
-function openReplayFile(): void {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/json,.json';
-  input.onchange = async () => {
-    const text = await input.files?.[0]?.text();
-    if (!text) return;
-    try {
-      const r = JSON.parse(text) as Replay;
-      if (r.v !== 1 || !Array.isArray(r.ticks)) throw new Error('not a replay');
-      sessionStorage.setItem(REPLAY_KEY, text);
-      playReplay(r);
-    } catch {
-      alert('Ce fichier n’est pas un replay Xcraft.');
-    }
-  };
-  input.click();
 }
