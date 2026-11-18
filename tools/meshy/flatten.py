@@ -42,19 +42,21 @@ def vivid(r, g, b):
 def classify(r, g, b):
     lum = 0.3 * r + 0.59 * g + 0.11 * b
     chroma = max(r, g, b) - min(r, g, b)
-    if b - max(r * 1.5, g) > 18 or (b > 38 and b > r + 14 and b > g + 8):
-        return BLUE  # the plates' shaded navy too, or it would turn brown
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    if b - max(r * 1.5, g) > 18 or (b > 38 and b > r + 14 and b > g + 8 and s > 0.35):
+        return BLUE  # the plates' shaded navy too, or it would turn brown; TRELLIS.2's bluish steel is not
     if vivid(r, g, b):
         return OTHER  # before the pale and warm tests below: a light yellow-green vial passed as ivory
-    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    if 4 < h * 360 < 18 and s > 0.7 and v > 0.35 and r < 170:
+        return SKIN  # TRELLIS.2 paints tan skin a deep orange-red; copper is yellower, a red gem or lamp brighter
     if 45 < h * 360 <= 75 and s > 0.3 and v > 0.3:
         return KHAKI
     if (g > r + 20 and g > b + 15) or (r > 140 and g < 70 and b < 70):
         return OTHER  # green vials and glows, red gems and lamps: kept as painted
     if r > 150 and r > g + 25 and g > b + 15 and lum > 120 and r - g < 70:
         return SKIN if r - b < 120 else OTHER
-    if chroma < 24 and lum > 70:
-        return STEEL
+    if (chroma < 24 or (0 <= b - r < 32 and b - g < 32 and s < 0.3)) and lum > 60:
+        return STEEL  # TRELLIS.2's steel leans blue
     if lum > 165 and r >= b:
         return IVORY
     if r > 120 and r - g > 40 and lum > 85:
