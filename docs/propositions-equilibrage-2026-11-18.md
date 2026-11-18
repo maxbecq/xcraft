@@ -65,7 +65,7 @@ Variantes essayées, pour mémoire :
 
 ## 4. Les Dieux : à part
 
-Avec ces propositions, les Dieux perdent partout : 10 – 56 contre les Humains (32 nuls), 7 – 86 contre les Isdaris, 3 – 87 contre Z. Donner 30 % de dégâts en plus au Nain, au Minotaure et au Sphinx change peu : 16 – 39 (43 nuls) et 12 – 73.
+Avec les corrections appliquées, les Dieux perdent partout : 10 – 56 contre les Humains (32 nuls), 7 – 86 contre les Isdaris, 22 – 61 contre Z (15 nuls). Donner 30 % de dégâts en plus au Nain, au Minotaure et au Sphinx change peu : 16 – 39 (43 nuls) et 12 – 73.
 
 Le problème ne semble pas venir des stats. Chaque dieu n'invoque qu'une unité à la fois : l'IA accumule des minerais sans pouvoir les dépenser, et les parties s'étirent jusqu'à la limite de 35 minutes. Avant de toucher aux chiffres, il faut trancher une règle : invocations simultanées, temps d'invocation plus court ou plus de dieux. C'est à vous de décider.
 
