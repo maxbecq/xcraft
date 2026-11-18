@@ -160,6 +160,8 @@ export class Input {
     private readonly player: number,
     private readonly hooks: InputHooks,
     private readonly canvas: HTMLCanvasElement,
+    /** Watching (spectator, replay): any side's things are picked to look at, nothing takes an order. */
+    private readonly spectator = false,
   ) {
     window.setInterval(() => this.animateCursor(), 60);
     this.box.className = 'selection-box';
@@ -421,6 +423,7 @@ export class Input {
 
   /** Own selected entities. */
   own(): Entity[] {
+    if (this.spectator) return [];
     return [...this.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e && e.owner === this.player);
   }
 
@@ -581,6 +584,11 @@ export class Input {
     if (this.canvas.style.cursor !== cursor) this.canvas.style.cursor = cursor;
   }
 
+  /** Seen by the local player (everything, for a spectator). */
+  private sees(e: Entity): boolean {
+    return this.spectator || this.world.sees(this.player, e);
+  }
+
   /**
    * Entity under the cursor. A unit wins over a building or a field: any unit the ray meets (even one behind a tall
    * building's corner), else the closest unit within a few pixels, and only then the building or field hit, else the
@@ -591,7 +599,7 @@ export class Input {
     let flyer: Entity | undefined;
     let flyerD = FLYER_PICK_PX;
     for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit' || !flies(e) || e.inside || !this.world.sees(this.player, e)) continue;
+      if (e.def.kind !== 'unit' || !flies(e) || e.inside || !this.sees(e)) continue;
       const s = this.screenOf(e);
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < flyerD) [flyer, flyerD] = [e, d];
@@ -612,7 +620,7 @@ export class Input {
     let best: Entity | undefined;
     let bestD = PICK_PX;
     for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit' || !this.world.sees(this.player, e)) continue;
+      if (e.def.kind !== 'unit' || !this.sees(e)) continue;
       const s = this.screenOf(e);
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < bestD) [best, bestD] = [e, d];

@@ -328,7 +328,7 @@ const input = new Input(world, map, PLAYER, {
   pan: (dx, dy) => rig.panPixels(dx, dy),
   fling: (vx, vy) => rig.fling(vx, vy),
   zoom: (f) => rig.zoomBy(f),
-}, renderer.domElement);
+}, renderer.domElement, SPECTATE);
 /** Windowed: the pointer stays in the game (Pointer Lock), so edge scrolling never loses it off the window. */
 /** When the first click asked for fullscreen: no lock in the same gesture (Safari stalls on both at once). */
 let fullscreenAsked = -Infinity;
