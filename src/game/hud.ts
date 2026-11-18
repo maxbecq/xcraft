@@ -573,8 +573,7 @@ export class Hud {
     const a = this.world.weapon(e);
     if (a) {
       // shortcut: only the faction's attack research is counted, not the rarer unit-specific bonuses (Acide, Conseil's aura…).
-      const p = this.world.players[e.owner];
-      const line = p?.faction === 'isdaris' ? ((e.def as UnitDef).mechanical ? 'assembleuratk' : 'portailatk') : p?.faction === 'z' ? 'zattaque' : a.range < 1 ? 'melee' : 'ranged';
+      const line = e.owner >= 0 ? this.world.attackLine(e, a) : '';
       const up = e.owner >= 0 && e.def.kind === 'unit' && !(e.def as UnitDef).worker ? this.world.level(e.owner, line) * Math.max(1, Math.round(a.damage / 10)) : 0;
       parts.push(`<span title="Dégâts par coup">Attaque ${a.damage}${plus(up)}</span>`);
       parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
@@ -710,6 +709,13 @@ export class Hud {
       const ready = same.some((o) => o.abilityCd === 0);
       const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
       list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: 0, energy: a.energy ?? 0 }, action: go });
+    }
+    // Z Pods: one add-on each, raised beside it (Plate-forme, Tourelle).
+    for (const t of (b.def as BuildingDef).addons ?? []) {
+      const d = DEFS[t] as BuildingDef;
+      const free = same.find((o) => ![...this.world.entities.values()].some((a) => a.host === o.id));
+      const reason = this.world.lacks(this.player, t) || (free ? undefined : 'Déjà un add-on');
+      list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
     }
     // Isdaris: turning into a stronger building, in place.
     for (const t of b.def.morphs ?? []) {

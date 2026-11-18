@@ -69,6 +69,8 @@ export interface Entity {
   ty: number;
   buildLeft: number;
   queue: string[];
+  /** Z add-on (Plate-forme, Tourelle): the Pod that raised it, or 0. */
+  host: number;
   /** Z Plate-forme: the weapon chosen for each socle of the queue (key of WEAPONS, '' for the machine gun). */
   kits: string[];
   trainLeft: number;
@@ -291,7 +293,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], trainLeft: 0, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -305,6 +307,7 @@ export class World {
     this.entities.set(e.id, e);
     if (this.cells) this.file(e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
+    if (owner >= 0 && e.type === 'drone' && this.level(owner, 'sonderobuste')) this.fortify(e);
     if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
   }
@@ -668,7 +671,7 @@ export class World {
         }
         if (!this.pay(e.owner, def)) return this.setOrder(e, null);
         const b = this.spawn(o.type, e.owner, o.tx * FP, o.ty * FP);
-        b.buildLeft = ticks(def.buildTime);
+        b.buildLeft = this.buildTicks(b);
         b.lvl = e.lvl;
         b.hp = Math.max(1, idiv(b.maxHp, 10));
         b.shield = 0;

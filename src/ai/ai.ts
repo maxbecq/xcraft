@@ -246,8 +246,21 @@ export class AI {
     if (moreEnergy && f !== FACTIONS.isdaris && minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
     for (const b of buildings) this.tried.delete(`${b.tx},${b.ty}`);
+    // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with no add-on yet; without one, a Pod first.
+    const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && !buildings.some((a) => a.host === b.id));
+    for (let i = 0; i < wants.length; i++) {
+      if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
+      const host = hosts.shift();
+      const def = DEFS[wants[i]] as BuildingDef;
+      if (host && minerals >= def.cost.minerals && energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
+        out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
+        minerals -= def.cost.minerals;
+        energy -= def.cost.energy;
+      } else if (!host && !building(f.supply) && !wants.includes(f.supply)) wants.splice(i + 1, 0, f.supply);
+    }
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
+      if (def.addon) continue;
       if (minerals < def.cost.minerals) {
         if (type === outpost) continue;
         break; // save up for the most urgent one
@@ -280,6 +293,8 @@ export class AI {
     const researching = new Set<number>();
     for (const t of this.easy ? [] : (RESEARCH[p.faction] ?? [])) {
       if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
+      // Z: Attaque de proximité only serves the flame thrower.
+      if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
       const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
       const cost = (DEFS[t] as UpgradeDef).cost;
       if (!host || minerals < cost.minerals + ((host.def as BuildingDef).trains?.length ? 300 : 0) || energy - researchReserve < cost.energy) continue;

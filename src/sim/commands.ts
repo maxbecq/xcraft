@@ -71,7 +71,8 @@ export function apply(this: World, c: Command): void {
     case 'build': {
       const worker = units.find((e) => (e.def as UnitDef).builder ?? (e.def as UnitDef).worker);
       const bdef = DEFS[c.type];
-      if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction) return;
+      // Morphs come out of a building's queue, Z add-ons out of a Pod: no worker raises them.
+      if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction || bdef.morphOnly || bdef.addon) return;
       const lack = this.lacks(c.player, c.type);
       if (lack) return void this.say(c.player, lack);
       if (!this.canPlace(c.type, c.tx, c.ty, c.player)) return void this.say(c.player, this.misplaced(bdef, c.tx, c.ty, c.player));
@@ -123,6 +124,21 @@ export function apply(this: World, c: Command): void {
           b.queue.push(c.type);
           b.kits.push('');
           b.trainLeft = ticks(into.buildTime);
+          return;
+        }
+        if (def.addons?.includes(c.type)) {
+          // Z: a Pod raises one add-on beside it, which assembles itself; no drone is spent.
+          if (b.buildLeft > 0 || [...this.entities.values()].some((a) => a.host === b.id)) continue;
+          const lack = this.lacks(c.player, c.type);
+          if (lack) return void this.say(c.player, lack);
+          const spot = this.addonSpot(b, c.type);
+          if (!spot) return void this.say(c.player, "Pas de place à côté du Pod.");
+          const add = DEFS[c.type] as BuildingDef;
+          if (!this.pay(c.player, add)) return;
+          const a = this.spawn(c.type, c.player, spot[0] * FP, spot[1] * FP);
+          a.host = b.id;
+          a.buildLeft = this.buildTicks(a);
+          a.hp = Math.max(1, idiv(a.maxHp, 10));
           return;
         }
         if (!def.trains?.includes(c.type)) continue;

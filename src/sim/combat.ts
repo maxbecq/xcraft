@@ -17,7 +17,8 @@ export function nearCouncil(this: World, e: Entity): boolean {
 /** Which attack upgrade line a weapon follows: Forge melee or ranged (Humans), Portail or Assembleur (Isdaris). */
 export function attackLine(this: World, e: Entity, a: Attack): UpgradeLine {
   if (this.players[e.owner].faction === 'isdaris') return (e.def as UnitDef).mechanical ? 'assembleuratk' : 'portailatk';
-  if (this.players[e.owner].faction === 'z') return 'zattaque';
+  // Z.doc: the flame thrower follows Attaque de proximité, like any melee weapon.
+  if (this.players[e.owner].faction === 'z') return a.range < 1 || e.kit === 'flammes' ? 'zproxi' : 'zdist';
   return a.range < 1 ? 'melee' : 'ranged';
 }
 
@@ -40,7 +41,7 @@ export function empower(this: World, u: Entity, type: string): void {
 export function armorBonus(this: World, t: Entity): number {
   const d = t.def as UnitDef;
   const faction = this.players[t.owner].faction;
-  let bonus = faction === 'z' ? this.level(t.owner, 'zblindage') : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+  let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
   if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
@@ -124,12 +125,14 @@ export function pulse(this: World, e: Entity): void {
 
 /** Croissance économique: serfs and the Caserne's soldiers. */
 export function grows(this: World, u: Entity): boolean {
+  if (u.type === 'drone') return false;
   return u.def.kind === 'unit' && (u.type === 'serf' || !!(DEFS.caserne as BuildingDef).trains?.includes(u.type));
 }
 
 /** Raises a unit's hp by the Croissance économique share, keeping its wounds. */
 export function fortify(this: World, u: Entity): void {
-  const extra = idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
+  // Sonde robuste (Z): a flat 25 hp for drones; Croissance économique: a share for Humans.
+  const extra = u.type === 'drone' ? BALANCE.rules.z.sondeRobusteHp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
   u.maxHp += extra;
   u.hp += extra;
 }

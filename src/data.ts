@@ -141,6 +141,10 @@ export interface BuildingDef {
   detector?: number;
   /** Bunker: how many units can shelter inside. */
   bunker?: number;
+  /** Z Pod: add-ons it raises beside it, one at a time (Plate-forme, Tourelle). */
+  addons?: string[];
+  /** Z: a Pod add-on, raised by a Pod, never by a drone. */
+  addon?: boolean;
   /** Buildings this one can turn into, in place, through its production queue (paying the new one's cost). */
   morphs?: string[];
   /** One per player at most (Grand Conseil). */
@@ -511,29 +515,47 @@ const BASE: Record<string, object> = {
   porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris."),
   concentrateur: extension('Concentrateur énergétique', 'C', "Le Trône dresse un mur d'énergie que rien ne traverse."),
 
-  // ---------------------------------------------------------------- Z (notice 1.2-1): a nest of metal insects
-  // Drones merge into the buildings they raise; every building but the Intelligence centrale and the Assimilateur
-  // stands on the creep of cables spread by the Intelligence centrale and the Pods (the Isdaris power field, drawn
-  // as cables). Socles leave the Plate-forme with the weapon chosen when they were queued, for good (Z.doc).
+  // ---------------------------------------------------------------- Z (Z.doc, 2010): a nest of metal insects
+  // Drones merge into the buildings they raise. The Intelligence centrale (and Suprême) and the Pod supérieur spread a
+  // creep of cables (the Isdaris power field, drawn as cables) that only repairs what stands on it. The Plate-forme and
+  // the Tourelle are Pod add-ons, raised by a Pod beside it, one per Pod. Socles are unlocked at the Centre de socles and
+  // leave the Plate-forme with the weapon chosen when they were queued, for good.
   drone: { kind: 'unit', name: 'Drone', radius: 0.375, worker: true, mechanical: true, faction: 'z', hotkey: 'D' },
   dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
-  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
-  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
-  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { armement: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'L' },
-  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone'], dropoff: true, absorbs: true, faction: 'z', hotkey: 'I' },
-  pod: { kind: 'building', name: 'Pod', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'P' },
-  // Notice: needs only 3 drones (supply) where the others need 4.
+  quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'Q' },
+  hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, requires: { rhexapode: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'H' },
+  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: ['laser', 'flammes', 'roquettes'], faction: 'z', hotkey: 'L' },
+  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone'], dropoff: true, absorbs: true, morphs: ['supreme'], faction: 'z', hotkey: 'I' },
+  // Z.doc: drones and spies in 75 % of their time (Production accélérée).
+  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone'], dropoff: true, absorbs: true, morphOnly: true, requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
+  pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
+  podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, faction: 'z', hotkey: 'A' },
-  // Notice: a Pod add-on that builds the socles; here a building of its own on the creep.
-  plateforme: { kind: 'building', name: 'Plate-forme', size: 3, needsPower: true, absorbs: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
-  armement: {
-    kind: 'building', name: "Centre d'armement", size: 3, needsPower: true, absorbs: true, requires: { plateforme: 1 }, faction: 'z', hotkey: 'R',
-    researches: ['zattaque1', 'zattaque2', 'zattaque3', 'zblindage1', 'zblindage2', 'zblindage3', 'laser', 'lanceflammes', 'lanceroquettes'],
+  plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
+  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, faction: 'z', hotkey: 'T' },
+  centresocles: {
+    kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
+    researches: ['rquadripode', 'rhexapode', 'rcoleoptere'],
   },
-  // Notice: a Pod add-on, a small metal tower fitted with a weapon; here a heavy machine gun that sees cloaked units.
-  tourelle: { kind: 'building', name: 'Tourelle', size: 2, needsPower: true, absorbs: true, faction: 'z', hotkey: 'T' },
-  ...upgrades('zattaque', 'Attaque physique', 'K', undefined, 'z'),
+  armement: {
+    kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
+    researches: ['laser', 'lanceflammes', 'lanceroquettes'],
+  },
+  centrerecherche: {
+    kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
+    researches: ['zproxi1', 'zproxi2', 'zproxi3', 'zdist1', 'zdist2', 'zdist3', 'zblindage1', 'zblindage2', 'zblindage3', 'titane', 'deploiement', 'sonderobuste', 'podsuperieur'],
+  },
+  optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, faction: 'z', hotkey: 'O' },
+  rquadripode: research('Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
+  rhexapode: research('Hexapode', 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
+  rcoleoptere: research('Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
+  ...upgrades('zproxi', 'Attaque de proximité', 'P', undefined, 'z'),
+  ...upgrades('zdist', 'Attaque à distance', 'D', undefined, 'z'),
   ...upgrades('zblindage', 'Blindage des socles', 'B', undefined, 'z'),
+  titane: research('Blindage de titane', 'T', 'Blindage des bâtiments +2.', undefined, 'z'),
+  deploiement: research('Déploiement rapide', 'R', 'Les bâtiments se construisent 20 % plus vite.', undefined, 'z'),
+  sonderobuste: research('Sonde robuste', 'S', 'Points de vie des drones +25.', { supreme: 1 }, 'z'),
+  podsuperieur: research('Pod supérieur', 'U', 'Les Pods peuvent évoluer en Pods supérieurs.', undefined, 'z'),
   laser: research('Laser', 'L', 'Arme laser pour les socles, choisie à leur construction.', undefined, 'z'),
   lanceflammes: research('Lance-flammes', 'F', 'Lance-flammes pour les socles, choisi à leur construction.', undefined, 'z'),
   lanceroquettes: research('Lance-roquettes', 'R', 'Lance-roquettes pour les socles, contre les machines et les bâtiments.', undefined, 'z'),
@@ -652,9 +674,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2 };
+export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
@@ -714,9 +736,9 @@ export const FACTIONS: Record<Faction, FactionDef> = {
   },
   z: {
     name: 'Z', worker: 'drone', hq: 'intelligence', supply: 'pod', barracks: 'plateforme', extractor: 'assimilateur',
-    forge: 'armement', detector: 'tourelle', defense: 'tourelle',
-    buildable: ['intelligence', 'pod', 'assimilateur', 'plateforme', 'tourelle', 'armement'],
-    advanced: ['armement'],
+    forge: 'centrerecherche', defense: 'tourelle',
+    buildable: ['intelligence', 'pod', 'assimilateur', 'centresocles', 'armement', 'centrerecherche', 'optimisation'],
+    advanced: ['centresocles', 'armement', 'centrerecherche', 'optimisation'],
     army: Object.entries(BALANCE.ai.army.z),
   },
   dieux: {

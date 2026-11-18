@@ -18,22 +18,98 @@ describe('Z', () => {
     expect(w.supply(0).max).toBe(10);
   });
 
-  it('a drone merges into the building it raises, which then assembles itself, on the creep only', () => {
+  it('a drone merges into the building it raises anywhere (no creep needed), which then assembles itself', () => {
     const w = createMatch(['z', 'humains']);
     w.players[0].minerals = 2000;
     const drone = of(w, 0, 'drone')[0];
-    expect(w.canPlace('plateforme', 30, 30, 0)).toBe(false); // off the creep
+    // Add-ons and morphs never come from a drone.
     w.step([{ player: 0, kind: 'build', ids: [drone.id], type: 'plateforme', tx: 30, ty: 30 }]);
-    expect(w.events.some((e) => e.text === 'Hors du creep.')).toBe(true);
-    w.step([{ player: 0, kind: 'build', ids: [drone.id], type: 'pod', tx: 18, ty: 18 }]);
-    run(w, 8);
+    expect(drone.order).toBeNull();
+    w.step([{ player: 0, kind: 'build', ids: [drone.id], type: 'pod', tx: 30, ty: 30 }]);
+    run(w, 15);
     const [pod] = of(w, 0, 'pod');
     expect(pod).toBeDefined();
     expect(w.entities.has(drone.id)).toBe(false);
-    run(w, 25);
+    run(w, 40);
     expect(pod.buildLeft).toBe(0);
     expect(pod.hp).toBe(pod.maxHp);
-    expect(w.supply(0).max).toBe(20);
+    expect(w.supply(0).max).toBe(25); // Z.doc: 10 + 15
+  });
+
+  it('a Pod raises one add-on beside it, no drone spent; the socles wait for the Centre de socles', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 2000;
+    const [ic] = of(w, 0, 'intelligence');
+    const pod = w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    const drones = of(w, 0, 'drone').length;
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'plateforme' }]);
+    const [pf] = of(w, 0, 'plateforme');
+    expect(pf.host).toBe(pod.id);
+    // Against one of its sides.
+    expect([[pod.tx + 2, pod.ty], [pod.tx - 3, pod.ty], [pod.tx, pod.ty + 2], [pod.tx, pod.ty - 3]]).toContainEqual([pf.tx, pf.ty]);
+    expect(of(w, 0, 'drone')).toHaveLength(drones);
+    expect(p.minerals).toBe(2000 - 200);
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
+    expect(of(w, 0, 'tourelle')).toHaveLength(0); // one per Pod
+    run(w, 41);
+    expect(pf.buildLeft).toBe(0);
+    w.step([{ player: 0, kind: 'train', ids: [pf.id], type: 'quadripode' }]);
+    expect(pf.queue).toHaveLength(0);
+    expect(w.lacks(0, 'quadripode')).toBe('Requiert : Quadripode');
+    expect(w.lacks(0, 'centresocles')).toBe('');
+    p.upgrades.rquadripode = 1;
+    w.step([{ player: 0, kind: 'train', ids: [pf.id], type: 'quadripode' }]);
+    expect(pf.queue).toEqual(['quadripode']);
+  });
+
+  it('the Intelligence suprême: needs the Centre d\'armement and the Centre de recherche, drones in 75 % of the time', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    p.energy = 5000;
+    const [ic] = of(w, 0, 'intelligence');
+    w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'supreme' }]);
+    expect(ic.queue).toHaveLength(0);
+    w.spawn('armement', 0, ic.x + 8 * FP, ic.y);
+    w.spawn('centrerecherche', 0, ic.x - 8 * FP, ic.y);
+    w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'supreme' }]);
+    expect(ic.queue).toEqual(['supreme']);
+    run(w, 71);
+    expect(ic.type).toBe('supreme');
+    expect(w.supply(0).max).toBe(15);
+    expect(w.trainTime(ic, 'drone')).toBe(ticks(15));
+  });
+
+  it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
+    const w = createMatch(['z', 'humains']);
+    const [ic] = of(w, 0, 'intelligence');
+    const pod = w.spawn('pod', 0, 40 * FP, 40 * FP);
+    expect(w.powered(0, pod.x, pod.y)).toBe(false);
+    const near = w.spawn('armement', 0, ic.x + 6 * FP, ic.y);
+    near.hp = 1000;
+    run(w, 3);
+    expect(near.hp).toBe(1003);
+    pod.type = 'podsup';
+    w.morph(pod, 'podsup');
+    expect(w.powered(0, pod.x, pod.y)).toBe(true); // not linked to the Intelligence: its own creep
+  });
+
+  it('Blindage de titane, Déploiement rapide and Sonde robuste', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    const [ic] = of(w, 0, 'intelligence');
+    expect(w.armorBonus(ic)).toBe(0);
+    p.upgrades.titane = 1;
+    expect(w.armorBonus(ic)).toBe(2);
+    const drone = of(w, 0, 'drone')[0];
+    expect(w.armorBonus(drone)).toBe(0);
+    const pod = w.spawn('pod', 0, 30 * FP, 30 * FP);
+    expect(w.buildTicks(pod)).toBe(ticks(40));
+    p.upgrades.deploiement = 1;
+    expect(w.buildTicks(pod)).toBe(Math.floor((ticks(40) * 100) / 120));
+    p.upgrades.sonderobuste = 1;
+    expect(w.spawn('drone', 0, 20 * FP, 20 * FP).maxHp).toBe(100);
   });
 
   it("chooses a socle's weapon when it is queued: paid on top, researched first, for good", () => {
@@ -42,7 +118,8 @@ describe('Z', () => {
     p.minerals = 2000;
     p.energy = 2000;
     const [ic] = of(w, 0, 'intelligence');
-    w.spawn('pod', 0, ic.x + 6 * FP, ic.y + 6 * FP);
+    p.upgrades.rquadripode = 1;
+    p.upgrades.rcoleoptere = 1;
     const pf = w.spawn('plateforme', 0, ic.x + 8 * FP, ic.y);
     const train = (type: string, weapon?: string) => w.step([{ player: 0, kind: 'train', ids: [pf.id], type, weapon }]);
     train('quadripode', 'roquettes');
@@ -60,7 +137,6 @@ describe('Z', () => {
     expect(p.minerals).toBe(2000);
     expect(p.energy).toBe(2000);
     // Z.doc: every socle takes any weapon, the Coléoptère a flame thrower too.
-    w.spawn('armement', 0, ic.x - 8 * FP, ic.y);
     train('coleoptere', 'flammes');
     train('quadripode');
     expect(pf.kits).toEqual(['flammes', '']);
@@ -88,9 +164,7 @@ describe('Z', () => {
     const p = w.players[0];
     p.minerals = 20000;
     p.energy = 20000;
-    p.upgrades.laser = 1;
-    p.upgrades.lanceflammes = 1;
-    p.upgrades.lanceroquettes = 1;
+    for (const r of ['laser', 'lanceflammes', 'lanceroquettes', 'rquadripode', 'rhexapode']) p.upgrades[r] = 1;
     const [ic] = of(w, 0, 'intelligence');
     for (let i = 0; i < 4; i++) w.spawn('pod', 0, ic.x + (i - 2) * 3 * FP, ic.y + 6 * FP);
     w.spawn('plateforme', 0, ic.x + 8 * FP, ic.y);

@@ -57,6 +57,21 @@ export function misplaced(this: World, def: BuildingDef, tx: number, ty: number,
   return def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.";
 }
 
+/** Where a Pod's add-on goes: against one of its sides, the first free one (east, west, south, north). */
+export function addonSpot(this: World, pod: Entity, type: string): [number, number] | undefined {
+  const size = (DEFS[type] as BuildingDef).size;
+  const own = (pod.def as BuildingDef).size;
+  const mid = idiv(own - size, 2);
+  const spots: [number, number][] = [[pod.tx + own, pod.ty + mid], [pod.tx - size, pod.ty + mid], [pod.tx + mid, pod.ty + own], [pod.tx + mid, pod.ty - size]];
+  return spots.find(([tx, ty]) => this.canPlace(type, tx, ty, pod.owner));
+}
+
+/** Ticks a building takes to raise: Z ones 20 % faster with Déploiement rapide. */
+export function buildTicks(this: World, b: Entity): number {
+  const t = ticks((b.def as BuildingDef).buildTime);
+  return this.players[b.owner]?.faction === 'z' && this.level(b.owner, 'deploiement') ? idiv(t * 100, 100 + BALANCE.rules.z.deploiementSpeedup) : t;
+}
+
 /** Is a point inside one of the player's linked power fields (Isdaris)? */
 export function powered(this: World, player: number, x: number, y: number): boolean {
   return this.powerNetwork(player).some((b) => dist(b.x, b.y, x, y) <= (b.def as BuildingDef).power! * FP);
@@ -68,6 +83,8 @@ export function powered(this: World, player: number, x: number, y: number): bool
  */
 export function powerNetwork(this: World, player: number): Entity[] {
   const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0);
+  // Z (Z.doc): each Intelligence and Pod supérieur spreads its own creep, linked or not.
+  if (this.players[player]?.faction === 'z') return nodes;
   const linked = nodes.filter((b) => (b.def as BuildingDef).dropoff);
   const rest = nodes.filter((b) => !(b.def as BuildingDef).dropoff);
   for (let i = 0; i < linked.length; i++) {
@@ -80,13 +97,13 @@ export function powerNetwork(this: World, player: number): Entity[] {
   return linked;
 }
 
-/** Z units on their own creep are repaired by the cables, a few hp each second. */
+/** Z units and buildings on their own creep are repaired by the cables, a few hp each second (Z.doc: 1). */
 export function repairOnCreep(this: World): void {
   for (const p of this.players) {
     if (p.faction !== 'z') continue;
     const net = this.powerNetwork(p.id);
     for (const u of this.entities.values()) {
-      if (u.owner !== p.id || u.def.kind !== 'unit' || u.hp <= 0 || u.hp >= u.maxHp || flies(u)) continue;
+      if (u.owner !== p.id || u.def.kind === 'resource' || u.buildLeft > 0 || u.hp <= 0 || u.hp >= u.maxHp || flies(u)) continue;
       if (net.some((b) => dist(b.x, b.y, u.x, u.y) <= (b.def as BuildingDef).power! * FP)) u.hp = Math.min(u.maxHp, u.hp + BALANCE.rules.creepRepair);
     }
   }
@@ -115,6 +132,8 @@ export function trainTime(this: World, b: Entity, type: string): number {
   if (b.type === 'portail' && this.level(b.owner, 'miniportail')) speedup += BALANCE.rules.upgrades.miniportailSpeedup;
   // The Grand Conseil plans production: every unit comes out faster while it stands.
   if ([...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0)) speedup += BALANCE.rules.upgrades.grandConseilSpeedup;
+  // Z.doc: the Intelligence suprême turns drones out in 75 % of their time (Production accélérée).
+  if (b.type === 'supreme') speedup += BALANCE.rules.z.supremeSpeedup;
   return idiv(t * (100 - speedup), 100);
 }
 
@@ -122,7 +141,7 @@ export function operate(this: World, b: Entity): void {
   if (b.buildLeft > 0) {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
     // Materialising (Isdaris) or assembling (Z): builds itself, hp and shield filling up.
-    const total = ticks((b.def as BuildingDef).buildTime);
+    const total = this.buildTicks(b);
     // Called down by Gaïa at level N: N steps a tick.
     for (let s = 0; s < b.lvl && b.buildLeft > 0; s++) {
       b.buildLeft--;
@@ -165,6 +184,7 @@ export function produce(this: World, b: Entity): void {
     if (up.kind === 'upgrade') {
       this.players[b.owner].upgrades[up.line] = up.level;
       this.say(b.owner, `Recherche terminée : ${up.name}.`, 'done');
+      if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'drone') this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
       if (type.startsWith('cercle') || type === 'boostgenetique') for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
       if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UpgradeDef).buildTime);

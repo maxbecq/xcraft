@@ -2221,6 +2221,60 @@ def tourelle(p):
     eyes(p, 0.18, -0.32, 1.55, n=1, r=0.05)
 
 
+# Provisional sketches of the Z.doc buildings the game did not have, until they get their own design sheets.
+def centresocles(p):
+    """Centre de socles (sketch): a low hangar under a gantry crane holding a bare socle frame, legs folded."""
+    box(p["zsteel"], (2.7, 2.7, 0.3), (0, 0, 0.15))
+    box(p["zdark"], (2.0, 2.0, 0.1), (0, 0, 0.35))
+    for s in (-1, 1):  # gantry pillars and beam
+        for t in (-1, 1):
+            box(p["zrust"], (0.18, 0.18, 1.8), (s * 1.15, t * 1.05, 1.0))
+        box(p["zsteel"], (0.2, 2.3, 0.2), (s * 1.15, 0, 1.95))
+    box(p["hazard"], (2.5, 0.22, 0.16), (0, 0.2, 2.1))  # crane bridge
+    cyl(p["graphite"], 0.03, 0.8, (0, 0.2, 1.6), verts=6)
+    box(p["zsteel"], (0.9, 0.7, 0.3), (0, 0.2, 1.05))  # socle hull on the hook
+    for s in (-1, 1):
+        for t in (-1, 1):
+            joint_leg(p, (s * 0.4, 0.2 + t * 0.3, 0.95), (s * 0.7, 0.2 + t * 0.5, 1.05), (s * 0.75, 0.2 + t * 0.55, 0.45), r=0.04)
+    box(p["team"], (2.72, 0.2, 0.32), (0, -1.3, 0.16))
+    for x in (-0.8, 0, 0.8):
+        box(p["cyan_glow"], (0.4, 0.03, 0.04), (x, -1.4, 0.26))
+    cable(p, (-1.15, 1.05, 1.8), (-0.3, 0.2, 1.1), sag=0.2, r=0.03)
+
+
+def centrerecherche(p):
+    """Centre de recherche (sketch): a stack of server blocks with glowing slots, a dish and an antenna mast."""
+    box(p["zsteel"], (2.6, 2.4, 0.9), (0, 0.1, 0.45))
+    box(p["zdark"], (1.8, 1.6, 0.7), (-0.2, 0.3, 1.25))
+    for k in range(6):  # server slots
+        box(p["cyan_glow"], (1.5, 0.03, 0.04), (-0.2, -0.51, 1.0 + k * 0.08))
+    for k in range(4):
+        box(p["cyan_glow"], (0.04, 0.03, 0.5), (-1.0 + k * 0.6, -1.11, 0.45))
+    cyl(p["zrust"], 0.08, 0.5, (0.9, -0.6, 1.15), verts=6)  # dish on a post
+    shell(p["zsteel"], 0.45, (0.9, -0.6, 1.45), scale=(1, 1, 0.35), seg=10, rings=4)
+    cyl(p["graphite"], 0.02, 0.4, (0.9, -0.6, 1.65), verts=5)
+    cyl(p["zsteel"], 0.035, 1.4, (-0.9, 0.7, 2.3), verts=6)  # antenna mast
+    ball(p["red_glow"], 0.06, (-0.9, 0.7, 3.0), seg=6, rings=4)
+    box(p["team"], (2.62, 0.18, 0.3), (0, 1.25, 0.3))
+    cable(p, (-1.2, -1.0, 0.8), (-1.4, -1.4, 0.05), sag=0.15, r=0.05)
+
+
+def optimisation(p):
+    """Centre d'optimisation (sketch): a squat reactor block under a tall upright ring with a glowing core."""
+    box(p["zsteel"], (2.6, 2.6, 0.6), (0, 0, 0.3))
+    cyl(p["zdark"], 0.9, 0.5, (0, 0, 0.85), verts=10)
+    for s in (-1, 1):  # ring supports
+        box(p["zrust"], (0.2, 0.3, 1.2), (s * 1.0, 0, 1.3))
+    ring(p["zsteel"], 1.0, 0.12, (0, 0, 2.0), rot=(math.pi / 2, 0, 0), seg=24)
+    ring(p["cyan_glow"], 0.85, 0.03, (0, 0, 2.0), rot=(math.pi / 2, 0, 0), seg=24)
+    ball(p["cyan_glow"], 0.3, (0, 0, 2.0), seg=10, rings=6)
+    for k in range(4):  # coils around the base
+        a = k / 4 * math.tau + 0.4
+        cyl(p["zcopper"], 0.15, 0.5, (math.cos(a) * 1.0, math.sin(a) * 1.0, 0.85), verts=8)
+    box(p["team"], (2.62, 0.18, 0.3), (0, -1.25, 0.3))
+    cable(p, (0.9, 0.9, 1.0), (0.4, 0.2, 1.1), sag=0.1, r=0.04)
+
+
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
     "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
@@ -2234,6 +2288,7 @@ MODELS = {
     "obelisque": obelisque, "emetteur": emetteur, "reservepsy": reservepsy, "portail": portail, "recepteur": recepteur,
     "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
     "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
+    "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation,
 }
 
 
