@@ -109,6 +109,17 @@ describe('Dieux', () => {
     expect(p.minerals).toBe(before);
   });
 
+  it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    w.players[0].minerals = 5000;
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
+    const before = w.supply(0).used;
+    expect(before).toBe(6 + (DEFS.gaia as UnitDef).supply + (DEFS.thor as UnitDef).supply);
+    w.players[0].upgrades.offrandes = 1;
+    expect(w.supply(0).used).toBe(6);
+  });
+
   it('a building Gaïa calls down at level 2 materialises twice as fast', () => {
     const w = createMatch(['dieux', 'humains']);
     w.players[0].minerals = 2000;

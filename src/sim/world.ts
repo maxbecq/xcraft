@@ -479,16 +479,17 @@ export class World {
   supply(player: number): { used: number; max: number } {
     let used = 0;
     let max = 0;
+    // Offrandes (Dieux): the gods stop counting.
+    const offrandes = this.level(player, 'offrandes') > 0;
+    const counts = (t: string) => (DEFS[t].kind === 'unit' && !(offrandes && (DEFS[t] as UnitDef).unique) ? (DEFS[t] as UnitDef).supply : 0);
     for (const e of this.entities.values()) {
       if (e.owner !== player) continue;
-      if (e.def.kind === 'unit') {
-        used += e.def.supply;
-        for (const t of e.queue) used += (DEFS[t] as UnitDef).supply;
-      } else if (e.def.kind === 'building') {
+      if (e.def.kind === 'unit') used += counts(e.type);
+      else if (e.def.kind === 'building') {
         if (e.def.supply < 0) used -= e.def.supply;
         else if (e.buildLeft === 0) max += e.def.supply;
-        for (const t of e.queue) if (DEFS[t].kind === 'unit') used += (DEFS[t] as UnitDef).supply;
       }
+      if (e.def.kind !== 'resource') for (const t of e.queue) used += counts(t); // a god's queued level counts nothing
     }
     return { used, max: Math.min(200, max) };
   }

@@ -519,12 +519,13 @@ const BASE: Record<string, object> = {
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
     kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
-    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite'],
+    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes'],
   },
   ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
   ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
   ...upgrades('armor', 'Amélioration armure', 'A', undefined, 'dieux', 3, 'darmor'),
   celerite: research('Célérité naine', 'N', 'Les Nains bondissent sur un ennemi proche.', undefined, 'dieux'),
+  offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
   // A god's next level, queued at the god itself; its price and time are the god's own (UnitDef.levels).
   niveau: research('Niveau divin', 'L', 'Le dieu monte d’un niveau : vie, armure, dégâts et vitesse ; il invoque et bâtit plus vite.', undefined, 'dieux'),
 

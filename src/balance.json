@@ -176,6 +176,7 @@
     "darmor2": { "cost": { "minerals": 350, "energy": 350 }, "buildTime": 90 },
     "darmor3": { "cost": { "minerals": 450, "energy": 450 }, "buildTime": 100 },
     "celerite": { "cost": { "minerals": 150, "energy": 150 }, "buildTime": 60 },
+    "offrandes": { "cost": { "minerals": 150, "energy": 0 }, "buildTime": 20 },
     "niveau": { "cost": { "minerals": 0, "energy": 0 }, "buildTime": 40 },
     "minerai": { "amount": 1500 }
   },
@@ -245,7 +246,7 @@
       "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
       "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
       "z": ["lanceroquettes", "zattaque1", "lanceflammes", "zblindage1", "zattaque2", "zblindage2", "zattaque3", "zblindage3"],
-      "dieux": ["dmelee1", "darmor1", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
+      "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3"]
     },
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2 } },
