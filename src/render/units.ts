@@ -1738,13 +1738,16 @@ export class EntityRenderer {
               (v.seam.material as MeshBasicMaterial).opacity = 0.55 + 0.3 * Math.abs(Math.sin(now / 120));
             }
             if (p >= 1) {
-              // Done: back to the shared materials, no cut.
+              // Done: back to the shared materials, no cut; the cut copies, the frame and the seam are freed.
+              const cuts = v.print.originals.map(([mesh]) => mesh.material);
               for (const [mesh, material] of v.print.originals) mesh.material = material;
               for (const l of v.print.lines) {
                 l.removeFromParent();
-                l.geometry.dispose();
+                free(l);
               }
+              for (const m of cuts.flat()) m.dispose();
               v.seam?.removeFromParent();
+              if (v.seam) free(v.seam);
               v.print = undefined;
               v.seam = undefined;
             }
@@ -1782,6 +1785,8 @@ export class EntityRenderer {
         v.handoff = { type: v.fab.type, owner: e.owner, at: v.fab.model.getWorldPosition(new Vector3()), yaw: v.model.rotation.y + v.fab.model.rotation.y, time: performance.now() };
       v.fab.model.removeFromParent();
       v.fab.line.removeFromParent();
+      free(v.fab.model);
+      free(v.fab.line);
       v.fab = undefined;
     }
     if (type && !v.fab) {
@@ -1798,7 +1803,7 @@ export class EntityRenderer {
         if (!mesh.isMesh) return;
         mesh.userData.noPick = true;
         const cut = (m: Material) => {
-          const c = m.clone();
+          const c = owned(m.clone());
           c.clippingPlanes = [plane];
           c.clipShadows = true;
           c.side = DoubleSide;
@@ -1808,7 +1813,7 @@ export class EntityRenderer {
       });
       const size = box.getSize(new Vector3());
       const r = Math.max(size.x, size.z) * 0.3; // round the body, inside the splayed legs
-      const line = new Mesh(new RingGeometry(r * 0.94, r, 4, 1), new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }));
+      const line = new Mesh(new RingGeometry(r * 0.94, r, 4, 1), owned(new MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide })));
       line.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
       line.scale.setScalar(Math.SQRT2);
       line.userData.noPick = true;
