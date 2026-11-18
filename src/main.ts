@@ -501,13 +501,13 @@ Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé s
 <kbd>Tab</kbd> : type actif d'une sélection mixte (ses capacités) · <kbd>Maj</kbd> maintenu : voir les ordres en file<br>
 <kbd>Espace</kbd>, <kbd>Entrée</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Espace</kbd> maintenu en bougeant la souris : faire glisser la carte · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
 <kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir · <kbd>²</kbd> : grande carte<br>
-<kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
+<kbd>F3</kbd> : panneau de production (toutes les files) · <kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
 Double tap : toutes les unités de ce type à l'écran<br>
 Glisser : déplacer la vue · pincer : zoomer<br>
 Appui long puis glisser : rectangle de sélection</div></div>`;
-tools.append(hud.idle, hud.idleProd, hud.groups);
+tools.append(hud.idle, hud.idleProd, hud.prodToggle, hud.groups);
 document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
 const setPaused = (on: boolean) => {

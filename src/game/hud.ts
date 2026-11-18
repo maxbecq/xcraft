@@ -77,6 +77,11 @@ export class Hud {
   /** Production buildings with an empty queue: a click goes through them one by one. */
   readonly idleProd = el('button', 'chip idle-prod');
   private idleProdCount = 0;
+  /** The production panel (F3 or its button): every producer of ours, what it makes and how far along, idle ones dimmed;
+   * a click on a row selects that producer and shows it. */
+  readonly prodToggle = el('button', 'chip prod-toggle');
+  private readonly prod = el('div', 'prod-panel');
+  private prodKey = '';
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
   private groupsKey = '';
@@ -131,6 +136,29 @@ export class Hud {
     this.idleProd.title = 'Production à l’arrêt : passer les bâtiments en revue';
     this.idleProd.hidden = true;
     this.idleProd.addEventListener('click', () => this.input.selectIdleProducer());
+    this.prodToggle.title = 'Production (F3) : toutes les files d’un coup d’œil';
+    this.prodToggle.hidden = spectator;
+    this.prodToggle.addEventListener('click', () => this.toggleProd());
+    try {
+      this.prod.hidden = localStorage.getItem('xcraft.prod') !== '1' || spectator;
+    } catch {
+      this.prod.hidden = true;
+    }
+    this.prodToggle.classList.toggle('on', !this.prod.hidden);
+    document.body.append(this.prod);
+    this.prod.addEventListener('click', (e) => {
+      const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
+      const b = this.world.entities.get(id);
+      if (!b || b.owner !== this.player) return;
+      this.input.selected.clear();
+      this.input.selected.add(b.id);
+      this.focus(b.x / FP, b.y / FP);
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'F3' || spectator) return;
+      e.preventDefault();
+      this.toggleProd();
+    });
     this.groups.addEventListener('click', (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-g]')?.dataset.g;
       if (k) this.input.recallGroup(k);
@@ -197,6 +225,45 @@ export class Hud {
         if (!e.repeat) this.press(b);
       }
     });
+  }
+
+  private toggleProd(): void {
+    this.prod.hidden = !this.prod.hidden;
+    this.prodToggle.classList.toggle('on', !this.prod.hidden);
+    this.prodKey = '';
+    try {
+      localStorage.setItem('xcraft.prod', this.prod.hidden ? '0' : '1');
+    } catch {
+      // private browsing: open for this game only
+    }
+  }
+
+  /** The production panel: rows rebuilt when a queue changes, progress bars moved every frame. */
+  private updateProd(): void {
+    if (!this.prodToggle.firstChild) this.prodToggle.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].barracks, '')}<b>≡</b>`;
+    if (this.prod.hidden) return;
+    const producers = [...this.world.entities.values()]
+      .filter((e) => e.owner === this.player && e.buildLeft === 0 && (e.def.kind === 'building' ? !!(e.def as BuildingDef).trains?.length || e.queue.length > 0 : e.queue.length > 0))
+      .sort((a, b) => Number(!a.queue.length) - Number(!b.queue.length) || a.type.localeCompare(b.type) || a.id - b.id);
+    const key = producers.map((e) => `${e.id}:${e.queue.join(',')}`).join('|');
+    if (key !== this.prodKey) {
+      this.prodKey = key;
+      this.prod.innerHTML = producers.length
+        ? producers
+            .map((e) => {
+              const queue = e.queue.map((t, i) => `<span class="${i ? '' : 'now'}">${img(t, DEFS[t].name)}${i ? '' : '<i></i>'}</span>`).join('');
+              return `<button class="prod-row${e.queue.length ? '' : ' idle'}" data-id="${e.id}" title="${e.def.name}${e.queue.length ? '' : ' : à l’arrêt'}"><span class="who">${img(e.type, e.def.name)}</span>${queue || '<em>à l’arrêt</em>'}</button>`;
+            })
+            .join('')
+        : '<em>Aucun bâtiment de production</em>';
+    }
+    for (const bar of this.prod.querySelectorAll<HTMLElement>('.prod-row')) {
+      const e = this.world.entities.get(Number(bar.dataset.id));
+      const fill = bar.querySelector<HTMLElement>('.now i');
+      if (!e || !fill || !e.queue.length) continue;
+      const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
+      fill.style.width = `${Math.round(100 * (1 - e.trainLeft / ticks(first.buildTime)))}%`;
+    }
   }
 
   private updateGroups(): void {
@@ -434,6 +501,7 @@ export class Hud {
     this.updatePanel();
     this.updateIdle();
     this.updateIdleProd();
+    this.updateProd();
     this.updateGroups();
     this.updateCard();
     this.updateGhost();
