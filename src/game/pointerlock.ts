@@ -21,8 +21,18 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
     y = e.clientY;
     void (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
   });
+  // A held pointer does not move the browser's :hover: the element under our cursor and its parents wear .vhover
+  // instead, which the stylesheet lights like :hover.
+  const hover = (target: Element | null) => {
+    for (const el of document.querySelectorAll('.vhover')) el.classList.remove('vhover');
+    for (let el = target; el && el !== document.body; el = el.parentElement) el.classList.add('vhover');
+  };
   document.addEventListener('pointerlockchange', () => {
     cursor.hidden = !locked();
+    if (!locked()) {
+      hover(null);
+      over = null;
+    }
     if (locked()) draw(document.elementFromPoint(x, y));
   });
   // The map picks what lies under the cursor a frame after a move (and animates its brackets): redraw then too, not
@@ -81,6 +91,7 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
         if (over) fire('pointerout', over, src);
         fire('pointerover', target, src);
         over = target;
+        hover(target);
       }
       fire('pointermove', target, src);
       draw(target);
