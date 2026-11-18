@@ -541,6 +541,132 @@ body.humains .cmd-tip b { font: 700 15px var(--carve); letter-spacing: 0.1em; co
   body.humains .tool { font-size: 14px; }
 }
 
+/* ---------------------------------------------------------------- Dieux screens: a magic sanctuary of stone and ivy */
+
+/* Painted, slightly cartoon stone (not photographic): a wall of ivory blocks with a glowing rune, crowned by a
+   Lombard band of little gilded arches; the minimap under a round Romanesque arch on Corinthian columns, the
+   commands between two columns (a portico); ivy, gold trims, turquoise ether glowing. Pictures generated locally
+   by tools/hud/gen.py (Draw Things) into public/hud/dieux/. */
+body.dieux {
+  --gold: #d8b45a;
+  --ivory: #fbf3de;
+  --ether: #7ff0dc;
+  --sage: #9cc283;
+  --night: #0b1428;
+  --antique: 'Marcellus', 'Cinzel', serif;
+  --script: 'Cormorant Garamond', Georgia, serif;
+  --arch: 50% 50% 4px 4px / 34px 34px 4px 4px;
+  --nook: 50% 50% 3px 3px / 42% 42% 3px 3px;
+  --glass: radial-gradient(ellipse at 50% 0, rgba(127, 240, 220, 0.18), transparent 60%), radial-gradient(ellipse at 50% 120%, #1a2d52 0%, #0b1428 60%, #060a16 100%);
+  --float: 0 0 2px #000, 0 0 7px rgba(0, 0, 0, 0.85), 0 0 12px rgba(127, 240, 220, 0.35);
+  --halo: drop-shadow(0 0 5px rgba(127, 240, 220, 0.45)) drop-shadow(0 3px 4px rgba(40, 30, 10, 0.5));
+  --plate: url('/hud/dieux/mur.webp') center / cover, #e9dfc4;
+  --edge: #b8933e;
+  --amber: #e9c46a;
+  --trim-top: -42px;
+}
+body.dieux .console { background: url('/hud/dieux/mur.webp') center / cover, #e9dfc4; border-top: 0; box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.55); }
+/* Both crests (the wings' and the dip's) are the Lombard band. */
+body.dieux .console::before, body.dieux .console::after { top: -42px; height: 44px; border: 0; background: url('/hud/dieux/frise.webp') 0 0 / auto 100% repeat-x; filter: var(--halo); pointer-events: none; }
+body.dieux .slot { background: var(--glass); border: 2px solid var(--edge); border-radius: 12px; box-shadow: inset 0 0 0 2px #060a16, inset 0 0 26px rgba(0, 0, 0, 0.85), 0 0 10px rgba(127, 240, 220, 0.25); }
+body.dieux .map-slot { border-radius: var(--arch); }
+/* Wide screens: the minimap under its arch (the column feet go below the screen's edge, so it rises only ~60 px),
+   the commands between two columns. */
+@media (min-height: 561px) and (min-width: 821px) {
+  body.dieux { --wl: 284px; --wr: 406px; }
+  body.dieux .console { column-gap: 40px; padding-left: 30px; padding-right: 55px; }
+  /* The wings' corners worn round a little where they meet the dip (browsers without shape() keep the base polygon). */
+  body.dieux .console {
+    clip-path: shape(from 0 -80px, hline to calc(var(--wl) - 8px), vline to -42px, arc to var(--wl) -34px of 8px cw,
+      vline to calc(var(--notch) + var(--trim-top) - 6px), arc to calc(var(--wl) + 6px) calc(var(--notch) + var(--trim-top)) of 6px ccw,
+      hline to calc(100% - var(--wr) - 6px), arc to calc(100% - var(--wr)) calc(var(--notch) + var(--trim-top) - 6px) of 6px ccw,
+      vline to -34px, arc to calc(100% - var(--wr) + 8px) -42px of 8px cw, vline to -80px, hline to 100%, vline to 100%, hline to 0, close);
+  }
+  body.dieux .hud-card { border-radius: 22px 22px 10px 10px; }
+  /* Depth where the wings meet the dip: the wings stand out as masonry, the dip is set back. On each wing's end a lit
+     arris then its shaded side face; in the dip the wings' shadow, on the wall and on its crest. */
+  body.dieux .console {
+    background:
+      linear-gradient(90deg, rgba(40, 28, 8, 0.62), rgba(40, 28, 8, 0.25) 16px, transparent 40px) var(--wl) 0 / 40px 100% no-repeat,
+      linear-gradient(270deg, rgba(40, 28, 8, 0.62), rgba(40, 28, 8, 0.25) 16px, transparent 40px) calc(100% - var(--wr) + 40px) 0 / 40px 100% no-repeat,
+      linear-gradient(90deg, transparent, rgba(255, 248, 225, 0.7) 3px, rgba(120, 95, 50, 0.35) 5px, rgba(70, 50, 20, 0.55)) calc(var(--wl) - 12px) 0 / 12px 100% no-repeat,
+      linear-gradient(270deg, transparent, rgba(255, 248, 225, 0.7) 3px, rgba(120, 95, 50, 0.35) 5px, rgba(70, 50, 20, 0.55)) calc(100% - var(--wr)) 0 / 12px 100% no-repeat,
+      url('/hud/dieux/mur.webp') center / cover, #e9dfc4;
+  }
+  body.dieux .console::before {
+    background:
+      linear-gradient(90deg, transparent, rgba(255, 248, 225, 0.75) 3px, rgba(120, 95, 50, 0.4) 5px, rgba(70, 50, 20, 0.6)) calc(var(--wl) - 12px) 0 / 12px 100% no-repeat,
+      linear-gradient(270deg, transparent, rgba(255, 248, 225, 0.75) 3px, rgba(120, 95, 50, 0.4) 5px, rgba(70, 50, 20, 0.6)) calc(100% - var(--wr)) 0 / 12px 100% no-repeat,
+      url('/hud/dieux/frise.webp') 0 0 / auto 100% repeat-x;
+  }
+  body.dieux .console::after {
+    background:
+      linear-gradient(90deg, rgba(40, 28, 8, 0.65), transparent 36px) 0 0 / 36px 100% no-repeat,
+      linear-gradient(270deg, rgba(40, 28, 8, 0.65), transparent 36px) 100% 0 / 36px 100% no-repeat,
+      url('/hud/dieux/frise.webp') 0 0 / auto 100% repeat-x;
+  }
+  body.dieux .map-slot { z-index: 0; overflow: visible; background: none; border: 0; box-shadow: none; }
+  /* the arch's opening, glazed (behind the minimap) */
+  body.dieux .map-slot::after { content: ''; position: absolute; z-index: -1; left: 31px; width: 158px; top: -45px; bottom: 0; border-radius: 79px 79px 12px 12px; background: var(--glass); box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.8); }
+  body.dieux .map-slot::before { content: ''; position: absolute; z-index: 1; left: -30px; right: -30px; top: -76px; bottom: -16px; background: url('/hud/dieux/arche-carte.webp') center / 100% 100% no-repeat; filter: var(--halo); pointer-events: none; }
+  body.dieux .hud-card::before { content: ''; position: absolute; left: -55px; right: -55px; top: -20px; bottom: -16px; background: url('/hud/dieux/colonne.webp') left top / auto 100% no-repeat, url('/hud/dieux/colonne.webp') right top / auto 100% no-repeat; filter: var(--halo); pointer-events: none; }
+}
+body.dieux .hud-panel { padding-top: 14px; font: 600 16px/1.2 var(--script); color: var(--ivory); text-shadow: 0 0 6px rgba(127, 240, 220, 0.25); }
+body.dieux .hud-panel .stats { font-size: 14px; }
+body.dieux .hud-panel .name { font: 400 25px/1 var(--antique); letter-spacing: 0.1em; color: var(--gold); text-shadow: 0 0 10px rgba(216, 180, 90, 0.55); }
+body.dieux .hud-panel .hp, body.dieux .hud-panel .bar { height: 6px; background: rgba(6, 10, 22, 0.9); border: 1px solid rgba(216, 180, 90, 0.7); border-radius: 3px; }
+body.dieux .hud-panel .hp > div { background: linear-gradient(90deg, #5f9a4e, #d8f5c2); box-shadow: 0 0 8px rgba(156, 194, 131, 0.8); }
+body.dieux .hud-panel .hp.shield > div { background: linear-gradient(90deg, #3fbfae, #e2fff9); box-shadow: 0 0 8px rgba(127, 240, 220, 0.9); }
+body.dieux .hud-panel .bar > div { background: linear-gradient(90deg, #b8933e, #fff1c2); box-shadow: 0 0 8px rgba(255, 220, 130, 0.9); }
+body.dieux .hud-panel .portrait, body.dieux .hud-panel .tile, body.dieux .hud-panel .queue span {
+  background: radial-gradient(circle at 50% 85%, rgba(127, 240, 220, 0.22), rgba(6, 10, 22, 0.7) 75%); border: 1px solid rgba(216, 180, 90, 0.75); border-radius: var(--nook);
+}
+body.dieux .hud-panel .tile { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--sage) calc(var(--hp) * 100%), #e2583e); }
+body.dieux .hud-panel .tile:hover { border-color: var(--ivory); }
+
+/* Commands: small arched niches, ether rising from below when pointed at. */
+body.dieux .hud-card { grid-template-columns: repeat(4, minmax(0, 1fr)); } /* the serif labels are wider: they shorten, the grid holds */
+body.dieux .cmd {
+  background: linear-gradient(rgba(26, 45, 82, 0.75), rgba(6, 10, 22, 0.92)); color: var(--ivory); border: 1px solid rgba(216, 180, 90, 0.8); border-radius: 16px 16px 3px 3px;
+  font: 700 14px/1 var(--script); text-shadow: 0 0 6px rgba(127, 240, 220, 0.3); box-shadow: inset 0 1px 0 rgba(255, 243, 207, 0.25), inset 0 -8px 14px rgba(127, 240, 220, 0.08);
+}
+body.dieux .cmd:hover { background: linear-gradient(rgba(26, 45, 82, 0.75), rgba(10, 40, 50, 0.92)); border-color: var(--ivory); box-shadow: inset 0 -14px 20px rgba(127, 240, 220, 0.35), 0 0 10px rgba(216, 180, 90, 0.5); }
+body.dieux .cmd.off { filter: none; opacity: 0.4; }
+body.dieux .cmd kbd { top: 3px; left: 50%; transform: translateX(-50%); font: 400 10px var(--antique); color: var(--gold); }
+body.dieux .cmd small { font: 700 11px var(--script); color: var(--ether); }
+body.dieux .cmd img { filter: brightness(1.2) drop-shadow(0 0 3px rgba(127, 240, 220, 0.55)); }
+
+body.dieux .hud-bar, body.dieux .hud-bar .res, body.dieux .tool, body.dieux .hud-toast { background: none; border: 0; box-shadow: none; text-shadow: var(--float); }
+body.dieux .hud-bar { gap: 20px; padding: 6px 4px; font: 400 23px/1 var(--antique); letter-spacing: 0.06em; }
+body.dieux .res.min, body.dieux .res.nrg, body.dieux .res.sup, body.dieux .res.clock { color: var(--ivory); }
+body.dieux .res.sup i { background: linear-gradient(#e8f8d8, #5f9a4e); } /* population is the Yggdrasill's: green */
+body.dieux .res i { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 5px rgba(127, 240, 220, 0.6)); }
+body.dieux .res.sup.full { color: #ff9a7a; }
+body.dieux .tool { padding: 2px 8px; font: 400 19px/1 var(--antique); letter-spacing: 0.08em; color: var(--gold); }
+body.dieux .tool:hover { color: var(--ivory); text-shadow: var(--float), 0 0 12px var(--gold); }
+body.dieux .hud-toast { padding: 0; font: 600 19px/1.2 var(--script); letter-spacing: 0.03em; color: var(--ivory); animation: ivy-bloom 0.6s ease-out both; }
+body.dieux .hud-toast.done { color: #d8f5c2; }
+body.dieux .hud-toast.alert { color: #ffb08f; font-size: 21px; }
+@keyframes ivy-bloom { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: reduce) { body.dieux .hud-toast { animation: none; } }
+
+body.dieux .pause-box { background: var(--glass); border: 2px solid var(--gold); border-radius: 50% 50% 6px 6px / 60px 60px 6px 6px; padding-top: 40px; box-shadow: inset 0 0 0 4px #060a16, inset 0 0 0 5px rgba(216, 180, 90, 0.5), 0 10px 40px rgba(0, 0, 0, 0.75); }
+body.dieux .pause-box h2 { font: 400 54px/1 var(--antique); letter-spacing: 0.18em; color: var(--gold); text-shadow: 0 0 14px rgba(216, 180, 90, 0.6); }
+body.dieux .pause-box button { min-width: 280px; padding: 8px 20px; font: 400 21px/1 var(--antique); letter-spacing: 0.12em; color: var(--ivory); background: rgba(6, 10, 22, 0.5); border: 1px solid rgba(216, 180, 90, 0.75); border-radius: 18px 18px 3px 3px; box-shadow: none; }
+body.dieux .pause-box button:hover { color: var(--night); background: linear-gradient(#fff4d6, var(--gold)); }
+body.dieux .help { font: 600 15px/1.5 var(--script); color: var(--ivory); }
+body.dieux .help h3 { font: 400 23px/1 var(--antique); color: var(--gold); letter-spacing: 0.08em; }
+body.dieux .help kbd { font: 400 12px var(--antique); color: var(--gold); background: rgba(6, 10, 22, 0.8); border-color: rgba(216, 180, 90, 0.6); }
+body.dieux .cmd-tip { font: 600 15px/1.35 var(--script); color: var(--ivory); background: rgba(8, 14, 30, 0.96); border: 1px solid rgba(216, 180, 90, 0.75); border-radius: 14px 14px 3px 3px; }
+body.dieux .cmd-tip b { font: 400 16px var(--antique); letter-spacing: 0.08em; color: var(--gold); }
+
+@media (max-height: 560px), (max-width: 820px) {
+  body.dieux { --arch: 50% 50% 4px 4px / 16px 16px 4px 4px; }
+  body.dieux .console::before { top: -22px; height: 24px; }
+  body.dieux .hud-bar { font-size: 17px; gap: 10px; }
+  body.dieux .tool { font-size: 15px; }
+}
+
 /* Spectating: the AI plays both sides, so no command buttons. */
 body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, not a bare patch of console */
 
