@@ -72,7 +72,7 @@ describe('Forge upgrades', () => {
     expect(hit('legionnaire', 'serf', () => {})).toBe(20);
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.melee = 2))).toBe(24); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.ranged = 3))).toBe(20); // wrong line
-    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(7); // at least +1
+    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(17); // +10 % per level, rounded
     expect(hit('legionnaire', 'serf', (w) => (w.players[1].upgrades.armor = 3))).toBe(17);
   });
 });
@@ -233,7 +233,7 @@ describe('Orbe plasma', () => {
     expect(orbe.hp).toBeGreaterThan(0);
   });
 
-  it('beats a lone assassin that attacks it', () => {
+  it('survives a lone assassin that attacks it', () => {
     const w = new World(createMap());
     w.players[0].faction = w.players[1].faction = 'isdaris';
     const orbe = w.spawn('orbe', 0, 40 * FP, 60 * FP);
@@ -241,7 +241,7 @@ describe('Orbe plasma', () => {
     w.step([{ player: 1, kind: 'attack', ids: [sin.id], x: orbe.x, y: orbe.y, target: orbe.id }]);
     run(w, 40);
     expect(w.entities.has(sin.id)).toBe(false);
-    expect(orbe.hp).toBe(orbe.maxHp); // never got through the shield
+    expect(orbe.hp).toBeGreaterThan(0); // the Assassin's 210 shield lets it strike, but the Orbe wins
   });
 
   it('must be beamed down inside a power field', () => {

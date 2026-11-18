@@ -48,6 +48,12 @@ IA facile plus facile, réglages provisoires du 17 novembre (le joueur se faisai
 - `levels.easy` : `{ waveBonus: -3 }` → `plan` (10 ouvriers par base, casernes `[[8, 1], [10, 2]]`, vagues de 5 puis +1), `attackMinute` 11, `maxWave` 6, `expandMinute` 14.
 - Mesure (`EASY=1 npx vitest run scripts/easy.test.ts`, IA facile contre IA normale, 4 camps × 4 camps × 2 côtés = 32 parties) : avant, 1 victoire sur 32, première attaque à 4,9 min, vagues de 7,0 unités ; après, 1 victoire sur 32, première attaque à 11,6 min (dans les 9 parties qui durent jusque-là), vagues de 5,9 unités.
 
+Reprises du mod SC2 (XC Mod 1.53, la dernière version pour les Humains et les Isdaris), 18 novembre, à la demande de l'utilisateur. Ces unités avaient gardé les chiffres du premier prototype. Toutes les valeurs restent à valider par l'équilibreur (voir `docs/fiches-2010-comparaison.md`) :
+- Humains : `serf` (100 PV, 20 s), `auxiliaire` (15 dégâts, 22 s), `legionnaire` (armure 0), `soigneur` et `phalangiste` (vue 8 ; 30 s et 35 s), `cadavre` (140 PV, vitesse 2, vue 5, 24 dégâts toutes les 2,2 s, −12 contre les machines).
+- Isdaris : `moissonneur` (bouclier 50, 20 s, frappe toutes les 2 s), `archer` (21 dégâts par seconde, armure 0, vitesse 2,2, vue 8, logistique 1, 75 d'énergie, 29 s), `creature` (67 PV, vitesse 2,8, vue 5, 18 dégâts par seconde, −6 contre les machines), `druide` (vue 9, logistique 1, 225 d'énergie, 34 s), `assassin` (bouclier 210, 49 s), `obelisque` (vue 15), `orbe` et `recepteurarme` (21 dégâts), `discobole` (44 s), `espion` (39 s), `voyageur` (49 s).
+- Les bonus du mod selon la cible (léger, blindé, massif, biologique) n'existent pas dans le jeu : les dégâts sont ceux contre l'infanterie, et `vsMechanical` corrige contre les machines et les bâtiments, comme pour les autres unités.
+- La Créature revient à 67 PV : les 70 PV du 17 novembre (ci-dessus) sont remplacés.
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).

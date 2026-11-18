@@ -26,7 +26,7 @@ describe('Human research (notice 1.2-1)', () => {
     run(w, (DEFS.croissance as UnitDef).buildTime + 1);
     expect(old.maxHp).toBe(88);
     expect(old.hp).toBe(68);
-    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(82);
+    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(110);
     expect(w.spawn('archer', 1, ...at(42, 60)).maxHp).toBe((DEFS.archer as UnitDef).hp);
   });
 
@@ -54,10 +54,11 @@ describe('Human research (notice 1.2-1)', () => {
     const aux = w.spawn('auxiliaire', 1, ...at(44, 62));
     const shooter = w.spawn('archer', 0, ...at(40, 61));
     shooter.order = { kind: 'attack', target: tank.id, auto: false, lx: shooter.x, ly: shooter.y };
-    run(w, 1.2);
+    // One shot each, so the comparison does not depend on the archer's cooldown.
+    while (tank.hp === tank.maxHp) w.step([]);
     const tankLoss = tank.maxHp - tank.hp;
     shooter.order = { kind: 'attack', target: aux.id, auto: false, lx: shooter.x, ly: shooter.y };
-    run(w, 1.2);
+    while (aux.hp === aux.maxHp) w.step([]);
     expect(tankLoss).toBeLessThan(aux.maxHp - aux.hp);
   });
 

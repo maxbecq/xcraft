@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type BuildingDef, DEFS, START } from '../data';
+import { type BuildingDef, DEFS, START, type UnitDef } from '../data';
 import { createMap } from '../map';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
@@ -91,7 +91,7 @@ describe('economy', () => {
     w.step([train, train, train, train, train]);
     expect(conseil.queue).toHaveLength(4); // 6 serfs + 4 queued = 10 supply
     expect(w.events.some((e) => e.text.includes('Logistique'))).toBe(true);
-    run(w, 12 * 4 + 1);
+    run(w, (DEFS.serf as UnitDef).buildTime * 4 + 1);
     expect(of(w, 0, 'serf')).toHaveLength(10);
   });
 
