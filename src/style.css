@@ -366,7 +366,7 @@ body.z .res i { background: var(--phos) !important; }
 /* Z console: the rusted, riveted armour plate of their buildings; a faint circuit, on the creep's angles, under the
    screens' glass; the minimap behind a bolted porthole; command labels small enough to be read whole. */
 body.z .console { background: url('/hud/z/plaques.webp') 0 0 / 300px auto, #4a4038; }
-body.z .slot { background: url('/hud/z/circuit.svg') 0 0 / 240px 140px, var(--screen); }
+body.z .slot { background: url('/hud/z/circuit.svg') 0 0 / 480px 280px, var(--screen); }
 body.z .cmd span { max-width: 100%; font-size: 12px; letter-spacing: -0.03em; }
 @media (min-height: 561px) and (min-width: 821px) {
   body.z .map-slot { overflow: visible; border-radius: 50%; border: 0; margin: 4px 14px 0 18px; }
