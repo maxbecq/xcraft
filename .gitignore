@@ -4,3 +4,6 @@ node_modules/
 dist/
 tools/meshy/out/
 .claude/worktrees/
+
+# Visual research (inspiration images by camp and universe): too heavy for the repository
+recherches-visuelles/
