@@ -1,6 +1,6 @@
 # Camp des Dieux — conception (phase 1)
 
-Quatrième camp de Xcraft, d'après la notice 1.2 et 1.2-1 (`Old_Project/notice 1.2.doc`, `Old_Project/notice_1.2-1.doc` : les deux versions sont identiques pour les Dieux) et l'arbre technologique dessiné page 32 à 34 de la notice.
+Quatrième camp de Xcraft, d'après la notice 1.2 et 1.2-1 (`Old_Project/notice 1.2 - ancienne version.doc`, `Old_Project/notice 1.2-1 - RÉFÉRENCE.doc` : les deux versions sont identiques pour les Dieux) et l'arbre technologique dessiné page 32 à 34 de la notice.
 
 Ce document ne contient aucun code. Il attend ton accord sur :
 1. le périmètre de la **V1 jouable** (section 6) ;
