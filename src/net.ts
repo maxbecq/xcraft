@@ -21,9 +21,10 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 /**
  * `t`: our orders for tick t; `a`: the first tick of theirs we still miss (everything before it arrived), on every
  * message, so each side forgets what the other has. `h`/`v`: a state fingerprint. `p`/`q`: ping and its echo.
- * `hi`: who this page is, first thing on every connection. `bye`: leaving the match on purpose.
+ * `hi`: who this page is, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
+ * asked for; `go`: the host's room for it, once both asked.
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string } | { bye: 1 };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string } | { bye: 1 } | { again: 1 } | { go: string };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -153,7 +154,8 @@ export class Lockstep {
   }
 }
 
-export type NetStatus = 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'left' | 'error';
+/** 'again': the other side wants a rematch; 'go': both do, the detail is the new room. */
+export type NetStatus = 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'left' | 'error' | 'again' | 'go';
 /** Silence after which the link is taken as cut (each side pings every second, even from a background tab). */
 const SILENCE_MS = 5000;
 /** A first connection to a room nobody has opened is tried again for this long. */
@@ -164,7 +166,7 @@ const FIND_MS = 60_000;
  * takes the same guest back, the guest calls again; the orders lost meanwhile are sent again. `onStatus` hears every
  * change; 'left' (the other side quit, or another page took its place) and 'error' are final.
  */
-export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void } {
+export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void; again: () => void } {
   let conn: DataConnection | null = null;
   const lock = new Lockstep(player, (m) => {
     if (conn?.open) conn.send(m);
@@ -180,6 +182,15 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   };
   const peer = player === 0 ? new Peer(peerId(room)) : new Peer();
   const began = performance.now();
+  /** A rematch asked for, by us and by them. The host picks its room once both have. */
+  let asked = false;
+  let theyAsked = false;
+  const rematch = () => {
+    if (!asked || !theyAsked || player !== 0) return;
+    const next = newRoom();
+    conn?.send({ go: next } satisfies Message);
+    onStatus('go', next);
+  };
   let dialed = -Infinity;
   const dial = () => {
     dialed = performance.now();
@@ -207,7 +218,13 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         conn = c;
         lock.reconnected();
         set('connected');
-      } else if (c === conn) {
+      } else if (c !== conn) return;
+      else if ('again' in m) {
+        theyAsked = true;
+        onStatus('again');
+        rematch();
+      } else if ('go' in m) onStatus('go', m.go);
+      else {
         lock.receive(m);
         if (lock.left) set('left', "L'adversaire a quitté la partie.");
       }
@@ -235,6 +252,11 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   return {
     lock,
     /** Leaving on purpose: the other side is told at once. */
+    again: () => {
+      asked = true;
+      if (conn?.open) conn.send({ again: 1 } satisfies Message);
+      rematch();
+    },
     leave: () => {
       if (conn?.open) conn.send({ bye: 1 } satisfies Message);
       stop();
@@ -274,17 +296,73 @@ export function newRoom(): string {
   return Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 }
 
-/** A shareable code holding the room and the match settings: `K7QX-HIL` (host Humains, guest Isdaris, Lune). */
-export function matchCode(room: string, factions: [string, string], biome: string, map = 0): string {
-  // The map, by its place in the list (both sides run the same site), after the planet; none for the first.
-  return `${room}-${factions.map((f) => f[0].toUpperCase()).join('')}${biome[0].toUpperCase()}${map > 0 ? map.toString(36).toUpperCase() : ''}`;
+/** A room code read from what the friend sent: the code itself, or the whole link. Null if neither. */
+export function readRoom(text: string): string | null {
+  const t = text.trim().toUpperCase();
+  const m = /[?&]AMI=([A-Z0-9]{4})\b/.exec(t) ?? /^([A-Z0-9]{4})$/.exec(t);
+  return m && [...m[1]].every((c) => ALPHABET.includes(c)) ? m[1] : null;
 }
 
-/** Reads a code back; null if it is not one. */
-export function readCode(code: string, biomes: string[], maps: string[] = []): { room: string; factions: [string, string]; biome: string; map: string } | null {
-  const m = /^([A-Z0-9]{4})-?([HIZD])([HIZD])([A-Z])([0-9A-Z]?)$/.exec(code.trim().toUpperCase());
-  const biome = m && biomes.find((b) => b[0].toUpperCase() === m[4]);
-  if (!m || !biome) return null;
-  const f = (c: string) => (c === 'H' ? 'humains' : c === 'Z' ? 'z' : c === 'D' ? 'dieux' : 'isdaris');
-  return { room: m[1], factions: [f(m[2]), f(m[3])], biome, map: maps[m[5] ? parseInt(m[5], 36) : 0] ?? maps[0] ?? '' };
+/** The match two friends set up together: each side's faction (the host's first), the map and the planet. */
+export interface LobbySetup {
+  camps: [string, string];
+  map: string;
+  biome: string;
+}
+/** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match. */
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: 1 };
+export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'error';
+
+/**
+ * The waiting room, on the title screen: the host opens it, the guest comes in by the link or the code. The guest
+ * may arrive before the room is open, or come back after a cut: it keeps calling. The host takes in one guest at a time.
+ */
+export function openLobby(
+  room: string,
+  host: boolean,
+  on: { status: (s: LobbyStatus, detail?: string) => void; message: (m: LobbyMessage) => void },
+): { send: (m: LobbyMessage) => void; close: () => void } {
+  let conn: DataConnection | null = null;
+  const peer = host ? new Peer(`xcraft-lobby-${room}`) : new Peer();
+  const began = performance.now();
+  const attach = (c: DataConnection) => {
+    c.on('open', () => {
+      if (conn?.open && conn !== c) return c.close(); // the room is full
+      conn = c;
+      on.status('here');
+    });
+    c.on('data', (d) => c === conn && on.message(d as LobbyMessage));
+    const gone = () => {
+      if (c !== conn) return;
+      conn = null;
+      on.status(host ? 'waiting' : 'gone');
+      if (!host) setTimeout(dial, 2000);
+    };
+    c.on('close', gone);
+    c.on('error', gone);
+  };
+  const dial = () => {
+    if (conn || peer.destroyed) return;
+    attach(peer.connect(`xcraft-lobby-${room}`, { reliable: true, serialization: 'json' }));
+  };
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') on.status('error', 'Ce code de partie est déjà pris : recommencez.');
+    else if (e.type === 'browser-incompatible') on.status('error', 'Ce navigateur ne permet pas le jeu en ligne.');
+    else if (e.type === 'peer-unavailable' && performance.now() - began > 60_000) on.status('error', 'Partie introuvable : vérifiez le lien ou le code.');
+    else if (e.type === 'peer-unavailable') setTimeout(dial, 2000);
+  });
+  if (host) {
+    peer.on('open', () => on.status('waiting'));
+    peer.on('connection', attach);
+  } else peer.on('open', dial);
+  const watch = setInterval(() => {
+    if (peer.disconnected && !peer.destroyed) peer.reconnect();
+  }, 2000);
+  return {
+    send: (m) => conn?.open && conn.send(m),
+    close: () => {
+      clearInterval(watch);
+      peer.destroy();
+    },
+  };
 }

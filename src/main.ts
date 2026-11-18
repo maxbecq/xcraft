@@ -27,7 +27,7 @@ import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } fr
 import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
-import { connect, every, matchCode, newRoom, readCode, stateHash, type NetStatus } from './net';
+import { connect, every, newRoom, openLobby, readRoom, stateHash, type LobbySetup, type NetStatus } from './net';
 import { countMatch, countTitle, SKIPPED } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
@@ -219,18 +219,26 @@ function showNet(status: NetStatus, detail?: string): void {
     cutSince = performance.now();
     return; // watchNet tells, once the cut lasts
   }
+  if (status === 'again' || status === 'go' || (status === 'left' && world.winner !== null)) return rematch(status, detail);
   if (status === 'left') return endNet('Victoire par abandon', detail ?? "L'adversaire a quitté la partie.");
   netBanner.hidden = false;
-  if (status === 'waiting') {
-    const code = matchCode(ROOM, [factions[0], factions[1]], biome.id, Object.keys(MAPS).indexOf(MAP.id));
-    const link = `${location.origin}${location.pathname}?net=join&room=${ROOM}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}&map=${MAP.id}`;
-    netBanner.innerHTML = `<h2>En attente de votre adversaire</h2>
-      <p>Donnez-lui ce code (menu « Rejoindre une partie ») :</p><div class="net-code">${code}</div>
-      <p>ou ce lien :</p><input class="net-link" readonly value="${link}"><button data-n="copy">Copier le lien</button>
-      <button data-n="quit">Annuler</button>`;
-  } else if (status === 'connecting') netBanner.innerHTML = `<h2>Connexion à la partie…</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Annuler</button>`;
+  if (status === 'waiting') netBanner.innerHTML = '<h2>En attente de votre adversaire…</h2><button data-n="quit">Annuler</button>';
+  else if (status === 'connecting') netBanner.innerHTML = `<h2>Connexion à la partie…</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Annuler</button>`;
   else netBanner.innerHTML = `<h2>Connexion impossible</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Menu principal</button>`;
 }
+/** After the end: the other side wants a rematch, both do (`room`: where), or it left and there will be none. */
+function rematch(status: NetStatus, room?: string): void {
+  const button = document.querySelector<HTMLButtonElement>('.hud-banner [data-p="restart"]');
+  if (status === 'go') {
+    // The host's page leaves a moment after telling the other, so the room's name gets there.
+    setTimeout(() => (location.search = `?net=${NET_ROLE}&room=${room}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}&map=${MAP.id}`), PLAYER === 0 ? 300 : 0);
+  } else if (button && status === 'again') button.textContent = rematchAsked ? 'Revanche…' : 'Revanche (votre adversaire est prêt)';
+  else if (button) {
+    button.disabled = true;
+    button.textContent = 'Adversaire parti';
+  }
+}
+let rematchAsked = false;
 /** The match is over for the network: said, kept as a replay, and the other side told. */
 function endNet(title: string, detail: string): void {
   if (netOver) return;
@@ -243,7 +251,7 @@ function endNet(title: string, detail: string): void {
 /** Long waits for the other side, said with the time left before the forfeit. A few times a second, even in a background tab. */
 let warned = '';
 function watchNet(): void {
-  if (!netStarted || netOver) return;
+  if (!netStarted || netOver || world.winner !== null) return;
   const since = cutSince || stalledSince;
   const waited = since ? performance.now() - since : 0;
   if (waited < QUIET_MS) {
@@ -261,11 +269,7 @@ function watchNet(): void {
 }
 netBanner.addEventListener('click', (e) => {
   const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
-  if (n === 'copy') {
-    const field = netBanner.querySelector<HTMLInputElement>('.net-link')!;
-    field.select();
-    navigator.clipboard?.writeText(field.value).catch(() => document.execCommand('copy'));
-  } else if (n === 'replay') downloadReplay(record);
+  if (n === 'replay') downloadReplay(record);
   else if (n === 'quit') {
     link?.leave();
     location.search = `?biome=${biome.id}&map=${MAP.id}`;
@@ -326,6 +330,7 @@ function answer(kind: 'ack' | 'go'): void {
   audio.play(`${kind}${factions[PLAYER]}` as Sfx, 0.8);
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
+hud.online = !!NET_ROLE;
 hud.gridKeys = SCROLL.grid && !TOUCH;
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
@@ -625,6 +630,11 @@ document.addEventListener('click', (e) => {
   }
   else if (p === 'fullscreen') toggleFullscreen();
   else if (p === 'restart' && !net) location.reload();
+  else if (p === 'restart' && link && !rematchAsked) {
+    rematchAsked = true;
+    button!.textContent = 'Revanche : en attente de votre adversaire…';
+    link.again();
+  } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(record);
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
@@ -675,7 +685,9 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   // Shaders compiled in the background (parallel compile where the browser has it) rather than in one long first frame.
   ready.then(() => renderer.compileAsync(scene, rig.camera)).catch(() => {}).then(start);
-  showHome();
+  const friend = readRoom(params.get('ami') ?? '');
+  if (friend) showLobby(document.body.appendChild(Object.assign(document.createElement('div'), { className: 'menu' })), friend, params.has('hote'));
+  else showHome();
   loading?.classList.add('mini'); // the menu does not wait for the scene behind it
 }
 
@@ -688,7 +700,7 @@ interface Setup {
   map: string;
   speed: number;
 }
-const CONTROLS: Record<string, string> = { none: 'Fermé', you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile', online: 'Ami en ligne' };
+const CONTROLS: Record<string, string> = { none: 'Fermé', you: 'Vous', easy: 'IA facile', normal: 'IA normale', hard: 'IA difficile' };
 
 function readSetup(): Setup {
   const fallback: Setup = {
@@ -722,7 +734,8 @@ function showHome(): void {
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z · Dieux</p>
     <button data-m="new">Nouvelle partie</button>
-    <button data-m="join">Rejoindre une partie</button>
+    <button data-m="friend">Jouer avec un ami</button>
+    <button data-m="join">Rejoindre un ami</button>
     <button data-m="options">Options</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
@@ -732,6 +745,7 @@ function showHome(): void {
   (menu as HTMLElement).onclick = (e) => {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
+    else if (m === 'friend') showLobby(menu as HTMLElement, newRoom(), true);
     else if (m === 'join') showJoin(menu as HTMLElement);
     else if (m === 'options') showOptions(menu as HTMLElement);
     else if (m === 'last-replay') playReplay(readReplay());
@@ -896,8 +910,6 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
     const controls: Record<string, string> = { ...CONTROLS };
     delete controls.none; // closing a seat is the switch's job
     if (i > 0) delete controls.you; // the local player is always the first side
-    // A friend online plays the second side, one against one only (for now).
-    if (i !== 1 || s.sides[0].control !== 'you' || s.sides[2].control !== 'none' || s.sides[3].control !== 'none') delete controls.online;
     const color = `#${TEAM_COLORS[i].toString(16).padStart(6, '0')}`;
     const open = s.sides[i].control !== 'none';
     // The first two seats are always taken; the others have an on/off switch.
@@ -937,8 +949,6 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
     else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
     else s.sides[Number(k[1])].control = v;
-    const crowd = s.sides[2].control !== 'none' || s.sides[3].control !== 'none';
-    if ((s.sides[0].control !== 'you' || crowd) && s.sides[1].control === 'online') s.sides[1].control = 'normal';
     showSetup(menu, s, step);
   };
   menu.onclick = (e) => {
@@ -956,24 +966,21 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map')
   };
 }
 
-/** Joining a friend's network game with the code shown on their screen. */
+/** Joining a friend's match with the code (or the link) they sent. */
 function showJoin(menu: HTMLElement): void {
   menu.className = 'menu setup';
-  menu.innerHTML = `<h2>Rejoindre une partie</h2>
-    <fieldset><legend>Code de la partie</legend><input class="net-input" maxlength="9" placeholder="K7QX-HIL" autocomplete="off" spellcheck="false"></fieldset>
+  menu.innerHTML = `<h2>Rejoindre un ami</h2>
+    <fieldset><legend>Code de la partie</legend><input class="net-input" maxlength="80" placeholder="K7QX" autocomplete="off" spellcheck="false"></fieldset>
     <p class="net-error" hidden></p>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">Rejoindre</button></div>`;
   const field = menu.querySelector<HTMLInputElement>('.net-input')!;
   const error = menu.querySelector<HTMLElement>('.net-error')!;
   field.focus();
   const go = () => {
-    const c = readCode(field.value, Object.keys(BIOMES), Object.keys(MAPS));
-    if (!c) {
-      error.hidden = false;
-      error.textContent = 'Code invalide : il ressemble à K7QX-HIL.';
-      return;
-    }
-    location.search = `?net=join&room=${c.room}&camp=${c.factions[0]}&adversaire=${c.factions[1]}&biome=${c.biome}&map=${c.map}`;
+    const room = readRoom(field.value);
+    if (room) return showLobby(menu, room, false);
+    error.hidden = false;
+    error.textContent = 'Code invalide : quatre caractères, comme K7QX (ou collez le lien).';
   };
   field.onkeydown = (e) => {
     e.stopPropagation();
@@ -983,6 +990,108 @@ function showJoin(menu: HTMLElement): void {
     const m = (e.target as HTMLElement).closest('button')?.dataset.m;
     if (m === 'back') showHome();
     else if (m === 'go') go();
+  };
+}
+
+/**
+ * The waiting room of a match between two friends: the host gets a link to send; the friend opening it lands here
+ * too. Each picks its own faction, the host the map and the planet; the host starts, and both pages load the match.
+ */
+function showLobby(menu: HTMLElement, room: string, host: boolean): void {
+  history.replaceState(null, '', `${location.pathname}?ami=${room}${host ? '&hote' : ''}`); // a reload comes back to the room, on the same side
+  const setup: LobbySetup = { camps: [asFaction(stored('xcraft.camp')), 'humains'], map: MAP.id, biome: biome.id };
+  if (!host) setup.camps = [setup.camps[1], setup.camps[0]];
+  const me = host ? 0 : 1;
+  let status = host ? 'Ouverture du salon…' : 'Connexion au salon…';
+  let here = false;
+  const link = `${location.origin}${location.pathname}?ami=${room}`;
+  const names = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
+  const draw = () => {
+    const chosen = mapFile(setup.map);
+    const pick = (i: number) =>
+      i === me
+        ? `<select data-k="camp">${Object.entries(names).map(([v, n]) => `<option value="${v}"${v === setup.camps[i] ? ' selected' : ''}>${n}</option>`).join('')}</select>`
+        : `<span class="lobby-other">${here ? names[setup.camps[i]] : 'en attente…'}</span>`;
+    const seat = (i: number) =>
+      `<div class="lobby-seat"><span class="chip" style="background:#${TEAM_COLORS[i].toString(16).padStart(6, '0')}"></span><span class="who">${i === me ? 'Vous' : 'Votre ami'}</span>${pick(i)}</div>`;
+    menu.className = 'menu setup lobby';
+    menu.innerHTML = `<h2>Partie entre amis</h2>
+      ${host && !here ? `<fieldset><legend>Invitez votre ami</legend>
+        <p class="lobby-note">Envoyez-lui ce lien : en l'ouvrant, il arrive ici.</p>
+        <input class="net-link" readonly value="${link}">
+        <div class="row"><button data-m="copy">Copier le lien</button>${'share' in navigator ? '<button data-m="share">Partager…</button>' : ''}</div>
+        <p class="lobby-note">ou le code <b>${room}</b> (menu « Rejoindre un ami »)</p></fieldset>` : ''}
+      <p class="lobby-note">${status}</p>
+      <fieldset class="seats"><legend>Joueurs</legend>${seat(0)}${seat(1)}</fieldset>
+      <fieldset class="maps${host ? '' : ' fixed'}"><legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? mapCards(chosen.id, setup.biome) : mapCards(chosen.id, setup.biome).replace(/<button/g, '<button disabled')}</fieldset>
+      <fieldset class="options"><legend>Partie</legend><label>Planète ${
+        host
+          ? `<select data-k="biome">${Object.values(BIOMES).map((b) => `<option value="${b.id}"${b.id === setup.biome ? ' selected' : ''}>${b.name}</option>`).join('')}</select>`
+          : `<span class="lobby-other">${BIOMES[setup.biome]?.name ?? ''}</span>`
+      }</label></fieldset>
+      <div class="row"><button data-m="back">Retour</button>${host ? `<button data-m="go" class="go"${here ? '' : ' disabled'}>Lancer la partie</button>` : ''}</div>`;
+  };
+  /** Into the match: the host's page hosts it, the guest's joins it. */
+  const play = () => {
+    lobby.close();
+    try {
+      localStorage.setItem('xcraft.camp', setup.camps[me]);
+    } catch {
+      // the URL carries it all
+    }
+    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${setup.camps[0]}&adversaire=${setup.camps[1]}&biome=${setup.biome}&map=${setup.map}`;
+  };
+  const lobby = openLobby(room, host, {
+    status: (s, detail) => {
+      here = s === 'here';
+      status = s === 'here' ? (host ? 'Votre ami est là. Lancez la partie quand vous êtes prêts.' : "Vous êtes dans le salon. Votre ami lance la partie.")
+        : s === 'waiting' ? 'En attente de votre ami…'
+        : s === 'gone' ? 'Votre ami est parti, reconnexion…'
+        : (detail ?? 'Connexion impossible.');
+      if (here && host) lobby.send({ setup });
+      if (here && !host) lobby.send({ camp: setup.camps[me] });
+      draw();
+    },
+    message: (m) => {
+      if ('setup' in m && !host) Object.assign(setup, m.setup);
+      else if ('camp' in m && host) {
+        setup.camps[1] = asFaction(m.camp);
+        lobby.send({ setup });
+      } else if ('go' in m && !host) return play();
+      draw();
+    },
+  });
+  draw();
+  menu.onchange = (e) => {
+    const el = e.target as HTMLSelectElement;
+    if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
+    else if (el.dataset.k === 'biome') setup.biome = el.value;
+    if (host) lobby.send({ setup });
+    else lobby.send({ camp: setup.camps[me] });
+    draw();
+  };
+  menu.onclick = (e) => {
+    const button = (e.target as HTMLElement).closest('button');
+    const m = button?.dataset.m;
+    if (button?.dataset.map && host) {
+      setup.map = button.dataset.map;
+      lobby.send({ setup });
+      draw();
+    } else if (m === 'copy') {
+      const field = menu.querySelector<HTMLInputElement>('.net-link')!;
+      field.select();
+      navigator.clipboard?.writeText(link).catch(() => document.execCommand('copy'));
+      button!.textContent = 'Lien copié';
+    } else if (m === 'share') navigator.share({ title: 'Xcraft', text: 'Une partie de Xcraft ?', url: link }).catch(() => {});
+    else if (m === 'go' && here) {
+      lobby.send({ go: 1 });
+      // A moment for the message to leave before the page does.
+      setTimeout(play, 300);
+    } else if (m === 'back') {
+      lobby.close();
+      history.replaceState(null, '', location.pathname);
+      showHome();
+    }
   };
 }
 
@@ -1002,8 +1111,7 @@ function launch(s: Setup): void {
   // With two players, each is its own team whatever was picked; with more, teams as chosen.
   const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);
   const p = seated.map((x, i) => `${x.control}.${x.faction}.${teams ? x.team : i}`).join(',');
-  if (b.control === 'online') location.search = `?net=host&room=${newRoom()}&${keep}`;
-  else location.search = a.control === 'you' ? `?play&p=${p}&${keep}` : `?spectate&speed=${s.speed}&p=${p}&${keep}`;
+  location.search = a.control === 'you' ? `?play&p=${p}&${keep}` : `?spectate&speed=${s.speed}&p=${p}&${keep}`;
 }
 
 function start(): void {

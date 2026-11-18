@@ -1,23 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { matchCode, newRoom, readCode } from './net';
+import { newRoom, readRoom } from './net';
 
-describe('network match codes', () => {
-  it('carry the room, both factions and the planet, and reject anything else', () => {
+describe('friend codes', () => {
+  it('are read from the code or the whole link, and nothing else', () => {
     const room = newRoom();
-    const code = matchCode(room, ['humains', 'isdaris'], 'lune');
-    expect(code).toMatch(/^[A-Z0-9]{4}-HIL$/);
-    expect(readCode(code.toLowerCase(), ['desert', 'lune', 'alien'], ['origine', 'le-col'])).toEqual({ room, factions: ['humains', 'isdaris'], biome: 'lune', map: 'origine' });
-    expect(readCode(`${room}HHD`, ['desert', 'lune', 'alien'])?.factions).toEqual(['humains', 'humains']);
-    expect(readCode('ABCD-XIL', ['desert', 'lune', 'alien'])).toBeNull();
-    expect(readCode('ABCD-HIZ', ['desert', 'lune', 'alien'])).toBeNull();
-  });
-
-  it('carry the map after the planet, none for the first map', () => {
-    const maps = ['origine', 'carrefour', 'le-col'];
-    const code = matchCode('ABCD', ['z', 'humains'], 'desert', 2);
-    expect(code).toBe('ABCD-ZHD2');
-    expect(readCode(code, ['desert'], maps)?.map).toBe('le-col');
-    expect(readCode('ABCD-ZHD9', ['desert'], maps)?.map).toBe('origine');
+    expect(readRoom(room.toLowerCase())).toBe(room);
+    expect(readRoom(` https://maxbecq.github.io/xcraft/?ami=${room} `)).toBe(room);
+    expect(readRoom(`https://x/?ami=${room}&hote`)).toBe(room);
+    expect(readRoom('ABC')).toBeNull();
+    expect(readRoom('AB0D')).toBeNull(); // 0 is never in a code: it reads like O
+    expect(readRoom('ABCD-HIL')).toBeNull();
   });
 });
 

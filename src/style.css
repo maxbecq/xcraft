@@ -819,7 +819,6 @@ body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, n
 }
 .net-banner h2 { margin: 0; font: 700 28px/1.2 var(--space-font); letter-spacing: 0.16em; text-transform: uppercase; text-shadow: 0 0 14px rgba(95, 184, 255, 0.5); }
 .net-banner p { margin: 0; font: 600 16px var(--ui); color: var(--space-dim); }
-.net-code { font: 900 46px/1 var(--space-font); letter-spacing: 0.2em; color: #e9f6ff; text-shadow: 0 0 18px rgba(95, 184, 255, 0.7); user-select: all; }
 .net-link, .net-input {
   width: min(560px, 86vw); padding: 9px 12px; box-sizing: border-box; font: 600 15px var(--ui); color: var(--space-ink);
   background: rgba(6, 12, 26, 0.8); border: 1px solid rgba(111, 211, 255, 0.45); border-radius: 0; outline: none; user-select: text;
@@ -954,3 +953,15 @@ body.humains { --trim-top: -34px; }
 }
 /* Phones: the army and base shortcuts sit under the menu button; the readout goes below them. */
 @media (pointer: coarse) { .perf { top: 92px; font-size: 10px; } }
+
+/* The waiting room of a match between friends. */
+.menu.lobby .lobby-note { margin: 0; font: 600 15px var(--ui); letter-spacing: 0; text-transform: none; color: #c9b896; }
+.menu.lobby .lobby-note b { color: var(--amber); letter-spacing: 0.15em; }
+.menu.lobby .net-link { width: 100%; }
+.menu.lobby .lobby-seat { display: grid; grid-template-columns: 16px 110px 1fr; align-items: center; gap: 8px; }
+.menu.lobby .lobby-seat .chip { width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px currentColor; }
+.menu.lobby .lobby-seat .who { font: 600 15px var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: #c9b896; }
+.menu.lobby .lobby-other { font: 15px var(--ui); color: var(--ink); }
+.menu.lobby .maps.fixed .map-card:not(.chosen) { opacity: 0.35; }
+.menu.lobby .maps.fixed .map-card { cursor: default; }
+.menu button:disabled { opacity: 0.45; cursor: default; }
