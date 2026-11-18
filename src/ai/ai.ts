@@ -28,6 +28,12 @@ export const DIFFICULTY: Record<string, number> = BALANCE.ai.difficulty;
 
 const THINK_EVERY = 10; // ticks
 const DEFEND_RADIUS = 14 * FP;
+/** A wave on its way to the shared road's middle goes on to its target once its front is this close to it. */
+const VIA_REACHED = 6 * FP;
+/** Seconds after which a wave stops making for the shared road's middle. */
+const VIA_TIMEOUT = 60;
+/** Tiles from the shared road's middle within which the road found the other way round counts as the same road. */
+const VIA_SAME_ROAD = 8;
 const MAX_WAVE = BALANCE.ai.maxWave;
 /** Researches in priority order, by faction; any building that hosts one researches it when idle. */
 const RESEARCH = BALANCE.ai.research as Record<string, string[]>;
@@ -73,6 +79,13 @@ export class AI {
   private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
   private wave = new Set<number>();
+  /**
+   * Where a new wave goes first: the middle of the road between our headquarters and the enemy's, the road always
+   * found from the lower seat to the higher. Each army taking the road its own pathfinding gives it, two armies on
+   * a map turned 180° with two equal roads (L'Anneau, round its chasm) took one road each, passed without meeting,
+   * and the side whose base was hit first called its wave back, to be beaten piecemeal at home.
+   */
+  private via: { x: number; y: number; until: number } | null = null;
   /** Build orders given per spot ("tx,ty"); a spot tried MAX_TRIES times with nothing built there is given up. */
   private tried = new Map<string, number>();
 
@@ -423,6 +436,7 @@ export class AI {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       this.waves++;
+      this.via = this.sharedRoad(home);
     }
     // Abilities: stimulant and charge when engaging, Peau de roc while healing in a fight.
     const casters = army.filter((u) => {
@@ -494,10 +508,18 @@ export class AI {
       if (leading.length) out.push({ player: this.player, kind: 'attack', ids: leading.map((u) => u.id), x: back.x, y: back.y });
       for (const u of leading) kiters.add(u.id);
     }
+    // The shared road's middle first, until the front gets there (or it is out of reach).
+    if (this.via && (!front.length || w.tick > this.via.until)) this.via = null;
+    if (this.via && front.length) {
+      const cx = front.reduce((s, u) => s + u.x, 0) / front.length;
+      const cy = front.reduce((s, u) => s + u.y, 0) / front.length;
+      if (dist(cx, cy, this.via.x, this.via.y) < VIA_REACHED) this.via = null;
+    }
+    const goal = this.via ?? target;
     // Also those still walking to an old target's spot, which may never be reached (below a cliff): the target moved on.
-    const stale = (u: Entity) => !!target && u.order?.kind === 'attackMove' && !u.order.target && dist(u.order.x, u.order.y, target.x, target.y) > 10 * FP;
+    const stale = (u: Entity) => !!goal && u.order?.kind === 'attackMove' && !u.order.target && dist(u.order.x, u.order.y, goal.x, goal.y) > 10 * FP;
     const waiting = waveUnits.filter((u) => !kiters.has(u.id) && (!u.order || u.order.kind === 'move' || stale(u)));
-    if (target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: target.x, y: target.y });
+    if (goal && target && waiting.length) out.push({ player: this.player, kind: 'attack', ids: waiting.map((u) => u.id), x: goal.x, y: goal.y });
     return out;
   }
 
@@ -889,6 +911,32 @@ export class AI {
    * Visible enemy units near any of our buildings (or hitting them from range): where to send defenders, the
    * enemy unit to hit, how many there are and their hp and shields.
    */
+  /**
+   * The middle of the road between our headquarters and the nearest enemy one, as both sides find it, when the two
+   * sides' own roads part (null when they share it).
+   */
+  private sharedRoad(home: Entity): { x: number; y: number; until: number } | null {
+    const w = this.world;
+    let enemy: Entity | undefined;
+    for (const e of w.entities.values()) {
+      if (!w.hostile(e.owner, this.player) || e.type !== FACTIONS[w.players[e.owner].faction].hq) continue;
+      if (!enemy || dist(e.x, e.y, home.x, home.y) < dist(enemy.x, enemy.y, home.x, home.y)) enemy = e;
+    }
+    if (!enemy) return null;
+    const [a, b] = this.player < enemy.owner ? [home, enemy] : [enemy, home];
+    const g = w.grid;
+    const [ax, ay] = g.nearestOpen(Math.floor(a.x / FP), Math.floor(a.y / FP));
+    const [bx, by] = g.nearestOpen(Math.floor(b.x / FP), Math.floor(b.y / FP));
+    const path = g.findPath(ax, ay, bx, by);
+    if (path.length < 2 || path[path.length - 1] !== by * g.width + bx) return null;
+    const mid = path[path.length >> 1];
+    const [mx, my] = [mid % g.width, Math.floor(mid / g.width)];
+    // Most maps: the road found the other way round goes by the same middle, and the armies meet without help.
+    const back = g.findPath(bx, by, ax, ay);
+    if (back.some((t) => Math.abs((t % g.width) - mx) + Math.abs(Math.floor(t / g.width) - my) <= VIA_SAME_ROAD)) return null;
+    return { x: mx * FP + FP / 2, y: my * FP + FP / 2, until: w.tick + ticks(VIA_TIMEOUT) };
+  }
+
   private threat(buildings: Entity[]): { x: number; y: number; target: number; count: number; strength: number } | undefined {
     const w = this.world;
     const foes: Entity[] = [];
