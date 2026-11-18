@@ -24,8 +24,13 @@ for action in bpy.data.actions:
 arm = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
 arm.data.pose_position = "REST"
 bpy.context.view_layer.update()
-old = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+# Only the skinned body sets the size and the ground: this Blender also leaves a stray 2 m icosphere in the
+# scene (centred on the origin), which put every new mesh's feet a metre below the ground.
+old = [o for o in bpy.context.scene.objects if o.type == "MESH" and (o.parent == arm or any(m.type == "ARMATURE" for m in o.modifiers))]
+for o in [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in old]:
+    bpy.data.objects.remove(o, do_unlink=True)
 lo, hi = bounds(old)
+print(f"RIGTO old body {lo.z:.3f} to {hi.z:.3f}")
 hips = arm.matrix_world @ arm.data.bones["Hips"].head_local
 for o in old:
     bpy.data.objects.remove(o, do_unlink=True)
@@ -73,6 +78,16 @@ body.select_set(True)
 arm.select_set(True)
 bpy.context.view_layer.objects.active = arm
 bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+# Bone heat sometimes leaves a few loose vertices with no weight, which skinning pulls to the origin: they take
+# the weights of the nearest weighted vertex.
+loose = [v for v in body.data.vertices if not v.groups]
+held = [v for v in body.data.vertices if v.groups]
+for v in loose:
+    near = min(held, key=lambda w: (w.co - v.co).length_squared)
+    for g in near.groups:
+        body.vertex_groups[g.group].add([v.index], g.weight, "REPLACE")
+if loose:
+    print(f"RIGTO {len(loose)} loose vertices took their neighbours' weights")
 weighted = sum(1 for v in body.data.vertices if v.groups)
 print(f"RIGTO {body.name}: {len(body.data.polygons)} faces, {weighted}/{len(body.data.vertices)} vertices weighted")
 arm.data.pose_position = "POSE"
