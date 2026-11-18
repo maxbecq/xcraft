@@ -121,11 +121,34 @@ Lecture :
 
 Piste suivante, non mesurée : des Dieux plus forts en début de partie (Nain, ou premier dieu plus tôt ou moins cher), avec les niveaux de 2008 complets (stats du dieu comprises) pour la fin de partie.
 
+### Ce qui est maintenant dans le jeu : niveaux de dieux et Offrandes
+
+Le programmeur a retenu les règles suivantes. La notice 1.2-1 fait foi, et le document de 2008 ne sert qu'à compléter ce qu'elle ne dit pas. Ces règles sont en ligne depuis le 18 novembre (commits fb95697 à b2261c7) :
+- Gaïa, Thor, Apollon et Seth ont **5 niveaux**, achetés au dieu lui-même.
+- Au niveau N, ce qu'un dieu invoque, ou ce que Gaïa bâtit, va **N fois plus vite**.
+- **Plus de deuil** : un dieu tué peut être réinvoqué tout de suite, et revient au niveau 1.
+- Pas de mana : les sorts ont seulement des temps de recharge, et deviennent plus forts à chaque niveau. Pluie de feu frappe plus fort et plus large, Tempête de sable dure plus longtemps et couvre plus large, la Flèche de Gaïa frappe plus fort, et sa Téléportation revient plus vite.
+- **Offrandes**, une recherche à 150 minerais en 20 s : les dieux cessent de compter dans la logistique.
+- L'IA n'achète un niveau qu'une fois ses trois dieux sortis, et jamais pour Gaïa.
+
+Stats par niveau : la progression de 2008, appliquée en proportion aux valeurs actuelles. Le prix d'un niveau vaut 60, 70, 80 puis 90 % du prix du dieu, comme dans la table de 2008 ; chaque niveau prend 5 s de plus que le précédent. Tout se règle dans `src/balance.json`, champ `levels` de chaque dieu.
+
+| Dieu | PV, niveau 1 → 5 | Armure | Dégâts | Prix des niveaux 2 à 5 | Durées |
+|---|---|---|---|---|---|
+| Gaïa | 3000 → 4880 | 6 → 10 | – | 345, 400, 460, 520 | 50 à 65 s |
+| Thor | 2200 → 3580 | 3 → 7 | 45 → 81 | 240, 280, 320, 360 | 40 à 55 s |
+| Seth | 1700 → 4530 | 2 → 6 | 35 → **166** | 300/120 à 450/180 | 35 à 50 s |
+| Apollon | 1500 → 2910 | 1 → 5 | 25 → 75 | 300/150 à 450/225 | 35 à 50 s |
+
+Gaïa est gratuite dans le jeu : ses prix de niveau sont provisoires, la moitié de ceux de 2008. Les dégâts de Seth au niveau 5 (166) suivent la progression de 2008 (16 → 76) appliquée aux 35 actuels ; ils sont à surveiller.
+
+Équilibre : les mesures complètes attendent que les mécaniques de tous les camps soient en place (règle du programmeur). Une seule mesure indicative a été faite, sur la première version (f3876bd), avant que l'IA cesse d'acheter les niveaux de Gaïa trop tôt. Elle n'est plus représentative : Dieux – Humains 0 – 76 sur la carte d'origine, contre 18 – 51 juste avant les niveaux.
+
 ## 5. Questions
 
 1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
 2. Faut-il reproduire les bonus selon la cible du mod (léger, blindé, massif, biologique) ? Cela demande du code, mais rendrait les chiffres du mod utilisables tels quels.
-3. Pour les Dieux : quelle règle d'invocation ?
+3. Pour les Dieux : les niveaux de 2008, les Offrandes et la fin du deuil sont maintenant en jeu (section 4). Vous conviennent-ils ? Les prix de niveau de Gaïa et les dégâts de Seth au niveau 5 sont à régler.
 
 ## 6. Revenir en arrière
 
