@@ -4,10 +4,11 @@ Every texel is sorted into team blue, bare steel, dark (leather, straps, cloth),
 repainted with that class's single tone, keeping only a soft shading from the original. Small light
 islands inside the blue (trims, specks) are swallowed by the blue: a texel only ever turns blue, when
 enough of its neighbourhood is blue, so the atlas's unrelated islands barely bleed into each other.
-Other colours (a red gem, a glowing vial) are kept as they are.
+Bright saturated colours (a red gem, a glowing vial, a lamp) are kept as they are and never swallowed.
 
 Usage: python3 tools/meshy/flatten.py in.webp out.webp
 """
+import colorsys
 import sys
 
 from PIL import Image, ImageFilter
@@ -23,11 +24,25 @@ TONES = {
 }
 
 
+def vivid(r, g, b):
+    """A bright, saturated colour other than the team blue and the orange-brown of skin and copper: a glow,
+    a vial, a gem, a lamp. Never repainted, never swallowed."""
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    hue = h * 360
+    if 55 < hue < 170 and s > 0.27 and v > 0.5:
+        return True  # greens, pale ones too (a vial's glass): no soldier is painted green
+    if s < 0.45 or v < 0.55 or 190 < hue < 255:
+        return False
+    return not 10 < hue < 45 or (v > 0.9 and s > 0.75)  # orange too when it glows
+
+
 def classify(r, g, b):
     lum = 0.3 * r + 0.59 * g + 0.11 * b
     chroma = max(r, g, b) - min(r, g, b)
     if b - max(r * 1.5, g) > 18 or (b > 38 and b > r + 14 and b > g + 8):
         return BLUE  # the plates' shaded navy too, or it would turn brown
+    if vivid(r, g, b):
+        return OTHER  # before the pale and warm tests below: a light yellow-green vial passed as ivory
     if (g > r + 20 and g > b + 15) or (r > 140 and g < 70 and b < 70):
         return OTHER  # green vials and glows, red gems and lamps: kept as painted
     if r > 150 and r > g + 25 and g > b + 15 and lum > 120 and r - g < 70:
@@ -79,7 +94,9 @@ def main(src, dst):
                 continue
             shade = max(0.7, min(1.25, 1 + 0.45 * (lum[x, y] / mean[c] - 1)))
             o[x, y] = tuple(min(255, int(v * shade)) for v in TONES[c])
-    out.save(dst, quality=92)
+    # Lossless, over a 256-colour palette (plenty for flat masses): lossy WebP halves the colour resolution,
+    # and small glows bled into their dark neighbours.
+    out.quantize(256, method=Image.Quantize.MAXCOVERAGE).convert("RGB").save(dst, lossless=True, method=6, quality=100)
     print(f"{src} -> {dst}: " + ", ".join(f"{n} {counts[i] * 100 // (w * h)}%" for i, n in enumerate(["blue", "steel", "dark", "skin", "other", "copper", "ivory"])))
 
 
