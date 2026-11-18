@@ -253,10 +253,10 @@ export const ABILITIES: Record<string, AbilityDef> = {
   peauderoc: { name: 'Peau de roc', hotkey: 'R', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
   /** Z Centre K (Z.doc): support kits fitted on an own socle anywhere on the map, on top of its weapon. */
-  kitdetection: { name: 'Kit Détection', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
-  kitinvisibilite: { name: 'Kit Invisibilité', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
-  kitreparateur: { name: 'Kit Auto-réparateur', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
-  kitbalise: { name: 'Kit Balise offensive', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
+  kitdetection: { name: 'Détection', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
+  kitinvisibilite: { name: 'Invisibilité', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
+  kitreparateur: { name: 'Auto-réparateur', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
+  kitbalise: { name: 'Balise offensive', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
   canoniem: { name: 'Canon IEM', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
   observation: { name: 'Observation céleste', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
