@@ -29,34 +29,10 @@ import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
 import { connect, every, newRoom, NO_DIRECT, openLobby, readRoom, stateHash, type LobbySetup, type NetStatus } from './net';
 import { countMatch, countTitle, SKIPPED } from './stats';
+import { asFaction, type Controls, fmt, FULLSCREEN_KEY, saveControls, SCROLL, SCROLL_BASE, stored, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { downloadReplay, openReplayFile, playReplay, readReplay, type Replay, REPLAY_KEY, saveReplay } from './game/replay';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-/** Control settings for this computer (Options, also from the pause menu): edge scrolling's speed, band width (1 = as
- * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed (one to one with the system cursor at 1)
- * (game/pointerlock.ts); the pointer held in the window; grid hotkeys; the game's speed against the AI. */
-const SCROLL_KEY = 'xcraft.scroll';
-const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, game: 1 };
-type Controls = typeof SCROLL_BASE;
-const SCROLL: Controls = (() => {
-  const base = { ...SCROLL_BASE };
-  try {
-    // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
-    const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
-    for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
-    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false };
-  } catch {
-    return base;
-  }
-})();
-function saveControls(): void {
-  try {
-    const { lock, ...rest } = SCROLL;
-    localStorage.setItem(SCROLL_KEY, JSON.stringify({ ...rest, lock2: lock }));
-  } catch {
-    // private browsing: kept for this page only
-  }
-}
 /** Its width grows with the screen: 12 % of its short side, never under 120 px (130 px on a 1080p screen), times the setting. */
 const edgeBand = () => Math.round(SCROLL.band * Math.max(120, 0.12 * Math.min(window.innerWidth, window.innerHeight)));
 const params = new URLSearchParams(location.search);
@@ -103,14 +79,6 @@ renderer.shadowMap.type = PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 /** Factions: the player's and the AI's, from the URL or the last menu choice. */
-const stored = (k: string) => {
-  try {
-    return localStorage.getItem(k);
-  } catch {
-    return null;
-  }
-};
-const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' || v === 'dieux' ? v : 'humains');
 /** The map: a replay's, else from the URL, else the last one picked. */
 const MAP = mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
 /** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
@@ -773,19 +741,6 @@ function showHome(): void {
   };
 }
 
-/** Fullscreen: chosen in the options for this computer, toggled from the pause menu. */
-const FULLSCREEN_KEY = 'xcraft.fullscreen';
-function wantsFullscreen(): boolean {
-  try {
-    return localStorage.getItem(FULLSCREEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-function toggleFullscreen(): void {
-  if (document.fullscreenElement) void document.exitFullscreen();
-  else void document.documentElement.requestFullscreen().catch(() => {});
-}
 if (document.fullscreenEnabled && !TOUCH) {
   const button = pause.querySelector<HTMLElement>('[data-p="fullscreen"]')!;
   button.hidden = false;
@@ -837,7 +792,6 @@ function controlFields(inMatch: boolean): string {
     </fieldset>
     ${inMatch && SOLO ? `<fieldset class="options"><legend>Partie contre l'IA</legend>${range('game', 'Vitesse du jeu', 0.5, 2, 0.25, '×')}</fieldset>` : ''}`;
 }
-const fmt = (v: number, unit: string) => (unit === '×' ? `×${+v.toFixed(2)}` : `${+v.toFixed(2)}${unit}`);
 /** A control field changed: kept, and live in the match. False for any other field. */
 function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   if (field.dataset.k === 'debug') {
