@@ -547,6 +547,8 @@ export class PowerNet {
   private rebuild(nodes: Entity[], world: World, fed: Entity[], key: string): void {
     const creep = (e: Entity) => world.players[e.owner].faction === 'z';
     this.key = key;
+    // Discs, wires and beams are built anew each time; only the plugs share one geometry. Materials are shared.
+    for (const m of this.root.children as Mesh[]) if (m.geometry !== this.plugGeometry) m.geometry.dispose();
     this.root.clear();
     const at = (e: Entity) => new Vector3(e.x / FP, heightAt(this.map, e.x / FP, e.y / FP), e.y / FP);
     for (const e of nodes) {
