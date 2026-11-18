@@ -761,6 +761,11 @@ function arm(character: Group, clips: AnimationClip[], weapon: Group, grip: Grip
   mixer.stopAllAction();
 }
 
+/** Frees what a preview copy allocated for itself (its cloned skeletons' bone textures, a placeholder's shapes). */
+export function freePreview(object: Object3D): void {
+  free(object);
+}
+
 /** A fresh copy of a type's model in a team's colours, with its clips when rigged (HUD portrait). */
 export function preview(type: string, owner: number): { object: Group; clips: AnimationClip[] } {
   const object = model(type, teamMaterials[owner] ?? teamMaterials[0]);

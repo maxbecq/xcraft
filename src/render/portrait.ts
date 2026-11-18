@@ -1,5 +1,5 @@
 import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, Mesh, PerspectiveCamera, Scene, Texture, Vector3, WebGLRenderer } from 'three';
-import { preview } from './units';
+import { freePreview, preview } from './units';
 
 /**
  * The selected entity, alive in the selection panel: its own model turning slowly (units play their idle
@@ -29,6 +29,7 @@ export class Portrait {
     const key = type ? `${type}/${owner}` : '';
     if (key === this.key) return;
     this.key = key;
+    for (const o of this.holder.children) freePreview(o);
     this.holder.clear();
     this.mixer = null;
     if (!type) return;
@@ -57,25 +58,28 @@ export class Portrait {
    * first click on a type froze the game for a third to half a second while its portrait's programs were built.
    */
   async prewarm(entries: [string, number][]): Promise<void> {
-    this.renderer ??= new WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    const renderer = this.context();
     // A scene of its own, lit as the portrait's (the same programs), so nothing of it ever shows.
     const warm = new Scene();
     warm.add(...this.scene.children.filter((o) => o !== this.holder).map((o) => o.clone()));
-    for (const [type, owner] of entries) warm.add(preview(type, owner).object);
+    const previews = entries.map(([type, owner]) => preview(type, owner).object);
+    warm.add(...previews);
     warm.traverse((o) => {
       if (!(o instanceof Mesh)) return;
-      for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) this.renderer!.initTexture(v);
+      for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) renderer.initTexture(v);
     });
     try {
-      await this.renderer.compileAsync(warm, this.camera);
+      await renderer.compileAsync(warm, this.camera);
       // A first draw through an empty scissor: the programs' first use (uniforms, link check) is paid now too.
-      this.renderer.setScissorTest(true);
-      this.renderer.setScissor(0, 0, 0, 0);
-      this.renderer.render(warm, this.camera);
-      this.renderer.setScissorTest(false);
+      renderer.setScissorTest(true);
+      renderer.setScissor(0, 0, 0, 0);
+      renderer.render(warm, this.camera);
+      renderer.setScissorTest(false);
     } catch {
       // a lost context: the first click builds them as before
     }
+    // The copies' own parts (bone textures) go; the programs and shared textures stay compiled.
+    previews.forEach(freePreview);
   }
 
   /** Draws a frame when the portrait is on screen. */
@@ -87,16 +91,21 @@ export class Portrait {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     if (!w || !h) return;
-    this.renderer ??= new WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    const renderer = this.context();
     const ratio = Math.min(2, window.devicePixelRatio);
     if (this.canvas.width !== Math.round(w * ratio) || this.canvas.height !== Math.round(h * ratio)) {
-      this.renderer.setPixelRatio(ratio);
-      this.renderer.setSize(w, h, false);
+      renderer.setPixelRatio(ratio);
+      renderer.setSize(w, h, false);
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     }
     this.mixer?.update(dt);
     if (!this.mixer) this.holder.rotation.y += dt * 0.35; // buildings turn slowly
-    this.renderer.render(this.scene, this.camera);
+    renderer.render(this.scene, this.camera);
+  }
+
+  /** The portrait's own WebGL context, made on first use. */
+  private context(): WebGLRenderer {
+    return (this.renderer ??= new WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true }));
   }
 }
