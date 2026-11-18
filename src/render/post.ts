@@ -65,6 +65,10 @@ export class Post {
       sh.fragmentShader = `varying float vUnit;\n${sh.fragmentShader.replace(/}\s*$/, '#ifdef USE_SKINNING\n  gl_FragColor.a = 0.5;\n#endif\n  if (vUnit > 0.5) gl_FragColor.a = 0.5;\n}')}`;
     };
     composer.addPass(this.ao);
+    // Its depth texture has no size until the pass first renders into it, but the ink pass samples it too: given
+    // its target's size now, it is never bound as a 0×0 texture (WebGL: « dimensions must be greater than zero »).
+    const target = (this.ao as unknown as { normalRenderTarget?: { width: number; height: number } }).normalRenderTarget;
+    if (target) Object.assign(this.ao.depthTexture.image, { width: target.width, height: target.height });
     // `?noink` keeps the plain 3D look.
     if (!new URLSearchParams(location.search).has('noink')) {
       this.ink = inkPass(this.ao.depthTexture, this.ao.normalTexture, camera as OrthographicCamera);
