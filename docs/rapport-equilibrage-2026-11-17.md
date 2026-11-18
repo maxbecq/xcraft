@@ -225,3 +225,17 @@ Avec cette méthode, le bruit sur 98 parties est d'environ ±5 victoires (1 σ).
 - **`771ef76`** (marge au pied des falaises `a179e39`, cible lâchée ignorée 10 s en attaque-déplacement `f1a84bd`) : +4 pour les Humains contre les Isdaris, +1 pour Z contre les Humains, +5 pour Z contre les Isdaris. Tout est dans le bruit : ces deux changements ne déplacent pas l'équilibre de façon mesurable.
 - **Départs** : p1 (bas droite) gagne plus souvent. Au total 118 / 168 sur `4c1ced4` (+50 sur 286 parties, 3,0 σ) et 127 / 165 sur `771ef76` (+38 sur 292, 2,2 σ). L'avantage vient surtout de Z – Isdaris (35 / 58 et 35 / 63). Origine est symétrique ; la cause n'a pas été cherchée.
 
+
+### Les Dieux sur Origine (`771ef76`, méthode corrigée)
+
+98 parties par paire, toutes distinctes. L'outil arrête une partie à 35 minutes ; sans vainqueur, elle compte comme nulle. Stats des Dieux : celles de la V1, provisoires (voir `BALANCE.md`).
+
+| Paire | Victoires | Nuls | p0 / p1 | Durée moyenne |
+|---|---|---|---|---|
+| Dieux – Humains | 41 – 25 | 32 | **50 / 16** | 27 min |
+| Dieux – Isdaris | 45 – 32 | 21 | 41 / 36 | 26 min |
+| Dieux – Z | 24 – 51 | 23 | 42 / 33 | 26 min |
+
+- **Ordre de force** : Z bat nettement les Dieux (51 – 24). Les Dieux battent les Humains (41 – 25) et, moins nettement, les Isdaris (45 – 32).
+- **Parties longues** : 26 à 27 minutes en moyenne, contre environ 15 entre les autres camps, et un quart des parties sans vainqueur à 35 minutes. Les mesures QUICK du 17 novembre (18 parties par paire) le montraient déjà.
+- **Départ** : contrairement aux autres camps, p0 (haut gauche) gagne plus souvent : 133 / 85 sur les trois paires (+48 sur 218 parties décidées, 3,2 σ). L'écart vient surtout de Dieux – Humains (50 / 16, 4,2 σ). La cause n'a pas été cherchée.

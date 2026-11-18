@@ -142,3 +142,42 @@ Mesures à 2 dans deux coins opposés, comme plus haut, 98 parties par paire. `2
 - Les coins sont symétriques par construction (vérifié par `src/maps.test.ts`). L'avantage de p1 vient donc du comportement des unités, comme sur L'Anneau, mais il est ici plus fort. La cause n'a pas été cherchée.
 - En 1 contre 1, la nouvelle carte de Carrefour est moins équilibrée que l'ancienne. À voir avec le programmeur : garder le dessin pour les parties à 4, ou chercher d'où vient l'avantage de p1.
 
+
+## Méthode corrigée (18 novembre)
+
+> **Avertissement.** Les chiffres plus haut viennent de l'ancienne méthode. Elle annonçait 98 parties par paire, mais n'en jouait que 32 différentes (voir `docs/rapport-equilibrage-2026-11-17.md`, « Limite de la méthode »). Les écarts y paraissaient environ 1,7 fois plus significatifs qu'ils ne l'étaient. La règle « ±5 » de la section Méthode ne vaut donc pas pour eux.
+
+`scripts/big.test.ts` joue maintenant 98 parties toutes différentes par paire : décalage de démarrage de chaque IA de 0 à 3 s, croisé avec des handicaps de 90, 100 et 110 %. Mesures sur la simulation de `771ef76` (worktree à `11722a1`, qui ne change que l'outil et la note du rapport de PR). Les 1 176 parties de cette série sont toutes distinctes (98 sur 98 pour chaque paire). Bruit : environ ±5 victoires (1 σ) sur 98 parties ; un écart de moins de 10 victoires autour de 49 est dans le bruit.
+
+### Victoires par camp
+
+| Carte | Humains – Isdaris | Z – Humains | Z – Isdaris | Durée moyenne |
+|---|---|---|---|---|
+| Origine (rappel) | **63 – 34** (1 nul) | **61 – 36** (1 nul) | 56 – 42 | — |
+| Le Col | 46 – 52 | **59 – 37** (2 nuls) | 55 – 43 | 16 à 20 min |
+| Les Ponts | **65 – 32** (1 nul) | 36 – 58 (4 nuls) | **62 – 35** (1 nul) | 14 à 17 min |
+| Carrefour | 57 – 40 (1 nul) | **72 – 25** (1 nul) | **67 – 30** (1 nul) | 19 à 23 min |
+| L'Anneau | 54 – 43 (1 nul) | **91 – 7** | **74 – 24** | 15 à 17 min |
+
+En gras : au moins 10 victoires au-delà de 49.
+
+- **Z** domine partout sauf aux Ponts. L'écart est énorme sur L'Anneau (91 – 7 contre les Humains, 74 – 24 contre les Isdaris) et sur Carrefour.
+- **Les Ponts** renversent Z – Humains : les Humains y gagnent 58 – 36, à la limite du significatif. Les Humains y écrasent aussi les Isdaris (65 – 32), comme avec l'ancienne méthode.
+- **Le Col** est la carte la plus proche de l'équilibre entre camps : seul Z – Humains sort de la cible, de justesse. Les Isdaris y battent les Humains (52 – 46, dans le bruit), seule carte où ils ne perdent pas cette paire.
+- **Les nuls** ont presque disparu (14 nuls aux Ponts et 10 sur L'Anneau avec l'ancienne méthode, 6 et 1 ici).
+
+### Victoires par départ
+
+| Carte | p0 (haut gauche) | p1 (bas droite) | Écart | Significatif ? |
+|---|---|---|---|---|
+| Origine (rappel) | 127 | 165 | +38 pour p1 | oui (2,2 σ) |
+| **Le Col** | **105** | **187** | **+82 pour p1** | **oui (4,8 σ)** |
+| **Les Ponts** | **114** | **174** | **+60 pour p1** | **oui (3,5 σ)** |
+| **Carrefour** | **118** | **173** | **+55 pour p1** | **oui (3,2 σ)** |
+| L'Anneau | 137 | 156 | +19 pour p1 | non (1,1 σ) |
+
+Détail p0 / p1 par paire (Humains – Isdaris, Z – Humains, Z – Isdaris) : Le Col 33 / 65, 34 / 62, 38 / 60 ; Les Ponts 37 / 60, 35 / 59, 42 / 55 ; Carrefour 50 / 47, 35 / 62, 33 / 64 ; L'Anneau 48 / 49, 50 / 48, 39 / 59.
+
+- **Le départ en bas à droite (p1) est avantagé sur toutes les cartes**, et nettement sur Le Col, Les Ponts et Carrefour. Avec l'ancienne méthode, Le Col et Les Ponts semblaient favoriser p0 : c'était un effet du petit nombre de parties distinctes.
+- **L'Anneau** n'a plus d'avantage de départ significatif. La passerelle anti-diagonale adoptée le 17 novembre semble avoir corrigé le +58 de p1.
+- Les cartes sont symétriques par rotation (vérifié par `src/maps.test.ts`). Un avantage de p1 présent sur quatre cartes sur cinq, dans presque toutes les paires, pointe vers le comportement des unités ou de l'IA plutôt que vers le dessin des cartes. La cause n'a pas été cherchée.
