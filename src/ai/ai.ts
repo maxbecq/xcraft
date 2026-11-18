@@ -758,6 +758,11 @@ export class AI {
             const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
             cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
           }
+        } else if (name === 'dissipation') {
+          // An enemy summoned or under a boon first, else an ally held or poisoned.
+          const foe = inReach.find((f) => f.ttl > 0 || f.reflect > 0 || f.war > 0 || f.invuln > 0);
+          const friend = foe ? undefined : allies.find((a) => a.held > ticks(1) || a.poison > 0);
+          if (foe ?? friend) cmd = at(u, name, (foe ?? friend)!);
         } else if (name === 'soumission') {
           // The toughest enemy soldier in reach that can change side.
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker && !(f.def as UnitDef).unique && f.charm === 0).sort((a, b) => b.maxHp - a.maxHp || a.id - b.id)[0];

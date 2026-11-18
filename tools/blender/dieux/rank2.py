@@ -366,3 +366,56 @@ def artefacterie(p):
     for k in range(3):
         box(p["gold"], (0.06, 0.02, 0.4), (-0.3 + k * 0.3, -0.72, 1.35), (0, math.radians(-20 + 20 * k), 0))
     sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.6, -0.76, 1.95 - 0.5 * t), cuts=6, thick=0.02)
+
+
+def _elemental(p, core, flames, glow, z=0.6, h=1.0):
+    meta(p[core], caps=[((0, 0, 0.15 * h), (0, 0, z), 0.12)], blobs=[((0, 0, z + 0.15), 0.13, (1, 1, 1.1), (0, 0, 0))])
+    for s in (-1, 1):
+        strand(p[flames], [(s * 0.1, 0, z), (s * 0.24, -0.08, z - 0.1), (s * 0.28, -0.16, z)], 0.045, 0.015)
+    ball(p[glow], 0.05, (0, -0.06, z + 0.02))
+    torus(p["team"], 0.16, 0.02, (0, 0, 0.12))
+
+
+def elemeau(p):
+    """Water form: a rippling column of water, an icy shard in hand."""
+    _elemental(p, "turq", "lapis", "ether")
+    for k in range(6):
+        torus(p["ether_soft"], 0.14 - k * 0.012, 0.012, (0, 0, 0.25 + k * 0.12))
+    cyl(p["white"], 0.03, 0.25, (0.28, -0.18, 0.62), rot=(0.4, 0, 0), v=6, r2=0.0)
+
+
+def elemterre(p):
+    """Earth form: a squat heap of rock and moss, blades of stone."""
+    meta(p["granite"], caps=[((0, 0, 0.2), (0, 0, 0.55), 0.22)], blobs=[((0, -0.05, 0.75), 0.16, (1, 1, 0.9), (0, 0, 0))])
+    for s in (-1, 1):
+        along(p["granite"], (s * 0.25, 0, 0.6), (s * 0.35, -0.1, 0.25), 0.09, 0.07)
+        cyl(p["stone"], 0.05, 0.3, (s * 0.38, -0.2, 0.2), rot=(1.2, 0, 0), v=4, r2=0.0)
+    for k in range(8):
+        a = k / 8 * math.tau
+        ball(p["moss"], 0.06, (math.cos(a) * 0.2, math.sin(a) * 0.2, 0.5 + (k % 3) * 0.08), (1, 1, 0.5))
+    ball(p["amber"], 0.03, (0, -0.2, 0.78))
+    torus(p["team"], 0.22, 0.025, (0, 0, 0.1))
+
+
+def elemair(p):
+    """Air form: a whirlwind with a bright eye, wisps for wings."""
+    for k in range(7):
+        torus(p["ether_soft"], 0.08 + k * 0.035, 0.015, (0, 0, 0.2 + k * 0.1), rot=(0.1 * k, 0, 0))
+    ball(p["white"], 0.1, (0, 0, 0.85))
+    ball(p["ether"], 0.04, (0, -0.09, 0.86))
+    for s in (-1, 1):
+        sheet(p["white"], 1, 1, lambda u, t, s=s: (s * (0.1 + u * 0.35), 0.05 + t * 0.1, 0.8 + math.sin(u * math.pi) * 0.08 - t * 0.15), cuts=6, thick=0.01)
+    torus(p["team"], 0.1, 0.02, (0, 0, 0.62))
+
+
+def golem(p):
+    """The Golem: a hulking body of solid ether, glowing seams, a block ready to throw."""
+    meta(p["jade"], caps=[((0, 0, 0.5), (0, 0, 1.1), 0.3), ((-0.35, 0, 1.15), (-0.45, -0.1, 0.6), 0.13), ((0.35, 0, 1.15), (0.5, -0.05, 1.5), 0.13),
+                         ((-0.15, 0, 0.5), (-0.18, 0, 0.08), 0.14), ((0.15, 0, 0.5), (0.18, 0, 0.08), 0.14)],
+         blobs=[((0, -0.1, 1.35), 0.15, (1, 1, 0.9), (0, 0, 0))])
+    for z in (0.6, 0.85, 1.1):
+        torus(p["ether"], 0.28, 0.012, (0, 0, z)).scale = (1.1, 0.85, 1)
+    box(p["turq"], (0.35, 0.35, 0.35), (0.55, -0.05, 1.75), (0.3, 0.4, 0.2), bevel=0.3)
+    for x in (-0.05, 0.05):
+        ball(p["ether"], 0.025, (x, -0.24, 1.38))
+    sheet(p["team"], 1, 1, lambda u, t: ((u - 0.5) * 0.2, -0.3, 1.0 - 0.3 * t), cuts=4, thick=0.015)

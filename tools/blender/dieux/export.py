@@ -41,6 +41,7 @@ TYPES = {
     "walkyrie": (rank2.walkyrie, 0.85, 6000), "titan": (rank2.titan, 1.0, 8000), "immortel": (rank2.immortel, 0.95, 8000),
     "fontaine": (rank2.fontaine, 1.0, 10000),
     "primordial": (rank2.primordial, 1.0, 20000), "jormungandr": (rank2.jormungandr, 1.0, 9000), "artefacterie": (rank2.artefacterie, 1.0, 10000),
+    "elemeau": (rank2.elemeau, 0.8, 6000), "elemterre": (rank2.elemterre, 0.85, 6000), "elemair": (rank2.elemair, 0.8, 5000), "golem": (rank2.golem, 1.0, 9000),
 }
 
 #: The look picked on 2026-11-18 (recherches-visuelles/dieux/planches/selection.jpg): palette slots a model's sculpt

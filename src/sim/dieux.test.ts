@@ -308,6 +308,35 @@ describe('Dieux', () => {
     expect(before - dummy.hp).toBe(plain + Math.trunc((plain * 2 * BALANCE.rules.upgrades.artefacts.force) / 100) - (DEFS.grenier as BuildingDef).armor);
   });
 
+  it('Chouette shows a zone; Dissipation frees an ally and hurts a summoned enemy; Élémentaires change form and merge', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const athena = w.spawn('athena', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [athena.id], name: 'chouette', x: 40 * FP, y: 30 * FP }]);
+    run(w, 3);
+    expect(w.scans.some((z) => z.owner === 0 && z.radius === ABILITIES.chouette.radius)).toBe(true);
+    const pretresse = w.spawn('pretresse', 0, 30 * FP, 34 * FP);
+    const nain = w.spawn('nain', 0, 32 * FP, 34 * FP);
+    nain.held = ticks(10);
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'dissipation', x: nain.x, y: nain.y }]);
+    run(w, 0.5);
+    expect(nain.held).toBe(0);
+    pretresse.abilityCd = 0;
+    const ghost = w.spawn('fantome', 1, 33 * FP, 36 * FP);
+    ghost.invuln = ghost.ttl;
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'dissipation', x: ghost.x, y: ghost.y }]);
+    run(w, 0.5);
+    expect(ghost.hp).toBeLessThan(ghost.maxHp);
+    const fire = w.spawn('elementaire', 0, 50 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [fire.id], name: 'formeterre' }]);
+    expect(fire.type).toBe('elemterre');
+    const other = w.spawn('elemeau', 0, 51 * FP, 30 * FP);
+    void other;
+    fire.abilityCd = 0; // one cooldown for its abilities
+    w.step([{ player: 0, kind: 'ability', ids: [fire.id], name: 'fusion' }]);
+    expect(of(w, 0, 'golem')).toHaveLength(1);
+    expect(of(w, 0, 'elemterre').length + of(w, 0, 'elemeau').length).toBe(0);
+  });
+
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);

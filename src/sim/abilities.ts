@@ -48,6 +48,9 @@ export function land(this: World, r: World['recalls'][number]): void {
   this.teleports.push({ phase: 'end', owner: r.owner, x1: r.x, y1: r.y, x2: b.x, y2: b.y, ids: units.map((e) => e.id) });
 }
 
+/** Mutation: the Élémentaire form each ability turns into. */
+const FORMS: Record<string, string> = { formefeu: 'elementaire', formeeau: 'elemeau', formeterre: 'elemterre', formeair: 'elemair' };
+
 /** Uses the unit's active ability if it is ready. */
 /** Uses an ability on the spot (by default the unit's first one); aimed ones go through castAt. */
 export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability): void {
@@ -115,6 +118,25 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       const g = this.spawnBeside('fantome', e);
       g.invuln = g.ttl; // unhurt for all their short life
     }
+  } else if (name!.startsWith('forme')) {
+    // Mutation: another form, its wounds kept; a flyer only lands on open ground.
+    const into = FORMS[name!];
+    if (flies(e) && !(DEFS[into] as UnitDef).flying && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible de se poser ici.');
+    this.transmute(e, into);
+  } else if (name === 'fusion') {
+    // Two Élémentaires, any forms, merge into a Golem, which takes a while to set.
+    const other = [...this.entities.values()]
+      .filter((t) => t !== e && t.owner === e.owner && t.hp > 0 && Object.values(FORMS).includes(t.type) && this.gap(e, t) <= toFp(ab.radius!))
+      .sort((a, b) => this.gap(e, a) - this.gap(e, b) || a.id - b.id)[0];
+    if (!other) return void this.say(e.owner, 'Il faut un second Élémentaire tout près.');
+    const [mx, my] = [(e.x + other.x) >> 1, (e.y + other.y) >> 1];
+    this.remove(other);
+    this.remove(e);
+    const g = this.spawn('golem', e.owner, mx, my);
+    this.place(g, mx, my);
+    g.held = ticks(ab.duration);
+    this.casts.push({ kind: name, x: mx, y: my });
+    return;
   } else if (name === 'nuee') {
     e.swarm = ticks(ab.duration);
   } else if (name === 'resurrection') {
@@ -210,6 +232,30 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'amonra') {
     // Blinded and held where they stand; machines shake it off sooner.
     for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
+  } else if (name === 'chouette') {
+    this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
+  } else if (name === 'dissipation') {
+    const t = near((t) => t !== e)[0];
+    if (!t) return false;
+    if (t.owner === e.owner) {
+      // What harms an ally: held, poisoned.
+      t.held = 0;
+      t.poison = 0;
+    } else {
+      // What helps an enemy; summoned ones and a Sphère de renvoi take a heavy blow.
+      const summoned = t.ttl > 0 || t.reflect > 0;
+      t.camo = 0;
+      t.war = 0;
+      t.skin = 0;
+      t.reflect = 0;
+      t.invuln = 0;
+      if (t.boost > 0) {
+        t.boost = 0;
+        t.speed = this.baseSpeed(t);
+      }
+      if (summoned) this.hurt(t, ab.damage!);
+    }
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
   } else if (name === 'soumission') {
     // The enemy unit nearest the point (not a god, not a worker) changes side for a while.
     const t = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).unique && !(t.def as UnitDef).worker && t.charm === 0)[0];

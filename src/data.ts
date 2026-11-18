@@ -358,6 +358,16 @@ export const ABILITIES: Record<string, AbilityDef> = {
   armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
   nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
+  /** Athéna (notice): her owl flies over a zone and shows it a while. */
+  chouette: { name: 'Chouette', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
+  /** Prêtresse (notice): on an ally, ends what harms it; on an enemy, what helps it, and hurts summoned ones badly. */
+  dissipation: { name: 'Dissipation', hotkey: 'D', target: 'point', ...BALANCE.abilities.dissipation },
+  /** Élémentaire (notice): Mutation to another form, and Fusion of two into a Golem. */
+  formefeu: { name: 'Forme de feu', hotkey: 'J', target: 'self', ...BALANCE.abilities.mutation },
+  formeeau: { name: 'Forme d’eau', hotkey: 'Y', target: 'self', ...BALANCE.abilities.mutation },
+  formeterre: { name: 'Forme de terre', hotkey: 'K', target: 'self', ...BALANCE.abilities.mutation },
+  formeair: { name: 'Forme d’air', hotkey: 'Q', target: 'self', ...BALANCE.abilities.mutation },
+  fusion: { name: 'Fusion en Golem', hotkey: 'U', target: 'self', ...BALANCE.abilities.fusion },
   // Ultimate spells (notice): charged at the Temple primordial while the mythology's three gods stand, cast by any of them.
   /** Scandinave: an avatar of the serpent Jörmungandr fights by the god a while, and feeds on the dead. */
   jormungand: { name: 'Appel de Jörmungand', hotkey: 'U', target: 'point', ultimate: 'scandinave', ...BALANCE.abilities.jormungand },
@@ -631,14 +641,23 @@ const BASE: Record<string, object> = {
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
   // passive (rules.auraguerre, rules.auraprotection).
   odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
-  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elementaire'], unique: true, abilities: ['tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
+  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elementaire'], unique: true, abilities: ['chouette', 'tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
   isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['soinsdivins', 'resurrection', 'amonra'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
   /** Odin's ravens: fast flying scouts, invisible, that see the invisible. */
   corbeau: { kind: 'unit', name: 'Corbeau', radius: 0.35, flying: true, beast: true, cloaked: true, faction: 'dieux', hotkey: 'C' },
   /** A slow flying beast, very hardy, breathing fire on an area. */
   drake: { kind: 'unit', name: 'Drake', radius: 0.9, flying: true, beast: true, faction: 'dieux', hotkey: 'D' },
-  /** A small shapeshifter (notice); here its fire form only, which also shoots flyers. */
-  elementaire: { kind: 'unit', name: 'Élémentaire', radius: 0.45, faction: 'dieux', hotkey: 'E' },
+  /** A small shapeshifter (notice): fire form, which also shoots flyers; it changes form at will (Mutation), and two
+   * merge into a Golem. */
+  elementaire: { kind: 'unit', name: 'Élémentaire de feu', radius: 0.45, abilities: ['formeeau', 'formeterre', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
+  /** Water form: an icy shot from afar. */
+  elemeau: { kind: 'unit', name: 'Élémentaire d’eau', radius: 0.45, abilities: ['formefeu', 'formeterre', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
+  /** Earth form: very slow, very hardy, blades against infantry. */
+  elemterre: { kind: 'unit', name: 'Élémentaire de terre', radius: 0.5, abilities: ['formefeu', 'formeeau', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
+  /** Air form: flies, very fast, strikes flyers only. */
+  elemair: { kind: 'unit', name: 'Élémentaire d’air', radius: 0.45, flying: true, abilities: ['formefeu', 'formeeau', 'formeterre', 'fusion'], faction: 'dieux', hotkey: 'E' },
+  /** Two Élémentaires merged: siege artillery of solid ether, enormous range, poor against what moves. */
+  golem: { kind: 'unit', name: 'Golem', radius: 0.9, faction: 'dieux', hotkey: 'G' },
   // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
   /** Frigg ignores the ground (cliffs, water): she flies. */
   frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, flying: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
@@ -652,8 +671,8 @@ const BASE: Record<string, object> = {
   immortel: { kind: 'unit', name: 'Immortel', radius: 0.8, faction: 'dieux', hotkey: 'I' },
   /** Hadès's Armée des enfers: ghosts that cannot be hurt, for a while. */
   fantome: { kind: 'unit', name: 'Fantôme', radius: 0.4, lifetime: 20, faction: 'dieux', hotkey: 'F' },
-  /** Isis's priestess: heals, no attack (Dispell to come). */
-  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, faction: 'dieux', hotkey: 'P' },
+  /** Isis's priestess: heals, no attack; Dissipation. */
+  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'P' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.

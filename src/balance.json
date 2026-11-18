@@ -200,6 +200,10 @@
     "primordial": { "hp": 3000, "armor": 3, "sight": 10, "supply": 0, "cost": { "minerals": 450, "energy": 450 }, "buildTime": 90, "charge": 300 },
     "jormungandr": { "hp": 1500, "armor": 4, "speed": 2.2, "sight": 10, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 60, "range": 1, "cooldown": 1.5, "splash": 1.5 } },
     "artefacterie": { "hp": 1600, "armor": 2, "sight": 9, "supply": 0, "cost": { "minerals": 400, "energy": 400 }, "buildTime": 50 },
+    "elemeau": { "hp": 230, "armor": 0, "speed": 2.4, "sight": 8, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 12, "range": 4.5, "cooldown": 1.5 } },
+    "elemterre": { "hp": 380, "armor": 4, "speed": 1.8, "sight": 8, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.5 } },
+    "elemair": { "hp": 180, "armor": 0, "speed": 3.2, "sight": 10, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 20, "range": 3, "cooldown": 1, "air": true, "ground": false } },
+    "golem": { "hp": 600, "armor": 4, "speed": 1.6, "sight": 10, "supply": 4, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 70, "range": 11, "cooldown": 3.75, "vsMechanical": 70, "splash": 1.2 } },
     "nain": { "hp": 150, "armor": 2, "speed": 2.1, "sight": 8, "supply": 1, "cost": { "minerals": 125, "energy": 0 }, "buildTime": 22, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.2 } },
     "minotaure": { "hp": 380, "armor": 1, "speed": 2.2, "sight": 8, "supply": 2, "cost": { "minerals": 300, "energy": 100 }, "buildTime": 35, "attack": { "damage": 40, "range": 0.1, "cooldown": 1.6 } },
     "sphinx": { "hp": 320, "armor": 3, "speed": 2.7, "sight": 9, "supply": 2, "cost": { "minerals": 275, "energy": 150 }, "buildTime": 38, "attack": { "damage": 22, "range": 5, "cooldown": 1.4 } },
@@ -293,7 +297,11 @@
     "nuee": { "cooldown": 40, "duration": 10, "radius": 3, "damage": 8, "levels": { "damage": [8, 10, 12, 15, 18] } },
     "jormungand": { "cooldown": 1, "duration": 60, "range": 8, "radius": 1 },
     "tempetezeus": { "cooldown": 1, "duration": 0, "range": 10, "radius": 5, "damage": 30 },
-    "amonra": { "cooldown": 1, "duration": 15, "range": 10, "radius": 5, "max": 6 }
+    "amonra": { "cooldown": 1, "duration": 15, "range": 10, "radius": 5, "max": 6 },
+    "chouette": { "cooldown": 40, "duration": 15, "range": 25, "radius": 8 },
+    "dissipation": { "cooldown": 6, "duration": 0, "range": 5, "radius": 1, "damage": 100 },
+    "mutation": { "cooldown": 20, "duration": 0 },
+    "fusion": { "cooldown": 1, "duration": 15, "radius": 2 }
   },
   "rules": {
     "start": { "minerals": 200, "energy": 0, "serfs": 6 },
