@@ -177,7 +177,7 @@ const FIND_MS = 60_000;
 export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void; again: () => void } {
   let conn: DataConnection | null = null;
   const lock = new Lockstep(player, (m) => {
-    if (conn?.open) conn.send(m);
+    sendOn(conn, m);
   });
   /** This page, and the other side's page once known: a page reloaded is a new one, its game started over. */
   const me = Math.random().toString(36).slice(2);
@@ -196,7 +196,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   const rematch = () => {
     if (!asked || !theyAsked || player !== 0) return;
     const next = newRoom();
-    conn?.send({ go: next } satisfies Message);
+    sendOn(conn, { go: next } satisfies Message);
     onStatus('go', next);
   };
   let dialed = -Infinity;
@@ -217,7 +217,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   };
   const attach = (c: DataConnection) => {
     if (player === 0 && them === null) knocked ||= performance.now();
-    c.on('open', () => c.send({ hi: me, v: VERSION } satisfies Message));
+    c.on('open', () => sendOn(c, { hi: me, v: VERSION } satisfies Message));
     c.on('data', (d) => {
       const m = d as Message;
       if ('hi' in m) {
@@ -277,11 +277,12 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     /** Leaving on purpose: the other side is told at once. */
     again: () => {
       asked = true;
-      if (conn?.open) conn.send({ again: 1 } satisfies Message);
+      sendOn(conn, { again: 1 } satisfies Message);
       rematch();
     },
     leave: () => {
-      if (conn?.open) conn.send({ bye: 1 } satisfies Message);
+      // Not to a side that has already gone: its channel is closing.
+      if (status !== 'left') sendOn(conn, { bye: 1 } satisfies Message);
       stop();
       peer.destroy();
     },
@@ -325,6 +326,16 @@ export function stateHash(world: World): number {
 
 const peerId = (room: string) => `xcraft-game-${room}`;
 
+/** Sends only on a channel still open: some browsers (Safari) throw, uncaught, on one closing. */
+function sendOn(c: DataConnection | null, m: unknown): void {
+  if (!c?.open || c.dataChannel?.readyState !== 'open') return;
+  try {
+    c.send(m);
+  } catch {
+    // closed in between: the watch sees the silence
+  }
+}
+
 export function newRoom(): string {
   return Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 }
@@ -342,8 +353,8 @@ export interface LobbySetup {
   map: string;
   biome: string;
 }
-/** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match. */
-type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: 1 } | { v: string };
+/** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match, with the setup both pages load. */
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup } | { v: string };
 /** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
 /**
@@ -381,7 +392,7 @@ export function openLobby(
       calling = null;
       knocked = 0;
       said = false;
-      c.send({ v: VERSION });
+      sendOn(c, { v: VERSION });
       on.status('here');
     });
     c.on('data', (d) => {
@@ -435,7 +446,7 @@ export function openLobby(
     }
   }, 1000);
   return {
-    send: (m) => conn?.open && conn.send(m),
+    send: (m) => sendOn(conn, m),
     close: () => {
       clearInterval(watch);
       peer.destroy();

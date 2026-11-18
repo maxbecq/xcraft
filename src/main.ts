@@ -1028,76 +1028,94 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
   let stuck = false;
   const link = `${location.origin}${location.pathname}?ami=${room}`;
   const names = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
-  const draw = () => {
-    const chosen = mapFile(setup.map);
-    const pick = (i: number) =>
-      i === me
-        ? `<select data-k="camp">${Object.entries(names).map(([v, n]) => `<option value="${v}"${v === setup.camps[i] ? ' selected' : ''}>${n}</option>`).join('')}</select>`
-        : `<span class="lobby-other">${here ? names[setup.camps[i]] : 'en attente…'}</span>`;
-    const seat = (i: number) =>
-      `<div class="lobby-seat"><span class="chip" style="background:#${TEAM_COLORS[i].toString(16).padStart(6, '0')}"></span><span class="who">${i === me ? 'Vous' : 'Votre ami'}</span>${pick(i)}</div>`;
-    menu.className = 'menu setup lobby';
-    menu.innerHTML = `<h2>Partie entre amis</h2>
-      ${host && !here ? `<fieldset><legend>Invitez votre ami</legend>
-        <p class="lobby-note">Envoyez-lui ce lien : en l'ouvrant, il arrive ici.</p>
-        <input class="net-link" readonly value="${link}">
-        <div class="row"><button data-m="copy">Copier le lien</button>${'share' in navigator ? '<button data-m="share">Partager…</button>' : ''}</div>
-        <p class="lobby-note">ou le code <b>${room}</b> (menu « Rejoindre un ami »)</p></fieldset>` : ''}
-      <p class="lobby-note">${status}</p>
-      <fieldset class="seats"><legend>Joueurs</legend>${seat(0)}${seat(1)}</fieldset>
-      <fieldset class="maps${host ? '' : ' fixed'}"><legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? mapCards(chosen.id, setup.biome) : mapCards(chosen.id, setup.biome).replace(/<button/g, '<button disabled')}</fieldset>
-      <fieldset class="options"><legend>Partie</legend><label>Planète ${
-        host
-          ? `<select data-k="biome">${Object.values(BIOMES).map((b) => `<option value="${b.id}"${b.id === setup.biome ? ' selected' : ''}>${b.name}</option>`).join('')}</select>`
-          : `<span class="lobby-other">${BIOMES[setup.biome]?.name ?? ''}</span>`
-      }</label></fieldset>
-      <div class="row"><button data-m="back">Retour</button>${stuck ? '<button data-m="retry">Réessayer</button>' : ''}${host ? `<button data-m="go" class="go"${here ? '' : ' disabled'}>Lancer la partie</button>` : ''}</div>`;
+  const options = (all: Record<string, string>, now: string) => Object.entries(all).map(([v, n]) => `<option value="${v}"${v === now ? ' selected' : ''}>${n}</option>`).join('');
+  const seat = (i: number) =>
+    `<div class="lobby-seat"><span class="chip" style="background:#${TEAM_COLORS[i].toString(16).padStart(6, '0')}"></span><span class="who">${i === me ? 'Vous' : 'Votre ami'}</span>${
+      i === me ? `<select data-k="camp">${options(names, setup.camps[i])}</select>` : '<span class="lobby-other lobby-camp"></span>'
+    }</div>`;
+  // Built once; what changes is then set in place (refresh), so a list open or a choice being made is never swept away.
+  menu.className = 'menu setup lobby';
+  menu.innerHTML = `<h2>Partie entre amis</h2>
+    ${host ? `<fieldset class="lobby-invite"><legend>Invitez votre ami</legend>
+      <p class="lobby-note">Envoyez-lui ce lien : en l'ouvrant, il arrive ici.</p>
+      <input class="net-link" readonly value="${link}">
+      <div class="row"><button data-m="copy">Copier le lien</button>${'share' in navigator ? '<button data-m="share">Partager…</button>' : ''}</div>
+      <p class="lobby-note">ou le code <b>${room}</b> (menu « Rejoindre un ami »)</p></fieldset>` : ''}
+    <p class="lobby-note lobby-status"></p>
+    <fieldset class="seats"><legend>Joueurs</legend>${seat(0)}${seat(1)}</fieldset>
+    <fieldset class="maps${host ? '' : ' fixed'}"></fieldset>
+    <fieldset class="options"><legend>Partie</legend><label>Planète ${
+      host ? `<select data-k="biome">${options(Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), setup.biome)}</select>` : '<span class="lobby-other lobby-biome"></span>'
+    }</label></fieldset>
+    <div class="row"><button data-m="back">Retour</button><button data-m="retry" hidden>Réessayer</button>${host ? '<button data-m="go" class="go" disabled>Lancer la partie</button>' : ''}</div>`;
+  const $ = <T extends HTMLElement>(q: string) => menu.querySelector<T>(q);
+  let drawnMaps = '';
+  const refresh = () => {
+    const invite = $('.lobby-invite');
+    if (invite) invite.hidden = here;
+    $('.lobby-status')!.textContent = status;
+    $('.lobby-camp')!.textContent = here ? names[setup.camps[1 - me]] : 'en attente…';
+    const biomeName = $('.lobby-biome');
+    if (biomeName) biomeName.textContent = BIOMES[setup.biome]?.name ?? '';
+    // The cards' pictures follow the planet: drawn again only when the map or the planet changes.
+    const key = `${setup.map}/${setup.biome}`;
+    if (key !== drawnMaps) {
+      drawnMaps = key;
+      const cards = mapCards(mapFile(setup.map).id, setup.biome);
+      $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
+    }
+    $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
+    const go = $<HTMLButtonElement>('[data-m="go"]');
+    if (go) go.disabled = !here;
   };
-  /** Into the match: the host's page hosts it, the guest's joins it. */
-  const play = () => {
+  /** Into the match, with the setup the host sent: the host's page hosts it, the guest's joins it. */
+  const play = (s: LobbySetup) => {
     lobby.close();
     try {
-      localStorage.setItem('xcraft.camp', setup.camps[me]);
+      localStorage.setItem('xcraft.camp', s.camps[me]);
     } catch {
       // the URL carries it all
     }
-    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${setup.camps[0]}&adversaire=${setup.camps[1]}&biome=${setup.biome}&map=${setup.map}`;
+    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&biome=${s.biome}&map=${s.map}`;
   };
-  /** The host's map or planet is not in this build: no match. */
-  let unknown = false;
+  /** A map or planet not in this build: no match. */
+  const unknown = (s: LobbySetup) => !MAPS[s.map] || !BIOMES[s.biome];
+  const UNKNOWN_TEXT = "Votre ami a choisi une carte ou une planète que votre version du jeu n'a pas : rechargez la page (tous les deux).";
   const lobby = openLobby(room, host, {
     status: (s, detail) => {
       here = s === 'here';
       stuck = s === 'trouble' || s === 'error';
-      status = s === 'here' ? (host ? 'Votre ami est là. Lancez la partie quand vous êtes prêts.' : "Vous êtes dans le salon. Votre ami lance la partie.")
+      status = s === 'here' ? (host ? 'Votre ami est là. Lancez la partie quand vous êtes prêts.' : 'Vous êtes dans le salon. Votre ami lance la partie.')
         : s === 'waiting' ? 'En attente de votre ami…'
         : s === 'gone' ? 'Votre ami est parti, reconnexion…'
         : (detail ?? 'Connexion impossible.');
       if (here && host) lobby.send({ setup });
       if (here && !host) lobby.send({ camp: setup.camps[me] });
-      draw();
+      refresh();
     },
     message: (m) => {
       if ('setup' in m && !host) {
-        Object.assign(setup, m.setup);
-        unknown = !MAPS[setup.map] || !BIOMES[setup.biome];
-        if (unknown) status = 'Votre ami a choisi une carte ou une planète que votre version du jeu n\'a pas : rechargez la page (tous les deux).';
-      }
-      else if ('camp' in m && host) {
+        // The guest's own pick stays as it is here: the host's copy may be older, and the start brings the final one.
+        Object.assign(setup, { ...m.setup, camps: [m.setup.camps[0], setup.camps[1]] });
+        if (unknown(setup)) status = UNKNOWN_TEXT;
+      } else if ('camp' in m && host) {
         setup.camps[1] = asFaction(m.camp);
         lobby.send({ setup });
-      } else if ('go' in m && !host && !unknown) return play();
-      draw();
+      } else if ('go' in m && !host) {
+        if (!unknown(m.go)) return play(m.go);
+        status = UNKNOWN_TEXT;
+      }
+      refresh();
     },
   });
-  draw();
+  refresh();
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement;
     if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
     else if (el.dataset.k === 'biome') setup.biome = el.value;
     if (host) lobby.send({ setup });
     else lobby.send({ camp: setup.camps[me] });
-    draw();
+    refresh();
   };
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
@@ -1105,17 +1123,19 @@ function showLobby(menu: HTMLElement, room: string, host: boolean): void {
     if (button?.dataset.map && host) {
       setup.map = button.dataset.map;
       lobby.send({ setup });
-      draw();
+      refresh();
     } else if (m === 'copy') {
-      const field = menu.querySelector<HTMLInputElement>('.net-link')!;
+      const field = $<HTMLInputElement>('.net-link')!;
       field.select();
       navigator.clipboard?.writeText(link).catch(() => document.execCommand('copy'));
       button!.textContent = 'Lien copié';
     } else if (m === 'share') navigator.share({ title: 'Xcraft', text: 'Une partie de Xcraft ?', url: link }).catch(() => {});
     else if (m === 'go' && here) {
-      lobby.send({ go: 1 });
+      // The setup as it stands now is the match, on both pages, whatever comes in meanwhile.
+      const final: LobbySetup = { ...setup, camps: [...setup.camps] };
+      lobby.send({ go: final });
       // A moment for the message to leave before the page does.
-      setTimeout(play, 300);
+      setTimeout(() => play(final), 300);
     } else if (m === 'retry') {
       lobby.close();
       showLobby(menu, host ? newRoom() : room, host);
