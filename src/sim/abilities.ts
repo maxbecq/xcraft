@@ -422,12 +422,8 @@ export function uproot(this: World, b: Entity): void {
 /** A building that becomes a unit, or back (at tiles tx, ty), keeping its id, rally and share of hit points. */
 export function transmute(this: World, e: Entity, type: string, tx = 0, ty = 0): void {
   const def = DEFS[type] as UnitDef | BuildingDef;
-  const hp = e.hp / e.maxHp;
   if (e.def.kind === 'building') this.block(e, -1);
-  e.type = type;
-  e.def = def;
-  e.maxHp = def.hp;
-  e.hp = Math.max(1, Math.round(def.hp * hp));
+  this.retype(e, type);
   e.path = [];
   e.goal = null;
   this.setOrder(e, null);

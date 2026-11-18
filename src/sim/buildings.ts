@@ -279,16 +279,22 @@ export function grow(this: World, b: Entity, total: number): void {
 /** A building turned into another, in place, keeping its share of hit points and shields. */
 export function morph(this: World, b: Entity, type: string): void {
   const def = DEFS[type] as BuildingDef;
-  const hp = b.hp / b.maxHp;
   const shield = b.maxShield ? b.shield / b.maxShield : 1;
-  b.type = type;
-  b.def = def;
-  b.maxHp = def.hp;
-  b.hp = Math.max(1, Math.round(def.hp * hp));
+  this.retype(b, type);
   b.maxShield = def.shield ?? 0;
   b.shield = Math.round(b.maxShield * shield);
   b.cooldown = 0;
   this.say(b.owner, `Transformation terminée : ${def.name}.`, 'done');
+}
+
+/** Another type for the same entity (morph, take-off, landing, Déracinement, Élémentaire forms): its share of hit points kept. */
+export function retype(this: World, e: Entity, type: string): void {
+  const def = DEFS[type] as UnitDef | BuildingDef;
+  const hp = e.hp / e.maxHp;
+  e.type = type;
+  e.def = def;
+  e.maxHp = def.hp;
+  e.hp = Math.max(1, Math.round(def.hp * hp));
 }
 
 /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
