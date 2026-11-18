@@ -86,6 +86,8 @@ export interface UnitDef {
   /** Z socle: weapons (keys of WEAPONS) it can be built with, in place of the machine gun of `attack`. */
   /** Z socle: the level of its weapon (Z.doc: Quadripode and Coléoptère T1 1, Hexapode T1 2), one more per tier. */
   weaponLevel?: number;
+  /** Z Barge: supply it carries, by tier. */
+  transport?: number[];
   /** Z socle: what it becomes in the field, T2 then T3 (Z.doc), each unlocked by the next level of its research `r<type>`. */
   tiers?: TierStats[];
   weapons?: string[];
@@ -598,6 +600,11 @@ const BASE: Record<string, object> = {
   quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'Q' },
   hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, requires: { rhexapode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'H' },
   coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: SOCLE_WEAPONS.filter((k) => k !== 'canonx04'), faction: 'z', hotkey: 'L' },
+  // Z.doc: the large socles, ground (Octopode) and flying (Mastodonte), after the Centre d'optimisation; the Barge,
+  // a flying transport for 8 then 12 of supply.
+  octopode: { kind: 'unit', name: 'Octopode', radius: 0.9, mechanical: true, requires: { roctopode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'O' },
+  mastodonte: { kind: 'unit', name: 'Mastodonte', radius: 0.9, flying: true, mechanical: true, requires: { rmastodonte: 1 }, weapons: SOCLE_WEAPONS.filter((k) => k !== 'canonx04'), faction: 'z', hotkey: 'M' },
+  barge: { kind: 'unit', name: 'Barge', radius: 0.7, flying: true, mechanical: true, requires: { rbarge: 1 }, faction: 'z', hotkey: 'B' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
   zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
   intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], faction: 'z', hotkey: 'I' },
@@ -607,11 +614,11 @@ const BASE: Record<string, object> = {
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
   assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'A' },
-  plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere'], faction: 'z', hotkey: 'F' },
+  plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'octopode', 'mastodonte', 'barge'], faction: 'z', hotkey: 'F' },
   tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'T' },
   centresocles: {
     kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
-    researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3'],
+    researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3', 'roctopode', 'roctopode2', 'rmastodonte', 'rmastodonte2', 'rbarge', 'rbarge2'],
   },
   armement: {
     kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
@@ -631,6 +638,12 @@ const BASE: Record<string, object> = {
   rquadripode: research('Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
   rhexapode: research('Hexapode', 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
   rcoleoptere: research('Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
+  roctopode: research('Octopode', 'O', 'Débloque le socle Octopode.', { supreme: 1, optimisation: 1 }, 'z'),
+  roctopode2: tier('roctopode', 'Octopode', 2, 'O'),
+  rmastodonte: research('Mastodonte', 'M', 'Débloque le socle Mastodonte.', { supreme: 1, optimisation: 1 }, 'z'),
+  rmastodonte2: tier('rmastodonte', 'Mastodonte', 2, 'M'),
+  rbarge: research('Barge', 'B', 'Débloque la Barge, socle volant de transport.', { supreme: 1 }, 'z'),
+  rbarge2: tier('rbarge', 'Barge', 2, 'B'),
   rquadripode2: tier('rquadripode', 'Quadripode', 2, 'Q'),
   rquadripode3: tier('rquadripode', 'Quadripode', 3, 'Q'),
   rhexapode2: tier('rhexapode', 'Hexapode', 2, 'H'),
@@ -879,9 +892,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod', vacarme: 'tourelle' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod', vacarme: 'tourelle', octopode: 'hexapode', mastodonte: 'coleoptere', barge: 'coleoptere' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15, vacarme: 0.5 };
+export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15, vacarme: 0.5, octopode: 1.5, mastodonte: 1.7, barge: 1.3 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;

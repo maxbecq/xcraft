@@ -710,7 +710,7 @@ export class World {
           // A carrier (Scarabée, Bourdon): walk up to it, wherever it goes.
           if (this.gap(e, b) > FP / 2) return this.chase(e, b);
         } else if (!this.reachRect(e, b.tx, b.ty, (b.def as BuildingDef).size)) return void this.goNear(e, b.tx, b.ty, (b.def as BuildingDef).size);
-        if ([...this.entities.values()].filter((u) => u.inside === b.id).length >= room) {
+        if (this.load(b, e) > room) {
           this.say(e.owner, `${b.def.name} : plein.`);
           return this.setOrder(e, null);
         }

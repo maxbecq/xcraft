@@ -274,6 +274,33 @@ describe('Z', () => {
     expect(guarded.hp).toBe(before);
   });
 
+  it('the large socles: Octopode and Mastodonte at weapon level 3, the Barge carries 8 then 12 of supply', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    p.energy = 5000;
+    const octo = w.spawn('octopode', 0, 20 * FP, 20 * FP);
+    expect(w.weapon(octo)!.damage).toBe(16); // machine gun N3: 19
+    p.upgrades.roctopode = 2;
+    w.step([{ player: 0, kind: 'evolve', ids: [octo.id] }]);
+    run(w, 18);
+    expect(octo.tier).toBe(2);
+    expect(w.weapon(octo)!.damage).toBe(19); // N4: 22
+    expect((DEFS.mastodonte as UnitDef).weapons).not.toContain('canonx04');
+    const barge = w.spawn('barge', 0, 30 * FP, 30 * FP);
+    expect(w.weapon(barge)).toBeUndefined();
+    const hexas = [0, 1, 2, 3, 4].map((i) => w.spawn('hexapode', 0, (28 + i) * FP, 32 * FP)); // supply 2 each
+    w.step([{ player: 0, kind: 'smart', ids: hexas.map((h) => h.id), x: barge.x, y: barge.y, target: barge.id }]);
+    run(w, 6);
+    expect(hexas.filter((h) => h.inside === barge.id)).toHaveLength(4); // 8 of supply
+    w.step([{ player: 0, kind: 'unload', ids: [barge.id] }]);
+    p.upgrades.rbarge = 2;
+    w.step([{ player: 0, kind: 'evolve', ids: [barge.id] }]);
+    run(w, 10);
+    expect(barge.tier).toBe(2);
+    expect(w.room(barge)).toBe(12);
+  });
+
   it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');

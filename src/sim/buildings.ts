@@ -123,12 +123,17 @@ export function repairOnCreep(this: World): void {
 /** Room in a bunker or carrier: Fortin, Scarabée, and Bourdons with Chargement. */
 export function room(this: World, b: Entity): number {
   if (b.type === 'drake') return this.level(b.owner, 'drakegeant') ? BALANCE.rules.upgrades.drakegeant.room : 0;
+  // Z Barge: supply carried, by tier (Z.doc).
+  const transport = (b.def as UnitDef).transport;
+  if (transport) return transport[b.tier - 1];
   return (b.def as BuildingDef | UnitDef).bunker ?? (b.type === 'bourdon' && this.level(b.owner, 'chargement') ? BALANCE.rules.upgrades.chargement : 0);
 }
 
 /** Who may get in: soldiers that shoot into a Fortin or a Scarabée, any foot soldier into a Bourdon. */
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
+  // Z Barge: any ground unit of its side, machines too.
+  if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
   if (d.worker || d.mechanical || d.beast) return false;
   return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
@@ -303,4 +308,13 @@ export function spawnBeside(this: World, type: string, b: Entity): Entity {
     }
   }
   return this.spawn(type, b.owner, best[0] * FP + FP / 2, best[1] * FP + FP / 2);
+}
+
+/** What a carrier holds: units, or for a Z Barge, their supply. */
+export function load(this: World, b: Entity, extra?: Entity): number {
+  const barge = !!(b.def as UnitDef).transport;
+  const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : 1);
+  let n = extra ? weigh(extra) : 0;
+  for (const u of this.entities.values()) if (u.inside === b.id) n += weigh(u);
+  return n;
 }
