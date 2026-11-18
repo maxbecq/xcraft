@@ -1,6 +1,6 @@
 # Propositions d'équilibrage — 18 novembre 2026
 
-Pour l'équilibreur. Ces chiffres sont des propositions : rien n'est appliqué au jeu tant que vous ne les avez pas validés.
+Pour l'équilibreur. Les trois corrections du point 3 sont **déjà appliquées au jeu**, à la demande du programmeur, pour que le jeu reste jouable en attendant votre avis. Vous pouvez revenir sur chacune : le point 6 donne les valeurs d'origine.
 
 ## 1. Point de départ : les stats du mod
 
@@ -36,9 +36,9 @@ IA contre IA, carte d'origine, 98 parties différentes par paire :
 
 Les Humains écrasent tout le monde, surtout grâce à l'Auxiliaire : à 15 dégâts, il fait 2,5 fois plus de dégâts qu'avant pour le même prix. Z et les Dieux avaient été calqués sur l'ancien Auxiliaire à 6.
 
-## 3. Propositions
+## 3. Corrections appliquées
 
-Trois changements, mesurés ensemble :
+Trois changements, mesurés ensemble, puis appliqués :
 
 | Proposition | Valeur | Pourquoi |
 |---|---|---|
@@ -71,6 +71,19 @@ Le problème ne semble pas venir des stats. Chaque dieu n'invoque qu'une unité 
 
 ## 5. Questions
 
-1. Validez-vous les trois propositions du point 3 ?
+1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
 2. Faut-il reproduire les bonus selon la cible du mod (léger, blindé, massif, biologique) ? Cela demande du code, mais rendrait les chiffres du mod utilisables tels quels.
 3. Pour les Dieux : quelle règle d'invocation ?
+
+## 6. Revenir en arrière
+
+Tout est dans `src/balance.json`. Pour annuler une correction, remettre la valeur du mod :
+
+| Unité | Champ | Valeur du mod | Valeur appliquée |
+|---|---|---|---|
+| `auxiliaire` | `attack.damage` | 15 | 10 |
+| `archer` | `cost.energy` | 75 | 50 |
+| `archer` | `buildTime` | 29 | 24 |
+| `dronecombat`, `quadripode`, `hexapode` | `attack.damage` | 6 | 7 |
+
+Pour revenir aux chiffres du prototype d'avant le mod, la liste est dans `BALANCE.md` (« Reprises du mod SC2 »). Toute modification passe par une pull request ; le bot rejoue alors les 98 parties par paire et commente le résultat.

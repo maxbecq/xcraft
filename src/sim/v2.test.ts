@@ -72,7 +72,7 @@ describe('Forge upgrades', () => {
     expect(hit('legionnaire', 'serf', () => {})).toBe(20);
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.melee = 2))).toBe(24); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.ranged = 3))).toBe(20); // wrong line
-    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(17); // +10 % per level, rounded
+    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(11); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[1].upgrades.armor = 3))).toBe(17);
   });
 });
@@ -167,7 +167,7 @@ describe('invisibility and detection', () => {
     expect(aux.some((a) => w.entities.has(a.id))).toBe(true);
   });
 
-  it('a detected assassin loses to 4 auxiliaires but beats 3', () => {
+  it('a detected assassin loses to 5 auxiliaires but beats 4', () => {
     const fight = (n: number) => {
       const w = new World(createMap());
       w.players[1].faction = 'isdaris';
@@ -178,8 +178,8 @@ describe('invisibility and detection', () => {
       for (let i = 0; i < ticks(40) && w.entities.has(sin.id) && aux.some((a) => w.entities.has(a.id)); i++) w.step([]);
       return w.entities.has(sin.id);
     };
-    expect(fight(4)).toBe(false);
-    expect(fight(3)).toBe(true);
+    expect(fight(5)).toBe(false);
+    expect(fight(4)).toBe(true);
   });
 
   it('a tower under construction does not detect', () => {

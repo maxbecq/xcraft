@@ -54,6 +54,15 @@ Reprises du mod SC2 (XC Mod 1.53, la dernière version pour les Humains et les I
 - Les bonus du mod selon la cible (léger, blindé, massif, biologique) n'existent pas dans le jeu : les dégâts sont ceux contre l'infanterie, et `vsMechanical` corrige contre les machines et les bâtiments, comme pour les autres unités.
 - La Créature revient à 67 PV : les 70 PV du 17 novembre (ci-dessus) sont remplacés.
 
+Corrections d'équilibrage appliquées le 18 novembre, à la demande de l'utilisateur, en attendant l'avis de l'équilibreur. Le détail et les mesures sont dans `docs/propositions-equilibrage-2026-11-18.md`. Pour revenir aux valeurs du mod, remettre la colonne « Mod 1.53 » :
+
+| Unité | Champ | Mod 1.53 | Appliqué | Pourquoi |
+|---|---|---|---|---|
+| Auxiliaire | `attack.damage` | 15 | 10 | Humains – Isdaris 88 – 10 avec 15 |
+| Archer | `cost.energy` | 75 | 50 | valeur de la fiche de 2010 ; avec l'Auxiliaire à 10 : Humains – Isdaris 50 – 48 |
+| Archer | `buildTime` | 29 | 24 | idem (fiche de 2010 : 30 s) |
+| Drone de combat, Quadripode, Hexapode (Z) | `attack.damage` | 6 (calqué sur l'ancien Auxiliaire) | 7 | Z – Humains 56 – 41, Z – Isdaris 58 – 40 |
+
 Champs ajoutés :
 - `attack.splash` : rayon (cases) des dégâts de zone, moitié des dégâts autour de la cible.
 - `lifetime` : durée de vie en secondes (Cadavre réanimé).
