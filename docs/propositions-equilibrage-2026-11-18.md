@@ -69,6 +69,29 @@ Avec les corrections appliquées, les Dieux perdent partout : 10 – 56 contre l
 
 Le problème ne semble pas venir des stats. Chaque dieu n'invoque qu'une unité à la fois : l'IA accumule des minerais sans pouvoir les dépenser, et les parties s'étirent jusqu'à la limite de 35 minutes. Avant de toucher aux chiffres, il faut trancher une règle : invocations simultanées, temps d'invocation plus court ou plus de dieux. C'est à vous de décider.
 
+### Les trois règles possibles, mesurées
+
+Chaque règle a été essayée seule, sans rien changer d'autre. Rien n'est dans le jeu. Mesures sur la carte d'origine et sur Le Col, 98 parties par paire. Les cases donnent les victoires des Dieux, puis celles de l'adversaire, puis les parties nulles (limite de 35 minutes), puis la durée moyenne d'une partie.
+
+| Règle | Carte | Dieux – Humains | Dieux – Isdaris | Dieux – Z |
+|---|---|---|---|---|
+| Actuelle : une unité à la fois, 3 dieux | Origine | 10 – 56, 32 nuls, 27 min | 7 – 86, 5 nuls, 17 min | 22 – 61, 15 nuls, 25 min |
+| | Le Col | 47 – 31, 20 nuls, 29 min | 7 – 85, 6 nuls, 20 min | 41 – 37, 20 nuls, 27 min |
+| A. Jusqu'à 3 unités invoquées ensemble par dieu | Origine | **98 – 0**, 9 min | **97 – 1**, 8 min | **98 – 0**, 7 min |
+| | Le Col | **92 – 5**, 1 nul, 12 min | **91 – 7**, 10 min | **98 – 0**, 8 min |
+| B. Invocation 40 % plus rapide | Origine | 17 – 46, 35 nuls, 28 min | 5 – 77, 16 nuls, 20 min | 26 – 53, 19 nuls, 24 min |
+| | Le Col | 67 – 19, 12 nuls, 25 min | 3 – 90, 5 nuls, 21 min | 69 – 21, 8 nuls, 21 min |
+| C. Un dieu de plus : un second Thor dès la 2e minute | Origine | 20 – 33, 45 nuls, 28 min | 16 – 56, 26 nuls, 24 min | 29 – 35, 34 nuls, 27 min |
+| | Le Col | 47 – 31, 20 nuls, 28 min | 18 – 68, 12 nuls, 26 min | 57 – 27, 14 nuls, 22 min |
+
+Lecture :
+- **A** triple la production des dieux. C'est beaucoup trop : les Dieux gagnent presque tout en moins de 12 minutes. Une borne de 2 unités ou des invocations plus chères seraient à mesurer si cette règle vous plaît.
+- **B** aide surtout sur Le Col. Contre les Isdaris, elle ne change rien sur les deux cartes.
+- **C** est la plus douce : elle resserre les écarts contre Humains et Z, mais les parties nulles restent nombreuses sur la carte d'origine.
+- Aucune règle seule ne corrige le match contre les Isdaris, sauf A, qui va trop loin.
+
+Méthode : variantes codées dans une copie jetable du jeu, sur le commit c5ade6f. A : quand l'invocation en tête de file se termine, un dieu fait sortir avec elle jusqu'à 2 autres unités de même type déjà en file, et l'IA garde jusqu'à 4 unités en file au lieu de 2. B : le temps d'invocation des unités de Thor, Seth et Apollon passe à 60 %. C : Thor n'est plus unique, et l'IA invoque un second Thor à partir de la 2e minute.
+
 ## 5. Questions
 
 1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
