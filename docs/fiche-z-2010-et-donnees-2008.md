@@ -192,3 +192,10 @@ Ces éléments sont des pistes pour plus tard, à discuter avec l'équilibreur. 
 1. Les unités Z reprennent maintenant la fiche de 2010, avec des dégâts ramenés à 12 (15 pour l'Hexapode). Ces valeurs vous conviennent-elles ?
 2. Les socles doivent-ils pouvoir monter de niveau (T1 à T3) sur le terrain, comme en 2010 ?
 3. Pour les Dieux : la règle de 2008 (temps d'invocation divisé par le niveau du dieu, niveaux achetés) vous convient-elle comme réponse à la question de l'invocation ?
+4. Les bâtiments Z suivent maintenant aussi `Z.doc` (commit 7b776b3) : bâtiments, annexes, recherches et prérequis. Avec eux, Z recule nettement : 19 – 78 contre les Humains et 20 – 78 contre les Isdaris, contre 48 – 43 et 58 – 39 juste avant. Les causes s'additionnent :
+   - le Pod coûte 300 ;
+   - la Plate-forme et la Tourelle sont des annexes du Pod ;
+   - il faut le Centre de socles et une recherche avant le premier Quadrupode ;
+   - le creep ne répare plus que 1 PV/s.
+
+   Entre 2010 et le mod, les bâtiments des Humains et des Isdaris avaient été rajustés : bâtiment principal plus rapide, armure divisée par deux, bâtiment d'énergie plus cher. Le programmeur vous laisse faire de même pour Z. Quelles valeurs proposez-vous pour les bâtiments Z ?
