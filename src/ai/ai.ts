@@ -377,8 +377,10 @@ export class AI {
         energy -= def.cost.energy;
         this.trained++;
       }
-      // Minerals to spare (a margin kept for the troops): an idle god, Gaïa included, buys its next level.
-      for (const g of mine.filter((e) => (e.def as UnitDef).levels && e.queue.length === 0 && !out.some((o) => o.kind === 'train' && o.ids.includes(e.id)))) {
+      // Minerals to spare (a margin kept for the troops), once every god is out: an idle god buys its next level.
+      // Not Gaïa: her levels only speed up buildings, and measured, they ate the minerals the next gods were saved with.
+      const allGods = GODS.every(([g]) => gods.some((e) => e.type === g));
+      for (const g of allGods ? gods.filter((e) => (e.def as UnitDef).levels && e.queue.length === 0 && !out.some((o) => o.kind === 'train' && o.ids.includes(e.id))) : []) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
         if (!cost || minerals - keep - BALANCE.ai.godLevelMargin < cost.minerals || energy - reserve < cost.energy) continue;

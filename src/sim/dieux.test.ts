@@ -177,7 +177,7 @@ describe('Dieux', () => {
     const record: [number, Command[]][] = [];
     const live = createMatch(['dieux', 'humains']);
     const ais = [new AI(live, 0), new AI(live, 1)];
-    while (live.tick < ticks(14 * 60)) {
+    while (live.tick < ticks(17 * 60)) {
       const cmds = ais.flatMap((ai) => ai.think());
       if (cmds.length) record.push([live.tick, cmds]);
       live.step(cmds);
