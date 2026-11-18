@@ -179,6 +179,8 @@ Depuis la mesure précédente (`be29c11`), la simulation a changé : `goNear` vi
 
 Au total, 137 victoires pour p0 et 157 pour p1. L'avantage de p0 mesuré sur `c3a60a9` (173 / 121) disparaît. Durée moyenne : 14 à 15 min.
 
+> **Avertissement.** Tous les chiffres « sur 98 parties » de ce rapport et du rapport des cartes, jusqu'à cette section, viennent de l'ancienne méthode : seulement 32 parties différentes par paire. Leurs écarts paraissent environ 1,7 fois plus significatifs qu'ils ne le sont. Par exemple, un « 3 σ » vaut en réalité à peu près 1,8 σ, et un écart de 10 victoires sur 98 n'est pas significatif. La méthode corrigée et les nouveaux chiffres sont à la fin de cette section.
+
 ### Limite de la méthode : 98 parties, mais 32 parties différentes
 
 Le handicap de récolte est appliqué à un voyage de 10 minerais, arrondi à l'entier inférieur (`idiv(carry × handicap, 100)` dans `src/sim/world.ts`). Les sept handicaps de `big.test.ts` (88 à 112) ne donnent donc que quatre récoltes réelles : 8, 9, 10 et 11 minerais par voyage. La simulation n'a aucun hasard : deux réglages qui tombent sur la même récolte jouent exactement la même partie.
@@ -205,3 +207,21 @@ Pour avoir des parties vraiment différentes, j'ai rejoué la paire en décalant
 - **Avantage de p1** : 93 victoires contre 69, soit +24 sur 162 parties (1,9 σ). La pente existe probablement, mais elle est bien plus faible que le 30 / 68 de la mesure normale.
 - **Équilibre de la paire** : Z gagne 60 % des parties (98 – 64). Le 51 – 47 de la mesure normale venait surtout du petit nombre de parties distinctes. Z – Isdaris reste en faveur de Z, comme le 60 – 38 de `be29c11`.
 - **Cause** : non cherchée. La pente est trop faible pour qu'on suive des parties une à une.
+
+### Méthode corrigée et nouveaux chiffres
+
+`scripts/big.test.ts` joue maintenant 98 parties différentes par paire. Pour chaque ordre des camps, l'outil croise 7 décalages de démarrage de chaque IA, de 0 à 3 s par pas de 0,5 s (l'IA réfléchit tous les 10 ticks), avec des handicaps de 90, 100 et 110 % (9, 10 ou 11 minerais par voyage) répartis sur cette grille. Les handicaps plus fins rejoueraient les mêmes parties ; 7 récoltes distinctes demanderaient des handicaps de 70 à 130 %, trop larges. L'outil compte les parties distinctes par une empreinte de l'état final (champ `distinct` de `BIG_OUT`, affiché en fin de sortie). Le jeu n'est pas modifié.
+
+Avec cette méthode, le bruit sur 98 parties est d'environ ±5 victoires (1 σ). Un écart n'est significatif qu'au-delà d'environ ±10.
+
+| Paire | `4c1ced4` | `771ef76` | p0 / p1 (`4c1ced4`) | p0 / p1 (`771ef76`) |
+|---|---|---|---|---|
+| Humains – Isdaris | **59 – 38** (1 nul) | **63 – 34** (1 nul) | 43 / 54 | 48 / 49 |
+| Z – Humains | **60 – 36** (2 nuls) | **61 – 36** (1 nul) | 40 / 56 | 44 / 53 |
+| Z – Isdaris | 51 – 42 (5 nuls) | 56 – 42 | 35 / 58 | 35 / 63 |
+| Parties distinctes | 98, 98, 96 | 98, 98, 98 | | |
+
+- **Ordre de force sur Origine** : Z > Humains > Isdaris. Z – Humains (60 – 36) et Humains – Isdaris (59 – 38, puis 63 – 34) sortent de la cible. Le 49 – 49 de Z – Humains mesuré les jours précédents venait du petit nombre de parties distinctes.
+- **`771ef76`** (marge au pied des falaises `a179e39`, cible lâchée ignorée 10 s en attaque-déplacement `f1a84bd`) : +4 pour les Humains contre les Isdaris, +1 pour Z contre les Humains, +5 pour Z contre les Isdaris. Tout est dans le bruit : ces deux changements ne déplacent pas l'équilibre de façon mesurable.
+- **Départs** : p1 (bas droite) gagne plus souvent. Au total 118 / 168 sur `4c1ced4` (+50 sur 286 parties, 3,0 σ) et 127 / 165 sur `771ef76` (+38 sur 292, 2,2 σ). L'avantage vient surtout de Z – Isdaris (35 / 58 et 35 / 63). Origine est symétrique ; la cause n'a pas été cherchée.
+
