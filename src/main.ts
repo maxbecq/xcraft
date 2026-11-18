@@ -393,11 +393,15 @@ function scrollDirection(): [number, number] {
   return [dx, dy];
 }
 
-renderer.setSize(window.innerWidth, window.innerHeight);
+// Never 0 by 0: a page opened hidden (a background tab, a closed panel) has no size yet, and render targets of size 0
+// make WebGL complain (« dimensions not positive »). The resize on showing gives the real size.
+const viewW = () => Math.max(1, window.innerWidth);
+const viewH = () => Math.max(1, window.innerHeight);
+renderer.setSize(viewW(), viewH());
 const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light');
 window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  post.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(viewW(), viewH());
+  post.setSize(viewW(), viewH());
 });
 
 /** Where buildings give off smoke or steam: [x, y, z offset from the centre, dark smoke?]. */
