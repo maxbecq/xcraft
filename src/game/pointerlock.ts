@@ -4,7 +4,7 @@
  * own, draw the cursor of whatever lies under it, and replay the mouse events there, so the game and its interface
  * work as before. The browser's Escape frees it (so does pausing); the next click in the map takes it again.
  */
-export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): { release(): void } {
+export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean, feel: () => { speed: number; accel: number }): { release(): void } {
   const cursor = document.createElement('div');
   cursor.className = 'vcursor';
   cursor.hidden = true;
@@ -13,14 +13,39 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
   let y = 0;
   let over: Element | null = null;
   let pressed: Element | null = null;
+  /** When the last move came (ms), for its speed. */
+  let lastMove = 0;
+  /** Failed tries in a row (refused, or no answer within a second: WebKit can leave the request pending for good),
+   * and no new try before `retryAt`; after three, none on this page: the plain cursor stays. */
+  let failures = 0;
+  let retryAt = 0;
+  let waiting = 0;
+  const failed = () => {
+    clearTimeout(waiting);
+    if (locked()) return;
+    failures++;
+    retryAt = performance.now() + 3000;
+  };
+  /** Moves right after the lock is taken: Safari sends one or two huge jumps then, which are dropped. */
+  let settling = 0;
   const locked = () => document.pointerLockElement === canvas;
 
   canvas.addEventListener('pointerdown', (e) => {
-    if (!e.isTrusted || e.pointerType !== 'mouse' || locked() || document.fullscreenElement || !wanted()) return;
+    if (!e.isTrusted || e.pointerType !== 'mouse' || failures >= 3 || performance.now() < retryAt || locked() || document.fullscreenElement || !wanted()) return;
     x = e.clientX;
     y = e.clientY;
-    void (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
+    // Never awaited: the game goes on with the plain cursor until the lock comes, if it does. Older Safari returns
+    // nothing, some browsers throw instead of rejecting.
+    retryAt = Infinity; // one request at a time
+    clearTimeout(waiting);
+    waiting = window.setTimeout(failed, 1000);
+    try {
+      void (canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(failed);
+    } catch {
+      failed();
+    }
   });
+  document.addEventListener('pointerlockerror', failed);
   // A held pointer does not move the browser's :hover: the element under our cursor and its parents wear .vhover
   // instead, which the stylesheet lights like :hover.
   const hover = (target: Element | null) => {
@@ -29,6 +54,13 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
   };
   document.addEventListener('pointerlockchange', () => {
     cursor.hidden = !locked();
+    if (locked()) {
+      clearTimeout(waiting);
+      failures = 0;
+      retryAt = 0;
+    }
+    settling = 2;
+    lastMove = 0;
     if (!locked()) {
       hover(null);
       over = null;
@@ -81,8 +113,22 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
     e.stopImmediatePropagation();
     const src = e as MouseEvent;
     if (e.type === 'mousemove') {
-      x = Math.min(window.innerWidth - 1, Math.max(0, x + src.movementX));
-      y = Math.min(window.innerHeight - 1, Math.max(0, y + src.movementY));
+      const dx = src.movementX || 0;
+      const dy = src.movementY || 0;
+      const jump = Math.hypot(dx, dy) > 0.25 * Math.max(window.innerWidth, window.innerHeight);
+      if (settling > 0 && jump) {
+        settling--;
+        return;
+      }
+      settling = 0;
+      // The browser gives the mouse's own counts, without the system's acceleration: ours, so that a slow move aims
+      // finely and a quick one crosses the screen.
+      const dt = lastMove ? e.timeStamp - lastMove : 16;
+      lastMove = e.timeStamp;
+      const { speed, accel } = feel();
+      const g = pointerGain(Math.hypot(dx, dy), dt, speed, accel);
+      x = Math.min(window.innerWidth - 1, Math.max(0, x + dx * g));
+      y = Math.min(window.innerHeight - 1, Math.max(0, y + dy * g));
     }
     // A press on a canvas (the map, the minimap) keeps its moves and release there, as pointer capture would.
     const target = pressed instanceof HTMLCanvasElement ? pressed : (document.elementFromPoint(x, y) ?? document.body);
@@ -113,6 +159,18 @@ export function holdPointer(canvas: HTMLCanvasElement, wanted: () => boolean): {
     window.addEventListener(type, replay, { capture: true, passive: false });
   }
   return { release: () => locked() && document.exitPointerLock() };
+}
+
+/**
+ * How far the held cursor goes per count of the mouse, from the move's speed (counts per millisecond), like the
+ * system's pointer acceleration: about `speed` when crawling, growing smoothly with the speed (eased in, so aiming
+ * stays steady) up to `speed × (1 + 3 × accel)` past 3 counts/ms. `accel` 0 is a plain constant gain.
+ */
+export function pointerGain(dist: number, dt: number, speed: number, accel: number): number {
+  // A move after a pause (or two in the same instant) has no meaningful time: a frame's worth.
+  const v = dist / (dt > 0 && dt < 100 ? Math.max(dt, 4) : 16);
+  const t = Math.min(1, Math.max(0, (v - 0.1) / 2.9));
+  return speed * (1 + 3 * accel * t * t * (3 - 2 * t));
 }
 
 const ARROW = `data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M2 2l7 19 3-8 8-3z' fill='#e8f2ff' stroke='#000' stroke-width='1.5' stroke-linejoin='round'/></svg>")}`;

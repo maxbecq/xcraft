@@ -30,18 +30,31 @@ import { Lockstep, matchCode, newRoom, readCode } from './net';
 import { countMatch, countTitle, SKIPPED } from './stats';
 
 /** Edge scrolling: how close to the screen's edge (at the bottom, to the top of the command console) the mouse must be. */
-/** Scrolling settings for this computer (Options): speed and edge band width (1 = as designed), pointer held in the window. */
+/** Control settings for this computer (Options, also from the pause menu): edge scrolling's speed, band width (1 = as
+ * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed and acceleration
+ * (game/pointerlock.ts); the pointer held in the window; grid hotkeys; the game's speed against the AI. */
 const SCROLL_KEY = 'xcraft.scroll';
-const SCROLL: { speed: number; band: number; lock: boolean; grid: boolean } = (() => {
-  const base = { speed: 1, band: 1, lock: false, grid: false };
+const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, mouseAccel: 1, lock: false, grid: false, game: 1 };
+type Controls = typeof SCROLL_BASE;
+const SCROLL: Controls = (() => {
+  const base = { ...SCROLL_BASE };
   try {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
-    const { speed, band, lock2, grid } = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
-    return { ...base, ...(speed ? { speed } : {}), ...(band ? { band } : {}), lock: lock2 === true, grid: grid === true };
+    const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
+    for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'mouseAccel', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
+    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true };
   } catch {
     return base;
   }
 })();
+function saveControls(): void {
+  try {
+    const { lock, ...rest } = SCROLL;
+    localStorage.setItem(SCROLL_KEY, JSON.stringify({ ...rest, lock2: lock }));
+  } catch {
+    // private browsing: kept for this page only
+  }
+}
 /** Its width grows with the screen: 12 % of its short side, never under 120 px (130 px on a 1080p screen), times the setting. */
 const edgeBand = () => Math.round(SCROLL.band * Math.max(120, 0.12 * Math.min(window.innerWidth, window.innerHeight)));
 const params = new URLSearchParams(location.search);
@@ -58,6 +71,9 @@ const REPLAY = params.has('replay') ? readReplay() : null;
 const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
+/** Alone against the AI, the game's speed is a setting (never online: both machines must step alike). */
+const SOLO = params.has('play') && !NET_ROLE;
+const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
 const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
 const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
 
@@ -250,7 +266,13 @@ const input = new Input(world, map, PLAYER, {
   zoom: (f) => rig.zoomBy(f),
 }, renderer.domElement);
 /** Windowed: the pointer stays in the game (Pointer Lock), so edge scrolling never loses it off the window. */
-const pointer = holdPointer(renderer.domElement, () => SCROLL.lock && !TOUCH && !paused && !ATTRACT);
+/** When the first click asked for fullscreen: no lock in the same gesture (Safari stalls on both at once). */
+let fullscreenAsked = -Infinity;
+const pointer = holdPointer(
+  renderer.domElement,
+  () => SCROLL.lock && !TOUCH && !paused && !ATTRACT && performance.now() - fullscreenAsked > 1500,
+  () => ({ speed: SCROLL.mouse, accel: SCROLL.mouseAccel }),
+);
 const audio = new Audio();
 /** Our units' wordless answer, at most every 0.3 s so a burst of clicks does not chatter. */
 let lastAnswer = 0;
@@ -391,14 +413,26 @@ const EDGE_DWELL_MS = 200;
 const EDGE_OUTER = 0.4;
 const EDGE_DWELL_OUTER_MS = 60;
 const EDGE_TOUCH_PX = 3;
-/** No edge scrolling this close to a button up top (the menu in its corner): reaching it must not move the view.
- * Buttons down by the console are left out: their calm zone would swallow the bottom band. */
-const UI_CALM_PX = 40;
-const nearButton = (x: number, y: number) =>
-  [...document.querySelectorAll<HTMLElement>('.tools button, .tools .chip')].some((b) => {
-    const r = b.getBoundingClientRect();
-    return r.width > 0 && r.top < window.innerHeight / 2 && x > r.left - UI_CALM_PX && x < r.right + UI_CALM_PX && y > r.top - UI_CALM_PX && y < r.bottom + UI_CALM_PX;
-  });
+/** Panels set against a screen edge (the minimap, the command card, the menu with its chips, the production list):
+ * the edge they touch does not scroll along them, nor a band's width past their ends, which takes in the corner they
+ * sit in. The way from the middle of the screen to any of them crosses no scrolling band (as in StarCraft II, where the
+ * console's edge is no scrolling edge). */
+const EDGE_PANELS = '.map-slot, .hud-card, .tools > *, .prod-panel';
+/** A panel this close to an edge is set against it. */
+const ATTACH_PX = 48;
+/** Whether the edge `side` (l, r, t, b: the bottom one runs along the console's top, at `bottom`) is calm at `along`
+ * (y for the side edges, x for the others). A panel resting on the console (the tools on a small screen) counts as
+ * set against the bottom. */
+function calmEdge(side: 'l' | 'r' | 't' | 'b', along: number, band: number, bottom: number): boolean {
+  for (const el of document.querySelectorAll<HTMLElement>(EDGE_PANELS)) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const near = side === 'l' ? r.left : side === 'r' ? window.innerWidth - r.right : side === 't' ? r.top : Math.min(window.innerHeight - r.bottom, Math.abs(bottom - r.bottom));
+    const [from, to] = side === 'l' || side === 'r' ? [r.top, r.bottom] : [r.left, r.right];
+    if (near < ATTACH_PX && along > from - band && along < to + band) return true;
+  }
+  return false;
+}
 /** The console's top edge, this deep, scrolls down at once, like the screen's very bottom: a pointer thrown down at
  * the console lands on it (it crosses the band above in a frame or two). Deeper in, the console is for clicking. */
 const EDGE_LINE_PX = 14;
@@ -408,21 +442,26 @@ function scrollDirection(): [number, number] {
   let edge = '';
   if (!mouse) edgeSince = 0;
   if (mouse && !mouse.onButton && !paused && !ATTRACT) {
-    // Speed grows the deeper the pointer goes into the band: a crawl at its inner border, full speed at the
-    // screen's edge (eased, so the inner half stays slow and easy to control).
+    // Speed grows the deeper the pointer goes into the band, along an S: barely moving as it enters, then faster and
+    // faster, and level again at the screen's edge.
     const EDGE_PX = edgeBand();
-    const depth = (d: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, 1 - d / EDGE_PX)) ** 2;
+    const depth = (d: number) => {
+      const t = Math.min(1, Math.max(0, 1 - d / EDGE_PX));
+      return 0.06 + 0.94 * t * t * (3 - 2 * t);
+    };
     let ex = mouse.x < EDGE_PX ? -depth(mouse.x) : mouse.x > window.innerWidth - EDGE_PX ? depth(window.innerWidth - mouse.x) : 0;
     // The bottom band sits just above the console, so its buttons never scroll the map.
     const bottom = document.querySelector('.console')?.getBoundingClientRect().top ?? window.innerHeight;
+    if (ex && calmEdge(ex < 0 ? 'l' : 'r', mouse.y, EDGE_PX, bottom)) ex = 0;
     edgeGlow.style.setProperty('--edge-bottom', `${window.innerHeight - bottom}px`);
     const floor = mouse.y >= window.innerHeight - 1 - EDGE_TOUCH_PX || (mouse.y >= bottom && mouse.y < bottom + EDGE_LINE_PX);
     let ey = mouse.y < EDGE_PX ? depth(mouse.y) : mouse.y > bottom - EDGE_PX && mouse.y < bottom ? -depth(bottom - mouse.y) : floor ? -1 : 0;
+    if (ey && calmEdge(ey > 0 ? 't' : 'b', mouse.x, EDGE_PX, bottom)) ey = 0;
     // Near a corner along an edge (the outer fifth): scroll diagonally, as fast as along the edge.
     const cornerX = window.innerWidth * 0.2;
     const cornerY = bottom * 0.2;
     if (ex && !ey) ey = Math.abs(ex) * (mouse.y < cornerY ? 1 : mouse.y > bottom - cornerY && mouse.y < bottom + EDGE_LINE_PX ? -1 : 0);
-    if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
+    else if (ey && !ex) ex = Math.abs(ey) * (mouse.x < cornerX ? -1 : mouse.x > window.innerWidth - cornerX ? 1 : 0);
     // The glow along the edge brightens with the speed.
     edgeGlow.style.opacity = String(0.35 + 0.65 * Math.max(Math.abs(ex), Math.abs(ey)));
     // Crossing the band on the way to a button, or near one: no scrolling.
@@ -433,7 +472,7 @@ function scrollDirection(): [number, number] {
     // Distance to the nearest edge being scrolled, to know whether the pointer is in the band's outer part.
     const toEdge = Math.min(ex ? Math.min(mouse.x, window.innerWidth - mouse.x) : Infinity, ey > 0 ? mouse.y : ey < 0 ? Math.max(0, bottom - mouse.y) : Infinity);
     const dwell = toEdge < EDGE_PX * EDGE_OUTER ? EDGE_DWELL_OUTER_MS : EDGE_DWELL_MS;
-    if (inBand && (nearButton(mouse.x, mouse.y) || (!touching && performance.now() - edgeSince < dwell))) ex = ey = 0;
+    if (inBand && !touching && performance.now() - edgeSince < dwell) ex = ey = 0;
     if (ex) dx = ex;
     if (ey) dy = ey;
     edge = (ey > 0 ? 'n' : ey < 0 ? 's' : '') + (ex > 0 ? 'e' : ex < 0 ? 'w' : '');
@@ -474,8 +513,6 @@ const scroll = { x: 0, y: 0 };
 const SCROLL_ACCEL = 8;
 /** How long the view has been scrolled without a break (s), for the speed-up. */
 let scrollHeld = 0;
-/** Letting go is gentler than setting off: the view coasts on about a quarter of a second. */
-const SCROLL_DECEL = 4;
 const tools = document.createElement('div');
 tools.className = 'tools';
 tools.innerHTML = '<button class="tool" data-t="menu" title="Menu"><svg class="burger" viewBox="0 0 20 16" aria-hidden="true"><path d="M2 2h16M2 8h16M2 14h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span> Menu</span></button><button class="tool" data-t="army" title="Toute l\'armée"><svg class="swords" viewBox="0 0 20 20" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M3 3l11 11M17 3L6 14"/><path d="M11.5 16.5l5-5M3.5 11.5l5 5" stroke-width="2"/><path d="M15.5 15.5l2 2M4.5 15.5l-2 2"/></g></svg><span> Armée</span></button><button class="tool" data-t="home" title="Retour à la base principale"><svg class="keep" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 18V8h3V5h2v3h4V5h2v3h3v10zM8.5 18v-4a1.5 1.5 0 0 1 3 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span> Base</span></button>';
@@ -486,6 +523,8 @@ pause.innerHTML = `<div class="pause-box">
 <h2>Pause</h2>
 <button data-p="resume">Reprendre</button>
 <button data-p="help">Contrôles</button>
+<button data-p="options">Options</button>
+<div class="pause-options" hidden></div>
 <button data-p="fullscreen" hidden>Plein écran</button>
 <button data-p="restart">Recommencer</button>
 <button data-p="replay">Enregistrer le replay</button>
@@ -514,8 +553,11 @@ const setPaused = (on: boolean) => {
   paused = on;
   if (on) pointer.release(); // the menu wants the real cursor
   pause.hidden = !on;
-  if (!on) helpText.hidden = true;
+  if (!on) helpText.hidden = pauseOptions.hidden = true;
 };
+const pauseOptions = pause.querySelector<HTMLElement>('.pause-options')!;
+pauseOptions.addEventListener('input', (e) => controlChange(e.target as HTMLInputElement));
+pauseOptions.addEventListener('change', (e) => controlChange(e.target as HTMLInputElement));
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);
@@ -533,6 +575,11 @@ document.addEventListener('click', (e) => {
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
+  else if (p === 'options') {
+    // Built on opening, so the fields show the values in force.
+    if (pauseOptions.hidden) pauseOptions.innerHTML = controlFields(true) || '<p>Rien à régler sur un écran tactile.</p>';
+    pauseOptions.hidden = !pauseOptions.hidden;
+  }
   else if (p === 'fullscreen') toggleFullscreen();
   else if (p === 'restart' && !net) location.reload();
   else if (p === 'replay') downloadReplay(record);
@@ -674,14 +721,57 @@ if (document.fullscreenEnabled && !TOUCH) {
   // Browsers only go fullscreen on a click or key press, and loading a match reloads the page:
   // with the option on, the first one in the match does it.
   if (!ATTRACT && wantsFullscreen()) {
+    // Captured, so it runs before the map's own press (which may hold the pointer).
     const enter = () => {
+      fullscreenAsked = performance.now();
       if (!document.fullscreenElement) toggleFullscreen();
-      window.removeEventListener('pointerdown', enter);
-      window.removeEventListener('keydown', enter);
+      window.removeEventListener('pointerdown', enter, true);
+      window.removeEventListener('keydown', enter, true);
     };
-    window.addEventListener('pointerdown', enter);
-    window.addEventListener('keydown', enter);
+    window.addEventListener('pointerdown', enter, true);
+    window.addEventListener('keydown', enter, true);
   }
+}
+
+/** The control settings' fields (mouse and keyboard; none on a touch screen), in the title's options and the pause
+ * menu; the game's speed only in a match alone against the AI. Sliders show their value. */
+function controlFields(inMatch: boolean): string {
+  if (TOUCH) return '';
+  const range = (k: keyof Controls, label: string, min: number, max: number, step: number, unit = '') =>
+    `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${min}" max="${max}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
+  const check = (k: 'lock' | 'grid', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
+  return `<fieldset class="options"><legend>Défilement par les bords</legend>
+      ${range('speed', 'Vitesse', 0.5, 2, 0.1, '×')}
+      ${range('band', 'Largeur des bords', 0.4, 1.6, 0.1, '×')}
+      ${range('ramp', 'Accélération', 0, 2, 0.1, '×')}
+      ${range('coast', 'Inertie', 0, 1, 0.05, ' s')}
+    </fieldset>
+    <fieldset class="options"><legend>Souris</legend>
+      ${check('lock', 'Garder la souris dans la fenêtre (hors plein écran)')}
+      ${range('mouse', 'Vitesse du curseur gardé', 0.5, 3, 0.1, '×')}
+      ${range('mouseAccel', 'Accélération du curseur gardé', 0, 2, 0.1, '×')}
+    </fieldset>
+    <fieldset class="options"><legend>Raccourcis</legend>
+      ${check('grid', `Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom`)}
+    </fieldset>
+    ${inMatch && SOLO ? `<fieldset class="options"><legend>Partie contre l'IA</legend>${range('game', 'Vitesse du jeu', 0.5, 2, 0.25, '×')}</fieldset>` : ''}`;
+}
+const fmt = (v: number, unit: string) => (unit === '×' ? `×${+v.toFixed(2)}` : `${+v.toFixed(2)}${unit}`);
+/** A control field changed: kept, and live in the match. False for any other field. */
+function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
+  const k = field.dataset.k as keyof Controls | undefined;
+  if (!k || !(k in SCROLL_BASE)) return false;
+  if (k === 'lock' || k === 'grid') {
+    SCROLL[k] = (field as HTMLInputElement).checked;
+    hud.gridKeys = SCROLL.grid && !TOUCH;
+    if (!SCROLL.lock) pointer.release();
+  } else {
+    SCROLL[k] = Number(field.value);
+    const out = field.nextElementSibling;
+    if (out instanceof HTMLOutputElement) out.value = fmt(SCROLL[k], field.dataset.unit ?? '');
+  }
+  saveControls();
+  return true;
 }
 
 /** The graphics level picked in the options, or 'auto'. */
@@ -705,29 +795,13 @@ function showOptions(menu: HTMLElement): void {
         .join('')}</select></label>
       ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
-    ${TOUCH ? '' : `<fieldset class="options"><legend>Défilement</legend>
-      <label>Vitesse <input type="range" data-k="speed" min="0.5" max="2" step="0.1" value="${SCROLL.speed}"></label>
-      <label>Largeur des bords <input type="range" data-k="band" min="0.6" max="1.6" step="0.1" value="${SCROLL.band}"></label>
-      <label><input type="checkbox" data-k="lock"${SCROLL.lock ? ' checked' : ''}> Garder la souris dans la fenêtre (hors plein écran)</label>
-    </fieldset>
-    <fieldset class="options"><legend>Raccourcis</legend>
-      <label><input type="checkbox" data-k="grid"${SCROLL.grid ? ' checked' : ''}> Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom</label>
-    </fieldset>`}
+    ${controlFields(false)}
     <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
+  menu.oninput = (e) => controlChange(e.target as HTMLInputElement);
   menu.onchange = (e) => {
     const field = e.target as HTMLSelectElement | HTMLInputElement;
-    const k = field.dataset.k;
-    if (k === 'speed' || k === 'band' || k === 'lock' || k === 'grid') {
-      if (k === 'lock' || k === 'grid') SCROLL[k] = (field as HTMLInputElement).checked;
-      else SCROLL[k] = Number(field.value);
-      try {
-        localStorage.setItem(SCROLL_KEY, JSON.stringify({ speed: SCROLL.speed, band: SCROLL.band, lock2: SCROLL.lock, grid: SCROLL.grid }));
-      } catch {
-        // private browsing: kept for this page only
-      }
-      return;
-    }
+    if (controlChange(field)) return;
     if (field.dataset.k === 'fullscreen') {
       try {
         localStorage.setItem(FULLSCREEN_KEY, (field as HTMLInputElement).checked ? '1' : '0');
@@ -894,7 +968,7 @@ function start(): void {
   const frame = (elapsed: number) => {
     mark = performance.now();
     const dt = Math.min(elapsed, 0.25);
-    if (!ATTRACT) acc += dt * SPEED;
+    if (!ATTRACT) acc += dt * gameSpeed();
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && !net.ready(world.tick)) {
@@ -925,18 +999,22 @@ function start(): void {
       const across = Math.sin(t) * 9;
       rig.lookAt(map.width / 2 - (along - across) / Math.SQRT2, map.height / 2 - (along + across) / Math.SQRT2);
     } else {
-      // Eased scrolling: the view speeds up over an eighth of a second, then glides to a stop (slow, fast, slow).
+      // Eased scrolling: the view speeds up over an eighth of a second, then glides to a stop (slow, fast, slow) over
+      // the coasting time set in the options.
+      const decel = 1 / Math.max(0.02, SCROLL.coast);
       const towards = (v: number, to: number) => {
-        const step = (Math.abs(to) < Math.abs(v) || Math.sign(to) !== Math.sign(v) ? SCROLL_DECEL : SCROLL_ACCEL) * dt;
+        const step = (Math.abs(to) < Math.abs(v) || Math.sign(to) !== Math.sign(v) ? decel : SCROLL_ACCEL) * dt;
         return v + Math.max(-step, Math.min(step, to - v));
       };
       scroll.x = towards(scroll.x, dx);
       scroll.y = towards(scroll.y, dy);
       rig.coast(dt);
       const ease = (v: number) => Math.sign(v) * Math.abs(v) * Math.abs(v) * (3 - 2 * Math.abs(v)); // smoothstep
-      // Held on and on, scrolling speeds up: slow to aim at first, up to 1.8 times as fast after a second and a half.
+      // Held on and on, scrolling speeds up along an S: slow to aim at first, up to 1.8 times as fast (with the
+      // speed-up option at 1) after a second and a half.
       scrollHeld = dx || dy ? scrollHeld + dt : 0;
-      const boost = SCROLL.speed * (1 + 0.8 * Math.min(1, Math.max(0, scrollHeld - 0.4) / 1.2));
+      const held = Math.min(1, Math.max(0, scrollHeld - 0.3) / 1.2);
+      const boost = SCROLL.speed * (1 + 0.8 * SCROLL.ramp * held * held * (3 - 2 * held));
       if (scroll.x || scroll.y) rig.pan(ease(scroll.x) * boost, ease(scroll.y) * boost, dt);
     }
     // A computer can zoom out to the whole map (phones keep the near view, lighter to draw).
