@@ -264,7 +264,37 @@ const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.gridKeys = SCROLL.grid && !TOUCH;
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
-hud.ping = (x, y) => minimap.ping(x, y);
+/** The big minimap (² on AZERTY, ` on QWERTY): a larger target to move the view or send units, over the middle of
+ * the screen; a left click (or drag) there moves the view and closes it, as does the key again or Escape. Drawn only while open. */
+const bigMap = new Minimap(map, rig, 440);
+const bigBox = document.createElement('div');
+bigBox.className = 'bigmap';
+bigBox.hidden = true;
+bigBox.append(bigMap.canvas);
+document.body.append(bigBox);
+bigMap.onOrder = (x, y) => input.orderAt(x, y);
+bigMap.intercept = (x, y) => hud.minimapClick(x, y);
+// Closes once the left button is let go (it may drag the view about first).
+bigMap.canvas.addEventListener('pointerup', (e) => e.button === 0 && (bigBox.hidden = true));
+const toggleBigMap = (open = bigBox.hidden) => {
+  bigBox.hidden = !open || TOUCH;
+  if (!bigBox.hidden) updateFog();
+};
+minimap.canvas.title = 'Carte (² ou ` : agrandir)';
+window.addEventListener('keydown', (e) => {
+  if ((e.target as HTMLElement).closest?.('input, textarea, select')) return;
+  if (e.code === 'Backquote') {
+    e.preventDefault();
+    toggleBigMap();
+  } else if (e.key === 'Escape' && !bigBox.hidden) {
+    e.stopImmediatePropagation();
+    toggleBigMap(false);
+  }
+}, true);
+hud.ping = (x, y) => {
+  minimap.ping(x, y);
+  bigMap.ping(x, y);
+};
 hud.focus = (x, y) => rig.lookAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
@@ -283,6 +313,7 @@ function updateFog(): void {
   for (let i = 0; i < tiles.length; i++) data[i] = tiles[i] === 2 ? 255 : tiles[i] === 1 ? 128 : 0;
   fog.needsUpdate = true;
   minimap.fog(tiles);
+  if (!bigBox.hidden) bigMap.fog(tiles);
 }
 
 // Camera: arrow keys, screen-edge scrolling, wheel zoom.
@@ -469,7 +500,7 @@ Icône d'ouvrier en haut : ouvriers inactifs (clic : les sélectionner)<br>
 Flèches, bords d'écran, minimap, clic molette glissé (ou clic droit glissé sans unité sélectionnée), deux doigts (trackpad) : caméra · molette, pincer : zoom vers le curseur, jusqu'à la carte entière<br>
 <kbd>Tab</kbd> : type actif d'une sélection mixte (ses capacités) · <kbd>Maj</kbd> maintenu : voir les ordres en file<br>
 <kbd>Espace</kbd>, <kbd>Entrée</kbd> ou clic sur l'alerte : aller à la dernière attaque · <kbd>Espace</kbd> maintenu en bougeant la souris : faire glisser la carte · <kbd>Alt</kbd> maintenu : toutes les barres de vie<br>
-<kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir<br>
+<kbd>Ctrl</kbd>+<kbd>F5</kbd>…<kbd>F8</kbd> : mémoriser la vue, <kbd>F5</kbd>…<kbd>F8</kbd> : y revenir · <kbd>²</kbd> : grande carte<br>
 <kbd>F2</kbd> ou ⚔ : toute l'armée · icône de donjon : retour à la base principale · <kbd>F1</kbd>, <kbd>F10</kbd> ou ≡ : menu et pause
 <h3>Écran tactile</h3>
 Tap : sélectionner, puis tap ailleurs pour donner l'ordre<br>
@@ -962,6 +993,7 @@ function start(): void {
     audio.frame();
     lap('fx+overlay');
     minimap.draw(world, sees);
+    if (!bigBox.hidden) bigMap.draw(world, sees);
     lap('minimap');
     sun.target.position.copy(rig.target);
     sun.position.copy(rig.target).add(SUN_OFFSET);
