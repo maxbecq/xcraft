@@ -1875,6 +1875,8 @@ export class EntityRenderer {
       const walk = Math.min(1, m.age / DEPLOY_WALK);
       m.v.root.position.lerpVectors(m.from, m.to, walk * walk * (3 - 2 * walk));
       const legs = m.v.limbs.insect ?? [];
+      // A drone without legs to fold (a static model) just walks over and settles.
+      if (!m.v.gait) return true;
       if (walk < 1) {
         const ph = this.stepGait(m.v);
         for (const w of m.v.wheels ?? []) w.o.rotation.x = ph / w.r;
