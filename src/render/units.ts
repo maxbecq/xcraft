@@ -1,7 +1,7 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, Raycaster, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, Raycaster, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, Quaternion, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -1081,8 +1081,9 @@ interface View {
   ghost?: [Mesh, Material | Material[]][];
   /** Its lights and glows, hidden while a ghost. */
   dimmed?: Object3D[];
-  /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
-  gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
+  /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle; with knees, the
+   * ground speed (tiles a second, smoothed) and the stride it sets. */
+  gait?: { x: number; z: number; phase: number; cycle: number; hip: number; speed: number; stride: number };
   /** Z socle: the weapon module mounted on its back (see weaponModule), and the module's name. */
   weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
@@ -1130,7 +1131,7 @@ interface View {
   playing?: AnimationAction;
 }
 
-/** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip; legs of one group step together. */
+/** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip, its shin (zshin_) at the knee; legs of one group step together. */
 interface InsectLeg {
   o: Object3D;
   /** The shin, hanging from the femur `o`, pivoting at the knee. */
@@ -1142,6 +1143,33 @@ interface InsectLeg {
   pair: number;
   group: number;
   side: number;
+  /** A leg cut at the knee (concepts-z/splitknee.py) walks by two-bone IK. */
+  ik?: LegIK;
+}
+
+/** A Z leg's two-bone IK: its rest pose in the femur's parent frame, and where its foot is on the ground. */
+interface LegIK {
+  hip: Vector3;
+  l1: number;
+  l2: number;
+  /** Rest hip-to-foot direction, and the way the knee stands out from that line. */
+  dir: Vector3;
+  pole: Vector3;
+  /** Inverse rest bases of femur and shin (along the bone, across, the bend's normal). */
+  femur: Matrix4;
+  shin: Matrix4;
+  qf: Quaternion;
+  qs: Quaternion;
+  /** The foot at rest, in the frame of the turning wrapper (heading, no bob nor lean), and the hip there. */
+  home: Vector3;
+  root: Vector3;
+  /** Thigh plus shin, in world units. */
+  reach: number;
+  /** World position of the foot, where the last swing began, whether it is in the air, and whether `at` is valid. */
+  at: Vector3;
+  lift: Vector3;
+  swing: boolean;
+  ready: boolean;
 }
 
 /** Not drawn, but hit by the click raycast. */
@@ -1308,6 +1336,114 @@ function insectLegs(body: Object3D): InsectLeg[] | undefined {
     if (m) legs.push({ o, shin: o.getObjectByName(`zshin_${m[1]}_${m[2]}`), alpha: 0, beta: 0, pair: Number(m[1]), group: (Number(m[1]) + (m[2] === 'r' ? 1 : 0)) % 2, side: m[2] === 'r' ? 1 : -1 });
   });
   return legs.length ? legs : undefined;
+}
+
+const _ta = new Vector3();
+const _tb = new Vector3();
+const _tc = new Vector3();
+const _td = new Vector3();
+const _te = new Vector3();
+const _tn = new Vector3();
+const _tk = new Vector3();
+const _th = new Vector3();
+const _tm = new Matrix4();
+const _tq = new Quaternion();
+const _tr = new Quaternion();
+const UP = new Vector3(0, 1, 0);
+
+/** Basis along `x`, across, and the bend normal `n` (orthogonalised against `x`). */
+function legBasis(m: Matrix4, x: Vector3, n: Vector3): Matrix4 {
+  _te.copy(n).addScaledVector(x, -n.dot(x)).normalize();
+  return m.makeBasis(x, _tn.crossVectors(_te, x), _te);
+}
+
+/** Measures a leg cut at the knee, matrices up to date: hip, knee and foot (the shin's lowest point) at rest. */
+function legRig(l: InsectLeg, pivot: Object3D): LegIK | undefined {
+  const parent = l.o.parent;
+  if (!l.shin || !parent) return undefined;
+  let low: Vector3 | undefined;
+  const p = new Vector3();
+  l.shin.traverse((m) => {
+    const pos = (m as Mesh).isMesh ? (m as Mesh).geometry.getAttribute('position') : undefined;
+    for (let i = 0; i < (pos?.count ?? 0); i++) {
+      p.fromBufferAttribute(pos!, i).applyMatrix4(m.matrixWorld);
+      if (!low || p.y < low.y) low = p.clone();
+    }
+  });
+  if (!low) return undefined;
+  const kneeW = l.shin.getWorldPosition(new Vector3());
+  const hipW = l.o.getWorldPosition(new Vector3());
+  const hip = l.o.position.clone();
+  const knee = parent.worldToLocal(kneeW.clone());
+  const foot = parent.worldToLocal(low.clone());
+  const x0 = knee.clone().sub(hip).normalize();
+  const s0 = foot.clone().sub(knee).normalize();
+  const n0 = new Vector3().crossVectors(x0, s0);
+  if (n0.lengthSq() < 1e-8) n0.crossVectors(x0, UP); // a straight leg: it will bend upwards
+  n0.normalize();
+  const dir = foot.clone().sub(hip).normalize();
+  const pole = knee.clone().sub(hip);
+  pole.addScaledVector(dir, -pole.dot(dir));
+  if (pole.lengthSq() < 1e-10) pole.copy(UP).addScaledVector(dir, -UP.dot(dir));
+  pole.normalize();
+  return {
+    hip,
+    l1: knee.distanceTo(hip),
+    l2: foot.distanceTo(knee),
+    dir,
+    pole,
+    femur: legBasis(new Matrix4(), x0, n0).transpose(),
+    shin: legBasis(new Matrix4(), s0, n0).transpose(),
+    qf: l.o.quaternion.clone(),
+    qs: l.shin.quaternion.clone(),
+    home: pivot.worldToLocal(low.clone()),
+    root: pivot.worldToLocal(hipW.clone()),
+    reach: hipW.distanceTo(kneeW) + kneeW.distanceTo(low),
+    at: new Vector3(),
+    lift: new Vector3(),
+    swing: false,
+    ready: false,
+  };
+}
+
+/** How far a walker sinks on its legs while walking, against its hip height: its knees bend, and its feet reach further. */
+const CROUCH = 0.3;
+/** Walking, each foot steps round a spot pulled from its rest spot this far back towards its hip, front to back: generated
+ * models stand with their legs splayed far forwards and back, which leaves them no reach to stride. */
+const GATHER = 0.6;
+
+/** How far (world units) this foot can go forwards or back of the spot it steps round, the body crouched by `crouch`. */
+function legRoom(ik: LegIK, crouch: number): number {
+  const x = ik.home.x - ik.root.x;
+  const z = (ik.home.z - ik.root.z) * (1 - GATHER);
+  const y = ik.root.y - crouch - ik.home.y;
+  return Math.sqrt(Math.max(0, (0.95 * ik.reach) ** 2 - x * x - y * y)) - Math.abs(z);
+}
+
+/** Bends a leg so its foot reaches `target` (world), the knee standing out the way it does at rest. Matrices up to
+ * date above the femur. */
+function reachFoot(l: InsectLeg, ik: LegIK, target: Vector3): void {
+  const t = l.o.parent!.worldToLocal(_ta.copy(target));
+  const d = _tb.subVectors(t, ik.hip);
+  const dist = Math.min((ik.l1 + ik.l2) * 0.999, Math.max(Math.abs(ik.l1 - ik.l2) * 1.02 + 1e-5, d.length()));
+  d.normalize();
+  _tq.setFromUnitVectors(ik.dir, d);
+  const pole = _tc.copy(ik.pole).applyQuaternion(_tq);
+  pole.addScaledVector(d, -pole.dot(d)).normalize();
+  const a = (ik.l1 * ik.l1 - ik.l2 * ik.l2 + dist * dist) / (2 * dist);
+  const knee = _td.copy(ik.hip).addScaledVector(d, a).addScaledVector(pole, Math.sqrt(Math.max(0, ik.l1 * ik.l1 - a * a)));
+  t.copy(ik.hip).addScaledVector(d, dist); // the foot, at reach
+  const x1 = d.subVectors(knee, ik.hip).normalize(); // d is free again
+  const s1 = t.sub(knee).normalize();
+  const n1 = _tn.crossVectors(x1, s1);
+  if (n1.lengthSq() < 1e-10) n1.crossVectors(x1, pole);
+  n1.normalize();
+  const nx = _tk.copy(n1);
+  // Femur: its rest basis turned onto the new one; the shin likewise, expressed under the turned femur.
+  const qf = _tq.setFromRotationMatrix(legBasis(_tm, x1, nx).multiply(ik.femur)).multiply(ik.qf);
+  l.o.quaternion.copy(qf);
+  const qs = _tr.setFromRotationMatrix(legBasis(_tm, s1, nx).multiply(ik.shin));
+  l.shin!.quaternion.copy(qf).invert().multiply(qs).multiply(ik.qf).multiply(ik.qs);
 }
 
 /** Clip roles baked by tools/meshy/pack.py; only idle, walk and die are always there. */
@@ -2338,11 +2474,12 @@ export class EntityRenderer {
   }
 
   /** Advances a Z walker's gait by the distance its view moved since the last frame; returns the phase. */
-  private stepGait(v: View): number {
+  private stepGait(v: View, dt = 0): number {
     const { x, z } = v.root.position;
     const g = v.gait!;
     const moved = Math.hypot(x - g.x, z - g.z);
     if (moved < 1) g.phase += (moved / g.cycle) * Math.PI * 2; // a longer jump is a teleport, not a step
+    if (dt > 0 && moved < 1) g.speed += (moved / dt - g.speed) * Math.min(1, dt * 4);
     g.x = x;
     g.z = z;
     return g.phase;
@@ -2392,7 +2529,7 @@ export class EntityRenderer {
     }
     const speed = (e.def as UnitDef).speed;
     // Z walkers: the gait follows the ground actually covered, so feet stay planted whatever the speed.
-    const gait = v.gait && this.stepGait(v);
+    const gait = v.gait && this.stepGait(v, dt);
     const phase = gait ?? t * speed * 4.2 + e.id;
     for (const w of v.wheels ?? []) w.o.rotation.x = (gait ?? 0) / w.r;
     if (v.rotors) {
@@ -2422,6 +2559,7 @@ export class EntityRenderer {
     ease(v.limbs.armR, 'x', armR, melee ? 0.45 : 0.25);
     // Insect gait: alternating tripods (diagonal pairs on four legs); a leg lifts while it swings forward.
     for (const [i, l] of (v.limbs.insect ?? []).entries()) {
+      if (l.ik) continue; // walked by walk(), once the body is posed
       const ph = phase + l.group * Math.PI;
       // Each side sweeps its foot forwards while lifted (cos > 0), backwards while planted.
       ease(l.o, 'y', moving ? -l.side * Math.sin(ph) * GAIT_SWING : Math.sin(t * 1.3 + i * 2.1 + e.id) * 0.03, moving ? 0.7 : 0.2);
@@ -2434,7 +2572,9 @@ export class EntityRenderer {
     const hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
     // Wheeled robots rumble over the ground rather than bounce.
     const rolling = !!v.wheels;
-    const bob = hover + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
+    // Walkers with knees crouch as they walk, and rise a little on each step.
+    const crouch = moving && v.limbs.insect?.[0]?.ik ? -CROUCH * v.gait!.hip : 0;
+    const bob = hover + crouch + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
     ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
     // Flyers bank into their turns instead of swaying.
@@ -2443,6 +2583,71 @@ export class EntityRenderer {
     ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
+    if (v.limbs.insect?.[0]?.ik) this.walk(v, dt, moving);
+  }
+
+  /**
+   * Z walkers with knees: each foot stays planted on the ground while its group bears the body, then swings in an arc
+   * to a spot half a stride ahead of where it stands at rest, the leg bent by two-bone IK. Groups take turns (tripods
+   * on six legs, diagonals on four), the stride lengthens and the step rises with the ground speed, and the gait's
+   * cycle is two strides so the planted feet do not slide. Standing still, the feet step back under the body.
+   */
+  private walk(v: View, dt: number, moving: boolean): void {
+    const legs = v.limbs.insect!;
+    const g = v.gait!;
+    const visible = this.inView(v.root.position.x, v.root.position.z);
+    const reach = legs.reduce((sum, l) => sum + l.ik!.reach, 0) / legs.length;
+    // As long as the speed asks for, within what every leg can reach with the body crouched.
+    const room = Math.max(0.15 * reach, 1.6 * Math.min(...legs.map((l) => legRoom(l.ik!, CROUCH * g.hip))));
+    g.stride = Math.min(room, Math.max(0.4 * room, g.speed * 0.32));
+    g.cycle = 2 * g.stride;
+    if (!visible) {
+      for (const l of legs) l.ik!.ready = false; // planted afresh when seen again
+      return;
+    }
+    v.root.updateMatrixWorld(true);
+    const fwd = _th.set(Math.sin(v.model.rotation.y), 0, Math.cos(v.model.rotation.y));
+    const step = g.stride * 0.35 + reach * 0.06;
+    const phase = g.phase / (Math.PI * 2);
+    for (const l of legs) {
+      const ik = l.ik!;
+      // Home: the rest foot under the turning wrapper, without the body's bob.
+      _ta.copy(ik.home);
+      if (moving) _ta.z += (ik.root.z - ik.home.z) * GATHER;
+      const home = v.model.localToWorld(_ta);
+      home.y -= v.model.position.y;
+      if (!ik.ready || ik.at.distanceTo(home) > 1.5 * reach) {
+        ik.at.copy(home);
+        ik.lift.copy(home);
+        ik.swing = false;
+        ik.ready = true;
+      }
+      const target = _tb.copy(ik.at);
+      if (!moving) {
+        // Back under the body, lifted while it is away.
+        const away = Math.hypot(ik.at.x - home.x, ik.at.z - home.z);
+        ik.at.lerp(home, Math.min(1, dt * 7));
+        target.copy(ik.at).y += Math.min(step, away * 0.6);
+        ik.swing = false;
+        ik.lift.copy(ik.at);
+      } else {
+        const f = (((phase + l.group * 0.5) % 1) + 1) % 1;
+        const swing = f >= 0.5;
+        // While a foot is planted the body goes one stride over it, from half a stride ahead to half behind; while it
+        // swings the body goes another stride, so it aims where its spot will be when it lands.
+        const p = swing ? (f - 0.5) * 2 : f * 2;
+        const ahead = swing ? g.stride * (1.5 - p) : g.stride * (0.5 - p);
+        const spot = _tc.copy(home).addScaledVector(fwd, ahead);
+        if (swing && !ik.swing) ik.lift.copy(ik.at);
+        if (!swing && ik.swing) ik.at.copy(spot); // plants it, as far behind as the stance has already gone
+        ik.swing = swing;
+        if (swing) {
+          ik.at.lerpVectors(ik.lift, spot, smoothstep(p));
+          target.copy(ik.at).y += step * Math.sin(Math.PI * p);
+        }
+      }
+      reachFoot(l, ik, target);
+    }
   }
 
   /** Lays a selection ring's meshes on the ground around (x, z), over dunes and slopes; only when it moved. */
@@ -2725,8 +2930,16 @@ export class EntityRenderer {
         wheels.push({ o, r: (b.max.y - b.min.y) / 2 });
       }
     });
-    // Wheels roll by the ground covered: with a cycle of 2π the phase is the distance itself.
-    const gait = insect ? { x: 0, z: 0, phase: e.id, cycle: gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y } : wheels.length ? { x: 0, z: 0, phase: 0, cycle: Math.PI * 2, hip: 0 } : undefined;
+    for (const l of insect ?? []) l.ik = legRig(l, pivot);
+    const rigged = !!insect?.every((l) => l.ik);
+    if (!rigged) for (const l of insect ?? []) l.ik = undefined;
+    // Wheels roll by the ground covered: with a cycle of 2π the phase is the distance itself. Legs with knees set
+    // their cycle from their stride as they go (see walk).
+    const gait = insect
+      ? { x: 0, z: 0, phase: e.id, cycle: rigged ? 1 : gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y, speed: 0, stride: 0.5 }
+      : wheels.length
+        ? { x: 0, z: 0, phase: 0, cycle: Math.PI * 2, hip: 0, speed: 0, stride: 0 }
+        : undefined;
     if (insect || wheels.length) {
       // Z walkers are mostly thin legs: an invisible box round the whole body catches clicks between them.
       const box = new Box3().setFromObject(body);
