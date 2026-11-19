@@ -145,4 +145,25 @@ describe('AI', () => {
     console.log('AI vs AI:', r, 'units', [...w.entities.values()].filter((e) => e.def.kind === 'unit').length);
     expect(r.winner).not.toBeNull();
   }, 60_000);
+  it('Z: trains socles while saving for its tech, before the tech can even be built', () => {
+    // From minute 6 the Z AI keeps the energy of its Intelligence suprême; it used to keep it before the Centre
+    // d'armement and the Centre de recherche it needs stood, and a socle that costs no energy waited for those 400
+    // energy too: the Z army never grew past 5 to 8 units (measure of the 0.9.48).
+    const w = createMatch(['z', 'humains']);
+    const pod = w.spawn('pod', 0, 20 * FP, 30 * FP);
+    const plat = w.spawn('plateforme', 0, 22 * FP, 30 * FP);
+    plat.host = pod.id;
+    w.tick = ticks(7 * 60);
+    w.players[0].minerals = 600;
+    w.players[0].energy = 100;
+    const ai = new AI(w, 0);
+    let trained = false;
+    for (let i = 0; i < 40 && !trained; i++) {
+      const cmds = ai.think();
+      trained = cmds.some((c) => c.kind === 'train' && c.ids.includes(plat.id));
+      w.step(cmds);
+    }
+    expect(w.lacks(0, 'supreme')).not.toBe('');
+    expect(trained).toBe(true);
+  });
 });

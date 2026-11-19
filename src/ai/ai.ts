@@ -109,6 +109,10 @@ export class AI {
     this.faction = FACTIONS[world.players[player].faction];
     this.easy = level === 'easy';
     if (this.easy) this.plan = { ...plan, ...(LEVELS.easy.plan as Partial<Plan>) };
+    // Z: waves of 12, not 8. Sent eight at a time against a bigger army, its socles died to the last one, and the
+    // base after them (light control games, 20 Nov, with the Centre d'armement at minute 10 in balance.json ai.extra:
+    // Z – Isdaris on the original map 0 wins out of 18 with waves of 8, 8 with waves of 12).
+    else if (this.faction === FACTIONS.z) this.plan = { ...plan, wave: Math.max(plan.wave, 12) };
     this.hard = level === 'hard';
   }
 
@@ -220,6 +224,9 @@ export class AI {
     const moreEnergy = !firstExtractor && count(f.extractor) < bases && !building(f.extractor) && !!this.spot(f.extractor, home);
     if (moreEnergy && (f === FACTIONS.isdaris || f.gods)) wants.push(f.extractor);
     let casernesWanted = this.plan.casernes.filter(([at]) => serfs.length >= at).reduce((m, [, n]) => Math.max(m, n), 0);
+    // Z: a Plate-forme takes a Pod of its own (and the drone each building absorbs): two by plan, a third only with
+    // minerals to spare (below), or the bank went into Pods instead of socles.
+    if (f === FACTIONS.z) casernesWanted = Math.min(casernesWanted, 2);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
     if (ctx.minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
@@ -251,7 +258,8 @@ export class AI {
     // Its first unit unlocked: the tech building trains it before researching anything else (the Balise held it a minute).
     const firstTech = f === FACTIONS.isdaris && unlocked.length > 0 && !this.fielded;
     const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x) && !(firstTech && techDef!.researches?.includes(x)));
-    if (f.defense && count(f.defense) < defenses && !building(f.defense)) wants.push(f.defense);
+    // Z: a Tourelle needs a Pod too, so only with minerals to spare.
+    if (f.defense && count(f.defense) < defenses && !building(f.defense) && !(f === FACTIONS.z && ctx.minerals < 500)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
     // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
     for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
@@ -277,7 +285,10 @@ export class AI {
     const { w, f, p, mine, builders, army, buildings, minute, moreEnergy, techWanted, techDef, techUp, unlocked, nextExtension } = ctx;
     // Z: once its prerequisites stand, the energy of the next step of its tech (Intelligence suprême, Centre
     // d'optimisation, Centre K) is kept from everything else.
-    const zTech = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
+    const zNext = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
+    // Not before its prerequisites stand: 400 energy kept for an Intelligence suprême that could not come yet held
+    // back every socle from minute 6 (the Z army never grew past 5 to 8 units, its energy piled up unused).
+    const zTech = zNext && !w.lacks(this.player, zNext) ? zNext : undefined;
     const wantSupreme = zTech === 'supreme' && !w.lacks(this.player, 'supreme');
     const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
@@ -445,9 +456,10 @@ export class AI {
       if (saving || c.queue.length > (this.easy ? 0 : 1) || free - ctx.out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), army, ctx.minerals);
       const def = DEFS[type] as UnitDef;
-      // Z: the minerals of the Intelligence suprême are kept once its energy is there (the units ate them all).
+      // Z: the minerals of the Intelligence suprême are kept once its energy is there (the units ate them all); its
+      // energy, kept from the energy-hungry socles only, never holds back one that costs none.
       const supreme = wantSupreme && p.energy >= 300 ? 300 : 0;
-      if (ctx.minerals - ctx.keep - gatewaysKeep - supreme < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris ? 0 : reserve) < def.cost.energy) continue;
+      if (ctx.minerals - ctx.keep - gatewaysKeep - supreme < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z ? 0 : reserve) < def.cost.energy) continue;
       // Z: a socle waits until its weapon is affordable too, rather than leave with the machine gun.
       const weapon = this.weaponFor(def, ctx.energy - unitReserve);
       const cost = withKit(def, weapon);

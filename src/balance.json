@@ -367,7 +367,7 @@
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rdechiqueteur", "rarc", "rjetsonique", "rreparateur", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "rbarge", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem", "rcanonx04", "roctopode", "rmastodonte", "roctopode2", "rmastodonte2"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3", "coupuissant"]
     },
-    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 5], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17], ["artefacterie", 19]] },
+    "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 10], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17], ["artefacterie", 19]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1, "octopode": 1, "mastodonte": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elementaire": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,
