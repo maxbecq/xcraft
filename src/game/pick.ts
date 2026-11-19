@@ -37,10 +37,16 @@ export function nearestCatch(x: number, y: number, catches: Catch[]): Entity | u
  * on its very model and shown there as a silhouette, wins (a click through to it). Only when the ray meets nothing do
  * the wider catch zones of units and resources decide (`caught`), then the nearest resource (`near`).
  */
-export function pickAt(hits: { e: Entity; seen: boolean; xray?: boolean }[], caught: () => Entity | undefined, near: () => Entity | undefined): Entity | undefined {
+export function pickAt(
+  hits: { e: Entity; seen: boolean; xray?: boolean }[],
+  caught: () => Entity | undefined,
+  near: () => Entity | undefined,
+  occupant: (well: Entity) => Entity | undefined = () => undefined,
+): Entity | undefined {
   const i = hits.findIndex(({ e, seen }) => e.def.kind !== 'unit' || seen);
   if (i < 0) return caught() ?? near();
-  const first = hits[i].e;
+  // A well an extractor stands on is that extractor (its rocks and glow reach past the building's model).
+  const first = occupant(hits[i].e) ?? hits[i].e;
   if (first.def.kind !== 'building') return first;
   return hits.slice(i + 1).find(({ e, seen, xray }) => e.def.kind === 'unit' && seen && xray)?.e ?? first;
 }

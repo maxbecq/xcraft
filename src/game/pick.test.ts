@@ -83,6 +83,17 @@ describe('what the ray under the cursor picks', () => {
     expect(pickAt([{ e: centre, seen: true }, { e: well, seen: true }], () => well, () => well)).toBe(centre);
   });
 
+  it('a well an extractor stands on is that extractor, whichever the ray meets first', () => {
+    const extractor = thing(15, 'building');
+    const on = (e: Entity) => (e === well ? extractor : undefined);
+    expect(pickAt([{ e: well, seen: true }, { e: extractor, seen: true }], none, none, on)).toBe(extractor);
+    expect(pickAt([{ e: extractor, seen: true }, { e: well, seen: true }], none, none, on)).toBe(extractor);
+  });
+
+  it('a free well is still picked', () => {
+    expect(pickAt([{ e: well, seen: true }], none, none, () => undefined)).toBe(well);
+  });
+
   it('nothing on the ray nor in a zone: the nearest resource', () => {
     expect(pickAt([], none, () => well)).toBe(well);
   });

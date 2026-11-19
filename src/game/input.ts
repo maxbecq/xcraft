@@ -688,22 +688,31 @@ export class Input {
       if (!e || !hit.object.visible || !o!.visible || e.inside) continue;
       hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e), xray: silhouetted(hit.object) });
     }
-    return pickAt(hits, () => this.caughtAt(x, y), () => {
+    const occupant = this.wellOccupants();
+    return pickAt(hits, () => this.caughtAt(x, y, occupant), () => {
       let best: Entity | undefined;
       let bestD = RESOURCE_PICK_PX;
       const hidden = new Set(this.hooks.roots().filter((r) => !r.visible).map((r) => r.userData.id));
       for (const e of this.world.entities.values()) {
-        if (e.def.kind !== 'resource' || hidden.has(e.id)) continue;
+        if (e.def.kind !== 'resource' || hidden.has(e.id) || occupant(e)) continue;
         const s = this.screenOf(e);
         const d = Math.hypot(s.x - x, s.y - y);
         if (d < bestD) [best, bestD] = [e, d];
       }
       return best;
-    });
+    }, occupant);
+  }
+
+  /** The extractor standing on a well, if any and in sight (a well taken is picked as its extractor, never itself). */
+  private wellOccupants(): (well: Entity) => Entity | undefined {
+    const shown = new Set(this.hooks.roots().filter((r) => r.visible).map((r) => r.userData.id as number));
+    const on = new Map<number, Entity>();
+    for (const b of this.world.entities.values()) if (b.def.kind === 'building' && (b.def as BuildingDef).energyRate && shown.has(b.id)) on.set(b.ty * this.map.width + b.tx, b);
+    return (well) => (well.type === 'puits' ? on.get(well.ty * this.map.width + well.tx) : undefined);
   }
 
   /** The unit or resource whose catch zone holds the point (see nearestCatch). */
-  private caughtAt(x: number, y: number): Entity | undefined {
+  private caughtAt(x: number, y: number, occupant: (well: Entity) => Entity | undefined = () => undefined): Entity | undefined {
     const roots = new Map<number, Object3D>();
     for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
     const catches: Catch[] = [];
@@ -714,6 +723,7 @@ export class Input {
       if (Math.abs(feet.x - x) > 400 || Math.abs(feet.y - y) > 400) continue;
       const root = roots.get(e.id);
       if (resource && root && !root.visible) continue; // a field the fog still hides
+      if (resource && occupant(e)) continue; // a well taken: its extractor is picked by the ray
       const r = (root && this.modelRect(root)) ?? { x0: feet.x, y0: feet.y, x1: feet.x, y1: feet.y };
       catches.push(resource ? { e, r, margin: RESOURCE_MARGIN_PX, min: RESOURCE_MIN_PX } : { e, r, margin: PICK_MARGIN_PX, min: PICK_MIN_PX });
     }
