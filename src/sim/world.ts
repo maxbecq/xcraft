@@ -382,14 +382,12 @@ export class World {
     this.recalls = this.recalls.filter((r) => r.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) {
-      // Shift: orders go after what the units are already doing; otherwise they replace it all.
+      // Shift: orders go after what the units are already doing; otherwise they replace it all (setOrder).
       this.queueing = 'queue' in c && !!c.queue;
-      if (!this.queueing && 'ids' in c && Array.isArray(c.ids)) for (const id of c.ids) {
-        const e = this.entities.get(id);
-        if (e?.owner === c.player) e.next.splice(0);
-      }
+      this.commanding = this.queueing ? null : c;
       this.apply(c);
       this.queueing = false;
+      this.commanding = null;
     }
     for (const e of this.entities.values()) if (e.owner >= 0 && this.players[e.owner].instant) this.hurry(e);
     for (const p of this.players) if (p.unlimited) [p.minerals, p.energy] = [Math.max(p.minerals, UNLIMITED), Math.max(p.energy, UNLIMITED)];
@@ -701,6 +699,12 @@ export class World {
   aurasAt = -1;
 
   queueing = false;
+  /**
+   * The command being applied without Shift: a unit it gives an order to (or stops) drops its queued ones then. Not
+   * before: a command refused, a production or an upgrade bought left the Shift-queued moves of the units selected
+   * with the building gone.
+   */
+  commanding: Command | null = null;
 
   // ---------------------------------------------------------------- placement
 

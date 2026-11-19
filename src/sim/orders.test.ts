@@ -339,3 +339,25 @@ describe('cancelling from the queue', () => {
     expect(b.queue).toEqual(['auxiliaire', 'legionnaire']);
   });
 });
+
+describe('Shift-queued orders', () => {
+  it('stay through a production or a refused command, and go with a new order', () => {
+    const w = new World(createMap());
+    const serf = w.spawn('serf', 0, ...at(40, 60));
+    const barracks = w.spawn('caserne', 0, 44 * FP, 64 * FP);
+    w.step([{ player: 0, kind: 'move', ids: [serf.id], x: at(48, 60)[0], y: at(48, 60)[1] }]);
+    w.step([{ player: 0, kind: 'move', ids: [serf.id], x: at(48, 70)[0], y: at(48, 70)[1], queue: true }]);
+    expect(serf.next).toHaveLength(1);
+    // Selected with the barracks, a training order without Shift (paid or not): the serf's queued move stays.
+    w.players[0].minerals = 1000;
+    w.step([{ player: 0, kind: 'train', ids: [serf.id, barracks.id], type: 'auxiliaire' }]);
+    w.players[0].minerals = 0;
+    w.step([{ player: 0, kind: 'train', ids: [serf.id, barracks.id], type: 'auxiliaire' }]);
+    // A building it cannot place there: refused, nothing changes.
+    w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'caserne', tx: 44, ty: 64 }]);
+    expect(serf.next).toHaveLength(1);
+    // A new move without Shift replaces it all.
+    w.step([{ player: 0, kind: 'move', ids: [serf.id], x: at(40, 60)[0], y: at(40, 60)[1] }]);
+    expect(serf.next).toHaveLength(0);
+  });
+});

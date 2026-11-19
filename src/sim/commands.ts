@@ -384,6 +384,8 @@ export function formation(this: World, units: Entity[], to?: [number, number]): 
 }
 
 export function setOrder(this: World, e: Entity, order: Order | null): void {
+  const c = this.commanding;
+  if (c && e.owner === c.player && Array.isArray(c.ids) && c.ids.includes(e.id)) e.next.splice(0);
   if (order && this.queueing && (e.order || e.next.length)) {
     e.next.push(order);
     return;
