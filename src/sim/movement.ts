@@ -5,11 +5,17 @@ import { flies, type Entity, type World } from './world';
 
 const REACH = FP / 4;
 
-/** Distance from a unit's edge to a tile rectangle is within reach. */
+/** Distance from a unit's edge to a tile rectangle is within reach, and (on the ground) not across a cliff. */
 export function reachRect(this: World, e: Entity, tx: number, ty: number, size: number): boolean {
   const nx = Math.max(tx * FP, Math.min(e.x, (tx + size) * FP));
   const ny = Math.max(ty * FP, Math.min(e.y, (ty + size) * FP));
-  return dist(e.x, e.y, nx, ny) <= e.radius + REACH;
+  if (dist(e.x, e.y, nx, ny) > e.radius + REACH) return false;
+  return flies(e) || this.grid.canStep(tileOf(e.x), tileOf(e.y), ...rectTile(tx, ty, size, e.x, e.y), true);
+}
+
+/** The rectangle's tile nearest to a point. */
+function rectTile(tx: number, ty: number, size: number, x: number, y: number): [number, number] {
+  return [Math.max(tx, Math.min(tileOf(x), tx + size - 1)), Math.max(ty, Math.min(tileOf(y), ty + size - 1))];
 }
 
 /** Walks to the point of a tile rectangle closest to the unit (callers stop once in reach). */
@@ -23,7 +29,8 @@ export function goNear(this: World, e: Entity, tx: number, ty: number, size: num
   // rectangle itself, not to its neighbour, which may be on the far side of it.
   if (!e.goal) {
     const [ox, oy] = [nx === tx * FP ? nx - 1 : nx, ny === ty * FP ? ny - 1 : ny];
-    if (this.grid.open(tileOf(ox), tileOf(oy))) this.plan(e, ox, oy);
+    // ...and only if that tile is at the rectangle's level: below a cliff, the rectangle is reached from the top.
+    if (this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true)) this.plan(e, ox, oy);
     else this.plan(e, Math.min(nx, (tx + size) * FP - 1), Math.min(ny, (ty + size) * FP - 1));
   }
   if (!this.follow(e)) return;
