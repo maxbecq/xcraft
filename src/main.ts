@@ -297,7 +297,8 @@ rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
 if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
 
-const minimap = new Minimap(map, rig, 164);
+// The Z porthole's frame is thin (style.css): its map is drawn larger, as large as the console allows.
+const minimap = new Minimap(map, rig, factions[PLAYER] === 'z' ? 210 : 164);
 
 const units = new EntityRenderer(scene, map);
 units.onBuilding = (e) => decor.hideUnder(e.tx, e.ty, (e.def as { size: number }).size);
