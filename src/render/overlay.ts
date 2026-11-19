@@ -6,7 +6,7 @@ import { type Entity, type Order, type World, flies } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 /** A rally point's arrows dive this long (ms), then its ring opens and fades for RALLY_RING. */
-const RALLY_DIVE = 380;
+const RALLY_DIVE = 450;
 const RALLY_RING = 520;
 
 export class Overlay {
@@ -17,7 +17,7 @@ export class Overlay {
   private readonly a = new Vector3();
   private readonly b = new Vector3();
   /** Order feedback: where the last right-clicks / taps landed, fading out. */
-  private marks: { x: number; z: number; color: string; label: string; t0: number; rally?: boolean }[] = [];
+  private marks: { x: number; z: number; color: string; label: string; t0: number; rally?: boolean; reach?: number }[] = [];
 
   constructor(private readonly map: GameMap) {
     this.canvas.className = 'overlay';
@@ -101,7 +101,8 @@ export class Overlay {
   /**
    * Shows that an order was taken: a ring that tightens on the spot (green: move, gold: harvest,
    * red: attack) and, on a resource, how much is left in it. A rally point set for buildings shows instead four
-   * arrows diving onto the spot from above, then a brief ring there.
+   * arrows diving onto the spot from above, then a brief ring there: on a clicked unit, building or field, onto the
+   * thing itself, round its middle and as wide as it.
    */
   mark(player: number, x: number, z: number, target?: Entity, rally = false): void {
     let color = '#8dff8a';
@@ -120,7 +121,10 @@ export class Overlay {
       z = target.y / FP;
     }
     if (rally) color = '#7fe8ff';
-    this.marks.push({ x, z, color, label, t0: performance.now(), rally });
+    // How far from the middle the arrows strike: the thing's own edge, or the very spot on open ground.
+    const d = target?.def as { kind: string; size?: number; radius?: number } | undefined;
+    const reach = !d ? 0 : d.kind === 'unit' ? (d.radius ?? 0.4) : (d.size ?? 1) * 0.5;
+    this.marks.push({ x, z, color, label, t0: performance.now(), rally, reach });
     if (this.marks.length > 6) this.marks.shift();
   }
 
@@ -220,12 +224,14 @@ export class Overlay {
   }
 
   /**
-   * A rally point being set: four arrows, one from each side of the ground, dive at the spot (RALLY_DIVE ms, faster
-   * as they fall), then a ring opens and fades where they struck. Drawn from 3D points, so they follow the camera.
+   * A rally point being set: four small arrows swoop down in a curve, one from each diagonal of the ground, and strike
+   * the edge of what was clicked (its middle on open ground), faster as they fall (RALLY_DIVE ms); then a ring opens
+   * and fades there. Drawn from 3D points, so they follow the camera.
    */
-  private drawRally(m: { x: number; z: number; color: string; label: string }, t: number, camera: Camera, w: number, h: number): void {
+  private drawRally(m: { x: number; z: number; color: string; reach?: number }, t: number, camera: Camera, w: number, h: number): void {
     const ctx = this.ctx;
     const ground = heightAt(this.map, m.x, m.z) + 0.05;
+    const reach = m.reach ?? 0;
     const at = (dx: number, dy: number, dz: number): [number, number] => {
       this.v.set(m.x + dx, ground + dy, m.z + dz).project(camera);
       return [((this.v.x + 1) / 2) * w, ((1 - this.v.y) / 2) * h];
@@ -233,28 +239,31 @@ export class Overlay {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     if (t < RALLY_DIVE) {
-      const p = (t / RALLY_DIVE) ** 2;
-      const d = 1.6 - 1.3 * p; // from the spot, tiles
-      const y = 1.8 * (1 - p) + 0.1;
-      // Diagonals: the camera looks along a ground axis, so arrows on the axes would hide one another.
-      for (const [cx, cz] of [[0.71, 0.71], [-0.71, 0.71], [-0.71, -0.71], [0.71, -0.71]]) {
-        const tip = at(cx * d, y, cz * d);
-        const tail = at(cx * (d + 0.65), y + 0.75, cz * (d + 0.65));
-        const a = Math.atan2(tip[1] - tail[1], tip[0] - tail[0]);
-        const head = (s: number): [number, number][] => [
-          [tip[0] - Math.cos(a - 0.55) * s, tip[1] - Math.sin(a - 0.55) * s],
-          [tip[0] - Math.cos(a + 0.55) * s, tip[1] - Math.sin(a + 0.55) * s],
-        ];
-        for (const [color, width] of [['rgba(0, 0, 0, 0.7)', 8], [m.color, 4]] as const) {
+      const p = t / RALLY_DIVE;
+      // Along a quadratic curve: out wide and high, over the thing's edge, down onto it; the arrows wheel a quarter
+      // turn on the way, so they swoop rather than slide.
+      const path = (q: number, a0: number): [number, number] => {
+        const e = q * q;
+        const r = (reach + 1.4) * (1 - e) ** 2 + 2 * (1 - e) * e * (reach + 0.5) + e * e * (reach + 0.05);
+        const y = 1.6 * (1 - e) ** 2 + 2 * (1 - e) * e * 1.5 + e * e * 0.05;
+        const a = a0 + (1 - e) * 0.9;
+        return at(Math.cos(a) * r, y, Math.sin(a) * r);
+      };
+      for (let k = 0; k < 4; k++) {
+        const a0 = Math.PI / 4 + (k * Math.PI) / 2;
+        const trail: [number, number][] = [];
+        for (let i = 0; i <= 6; i++) trail.push(path(Math.max(0, p - 0.22 + (0.22 * i) / 6), a0));
+        const tip = trail[6];
+        const prev = trail[5];
+        const a = Math.atan2(tip[1] - prev[1], tip[0] - prev[0]);
+        for (const [color, width] of [['rgba(0, 0, 0, 0.6)', 5], [m.color, 2.5]] as const) {
           ctx.strokeStyle = color;
           ctx.lineWidth = width;
           ctx.beginPath();
-          ctx.moveTo(...tail);
+          trail.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.moveTo(tip[0] - Math.cos(a - 0.6) * 7, tip[1] - Math.sin(a - 0.6) * 7);
           ctx.lineTo(...tip);
-          const [l, r] = head(13);
-          ctx.moveTo(...l);
-          ctx.lineTo(...tip);
-          ctx.lineTo(...r);
+          ctx.lineTo(tip[0] - Math.cos(a + 0.6) * 7, tip[1] - Math.sin(a + 0.6) * 7);
           ctx.stroke();
         }
       }
@@ -266,11 +275,12 @@ export class Overlay {
     ctx.strokeStyle = m.color;
     ctx.shadowColor = m.color;
     ctx.shadowBlur = 10;
-    ctx.lineWidth = 4 * (1 - k) + 1.5;
+    ctx.lineWidth = 3 * (1 - k) + 1.2;
+    const r = reach + 0.2 + 0.45 * k;
     ctx.beginPath();
-    for (let i = 0; i <= 24; i++) {
-      const a = (i / 24) * Math.PI * 2;
-      const [sx, sy] = at(Math.cos(a) * (0.25 + 0.55 * k), 0, Math.sin(a) * (0.25 + 0.55 * k));
+    for (let i = 0; i <= 32; i++) {
+      const a = (i / 32) * Math.PI * 2;
+      const [sx, sy] = at(Math.cos(a) * r, 0, Math.sin(a) * r);
       if (i === 0) ctx.moveTo(sx, sy);
       else ctx.lineTo(sx, sy);
     }
