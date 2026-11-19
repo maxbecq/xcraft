@@ -19,6 +19,7 @@ import { createMatch } from './sim/setup';
 import { DEFAULT_MAP, MAPS, mapFile } from './maps';
 import { seatsOf } from './mappicker';
 import { PerfHud } from './perf';
+import { Footprints } from './render/footprints';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
@@ -370,6 +371,7 @@ overlay.top = (id) => units.top(id);
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
+const footprints = new Footprints(scene, map, biome.id, QUALITY_LEVEL !== 'basse');
 document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
@@ -862,6 +864,7 @@ function start(): void {
     if (picked.some((id) => !lastPicked.has(id))) answer('ack');
     lastPicked = new Set(picked);
     units.sync(world, acc / TICK, input.selected, PLAYER, sees, seenAt);
+    footprints.update(world, sees, performance.now());
     // The hover halo: a building in sight under the mouse, not already selected (none on a touch screen, which has no hover).
     const hovered = input.hovered;
     units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && !input.selected.has(hovered.id) && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
