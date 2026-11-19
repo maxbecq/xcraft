@@ -1023,6 +1023,10 @@ interface View {
   /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
   hp?: number;
   flash?: { left: number; saved: [Mesh, Material | Material[]][] };
+  /** An enemy building out of sight: drawn grey, frozen as last seen; its own materials, to put back. */
+  ghost?: [Mesh, Material | Material[]][];
+  /** Its lights and glows, hidden while a ghost. */
+  dimmed?: Object3D[];
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
@@ -1492,6 +1496,60 @@ function toCorpse(root: Object3D): void {
   });
 }
 
+/** Grey copies of materials for ghosts (FOG_GLSL's explored grey), one per material. */
+const GREY = new WeakMap<Material, Material>();
+function grey(m: Material): Material {
+  let g = GREY.get(m);
+  if (!g) {
+    g = m.clone();
+    const prev = m.onBeforeCompile;
+    g.onBeforeCompile = (shader, r) => {
+      prev.call(g, shader, r);
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        '#include <dithering_fragment>\ngl_FragColor.rgb = vec3(dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)) * 0.55);',
+      );
+    };
+    g.customProgramCacheKey = () => `${m.customProgramCacheKey()}|ghost`;
+    GREY.set(m, g);
+  }
+  return g;
+}
+
+/** An enemy building gone out of sight: grey, and no longer updated (what was last seen, not what is there). */
+function toGhost(v: View): void {
+  unflash(v);
+  v.ghost = [];
+  v.dimmed = [];
+  v.root.traverse((o) => {
+    const m = (o as Mesh).material as Material | Material[] | undefined;
+    if (!m || !o.visible) return;
+    // Lights, glows and shader effects go dark; the rest turns grey.
+    const lit = (x: Material) => x.blending === AdditiveBlending || x instanceof ShaderMaterial || x instanceof PointsMaterial || x instanceof SpriteMaterial;
+    if (!(o instanceof Mesh) || (Array.isArray(m) ? m.some(lit) : lit(m))) {
+      o.visible = false;
+      v.dimmed!.push(o);
+      return;
+    }
+    v.ghost!.push([o, m]);
+    o.material = Array.isArray(m) ? m.map(grey) : grey(m);
+  });
+}
+
+/** Back in sight: its own materials (the owned grey copies are dropped). */
+function fromGhost(v: View): void {
+  for (const [o, m] of v.ghost ?? []) {
+    for (const x of Array.isArray(m) ? m : [m]) {
+      if (!x.userData.owned) continue;
+      GREY.get(x)?.dispose();
+      GREY.delete(x);
+    }
+    o.material = m;
+  }
+  for (const o of v.dimmed ?? []) o.visible = true;
+  v.ghost = v.dimmed = undefined;
+}
+
 /** Ends a hit flash: the unit's own materials go back on. */
 function unflash(v: View): void {
   for (const [o, m] of v.flash?.saved ?? []) o.material = m;
@@ -1624,8 +1682,11 @@ export class EntityRenderer {
   }
 
   private release(v: View): void {
-    free(v.root, v.flash?.saved.map(([, m]) => m) ?? []);
+    free(v.root, [...(v.flash?.saved ?? []), ...(v.ghost ?? [])].map(([, m]) => m));
   }
+
+  /** Ghosts of enemy buildings destroyed or changed out of sight: they stay, as last seen, until the place is seen. */
+  private ghosts: View[] = [];
 
   /** All entity roots, for picking; each carries its entity id in userData. */
   get roots(): Object3D[] {
@@ -1666,15 +1727,25 @@ export class EntityRenderer {
     }
   }
 
-  sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean): void {
+  sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean, seenAt: (x: number, y: number) => boolean): void {
     const now = performance.now();
     veinTime.value = now / 1000;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.syncRallyFlags(world, selected, player, now);
+    this.ghosts = this.ghosts.filter((v) => {
+      if (!seenAt(v.root.position.x * FP, v.root.position.z * FP)) return true;
+      this.scene.remove(v.root);
+      this.release(v);
+      return false;
+    });
     for (const [id, v] of this.views) {
       if (!world.entities.has(id)) {
         this.views.delete(id);
+        if (v.ghost) {
+          this.ghosts.push(v);
+          continue;
+        }
         // Fallen soldiers topple over and sink into the ground; buildings just go (they explode).
         const into = v.unit && [...world.entities.values()].find((b) => b.absorbed === id);
         if (into && v.root.visible) {
@@ -1792,8 +1863,11 @@ export class EntityRenderer {
     for (const e of world.entities.values()) {
       const old = this.views.get(e.id);
       if (old && (old.type !== e.type || old.owner !== e.owner)) {
-        this.scene.remove(old.root);
-        this.release(old);
+        if (old.ghost) this.ghosts.push(old);
+        else {
+          this.scene.remove(old.root);
+          this.release(old);
+        }
         this.views.delete(e.id);
       }
       const v = this.views.get(e.id) ?? this.create(e, player);
@@ -1810,6 +1884,12 @@ export class EntityRenderer {
         v.seen ||= now;
         v.root.visible = e.def.kind === 'unit' ? now : v.seen;
         if (!v.root.visible) continue;
+        // A building seen before, out of sight now: a frozen grey ghost of what was last seen.
+        if (!now) {
+          if (!v.ghost) toGhost(v);
+          continue;
+        }
+        if (v.ghost) fromGhost(v);
       }
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;

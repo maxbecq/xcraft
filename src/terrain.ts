@@ -518,6 +518,16 @@ export function createFog(map: GameMap): DataTexture {
   return fog;
 }
 
+/**
+ * The two levels of the fog of war, from the fog texture's value `f` (0 never explored, 0.5 explored, 1 in sight):
+ * black where never explored, grey and dim where explored but out of sight, full colour in sight.
+ */
+export const FOG_GLSL = (f: string) => `{
+  float fogF = ${f};
+  float fogLum = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11));
+  gl_FragColor.rgb = mix(vec3(fogLum) * 0.55, gl_FragColor.rgb, smoothstep(0.55, 0.95, fogF)) * smoothstep(0.08, 0.45, fogF);
+}`;
+
 /** Makes a material darker where the player has no vision (works for instanced meshes too). */
 export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void {
   if (mat.userData.fogged) return;
@@ -543,12 +553,13 @@ export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void
       .replace(
         '#include <dithering_fragment>',
         mat.userData.outskirts
-          ? // Outside the map: the edge's fog, faded out a few tiles away (it tells nothing the edge does not).
+          ? // Outside the map: the edge's fog, eased to the explored grey a few tiles out where the edge was seen;
+            // never explored stays black (it tells nothing the edge does not).
             `#include <dithering_fragment>
             vec2 fogIn = clamp(vFogUv, 0.5 / mapSize, 1.0 - 0.5 / mapSize);
             float fogOut = length((vFogUv - fogIn) * mapSize);
-            gl_FragColor.rgb *= 0.12 + 0.88 * mix(texture2D(fogMap, fogIn).r, 0.7, smoothstep(2.0, 14.0, fogOut));`
-          : '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.12 + 0.88 * texture2D(fogMap, vFogUv).r;',
+            ${FOG_GLSL('mix(texture2D(fogMap, fogIn).r, min(texture2D(fogMap, fogIn).r, 0.5), smoothstep(2.0, 14.0, fogOut))')}`
+          : `#include <dithering_fragment>\n${FOG_GLSL('texture2D(fogMap, vFogUv).r')}`,
       );
   };
 }
