@@ -1144,12 +1144,15 @@ export class Hud {
       this.grid.hide();
       this.gridKey = '';
     }
+    // The grid shows as soon as the order is armed: an extractor far from any well (no spot to snap to) still gets it,
+    // the free wells lit, only without a footprint.
+    if (this.placing && g) this.updateGrid(this.placing, g);
+    if (!spot) this.grid.noFootprint();
     if (!spot || !this.placing) return;
     const def = DEFS[this.placing] as BuildingDef;
     const size = def.size;
     const room = this.addonRoom(this.placing, spot);
     const ok = this.world.canPlace(this.placing, spot[0], spot[1], this.player) && room !== null;
-    this.updateGrid(this.placing, g!);
     let addon: { tx: number; ty: number; size: number; ok: boolean } | null = null;
     if (room !== undefined) {
       // The add-on's room: where it would go, or (none free) against the east side, in red.

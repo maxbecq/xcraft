@@ -50,6 +50,11 @@ export class PlaceGrid {
     this.group.visible = false;
   }
 
+  /** The tiles without a footprint (an extractor with no well near the cursor yet). */
+  noFootprint(): void {
+    this.foot.visible = this.addon.visible = false;
+  }
+
   /**
    * Redraws the tiles within `reach` of (cx, cy), each lit by `fits`. Meant to be called only when the cursor moves to
    * another tile (or the ground changes): the footprint alone moves every frame.
@@ -87,6 +92,7 @@ export class PlaceGrid {
   /** The footprint (tx, ty, size) under the cursor, and, for a Pod, its add-on's room (null: not shown). */
   footprint(tx: number, ty: number, size: number, ok: boolean, addon: { tx: number; ty: number; size: number; ok: boolean } | null): void {
     place(this.foot, this.map, tx, ty, size, ok, 1);
+    this.foot.visible = true;
     this.addon.visible = !!addon;
     if (addon) place(this.addon, this.map, addon.tx, addon.ty, addon.size, addon.ok, 0.7);
     this.group.visible = true;
