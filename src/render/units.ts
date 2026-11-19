@@ -1148,9 +1148,12 @@ const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 /** Height of the Z Plate-forme's deck, where the socles are built. */
 const PLATFORM_DECK = 0.37;
 /**
- * Z socle weapons: one module per weapon (tools/blender/models.py zw_<weapon>, Blender stand-ins a Meshy model can
- * replace: origin under the centre of its mounting ring, ring 0.64 across, pointing glTF +Z), the same on every socle.
- * A socle built without a weapon carries the free default machine gun.
+ * Z socle weapons: one module per weapon, public/models/zw_<weapon>.glb, the same on every socle; a socle built
+ * without a weapon carries the free default machine gun. The nine weapons are Rodin Low Poly models (fal), made from
+ * the chosen boards and normalised by concepts-z/normweapon.py; the machine gun is a Blender stand-in
+ * (tools/blender/models.py). Convention for a module, and for any model replacing one: centred over its origin, its
+ * base on the ground plane, 0.9 across at its widest, pointing glTF +Z. A replacement that comes out turned or sized
+ * otherwise is set right in WEAPON_TUNE, the code needing nothing else.
  */
 export const WEAPON_MODELS = [...Object.keys(WEAPONS), 'mitrailleuse'].map((k) => `zw_${k}`);
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
@@ -1158,6 +1161,10 @@ const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
   mastodonte: { size: 0.5 },
   octopode: { size: 0.5 },
 };
+/** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
+const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
+/** The team-colour collar under every module (generated models carry no team colour of their own). */
+const WEAPON_COLLAR = new CylinderGeometry(0.3, 0.33, 0.05, 20).translate(0, 0.025, 0);
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
 function weaponModule(e: Entity): string {
   if (e.type === 'dronecombat') return 'zw_mitrailleuse'; // its one gun, a module like the others: no socle keeps a built-in one
@@ -1854,8 +1861,13 @@ export class EntityRenderer {
     const at = hit ? hit.point : new Vector3(centre.x, box.max.y, centre.z);
     const o = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
+    const fit = WEAPON_TUNE[name] ?? {};
+    o.rotation.y = fit.yaw ?? 0;
+    SHARED.add(WEAPON_COLLAR);
+    const collar = new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]);
+    o.add(collar);
     o.position.copy(body.worldToLocal(at.clone()));
-    o.scale.setScalar(((tune.size ?? 0.7) * across) / 0.64 / body.getWorldScale(new Vector3()).x);
+    o.scale.setScalar((((tune.size ?? 0.7) * across) / 0.64 / body.getWorldScale(new Vector3()).x) * (fit.scale ?? 1));
     o.traverse((m) => (m.userData.noPick = true));
     body.add(o);
     v.weapon = { name, o };
