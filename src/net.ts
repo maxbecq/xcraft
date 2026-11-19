@@ -272,6 +272,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   };
   peer.on('error', (e) => {
     if (e.type === 'unavailable-id') set('error', 'Ce code de partie est déjà pris.');
+    else if (e.type === 'invalid-id') set('error', 'Code de partie invalide : vérifiez le lien ou le code.');
     else if (e.type === 'browser-incompatible') set('error', 'Ce navigateur ne permet pas le jeu en ligne.');
     else if (e.type === 'peer-unavailable' && them === null && performance.now() - began > FIND_MS) set('error', 'Partie introuvable : vérifiez le lien ou le code.');
     else if (e.type === 'peer-unavailable' && them === null) set('connecting', "L'hôte n'est pas encore là, nouvel essai…");
@@ -476,6 +477,7 @@ export function openLobby(
   };
   peer.on('error', (e) => {
     if (e.type === 'unavailable-id') on.status('error', 'Ce code de partie est encore pris (une ancienne page ?) : Réessayer en ouvre un autre.');
+    else if (e.type === 'invalid-id') on.status('error', 'Code de partie invalide : vérifiez le lien ou le code.');
     else if (e.type === 'browser-incompatible') on.status('error', 'Ce navigateur ne permet pas le jeu en ligne.');
     else if (e.type === 'peer-unavailable' && performance.now() - began > 60_000) on.status('error', 'Partie introuvable : vérifiez le lien ou le code.');
     else if (e.type === 'peer-unavailable') {

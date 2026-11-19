@@ -196,10 +196,12 @@ const netBanner = document.createElement('div');
 netBanner.className = 'net-banner';
 netBanner.hidden = true;
 document.body.append(netBanner);
-const ROOM = params.get('room') ?? '';
+/** The room, as a code reads (an address typed or cut short may hold anything); none if it is not one. */
+const ROOM = readRoom(params.get('room') ?? '');
 /** A map or planet this build does not have would be swapped for the default one, on this side only: the two games would differ. */
 const UNKNOWN = !!NET_ROLE && (!MAPS[params.get('map') ?? ''] || !BIOMES[params.get('biome') ?? '']);
-const link = NET_ROLE && !UNKNOWN ? connect(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
+const NO_ROOM = !!NET_ROLE && !ROOM;
+const link = NET_ROLE && ROOM && !UNKNOWN ? connect(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
 const net = link?.lock ?? null;
 /** The other side has been here: the match runs (before, nobody's clock starts). */
 let netStarted = false;
@@ -298,7 +300,8 @@ netBanner.addEventListener('click', (e) => {
     location.search = `?biome=${biome.id}&map=${MAP.id}`;
   }
 });
-if (UNKNOWN) showNet('error', 'Carte ou planète inconnue de cette version du jeu : rechargez la page (tous les deux).');
+if (NO_ROOM) showNet('error', "Ce lien ne contient pas de code de partie valide (quatre caractères, comme K7QX) : demandez à votre ami de vous le renvoyer.");
+else if (UNKNOWN) showNet('error', 'Carte ou planète inconnue de cette version du jeu : rechargez la page (tous les deux).');
 else if (net) showNet(PLAYER === 0 ? 'waiting' : 'connecting');
 // Leaving the page tells the other side at once, rather than after the silence timeout.
 window.addEventListener('pagehide', () => link?.leave());
