@@ -1005,11 +1005,12 @@ function start(): void {
         }
       }
       if (e.type === 'plateforme' && e.buildLeft === 0 && e.trainLeft > 0 && DEFS[e.queue[0]]?.kind === 'unit' && sees(e)) {
-        // Welding on the deck while it assembles a unit: blue sparks at a point that wanders over the socle.
+        // Welding on the deck while it assembles a unit: blue sparks from the tip of the arm's torch as it sweeps over
+        // the socle, or, a model with no arm to follow, at a point that wanders over it.
         const a = performance.now() / 260 + e.id;
         const wx = e.x / FP + Math.cos(a * 1.7) * 0.35;
         const wz = e.y / FP + 0.1 + Math.sin(a * 1.3) * 0.3;
-        const weld = new Vector3(wx, heightAt(map, e.x / FP, e.y / FP) + 0.55 + Math.abs(Math.sin(a)) * 0.35, wz);
+        const weld = units.weld(e.id) ?? new Vector3(wx, heightAt(map, e.x / FP, e.y / FP) + 0.55 + Math.abs(Math.sin(a)) * 0.35, wz);
         effects.sparks(weld, dt);
         effects.sparks(weld, dt); // twice a jackhammer's rate: a weld crackles
       }

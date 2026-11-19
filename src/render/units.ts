@@ -2021,6 +2021,11 @@ export class EntityRenderer {
 
   /** Height of the top of a view's model in the world (its full height, measured once, above where it stands);
    * undefined while it has no view yet. The overlay hangs a building's health bar just above it. */
+  /** Where a Z Plate-forme's welding torch ends (world), for its sparks; none if its model has no cut-out arm. */
+  weld(id: number): Vector3 | undefined {
+    return this.views.get(id)?.model.getObjectByName('zarm_0_weld')?.getWorldPosition(new Vector3());
+  }
+
   top(id: number): number | undefined {
     const v = this.views.get(id);
     if (!v) return undefined;
@@ -2545,6 +2550,14 @@ export class EntityRenderer {
         if (o) o.rotation[axis] += (to - o.rotation[axis]) * 0.12;
       };
       const k = i * 2.3;
+      if (e.type === 'plateforme') {
+        // The Plate-forme's one arm sweeps its torch to and fro over the socle on the deck, bent down onto it,
+        // rocking in and out as it goes, a quick jitter at the torch while it welds.
+        ease(a.upper, 'y', working ? Math.sin(t * 0.9) * 0.55 : 0);
+        ease(a.upper, 'x', working ? 0.12 + Math.sin(t * 1.7) * 0.1 : 0);
+        ease(a.tip, 'x', working ? 0.35 + Math.sin(t * 2.3) * 0.15 + Math.sin(t * 23) * 0.02 : 0);
+        return;
+      }
       ease(a.upper, 'y', working ? Math.sin(t * 1.3 + k) * 0.35 : 0);
       ease(a.upper, 'x', working ? Math.sin(t * 2.1 + k) * 0.08 : 0);
       ease(a.tip, 'x', working ? Math.sin(t * 3.7 + k) * 0.25 : 0);
