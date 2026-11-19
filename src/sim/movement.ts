@@ -69,8 +69,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);
   const end = tiles.length ? tiles[tiles.length - 1] : tileOf(e.y) * g.width + tileOf(e.x);
   if (exact && end === gy * g.width + gx) {
-    pts.splice(-2, 2, x, y);
-    if (pts.length === 0) pts.push(x, y);
+    pts.splice(-2, 2, x, y); // on an empty path too: it then holds just the point
   }
   // String-pulling: skip waypoints that can be reached in a straight line.
   const smooth: number[] = [];
