@@ -11,12 +11,14 @@ One GPU job at a time on this Mac: every mode takes ~/xcraft-3d/gpu.lock first a
 GPU"); two jobs at once make the macOS watchdog cut the meshes.
 Shared queue: drop <session>-<model>.json first ({"session", "model", "seed", "resolution": 512, "output": path}, all
 optional), then <session>-<model>.png last (mv, so it is never read half-written). `--queue` processes the inbox
-until it is empty, one model load for all, into queue/done/ (glb + log, glb also copied to "output") or
+until it is empty, into queue/done/ (glb + log, glb also copied to "output") or
 queue/failed/ (png + json + log), and appends one line to queue/recap.log.
 Env: LOCAL3D_HOME (default ~/xcraft-3d/trellis-silicon), LOCAL3D_PIPELINE (512 | 1024 | 1024_cascade, default 512),
      LOCAL3D_TEXTURE (512 | 1024 | 2048, default 1024), BAKE_MAX_FACES (default 3000).
 On the M1 Max 64 GB: 512 takes about 4 min and 16 GB; 1024 takes 10 min and 32 GB, and its mesh came out cut to a
 sliver by the GPU watchdog with no error, so stay on 512.
+Each attempt at each image runs in a fresh child process (--one), which loads the model and exits: MPS memory
+leaks from one generation to the next in a single process (out of memory after two jobs), and an exit frees it all.
 Install: see the tools/meshy/ lines in README.md.
 """
 import fcntl
@@ -27,9 +29,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
-ROOT = os.path.expanduser("~/xcraft-3d")
+ROOT = os.path.expanduser(os.environ.get("LOCAL3D_ROOT", "~/xcraft-3d"))  # lock and queue
 QUEUE = os.path.join(ROOT, "queue")
 
 
@@ -56,45 +59,34 @@ if sys.argv[1:2] == ["--gpu"]:
 
 HOME = os.path.expanduser(os.environ.get("LOCAL3D_HOME", "~/xcraft-3d/trellis-silicon"))
 VENV_PY = os.path.join(HOME, ".venv", "bin", "python")
-if os.path.realpath(sys.prefix) != os.path.realpath(os.path.join(HOME, ".venv")):
-    os.execv(VENV_PY, [VENV_PY, os.path.abspath(__file__), *sys.argv[1:]])  # run inside the port's venv
-
-# The macOS GPU watchdog kills the decoder's long Metal kernels at random (an empty mesh, seen on this M1 Max at
-# 512 and 1024); Metal capture mode extends its timeout. Must be set before torch loads Metal.
-os.environ.setdefault("MTL_CAPTURE_ENABLED", "1")
-# Texture baked straight onto a light mesh: Blender's decimation (simplify.mjs) stalls near 12 700 faces on the
-# raw 190 000-face output (non-manifold edges).
-os.environ.setdefault("BAKE_MAX_FACES", "3000")
-
-from PIL import Image, ImageDraw, ImageFilter  # noqa: E402
-from trellis_silicon.core import WatchdogEmptyMeshError, generate_glb, load_pipeline  # noqa: E402  (MPS env before torch)
-
 PIPELINE = os.environ.get("LOCAL3D_PIPELINE", "512")
 TEXTURE = int(os.environ.get("LOCAL3D_TEXTURE", "1024"))
-loaded = {}
+CUT = 3  # child exit code: the GPU watchdog cut the mesh
 
 
-def pipeline_for(kind):
-    if kind not in loaded:
-        loaded.clear()  # one model in memory at a time: 16 GB at 512, 32 GB at 1024
-        import gc
-        import torch
-        gc.collect()
-        torch.mps.empty_cache()
-        loaded[kind] = load_pipeline(kind)
-        if os.environ.get("LOCAL3D_SYNC", "1") == "1":
-            # The watchdog fires in the SLat decoders, after texture sampling: PyTorch packs a whole decoder pass
-            # into a few long command buffers. A sync after each layer commits them one layer at a time.
-            for key in ("shape_slat_decoder", "tex_slat_decoder"):
-                for m in loaded[kind].models[key].modules():
-                    if not list(m.children()):
-                        m.register_forward_hook(lambda *_: torch.mps.synchronize())
-    return loaded[kind]
+def one(src, dst, seed):
+    """Child: one attempt, in the port's venv. Exit 0, CUT, or an error."""
+    parent = int(os.environ.get("LOCAL3D_PARENT", os.getppid()))
 
+    def orphan_guard():  # a killed queue must not leave its child holding the GPU
+        while os.getppid() == parent:
+            time.sleep(5)
+        os._exit(1)
+    threading.Thread(target=orphan_guard, daemon=True).start()
+    if os.path.realpath(sys.prefix) != os.path.realpath(os.path.join(HOME, ".venv")):
+        os.execv(VENV_PY, [VENV_PY, os.path.abspath(__file__), "--one", src, dst, str(seed)])
+    # The macOS GPU watchdog kills the decoder's long Metal kernels at random (an empty mesh, seen on this M1 Max at
+    # 512 and 1024); Metal capture mode extends its timeout. Must be set before torch loads Metal.
+    os.environ.setdefault("MTL_CAPTURE_ENABLED", "1")
+    # Texture baked straight onto a light mesh: Blender's decimation (simplify.mjs) stalls near 12 700 faces on the
+    # raw 190 000-face output (non-manifold edges).
+    os.environ.setdefault("BAKE_MAX_FACES", "3000")
+    import torch
+    from PIL import Image, ImageDraw, ImageFilter
+    from trellis_silicon.core import WatchdogEmptyMeshError, generate_glb, load_pipeline
 
-def cut(path):
-    """The plain background flooded from the corners becomes alpha (same as trellis.py)."""
-    im = Image.open(path).convert("RGB")
+    # The plain background flooded from the corners becomes alpha (same as trellis.py).
+    im = Image.open(src).convert("RGB")
     flood = im.copy()
     key = (255, 0, 255)
     for corner in ((0, 0), (im.width - 1, 0), (0, im.height - 1), (im.width - 1, im.height - 1)):
@@ -102,41 +94,49 @@ def cut(path):
     alpha = Image.new("L", im.size, 255)
     alpha.putdata([0 if p == key else 255 for p in flood.getdata()])
     im.putalpha(alpha.filter(ImageFilter.MinFilter(3)))
-    return im
+
+    pipeline = load_pipeline(PIPELINE)
+    if os.environ.get("LOCAL3D_SYNC", "1") == "1":
+        # The watchdog fires in the SLat decoders, after texture sampling: PyTorch packs a whole decoder pass
+        # into a few long command buffers. A sync after each layer commits them one layer at a time.
+        for k in ("shape_slat_decoder", "tex_slat_decoder"):
+            for m in pipeline.models[k].modules():
+                if not list(m.children()):
+                    m.register_forward_hook(lambda *_: torch.mps.synchronize())
+    try:
+        result = generate_glb(pipeline, im, seed=seed, pipeline_type=PIPELINE, texture_size=TEXTURE,
+                              output_base=os.path.join(tempfile.mkdtemp(), "out"))
+    except WatchdogEmptyMeshError:
+        sys.exit(CUT)
+    os.replace(result["glb_path"], dst)
 
 
 def run(kind, src, dst, seed, journal=None):
-    pipeline = pipeline_for(kind)
+    """Up to 4 child attempts; the watchdog often leaves half a mesh with no exception, only its message on stderr."""
     start = time.time()
-    base = os.path.join(tempfile.mkdtemp(), "out")
     for attempt in range(4):
-        # The watchdog only prints to stderr (from Metal, not Python) and often leaves half a mesh with no
-        # exception, so stderr is caught at the file descriptor and read for its message.
-        log = tempfile.TemporaryFile()
-        saved = os.dup(2)
-        sys.stderr.flush()
-        os.dup2(log.fileno(), 2)
-        try:
-            result = generate_glb(pipeline, cut(src), seed=seed, pipeline_type=kind, texture_size=TEXTURE,
-                                  output_base=base)
-        except WatchdogEmptyMeshError:
-            result = None
-        finally:
-            sys.stderr.flush()
-            os.dup2(saved, 2)
-            os.close(saved)
-            log.seek(0)
-            text = log.read()
-            os.write(2, text)
+        child = subprocess.Popen([VENV_PY, os.path.abspath(__file__), "--one", src, dst, str(seed)],
+                                 env=dict(os.environ, LOCAL3D_PIPELINE=kind, LOCAL3D_PARENT=str(os.getpid())),
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cut = False
+        for line in child.stdout:
+            sys.stdout.buffer.write(line)
+            sys.stdout.flush()
             if journal:
-                journal.write(text)
-        if result and b"ImpactingInteractivity" not in text:
-            break
-        if attempt == 3:
-            raise RuntimeError(f"GPU watchdog cut the mesh in every attempt: {src}")
+                journal.write(line)
+            cut = cut or b"ImpactingInteractivity" in line
+        code = child.wait()
+        if code == 0 and not cut:
+            print(f"local TRELLIS.2 {src} -> {dst} in {time.time() - start:.0f} s", flush=True)
+            return
+        if code not in (0, CUT):
+            raise RuntimeError(f"child exit {code}: {src}")
+        if os.path.exists(dst):
+            os.remove(dst)
+        if journal:
+            journal.write(b"GPU watchdog cut the mesh, retrying\n")
         print(f"GPU watchdog cut the mesh, retrying {src}", flush=True)
-    os.replace(result["glb_path"], dst)
-    print(f"local TRELLIS.2 {src} -> {dst} in {time.time() - start:.0f} s", flush=True)
+    raise RuntimeError(f"GPU watchdog cut the mesh in every attempt: {src}")
 
 
 def inbox():
@@ -158,8 +158,7 @@ def inbox():
                 metas[p] = {"error": f"bad json: {e}"}
             if str(metas[p].get("resolution", PIPELINE)) not in ("512", "1024", "1024_cascade"):
                 metas[p] = {"error": f"resolution must be 512, 1024 or 1024_cascade: {metas[p].get('resolution')}"}
-        # The resolution already loaded first, so the model is swapped as rarely as possible.
-        png = min(pngs, key=lambda p: (str(metas[p].get("resolution", PIPELINE)) not in loaded, p))
+        png = min(pngs)
         meta, name = metas[png], os.path.basename(png)[:-4]
         glb = os.path.join(done, name + ".glb")
         with open(os.path.join(QUEUE, name + ".log"), "wb") as journal:  # moved once the job ends: a kill leaves no log in done/
@@ -189,6 +188,9 @@ def inbox():
 
 
 args = sys.argv[1:]
+if args[:1] == ["--one"]:
+    one(args[1], args[2], int(args[3]))
+    sys.exit()
 lock = gpu_lock()
 if args == ["--queue"]:
     inbox()
