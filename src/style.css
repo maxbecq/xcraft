@@ -923,6 +923,22 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
 }
+/* Phones: a command with both a picture and a cost keeps the picture at the top, so the cost below never covers it. */
+@media (max-height: 560px), (max-width: 820px) {
+  body[class] .cmd.has-icon:has(small) { justify-content: flex-start; padding-top: 2px; }
+  body[class] .cmd.has-icon:has(small) img { width: 20px; height: 20px; }
+  body[class] .cmd small { line-height: 1; white-space: nowrap; font-size: 10px; }
+}
+/* Phones held upright: while something is in production, the name keeps one line, the bars close up, the stats step
+   aside and the queue sits at the end of the production bar, so it fits in the panel's 84 px instead of being cut off. */
+@media (orientation: portrait) and (max-width: 820px) {
+  body[class] .console .hud-panel .details:has(.queue) .name { -webkit-line-clamp: 1; line-clamp: 1; }
+  body[class] .console .hud-panel .details:has(.queue) :is(.hp, .bar) { margin: 3px 0; }
+  body[class] .console .hud-panel .details:has(.queue) .stats { display: none; }
+  body[class] .console .hud-panel .prod:has(.queue) { display: flex; align-items: center; gap: 4px; }
+  body[class] .console .hud-panel .prod:has(.queue) .bar { flex: 1; min-width: 24px; }
+  body[class] .console .hud-panel .prod .queue { margin: 0; }
+}
 /* Phones held upright: the menu and army buttons big enough for a thumb, whatever the faction's lettering. */
 @media (orientation: portrait) and (max-width: 820px) {
   body[class] .tools .tool { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 2px 6px; font-size: 26px; line-height: 1; }
