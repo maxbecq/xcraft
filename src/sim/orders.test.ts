@@ -138,3 +138,16 @@ describe('not enough supply', () => {
     }
   });
 });
+
+describe('rally point', () => {
+  it('the order the card button gives (as a right click) sets it on the ground, or on a mineral field to mine', () => {
+    const w = new World(createMap());
+    const a = w.spawn('caserne', 0, 20 * FP, 20 * FP);
+    const field = w.spawn('minerai', -1, 30 * FP, 20 * FP);
+    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: 25 * FP, y: 22 * FP }]);
+    expect(a.rally).toEqual({ x: 25 * FP, y: 22 * FP });
+    expect(a.rallyTarget).toBe(0);
+    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: field.x, y: field.y, target: field.id }]);
+    expect(a.rallyTarget).toBe(field.id);
+  });
+});

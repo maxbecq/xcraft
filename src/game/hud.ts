@@ -408,6 +408,8 @@ export class Hud {
   }
 
   private aim(x: number, z: number, target?: Entity, queue = false): void {
+    // Rally point: the selected producers' right click, on the ground, a unit or a resource.
+    if (this.aimed === 'rally') return this.input.orderAt(x, z, target, queue);
     if (this.aimed === 'patrol') {
       // Patrol: between where each unit stands and the point clicked.
       this.audio.play('order');
@@ -795,6 +797,8 @@ export class Hud {
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
     }
+    // Last, so the other buttons keep their places (and grid keys).
+    if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => this.setTargeting(true, true, 'rally') });
     if (same.some((o) => o.queue.length)) {
       list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
     }
