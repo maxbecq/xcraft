@@ -1,7 +1,7 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, Raycaster, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, Quaternion, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, Raycaster, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, Quaternion, RepeatWrapping, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -1566,6 +1566,83 @@ function reserveFx(body: Object3D, seed: number): { group: Group; update(dt: num
  * The life of an energy well: the glow at the bottom breathes unevenly, eddies turn on the pool, stars drift up
  * out of it and now and then a little geyser of sparks shoots up and falls back. Render only, seeded by the well.
  */
+let bubbleTexture: CanvasTexture | undefined;
+/** Bubbles on a clear ground, tiling top to bottom, for a liquid seen through glass. */
+function bubbles(): CanvasTexture {
+  if (bubbleTexture) return bubbleTexture;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  let r = 7;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < 22; i++) {
+    const [x, y, s] = [4 + rand() * 56, rand() * 128, 1.5 + rand() * 4.5];
+    for (const dy of [-128, 0, 128]) {
+      g.strokeStyle = 'rgba(255,255,255,0.85)';
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.arc(x, y + dy, s, 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.9)';
+      g.fillRect(x - s * 0.45, y + dy - s * 0.45, Math.max(1, s * 0.35), Math.max(1, s * 0.35)); // a glint
+    }
+  }
+  bubbleTexture = new CanvasTexture(c);
+  bubbleTexture.wrapT = RepeatWrapping;
+  return bubbleTexture;
+}
+
+/**
+ * The Z Assimilateur at work: bubbles rising in the blue liquid of its tank (a strip scrolling up over the glass, a
+ * few loose ones in front), and a glow breathing over the tank. The tank is where Rodin painted it on the model, in
+ * the body's frame; nothing shows while the building is still being printed.
+ */
+function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  group.userData.noPick = true;
+  const [w, h, y, z] = [0.5, 0.38, 0.65, 0.475]; // the tank's face
+  const tex = owned(bubbles().clone());
+  tex.needsUpdate = true;
+  tex.repeat.set(1, h / w / 2);
+  const rising = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, color: 0x8fd8ff })));
+  rising.position.set(0, y, z);
+  const glow = new Mesh(new PlaneGeometry(w * 1.5, h * 1.6), owned(new MeshBasicMaterial({ map: spark(), transparent: true, opacity: 0.3, depthWrite: false, blending: AdditiveBlending, color: 0x5a7dff })));
+  glow.position.set(0, y, z + 0.01);
+  group.add(rising, glow);
+  const n = 10;
+  const pos = new Float32Array(n * 3);
+  let r = e.id * 9301 + 49297;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const reset = (i: number, any?: boolean) => pos.set([(rand() - 0.5) * w * 0.85, y - h / 2 + (any ? rand() * h : 0), z + 0.02], i * 3);
+  for (let i = 0; i < n; i++) reset(i, true);
+  const geom = new BufferGeometry();
+  geom.setAttribute('position', new BufferAttribute(pos, 3));
+  const loose = new Points(geom, owned(new PointsMaterial({ map: spark(), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xbfe8ff })));
+  loose.frustumCulled = false;
+  group.add(loose);
+  for (const o of group.children) o.userData.noPick = true;
+  body.add(group);
+  return {
+    group,
+    update(dt, t) {
+      group.visible = e.buildLeft === 0;
+      if (!group.visible) return;
+      tex.offset.y -= dt * 0.18;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.id);
+      (glow.material as MeshBasicMaterial).opacity = 0.18 + 0.2 * pulse;
+      (rising.material as MeshBasicMaterial).opacity = 0.45 + 0.15 * pulse;
+      for (let i = 0; i < n; i++) {
+        const j = i * 3;
+        pos[j + 1] += dt * (0.12 + (i % 3) * 0.04);
+        pos[j] += Math.sin(t * 3 + i) * dt * 0.02; // a little wobble
+        if (pos[j + 1] > y + h / 2) reset(i);
+      }
+      geom.getAttribute('position').needsUpdate = true;
+    },
+  };
+}
+
 function wellFx(body: Object3D, seed: number): { group: Group; update(dt: number, t: number): void } {
   const group = new Group();
   group.userData.noPick = true;
@@ -2927,6 +3004,7 @@ export class EntityRenderer {
       fx = well;
     }
     fx ??= armillaries(body, e.id) ?? undefined;
+    if (e.type === 'assimilateur') fx = assimFx(body, e);
     if (e.type === 'reservepsy') {
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);
