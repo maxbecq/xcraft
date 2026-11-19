@@ -577,7 +577,9 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type))));
+            // From the model's own textured material, not whichever part comes first (a plain added part, the
+            // Drone's bin floor, made it the whole model's skin).
+            if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
@@ -2896,6 +2898,12 @@ export class EntityRenderer {
       cargo.name = 'cargo';
       cargo.position.set(0, 0.62, -0.2);
       pivot.add(cargo);
+    } else if (e.type === 'drone') {
+      // The Drone's load, cut out of its bin (concepts-z/splitcargo.py): golden like the ore it digs, not the
+      // crystal blue Rodin painted it.
+      pivot.getObjectByName('cargo')?.traverse((m) => {
+        if ((m as Mesh).isMesh) (m as Mesh).material = ore;
+      });
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
