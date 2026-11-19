@@ -288,6 +288,8 @@ export class Input {
         if (this.touchMode !== 'pending' || !t) return;
         this.touchMode = 'box';
         this.dragStart = { x: t.sx, y: t.sy };
+        // From nothing at the new start: the last box's size would show until the finger moves.
+        Object.assign(this.box.style, { left: `${t.sx}px`, top: `${t.sy}px`, width: '0px', height: '0px' });
         this.box.hidden = false;
         navigator.vibrate?.(15);
       }, LONG_PRESS_MS);
