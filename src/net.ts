@@ -65,20 +65,36 @@ export class Lockstep {
     this.heard = now();
   }
 
-  receive(m: Message): void {
+  /**
+   * Trust boundary: everything the other side sends is checked for shape and kept within bounds before it is used,
+   * whatever a modified page might send. A message that fails is ignored (orders not taken stall the game, and the
+   * other side is then counted absent).
+   */
+  receive(raw: unknown): void {
+    if (!isRecord(raw)) return;
+    const m = raw;
     this.heard = this.now();
-    if ('a' in m) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
+    // Acknowledged: never past what we have sent, so a wild value cannot empty what is still owed.
+    if (int(m.a) && m.a <= this.next) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
     if ('t' in m) {
-      if (m.t < this.missing || this.theirs.has(m.t)) return; // sent again: already here
-      // Trust boundary: the other side only ever orders its own units.
-      this.theirs.set(m.t, (Array.isArray(m.c) ? m.c : []).map((cmd) => ({ ...cmd, player: 1 - this.player })));
+      const t = m.t;
+      if (!int(t) || t < this.missing || t > this.missing + WINDOW || this.theirs.has(t)) return; // sent again, or out of reach
+      if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return;
+      // The other side only ever orders its own units.
+      this.theirs.set(t, (m.c as Command[]).map((cmd) => ({ ...cmd, player: 1 - this.player })));
       while (this.theirs.has(this.missing)) this.missing++;
     } else if ('h' in m) {
+      // Only recent fingerprints (one every 100 ticks), a few at a time.
+      if (!int(m.h) || !int(m.v) || Math.abs(m.h - this.missing) > 1000) return;
       this.their.set(m.h, m.v);
+      if (this.their.size > 16) this.their.delete(this.their.keys().next().value!);
       this.compare(m.h);
-    } else if ('p' in m) this.send({ q: m.p });
-    else if ('q' in m) {
-      this.trips.push(this.now() - m.q);
+    } else if ('p' in m) {
+      if (typeof m.p === 'number' && Number.isFinite(m.p)) this.send({ q: m.p });
+    } else if ('q' in m) {
+      const trip = typeof m.q === 'number' ? this.now() - m.q : NaN;
+      if (!(trip >= 0 && trip < 60_000)) return; // only our own pings come back
+      this.trips.push(trip);
       if (this.trips.length > 8) this.trips.shift();
       // The orders must arrive before their tick comes, a full round trip later at worst: the slowest recent one, plus a tick.
       this.delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, Math.ceil(Math.max(...this.trips) / 50) + 1));
@@ -125,6 +141,7 @@ export class Lockstep {
   /** Compares the game state with the other side's every so often: they should never differ. */
   check(t: number, sum: number): void {
     this.mine.set(t, sum);
+    if (this.mine.size > 16) this.mine.delete(this.mine.keys().next().value!); // the other side's never came
     this.send({ h: t, v: sum });
     this.compare(t);
   }
@@ -219,9 +236,10 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     if (player === 0 && them === null) knocked ||= performance.now();
     c.on('open', () => sendOn(c, { hi: me, v: VERSION } satisfies Message));
     c.on('data', (d) => {
-      const m = d as Message;
+      if (!isRecord(d)) return;
+      const m = d;
       if ('hi' in m) {
-        if (m.v !== VERSION) {
+        if (typeof m.hi !== 'string' || m.v !== VERSION) {
           c.close();
           return set('error', OTHER_VERSION);
         }
@@ -241,7 +259,9 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         theyAsked = true;
         onStatus('again');
         rematch();
-      } else if ('go' in m) onStatus('go', m.go);
+      } else if ('go' in m) {
+        if (typeof m.go === 'string' && readRoom(m.go) === m.go) onStatus('go', m.go);
+      }
       else {
         lock.receive(m);
         if (lock.left) set('left', "L'adversaire a quitté la partie.");
@@ -334,6 +354,54 @@ export function stateHash(world: World): number {
 
 const peerId = (room: string) => `xcraft-game-${room}`;
 
+/** How far ahead of the first missing tick the other side's orders may be: its delay, plus what loss may leave out. */
+const WINDOW = 8 * MAX_DELAY;
+/** Orders in one tick, and units in one order: well above anything a player can give. */
+const MAX_ORDERS = 64;
+const MAX_IDS = 1024;
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const int = (v: unknown): v is number => Number.isSafeInteger(v);
+const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 2 ** 31;
+const word = (v: unknown) => typeof v === 'string' && v.length > 0 && v.length <= 40;
+/** Each order's fields by kind (mirrors `Command` in sim/world.ts): n a number, s a short string, b a flag, ? optional. */
+const FIELDS: Record<string, Record<string, string>> = {
+  move: { x: 'n', y: 'n', queue: 'b?' },
+  smart: { x: 'n', y: 'n', target: 'n?', queue: 'b?' },
+  rally: { x: 'n', y: 'n', target: 'n?' },
+  stop: {},
+  hold: {},
+  patrol: { x: 'n', y: 'n', queue: 'b?' },
+  build: { type: 's', tx: 'n', ty: 'n', queue: 'b?' },
+  train: { type: 's', weapon: 's?' },
+  arm: { weapon: 's' },
+  evolve: {},
+  cancel: { slot: 'n?' },
+  unload: { unit: 'n?' },
+  ability: { x: 'n?', y: 'n?', name: 's?' },
+  trade: { sell: 's' },
+  attack: { x: 'n', y: 'n', target: 'n?', queue: 'b?' },
+  // 'sandbox': one-player matches only, never online
+};
+/** Whether an order from the other side has the shape the simulation expects; anything else never reaches it. */
+export function commandOk(c: unknown): boolean {
+  if (!isRecord(c) || typeof c.kind !== 'string' || !Object.hasOwn(FIELDS, c.kind)) return false;
+  if (!Array.isArray(c.ids) || c.ids.length > MAX_IDS || !c.ids.every(int)) return false;
+  if (c.kind === 'trade' && c.sell !== 'minerals' && c.sell !== 'energy') return false;
+  return Object.entries(FIELDS[c.kind]).every(([k, t]) => {
+    const v = c[k];
+    if (t.endsWith('?') && v === undefined) return true;
+    return t[0] === 'n' ? num(v) : t[0] === 's' ? word(v) : typeof v === 'boolean';
+  });
+}
+
+/** A waiting room's message: factions, maps and planets are plain ids (they go into the match's address). */
+function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
+  const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
+  const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome);
+  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) : 'camp' in m ? id(m.camp) : false;
+}
+
 /** Sends only on a channel still open: some browsers (Safari) throw, uncaught, on one closing. */
 function sendOn(c: DataConnection | null, m: unknown): void {
   if (!c?.open || c.dataChannel?.readyState !== 'open') return;
@@ -404,9 +472,12 @@ export function openLobby(
       on.status('here');
     });
     c.on('data', (d) => {
-      if (c !== conn) return;
-      const m = d as LobbyMessage;
-      if (!('v' in m)) return on.message(m);
+      if (c !== conn || !isRecord(d)) return;
+      const m = d;
+      if (!('v' in m)) {
+        if (lobbyOk(m)) on.message(m);
+        return;
+      }
       if (m.v === VERSION) return;
       // Turned away, and said so on both sides; the host's room stays open for the friend once reloaded.
       conn = null;

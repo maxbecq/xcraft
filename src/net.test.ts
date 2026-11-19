@@ -14,7 +14,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { Lockstep, START, stateHash, type Message } from './net';
+import { commandOk, Lockstep, START, stateHash, type Message } from './net';
 import { createMatch } from './sim/setup';
 import type { Command } from './sim/world';
 
@@ -136,6 +136,71 @@ describe('lockstep between two browsers', () => {
     b.check(200, 6);
     expect(a.desync).toBe(200);
     expect(b.desync).toBe(200);
+  });
+
+  it('takes anything from the other side without breaking, and keeps every store bounded', () => {
+    const r = rng(3);
+    const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length)];
+    const junk = (): unknown =>
+      pick([null, undefined, NaN, Infinity, -1, 0, 1e300, 2 ** 53, 3.5, '', 'x', 'move', true, [], {}, [1, 2], { kind: 'move' }, Object.create(null)]);
+    const value = (): unknown => (r() < 0.5 ? junk() : Math.floor(r() * 4000) - 500);
+    const order = (): unknown =>
+      r() < 0.3 ? junk() : { player: value(), kind: pick(['move', 'stop', 'trade', 'sandbox', 'nope', 'toString', '__proto__']), ids: r() < 0.7 ? [1, 2] : junk(), x: value(), y: value(), sell: pick(['minerals', 'gold', 1]) };
+    const message = (): unknown => {
+      const key = pick(['t', 'h', 'p', 'q', 'a', 'bye', 'hi', 'zzz']);
+      return r() < 0.1 ? junk() : { [key]: value(), c: r() < 0.5 ? Array.from({ length: Math.floor(r() * 4) }, order) : junk(), v: value(), a: value() };
+    };
+    const sent: Message[] = [];
+    let now = 0;
+    const lock = new Lockstep(0, (m) => sent.push(m), () => now);
+    for (let t = 0; t < 50; t++) lock.step(t, []); // something owed, which a wild acknowledgement must not wipe
+    const owed = (lock as unknown as { unacked: Map<number, unknown> }).unacked;
+    const before = owed.size;
+    // An acknowledgement past what was sent is wild: it frees nothing.
+    for (const a of [10 ** 9, 2 ** 53, 55, Infinity]) lock.receive({ p: 1, a } as never);
+    expect(owed.size).toBe(before);
+    expect(before).toBeGreaterThan(0);
+    for (let i = 0; i < 20_000; i++) {
+      now += 1;
+      expect(() => lock.receive(message())).not.toThrow();
+    }
+    const stores = lock as unknown as { theirs: Map<number, Command[]>; their: Map<number, number> };
+    expect(stores.theirs.size).toBeLessThanOrEqual(8 * 15 + 1);
+    expect(stores.their.size).toBeLessThanOrEqual(16);
+    expect(lock.delay).toBeGreaterThanOrEqual(2);
+    expect(lock.delay).toBeLessThanOrEqual(15);
+    for (const cmds of stores.theirs.values()) for (const c of cmds) expect(commandOk(c) && c.player === 1).toBe(true);
+  });
+
+  it('lets every kind of order a player gives through, and nothing malformed', () => {
+    const ok = [
+      { player: 0, kind: 'smart', ids: [1, 2], x: 1024, y: 2048, target: 7, queue: true },
+      { player: 0, kind: 'rally', ids: [3], x: 10, y: 20 },
+      { player: 0, kind: 'build', ids: [4], type: 'caserne', tx: 5, ty: 6 },
+      { player: 0, kind: 'train', ids: [4], type: 'marine' },
+      { player: 0, kind: 'arm', ids: [4], weapon: 'laser' },
+      { player: 0, kind: 'evolve', ids: [4] },
+      { player: 0, kind: 'cancel', ids: [4], slot: 2 },
+      { player: 0, kind: 'unload', ids: [4], unit: 9 },
+      { player: 0, kind: 'ability', ids: [4], name: 'stim' },
+      { player: 0, kind: 'trade', ids: [4], sell: 'energy' },
+      { player: 0, kind: 'attack', ids: [4], x: 1, y: 2 },
+      { player: 0, kind: 'patrol', ids: [4], x: 1, y: 2 },
+      { player: 0, kind: 'stop', ids: [] },
+      { player: 0, kind: 'hold', ids: [1] },
+    ];
+    for (const c of ok) expect(commandOk(JSON.parse(JSON.stringify(c))), c.kind).toBe(true);
+    const bad = [
+      { kind: 'move', ids: [1], x: 'a', y: 2 },
+      { kind: 'move', ids: [1.5], x: 1, y: 2 },
+      { kind: 'move', ids: 'all', x: 1, y: 2 },
+      { kind: 'build', ids: [1], type: '', tx: 1, ty: 1 },
+      { kind: 'trade', ids: [1], sell: 'gold' },
+      { kind: 'sandbox', ids: [], tool: 'fog', on: true },
+      { kind: 'toString', ids: [] },
+      { kind: 'move', ids: Array(2000).fill(1), x: 1, y: 2 },
+    ];
+    for (const c of bad) expect(commandOk(c), JSON.stringify(c).slice(0, 40)).toBe(false);
   });
 
   it("knows when the other side's match has begun, not merely its page", () => {
