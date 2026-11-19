@@ -1160,6 +1160,7 @@ const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
 };
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
 function weaponModule(e: Entity): string {
+  if (e.type === 'dronecombat') return 'zw_mitrailleuse'; // its one gun, a module like the others: no socle keeps a built-in one
   if (!(e.def as { weapons?: string[] }).weapons) return '';
   if (e.kit) return `zw_${e.kit}`;
   return e.def.kind === 'unit' ? 'zw_mitrailleuse' : '';
