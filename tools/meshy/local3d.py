@@ -1,6 +1,6 @@
 """Image to 3D model on this Mac, no quota: TRELLIS.2 (MIT) through the trellis-silicon port (PyTorch MPS).
 Same interface as trellis.py, so the rest of the chain (simplify.mjs, flatten.py, rigto.py) does not change.
-The plain background is cut away first, as in trellis.py; an image with real alpha skips TRELLIS.2's remover.
+The background and its drop shadow are removed by TRELLIS.2's BiRefNet; an image with real alpha keeps it.
 
 Usage:
   python3 tools/meshy/local3d.py in.png out.glb [seed]
@@ -82,19 +82,14 @@ def one(src, dst, seed):
     # raw 190 000-face output (non-manifold edges).
     os.environ.setdefault("BAKE_MAX_FACES", "3000")
     import torch
-    from PIL import Image, ImageDraw, ImageFilter
+    from PIL import Image
     from trellis_silicon.core import WatchdogEmptyMeshError, generate_glb, load_pipeline
 
-    # The plain background flooded from the corners becomes alpha (same as trellis.py).
-    im = Image.open(src).convert("RGB")
-    flood = im.copy()
-    key = (255, 0, 255)
-    for corner in ((0, 0), (im.width - 1, 0), (0, im.height - 1), (im.width - 1, im.height - 1)):
-        ImageDraw.floodfill(flood, corner, key, thresh=18)
-    alpha = Image.new("L", im.size, 255)
-    alpha.putdata([0 if p == key else 255 for p in flood.getdata()])
-    im.putalpha(alpha.filter(ImageFilter.MinFilter(3)))
-
+    # No colour cut: TRELLIS.2's own remover (BiRefNet) gets the plain image. A corner flood fill left the drop
+    # shadows, which TRELLIS modelled as dark sheets, and a chroma cut ate grey, white or brown parts of the object;
+    # BiRefNet kept the object and dropped the shadow on all 53 concepts tried (Meshy sketches, the queue's images).
+    im = Image.open(src)
+    im = im if im.mode == "RGBA" and im.getextrema()[3][0] < 255 else im.convert("RGB")  # real alpha is kept
     pipeline = load_pipeline(PIPELINE)
     if os.environ.get("LOCAL3D_SYNC", "1") == "1":
         # The watchdog fires in the SLat decoders, after texture sampling: PyTorch packs a whole decoder pass
