@@ -592,6 +592,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           const size = new Box3().setFromObject(gltf.scene).getSize(new Vector3());
           gltf.scene.scale.setScalar(character.height / size.y);
+          centerHips(gltf.scene, gltf.animations);
           let skin: MeshStandardMaterial | undefined;
           gltf.scene.traverse((o) => {
             if (o instanceof SkinnedMesh) skin = o.material as MeshStandardMaterial;
@@ -738,6 +739,42 @@ function mergeGeodes(scene: Group): Group {
     field.add(mesh);
   }
   return field;
+}
+
+/**
+ * Keeps a rigged character over its own feet. Some Meshy clips carry the hips well off the origin (the Archer's
+ * stance by 0.3 tile), so the body was drawn beside its selection ring and its click zone. Each clip's hips are
+ * shifted, on the ground plane only, so that on average they stand where they rest; a clip's own sway is kept.
+ * The death clip takes the idle's shift, so the fall starts where the body stood.
+ */
+function centerHips(character: Group, clips: AnimationClip[]): void {
+  const hips = character.getObjectByName('Hips');
+  if (!hips?.parent) return;
+  character.updateMatrixWorld(true);
+  const up = new Vector3(0, 1, 0).transformDirection(hips.parent.matrixWorld.clone().invert()).normalize();
+  const shift = (clip: AnimationClip): Vector3 | undefined => {
+    const track = clip.tracks.find((t) => t.name === `${hips.name}.position`);
+    if (!track) return undefined;
+    const n = track.values.length / 3;
+    const d = new Vector3();
+    for (let i = 0; i < n; i++) d.add(new Vector3().fromArray(track.values, i * 3));
+    d.divideScalar(n).sub(hips.position);
+    return d.addScaledVector(up, -d.dot(up));
+  };
+  const apply = (clip: AnimationClip, d: Vector3): void => {
+    const track = clip.tracks.find((t) => t.name === `${hips.name}.position`)!;
+    for (let i = 0; i < track.values.length; i += 3) {
+      track.values[i] -= d.x;
+      track.values[i + 1] -= d.y;
+      track.values[i + 2] -= d.z;
+    }
+  };
+  const idle = clips.find((c) => c.name === CLIP.idle);
+  const idleShift = idle && shift(idle);
+  for (const clip of clips) {
+    const d = clip.name === CLIP.die ? idleShift : shift(clip);
+    if (d && clip.tracks.some((t) => t.name === `${hips.name}.position`)) apply(clip, d);
+  }
 }
 
 /**

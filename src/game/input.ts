@@ -1,16 +1,20 @@
-import { Raycaster, Vector2, Vector3, type Camera, type Object3D } from 'three';
+import { Box3, Raycaster, Vector2, Vector3, type Camera, type Mesh, type Object3D, type SkinnedMesh } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 
 const DRAG_PX = 5;
-const PICK_PX = 22;
-/** Flyers win a click within this distance of where they fly, over anything on the ground. */
-const FLYER_PICK_PX = 28;
+/** A unit is caught this far outside the box its model fills on screen, so a click need not land on a thin limb. */
+const PICK_MARGIN_PX = 10;
+/** Its catch is never smaller than this, however far the camera: a small unit stays easy to click. */
+const PICK_MIN_PX = 34;
+/** Flesh round a rigged character's bones, in world units: its posed skeleton is what is measured. */
+const BONE_PAD = 0.14;
 /** Mineral fields and geysers are small on screen: a wider catch, so a worker order lands on them. */
 const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
+const scratch = new Box3();
 
 export interface InputHooks {
   camera: () => Camera;
@@ -613,44 +617,25 @@ export class Input {
   }
 
   /**
-   * Entity under the cursor. A unit wins over a building or a field: any unit the ray meets (even one behind a tall
-   * building's corner), else the closest unit within a few pixels, and only then the building or field hit, else the
-   * closest resource.
+   * Entity under the cursor. A unit wins over a building or a field: the unit whose model, as drawn on screen, is
+   * nearest the cursor, caught a little outside its outline (PICK_MARGIN_PX, at least PICK_MIN_PX across); only then
+   * the building or field the ray hits, else the closest resource.
    */
   private entityAt(x: number, y: number): Entity | undefined {
-    // Flyers first: small and high up, a ray that just misses one hits whatever is on the ground below.
-    let flyer: Entity | undefined;
-    let flyerD = FLYER_PICK_PX;
-    for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit' || !flies(e) || e.inside || !this.sees(e)) continue;
-      const s = this.screenOf(e);
-      const d = Math.hypot(s.x - x, s.y - y);
-      if (d < flyerD) [flyer, flyerD] = [e, d];
-    }
-    if (flyer) return flyer;
+    const unit = this.unitAt(x, y);
+    if (unit) return unit;
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
-    let first: Entity | undefined;
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
       if (hit.object.userData.noPick) continue;
       let o: Object3D | null = hit.object;
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);
-      if (!e || !hit.object.visible || e.inside) continue;
-      if (e.def.kind === 'unit') return e;
-      first ??= e;
+      if (!e || !hit.object.visible || e.inside || e.def.kind === 'unit') continue;
+      return e;
     }
     let best: Entity | undefined;
-    let bestD = PICK_PX;
-    for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit' || !this.sees(e)) continue;
-      const s = this.screenOf(e);
-      const d = Math.hypot(s.x - x, s.y - y);
-      if (d < bestD) [best, bestD] = [e, d];
-    }
-    if (best) return best;
-    if (first) return first;
-    bestD = RESOURCE_PICK_PX;
+    let bestD = RESOURCE_PICK_PX;
     for (const e of this.world.entities.values()) {
       if (e.def.kind !== 'resource') continue;
       const s = this.screenOf(e);
@@ -658,6 +643,66 @@ export class Input {
       if (d < bestD) [best, bestD] = [e, d];
     }
     return best;
+  }
+
+  /** The unit whose catch zone holds the point: outside every outline, the nearest outline; inside several, the nearest centre. */
+  private unitAt(x: number, y: number): Entity | undefined {
+    const roots = new Map<number, Object3D>();
+    for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
+    let best: Entity | undefined;
+    let bestD = Infinity;
+    let bestC = Infinity;
+    for (const e of this.world.entities.values()) {
+      if (e.def.kind !== 'unit' || e.inside || !this.sees(e)) continue;
+      const feet = this.screenOf(e);
+      if (Math.abs(feet.x - x) > 400 || Math.abs(feet.y - y) > 400) continue;
+      const root = roots.get(e.id);
+      const r = (root && this.modelRect(root)) ?? { x0: feet.x, y0: feet.y, x1: feet.x, y1: feet.y };
+      const cx = (r.x0 + r.x1) / 2;
+      const cy = (r.y0 + r.y1) / 2;
+      const hx = Math.max((r.x1 - r.x0) / 2 + PICK_MARGIN_PX, PICK_MIN_PX / 2);
+      const hy = Math.max((r.y1 - r.y0) / 2 + PICK_MARGIN_PX, PICK_MIN_PX / 2);
+      if (Math.abs(x - cx) > hx || Math.abs(y - cy) > hy) continue;
+      const d = Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.y0 - y, 0, y - r.y1));
+      const c = Math.hypot(x - cx, y - cy);
+      if (d < bestD || (d === bestD && c < bestC)) [best, bestD, bestC] = [e, d, c];
+    }
+    return best;
+  }
+
+  /** The screen box an entity's drawn model fills (rings, halos and other see-through parts left out), or null. */
+  private modelRect(root: Object3D): { x0: number; y0: number; x1: number; y1: number } | null {
+    const box = new Box3();
+    const v = new Vector3();
+    const walk = (o: Object3D): void => {
+      if (!o.visible || o.userData.noPick) return;
+      const skin = o as SkinnedMesh;
+      if (skin.isSkinnedMesh) {
+        // Its geometry's box is the rest pose; the bones are where the animation has put it.
+        for (const b of skin.skeleton.bones) box.expandByPoint(b.getWorldPosition(v));
+        const pad = BONE_PAD * root.scale.x;
+        if (!box.isEmpty()) box.expandByVector(v.set(pad, pad, pad));
+      } else if ((o as Mesh).isMesh) {
+        const g = (o as Mesh).geometry;
+        if (!g.boundingBox) g.computeBoundingBox();
+        box.union(scratch.copy(g.boundingBox!).applyMatrix4(o.matrixWorld));
+      }
+      for (const c of o.children) walk(c);
+    };
+    walk(root);
+    if (box.isEmpty()) return null;
+    const camera = this.hooks.camera();
+    const r = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera);
+      const sx = ((v.x + 1) / 2) * window.innerWidth;
+      const sy = ((1 - v.y) / 2) * window.innerHeight;
+      r.x0 = Math.min(r.x0, sx);
+      r.x1 = Math.max(r.x1, sx);
+      r.y0 = Math.min(r.y0, sy);
+      r.y1 = Math.max(r.y1, sy);
+    }
+    return r;
   }
 
   /** Own units inside a screen rectangle. */
