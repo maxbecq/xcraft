@@ -84,11 +84,12 @@ export class Minimap {
   /** Redraws the ground darkened by the player's fog of war. */
   fog(tiles: Uint8Array): void {
     const d = this.image.data;
-    // Black where never explored, grey where explored but out of sight (as on the terrain, FOG_GLSL).
+    // Grey where explored but out of sight (as on the terrain, FOG_GLSL); where never explored, the map's layout
+    // stays readable, very dark (the terrain itself is black there).
     for (let i = 0; i < tiles.length; i++) {
       const [r, g, b] = [this.base[i * 4], this.base[i * 4 + 1], this.base[i * 4 + 2]];
       const grey = (0.3 * r + 0.59 * g + 0.11 * b) * 0.55;
-      const [cr, cg, cb] = tiles[i] === 2 ? [r, g, b] : tiles[i] === 1 ? [grey, grey, grey] : [0, 0, 0];
+      const [cr, cg, cb] = tiles[i] === 2 ? [r, g, b] : tiles[i] === 1 ? [grey, grey, grey] : [r * 0.35, g * 0.35, b * 0.35];
       d[i * 4] = cr;
       d[i * 4 + 1] = cg;
       d[i * 4 + 2] = cb;

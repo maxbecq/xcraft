@@ -553,12 +553,10 @@ export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void
       .replace(
         '#include <dithering_fragment>',
         mat.userData.outskirts
-          ? // Outside the map: the edge's fog, eased to the explored grey a few tiles out where the edge was seen;
-            // never explored stays black (it tells nothing the edge does not).
+          ? // Outside the map: the fog of the nearest edge tile, carried straight out (in colour beside what is in
+            // sight, grey beside what was explored, black beside the never explored; it tells nothing the edge does not).
             `#include <dithering_fragment>
-            vec2 fogIn = clamp(vFogUv, 0.5 / mapSize, 1.0 - 0.5 / mapSize);
-            float fogOut = length((vFogUv - fogIn) * mapSize);
-            ${FOG_GLSL('mix(texture2D(fogMap, fogIn).r, min(texture2D(fogMap, fogIn).r, 0.5), smoothstep(2.0, 14.0, fogOut))')}`
+            ${FOG_GLSL('texture2D(fogMap, clamp(vFogUv, 0.5 / mapSize, 1.0 - 0.5 / mapSize)).r')}`
           : `#include <dithering_fragment>\n${FOG_GLSL('texture2D(fogMap, vFogUv).r')}`,
       );
   };
