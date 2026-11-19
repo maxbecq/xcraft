@@ -13,6 +13,7 @@ import { Paving } from './render/paving';
 import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
 import { EntityRenderer, MINERAL_VARIANTS, WEAPON_MODELS, loadModels } from './render/units';
+import { loadSprites } from './render/sprites';
 import { type BuildingDef, DEFS, FACTIONS, type Faction, LOOKS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -767,6 +768,7 @@ const shown = ATTRACT
 const ready = Promise.all([
   loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
   decor.load(scene, (m) => fogMaterial(m, fog, map)),
+  loadSprites(shown),
 ]);
 ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {

@@ -5,6 +5,7 @@ import {
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { dressSprite } from './sprites';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -2564,6 +2565,7 @@ export class EntityRenderer {
     // Mineral fields use one of several geode clusters, turned and sized at random (stable per field).
     const variant = e.type === 'minerai' ? MINERAL_VARIANTS[e.id % MINERAL_VARIANTS.length] : e.type;
     const body = model(variant, teamMaterials[e.owner] ?? neutral, e.id);
+    dressSprite(body, variant, TEAM_COLORS[e.owner] ?? 0x9a8f7a); // `?sprites=1` prototype
     body.scale.multiplyScalar(LOOK_SCALE[e.type] ?? 1);
     if (e.type === 'minerai') {
       body.rotation.y = ((e.id * 2654435761) % 1000) / 1000 * Math.PI * 2;
