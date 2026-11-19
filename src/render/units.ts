@@ -1610,6 +1610,19 @@ export class EntityRenderer {
     return (m.userData.size = box.getSize(new Vector3()));
   }
 
+  /** Height of the top of a view's model in the world (its full height, measured once, above where it stands);
+   * undefined while it has no view yet. The overlay hangs a building's health bar just above it. */
+  top(id: number): number | undefined {
+    const v = this.views.get(id);
+    if (!v) return undefined;
+    let h = v.model.userData.top as number | undefined;
+    if (h === undefined) {
+      v.root.updateWorldMatrix(true, true);
+      h = v.model.userData.top = new Box3().setFromObject(v.model, true).max.y - v.root.position.y;
+    }
+    return v.root.position.y + h;
+  }
+
   private release(v: View): void {
     free(v.root, v.flash?.saved.map(([, m]) => m) ?? []);
   }

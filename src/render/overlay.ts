@@ -25,6 +25,9 @@ export class Overlay {
   /** Shift held: the selected units' orders show as a path of waypoints. */
   showQueue = false;
 
+  /** Where a building's model tops out in the world (set by the game from the entity renderer); undefined: not drawn yet. */
+  top: (id: number) => number | undefined = () => undefined;
+
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     const dpr = window.devicePixelRatio;
     const w = window.innerWidth;
@@ -47,7 +50,10 @@ export class Overlay {
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
-      this.v.set(x, heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (flies(e) ? FLY_HEIGHT : 0), z).project(camera);
+      // A building's bar sits just above its model's real top (a tower is far taller than its footprint says).
+      const top = size ? this.top(e.id) : undefined;
+      const y = top !== undefined ? top + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (flies(e) ? FLY_HEIGHT : 0);
+      this.v.set(x, y, z).project(camera);
       if (this.v.z > 1) continue;
       const sx = ((this.v.x + 1) / 2) * w;
       const sy = ((1 - this.v.y) / 2) * h;
