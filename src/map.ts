@@ -152,14 +152,43 @@ function computeRelief(map: GameMap, vx: number, vz: number): number {
   return relief!(vx, vz) * [1, 0.35, 0.2][Math.min(2, level)];
 }
 
+/**
+ * Per map, what heightAt needs of each tile, worked out on first use: its cut corner (-1: none), the height the cut
+ * part drops to, and its four corner heights. heightAt is asked every frame for every unit; working these out each
+ * time made some 5 MB of garbage a second. The map's tiles never change once it is built.
+ */
+const tileCache = new WeakMap<GameMap, { cut: Int8Array; cutHeight: Float64Array; corners: Float64Array }>();
+
+function tileData(map: GameMap): { cut: Int8Array; cutHeight: Float64Array; corners: Float64Array } {
+  let d = tileCache.get(map);
+  if (d) return d;
+  const n = map.width * map.height;
+  d = { cut: new Int8Array(n), cutHeight: new Float64Array(n), corners: new Float64Array(n * 4) };
+  for (let ty = 0; ty < map.height; ty++)
+    for (let tx = 0; tx < map.width; tx++) {
+      const i = ty * map.width + tx;
+      const cut = cutCorner(map, tx, ty);
+      d.cut[i] = cut;
+      if (cut >= 0) d.cutHeight[i] = cutLevel(map, tx, ty, cut) * LEVEL_HEIGHT;
+      d.corners.set(cornerHeights(map, tx, ty), i * 4);
+    }
+  tileCache.set(map, d);
+  return d;
+}
+
 export function heightAt(map: GameMap, x: number, y: number): number {
   const tx = Math.min(map.width - 1, Math.max(0, Math.floor(x)));
   const ty = Math.min(map.height - 1, Math.max(0, Math.floor(y)));
   const u = Math.min(1, Math.max(0, x - tx));
   const v = Math.min(1, Math.max(0, y - ty));
-  const cut = cutCorner(map, tx, ty);
-  if (cut >= 0 && inCut(cut, u, v)) return cutLevel(map, tx, ty, cut) * LEVEL_HEIGHT;
-  const [nw, ne, se, sw] = cornerHeights(map, tx, ty);
-  const r = relief ? [reliefAt(map, tx, ty), reliefAt(map, tx + 1, ty), reliefAt(map, tx + 1, ty + 1), reliefAt(map, tx, ty + 1)] : [0, 0, 0, 0];
-  return ((nw + r[0]) * (1 - u) + (ne + r[1]) * u) * (1 - v) + ((sw + r[3]) * (1 - u) + (se + r[2]) * u) * v;
+  const d = tileData(map);
+  const i = ty * map.width + tx;
+  const cut = d.cut[i];
+  if (cut >= 0 && inCut(cut, u, v)) return d.cutHeight[i];
+  const c = d.corners;
+  const nw = c[i * 4] + (relief ? reliefAt(map, tx, ty) : 0);
+  const ne = c[i * 4 + 1] + (relief ? reliefAt(map, tx + 1, ty) : 0);
+  const se = c[i * 4 + 2] + (relief ? reliefAt(map, tx + 1, ty + 1) : 0);
+  const sw = c[i * 4 + 3] + (relief ? reliefAt(map, tx, ty + 1) : 0);
+  return (nw * (1 - u) + ne * u) * (1 - v) + (sw * (1 - u) + se * u) * v;
 }

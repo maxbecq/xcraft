@@ -90,13 +90,23 @@ export class Minimap {
     const d = this.image.data;
     // Grey where explored but out of sight (as on the terrain, FOG_GLSL); where never explored, the map's layout
     // stays readable, very dark (the terrain itself is black there).
+    // No little arrays per tile: this runs every few ticks over the whole map (it was 7 MB of garbage a second).
     for (let i = 0; i < tiles.length; i++) {
-      const [r, g, b] = [this.base[i * 4], this.base[i * 4 + 1], this.base[i * 4 + 2]];
-      const grey = (0.3 * r + 0.59 * g + 0.11 * b) * 0.55;
-      const [cr, cg, cb] = tiles[i] === 2 ? [r, g, b] : tiles[i] === 1 ? [grey, grey, grey] : [r * 0.35, g * 0.35, b * 0.35];
-      d[i * 4] = cr;
-      d[i * 4 + 1] = cg;
-      d[i * 4 + 2] = cb;
+      const r = this.base[i * 4];
+      const g = this.base[i * 4 + 1];
+      const b = this.base[i * 4 + 2];
+      if (tiles[i] === 2) {
+        d[i * 4] = r;
+        d[i * 4 + 1] = g;
+        d[i * 4 + 2] = b;
+      } else if (tiles[i] === 1) {
+        const grey = (0.3 * r + 0.59 * g + 0.11 * b) * 0.55;
+        d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = grey;
+      } else {
+        d[i * 4] = r * 0.35;
+        d[i * 4 + 1] = g * 0.35;
+        d[i * 4 + 2] = b * 0.35;
+      }
     }
     this.tiles.getContext('2d')!.putImageData(this.image, 0, 0);
   }

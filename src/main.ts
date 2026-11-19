@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, type Object3D, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
@@ -20,6 +20,8 @@ import { DEFAULT_MAP, MAPS, mapFile } from './maps';
 import { seatsOf } from './mappicker';
 import { PerfHud } from './perf';
 import { Footprints } from './render/footprints';
+import { stableShadowDepth } from './render/shadowdepth';
+import { drawXray } from './render/xray';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
@@ -664,6 +666,61 @@ document.addEventListener('change', (e) => {
   if ((e.target as HTMLElement).closest('.menu')) audio.play('menu');
 });
 
+/**
+ * The match's own shader programs, compiled behind the loading screen: what lies off screen at first (decor,
+ * deposits, the other base under the fog) would otherwise compile when the camera first scrolls over it, a frame
+ * held up for 60 to 380 ms (CPU slowed 4 times). The entities' views are made first (before the first frame there
+ * are none), then one draw of the whole map and its unit silhouettes through an empty scissor, hidden things shown
+ * for it: the shadow pass's programs, the silhouettes' and those that differ from one object to the next (skinned,
+ * shadowed) are built too.
+ */
+async function compileScene(): Promise<void> {
+  units.sync(world, 0, input.selected, PLAYER, sees, seenAt);
+  stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
+  const into = post.sceneTarget;
+  renderer.setRenderTarget(into);
+  await renderer.compileAsync(scene, rig.camera);
+  const aspect = window.innerWidth / window.innerHeight;
+  const [target, view, box] = [rig.target.clone(), rig.viewHeight, { ...sun.shadow.camera }];
+  // An empty scissor: drawn, nothing shows.
+  const scissor = (on: boolean) => {
+    if (into) [into.scissorTest, into.scissor.x, into.scissor.y, into.scissor.z, into.scissor.w] = on ? [true, 0, 0, 0, 0] : [false, 0, 0, into.width, into.height];
+    else renderer.setScissorTest(on);
+  };
+  const hidden: Object3D[] = [];
+  scene.traverse((o) => {
+    if (o.visible) return;
+    hidden.push(o);
+    o.visible = true;
+  });
+  try {
+    rig.lookAt(map.width / 2, map.height / 2);
+    rig.viewHeight = rig.overview(aspect);
+    rig.update(aspect);
+    const reach = Math.max(map.width, map.height);
+    Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, far: 400 });
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.target.position.copy(rig.target);
+    sun.position.copy(rig.target).add(SUN_OFFSET);
+    renderer.setScissor(0, 0, 0, 0);
+    renderer.setRenderTarget(into);
+    scissor(true);
+    renderer.shadowMap.needsUpdate = true; // its programs too (the map is only drawn when asked for)
+    renderer.render(scene, rig.camera);
+    drawXray(renderer, scene, rig.camera, into); // the buildings' depth and the silhouettes, one per side
+  } finally {
+    scissor(false);
+    renderer.setScissorTest(false);
+    renderer.setRenderTarget(null);
+    for (const o of hidden) o.visible = false;
+    Object.assign(sun.shadow.camera, { left: box.left, right: box.right, top: box.top, bottom: box.bottom, far: box.far });
+    sun.shadow.camera.updateProjectionMatrix();
+    rig.target.copy(target);
+    rig.viewHeight = view;
+    rig.update(aspect);
+  }
+}
+
 // The loading screen (index.html) fills as the models arrive and lifts once the first pictures are drawn.
 const loading = document.getElementById('loading');
 // Only the models this page can show: the title scene's own, or in a match every type of the factions playing and the neutral ones.
@@ -681,7 +738,7 @@ if (!ATTRACT) {
   // Never waited for more than 3 s: a page the browser does not draw (a tab opened behind, never shown) may never
   // finish compiling shaders, and its match, so the other player's too, would not start until it is shown.
   const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, 3000))]);
-  ready.then(() => warmed(hud.portrait.prewarm(portraits))).then(start);
+  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene()]).then(() => {}))).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();
@@ -865,6 +922,11 @@ function start(): void {
     const picked = input.own().filter((u) => u.def.kind === 'unit').map((u) => u.id);
     if (picked.some((id) => !lastPicked.has(id))) answer('ack');
     lastPicked = new Set(picked);
+    // What the camera sees, with a margin (shadows, tall models): off it, skeletons wait (render/units.ts).
+    const seen = rig.footprint();
+    const [x0, x1] = [Math.min(...seen.map((p) => p.x)) - 4, Math.max(...seen.map((p) => p.x)) + 4];
+    const [z0, z1] = [Math.min(...seen.map((p) => p.z)) - 4, Math.max(...seen.map((p) => p.z)) + 4];
+    units.inView = (x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
     units.sync(world, acc / TICK, input.selected, PLAYER, sees, seenAt);
     footprints.update(world, sees, performance.now());
     // The hover halo: a building in sight under the mouse, not already selected (none on a touch screen, which has no hover).

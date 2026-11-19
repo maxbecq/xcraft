@@ -3,6 +3,7 @@ import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
+import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -1058,6 +1059,8 @@ function ghost(body: Object3D): void {
 }
 
 interface View {
+  /** Animation time not yet played while the view was off screen (s), caught up when it comes back. */
+  idle?: number;
   /** Entity type it was built for: a building turned into another gets a new view. */
   type: string;
   /** Z socle: the tier it is drawn at (each one a little larger). */
@@ -1726,6 +1729,11 @@ function dropHalo(h: Halo): void {
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
 export class EntityRenderer {
+  /**
+   * Whether a ground point (tiles) is in view or near it: off screen, skeletons wait. Animating every unit of the
+   * map, seen or not, cost a share of the frame and the most garbage left (about 10 MB a second in a fight).
+   */
+  inView: (x: number, z: number) => boolean = () => true;
   /** The building wearing the hover halo, and the one whose halo is fading out (see glow). */
   private halo: Halo | null = null;
   private fading: Halo | null = null;
@@ -2235,6 +2243,16 @@ export class EntityRenderer {
     return g.phase;
   }
 
+  /** Moves a skeleton on by `dt`, or, off screen, keeps the time for when it is seen again. */
+  private pose(v: View, dt: number): void {
+    if (!this.inView(v.root.position.x, v.root.position.z)) {
+      v.idle = (v.idle ?? 0) + dt;
+      return;
+    }
+    v.mixer!.update(dt + (v.idle ?? 0));
+    v.idle = 0;
+  }
+
   private animate(v: View, e: Entity, dt: number): void {
     const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py || !!v.emerge;
@@ -2255,7 +2273,7 @@ export class EntityRenderer {
       } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && CHARACTERS[e.type]?.grip === 'drill') {
         // Jackhammer: lean on it and shudder fast, rather than the slow hammer swing of the work clip.
         play(v, CLIP.idle, 0.3);
-        v.mixer.update(dt);
+        this.pose(v, dt);
         // A light judder, not a bounce: the sparks show the work.
         v.model.position.y = Math.abs(Math.sin(t * 47 + e.id)) * 0.008;
         v.model.children[0].rotation.x = 0.12 + Math.sin(t * 61 + e.id) * 0.006; // leaning forward, whatever the heading
@@ -2264,7 +2282,7 @@ export class EntityRenderer {
       else play(v, CLIP.idle, attacking ? 1.4 : 0.8);
       v.model.position.y = 0;
       v.model.children[0].rotation.x = 0;
-      v.mixer.update(dt);
+      this.pose(v, dt);
       return;
     }
     const speed = (e.def as UnitDef).speed;
@@ -2638,6 +2656,7 @@ export class EntityRenderer {
     }
     if (v.unit) xrayable(pivot, e.owner);
     else if (e.def.kind === 'building') occluder(pivot);
+    stableShadowDepth(root);
     this.views.set(e.id, v);
     return v;
   }

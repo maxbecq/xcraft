@@ -1,4 +1,4 @@
-import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, type Sprite, Vector2, type WebGLRenderer } from 'three';
+import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, type Sprite, Vector2, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { inkPass } from './ink';
 import { drawXray, XrayPass } from './xray';
@@ -96,6 +96,12 @@ export class Post {
   setSize(w: number, h: number): void {
     this.composer?.setSize(w, h);
     this.ink?.uniforms.resolution.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+  }
+
+  /** Where the scene itself is drawn: the composer's buffer, else the screen. Its programs differ (tone mapping,
+   * colour space), so the scene is compiled there. */
+  get sceneTarget(): WebGLRenderTarget | null {
+    return this.composer?.readBuffer ?? null;
   }
 
   render(): void {
