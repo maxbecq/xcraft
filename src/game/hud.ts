@@ -118,6 +118,8 @@ export class Hud {
   /** Unit ability being aimed (none: a building's). */
   private aimed?: string;
   private readonly banner = el('div', 'hud-banner');
+  /** More buttons for the end-of-game banner (the telemetry's). */
+  endButtons = '';
   /** A match against a friend online: the end offers a rematch instead of a new game. */
   online = false;
   private readonly tip = el('div', 'cmd-tip');
@@ -643,7 +645,7 @@ export class Hud {
     this.updateGhost();
     if (this.world.winner !== null && this.banner.hidden) {
       const won = this.world.winner === this.player;
-      this.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${this.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button></div>`;
+      this.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${this.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${this.endButtons}</div>`;
       this.banner.classList.toggle('won', won);
       this.banner.hidden = false;
     }

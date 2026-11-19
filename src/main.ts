@@ -20,6 +20,7 @@ import { DEFAULT_MAP, MAPS, mapFile } from './maps';
 import { seatsOf } from './mappicker';
 import { PerfHud } from './perf';
 import { Footprints } from './render/footprints';
+import { PerfRecorder } from './perfrec';
 import { stableShadowDepth } from './render/shadowdepth';
 import { drawXray } from './render/xray';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
@@ -116,6 +117,15 @@ slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the
 const factions = slots.map((s) => s.faction);
 const [myFaction, foeFaction = asFaction(stored('xcraft.adversaire'))] = factions; // a Bac à sable has no opponent
 const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
+/** `?perf=rec` or the Options box: frame-by-frame telemetry of this game, to send at the end. */
+const rec = new PerfRecorder(renderer, {
+  version: typeof __VERSION__ === 'string' ? __VERSION__ : 'dev',
+  mode: ATTRACT ? 'titre' : REPLAY ? 'replay' : NET_ROLE ? 'en-ligne' : SANDBOX ? 'bac-a-sable' : SPECTATE ? 'spectateur' : 'solo',
+  map: MAP.id,
+  factions,
+  quality: QUALITY_LEVEL,
+  touch: TOUCH,
+});
 // Title screen: a still scene, not a running match (no simulation, no AI, so no fights and no sound).
 if (ATTRACT) stageAttract(world);
 document.body.classList.toggle('isdaris', factions[PLAYER] === 'isdaris'); // spectating shows the first side's interface
@@ -329,6 +339,11 @@ function answer(kind: 'ack' | 'go'): void {
   lastAnswer = performance.now();
   audio.play(`${kind}${factions[PLAYER]}` as Sfx, 0.8);
 }
+/** The telemetry's buttons, in the pause menu and the end-of-game banner, while it records. */
+function showRecButtons(): void {
+  pause.querySelector<HTMLElement>('[data-p="perfrec"]')!.hidden = !rec.on;
+  hud.endButtons = rec.on ? '<button data-p="perfrec">Enregistrer les mesures</button>' : '';
+}
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.online = !!NET_ROLE;
 hud.gridKeys = SCROLL.grid && !TOUCH;
@@ -380,12 +395,14 @@ document.body.insertBefore(overlay.canvas, renderer.domElement.nextSibling);
 
 /** Copies the player's fog of war to the terrain and minimap. */
 function updateFog(): void {
+  const t0 = performance.now();
   const tiles = revealed() ? world.vision[PLAYER].tiles.map(() => 2) : world.vision[PLAYER].tiles;
   const data = fog.image.data as Uint8Array;
   for (let i = 0; i < tiles.length; i++) data[i] = tiles[i] === 2 ? 255 : tiles[i] === 1 ? 128 : 0;
   fog.needsUpdate = true;
   minimap.fog(tiles);
   if (!bigBox.hidden) bigMap.fog(tiles);
+  rec.add('fog', performance.now() - t0);
 }
 
 // Camera: arrow keys, screen-edge scrolling, wheel zoom.
@@ -578,6 +595,7 @@ pause.innerHTML = `<div class="pause-box">
 <button data-p="fullscreen" hidden>Plein écran</button>
 <button data-p="restart">Recommencer</button>
 <button data-p="replay">Enregistrer le replay</button>
+<button data-p="perfrec" hidden>Enregistrer les mesures de performance</button>
 <button data-p="quit">Quitter la partie</button>
 <div class="help" hidden><h3>Contrôles</h3>
 Clic gauche / rectangle : sélectionner (<kbd>Maj</kbd> pour ajouter) · double-clic ou <kbd>Ctrl</kbd>+clic : tout ce type à l'écran<br>
@@ -627,7 +645,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'options') {
     // Built on opening, so the fields show the values in force.
-    if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields() + controlFields(true) + perf.field();
+    if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields() + controlFields(true) + perf.field(rec.field());
     pauseOptions.hidden = !pauseOptions.hidden;
   }
   else if (p === 'fullscreen') toggleFullscreen();
@@ -638,6 +656,7 @@ document.addEventListener('click', (e) => {
     link.again();
   } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(record);
+  else if (p === 'perfrec') rec.save({ ticks: world.tick, winner: world.winner });
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
     location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`;
@@ -823,6 +842,11 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
     perf.toggle((field as HTMLInputElement).checked);
     return true;
   }
+  if (field.dataset.k === 'perfrec') {
+    rec.toggle((field as HTMLInputElement).checked);
+    showRecButtons();
+    return true;
+  }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
   if (k === 'lock' || k === 'grid' || k === 'halo') {
@@ -840,6 +864,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
 
 function start(): void {
   clock.getDelta();
+  showRecButtons();
   if (ATTRACT) updateFog(); // the simulation never runs to do it
   const timing: Record<string, number> = {};
   if (import.meta.env.DEV) Object.assign(window, { timing });
@@ -848,7 +873,11 @@ function start(): void {
     const now = performance.now();
     timing[name] = (timing[name] ?? 0) * 0.9 + (now - mark) * 0.1;
     mark = now;
+    rec.lap(name);
   };
+  /** This frame's simulation steps and what they reported, for the telemetry. */
+  let stepped = 0;
+  const happened: Record<string, number> = {};
   /** Runs the simulation `dt` seconds on. `drawn`: false in a background tab, where nothing is shown. */
   const advance = (dt: number, drawn = true) => {
     if (!ATTRACT && !(paused && !net)) acc += dt * gameSpeed();
@@ -864,6 +893,10 @@ function start(): void {
       if (net && world.tick % 100 === 0) net.check(world.tick, stateHash(world));
       if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
       world.step(cmds);
+      if (rec.on) {
+        stepped++;
+        for (const ev of world.events) happened[ev.kind] = (happened[ev.kind] ?? 0) + 1;
+      }
       if (world.winner !== null && !REPLAY && !ATTRACT && !saved) saved = saveReplay(record);
       pending = [];
       hud.notify(world.events);
@@ -883,6 +916,7 @@ function start(): void {
     });
   const frame = (elapsed: number) => {
     mark = performance.now();
+    rec.begin();
     const dt = Math.min(elapsed, 0.25);
     // The pause menu stops the match on this machine (alone, or watching a replay); online both sides step together,
     // so it pauses nothing there.
@@ -989,9 +1023,29 @@ function start(): void {
     }
     post.render();
     lap('render');
+    rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, () => ({
+      tick: world.tick,
+      ticks: stepped,
+      units: unitsOnScreen(),
+      moving: false,
+      events: { ...happened },
+    }));
+    stepped = 0;
+    for (const k in happened) delete happened[k];
+  };
+  /** Units in the camera's view (only counted for a telemetry spike). */
+  const unitsOnScreen = () => {
+    const v = new Vector3();
+    let n = 0;
+    for (const e of world.entities.values()) {
+      if (e.def.kind !== 'unit' || e.inside || !sees(e)) continue;
+      v.set(e.x / FP, 0, e.y / FP).project(rig.camera);
+      if (Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1) n++;
+    }
+    return n;
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
-  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer });
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer, rec });
   // Two frames on (the first compiles the shaders), the picture is ready: the loading screen fades away.
   requestAnimationFrame(() => requestAnimationFrame(() => {
     loading?.classList.add('done');
@@ -1010,7 +1064,10 @@ function start(): void {
     const dt = clock.getDelta();
     // Paused: the world, units and effects stand still; the picture is still drawn under the menu.
     // A network game never pauses: the other player is still playing.
-    if (paused && !net) post.render();
+    if (paused && !net) {
+      post.render();
+      rec.idle();
+    }
     else frame(dt);
     perf.frame(world.tick);
   });

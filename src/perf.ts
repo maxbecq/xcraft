@@ -32,9 +32,9 @@ export class PerfHud {
     if (new URLSearchParams(location.search).has('debug') || stored) this.show(true);
   }
 
-  /** The Options box. */
-  field(): string {
-    return `<fieldset class="options"><legend>Débogage</legend><label><input type="checkbox" data-k="debug"${this.el ? ' checked' : ''}> Mesures de performance en haut de l'écran</label></fieldset>`;
+  /** The Options box (`extra`: more lines in it). */
+  field(extra = ''): string {
+    return `<fieldset class="options"><legend>Débogage</legend><label><input type="checkbox" data-k="debug"${this.el ? ' checked' : ''}> Mesures de performance en haut de l'écran</label>${extra}</fieldset>`;
   }
 
   /** Turned on or off from the Options box, and kept for this browser. */
