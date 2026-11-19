@@ -705,7 +705,8 @@ export class Hud {
     this.updateCard();
     this.updateGhost();
     if (this.world.winner !== null && this.banner.hidden) {
-      const won = this.world.winner === this.player;
+      // The winner is one player of the winning team: an ally's victory is ours too (our own buildings lost or not).
+      const won = this.world.players[this.world.winner]?.team === this.world.players[this.player]?.team;
       this.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${this.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${this.endButtons}</div>`;
       this.banner.classList.toggle('won', won);
       this.banner.hidden = false;
