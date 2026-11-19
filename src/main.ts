@@ -507,8 +507,9 @@ function scrollDirection(): [number, number] {
   let dx = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
   let dy = Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown'));
   let edge = '';
-  if (!mouse) edgeSince = 0;
-  if (mouse && !mouse.onButton && !paused && !ATTRACT) {
+  // Space held drags the map with the mouse: the edges would scroll it too, against the drag.
+  if (!mouse || spaceDrag) edgeSince = 0;
+  if (mouse && !spaceDrag && !mouse.onButton && !paused && !ATTRACT) {
     // Speed grows the deeper the pointer goes into the band, along an S: barely moving as it enters, then faster and
     // faster, and level again at the screen's edge.
     const EDGE_PX = edgeBand();
