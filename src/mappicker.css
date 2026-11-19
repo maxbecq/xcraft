@@ -12,8 +12,14 @@
 .menu .maps .map-card .map-meta { font-size: 11px; opacity: 0.8; line-height: 1.3; }
 .menu .maps .map-card.chosen { opacity: 1; border-color: var(--amber, #e0b34f); box-shadow: 0 0 12px rgba(224, 179, 79, 0.45); }
 .menu .map-about { width: min(900px, 94vw); margin: -8px 0 0; font: 13px var(--ui); letter-spacing: 0; color: #c9b896; text-align: center; }
-/* Hovering a card lights its frame only: the menu buttons' bright hover fill would wash out the picture and text. */
-.menu .maps .map-card:hover { opacity: 1; color: inherit; background: inherit; border-color: var(--space-glow, #6fd3ff); text-shadow: none; }
+/* Hovering a card lights its frame only: the menu buttons' bright hover fill would wash out the picture and text. Its
+   own ink and panel stay (inherit gave the page's black). Only where there is a pointer to hover with: on a touch
+   screen :hover sticks to the card just tapped. No fade either, so the redrawn row does not flicker on a tap. */
+.menu .maps .map-card { transition: none; -webkit-tap-highlight-color: transparent; }
+.menu .maps .map-card:is(:hover, .vhover) { color: var(--space-ink); background: var(--space-panel); text-shadow: none; }
+@media (hover: hover) {
+  .menu .maps .map-card:is(:hover, .vhover) { opacity: 1; border-color: var(--space-glow, #6fd3ff); }
+}
 /* Small screens: the maps get a step of their own, as a grid that scrolls with the page. */
 .menu.compact .maps { flex-wrap: wrap; justify-content: center; overflow: visible; width: min(640px, 94vw); }
 .menu.compact .maps .map-card { width: calc(50% - 6px); max-width: 158px; }
