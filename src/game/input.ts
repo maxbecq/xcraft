@@ -365,6 +365,11 @@ export class Input {
     const target = this.entityAt(x, y);
     if (this.hooks.click?.(0, ground, false, target)) return;
     const now = performance.now();
+    // Our site left half built, tapped with a worker selected: it goes back to finish it (as a right click does).
+    if (target && target.owner === this.player && target.buildLeft > 0 && ground && this.own().some((e) => (e.def as UnitDef).worker)) {
+      this.orderAt(ground.x, ground.z, target);
+      return;
+    }
     if (target && target.owner === this.player) {
       if (this.lastTap.type === target.type && now - this.lastTap.time < DOUBLE_TAP_MS) {
         this.sameOnScreen(target.type).forEach((id) => this.selected.add(id));
