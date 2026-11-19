@@ -15,8 +15,11 @@ import { isoOffset } from '../camera';
 export const SPRITES = new URLSearchParams(location.search).has('sprites');
 /** Buildings with a painted picture (public/sprites/<type>.png, <type>-depth.png, <type>.json). */
 export const SPRITE_TYPES = ['pod', 'armement', 'intelligence'];
-/** The model's turn when baked and when drawn: its front to the camera. */
-export const SPRITE_YAW = Math.PI / 4;
+/**
+ * The model's turn when baked and when drawn: none, as the 3D buildings stand (a corner to the camera), except
+ * where the picture is the 2D concept itself, drawn from another side: the model is turned to match it.
+ */
+export const SPRITE_YAW: Record<string, number> = { armement: Math.PI / 2 };
 /** Image pixels per world unit, when baked. */
 export const SPRITE_PPU = 144;
 /** Depth span coded in the depth image (world units, centred on the building's origin). */
@@ -210,7 +213,7 @@ export function dressSprite(model: Object3D, type: string, teamColor: number): b
   if (!s) return false;
   const holder = new Upright();
   const turned = new Group();
-  turned.rotation.y = SPRITE_YAW;
+  turned.rotation.y = SPRITE_YAW[type] ?? 0;
   for (const c of [...model.children]) turned.add(c);
   turned.traverse((o) => {
     if (!(o instanceof Mesh)) return;

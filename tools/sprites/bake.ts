@@ -11,7 +11,8 @@ import { cameraAxes, DEPTH_RANGE, SPRITE_PPU, SPRITE_YAW } from '../../src/rende
 const params = new URLSearchParams(location.search);
 const types = (params.get('types') ?? 'pod,armement,intelligence').split(',');
 const ppu = Number(params.get('ppu')) || SPRITE_PPU;
-const post = (name: string, body: Blob | string) => fetch(`http://127.0.0.1:8765/${name}`, { method: 'POST', body });
+const suffix = params.get('suffix') ?? '';
+const post = (name: string, body: Blob | string) => fetch(`http://127.0.0.1:8765/${name.replace('.', `${suffix}.`)}`, { method: 'POST', body });
 const log = (s: string) => (document.getElementById('log')!.textContent += `${s}\n`);
 
 // The desert's light (src/render/biome.ts), imported there through a cycle that breaks this page.
@@ -42,7 +43,7 @@ for (const type of types) {
   sun.position.set(-22, 40, -12);
   scene.add(sun, sun.target);
   const holder = new Group();
-  holder.rotation.y = SPRITE_YAW;
+  holder.rotation.y = params.has('yaw') ? Number(params.get('yaw')) : (SPRITE_YAW[type] ?? 0);
   holder.add(preview(type, 0).object);
   scene.add(holder);
   holder.updateMatrixWorld(true);
