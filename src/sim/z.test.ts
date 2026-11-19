@@ -272,6 +272,12 @@ describe('Z', () => {
     const before = guarded.hp;
     w.hurt(guarded, 50);
     expect(guarded.hp).toBe(before);
+    // Killed with its cone still up, the count of live cones comes back to 0.
+    expect(w.cones).toBe(1);
+    acc.hp = 0;
+    w.step([]);
+    expect(w.entities.has(acc.id)).toBe(false);
+    expect(w.cones).toBe(0);
   });
 
   it('the large socles: Octopode and Mastodonte at weapon level 3, the Barge carries 8 then 12 of supply', () => {

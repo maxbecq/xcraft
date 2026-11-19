@@ -355,6 +355,12 @@ export class World {
 
   remove(e: Entity): void {
     if (e.def.kind !== 'unit') this.block(e, -1);
+    // A caster gone with its Cône still up: it counted among the live cones, and coned() would look through every
+    // entity at every hit until the game's end.
+    if (e.cone > 0) {
+      e.cone = 0;
+      this.cones--;
+    }
     this.entities.delete(e.id);
   }
 
