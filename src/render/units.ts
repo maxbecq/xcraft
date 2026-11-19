@@ -1,4 +1,4 @@
-import { unxray, xrayable } from './xray';
+import { occluder, unxray, xrayable } from './xray';
 import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
@@ -2637,6 +2637,7 @@ export class EntityRenderer {
       }
     }
     if (v.unit) xrayable(pivot, e.owner);
+    else if (e.def.kind === 'building') occluder(pivot);
     this.views.set(e.id, v);
     return v;
   }
