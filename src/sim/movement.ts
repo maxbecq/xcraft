@@ -164,23 +164,70 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
 
 /** Pushes overlapping units apart (flying ones among themselves); moving units shove idle ones. Harvesters pass through each other. */
 export function separate(this: World): void {
-  const buckets = new Map<number, Entity[]>();
+  const index = new Map<number, number>();
+  /** Per bucket: its units (indices into units), its widest body, the most any of them has moved so far. */
+  const members: number[][] = [];
+  const widest: number[] = [];
+  const drift: number[] = [];
   const key = (x: number, y: number) => y * 1024 + x;
   const units = [...this.entities.values()].filter((e) => e.def.kind === 'unit' && e.order?.kind !== 'gather' && !e.inside);
-  for (const e of units) {
+  const n = units.length;
+  const x0 = new Int32Array(n);
+  const y0 = new Int32Array(n);
+  const home = new Int32Array(n);
+  const air = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const e = units[i];
+    x0[i] = e.x;
+    y0[i] = e.y;
+    air[i] = flies(e) ? 1 : 0;
     const k = key(tileOf(e.x) >> 1, tileOf(e.y) >> 1);
-    let b = buckets.get(k);
-    if (!b) buckets.set(k, (b = []));
-    b.push(e);
+    let b = index.get(k);
+    if (b === undefined) {
+      index.set(k, (b = members.length));
+      members.push([]);
+      widest.push(0);
+      drift.push(0);
+    }
+    members[b].push(i);
+    widest[b] = Math.max(widest[b], e.radius);
+    home[i] = b;
   }
+  const moved = (i: number) => {
+    const u = units[i];
+    drift[home[i]] = Math.max(drift[home[i]], Math.abs(u.x - x0[i]), Math.abs(u.y - y0[i]));
+  };
   // Buckets two tiles wide: look far enough that the two widest bodies (gods, 1.3 tiles) still meet.
   const reach = idiv(2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + 2 * FP - 1, 2 * FP);
-  for (const e of units) {
+  for (let i = 0; i < n; i++) {
+    const e = units[i];
     const bx = tileOf(e.x) >> 1;
     const by = tileOf(e.y) >> 1;
     for (let dy = -reach; dy <= reach; dy++) {
       for (let dx = -reach; dx <= reach; dx++) {
-        for (const f of buckets.get(key(bx + dx, by + dy)) ?? []) if (f.id > e.id && flies(f) === flies(e)) this.pushApart(e, f);
+        const b = index.get(key(bx + dx, by + dy));
+        if (b === undefined) continue;
+        // Every body of the bucket, even moved by the pushes so far, too far to touch e: none of its pairs would push,
+        // so skipping it changes nothing (the same pushes, in the same order).
+        const gx = dx > 0 ? 2 * (bx + dx) * FP - e.x : dx < 0 ? e.x - 2 * (bx + dx + 1) * FP : 0;
+        const gy = dy > 0 ? 2 * (by + dy) * FP - e.y : dy < 0 ? e.y - 2 * (by + dy + 1) * FP : 0;
+        if (Math.max(gx, gy) - drift[b] >= e.radius + widest[b]) continue;
+        // Units come in id order (entities are kept in spawn order): start past e.
+        const m = members[b];
+        let q = 0;
+        for (let hi = m.length; q < hi; ) {
+          const mid = (q + hi) >> 1;
+          if (m[mid] <= i) q = mid + 1;
+          else hi = mid;
+        }
+        for (; q < m.length; q++) {
+          const j = m[q];
+          const f = units[j];
+          if (air[j] !== air[i]) continue;
+          this.pushApart(e, f);
+          moved(i);
+          moved(j);
+        }
       }
     }
   }
