@@ -25,8 +25,8 @@ export interface InputHooks {
   focus: (x: number, z: number) => void;
   /** Lets the HUD take a click first (e.g. to place a building); true if consumed. */
   click?: (button: number, ground: Vector3 | null, shift: boolean, target?: Entity) => boolean;
-  /** An order was given at a ground point (tiles), maybe on an entity: show it. */
-  ordered?: (x: number, z: number, target?: Entity) => void;
+  /** An order was given at a ground point (tiles), maybe on an entity: show it. `rally`: it set buildings' rally point. */
+  ordered?: (x: number, z: number, target?: Entity, rally?: boolean) => void;
   /** Touch: move the camera by a finger drag (pixels) and zoom by a pinch factor. */
   pan: (dx: number, dy: number) => void;
   /** A finger let go of a drag at this speed (pixels per second); 0, 0 when a finger touches down. */
@@ -457,10 +457,10 @@ export class Input {
   /** Right-click at a ground point (in tiles), optionally on an entity. */
   /** Right-click order; with shift, it comes after what the units are doing. */
   orderAt(x: number, z: number, target?: Entity, queue = false): void {
-    const ids = this.own().map((e) => e.id);
-    if (!ids.length) return;
-    this.hooks.issue({ player: this.player, kind: 'smart', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
-    this.hooks.ordered?.(x, z, target);
+    const own = this.own();
+    if (!own.length) return;
+    this.hooks.issue({ player: this.player, kind: 'smart', ids: own.map((e) => e.id), x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
+    this.hooks.ordered?.(x, z, target, own.every((e) => e.def.kind === 'building'));
   }
 
   /** Drops dead entities from the selection. */

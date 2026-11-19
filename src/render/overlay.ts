@@ -5,6 +5,10 @@ import { FP } from '../sim/fixed';
 import { type Entity, type Order, type World, flies } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
+/** A rally point's arrows dive this long (ms), then its ring opens and fades for RALLY_RING. */
+const RALLY_DIVE = 380;
+const RALLY_RING = 520;
+
 export class Overlay {
   readonly canvas = document.createElement('canvas');
   private readonly ctx: CanvasRenderingContext2D;
@@ -13,7 +17,7 @@ export class Overlay {
   private readonly a = new Vector3();
   private readonly b = new Vector3();
   /** Order feedback: where the last right-clicks / taps landed, fading out. */
-  private marks: { x: number; z: number; color: string; label: string; t0: number }[] = [];
+  private marks: { x: number; z: number; color: string; label: string; t0: number; rally?: boolean }[] = [];
 
   constructor(private readonly map: GameMap) {
     this.canvas.className = 'overlay';
@@ -96,9 +100,10 @@ export class Overlay {
 
   /**
    * Shows that an order was taken: a ring that tightens on the spot (green: move, gold: harvest,
-   * red: attack) and, on a resource, how much is left in it.
+   * red: attack) and, on a resource, how much is left in it. A rally point set for buildings shows instead four
+   * arrows diving onto the spot from above, then a brief ring there.
    */
-  mark(player: number, x: number, z: number, target?: Entity): void {
+  mark(player: number, x: number, z: number, target?: Entity, rally = false): void {
     let color = '#8dff8a';
     let label = '';
     if (target?.def.kind === 'resource') {
@@ -114,7 +119,8 @@ export class Overlay {
       x = target.x / FP;
       z = target.y / FP;
     }
-    this.marks.push({ x, z, color, label, t0: performance.now() });
+    if (rally) color = '#7fe8ff';
+    this.marks.push({ x, z, color, label, t0: performance.now(), rally });
     if (this.marks.length > 6) this.marks.shift();
   }
 
@@ -173,6 +179,10 @@ export class Overlay {
     const now = performance.now();
     this.marks = this.marks.filter((m) => now - m.t0 < 1200);
     for (const m of this.marks) {
+      if (m.rally) {
+        this.drawRally(m, now - m.t0, camera, w, h);
+        continue;
+      }
       const k = (now - m.t0) / 1200; // 0 → 1
       const y = heightAt(this.map, m.x, m.z) + 0.05;
       const r = 0.9 * (1 - k * 0.6);
@@ -207,5 +217,65 @@ export class Overlay {
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     }
+  }
+
+  /**
+   * A rally point being set: four arrows, one from each side of the ground, dive at the spot (RALLY_DIVE ms, faster
+   * as they fall), then a ring opens and fades where they struck. Drawn from 3D points, so they follow the camera.
+   */
+  private drawRally(m: { x: number; z: number; color: string; label: string }, t: number, camera: Camera, w: number, h: number): void {
+    const ctx = this.ctx;
+    const ground = heightAt(this.map, m.x, m.z) + 0.05;
+    const at = (dx: number, dy: number, dz: number): [number, number] => {
+      this.v.set(m.x + dx, ground + dy, m.z + dz).project(camera);
+      return [((this.v.x + 1) / 2) * w, ((1 - this.v.y) / 2) * h];
+    };
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (t < RALLY_DIVE) {
+      const p = (t / RALLY_DIVE) ** 2;
+      const d = 1.6 - 1.3 * p; // from the spot, tiles
+      const y = 1.8 * (1 - p) + 0.1;
+      // Diagonals: the camera looks along a ground axis, so arrows on the axes would hide one another.
+      for (const [cx, cz] of [[0.71, 0.71], [-0.71, 0.71], [-0.71, -0.71], [0.71, -0.71]]) {
+        const tip = at(cx * d, y, cz * d);
+        const tail = at(cx * (d + 0.65), y + 0.75, cz * (d + 0.65));
+        const a = Math.atan2(tip[1] - tail[1], tip[0] - tail[0]);
+        const head = (s: number): [number, number][] => [
+          [tip[0] - Math.cos(a - 0.55) * s, tip[1] - Math.sin(a - 0.55) * s],
+          [tip[0] - Math.cos(a + 0.55) * s, tip[1] - Math.sin(a + 0.55) * s],
+        ];
+        for (const [color, width] of [['rgba(0, 0, 0, 0.7)', 8], [m.color, 4]] as const) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.beginPath();
+          ctx.moveTo(...tail);
+          ctx.lineTo(...tip);
+          const [l, r] = head(13);
+          ctx.moveTo(...l);
+          ctx.lineTo(...tip);
+          ctx.lineTo(...r);
+          ctx.stroke();
+        }
+      }
+      return;
+    }
+    const k = (t - RALLY_DIVE) / RALLY_RING;
+    if (k >= 1) return;
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = m.color;
+    ctx.shadowColor = m.color;
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 4 * (1 - k) + 1.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const [sx, sy] = at(Math.cos(a) * (0.25 + 0.55 * k), 0, Math.sin(a) * (0.25 + 0.55 * k));
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 }
