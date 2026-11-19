@@ -925,11 +925,11 @@ export class Hud {
         this.weaponMenu = null;
       };
       this.menuItems = [
-        { label: 'Mitrailleuse', key: 'M', cost: d.cost, reason: lack, action: queue() },
+        { label: 'Mitrailleuse', key: 'M', cmd: 'mitrailleuse', cost: d.cost, reason: lack, action: queue() },
         ...d.weapons!.map((k) => {
           const kit = WEAPONS[k];
           const reason = lack ?? this.world.needs(this.player, kit.research);
-          return { label: kit.name, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
+          return { label: kit.name, key: kit.hotkey, cmd: k, cost: withKit(d, k), reason, action: queue(k) };
         }),
       ];
     }
@@ -1007,7 +1007,8 @@ export class Hud {
       .map((b) => {
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? ''}"><kbd>${b.key}</kbd><span>${b.label}</span>${cost}</button>`;
+        const glyph = WEAPON_GLYPHS[b.cmd ?? ''] ?? '';
+        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? b.label}"><kbd>${b.key}</kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${glyph}"/></svg><span>${b.label}</span>${cost}</button>`;
       })
       .join('');
     this.tip.hidden = true; // its button may be gone
@@ -1024,18 +1025,28 @@ export class Hud {
     this.placeMenu();
   }
 
-  /** The weapon menu under its socle's button (above it when the screen ends below), or hidden. */
+  /**
+   * The weapon panel: an extra LCD screen as wide as the command card, standing on top of it, a grid like it; it
+   * unfolds upwards from the socle's button (the first frame it shows), with a flicker. Hidden when no socle is open.
+   */
   private placeMenu(): void {
     const at = this.menuItems.length ? this.card.querySelector<HTMLElement>('.cmd.open') : null;
+    const opening = !!at && this.menu.hidden;
     this.menu.hidden = !at;
     if (!at) {
       this.weaponMenu = null; // its socle no longer on the card (another selection)
       return;
     }
+    const card = this.card.getBoundingClientRect();
     const r = at.getBoundingClientRect();
-    const h = this.menu.offsetHeight;
-    this.menu.style.left = `${Math.max(4, Math.min(innerWidth - this.menu.offsetWidth - 4, r.left))}px`;
-    this.menu.style.top = `${r.bottom + 4 + h <= innerHeight ? r.bottom + 4 : Math.max(4, r.top - h - 4)}px`;
+    this.menu.style.left = `${card.left}px`;
+    this.menu.style.width = `${card.width}px`;
+    this.menu.style.top = `${Math.max(4, card.top - this.menu.offsetHeight - 4)}px`;
+    if (!opening) return;
+    this.menu.style.transformOrigin = `${r.left + r.width / 2 - card.left}px 100%`;
+    this.menu.classList.remove('unfold');
+    void this.menu.offsetWidth; // restarts the animation
+    this.menu.classList.add('unfold');
   }
 
   /** A weapon picked in the menu (a click, a tap or its key). */
@@ -1189,6 +1200,20 @@ function el(tag: string, cls: string): HTMLElement {
   e.className = cls;
   return e;
 }
+
+/** Z socle weapons' pictograms on the weapon panel: strokes on a 24 px box, drawn in the LCD's phosphor. */
+const WEAPON_GLYPHS: Record<string, string> = {
+  mitrailleuse: 'M3 10h13M3 14h13M16 8v8h3M19 11h2M6 14v3',
+  laser: 'M3 12h12M15 12l2-2 2 2-2 2zM19 12h2M9 9v-2M9 15v2',
+  flammes: 'M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 3-7 1 2 2 3 3 3c0-2-1-4 0-7z',
+  roquettes: 'M5 19l3-3M8 16l9-9 3-1-1 3-9 9zM8 12l-3 1M12 16l-1 3',
+  dechiqueteur: 'M12 3l2 3 3-1v3l3 2-3 2v3l-3-1-2 3-2-3-3 1v-3l-3-2 3-2V5l3 1zM12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4',
+  jetsonique: 'M3 12h3M9 7a7 7 0 0 1 0 10M13 5a10 10 0 0 1 0 14M17 3a13 13 0 0 1 0 18',
+  arc: 'M13 2L6 13h5l-2 9 8-12h-5z',
+  canonx04: 'M3 10h12l3 2h3M3 14h12l3-2M6 14v4M11 14v4M3 10v4',
+  reparateur: 'M15 4a4 4 0 0 0-1 6l-8 8 2 2 8-8a4 4 0 0 0 6-1l-3-1-1-3z',
+  accumulateur: 'M4 8h14v8H4zM18 11h2v2h-2M7 10v4M10 10v4M13 10v4',
+};
 
 function progress(label: string, f: number): string {
   return `<div class="info">${label}</div><div class="bar"><div style="width:${Math.round(100 * f)}%"></div></div>`;
