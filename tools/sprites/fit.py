@@ -2,6 +2,10 @@
 then crops both to what they cover and writes public/sprites/<type>.png, <type>-ref.png, <type>-depth.png, <type>.json.
 
 Usage: python3 tools/sprites/fit.py BAKE_DIR PAINTED.png TYPE OUT_DIR [TOLERANCE]
+       python3 tools/sprites/fit.py --base BASE_TYPE PAINTED.png TYPE OUT_DIR [TOLERANCE]
+The second form is for an upgrade painted over a building's sprite (the Pod supérieur over the Pod): no model of its
+own is baked; its base is sized and placed on the base building's sprite (the width of the bottom band of each), it
+grows upwards past it, and it takes the base building's depth.
 """
 import json
 import sys
@@ -9,11 +13,19 @@ from collections import deque
 
 from PIL import Image, ImageFilter
 
-bake, painted, kind, out = sys.argv[1:5]
-tol = int(sys.argv[5]) if len(sys.argv) > 5 else 30
-ref = Image.open(f"{bake}/{kind}-ref.png").convert("RGBA")
-depth = Image.open(f"{bake}/{kind}-depth.png").convert("RGBA")
-meta = json.load(open(f"{bake}/{kind}.json"))
+upgrade = sys.argv[1] == "--base"
+args = sys.argv[2:] if upgrade else sys.argv[1:]
+bake, painted, kind, out = args[:4]
+tol = int(args[4]) if len(args) > 4 else 30
+if upgrade:
+    base = bake
+    ref = Image.open(f"{out}/{base}.png").convert("RGBA")
+    depth = Image.open(f"{out}/{base}-depth.png").convert("RGBA")
+    meta = json.load(open(f"{out}/{base}.json"))
+else:
+    ref = Image.open(f"{bake}/{kind}-ref.png").convert("RGBA")
+    depth = Image.open(f"{bake}/{kind}-depth.png").convert("RGBA")
+    meta = json.load(open(f"{bake}/{kind}.json"))
 
 # Background: flood fill from the borders through pixels near the corners' colour.
 p = Image.open(painted).convert("RGB")
@@ -68,6 +80,38 @@ alpha = Image.frombytes("L", (w, h), bytes(0 if v else 255 for v in bg)).filter(
 cut = p.convert("RGBA")
 cut.putalpha(alpha)
 cut = cut.crop(alpha.point(lambda a: 255 if a > 128 else 0).getbbox())
+
+if upgrade:
+    def band(im):
+        """Left, right and bottom of the lowest band of what is drawn, as high as a third of its width: the base
+        (measured on the width, not the height, which the upgrade's towers change)."""
+        a = im.getchannel("A").point(lambda v: 255 if v > 128 else 0)
+        b = a.getbbox()
+        top = b[3] - (b[2] - b[0]) // 3
+        f = a.crop((0, top, im.width, b[3])).getbbox()
+        return f[0], f[2], b[3]
+    l0, r0, b0 = band(ref)
+    l1, r1, b1 = band(cut)
+    k = (r0 - l0) / (r1 - l1)
+    cut = cut.resize((round(cut.width * k), round(cut.height * k)), Image.LANCZOS)
+    x = round((l0 + r0) / 2 - (l1 + r1) / 2 * k)
+    y = round(b0 - b1 * k)
+    # A canvas holding both, the base building's pixels where they were (its origin moves with the padding).
+    pl, pt = max(0, -x), max(0, -y)
+    size = (max(ref.width, x + cut.width) + pl, max(ref.height, y + cut.height) + pt)
+    fitted = Image.new("RGBA", size, (0, 0, 0, 0))
+    fitted.alpha_composite(cut, (x + pl, y + pt))
+    grown = Image.new("RGBA", size, (0, 0, 0, 0))
+    grown.alpha_composite(depth, (pl, pt))
+    m = 8
+    c = fitted.getchannel("A").getbbox()
+    c = (max(0, c[0] - m), max(0, c[1] - m), min(size[0], c[2] + m), min(size[1], c[3] + m))
+    fitted.crop(c).save(f"{out}/{kind}.png", optimize=True)
+    grown.crop(c).save(f"{out}/{kind}-depth.png", optimize=True)
+    meta.update(w=c[2] - c[0], h=c[3] - c[1], ax=meta["ax"] + pl - c[0], ay=meta["ay"] + pt - c[1])
+    json.dump(meta, open(f"{out}/{kind}.json", "w"))
+    print(kind, meta, "scale", round(k, 3))
+    sys.exit(0)
 
 # Onto the reference's box.
 box = ref.getchannel("A").point(lambda a: 255 if a > 128 else 0).getbbox()

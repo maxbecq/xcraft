@@ -14,7 +14,12 @@ import { isoOffset } from '../camera';
  */
 export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
-export const SPRITE_TYPES = ['pod', 'intelligence'];
+export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme'];
+/**
+ * A picture's size against the model it stands on. The Intelligence suprême's model is drawn 10 % larger
+ * (LOOK_SCALE); its picture is painted over the Intelligence centrale's with the same base, and keeps it.
+ */
+const SPRITE_SCALE: Record<string, number> = { supreme: 1 / 1.1 };
 /**
  * The model's turn when baked and when drawn: none, as the 3D buildings stand (a corner to the camera). A picture
  * drawn from another side (a 2D concept) would turn the model under it to match.
@@ -246,6 +251,7 @@ export function dressSprite(model: Object3D, type: string, teamColor: number): b
     o.receiveShadow = false;
   });
   const picture = new Mesh(s.geometry, skin(type, teamColor));
+  picture.scale.setScalar(SPRITE_SCALE[type] ?? 1);
   picture.castShadow = false;
   picture.receiveShadow = false;
   picture.userData.sprite = true;
