@@ -13,6 +13,8 @@ interface Button {
   /** Entity type whose icon to show. */
   icon?: string;
   key: string;
+  /** Command pictogram (public/icons/cmd/<faction>/<cmd>.svg), drawn in the player's side's style; the label goes to the tooltip. */
+  cmd?: string;
   cost?: Cost;
   /** Why the button is disabled (unmet prerequisites), shown in its tooltip. */
   reason?: string;
@@ -618,8 +620,8 @@ export class Hud {
     if (!own.some((o) => o.type === this.activeType)) this.activeType = null;
     const ids = own.map((e) => e.id);
     const cmd = (c: Order) => this.issue({ ...c, player: this.player } as Command);
-    if (this.placing) return [{ label: 'Annuler', key: 'Escape', action: () => (this.placing = null) }];
-    if (this.targeting) return [{ label: 'Annuler', key: 'Escape', action: () => this.setTargeting(false) }];
+    if (this.placing) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => (this.placing = null) }];
+    if (this.targeting) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => this.setTargeting(false) }];
     let units = own.filter((e) => e.def.kind === 'unit');
     if (units.length) {
       if (this.buildMenu && this.workers().length) {
@@ -629,29 +631,29 @@ export class Hud {
             const d = DEFS[t] as BuildingDef;
             return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => (this.placing = t) };
           }),
-          { label: 'Retour', key: 'Escape', action: () => (this.buildMenu = false) },
+          { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (this.buildMenu = false) },
         ];
       }
-      const list: Button[] = [{ label: 'Stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
+      const list: Button[] = [{ label: 'Stop', cmd: 'stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
       // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
       const all = units;
       const sub = units.filter((u) => u.type === this.activeType);
       if (sub.length) units = sub;
       if (all.some((u) => this.world.weapon(u))) {
-        list.unshift({ label: 'Attaquer', key: 'A', action: () => this.setTargeting(true) });
-        list.push({ label: 'Maintenir', key: 'H', action: () => cmd({ kind: 'hold', ids }) });
-        list.push({ label: 'Patrouille', key: 'P', action: () => this.setTargeting(true, false, 'patrol') });
+        list.unshift({ label: 'Attaquer', cmd: 'attaquer', key: 'A', action: () => this.setTargeting(true) });
+        list.push({ label: 'Maintenir', cmd: 'maintenir', key: 'H', action: () => cmd({ kind: 'hold', ids }) });
+        list.push({ label: 'Patrouille', cmd: 'patrouiller', key: 'P', action: () => this.setTargeting(true, false, 'patrol') });
       }
       // Carriers (Scarabée, Bourdon with Chargement): let everyone out.
       const carriers = units.filter((u) => this.world.room(u));
       if (carriers.length) {
         const ids = carriers.map((u) => u.id);
         const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
-        list.push({ label: `Débarquer (${inside})`, key: 'D', reason: inside ? undefined : "Personne à l'intérieur", action: () => cmd({ kind: 'unload', ids }) });
+        list.push({ label: `Débarquer (${inside})`, cmd: 'debarquer', key: 'D', reason: inside ? undefined : "Personne à l'intérieur", action: () => cmd({ kind: 'unload', ids }) });
       }
       if (this.workers().length) {
-        list.push({ label: 'Construire', key: 'B', action: () => (this.buildMenu = 'basic') });
-        list.push({ label: 'Avancé', key: 'V', action: () => (this.buildMenu = 'advanced') });
+        list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (this.buildMenu = 'basic') });
+        list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (this.buildMenu = 'advanced') });
       }
       // One button per active ability among the selected units; each ready unit uses it.
       for (const ab of new Set(units.flatMap((u) => this.world.abilitiesFor(u)))) {
@@ -670,7 +672,7 @@ export class Hud {
         const next = this.world.nextTier(u)!;
         const research = DEFS[`r${u.type}${u.tier + 1}`] as UpgradeDef;
         const reason = this.world.level(this.player, `r${u.type}`) <= u.tier ? `Requiert : ${research.name}` : undefined;
-        list.push({ label: `Évoluer en T${u.tier + 1}`, key: 'E', cost: next.cost, reason, action: () => cmd({ kind: 'evolve', ids: evolvers.filter((o) => o.tier === u.tier).map((o) => o.id) }) });
+        list.push({ label: `Évoluer en T${u.tier + 1}`, cmd: 'evoluer', key: 'E', cost: next.cost, reason, action: () => cmd({ kind: 'evolve', ids: evolvers.filter((o) => o.tier === u.tier).map((o) => o.id) }) });
       }
       // Dieux: the gods summon their troops (in the least busy of the selected ones that can).
       for (const t of new Set(units.flatMap((u) => (u.def as UnitDef).trains ?? []))) {
@@ -682,7 +684,7 @@ export class Hud {
       // Dieux: the next level of a selected god, bought at the god (the lowest-levelled first).
       const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
       const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
-      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
+      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, cmd: 'niveau', type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
       // The Artefacterie's improvements, once there is one, for a selected god with room left.
       const buyers = units.filter((u) => (u.def as UnitDef).levels);
       if (buyers.length && [...this.world.entities.values()].some((b) => b.owner === this.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
@@ -694,14 +696,14 @@ export class Hud {
         }
       }
       const summoning = units.find((u) => u.queue.length);
-      if (summoning) list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
+      if (summoning) list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
       return list;
     }
     this.buildMenu = false;
     const b = own.find((o) => o.type === this.activeType) ?? own[0];
     if (!b || b.def.kind !== 'building') return [];
     const same = own.filter((o) => o.type === b.type);
-    if (b.buildLeft > 0) return [{ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [b.id] }) }];
+    if (b.buildLeft > 0) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [b.id] }) }];
     // Queue in the least busy of the selected buildings.
     const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
     // Z: a socle's weapon is picked before it is queued, for good; the machine gun comes free.
@@ -721,7 +723,7 @@ export class Hud {
           const reason = lack ?? this.world.needs(this.player, kit.research);
           return { label: `${d.name} : ${kit.name}`, icon: t, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
         }),
-        { label: 'Retour', key: 'Escape', action: () => (this.weaponMenu = null) },
+        { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (this.weaponMenu = null) },
       ];
     }
     const list: Button[] = (b.def.trains ?? []).map((t) => {
@@ -732,7 +734,7 @@ export class Hud {
     if (b.def.bunker) {
       const ids = same.map((o) => o.id);
       const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
-      list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
+      list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, cmd: 'debarquer', key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
     }
     // A building's abilities, once researched if they must be.
     for (const name of abilitiesOf(b.def as BuildingDef)) {
@@ -768,8 +770,8 @@ export class Hud {
     // Marché: trade one resource for the other.
     if (b.type === 'marche') {
       const { give, get } = BALANCE.rules.trade;
-      list.push({ label: `Minerai → ${get} énergie`, key: 'M', cost: { minerals: give, energy: 0 }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'minerals' }) });
-      list.push({ label: `Énergie → ${get} minerai`, key: 'N', cost: { minerals: 0, energy: give }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'energy' }) });
+      list.push({ label: `Minerai → ${get} énergie`, cmd: 'echange', key: 'M', cost: { minerals: give, energy: 0 }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'minerals' }) });
+      list.push({ label: `Énergie → ${get} minerai`, cmd: 'echange', key: 'N', cost: { minerals: 0, energy: give }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'energy' }) });
     }
     // Research: the next level of each upgrade line not yet researched nor queued.
     for (const t of b.def.researches ?? []) {
@@ -781,7 +783,7 @@ export class Hud {
       list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
     }
     if (same.some((o) => o.queue.length)) {
-      list.push({ label: 'Annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
+      list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
     }
     return list;
   }
@@ -797,7 +799,7 @@ export class Hud {
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-        const pic = b.icon ? img(b.icon, '') : '';
+        const pic = b.icon ? img(b.icon, '') : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : '';
         const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
         return `<button class="cmd${off}${anim}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
