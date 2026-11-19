@@ -14,7 +14,8 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { commandOk, Lockstep, START, stateHash, type Message } from './net';
+import { commandOk, Lockstep, START, type Message } from './net';
+import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command } from './sim/world';
 
@@ -66,7 +67,7 @@ function play(ticks: number, link: Link) {
       s.lock.poll();
       while (s.acc >= 50 && s.world.tick < ticks && s.lock.ready(s.world.tick)) {
         const cmds = s.lock.step(s.world.tick, s.ai.think());
-        if (s.world.tick % 100 === 0) s.lock.check(s.world.tick, stateHash(s.world));
+        if (s.world.tick % 100 === 0) s.lock.check(s.world.tick, fingerprint(s.world));
         if (cmds.length) s.log.push([s.world.tick, cmds]);
         s.world.step(cmds);
         s.acc -= 50;
@@ -100,8 +101,8 @@ describe('lockstep between two browsers', () => {
       expect(b.world.tick).toBe(ticks);
       expect(a.log.length).toBeGreaterThan(10); // the AIs did play
       expect(a.log).toEqual(b.log);
-      expect(stateHash(a.world)).toBe(stateHash(b.world));
-      expect(stateHash(replay(a.log, ticks))).toBe(stateHash(a.world));
+      expect(fingerprint(a.world)).toBe(fingerprint(b.world));
+      expect(fingerprint(replay(a.log, ticks))).toBe(fingerprint(a.world));
       expect(a.lock.desync).toBeNull();
       expect(b.lock.desync).toBeNull();
     });
@@ -209,27 +210,6 @@ describe('lockstep between two browsers', () => {
     expect(b.started).toBe(false);
     b.receive({ t: START + 1, c: [], a: START }); // out of order: still a sign of life
     expect(b.started).toBe(true);
-  });
-
-  it('fingerprints shields, research and orders too, cheaply', () => {
-    const [a] = play(600, { latency: () => 30, lost: () => false });
-    const other = replay(a.log, 600);
-    expect(stateHash(other)).toBe(stateHash(a.world));
-    const unit = [...other.entities.values()].find((e) => e.def.kind === 'unit' && e.owner === 1)!;
-    const was = { shield: unit.shield, order: unit.order };
-    unit.shield += 1;
-    expect(stateHash(other)).not.toBe(stateHash(a.world));
-    unit.shield = was.shield;
-    unit.order = { kind: 'move', x: unit.x + 1000, y: unit.y, arrive: 0 } as typeof unit.order;
-    expect(stateHash(other)).not.toBe(stateHash(a.world));
-    unit.order = was.order;
-    other.players[1].upgrades = { ...other.players[1].upgrades, test: 1 };
-    expect(stateHash(other)).not.toBe(stateHash(a.world));
-    // Every 100 ticks (5 s): it must stay far below a frame.
-    const t0 = performance.now();
-    for (let i = 0; i < 200; i++) stateHash(a.world);
-    const each = (performance.now() - t0) / 200;
-    expect(each).toBeLessThan(2);
   });
 
   it('hears a deliberate leave', () => {

@@ -1,0 +1,88 @@
+import { describe, expect, it } from 'vitest';
+import { AI } from '../ai/ai';
+import { fingerprint } from './fingerprint';
+import { createMatch } from './setup';
+import type { Command, World } from './world';
+
+/** Two AIs play `ticks`; the orders are kept so the same game can be played again. */
+function game(ticks: number): { world: World; log: Map<number, Command[]> } {
+  const world = createMatch(['humains', 'z']);
+  const ais = [new AI(world, 0), new AI(world, 1)];
+  const log = new Map<number, Command[]>();
+  while (world.tick < ticks) {
+    const cmds = ais.flatMap((ai) => ai.think());
+    if (cmds.length) log.set(world.tick, cmds);
+    world.step(cmds);
+  }
+  return { world, log };
+}
+function again(log: Map<number, Command[]>, ticks: number): World {
+  const world = createMatch(['humains', 'z']);
+  while (world.tick < ticks) world.step(log.get(world.tick) ?? []);
+  return world;
+}
+
+describe('the state fingerprint', () => {
+  const ticks = 2400; // two minutes: armies, queues, research under way
+  const { world, log } = game(ticks);
+  const same = fingerprint(world);
+
+  it('is the same for the same game played twice', () => {
+    expect(fingerprint(again(log, ticks))).toBe(same);
+  });
+
+  it('tells apart two games differing in one detail the old fingerprint missed', () => {
+    const other = again(log, ticks);
+    const all = [...other.entities.values()];
+    const check = (what: string, change: () => () => void) => {
+      const undo = change();
+      expect(fingerprint(other), what).not.toBe(same);
+      undo();
+      expect(fingerprint(other), `${what}, undone`).toBe(same);
+    };
+    const producer = all.find((e) => e.queue.length > 0) ?? all.find((e) => e.def.kind === 'building')!;
+    check('a production queue of the same length, another unit in it', () => {
+      const was = [...producer.queue];
+      producer.queue = producer.queue.length ? [...producer.queue.slice(0, -1), 'autre'] : ['autre'];
+      if (!was.length) producer.queue = ['x'];
+      return () => (producer.queue = was);
+    });
+    const unit = all.find((e) => e.def.kind === 'unit')!;
+    check('a cooldown', () => {
+      unit.cooldown += 1;
+      return () => (unit.cooldown -= 1);
+    });
+    check('an ability cooldown', () => {
+      unit.abilityCd += 1;
+      return () => (unit.abilityCd -= 1);
+    });
+    check('a kit', () => {
+      const was = unit.kits;
+      unit.kits = [...was, 'test'];
+      return () => (unit.kits = was);
+    });
+    check('an order queued after the current one', () => {
+      const was = unit.next;
+      unit.next = [...was, { kind: 'move', x: 1, y: 2, arrive: 0 } as (typeof was)[number]];
+      return () => (unit.next = was);
+    });
+    check('a lasting effect on the ground', () => {
+      other.silences.push({ x: 1, y: 2, r: 3, until: 4 });
+      return () => other.silences.pop();
+    });
+    check('a research level', () => {
+      const p = other.players[0];
+      const was = p.upgrades;
+      p.upgrades = { ...was, armor: was.armor + 1 };
+      return () => (p.upgrades = was);
+    });
+  });
+
+  it('stays cheap: it runs every 100 ticks', () => {
+    const t0 = performance.now();
+    for (let i = 0; i < 50; i++) fingerprint(world);
+    const each = (performance.now() - t0) / 50;
+    console.log(`fingerprint: ${each.toFixed(3)} ms, ${world.entities.size} entities`);
+    expect(each).toBeLessThan(3);
+  });
+});

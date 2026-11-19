@@ -1,5 +1,5 @@
 import Peer, { type DataConnection } from 'peerjs';
-import type { Command, World } from './sim/world';
+import type { Command } from './sim/world';
 
 /**
  * Two-player lockstep over WebRTC. Both browsers run the same deterministic simulation; each tick, each side sends
@@ -326,31 +326,6 @@ export function every(ms: number, fn: () => void): () => void {
   }
 }
 
-/**
- * A fingerprint of the game state, compared between the two sides of a network game: the world's own (positions,
- * health, shields, resources, research) and every unit's order, queue and Z weapon, so a difference shows up before it moves anything.
- */
-export function stateHash(world: World): number {
-  let h = world.hash();
-  const mix = (v: number) => (h = Math.imul(h ^ (v | 0), 16777619));
-  for (const e of world.entities.values()) {
-    const o = e.order as { kind: string; x?: number; y?: number; target?: number } | null;
-    mix(o ? o.kind.charCodeAt(0) * 64 + o.kind.length : 0);
-    mix(o?.target ?? 0);
-    mix(o?.x ?? 0);
-    mix(o?.y ?? 0);
-    mix(e.queue.length);
-    // Z: the socle's weapon, and those chosen for the socles in the queue.
-    mix(e.kit.length);
-    mix(e.tier * 4096 + e.evolving);
-    mix(e.support * 65536 + e.seizedLeft);
-    for (const k of e.kits) mix(k.length);
-    // Who holds it (Soumission, Canon IEM) and what carries it.
-    mix(e.owner * 65536 + e.charm);
-    mix(e.inside);
-  }
-  return h >>> 0;
-}
 
 const peerId = (room: string) => `xcraft-game-${room}`;
 

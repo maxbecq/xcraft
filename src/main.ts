@@ -32,7 +32,8 @@ import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } fr
 import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
-import { connect, every, NO_DIRECT, readRoom, stateHash, type NetStatus } from './net';
+import { connect, every, NO_DIRECT, readRoom, type NetStatus } from './net';
+import { fingerprint } from './sim/fingerprint';
 import { countMatch, countTitle } from './stats';
 import { asFaction, SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, stored, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { decodeSeats } from './game/seats';
@@ -923,7 +924,7 @@ function start(): void {
       }
       stalledSince = 0;
       const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : net ? net.step(world.tick, pending) : [...pending, ...ais.flatMap((ai) => ai.think())];
-      if (net && world.tick % 100 === 0) net.check(world.tick, stateHash(world));
+      if (net && world.tick % 100 === 0) net.check(world.tick, fingerprint(world));
       if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
       world.step(cmds);
       if (rec.on) {
