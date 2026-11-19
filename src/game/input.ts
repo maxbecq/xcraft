@@ -156,6 +156,24 @@ export class Input {
   readonly selected = new Set<number>();
   /** Ground point under the cursor, in world units. */
   hover: Vector3 | null = null;
+  /** A finger was the last to touch the map, and where (screen pixels): it has no hover to aim with. */
+  private touchy = false;
+  private touchAt: { x: number; y: number } | null = null;
+  private aimed = { key: '', at: null as Vector3 | null };
+
+  /**
+   * Where a building being placed is aimed: the ground under the mouse; on a touch screen, under the last touch on the
+   * map, else under the screen's centre (so the grid shows as soon as the order is armed, and follows the finger and
+   * the camera). The ground there is found again only when the view or that point moves.
+   */
+  aim(): Vector3 | null {
+    if (!this.touchy && this.hover) return this.hover;
+    const cam = this.hooks.camera();
+    const at = this.touchAt ?? { x: innerWidth / 2, y: innerHeight / 2 };
+    const key = `${at.x},${at.y},${innerWidth},${innerHeight},${cam.matrixWorld.elements.join()},${cam.projectionMatrix.elements[0]}`;
+    if (key !== this.aimed.key) this.aimed = { key, at: this.groundAt(at.x, at.y) ?? (this.touchAt ? this.groundAt(innerWidth / 2, innerHeight / 2) : null) };
+    return this.aimed.at;
+  }
   private readonly groups = new Map<string, number[]>();
   private readonly box = document.createElement('div');
   private dragStart: { x: number; y: number } | null = null;
@@ -209,6 +227,8 @@ export class Input {
     });
     canvas.addEventListener('pointermove', (e) => {
       this.hover = this.groundAt(e.clientX, e.clientY);
+      this.touchy = e.pointerType === 'touch';
+      if (this.touchy) this.touchAt = { x: e.clientX, y: e.clientY };
       if (e.pointerType === 'touch') return this.touchMove(e);
       this.hoverCursor(e.clientX, e.clientY);
       if (this.grab) {
@@ -276,6 +296,8 @@ export class Input {
   private panVel = { x: 0, y: 0, t: 0 };
 
   private touchDown(e: PointerEvent, canvas: HTMLCanvasElement): void {
+    this.touchy = true;
+    this.touchAt = { x: e.clientX, y: e.clientY };
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {

@@ -937,7 +937,7 @@ export class Hud {
   }
 
   private updateGhost(): void {
-    const g = this.input.hover;
+    const g = this.placing ? this.input.aim() : this.input.hover;
     const spot = this.placing && g ? this.spot(this.placing, g) : null;
     this.ghost.visible = !!spot;
     if (!this.placing || !g) {
