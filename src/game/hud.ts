@@ -1035,7 +1035,7 @@ export class Hud {
   private placeMenu(): void {
     const at = this.menuItems.length ? this.card.querySelector<HTMLElement>('.cmd.open') : null;
     const opening = !!at && this.menu.hidden;
-    this.menu.hidden = !at;
+    if (this.menu.hidden !== !at) this.menu.hidden = !at;
     if (!at) {
       this.weaponMenu = null; // its socle no longer on the card (another selection)
       return;

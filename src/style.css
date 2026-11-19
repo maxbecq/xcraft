@@ -1052,9 +1052,14 @@ body.z .cmd.open { outline-color: var(--phos); box-shadow: 0 0 10px rgba(141, 25
   /* Scan lines over the glass. */
   background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px), var(--screen, none);
 }
-.cmd-menu.unfold { animation: menu-unfold 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both, menu-flicker 420ms steps(1) both; }
-@keyframes menu-unfold { from { transform: scaleY(0.04); } to { transform: none; } }
-@keyframes menu-flicker { 0% { opacity: 0.2; } 15% { opacity: 1; } 25% { opacity: 0.45; } 40% { opacity: 1; } 55% { opacity: 0.75; } 70%, 100% { opacity: 1; } }
+.cmd-menu.unfold { animation: menu-unfold 240ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+/* One clean opening: it unfolds and fades in, its glass lit up once then settling, never dimming again on the way
+   (a flicker read as the panel jumping, on phones). */
+@keyframes menu-unfold {
+  from { transform: scaleY(0.04); opacity: 0; filter: brightness(1.8); }
+  60% { opacity: 1; }
+  to { transform: none; opacity: 1; filter: none; }
+}
 .cmd-menu-item {
   position: relative; display: grid; place-items: center; align-content: center; gap: 1px; padding: 3px 2px 2px; min-width: 0;
   background: rgba(141, 255, 138, 0.04); border: 1px solid var(--phos-dim, #3c8a44); border-radius: 0;
