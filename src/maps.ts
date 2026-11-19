@@ -84,6 +84,23 @@ function octagon(dx: number, dy: number, half: number, cut: number): boolean {
   return Math.abs(dx) <= half && Math.abs(dy) <= half && Math.abs(dx) + Math.abs(dy) <= 2 * half - cut;
 }
 
+/**
+ * sin and cos from + − × ÷ alone, which every browser rounds the same (Math.sin need not): the angle brought within
+ * a turn, then its series, to well past double precision.
+ */
+function sine(x: number): number {
+  const TURN = 6.283185307179586;
+  x -= TURN * Math.round(x / TURN);
+  let term = x;
+  let sum = x;
+  for (let n = 1; n < 14; n++) {
+    term *= -(x * x) / (2 * n * (2 * n + 1));
+    sum += term;
+  }
+  return sum;
+}
+const cosine = (x: number) => sine(x + 1.5707963267948966);
+
 /** The terrain of a map file for `players` players on planet `biome`. */
 export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
   const width = def.size;
@@ -114,15 +131,27 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
         const [cx, cy] = a.at;
         let off = 0;
         if (a.ragged !== undefined && !calm.some(([rx, ry]) => Math.abs(x - rx) + Math.abs(y - ry) < 6)) {
-          const t = Math.atan2(y - cy, x - cx);
-          off = Math.round(Math.sin(t * 3 + a.ragged) * 1.1 + Math.sin(t * 7 + a.ragged * 2) * 0.7);
+          // sin(3t + φ)·1.1 + sin(7t + 2φ)·0.7 round the angle t of (x, y), without Math.atan2 or Math.sin: the angle
+          // taken k times is (cos t + i sin t)^k, from √, × and ÷ alone, which every browser rounds the same.
+          const dx = x - cx;
+          const dy = y - cy;
+          const r = Math.sqrt(dx * dx + dy * dy);
+          const [c, s] = r ? [dx / r, dy / r] : [1, 0];
+          const times = (k: number) => {
+            let [re, im] = [1, 0];
+            for (let n = 0; n < k; n++) [re, im] = [re * c - im * s, re * s + im * c];
+            return [re, im];
+          };
+          const [c3, s3] = times(3);
+          const [c7, s7] = times(7);
+          off = Math.round((s3 * cosine(a.ragged) + c3 * sine(a.ragged)) * 1.1 + (s7 * cosine(2 * a.ragged) + c7 * sine(2 * a.ragged)) * 0.7);
         }
         return octagon(x - cx, y - cy, a.half + off, a.cut);
       }
       case 'rect':
         return x >= a.from[0] && x <= a.to[0] && y >= a.from[1] && y <= a.to[1];
       case 'circle':
-        return Math.hypot(x - a.at[0], y - a.at[1]) <= a.r;
+        return (x - a.at[0]) * (x - a.at[0]) + (y - a.at[1]) * (y - a.at[1]) <= a.r * a.r;
       case 'band':
         return Math.abs(x + y * a.diag - a.offset) <= a.half;
     }
