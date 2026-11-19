@@ -151,6 +151,7 @@ Bug corrigé le 19 novembre (commit 0fa1bc9) : un bâtiment posé par une Gaïa 
 1. Gardez-vous les trois corrections du point 3, ou préférez-vous d'autres valeurs ?
 2. Faut-il reproduire les bonus selon la cible du mod (léger, blindé, massif, biologique) ? Cela demande du code, mais rendrait les chiffres du mod utilisables tels quels.
 3. Pour les Dieux : les niveaux de 2008, les Offrandes et la fin du deuil sont maintenant en jeu (section 4). Vous conviennent-ils ? Les prix de niveau de Gaïa et les dégâts de Seth au niveau 5 sont à régler.
+4. La Soumission de Frigg doit-elle continuer après la mort de Frigg ? Aujourd'hui, elle continue : l'unité prise reste au joueur de Frigg jusqu'à la fin du sort, puis revient à son joueur. Ce choix est provisoire et attend votre avis.
 
 ## 6. Revenir en arrière
 
