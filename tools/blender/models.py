@@ -2574,6 +2574,127 @@ def barge(p):
     box(p["team"], (1.02, 0.15, 0.1), (0, 0.76, 0.6))
 
 
+
+# ------------------------------------------------------------------ Z socle weapons: one module per weapon, the same on every socle
+# Convention (render/units.ts WEAPON_MOUNTS mounts them): origin at the centre of the mounting ring's underside, the
+# ring 0.64 across, weapon pointing -Y (glTF +Z, the socle's forward). A Meshy model replacing one (zw_<weapon>.glb)
+# keeps that pivot, that ring size and that forward, and the code stays as it is.
+def zmount(p):
+    """The common ring every weapon module sits on: a steel collar with a cyan light and a team-colour band."""
+    cyl(p["steel"], 0.32, 0.06, (0, 0, 0.03), verts=16)
+    for k in range(4):  # four small lights, not a ring: a glowing ring outshone the weapon under the bloom
+        a = k * math.pi / 2 + math.pi / 4
+        box(p["cyan_glow"], (0.05, 0.05, 0.03), (math.cos(a) * 0.29, math.sin(a) * 0.29, 0.07))
+    box(p["team"], (0.5, 0.06, 0.03), (0, 0.27, 0.075))
+    cyl(p["rust"], 0.22, 0.1, (0, 0, 0.13), verts=12)
+
+
+def zw_laser(p):
+    """Laser: one long slim barrel with cooling fins, a glowing cyan lens at its tip."""
+    zmount(p)
+    box(p["rust"], (0.3, 0.34, 0.2), (0, 0.04, 0.28))
+    cyl(p["steel"], 0.05, 0.62, (0, -0.42, 0.3), rot=(math.pi / 2, 0, 0), verts=10)
+    for y in (-0.22, -0.32, -0.42):
+        cyl(p["dark"], 0.09, 0.03, (0, y, 0.3), rot=(math.pi / 2, 0, 0), verts=10)
+    cyl(p["cyan_glow"], 0.075, 0.06, (0, -0.74, 0.3), rot=(math.pi / 2, 0, 0), verts=12)
+
+
+def zw_flammes(p):
+    """Flamethrower: a short wide nozzle with a flame at its mouth, two round fuel tanks behind."""
+    zmount(p)
+    box(p["rust"], (0.26, 0.28, 0.18), (0, 0, 0.26))
+    cyl(p["steel"], 0.09, 0.34, (0, -0.28, 0.27), rot=(math.pi / 2, 0, 0), verts=10, r2=0.12)
+    cone(p["orange_glow"], 0.11, 0.2, (0, -0.52, 0.27), rot=(-math.pi / 2, 0, 0), verts=8)
+    for x in (-0.12, 0.12):
+        ball(p["bronze"], 0.11, (x, 0.18, 0.36), scale=(1, 1, 1.3))
+
+
+def zw_roquettes(p):
+    """Rocket launcher: a square box pod, a grid of six tubes with red warheads facing forward."""
+    zmount(p)
+    box(p["rust"], (0.42, 0.4, 0.3), (0, -0.02, 0.32))
+    for x in (-0.13, 0, 0.13):
+        for z in (0.26, 0.38):
+            cyl(p["dark"], 0.05, 0.04, (x, -0.23, z), rot=(math.pi / 2, 0, 0), verts=8)
+            cone(p["red_glow"], 0.04, 0.08, (x, -0.27, z), rot=(-math.pi / 2, 0, 0), verts=6)
+
+
+def zw_dechiqueteur(p):
+    """Shredder: two big serrated saw discs side by side at the front, a gear drive behind."""
+    zmount(p)
+    box(p["rust"], (0.3, 0.26, 0.2), (0, 0.06, 0.27))
+    for x in (-0.13, 0.13):
+        cyl(p["steel"], 0.2, 0.04, (x, -0.24, 0.3), rot=(0, math.pi / 2, 0), verts=12)
+        for k in range(8):
+            a = k * math.pi / 4
+            cone(p["chrome"], 0.035, 0.08, (x, -0.24 + math.cos(a) * 0.22, 0.3 + math.sin(a) * 0.22), rot=(a - math.pi / 2, 0, 0), verts=4)
+    cyl(p["bronze"], 0.09, 0.32, (0, -0.08, 0.3), rot=(0, math.pi / 2, 0), verts=8)
+
+
+def zw_jetsonique(p):
+    """Sonic jet: a wide horn opening forward, cyan rings glowing inside its mouth."""
+    zmount(p)
+    box(p["rust"], (0.22, 0.22, 0.18), (0, 0.08, 0.27))
+    cyl(p["steel"], 0.07, 0.42, (0, -0.2, 0.3), rot=(math.pi / 2, 0, 0), verts=12, r2=0.24)
+    for r, y in ((0.2, -0.4), (0.13, -0.36), (0.07, -0.32)):
+        cyl(p["cyan_glow"], r, 0.015, (0, y, 0.3), rot=(math.pi / 2, 0, 0), verts=16, r2=r - 0.02)
+
+
+def zw_arc(p):
+    """Electric arc: a Tesla tower, a copper coil topped by a sphere crackling cyan."""
+    zmount(p)
+    cyl(p["dark"], 0.08, 0.5, (0, 0, 0.4), verts=10)
+    for z in (0.24, 0.32, 0.4, 0.48):
+        cyl(p["bronze"], 0.13, 0.04, (0, 0, z), verts=12)
+    ball(p["cyan_glow"], 0.13, (0, 0, 0.72))
+    for x in (-0.16, 0.16):
+        cone(p["cyan_glow"], 0.02, 0.18, (x, -0.04, 0.7), rot=(0, x * 6, 0), verts=4)
+
+
+def zw_canonx04(p):
+    """X-04 cannon: one very thick short barrel with a muzzle brake, recoil springs on a heavy armoured breech."""
+    zmount(p)
+    box(p["rust"], (0.4, 0.4, 0.28), (0, 0.06, 0.3))
+    cyl(p["steel"], 0.12, 0.5, (0, -0.36, 0.32), rot=(math.pi / 2, 0, 0), verts=12)
+    box(p["dark"], (0.32, 0.1, 0.2), (0, -0.62, 0.32))
+    for x in (-0.14, 0.14):
+        cyl(p["bronze"], 0.04, 0.3, (x, -0.2, 0.42), rot=(math.pi / 2, 0, 0), verts=8)
+
+
+def zw_reparateur(p):
+    """Repairer: an articulated arm ending in a welding torch with a green repair light, and a gripper."""
+    zmount(p)
+    box(p["rust"], (0.24, 0.24, 0.16), (0, 0.06, 0.25))
+    box(p["steel"], (0.08, 0.08, 0.38), (0, -0.04, 0.47), rot=(0.5, 0, 0))
+    box(p["steel"], (0.07, 0.34, 0.07), (0, -0.28, 0.64))
+    cone(p["green_glow"], 0.06, 0.14, (0, -0.5, 0.62), rot=(-math.pi / 2, 0, 0), verts=8)
+    for x in (-0.06, 0.06):
+        box(p["dark"], (0.03, 0.12, 0.03), (x, -0.4, 0.58))
+
+
+def zw_accumulateur(p):
+    """Accumulator: a big glowing cyan core in an open steel cage, copper bars, a stubby emitter forward."""
+    zmount(p)
+    ball(p["cyan_glow"], 0.18, (0, 0.02, 0.38))
+    for a in range(4):
+        x, y = math.cos(a * math.pi / 2 + math.pi / 4) * 0.2, math.sin(a * math.pi / 2 + math.pi / 4) * 0.2
+        box(p["steel"], (0.04, 0.04, 0.42), (x, y + 0.02, 0.38))
+    cyl(p["bronze"], 0.24, 0.04, (0, 0.02, 0.2), verts=8)  # open at the top: the core shows from above
+    cyl(p["dark"], 0.06, 0.24, (0, -0.28, 0.38), rot=(math.pi / 2, 0, 0), verts=8)
+
+
+def zw_mitrailleuse(p):
+    """The free default machine gun: a small box and two short barrels, plain on purpose."""
+    zmount(p)
+    box(p["steel"], (0.2, 0.24, 0.14), (0, 0.02, 0.24))
+    for x in (-0.04, 0.04):
+        cyl(p["dark"], 0.025, 0.3, (x, -0.24, 0.26), rot=(math.pi / 2, 0, 0), verts=6)
+
+
+ZWEAPONS = {f"zw_{k}": f for k, f in [("laser", zw_laser), ("flammes", zw_flammes), ("roquettes", zw_roquettes), ("dechiqueteur", zw_dechiqueteur),
+            ("jetsonique", zw_jetsonique), ("arc", zw_arc), ("canonx04", zw_canonx04), ("reparateur", zw_reparateur),
+            ("accumulateur", zw_accumulateur), ("mitrailleuse", zw_mitrailleuse)]}
+
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
     "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur, "pylonesanglant": pylonesanglant,
@@ -2588,6 +2709,7 @@ MODELS = {
     "drone": drone, "dronecombat": dronecombat, "quadripode": quadripode, "hexapode": hexapode, "coleoptere": coleoptere,
     "intelligence": intelligence, "pod": pod, "assimilateur": assimilateur, "plateforme": plateforme, "armement": armement, "tourelle": tourelle,
     "centresocles": centresocles, "centrerecherche": centrerecherche, "optimisation": optimisation, "centrek": centrek, "zespion": zespion, "octopode": octopode, "mastodonte": mastodonte, "barge": barge,
+    **ZWEAPONS,
 }
 
 
