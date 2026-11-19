@@ -1597,7 +1597,8 @@ function bubbles(): CanvasTexture {
 
 /**
  * The Z Assimilateur at work: bubbles rising in the blue liquid of its tank (a strip scrolling up over the glass, a
- * few loose ones in front), and a glow breathing over the tank. The tank is where Rodin painted it on the model, in
+ * few loose ones in front), the liquid lit from within, and a wide halo round the tank that swells and fades in a slow,
+ * deep pulse, both kept dim enough not to flare under the bloom. The tank is where Rodin painted it on the model, in
  * the body's frame; nothing shows while the building is still being printed.
  */
 function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
@@ -1609,9 +1610,16 @@ function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: number, 
   tex.repeat.set(1, h / w / 2);
   const rising = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, color: 0x8fd8ff })));
   rising.position.set(0, y, z);
+  // The liquid's own light, under the bubbles.
+  const liquid = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false, blending: AdditiveBlending, color: 0x3d6bff })));
+  liquid.position.set(0, y, z - 0.005);
   const glow = new Mesh(new PlaneGeometry(w * 1.5, h * 1.6), owned(new MeshBasicMaterial({ map: spark(), transparent: true, opacity: 0.3, depthWrite: false, blending: AdditiveBlending, color: 0x5a7dff })));
   glow.position.set(0, y, z + 0.01);
-  group.add(rising, glow);
+  // The halo: facing the camera, so it reads from the game's view whatever the side the tank is on.
+  const halo = new Sprite(owned(new SpriteMaterial({ map: spark(), transparent: true, opacity: 0.4, depthWrite: false, blending: AdditiveBlending, color: 0x4f7bff })));
+  halo.scale.set(w * 3.4, h * 3.6, 1);
+  halo.position.set(0, y, z + 0.12);
+  group.add(liquid, rising, glow, halo);
   const n = 10;
   const pos = new Float32Array(n * 3);
   let r = e.id * 9301 + 49297;
@@ -1631,9 +1639,13 @@ function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: number, 
       group.visible = e.buildLeft === 0;
       if (!group.visible) return;
       tex.offset.y -= dt * 0.18;
-      const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.id);
-      (glow.material as MeshBasicMaterial).opacity = 0.18 + 0.2 * pulse;
-      (rising.material as MeshBasicMaterial).opacity = 0.45 + 0.15 * pulse;
+      // About 3.7 s a beat, eased so it lingers bright and dark.
+      const pulse = smoothstep(0.5 + 0.5 * Math.sin(t * 1.7 + e.id));
+      (liquid.material as MeshBasicMaterial).opacity = 0.35 + 0.35 * pulse;
+      (glow.material as MeshBasicMaterial).opacity = 0.2 + 0.4 * pulse;
+      (halo.material as SpriteMaterial).opacity = 0.1 + 0.5 * pulse;
+      halo.scale.set(w * (3 + 0.8 * pulse), h * (3.2 + 0.9 * pulse), 1);
+      (rising.material as MeshBasicMaterial).opacity = 0.5 + 0.2 * pulse;
       for (let i = 0; i < n; i++) {
         const j = i * 3;
         pos[j + 1] += dt * (0.12 + (i % 3) * 0.04);
