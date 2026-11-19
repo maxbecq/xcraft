@@ -968,6 +968,8 @@ export class Hud {
       if ((d as BuildingDef).bunker) stats.push(`abrite ${(d as BuildingDef).bunker} soldats`);
       if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
       lines.push(stats.join(' · '));
+      // Z socles: a second step follows the click (the weapon), easy to miss.
+      if (d.kind === 'unit' && (d as UnitDef).weapons) lines.push('Socle : reçoit une arme, choisie ensuite (mitrailleuse gratuite).');
     }
     if (d?.kind === 'upgrade' && d.effect) lines.push(d.effect);
     if (b.reason) lines.push(`<span class="need">${b.reason}</span>`);

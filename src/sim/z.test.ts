@@ -56,7 +56,7 @@ describe('Z', () => {
     expect(pf.buildLeft).toBe(0);
     w.step([{ player: 0, kind: 'train', ids: [pf.id], type: 'quadripode' }]);
     expect(pf.queue).toHaveLength(0);
-    expect(w.lacks(0, 'quadripode')).toBe('Requiert : Quadripode');
+    expect(w.lacks(0, 'quadripode')).toBe('Requiert : Plan du Quadripode');
     expect(w.lacks(0, 'centresocles')).toBe('');
     p.upgrades.rquadripode = 1;
     w.step([{ player: 0, kind: 'train', ids: [pf.id], type: 'quadripode' }]);
