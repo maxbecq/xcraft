@@ -476,7 +476,9 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
 };
 const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
-  'minotaure', 'temple', 'gaia'];
+  'minotaure', 'temple', 'gaia',
+  // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches
+  'barge', 'zespion', 'centrerecherche', 'pod', 'tourelle'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
