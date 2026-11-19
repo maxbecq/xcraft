@@ -43,20 +43,29 @@ export function unxray(model: Object3D): void {
   });
 }
 
-/** Draws the silhouettes over what is already in the target (colour and depth): one pass per side present. */
+/**
+ * Draws the silhouettes over what is already in the target (colour and depth): one pass per side present. It comes
+ * right after the scene's own render, nothing moved since: each pass keeps the frame count of that render, so three
+ * neither works the skeletons out and uploads their bones again nor re-sends the geometry, and the scene's matrices
+ * are not updated again. That work, done twice more a frame, was most of the passes' cost (6.5 to 2.5 ms a frame with
+ * 80 units, CPU slowed 4 times).
+ */
 export function drawXray(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
   if (!used.size) return;
-  const [mask, override, background, autoClear] = [camera.layers.mask, scene.overrideMaterial, scene.background, renderer.autoClear];
+  const [mask, override, background, autoClear, autoUpdate] = [camera.layers.mask, scene.overrideMaterial, scene.background, renderer.autoClear, scene.matrixWorldAutoUpdate];
   scene.background = null;
+  scene.matrixWorldAutoUpdate = false;
   renderer.autoClear = false;
   for (const layer of used) {
     camera.layers.set(layer);
     scene.overrideMaterial = (materials ??= makeMaterials())[layer - 1];
+    renderer.info.render.frame--; // render() counts it back up: the same frame as the scene's render
     renderer.render(scene, camera);
   }
   camera.layers.mask = mask;
   scene.overrideMaterial = override;
   scene.background = background;
+  scene.matrixWorldAutoUpdate = autoUpdate;
   renderer.autoClear = autoClear;
 }
 
