@@ -387,6 +387,9 @@ export class Hud {
       if (!shift) {
         this.placing = null;
         this.buildMenu = false;
+        // Off to build: out of the selection, so a stray tap or click no longer pulls it off the site (Shift keeps it
+        // selected to queue more).
+        this.input.selected.delete(worker.id);
       }
     }
     return true;

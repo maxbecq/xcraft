@@ -368,6 +368,8 @@ export class Input {
     // Our site left half built, tapped with a worker selected: it goes back to finish it (as a right click does).
     if (target && target.owner === this.player && target.buildLeft > 0 && ground && this.own().some((e) => (e.def as UnitDef).worker)) {
       this.orderAt(ground.x, ground.z, target);
+      // Back on the site: out of the selection, as after a build order.
+      for (const e of this.own()) if ((e.def as UnitDef).worker) this.selected.delete(e.id);
       return;
     }
     if (target && target.owner === this.player) {
