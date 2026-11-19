@@ -251,6 +251,10 @@ def palette():
         "geode_band": mat("geode_band", 0xD8CCB2, rough=0.6),
         "geode_lining": mat("geode_lining", 0x9A5E2C, rough=0.85),
         "geode_core": mat("geode_core", 0xC8742A, emission=0x5A2208, rough=0.5),
+        # Isdaris, clinical style (like the Réserve psy): white enamel, frosted glass lit from within, laser seams.
+        "enamel": mat("enamel", 0xDCE0E5, rough=0.35),
+        "frost": mat("frost", 0xCDEAF2, emission=0x2E7F96, rough=0.2),
+        "laser": mat("laser", 0x9FEFFF, emission=0x2A9CC0, rough=0.3),
         "ivory": mat("ivory", 0xEDE6D6, rough=0.35),
         "chrome": mat("chrome", 0xC8CCD2, metallic=1.0, rough=0.18),
         "gold": mat("gold", 0xD4AF37, metallic=1.0, rough=0.25),
@@ -883,16 +887,6 @@ def obelisque(p):
     for x, y in ((-2.1, -2.1), (2.1, -2.1), (2.1, 2.1), (-2.1, 2.1)):  # corner lamps
         cyl(p["chrome"], 0.08, 0.6, (x, y, 0.6), verts=8)
         ball(p["cyan_glow"], 0.1, (x, y, 0.95), seg=8, rings=4)
-
-
-def emetteur(p):
-    """Emitter pylon: a slender gold-and-ivory mast with fins and a glowing halo that projects the power field."""
-    cyl(p["ivory"], 0.7, 0.25, (0, 0, 0.12), verts=8)
-    cyl(p["chrome"], 0.16, 1.9, (0, 0, 1.1), verts=8, r2=0.08)
-    fins(p, p["gold"], 3, 0.18, 0.8, 1.1, width=0.4)
-    fins(p, p["team"], 3, 0.32, 0.45, 0.5, width=0.35)
-    ring(p["cyan_glow"], 0.45, 0.04, (0, 0, 2.0))
-    ball(p["cyan_glow"], 0.12, (0, 0, 2.15), seg=10, rings=5)
 
 
 def reservepsy(p):
@@ -1712,28 +1706,255 @@ def orbecommandement(p):
     fins(p, p["team"], 4, 1.15, 0.5, 0.4, width=0.3)
 
 
+def laser_square(p, size, z, inset=0.03):
+    """Thin cyan laser seams along the four top edges of a square tier."""
+    h = size / 2 - inset
+    for sx, sy, along in ((0, h, "x"), (0, -h, "x"), (h, 0, "y"), (-h, 0, "y")):
+        dims = (size - 2 * inset, 0.025, 0.025) if along == "x" else (0.025, size - 2 * inset, 0.025)
+        box(p["laser"], dims, (sx, sy, z))
+
+
+def wall_strip(m, pts_bottom, pts_top, thickness=0.1, name="wall"):
+    """A wall from a row of bottom points to a row of top points (same count), given some thickness."""
+    me = bpy.data.meshes.new(name)
+    verts = [tuple(v) for v in pts_bottom] + [tuple(v) for v in pts_top]
+    n = len(pts_bottom)
+    faces = [(i, i + 1, n + i + 1, n + i) for i in range(n - 1)]
+    me.from_pydata(verts, [], faces)
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    bpy.context.view_layer.objects.active = o
+    o.select_set(True)
+    mod = o.modifiers.new("solid", "SOLIDIFY")
+    mod.thickness = thickness
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    return _finish(o, m, name)
+
+
 def trone(p):
-    """Trône d'Altar Sargon: a stepped ziggurat crowned by a tall gold throne-spire and a halo of light."""
-    for sz, z in ((3.7, 0.15), (3.0, 0.45), (2.3, 0.75), (1.6, 1.05)):
-        box(p["ivory"], (sz, sz, 0.3), (0, 0, z))
-        box(p["gold"], (sz + 0.04, sz + 0.04, 0.04), (0, 0, z + 0.15))
-    box(p["gold"], (0.7, 0.5, 1.4), (0, 0.2, 1.9))
-    box(p["ivory"], (0.6, 0.15, 1.9), (0, 0.5, 2.1))
-    cone(p["gold"], 0.25, 1.2, (0, 0.2, 3.2), verts=8)
-    ring(p["cyan_glow"], 0.55, 0.04, (0, 0.2, 3.0), seg=24)
-    for sx in (-1, 1):
-        box(p["team"], (0.12, 3.0, 0.1), (sx * 1.5, 0, 0.62))
+    """Trône d'Altar Sargon, after the chosen sketch (the god-king's crescent): a square stepped terrace, a stepped
+    dais up to a throne of light between two Art Deco pillars, and behind it no vault but two tall enamel walls along
+    the back edges, rising from the side corners to meet in a pointed arch over the back corner like a monumental
+    backrest, ribs fanning up them from behind the throne with cyan light between, a chrome rim with a laser seam,
+    the team blue on the feet. Faces the corner the game camera looks at."""
+    front = Vector((1, -1, 0)).normalized()
+    back, side = -front, Vector((1, 1, 0)).normalized()
+    yaw = math.atan2(front.y, front.x)
+    # The terrace.
+    for sz, z, h in ((3.9, 0.0, 0.14), (3.5, 0.14, 0.1)):
+        box(p["enamel"], (sz, sz, h), (0, 0, z + h / 2))
+        laser_square(p, sz, z + h)
+    z0 = 0.24
+    # The two walls, along the back edges (x = -W and y = +W), from the side corners up to the back corner.
+    W, H, N = 1.6, 3.2, 24
+    A, Q = 4.4, 0.42  # fitted to the sketch's outline (silhouette overlap 0.967)
+    top = lambda s: z0 + H * (1 - (1 - s) ** A) ** Q  # upright at the feet, round shoulders, a soft point at the back corner
+    corner_b = Vector((-W, W, 0))
+    for foot, inward, thick in ((Vector((-W, -W, 0)), Vector((1, 0, 0)), 0.12), (Vector((W, W, 0)), Vector((0, -1, 0)), -0.12)):  # walls thickened outwards
+        along = corner_b - foot
+        bottom = [foot + along * (i / (N - 1)) + Vector((0, 0, z0)) for i in range(N)]
+        tops = [foot + along * (i / (N - 1)) + Vector((0, 0, top(i / (N - 1)))) for i in range(N)]
+        wall_strip(p["enamel"], bottom, tops, thickness=thick)
+        # Broad planks fanning, as on the sketch, from a point below the floor behind the throne up to the rim, cut
+        # by the floor; each leans out at one edge, so they catch the light in turn, a thin line of light in each fold.
+        F = corner_b + Vector((0, 0, z0 - 3.0))
+        n_planks = 12
+        rim = [foot + along * (k / n_planks) + Vector((0, 0, top(k / n_planks) - 0.1)) for k in range(n_planks + 1)]
+        rim[0] = foot + Vector((0, 0, z0 + 0.5))
+        floor = lambda t: F + (t - F) * ((z0 + 0.01 - F.z) / (t.z - F.z))  # where the line from F to t meets the floor
+        sign = 1 if (inward.x > 0.5 or inward.y > 0.5) else -1
+        for k in range(n_planks):
+            t0, t1 = rim[k], rim[k + 1]
+            u = (t1 - t0).normalized()
+            t0g, t1g = t0 + u * 0.03, t1 - u * 0.03
+            b0, b1 = floor(t0g), floor(t1g)
+            wall_strip(p["enamel"], [b0 + inward * 0.02, b1 + inward * 0.06], [t0g + inward * 0.02, t1g + inward * 0.13], thickness=sign * 0.03)
+            if k:
+                pipe(p["laser"], floor(t0) + inward * 0.05, t0 + inward * 0.05, r=0.018, verts=5)
+        for i in range(N - 1):  # chrome rim, a laser seam just inside it
+            pa, pb = tops[i], tops[i + 1]
+            pipe(p["enamel"], pa, pb, r=0.12, verts=4)  # a thick framing rim
+            pipe(p["laser"], pa + inward * 0.07 - Vector((0, 0, 0.05)), pb + inward * 0.07 - Vector((0, 0, 0.05)), r=0.018, verts=5)
+        # The foot: a stepped pedestal with the team colour facing out.
+        box(p["enamel"], (0.44, 0.44, 0.16), (foot.x, foot.y, z0 + 0.08))  # a low stepped plinth under the foot
+        box(p["enamel"], (0.34, 0.34, 0.1), (foot.x, foot.y, z0 + 0.21))
+        tdir = along.normalized()  # the team blue on the arch's leg, low on its inner face
+        q = foot + tdir * 0.16 + inward * 0.07
+        box(p["team"], (0.03, 0.14, 0.6) if abs(inward.x) > 0.5 else (0.14, 0.03, 0.6), (q.x, q.y, z0 + 0.6))
+    # The dais: square steps with laser seams, up to the throne.
+    c = back * 0.3
+    for i, sz in enumerate((2.45, 2.0, 1.6, 1.25, 0.95)):
+        z = z0 + i * 0.11
+        box(p["enamel"], (sz, sz, 0.11), (c.x, c.y, z + 0.055))
+        laser_square(p, sz, z + 0.11, inset=0.05)
+    box(p["frost"], (0.85, 0.85, 0.012), (c.x, c.y, z0 + 0.556))  # light spilling from the throne onto the top step
+    zs = z0 + 0.55
+    before = set(bpy.context.scene.objects)
+    # The throne: a block seat with a glowing round cushion, a tall arched back of lit glass in an enamel frame.
+    box(p["enamel"], (0.72, 0.72, 0.28), (c.x, c.y, zs + 0.14), rot=(0, 0, yaw))
+    ball(p["cyan_glow"], 0.27, (c.x, c.y, zs + 0.3), scale=(1, 1, 0.55), seg=24, rings=8)  # a glowing domed cushion, the light source
+    bk = c + back * 0.3
+    box(p["frost"], (0.07, 0.48, 1.0), (bk.x, bk.y, zs + 0.78), rot=(0, 0, yaw))
+    cyl(p["frost"], 0.24, 0.07, (bk.x, bk.y, zs + 1.28), rot=(math.pi / 2, 0, yaw + math.pi / 2), verts=20)
+    for sd in (-1, 1):
+        q = bk + side * sd * 0.27
+        box(p["enamel"], (0.13, 0.13, 1.02), (q.x, q.y, zs + 0.77), rot=(0, 0, yaw))
+    for k in range(10):  # the round top of the frame
+        t0, t1 = k * math.pi / 10, (k + 1) * math.pi / 10
+        pa = bk + side * 0.27 * math.cos(t0) + Vector((0, 0, zs + 1.28 + 0.27 * math.sin(t0)))
+        pb = bk + side * 0.27 * math.cos(t1) + Vector((0, 0, zs + 1.28 + 0.27 * math.sin(t1)))
+        pipe(p["enamel"], pa, pb, r=0.075, verts=6)
+    # Two Art Deco pillars beside the seat: stepped tops, a tall team panel and a glowing slit on the front.
+    for sd in (-1, 1):
+        q = c + side * sd * 0.5 + front * 0.02  # slabs: narrow sideways, deep front to back
+        box(p["enamel"], (0.36, 0.2, 1.0), (q.x, q.y, zs + 0.5), rot=(0, 0, yaw))
+        box(p["enamel"], (0.3, 0.16, 0.16), (q.x, q.y, zs + 1.08), rot=(0, 0, yaw))
+        box(p["enamel"], (0.2, 0.11, 0.1), (q.x, q.y, zs + 1.21), rot=(0, 0, yaw))
+        f = q + front * 0.185
+        box(p["team"], (0.02, 0.1, 0.5), (f.x - side.x * sd * 0.05, f.y - side.y * sd * 0.05, zs + 0.45), rot=(0, 0, yaw))
+        box(p["laser"], (0.02, 0.03, 0.5), (f.x + side.x * sd * 0.07, f.y + side.y * sd * 0.07, zs + 0.45), rot=(0, 0, yaw))
+    k = 1.2  # the throne and its pillars, larger as on the sketch
+    for o in set(bpy.context.scene.objects) - before:
+        o.location = Vector((c.x, c.y, zs)) + (o.location - Vector((c.x, c.y, zs))) * k
+        o.scale = o.scale * k
+
+
+
+# ------------------------------------------------------------------ Isdaris: the Émetteur family on its common Art Deco base
+
+def loft(m, sections, name="loft"):
+    """A closed tube through same-sized polygons (lists of Vectors), capped at both ends."""
+    bm = bmesh.new()
+    rings = [[bm.verts.new(v) for v in s] for s in sections]
+    n = len(sections[0])
+    for r0, r1 in zip(rings, rings[1:]):
+        for i in range(n):
+            bm.faces.new((r0[i], r0[(i + 1) % n], r1[(i + 1) % n], r1[i]))
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    o.data.materials.append(m)
+    return o
+
+
+TOWER_FACES = [(Vector((1, 0, 0)), Vector((0, 1, 0))), (Vector((0, 1, 0)), Vector((-1, 0, 0))),
+         (Vector((-1, 0, 0)), Vector((0, -1, 0))), (Vector((0, -1, 0)), Vector((1, 0, 0)))]
+
+
+def tower(p, zt, upper=None):
+    """The common base and shaft, up to zt; `upper` recolours the glass between the fins above mid-height."""
+    W0, W1, E = 0.70, 0.25, 2.0
+    w = lambda z: W1 + (W0 - W1) * (1 - z / zt) ** E
+    N = 14
+    zs = [zt * i / N for i in range(N + 1)]
+    sq = lambda z, k=1.0: [Vector((sx * w(z) * k, sy * w(z) * k, z)) for sx, sy in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+    split = N // 2 if upper else N
+    loft(p["team"], [sq(z, 0.99) for z in zs[: split + 1]], "core")
+    if upper:
+        loft(p[upper], [sq(z, 0.99) for z in zs[split:]], "core_up")
+    box(p["enamel"], (1.86, 1.86, 0.06), (0, 0, 0.03))
+    laser_square(p, 1.86, 0.06)
+    for n, s in TOWER_FACES:
+        for t, half in ((0.0, 0.07), (-0.45, 0.026), (0.45, 0.026), (-0.8, 0.024), (0.8, 0.024)):
+            dep = lambda z: (0.03 if t else 0.06) + 0.06 * (1 - z / zt) ** 3  # fins fan out at the foot
+            secs = []
+            for z in zs:
+                c = s * t * w(z)
+                o0, o1 = n * (w(z) * 0.9), n * (w(z) + dep(z))
+                hw = half * w(z) / 0.45  # the fins narrow with the shaft, so the glass between them shows up to the top
+                secs.append([o0 + c - s * hw + Vector((0, 0, z)), o1 + c - s * hw + Vector((0, 0, z)),
+                             o1 + c + s * hw + Vector((0, 0, z)), o0 + c + s * hw + Vector((0, 0, z))])
+            loft(p["enamel"], secs, "fin")
+        # The setback buttress in the middle of the face, three steps.
+        for k, (bw, out, h) in enumerate(((0.36, 0.95, 0.42), (0.28, 0.86, 0.85), (0.2, 0.78, 1.25))[: int(1)]):
+            c = n * (out - 0.18)
+            box(p["enamel"], (0.36 if n.x else bw, bw if n.x else 0.36, h), (c.x, c.y, h / 2))
+        q = n * 0.96
+        box(p["laser"], (0.02 if n.x else 0.3, 0.3 if n.x else 0.02, 0.02), (q.x, q.y, 0.42))
+    for sx in (-1, 1):  # corner bastions: a sloped block and a pier behind it
+        for sy in (-1, 1):
+            cyl(p["enamel"], 0.36 * math.sqrt(2), 0.4, (sx * 0.66, sy * 0.66, 0.4 / 2), rot=(0, 0, math.pi / 4), verts=4, r2=0.24 * math.sqrt(2))
+            for off, size, h in ((0.62, 0.42, 0.6), (0.52, 0.32, 1.0), (0.43, 0.24, 1.4)):  # stepped buttress up the corner
+                box(p["enamel"], (size, size, h * 0.9), (sx * off, sy * off, h * 0.9 / 2))
+            loft(p["enamel"], [[Vector((sx * w(z), sy * w(z), z)) + Vector(d) * 0.05 for d in ((sx, 0, 0), (0, sy, 0), (-sx, 0, 0), (0, -sy, 0))] for z in zs], "edge")
+    # Collar on top of the shaft.
+    cyl(p["enamel"], 0.42, 0.12, (0, 0, zt + 0.06), verts=32)
+    ring(p["laser"], 0.42, 0.014, (0, 0, zt + 0.1), seg=40)
+    cyl(p["chrome"], 0.34, 0.08, (0, 0, zt + 0.16), verts=32)
+
+
+def bowl(m, r0, r1, z0, z1, thick=0.04):
+    bpy.ops.mesh.primitive_cone_add(vertices=40, radius1=r0, radius2=r1, depth=z1 - z0, location=(0, 0, (z0 + z1) / 2), end_fill_type="NOTHING")
+    o = bpy.context.active_object
+    o.data.materials.append(m)
+    mod = o.modifiers.new("s", "SOLIDIFY"); mod.thickness = thick
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    return o
+
+
+def emetteur(p):
+    """Émetteur, on the common Art Deco base: a dark graphite ring round a pale sphere of light, a chrome finial."""
+    zt = 2.9
+    tower(p, zt)
+    z = zt + 0.2
+    R = 0.68
+    cyl(p["graphite"], 0.36, 0.3, (0, 0, z + 0.05), verts=32)
+    ring(p["laser"], 0.365, 0.014, (0, 0, z + 0.12), seg=40)
+    cyl(p["frost"], 0.19, 0.5, (0, 0, z + 0.45), verts=24, r2=0.12)
+    ball(p["crystal_pale"], 0.24, (0, 0, z + 0.58), seg=24, rings=12)
+    ring(p["graphite"], R, 0.05, (0, 0, z + 0.7), seg=56)
+    ring(p["chrome"], R - 0.06, 0.025, (0, 0, z + 0.58), rot=(0.12, 0.08, 0), seg=56)
+    for k in range(4):  # arms holding the ring
+        a_ = k / 4 * math.tau + math.pi / 4
+        pipe(p["graphite"], (math.cos(a_) * 0.22, math.sin(a_) * 0.22, z + 0.3), (math.cos(a_) * (R - 0.02), math.sin(a_) * (R - 0.02), z + 0.55), r=0.022, verts=5)
+    cyl(p["chrome"], 0.15, 0.16, (0, 0, z + 0.86), verts=20)
+    cyl(p["graphite"], 0.07, 0.12, (0, 0, z + 1.0), verts=12)
+    cyl(p["chrome"], 0.025, 0.14, (0, 0, z + 1.13), verts=8)
 
 
 def deflecteur(p):
-    """Déflecteur: an Émetteur turned shield of invisibility: a tall chrome mast with three bent vanes and a pale veil."""
-    cyl(p["ivory"], 0.8, 0.25, (0, 0, 0.12), verts=16)
-    cyl(p["chrome"], 0.08, 1.8, (0, 0, 1.1), verts=10)
-    for k in range(3):
-        a = k / 3 * math.tau
-        box(p["gold"], (0.05, 0.5, 0.9), (math.cos(a) * 0.3, math.sin(a) * 0.3, 1.3), rot=(0.25, 0, a))
-    ball(p["crystal_pale"], 0.25, (0, 0, 2.05))
-    box(p["team"], (0.05, 0.4, 0.2), (0.78, 0, 0.18))
+    """Déflecteur, on the common base: a frosted glass cage and a wide shallow dish of frosted glass, chrome rim."""
+    zt = 2.9
+    tower(p, zt)
+    z = zt + 0.2
+    cyl(p["frost"], 0.3, 0.32, (0, 0, z + 0.16), verts=32)
+    ring(p["laser"], 0.31, 0.014, (0, 0, z + 0.06), seg=40)
+    for k in range(8):
+        a_ = k / 8 * math.tau
+        box(p["chrome"], (0.03, 0.03, 0.32), (math.cos(a_) * 0.3, math.sin(a_) * 0.3, z + 0.16))
+    cyl(p["enamel"], 0.33, 0.05, (0, 0, z + 0.34), verts=32)
+    BR, BZ, BD = 0.66, 0.6, 0.2  # the dish: rim radius, rim height, depth
+    bowl(p["frost"], 0.34, BR, z + BZ - BD, z + BZ)
+    cyl(p["frost"], 0.34, 0.03, (0, 0, z + BZ - BD), verts=32)
+    ring(p["chrome"], BR + 0.01, 0.05, (0, 0, z + BZ), seg=56)
+    ball(p["crystal_pale"], 0.22, (0, 0, z + BZ - 0.02), seg=24, rings=12)  # rides above the rim, seen over the frosted dish
+
+
+def pylonesanglant(p):
+    """Pylône sanglant, on the common base: red stained glass up the shaft, a red sphere between two white horns."""
+    zt = 2.9
+    tower(p, zt, upper="red_glow")
+    z = zt + 0.2
+    cyl(p["red_glow"], 0.25, 0.34, (0, 0, z + 0.17), verts=24)
+    for k in range(10):
+        a_ = k / 10 * math.tau
+        box(p["graphite"], (0.035, 0.035, 0.34), (math.cos(a_) * 0.26, math.sin(a_) * 0.26, z + 0.17))
+    ring(p["graphite"], 0.27, 0.02, (0, 0, z + 0.34), seg=32)
+    ball(p["red_glow"], 0.29, (0, 0, z + 0.58), seg=24, rings=12)
+    side = Vector((1, 1, 0)).normalized()
+    for sd in (-1, 1):  # two curved horns, base beside the sphere, sweeping out then up and in
+        pts = []
+        for i in range(13):
+            t = i / 12
+            out = 0.3 + 0.35 * math.sin(t * math.pi * 0.8) - 0.12 * t
+            pts.append(side * sd * out + Vector((0, 0, z + 0.3 + 1.05 * t)))
+        for i in range(12):
+            pipe(p["enamel"], pts[i], pts[i + 1], r=0.18 * (1 - i / 12) + 0.012, verts=12)
+
 
 
 # ------------------------------------------------------------------ Z: a nest of metal insects, rusted steel, hydraulics and live wires
@@ -2355,7 +2576,7 @@ def barge(p):
 
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,
-    "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur,
+    "orbecommandement": orbecommandement, "trone": trone, "deflecteur": deflecteur, "pylonesanglant": pylonesanglant,
     "scarabee": scarabee,
     "cuve": cuve,
     "marche": marche,
