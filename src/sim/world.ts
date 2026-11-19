@@ -23,6 +23,8 @@ export type Order =
   /** `back`: a patrol, which turns round at (x, y) and heads back there, for ever. */
   | { kind: 'attackMove'; x: number; y: number; target: number; back?: [number, number] }
   | { kind: 'heal'; target: number }
+  /** Keeps up with a friendly unit wherever it goes; (lx, ly) is where it was last, to go to if it is lost. */
+  | { kind: 'follow'; target: number; lx: number; ly: number }
   /** Walk into a bunker (Fortin) and take cover there. */
   | { kind: 'enter'; target: number }
   /** Walk within range of (x, y), then use an aimed ability there. */
@@ -707,6 +709,16 @@ export class World {
       case 'attackMove':
       case 'heal':
         return this.fight(e, o);
+      case 'follow': {
+        const t = this.entities.get(o.target);
+        // Lost (dead, gone inside, taken over): on to where it was last.
+        if (!t || t.hp <= 0 || t.inside || this.hostile(t.owner, e.owner)) return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP / 2 });
+        o.lx = t.x;
+        o.ly = t.y;
+        if (this.gap(e, t) > FP) return this.chase(e, t);
+        e.goal = null;
+        return;
+      }
       case 'enter': {
         const b = this.entities.get(o.target);
         const room = b && this.room(b);

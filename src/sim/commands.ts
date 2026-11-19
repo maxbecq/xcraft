@@ -294,8 +294,10 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
   const t = this.target(c);
   for (const b of buildings) {
     if (!(b.def as BuildingDef).trains) continue;
-    b.rally = { x: c.x, y: c.y };
-    b.rallyTarget = t?.type === 'minerai' ? t.id : 0;
+    // On a thing (unit, building, field), the rally point is that thing, at its middle; else the spot clicked.
+    const on = t && t.id !== b.id ? t : undefined;
+    b.rally = on ? { x: on.x, y: on.y } : { x: c.x, y: c.y };
+    b.rallyTarget = on?.id ?? 0;
   }
   const movers: Entity[] = [];
   for (const e of units) {

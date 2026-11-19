@@ -140,7 +140,7 @@ export class Overlay {
       case 'cast': return [o.x / FP, o.y / FP, '#ffd860'];
       case 'build': return [o.tx + 0.5, o.ty + 0.5, '#4dff6a'];
       case 'attack': { const p = at(o.target); return p && [...p, '#ff6a4a']; }
-      case 'gather': case 'construct': case 'enter': case 'heal': case 'repair': { const p = at(o.target); return p && [...p, '#4dff6a']; }
+      case 'gather': case 'construct': case 'enter': case 'heal': case 'repair': case 'follow': { const p = at(o.target); return p && [...p, '#4dff6a']; }
     }
   }
 

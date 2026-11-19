@@ -147,7 +147,98 @@ describe('rally point', () => {
     w.step([{ player: 0, kind: 'smart', ids: [a.id], x: 25 * FP, y: 22 * FP }]);
     expect(a.rally).toEqual({ x: 25 * FP, y: 22 * FP });
     expect(a.rallyTarget).toBe(0);
-    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: field.x, y: field.y, target: field.id }]);
+    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: field.x + 300, y: field.y - 200, target: field.id }]);
     expect(a.rallyTarget).toBe(field.id);
+    expect(a.rally).toEqual({ x: field.x, y: field.y }); // the thing's middle, not the spot clicked on it
+  });
+
+  describe('a unit out of the building goes by what the rally point is on', () => {
+    const setup = () => {
+      const w = new World(createMap());
+      const b = w.spawn('caserne', 0, 20 * FP, 20 * FP);
+      const rally = (x: number, y: number, target?: Entity) => w.step([{ player: 0, kind: 'smart', ids: [b.id], x, y, target: target?.id }]);
+      return { w, b, rally };
+    };
+
+    it('open ground: to the spot', () => {
+      const { w, b, rally } = setup();
+      rally(26 * FP, 23 * FP);
+      const u = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(u, b);
+      expect(u.order).toMatchObject({ kind: 'move', x: 26 * FP, y: 23 * FP });
+    });
+
+    it('a mineral field: a worker mines it, a soldier goes beside it', () => {
+      const { w, b, rally } = setup();
+      const field = w.spawn('minerai', -1, 28 * FP, 20 * FP);
+      rally(field.x, field.y, field);
+      const serf = w.spawn('serf', 0, 22 * FP, 22 * FP);
+      w.rallyOn(serf, b);
+      expect(serf.order).toMatchObject({ kind: 'gather', target: field.id });
+      const soldier = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(soldier, b);
+      expect(soldier.order?.kind).toBe('move');
+      const o = soldier.order as { x: number; y: number };
+      // On the side facing the Caserne, a tile out from the field's edge.
+      expect(o.x).toBeLessThan(field.x);
+      expect(Math.abs(o.x - field.x)).toBeGreaterThan(FP);
+    });
+
+    it('another resource (a well): even a worker goes beside it', () => {
+      const { w, b, rally } = setup();
+      const well = w.spawn('puits', -1, 30 * FP, 20 * FP);
+      rally(well.x, well.y, well);
+      const serf = w.spawn('serf', 0, 22 * FP, 22 * FP);
+      w.rallyOn(serf, b);
+      expect(serf.order?.kind).toBe('move');
+    });
+
+    it('a friendly unit: followed wherever it goes', () => {
+      const { w, b, rally } = setup();
+      const lead = w.spawn('legionnaire', 0, 26 * FP, 22 * FP);
+      rally(lead.x, lead.y, lead);
+      const u = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(u, b);
+      expect(u.order).toMatchObject({ kind: 'follow', target: lead.id });
+      w.step([{ player: 0, kind: 'move', ids: [lead.id], x: 34 * FP, y: 22 * FP }]);
+      run(w, 8);
+      expect(u.order?.kind).toBe('follow');
+      expect(Math.abs(u.x - lead.x)).toBeLessThan(3 * FP);
+      expect(b.rally).toEqual({ x: lead.x, y: lead.y }); // the flag moves with it
+    });
+
+    it('a friendly building: beside it', () => {
+      const { w, b, rally } = setup();
+      const other = w.spawn('caserne', 0, 30 * FP, 20 * FP);
+      rally(other.x, other.y, other);
+      const u = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(u, b);
+      expect(u.order?.kind).toBe('move');
+      expect((u.order as { x: number }).x).toBeLessThan(other.x - FP);
+    });
+
+    it('an enemy: attacked', () => {
+      const { w, b, rally } = setup();
+      const foe = w.spawn('legionnaire', 1, 25 * FP, 22 * FP);
+      rally(foe.x, foe.y, foe);
+      expect(b.rallyTarget).toBe(foe.id);
+      const u = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(u, b);
+      expect(u.order).toMatchObject({ kind: 'attack', target: foe.id });
+    });
+
+    it('a thing gone by then: its last known place', () => {
+      const { w, b, rally } = setup();
+      const lead = w.spawn('legionnaire', 0, 26 * FP, 22 * FP);
+      rally(lead.x, lead.y, lead);
+      w.step([{ player: 0, kind: 'move', ids: [lead.id], x: 29 * FP, y: 22 * FP }]);
+      run(w, 3);
+      const last = { x: lead.x, y: lead.y };
+      w.remove(lead);
+      run(w, 1);
+      const u = w.spawn('legionnaire', 0, 22 * FP, 22 * FP);
+      w.rallyOn(u, b);
+      expect(u.order).toMatchObject({ kind: 'move', x: last.x, y: last.y });
+    });
   });
 });

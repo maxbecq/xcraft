@@ -210,6 +210,14 @@ export function operate(this: World, b: Entity): void {
 
 /** Training, research and morphing through the queue of a building, or of a god (Dieux). */
 export function produce(this: World, b: Entity): void {
+  // A rally point on a thing moves with it while it is seen, so its last known place is where it was last seen.
+  if (b.rallyTarget && b.rally) {
+    const t = this.entities.get(b.rallyTarget);
+    if (t && (t.owner < 0 || this.sees(b.owner, t))) {
+      b.rally.x = t.x;
+      b.rally.y = t.y;
+    }
+  }
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
@@ -246,12 +254,9 @@ export function produce(this: World, b: Entity): void {
     // Cuve génétique: Créatures come in pairs.
     if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
       const twin = this.spawnBeside(type, b);
-      if (b.rally) this.setOrder(twin, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
+      this.rallyOn(twin, b);
     }
-    const field = (u.def as UnitDef).worker && (!b.rally || b.rallyTarget) ? (this.entities.get(b.rallyTarget) ?? this.nearestField(u)) : undefined;
-    // Workers go mining by default (or on the rallied field); others walk to the rally point.
-    if (field) this.setOrder(u, { kind: 'gather', target: field.id, phase: 'go', timer: 0 });
-    else if (b.rally) this.setOrder(u, { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 });
+    this.rallyOn(u, b);
     if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
   }
 }
@@ -313,6 +318,43 @@ export function retype(this: World, e: Entity, type: string): void {
   e.def = def;
   e.maxHp = def.hp;
   e.hp = Math.max(1, Math.round(def.hp * hp));
+}
+
+/**
+ * Sends a unit just out of `b` to its rally point. None: workers go mining, the others stay. On open ground: there.
+ * On a thing: a field is mined by a worker, others go beside it; a friendly unit is followed; a friendly building,
+ * gone beside; an enemy, attacked (by those that can hit it). A thing gone by then: its last known place.
+ */
+export function rallyOn(this: World, u: Entity, b: Entity): void {
+  const worker = (u.def as UnitDef).worker;
+  if (!b.rally) {
+    const field = worker ? this.nearestField(u) : undefined;
+    if (field) this.setOrder(u, { kind: 'gather', target: field.id, phase: 'go', timer: 0 });
+    return;
+  }
+  const t = b.rallyTarget ? this.entities.get(b.rallyTarget) : undefined;
+  const there = { kind: 'move', x: b.rally.x, y: b.rally.y, arrive: FP / 2 } as const;
+  if (!t || (t.def.kind !== 'resource' && (t.hp <= 0 || t.inside))) return this.setOrder(u, there);
+  if (t.def.kind === 'resource') {
+    if (worker && t.type === 'minerai') return this.setOrder(u, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
+    return this.setOrder(u, this.beside(t, b));
+  }
+  if (this.hostile(t.owner, u.owner)) {
+    const w = this.weapon(u);
+    if (w && reaches(w, t.def.kind === 'unit' && flies(t))) return this.setOrder(u, { kind: 'attack', target: t.id, auto: false, lx: u.x, ly: u.y });
+    return this.setOrder(u, there);
+  }
+  if (t.def.kind === 'unit') return this.setOrder(u, { kind: 'follow', target: t.id, lx: t.x, ly: t.y });
+  this.setOrder(u, this.beside(t, b));
+}
+
+/** A walk to the edge of a building or field, a tile out, on the side facing `from`. */
+export function beside(this: World, t: Entity, from: Entity): { kind: 'move'; x: number; y: number; arrive: number } {
+  const half = t.def.kind === 'unit' ? t.radius : idiv(((t.def as BuildingDef).size ?? 1) * FP, 2);
+  const dx = from.x - t.x;
+  const dy = from.y - t.y;
+  const len = dist(from.x, from.y, t.x, t.y) || 1;
+  return { kind: 'move', x: t.x + idiv(dx * (half + FP), len), y: t.y + idiv(dy * (half + FP), len), arrive: FP / 2 };
 }
 
 /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
