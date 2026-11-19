@@ -76,7 +76,8 @@ const QUALITY_LEVEL = pickQuality(params, (() => {
   }
 })(), DETECTED);
 const GFX = QUALITY[QUALITY_LEVEL];
-renderer.setPixelRatio(Math.min(GFX.pixelRatio, window.devicePixelRatio));
+// `?pr=1.5`: another pixel density cap, to measure on a given machine (with ?perf=rec) what the level's costs the graphics chip.
+renderer.setPixelRatio(Math.min(Number(params.get('pr')) || GFX.pixelRatio, window.devicePixelRatio));
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(params);
