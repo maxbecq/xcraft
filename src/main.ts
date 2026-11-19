@@ -1002,6 +1002,9 @@ function start(): void {
     lap('units');
     hud.update();
     lap('hud');
+    // Wells an extractor stands on, once a frame (not a walk over every entity for each well).
+    const taken = new Set<number>();
+    for (const m of world.entities.values()) if (m.def.kind === 'building' && m.def.energyRate) taken.add(m.ty * map.width + m.tx);
     for (const e of world.entities.values()) {
       // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site); a Z drone
       // drilling a crystal throws the same.
@@ -1028,8 +1031,7 @@ function start(): void {
         effects.sparks(weld, dt); // twice a jackhammer's rate: a weld crackles
       }
       if (e.type === 'puits') {
-        const covered = [...world.entities.values()].some((m) => m.def.kind === 'building' && m.def.energyRate && m.tx === e.tx && m.ty === e.ty);
-        if (!covered) effects.ambient(new Vector3(e.x / FP, heightAt(map, e.x / FP, e.y / FP) + 0.2, e.y / FP), dt, false);
+        if (!taken.has(e.ty * map.width + e.tx)) effects.ambient(new Vector3(e.x / FP, heightAt(map, e.x / FP, e.y / FP) + 0.2, e.y / FP), dt, false);
         continue;
       }
       if (e.def.kind !== 'building' || e.buildLeft > 0 || !sees(e)) continue;

@@ -1002,7 +1002,14 @@ export class Hud {
     return list;
   }
 
+  /** What the card's buttons depend on, cheap to read: they are worked out again only when it changes (at most once a
+   * tick: resources, queues, sites, research and cooldowns move with the tick; the rest is the selection and this card's
+   * own state). */
+  private buttonsKey = '';
   private updateCard(): void {
+    const bk = `${this.world.tick}|${[...this.input.selected].join()}|${this.activeType}|${this.placing}|${this.targeting}|${this.scanning}|${this.aimed}|${this.buildMenu}|${this.weaponMenu}|${this.gridKeys}`;
+    if (bk === this.buttonsKey) return this.placeMenu();
+    this.buttonsKey = bk;
     this.buttons = this.buttonsFor();
     const p = this.world.players[this.player];
     const key = [...this.buttons, ...this.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + this.gridKeys + this.weaponMenu;
