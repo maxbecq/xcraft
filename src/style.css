@@ -997,3 +997,12 @@ body.touch fieldset.options input[type="checkbox"] { width: 20px; height: 20px; 
 /* The end-of-match banner (back to the menu, play again, rematch online) too. */
 body.touch .hud-banner button { min-height: 44px; }
 .menu button:disabled { opacity: 0.45; cursor: default; }
+
+/* A queued icon (selection panel, production panel): a click or a tap takes it out of the queue (game/hud.ts
+   cancelSlot); the pointer over it shows a red cross. */
+:is(.queue, .prod-row) span.cancel { position: relative; cursor: pointer; }
+:is(.queue, .prod-row) span.cancel:is(:hover, .vhover) { border-color: #ff4a3a; box-shadow: inset 0 0 8px rgba(255, 74, 58, 0.7); }
+:is(.queue, .prod-row) span.cancel:is(:hover, .vhover)::after {
+  content: '✕'; position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(110, 8, 0, 0.5); color: #ff7060; font: 700 18px/1 system-ui, sans-serif; text-shadow: 0 0 3px #000;
+}

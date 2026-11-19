@@ -172,6 +172,8 @@ export class Hud {
       if (t instanceof HTMLCanvasElement) e.stopPropagation();
     }, { capture: true });
     this.prod.addEventListener('click', (e) => {
+      const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
+      if (q) return this.cancelSlot(q);
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       const b = this.world.entities.get(id);
       if (!b || b.owner !== this.player) return;
@@ -214,6 +216,8 @@ export class Hud {
       if (b) this.press(b);
     });
     this.panel.addEventListener('pointerdown', (e) => {
+      const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
+      if (q) return this.cancelSlot(q);
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       if (!id) return;
       this.input.selected.clear();
@@ -253,6 +257,31 @@ export class Hud {
     });
   }
 
+  /** A click on a queued icon (selection panel or production panel): that one out of the queue. */
+  private cancelSlot(q: HTMLElement): void {
+    const id = Number(q.dataset.of);
+    const slot = Number(q.dataset.slot);
+    if (this.world.entities.get(id)?.owner !== this.player) return;
+    this.audio.play('click');
+    this.issue({ player: this.player, kind: 'cancel', ids: [id], slot });
+  }
+
+  /** The selection's details, rebuilt only when more than its bars changed (so a hover or a tooltip on them holds). */
+  private detailsKey = '';
+  private setDetails(html: string): void {
+    const bars = /width:[\d.e+-]+%/g;
+    const key = html.replace(bars, '');
+    if (key !== this.detailsKey) {
+      this.detailsKey = key;
+      this.details.innerHTML = html;
+      return;
+    }
+    const widths = html.match(bars) ?? [];
+    this.details.querySelectorAll<HTMLElement>('[style*="width"]').forEach((el, i) => {
+      if (widths[i]) el.style.width = widths[i].slice(6);
+    });
+  }
+
   private toggleProd(): void {
     this.prod.hidden = !this.prod.hidden;
     this.prodToggle.classList.toggle('on', !this.prod.hidden);
@@ -277,7 +306,7 @@ export class Hud {
       this.prodList.innerHTML = producers.length
         ? producers
             .map((e) => {
-              const queue = e.queue.map((t, i) => `<span class="${i ? '' : 'now'}">${img(t, DEFS[t].name)}${i ? '' : '<i></i>'}</span>`).join('');
+              const queue = e.queue.map((t, i) => `<span class="cancel${i ? '' : ' now'}" data-of="${e.id}" data-slot="${i}" title="${DEFS[t].name}. Clic : annuler">${img(t, DEFS[t].name)}${i ? '' : '<i></i>'}</span>`).join('');
               return `<button class="prod-row${e.queue.length ? '' : ' idle'}" data-id="${e.id}" title="${e.def.name}${e.queue.length ? '' : ' : à l’arrêt'}"><span class="who">${img(e.type, e.def.name)}</span>${queue || '<em>à l’arrêt</em>'}</button>`;
             })
             .join('')
@@ -556,14 +585,14 @@ export class Hud {
     this.portrait.show(sel.length === 1 ? sel[0].type : null, sel[0]?.owner);
     this.portrait.canvas.hidden = sel.length !== 1;
     if (sel.length === 0) {
-      this.details.innerHTML = '';
+      this.setDetails('');
       return;
     }
     if (sel.length > 1) {
-      this.details.innerHTML = `<div class="grid">${sel
+      this.setDetails(`<div class="grid">${sel
         .slice(0, 24)
         .map((e) => `<div class="tile${e.type === this.activeType ? ' active' : ''}${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
-        .join('')}</div>`;
+        .join('')}</div>`);
       return;
     }
     const e = sel[0];
@@ -582,7 +611,14 @@ export class Hud {
       } else if (e.queue.length) {
         const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
         html += `<div class="prod">${progress(first.name, 1 - e.trainLeft / ticks(first.buildTime))}`;
-        html += `<div class="queue">${e.queue.map((t, i) => `<span>${img(t, e.kits[i] ? `${DEFS[t].name} : ${WEAPONS[e.kits[i]].name}` : DEFS[t].name)}</span>`).join('')}</div></div>`;
+        // Each one in the queue: a click (or a tap) takes it out, refunded.
+        const own = e.owner === this.player && !this.spectator;
+        html += `<div class="queue">${e.queue
+          .map((t, i) => {
+            const name = e.kits[i] ? `${DEFS[t].name} : ${WEAPONS[e.kits[i]].name}` : DEFS[t].name;
+            return own ? `<span class="cancel" data-of="${e.id}" data-slot="${i}" title="${name}. Clic : annuler">${img(t, name)}</span>` : `<span>${img(t, name)}</span>`;
+          })
+          .join('')}</div></div>`;
       }
     }
     // The Temple primordial: each mythology's ultimate, charging while its three gods stand.
@@ -596,7 +632,7 @@ export class Hud {
       html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}${kits.length ? ` · Kits : ${kits.join(', ')}` : ''}${e.seizedLeft ? ' · Capturé (Canon IEM)' : ''}</div>`;
     }
     if (e.def.kind !== 'resource') html += this.stats(e);
-    this.details.innerHTML = html;
+    this.setDetails(html);
     this.portrait.render();
   }
 
