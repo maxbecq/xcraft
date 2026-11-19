@@ -1076,6 +1076,8 @@ interface View {
   dimmed?: Object3D[];
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
+  /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
+  rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
   wheels?: { o: Object3D; r: number }[];
   root: Object3D;
@@ -2290,6 +2292,11 @@ export class EntityRenderer {
     const gait = v.gait && this.stepGait(v);
     const phase = gait ?? t * speed * 4.2 + e.id;
     for (const w of v.wheels ?? []) w.o.rotation.x = (gait ?? 0) / w.r;
+    if (v.rotors) {
+      // Fans race while flying somewhere and idle down when it hovers in place.
+      v.rotors.spin += ((moving ? 28 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
+      for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
+    }
     const a = (e.def as UnitDef).attack;
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
@@ -2623,8 +2630,12 @@ export class EntityRenderer {
       dock = podDock(Math.min(box.x, box.z) * 0.42, box.y);
       root.add(dock.ports, dock.arm);
     }
+    const rotors: Object3D[] = [];
+    body.traverse((o) => {
+      if (/^zrotor_\d+$/.test(o.name)) rotors.push(o);
+    });
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: 7 } : undefined, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
