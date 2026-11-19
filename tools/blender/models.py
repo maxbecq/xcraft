@@ -2684,11 +2684,29 @@ def zw_accumulateur(p):
 
 
 def zw_mitrailleuse(p):
-    """The free default machine gun: a small box and two short barrels, plain on purpose."""
+    """The free default machine gun: twin barrels in vented jackets with muzzle brakes, on a yoke, a receiver fed by an
+    ammunition box and its belt, a small shield, a sight and two rear handles."""
     zmount(p)
-    box(p["steel"], (0.2, 0.24, 0.14), (0, 0.02, 0.24))
-    for x in (-0.04, 0.04):
-        cyl(p["dark"], 0.025, 0.3, (x, -0.24, 0.26), rot=(math.pi / 2, 0, 0), verts=6)
+    cyl(p["rust"], 0.16, 0.08, (0, 0, 0.21), verts=12)  # turntable
+    for x in (-0.13, 0.13):  # yoke
+        box(p["rust"], (0.04, 0.18, 0.16), (x, 0.02, 0.3))
+    box(p["steel"], (0.17, 0.3, 0.13), (0, 0.03, 0.33))  # receiver
+    box(p["dark"], (0.13, 0.22, 0.03), (0, 0.05, 0.41))  # top cover
+    box(p["steel"], (0.3, 0.025, 0.17), (0, -0.13, 0.35))  # shield
+    for x in (-0.05, 0.05):
+        cyl(p["steel"], 0.038, 0.3, (x, -0.29, 0.34), rot=(math.pi / 2, 0, 0), verts=10)  # jacket
+        for y in (-0.19, -0.27, -0.35):
+            cyl(p["dark"], 0.044, 0.018, (x, y, 0.34), rot=(math.pi / 2, 0, 0), verts=10)  # vents
+        cyl(p["dark"], 0.018, 0.14, (x, -0.5, 0.34), rot=(math.pi / 2, 0, 0), verts=8)  # barrel
+        cyl(p["steel"], 0.03, 0.06, (x, -0.58, 0.34), rot=(math.pi / 2, 0, 0), verts=8)  # muzzle brake
+        cyl(p["orange_glow"], 0.014, 0.012, (x, -0.612, 0.34), rot=(math.pi / 2, 0, 0), verts=8)
+    box(p["bronze"], (0.11, 0.15, 0.12), (0.19, 0.06, 0.3))  # ammunition box
+    for k in range(3):  # its belt, up into the receiver
+        box(p["dark"], (0.03, 0.035, 0.022), (0.155 - k * 0.03, 0.0, 0.37 + k * 0.012))
+    box(p["dark"], (0.03, 0.05, 0.05), (0, -0.07, 0.44))  # sight
+    box(p["cyan_glow"], (0.02, 0.02, 0.012), (0, -0.09, 0.47))
+    for x in (-0.06, 0.06):  # handles
+        cyl(p["dark"], 0.015, 0.09, (x, 0.22, 0.32), verts=6)
 
 
 ZWEAPONS = {f"zw_{k}": f for k, f in [("laser", zw_laser), ("flammes", zw_flammes), ("roquettes", zw_roquettes), ("dechiqueteur", zw_dechiqueteur),

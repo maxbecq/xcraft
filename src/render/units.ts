@@ -1170,6 +1170,8 @@ interface LegIK {
   lift: Vector3;
   swing: boolean;
   ready: boolean;
+  /** A soft dark disc on the ground under the foot (a child of the view's root), smaller as the foot lifts. */
+  shadow?: Mesh;
 }
 
 /** Not drawn, but hit by the click raycast. */
@@ -2646,7 +2648,11 @@ export class EntityRenderer {
           target.copy(ik.at).y += step * Math.sin(Math.PI * p);
         }
       }
-      reachFoot(l, ik, target);
+      if (ik.shadow) {
+        ik.shadow.position.set(target.x - v.root.position.x, 0.03, target.z - v.root.position.z);
+        ik.shadow.scale.setScalar(Math.max(0.4, 1 - (target.y - home.y) / Math.max(step, 0.01)));
+      }
+      reachFoot(l, ik, target); // last: it reuses the scratch vectors home and target live in
     }
   }
 
@@ -2939,6 +2945,12 @@ export class EntityRenderer {
     for (const l of insect ?? []) l.ik = legRig(l, pivot);
     const rigged = !!insect?.every((l) => l.ik);
     if (!rigged) for (const l of insect ?? []) l.ik = undefined;
+    if (rigged) {
+      // Thin feet cast next to no shadow: soft contact discs under each foot and the body ground the walker.
+      for (const l of insect!) root.add((l.ik!.shadow = contactShadow(l.ik!.reach * 0.32)));
+      const box = new Box3().setFromObject(body).getSize(new Vector3());
+      root.add(contactShadow(Math.min(box.x, box.z) * 0.55));
+    }
     // Wheels roll by the ground covered: with a cycle of 2π the phase is the distance itself. Legs with knees set
     // their cycle from their stride as they go (see walk).
     const gait = insect
