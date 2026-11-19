@@ -12,6 +12,12 @@ export class Grid {
   private readonly cut: Uint8Array;
   /** Chasms: never walkable nor buildable. */
   private readonly chasm: Uint8Array;
+  /**
+   * Per tile, the sides a ground unit may cross on terrain alone (bits 1 N, 2 E, 4 S, 8 W): the neighbour is on the
+   * map, not a chasm, and their shared edge's corners are level. The terrain never changes in a game, so canStep's
+   * terrain test is worked out once here (it was half the cost of a long path's search); buildings stay checked live.
+   */
+  private readonly sides: Uint8Array;
 
   constructor(map: GameMap) {
     this.width = map.width;
@@ -26,6 +32,10 @@ export class Grid {
         this.cut[y * map.width + x] = cutCorner(map, x, y) >= 0 ? 1 : 0;
       }
     }
+    this.sides = new Uint8Array(map.width * map.height);
+    for (let y = 0; y < map.height; y++)
+      for (let x = 0; x < map.width; x++)
+        for (const [bit, dx, dy] of SIDES) if (this.terrainStep(x, y, x + dx, y + dy, true)) this.sides[y * map.width + x] |= bit;
   }
 
   inside(x: number, y: number): boolean {
@@ -61,13 +71,29 @@ export class Grid {
    * `throughBuildings` ignores buildings (to walk out from under one) but never cliffs.
    */
   canStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
+    const dx = bx - ax;
+    const dy = by - ay;
+    if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0) || !this.inside(ax, ay)) return this.terrainStep(ax, ay, bx, by, throughBuildings);
+    const t = throughBuildings;
+    if (dx === 0 || dy === 0) return this.side(ax, ay, dx, dy, t);
+    return this.side(ax, ay, dx, 0, t) && this.side(bx, ay, 0, dy, t) && this.side(ax, ay, 0, dy, t) && this.side(ax, by, dx, 0, t);
+  }
+
+  /** One orthogonal step from an inside tile: its side open on terrain, and the tile beyond free (or `through`). */
+  private side(x: number, y: number, dx: number, dy: number, through: boolean): boolean {
+    const bit = dy === -1 ? 1 : dx === 1 ? 2 : dy === 1 ? 4 : 8;
+    return (this.sides[y * this.width + x] & bit) !== 0 && (through || this.blocked[(y + dy) * this.width + x + dx] === 0);
+  }
+
+  /** canStep worked out from the tiles themselves (what `sides` holds; also any odd pair of tiles). */
+  private terrainStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
     // Leaving a blocked tile is allowed, so units caught under a new building can walk out.
     if (!this.inside(ax, ay) || !this.inside(bx, by) || this.chasm[by * this.width + bx] || (!throughBuildings && !this.open(bx, by))) return false;
     const dx = bx - ax;
     const dy = by - ay;
     if (dx !== 0 && dy !== 0) {
       const t = throughBuildings;
-      return this.canStep(ax, ay, bx, ay, t) && this.canStep(bx, ay, bx, by, t) && this.canStep(ax, ay, ax, by, t) && this.canStep(ax, by, bx, by, t);
+      return this.terrainStep(ax, ay, bx, ay, t) && this.terrainStep(bx, ay, bx, by, t) && this.terrainStep(ax, ay, ax, by, t) && this.terrainStep(ax, by, bx, by, t);
     }
     // Tiles connect when the corners along their shared edge are at the same level.
     const a = (ay * this.width + ax) * 4;
@@ -175,6 +201,8 @@ export class Grid {
   }
 }
 
+/** canStep's sides: bit, and the step across it. */
+const SIDES: [number, number, number][] = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]];
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
 
