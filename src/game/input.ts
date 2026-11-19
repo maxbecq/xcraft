@@ -213,7 +213,16 @@ export class Input {
       this.box.hidden = r.w < DRAG_PX && r.h < DRAG_PX;
       Object.assign(this.box.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
     });
-    canvas.addEventListener('pointercancel', (e) => this.touches.delete(e.pointerId));
+    canvas.addEventListener('pointercancel', (e) => {
+      if (e.pointerType !== 'touch') return;
+      this.touches.delete(e.pointerId);
+      if (this.touches.size) return;
+      // A touch the browser took back ends any box it was drawing: the next press starts afresh.
+      clearTimeout(this.longPress);
+      this.touchMode = null;
+      this.dragStart = null;
+      this.box.hidden = true;
+    });
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'touch') return this.touchUp(e);
       if (e.button === 1 || e.button === 2) this.grab = null;
@@ -270,11 +279,15 @@ export class Input {
     clearTimeout(this.longPress);
     if (this.touches.size === 1) {
       this.touchMode = 'pending';
-      // Hold still a moment, then drag: selection box.
+      this.dragStart = null;
+      this.box.hidden = true;
+      // Hold still a moment, then drag: selection box, from where this finger came down.
+      const id = e.pointerId;
       this.longPress = window.setTimeout(() => {
-        if (this.touchMode !== 'pending') return;
+        const t = this.touches.get(id);
+        if (this.touchMode !== 'pending' || !t) return;
         this.touchMode = 'box';
-        this.dragStart = { x: e.clientX, y: e.clientY };
+        this.dragStart = { x: t.sx, y: t.sy };
         this.box.hidden = false;
         navigator.vibrate?.(15);
       }, LONG_PRESS_MS);
@@ -329,12 +342,13 @@ export class Input {
     this.touches.delete(e.pointerId);
     if (this.touches.size > 0) return;
     this.touchMode = null;
+    const start = this.dragStart;
+    this.dragStart = null;
+    this.box.hidden = true;
     // Let go while still moving (not after a pause): the view slides on.
     if (mode === 'pan' && performance.now() - this.panVel.t < 60) this.hooks.fling?.(this.panVel.x, this.panVel.y);
-    if (mode === 'box' && this.dragStart) {
-      const r = this.rect(this.dragStart, e);
-      this.dragStart = null;
-      this.box.hidden = true;
+    if (mode === 'box' && start) {
+      const r = this.rect(start, e);
       const ids = this.inBox(r);
       if (ids.length) {
         this.selected.clear();
