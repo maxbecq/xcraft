@@ -563,7 +563,13 @@ export class World {
   private revive(): void {
     for (const r of this.respawns) {
       if (this.tick < r.at) continue;
-      const hq = [...this.entities.values()].find((b) => b.owner === r.owner && b.type === FACTIONS[this.players[r.owner].faction].hq && b.buildLeft === 0);
+      // The first finished headquarters, looked for without copying every entity (done each tick while there is none).
+      let hq: Entity | undefined;
+      for (const b of this.entities.values())
+        if (b.owner === r.owner && b.type === FACTIONS[this.players[r.owner].faction].hq && b.buildLeft === 0) {
+          hq = b;
+          break;
+        }
       if (!hq) continue;
       this.spawnBeside(r.type, hq);
       this.say(r.owner, `${DEFS[r.type].name} est de retour.`, 'done');
