@@ -427,7 +427,11 @@ export class World {
     this.chargeUltimates();
     this.storms = this.storms.filter((z) => z.until > this.tick);
     this.index();
-    for (const e of [...this.entities.values()]) {
+    // Those there when the tick began, without copying them: what spawns meanwhile comes after them (ids only grow)
+    // and waits for the next tick, and none but the one thinking can leave the map during the loop.
+    const last = this.nextId - 1;
+    for (const e of this.entities.values()) {
+      if (e.id > last) break;
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
       if (e.def.kind === 'unit') this.think(e);
       else if (e.def.kind === 'building') this.operate(e);
@@ -466,11 +470,17 @@ export class World {
     for (const d of this.detected) d.clear();
     // Déflecteurs hide the allied ground units round them.
     this.shrouded.clear();
+    // The Déflecteurs listed first: the units are then looked through once, and only if there is one.
+    const veils: [Entity, number][] = [];
     for (const d of this.entities.values()) {
       const r = (d.def as BuildingDef).cloakAura;
-      if (!r || d.buildLeft > 0) continue;
-      for (const u of this.entities.values()) if (u.owner === d.owner && u.def.kind === 'unit' && !flies(u) && dist(u.x, u.y, d.x, d.y) <= toFp(r)) this.shrouded.add(u.id);
+      if (r && d.buildLeft === 0) veils.push([d, toFp(r)]);
     }
+    if (veils.length)
+      for (const u of this.entities.values()) {
+        if (u.def.kind !== 'unit' || flies(u)) continue;
+        for (const [d, r] of veils) if (u.owner === d.owner && dist(u.x, u.y, d.x, d.y) <= r) this.shrouded.add(u.id);
+      }
     // The detectors and their range, listed once (at the first hidden unit) rather than for each hidden unit.
     let detectors: [Entity, number][] | undefined;
     for (const e of this.entities.values()) {
@@ -499,7 +509,8 @@ export class World {
 
   private bury(): void {
     this.corpses = this.corpses.filter((c) => this.tick - c.tick < ticks(20));
-    for (const e of [...this.entities.values()]) {
+    // No copy: only the entity at hand leaves the map, which a Map's iteration allows.
+    for (const e of this.entities.values()) {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       // A unit taken for a while (Soumission, Canon IEM) dies its own player's.
       const owner = e.charm ? e.charmOwner : e.seizedLeft ? e.seizedFrom : e.owner;

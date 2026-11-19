@@ -169,7 +169,8 @@ export function separate(this: World): void {
   const widest: number[] = [];
   const drift: number[] = [];
   const key = (x: number, y: number) => y * 1024 + x;
-  const units = [...this.entities.values()].filter((e) => e.def.kind === 'unit' && e.order?.kind !== 'gather' && !e.inside);
+  const units: Entity[] = [];
+  for (const e of this.entities.values()) if (e.def.kind === 'unit' && e.order?.kind !== 'gather' && !e.inside) units.push(e);
   const n = units.length;
   const x0 = new Int32Array(n);
   const y0 = new Int32Array(n);
