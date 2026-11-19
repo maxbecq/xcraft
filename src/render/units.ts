@@ -476,7 +476,7 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
 };
 const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
-  'minotaure', 'temple'];
+  'minotaure', 'temple', 'gaia'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
@@ -833,7 +833,14 @@ function model(type: string, team: Material, seed = 0): Group {
     o.add(halo);
   }
   const d = DEFS[type];
-  if (d && 'faction' in d && d.faction === 'dieux' && d.kind === 'unit' && d.unique) godAura(g, t);
+  if (d && 'faction' in d && d.faction === 'dieux' && d.kind === 'unit' && d.unique) {
+    godAura(g, t);
+    // The Blender gods stand in a cyan circle of their own; the image-to-3D ones get it here.
+    if (STATIC_MESHY.includes(type)) {
+      godRing(g, (d as UnitDef).radius);
+      godPick(g, (d as UnitDef).radius, godTop.get(t) ?? 2);
+    }
+  }
   return g;
 }
 
@@ -843,6 +850,28 @@ function model(type: string, team: Material, seed = 0): Group {
  */
 const godTop = new WeakMap<Object3D, number>();
 let auraTexture: CanvasTexture | undefined;
+let pickMaterial: MeshBasicMaterial | undefined;
+/** An unseen column over a slender image-to-3D god, so a click anywhere on its figure selects it, not only its feet. */
+function godPick(g: Object3D, radius: number, top: number): void {
+  pickMaterial ??= new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+  const column = new Mesh(new CylinderGeometry(radius * 0.35, radius * 0.35, top, 12).translate(0, top / 2, 0), pickMaterial);
+  column.castShadow = false;
+  g.add(column);
+}
+
+let ringMaterial: MeshBasicMaterial | undefined;
+/** A god's cyan circle on the ground, as the Blender gods have (gods.py god_circle). */
+function godRing(g: Object3D, radius: number): void {
+  ringMaterial ??= new MeshBasicMaterial({ color: 0x7ff0e0, transparent: true, opacity: 0.8, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
+  for (const [inner, outer] of [[0.86, 0.9], [0.95, 0.99]]) {
+    const ring = new Mesh(new RingGeometry(radius * inner, radius * outer, 64).rotateX(-Math.PI / 2), ringMaterial);
+    ring.position.y = 0.03;
+    ring.userData.noPick = true;
+    ring.raycast = () => {};
+    g.add(ring);
+  }
+}
+
 function godAura(g: Object3D, template: Object3D): void {
   let top = godTop.get(template);
   if (top === undefined) godTop.set(template, (top = new Box3().setFromObject(template).max.y));

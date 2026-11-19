@@ -136,33 +136,90 @@ def protecteur(p):
 
 
 def antre(p):
-    ball(p["moss"], 1.25, (0, 0, 0.0), (1, 1, 0.55))
-    for i in range(7):
-        a = i / 7 * math.tau
-        box(p["stone"], (0.3, 0.22, 0.24), (math.cos(a) * 1.2, math.sin(a) * 1.2, 0.12), (0, 0, a), bevel=0.4)
-    # carved stone mouth
-    for x in (-0.34, 0.34):
-        box(p["marble2"], (0.18, 0.2, 0.62), (x, -1.0, 0.31))
-    box(p["marble"], (0.9, 0.24, 0.18), (0, -1.0, 0.68))
-    box(p["navy"], (0.5, 0.15, 0.56), (0, -0.93, 0.28))
-    box(p["ether_soft"], (0.44, 0.02, 0.5), (0, -1.0, 0.27))
-    box(p["gold"], (0.96, 0.26, 0.05), (0, -1.0, 0.79))
-    box(p["team"], (0.6, 0.03, 0.12), (0, -1.12, 0.68))
-    # a small tree grows from the top of the den
-    for k in range(3):
-        strand(p["bark2"], [(0.1 + k * 0.05, 0.25, 0.6), (0.15 + k * 0.1, 0.3, 1.0), (0.1 * k, 0.35 + k * 0.05, 1.35)], 0.07, 0.025)
-    for i in range(12):
-        a = i / 12 * math.tau
-        ball(p["leafglow"] if i % 3 else p["bloom_pink"], 0.2 if i % 3 else 0.08, (0.1 + math.cos(a) * 0.3, 0.38 + math.sin(a) * 0.3, 1.38 + 0.1 * math.sin(a * 2)), (1, 1, 0.75))
-    for i in range(6):
-        a = i / 6 * math.tau + 0.3
-        strand(p["bark"], [(0.1, 0.3, 0.6), (math.cos(a) * 0.7, math.sin(a) * 0.7, 0.45), (math.cos(a) * 1.15, math.sin(a) * 1.15, 0.05)], 0.06, 0.015)
-    for x, y in ((-0.6, 0.4), (0.6, 0.5), (0.7, -0.4), (-0.7, -0.3)):
-        ball(p["bloom_pink"], 0.04, (x, y, 0.42))
-    for x in (-0.55, 0.55):
-        cyl(p["bark2"], 0.02, 0.6, (x, -1.12, 0.3))
-        ball(p["ether"], 0.06, (x, -1.12, 0.66))
-        ball(p["ether_veil"], 0.14, (x, -1.12, 0.66))
+    """The chosen board (retouches/antre-2, redone 2026-11-19): a grassy Art Nouveau mound on a square stone base,
+    a tall gilded arch glowing warm from inside as its readable front, bronze whiplash vines, turquoise blossoms."""
+    import bpy
+    from kit import _fin, glow, paint
+    bronze = paint("bronze", 0x9A7240, metallic=0.7, rough=0.5, kind="metal", dark=0.5, light=1.15, grain=0.2)
+    grass = paint("grass", 0x74AC4A, kind="leaf", rough=0.95, dark=0.55, light=1.18, grain=0.3)
+    jamb = paint("jamb", 0x7C6E60, kind="stone", rough=0.9, grain=0.25, scale=2.0)
+    door = glow("doorglow", 0xFFB032, 4.0)
+    R, H, N = 1.42, 1.95, 3.2
+    rnd = random.Random(7)
+
+    def rim(a):  # a rounded square: the mound fills its 3-tile footprint
+        return R / (abs(math.cos(a)) ** N + abs(math.sin(a)) ** N) ** (1 / N)
+
+    def on(a, rho, lift=0.0):  # a point on the mound at azimuth a (-pi/2 = front), rho 0 (top) .. 1 (rim)
+        r = rim(a) * rho
+        return (r * math.cos(a), r * math.sin(a), 0.08 + H * (1 - rho ** 1.5) ** 1.15 + lift)
+
+    # the mound, built as one dome mesh (nothing under the ground)
+    na, nr = 72, 18
+    verts = [(0.0, 0.0, 0.08 + H)] + [on(i / na * math.tau, j / nr) for j in range(1, nr + 1) for i in range(na)]
+    faces = [(0, 1 + i, 1 + (i + 1) % na) for i in range(na)]
+    for j in range(nr - 1):
+        for i in range(na):
+            q, w = 1 + j * na, 1 + (j + 1) * na
+            faces.append((q + i, w + i, w + (i + 1) % na, q + (i + 1) % na))
+    me = bpy.data.meshes.new("mound")
+    me.from_pydata(verts, [], faces)
+    o = bpy.data.objects.new("mound", me)
+    bpy.context.scene.collection.objects.link(o)
+    _fin(o, grass, True)
+    # square base, its corners in stone
+    box(p["granite"], (3.0, 3.0, 0.1), (0, 0, 0.05), bevel=0.15)
+    for x in (-1.36, 1.36):
+        for y in (-1.36, 1.36):
+            box(p["granite"], (0.3, 0.3, 0.2), (x, y, 0.1), (0, 0, rnd.uniform(-0.3, 0.3)), bevel=0.3)
+    # grass tufts around the rim
+    for i in range(40):
+        a = i / 40 * math.tau + rnd.uniform(-0.04, 0.04)
+        if abs(a - 1.5 * math.pi) < 0.3:
+            continue
+        x, y, _ = on(a, 0.98)
+        ico(p["leaf"] if i % 2 else grass, 0.14, (x, y, 0.17), 1)
+    # the doorway: a stone portal jutting from the slope, its opening glowing
+    yf = -1.3
+    box(jamb, (0.84, 0.9, 0.86), (0, yf + 0.45, 0.5), bevel=0.15)
+    cyl(jamb, 0.42, 0.9, (0, yf + 0.45, 0.86), (math.pi / 2, 0, 0), v=32)
+    box(p["shadow"], (0.74, 0.04, 0.8), (0, yf + 0.01, 0.5))
+    box(door, (0.64, 0.06, 0.72), (0, yf - 0.01, 0.46))
+    cyl(door, 0.32, 0.06, (0, yf - 0.01, 0.82), (math.pi / 2, 0, 0), v=32)
+    box(p["stone"], (0.56, 0.36, 0.03), (0, yf - 0.16, 0.12), bevel=0.3)
+    # gilded Art Nouveau arch: twin jambs rising into a pointed whiplash crest
+    z0 = yf - 0.05
+    for sx in (-1, 1):
+        strand(p["gold"], [(sx * 0.46, z0, 0.1), (sx * 0.48, z0, 0.62), (sx * 0.44, z0, 1.06),
+                           (sx * 0.24, z0, 1.36), (sx * 0.03, z0 + 0.02, 1.5)], 0.075, 0.05)
+        strand(p["gold"], [(sx * 0.03, z0 + 0.02, 1.5), (sx * 0.07, z0 + 0.1, 1.66), (sx * 0.2, z0 + 0.2, 1.7), (sx * 0.26, z0 + 0.26, 1.6)], 0.04, 0.014)
+        strand(p["gold"], [(sx * 0.5, z0, 0.95), (sx * 0.7, z0 + 0.1, 1.02), (sx * 0.76, z0 + 0.18, 0.88), (sx * 0.66, z0 + 0.14, 0.8)], 0.035, 0.012)
+        strand(p["gold"], [(sx * 0.5, z0, 0.32), (sx * 0.68, z0 + 0.06, 0.26), (sx * 0.74, z0 + 0.12, 0.38), (sx * 0.64, z0 + 0.1, 0.44)], 0.032, 0.012)
+    ball(p["gold"], 0.09, (0, z0 + 0.02, 1.5))
+    box(p["team"], (0.4, 0.05, 0.13), (0, z0 - 0.03, 1.2))
+    # bronze whiplash vines climbing the mound, gold-tipped
+    for i in range(14):
+        a0 = -math.pi / 2 + (0.62 + (i // 2) * 0.68) * (1 if i % 2 else -1) + rnd.uniform(-0.12, 0.12)
+        sway, top = rnd.choice((-1, 1)) * rnd.uniform(0.25, 0.45), rnd.uniform(0.1, 0.4)
+        pts = [on(a0 + sway * math.sin(t * 6.0), 1.0 - t * (1.0 - top), 0.02) for t in [k / 9 for k in range(10)]]
+        strand(bronze, pts, 0.05, 0.016)
+        x, y, z = pts[-1]
+        ball(p["gold"], 0.04, (x, y, z + 0.01))
+    # blossoms: glowing turquoise, pale cream and peach
+    cream = paint("cream", 0xF4ECD8, kind="cloth", dark=0.7, grain=0.1)
+    peach = paint("peach", 0xF0A060, kind="cloth", dark=0.6, grain=0.1)
+    for i in range(110):
+        a = rnd.uniform(0, math.tau)
+        rho = math.sqrt(rnd.uniform(0.01, 0.95))
+        x, y, z = on(a, rho, 0.025)
+        if abs(x) < 0.85 and y < -0.55:
+            continue  # keep the portal clear
+        m = p["ether"] if i % 2 == 0 else (cream if i % 3 == 1 else peach)
+        for k in range(5):
+            b = k / 5 * math.tau
+            ball(m, 0.06, (x + 0.065 * math.cos(b), y + 0.065 * math.sin(b), z), (1, 1, 0.5), seg=8)
+        ball(p["gold"], 0.025, (x, y, z + 0.02), seg=8)
+    motes(p["ether"], (0, -0.2, 0.0), 1.1, 12, 3, size=0.016, zmin=0.4, zmax=1.9)
 
 
 def puits(p):
