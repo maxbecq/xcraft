@@ -606,6 +606,7 @@ export class PowerNet {
         if (touching.length) this.link(linked[i], nearest(linked[i], touching));
       }
       for (const e of fed) {
+        if (e.host) continue; // a Pod's add-on hangs on its Pod's gantry, not on a wire of its own
         const under = own.filter((b) => far(e, b) <= radius(b));
         if (e.owner === owner && under.length) this.link(e, nearest(e, under));
       }
