@@ -8,6 +8,7 @@ larger, which its picture's SPRITE_SCALE undoes).
 """
 import json
 import math
+import os
 import sys
 
 from PIL import Image
@@ -35,6 +36,34 @@ l0, r0, b0 = band(pic)
 l1, r1, b1 = band(ref)
 s = (r0 - l0) / (r1 - l1)  # image scale of the model onto the picture
 fx, fy = (l0 + r0) / 2 - (l1 + r1) / 2 * s, b0 - b1 * s
+
+
+def overlap(s, fx, fy, q=4):
+    """Intersection over union of the model's silhouette, so placed, and the picture's (at 1/q resolution)."""
+    W, H = pic.width // q, pic.height // q
+    a = pic.getchannel("A").resize((W, H)).point(lambda v: 1 if v > 128 else 0)
+    m = Image.new("L", (W, H), 0)
+    r = ref.getchannel("A").resize((max(1, round(ref.width * s / q)), max(1, round(ref.height * s / q))))
+    m.paste(r.point(lambda v: 1 if v > 128 else 0), (round(fx / q), round(fy / q)))
+    A, M = list(a.getdata()), list(m.getdata())
+    inter = sum(x & y for x, y in zip(A, M))
+    return inter / max(1, sum(x | y for x, y in zip(A, M)))
+
+
+# SILHOUETTE=1: refine the fit on the whole silhouette (towers included), not only the base.
+if os.environ.get("SILHOUETTE"):
+    best = (overlap(s, fx, fy), s, fx, fy)
+    for step in (12, 6, 3, 1.5):
+        improved = True
+        while improved:
+            improved = False
+            _, bs, bx, by = best
+            for ds, dx, dy in ((1.03, 0, 0), (1 / 1.03, 0, 0), (1, step, 0), (1, -step, 0), (1, 0, step), (1, 0, -step)):
+                c = overlap(bs * ds, bx + dx, by + dy)
+                if c > best[0] + 1e-4:
+                    best, improved = (c, bs * ds, bx + dx, by + dy), True
+    _, s, fx, fy = best
+print("overlap", round(overlap(s, fx, fy), 3))
 # Depth: the baked depth scaled by s about the image origin, its values by s too.
 w, h = src.size
 px = src.load()

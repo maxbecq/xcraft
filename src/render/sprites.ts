@@ -242,6 +242,9 @@ class Upright extends Group {
   }
 }
 
+/** Whether a type is drawn as its picture in this game. */
+export const spriteOf = (type: string): boolean => SPRITES && loaded.has(type);
+
 /**
  * A model copy turned into its picture: its meshes kept as the invisible stand-in, the relief added. Returns false
  * (model untouched) for a type without a picture.

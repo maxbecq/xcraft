@@ -5,7 +5,7 @@ import {
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { dressSprite } from './sprites';
+import { dressSprite, spriteOf } from './sprites';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -2291,6 +2291,9 @@ export class EntityRenderer {
     this.hostile = (a, b) => world.hostile(a, b);
     const hosted = new Map<number, Entity>(); // Z Pod id -> its add-on
     for (const e of world.entities.values()) if (e.host) hosted.set(e.host, e);
+    // Energy wells under a building drawn as a picture: their rocks go, the picture's own base takes their place.
+    const covered = new Set<number>();
+    for (const e of world.entities.values()) if (e.def.kind === 'building' && spriteOf(e.type)) covered.add(e.tx * 4096 + e.ty);
     for (const e of world.entities.values()) {
       const old = this.views.get(e.id);
       if (old && (old.type !== e.type || old.owner !== e.owner)) {
@@ -2426,6 +2429,7 @@ export class EntityRenderer {
           v.dock.arm.scale.x = Math.max(0.01, Math.hypot(to - from, rise) * grown);
         }
       }
+      if (e.type === 'puits') v.model.visible = !covered.has(e.tx * 4096 + e.ty);
       if (e.type === 'minerai') {
         // Fields shrink as they are mined out, and their small geodes go one by one.
         const body = v.model.children[0];
