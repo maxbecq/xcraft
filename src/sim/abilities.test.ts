@@ -121,6 +121,18 @@ describe('Human carriers and machines (notice 1.2-1)', () => {
     expect(aux.inside).toBe(0);
   });
 
+  it('one passenger out at a click on its portrait, the others staying aboard', () => {
+    const w = new World(createMap());
+    const s = w.spawn('scarabee', 0, ...at(40, 60));
+    const a = w.spawn('auxiliaire', 0, ...at(42, 60));
+    const b = w.spawn('auxiliaire', 0, ...at(42, 61));
+    w.step([{ player: 0, kind: 'smart', ids: [a.id, b.id], x: s.x, y: s.y, target: s.id }]);
+    run(w, 2);
+    expect([a.inside, b.inside]).toEqual([s.id, s.id]);
+    w.step([{ player: 0, kind: 'unload', ids: [s.id], unit: b.id }]);
+    expect([a.inside, b.inside]).toEqual([s.id, 0]);
+  });
+
   it('a Char Pégase takes off once researched, then shoots only at flyers', () => {
     const w = new World(createMap());
     const p = w.spawn('pegase', 0, ...at(40, 60));

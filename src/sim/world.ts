@@ -206,7 +206,8 @@ export type Command =
   /** Without `slot`, the last in the queue (or a site being raised); with it, that place in the queue. */
   | { player: number; kind: 'cancel'; ids: number[]; slot?: number }
   /** Every unit in the given bunkers walks out. */
-  | { player: number; kind: 'unload'; ids: number[] }
+  /** Everyone out of the carriers or bunkers named, or only `unit` (a click on its portrait). */
+  | { player: number; kind: 'unload'; ids: number[]; unit?: number }
   /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */
   | { player: number; kind: 'ability'; ids: number[]; x?: number; y?: number; name?: string }
   /** Marché: sells some of one resource for some of the other. */

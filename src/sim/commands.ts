@@ -61,7 +61,7 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'unload':
-      for (const b of [...buildings, ...units]) for (const u of [...this.entities.values()]) if (u.inside === b.id) this.leave(u);
+      for (const b of [...buildings, ...units]) for (const u of [...this.entities.values()]) if (u.inside === b.id && (c.unit === undefined || u.id === c.unit)) this.leave(u);
       return;
     case 'move':
       this.moveGroup(units, c.x, c.y);

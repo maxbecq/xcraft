@@ -261,6 +261,13 @@ export class Hud {
     this.panel.addEventListener('pointerdown', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
       if (q) return this.cancelSlot(q);
+      const out = (e.target as HTMLElement).closest<HTMLElement>('[data-unload]');
+      if (out) {
+        const of = Number(out.dataset.of);
+        if (this.world.entities.get(of)?.owner !== this.player || this.spectator) return;
+        this.audio.play('click');
+        return this.issue({ player: this.player, kind: 'unload', ids: [of], unit: Number(out.dataset.unload) });
+      }
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       if (!id) return;
       this.input.selected.clear();
@@ -750,6 +757,14 @@ export class Hud {
       html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => progress(`${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})`, this.ultimatePct(m) / 100)).join('')}</div>`;
     }
     if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
+    // Carriers and bunkers: who is inside, each with its health; a click on one lets it out (as in SC2).
+    const aboard = [...this.world.entities.values()].filter((u) => u.inside === e.id);
+    if (aboard.length) {
+      const out = e.owner === this.player && !this.spectator ? ' (clic : débarquer)' : '';
+      html += `<div class="prod cargo"><div class="info">À bord : ${aboard.length}</div><div class="grid">${aboard
+        .map((u) => `<div class="tile" data-unload="${u.id}" data-of="${e.id}" style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${out}">${img(u.type, u.def.name)}</div>`)
+        .join('')}</div></div>`;
+    }
     if ((e.def as UnitDef).weapons) {
       const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
       const kits = [[KIT.detection, 'Détection'], [KIT.invisibilite, 'Invisibilité'], [KIT.reparateur, 'Auto-réparateur'], [KIT.balise, 'Balise offensive']].filter(([bit]) => e.support & (bit as number)).map(([, n]) => n);
