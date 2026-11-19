@@ -2,7 +2,7 @@ import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial,
 import { isoOffset } from '../camera';
 
 /**
- * Prototype (`?sprites=1`): a few Z buildings drawn as a painted picture instead of their 3D model. The camera never
+ * A few Z buildings drawn as a painted picture instead of their 3D model (`?sprites=0` turns them back). The camera never
  * turns, so a building is always seen from the same side: one image, painted over a render of the model from that
  * exact angle (tools/sprites), can stand in for it.
  *
@@ -12,14 +12,14 @@ import { isoOffset } from '../camera';
  * plane (the Z fabrication) cuts it at the right height. The model itself stays, invisible: it casts the shadow, is
  * hit by clicks and carries the hover halo and the fabrication armature.
  */
-export const SPRITES = new URLSearchParams(location.search).has('sprites');
-/** Buildings with a painted picture (public/sprites/<type>.png, <type>-depth.png, <type>.json). */
-export const SPRITE_TYPES = ['pod', 'armement', 'intelligence'];
+export const SPRITES = new URLSearchParams(location.search).get('sprites') !== '0';
+/** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
+export const SPRITE_TYPES = ['pod', 'intelligence'];
 /**
- * The model's turn when baked and when drawn: none, as the 3D buildings stand (a corner to the camera), except
- * where the picture is the 2D concept itself, drawn from another side: the model is turned to match it.
+ * The model's turn when baked and when drawn: none, as the 3D buildings stand (a corner to the camera). A picture
+ * drawn from another side (a 2D concept) would turn the model under it to match.
  */
-export const SPRITE_YAW: Record<string, number> = { armement: Math.PI / 2 };
+export const SPRITE_YAW: Record<string, number> = {};
 /** Image pixels per world unit, when baked. */
 export const SPRITE_PPU = 144;
 /** Depth span coded in the depth image (world units, centred on the building's origin). */
@@ -144,9 +144,7 @@ export async function loadSprites(types: string[]): Promise<void> {
   await Promise.all(types.filter((t) => SPRITE_TYPES.includes(t)).map(async (type) => {
     try {
       const base = `${import.meta.env.BASE_URL}sprites/${type}`;
-      // `?sprites=ref`: the plain render instead of the painting, to tell the technique from the painting.
-      const look = new URLSearchParams(location.search).get('sprites') === 'ref' ? '-ref' : '';
-      const [meta, color, depth] = await Promise.all([fetch(`${base}.json`).then((r) => r.json() as Promise<SpriteMeta>), image(`${base}${look}.png`), image(`${base}-depth.png`)]);
+      const [meta, color, depth] = await Promise.all([fetch(`${base}.json`).then((r) => r.json() as Promise<SpriteMeta>), image(`${base}.png`), image(`${base}-depth.png`)]);
       const texture = new Texture(color);
       texture.colorSpace = SRGBColorSpace;
       texture.anisotropy = 4;
@@ -160,6 +158,30 @@ export async function loadSprites(types: string[]): Promise<void> {
 
 /** Brightness of the painted picture on screen (it is not lit again: its light is painted in). */
 const GLOW = 0.95;
+/** Seconds, for the lights' life; shared by every picture, set as one is drawn. */
+const clock = { value: 0 };
+
+/**
+ * The painted lights live: found by their colour (bright and saturated), red ones blink, warm ones (thrusters, the
+ * forge) flicker, blue and cyan ones (screens, the gate's glow, light rings) breathe slowly. Each patch of the
+ * picture and each building has its own phase, so they never pulse together. Works on the colour before the team's.
+ */
+const LIGHTS_GLSL = `
+      float lMax = max(paint.r, max(paint.g, paint.b));
+      float lSat = (lMax - min(paint.r, min(paint.g, paint.b))) / max(lMax, 0.001);
+      float lit = smoothstep(0.18, 0.4, lMax) * smoothstep(0.45, 0.7, lSat);
+      float red = lit * step(paint.g * 2.5, paint.r) * step(paint.b * 2.5, paint.r);
+      // Warm: only the brightest (lit thrusters), not the rust's highlights.
+      float warm = lit * smoothstep(0.45, 0.7, lMax) * (1.0 - red) * step(paint.b * 3.0, paint.r) * step(paint.g, paint.r);
+      float cool = lit * step(paint.r * 1.6, paint.b);
+      // Small lights blink each on its own (a phase per patch); wide glows breathe as one slow wave across the picture.
+      vec2 lCell = floor(vMapUv * 9.0) + vSpriteSeed;
+      float lPhase = fract(sin(dot(lCell, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+      float lWave = dot(vMapUv, vec2(2.5, 1.5)) + fract(sin(dot(vSpriteSeed, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+      float blink = 0.15 + 1.4 * smoothstep(0.1, 0.6, sin(spriteTime * 2.4 + lPhase));
+      float flicker = 1.05 + 0.4 * sin(spriteTime * 1.3 + lWave) * (0.6 + 0.4 * sin(spriteTime * 4.7 + lWave * 1.7));
+      float breathe = 0.65 + 0.85 * (0.5 + 0.5 * sin(spriteTime * 0.9 + lWave));
+      totalEmissiveRadiance *= mix(mix(mix(1.0, blink, red), flicker, warm), breathe, cool);`;
 
 /** The picture in a team's colours: its blue paint (the 3D models' team key) turned to the team colour. */
 function skin(type: string, color: number): MeshStandardMaterial {
@@ -172,10 +194,13 @@ function skin(type: string, color: number): MeshStandardMaterial {
   const team = new Color(color);
   m.onBeforeCompile = (shader) => {
     shader.uniforms.teamColor = { value: team };
-    shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    shader.uniforms.spriteTime = clock;
+    shader.vertexShader = `varying vec2 vSpriteSeed;\n${shader.vertexShader}`.replace('#include <project_vertex>', `#include <project_vertex>
+      vSpriteSeed = floor(modelMatrix[3].xz);`);
+    shader.fragmentShader = `uniform vec3 teamColor;\nuniform float spriteTime;\nvarying vec2 vSpriteSeed;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       vec3 paint = totalEmissiveRadiance;
       float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
-      totalEmissiveRadiance = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08) * ${GLOW.toFixed(2)}, teamMask);`);
+      totalEmissiveRadiance = mix(paint, teamColor * (dot(paint, vec3(0.3, 0.59, 0.11)) * 2.4 + 0.08) * ${GLOW.toFixed(2)}, teamMask);${LIGHTS_GLSL}`);
   };
   m.customProgramCacheKey = () => 'sprite-team';
   skins.set(key, m);
@@ -224,6 +249,7 @@ export function dressSprite(model: Object3D, type: string, teamColor: number): b
   picture.castShadow = false;
   picture.receiveShadow = false;
   picture.userData.sprite = true;
+  picture.onBeforeRender = () => (clock.value = performance.now() / 1000);
   holder.add(turned, picture);
   model.add(holder);
   return true;
