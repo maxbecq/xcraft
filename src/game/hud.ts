@@ -23,6 +23,8 @@ interface Button {
   type?: string;
   /** Its time in seconds, when not the type's own (a god's level). */
   seconds?: number;
+  /** The ability it uses, whose effect the tooltip explains. */
+  ability?: string;
   action: () => void;
 }
 
@@ -213,11 +215,29 @@ export class Hud {
       clearTimeout(tipTimer);
       this.tip.hidden = true;
     });
+    // A finger has no hover: a long press shows the tooltip (and presses nothing); a short one presses on release.
+    let held: { b: Button; long: boolean; timer: number } | null = null;
     this.card.addEventListener('pointerdown', (e) => {
-      const key = (e.target as HTMLElement).closest<HTMLElement>('[data-key]')?.dataset.key;
-      const b = this.buttons.find((x) => x.key === key);
-      if (b) this.press(b);
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
+      const b = this.buttons.find((x) => x.key === el?.dataset.key);
+      if (!b || !el) return;
+      if (e.pointerType !== 'touch') return this.press(b);
+      if (held) clearTimeout(held.timer);
+      const h: { b: Button; long: boolean; timer: number } = (held = { b, long: false, timer: 0 });
+      h.timer = window.setTimeout(() => {
+        h.long = true;
+        this.showTip(el);
+      }, 450);
     });
+    const release = (press: boolean) => {
+      if (!held) return;
+      clearTimeout(held.timer);
+      if (held.long) this.tip.hidden = true;
+      else if (press) this.press(held.b);
+      held = null;
+    };
+    this.card.addEventListener('pointerup', () => release(true));
+    this.card.addEventListener('pointercancel', () => release(false));
     this.panel.addEventListener('pointerdown', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
       if (q) return this.cancelSlot(q);
@@ -800,7 +820,7 @@ export class Hud {
         const reason = this.world.needs(this.player, a.research) ?? (a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined);
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
-        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action });
+        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
       }
       // Z socles: evolve into the next tier, in the field.
       const evolvers = units.filter((u) => this.world.nextTier(u) && !u.evolving);
@@ -881,7 +901,7 @@ export class Hud {
       if (a.research && !this.world.level(this.player, a.research)) continue;
       const ready = same.some((o) => (name === 'canoniem' ? o.iemCd : o.abilityCd) === 0);
       const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go });
+      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
     }
     // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
     if ((b.def as BuildingDef).weapons) {
@@ -972,6 +992,7 @@ export class Hud {
       if (d.kind === 'unit' && (d as UnitDef).weapons) lines.push('Socle : reçoit une arme, choisie ensuite (mitrailleuse gratuite).');
     }
     if (d?.kind === 'upgrade' && d.effect) lines.push(d.effect);
+    if (b.ability && ABILITIES[b.ability].effect) lines.push(ABILITIES[b.ability].effect!);
     if (b.reason) lines.push(`<span class="need">${b.reason}</span>`);
     else if (b.cost && !afford(p, b.cost)) lines.push('<span class="need">Ressources insuffisantes</span>');
     this.tip.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');

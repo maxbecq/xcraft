@@ -215,6 +215,8 @@ export type Def = UnitDef | BuildingDef | ResourceDef | UpgradeDef;
 /** Active abilities: one per Human soldier. Times in "Normal" seconds. */
 export interface AbilityDef {
   name: string;
+  /** What it does, in a sentence, for its button's tooltip. */
+  effect?: string;
   hotkey: string;
   cooldown: number;
   duration: number;
@@ -271,138 +273,138 @@ export function abilitiesOf(def: { ability?: string; abilities?: string[] }): st
 
 export const ABILITIES: Record<string, AbilityDef> = {
   /** Auxiliaire: costs 10 hp, attacks and moves 50 % faster. */
-  stimulant: { name: 'Stimulant', hotkey: 'T', ...BALANCE.abilities.stimulant },
+  stimulant: { name: 'Stimulant', effect: 'Coûte un peu de vie : l\'unité attaque et se déplace bien plus vite un moment.', hotkey: 'T', ...BALANCE.abilities.stimulant },
   /** Légionnaire: runs twice as fast to close in. */
-  charge: { name: 'Charge', hotkey: 'C', ...BALANCE.abilities.charge },
+  charge: { name: 'Charge', effect: 'Court deux fois plus vite pour fondre sur l\'ennemi.', hotkey: 'C', ...BALANCE.abilities.charge },
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
-  peauderoc: { name: 'Peau de roc', hotkey: 'R', ...BALANCE.abilities.peauderoc },
+  peauderoc: { name: 'Peau de roc', effect: 'Un allié proche encaisse moins de dégâts à chaque coup.', hotkey: 'R', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
   /** Z Espion (Z.doc): a beacon that gives sight of a zone for 50 s; units of a small zone held 5 s; invisible 20 s. */
-  balisez: { name: 'Balise de révélation', hotkey: 'B', ...(BALANCE.abilities.balisez as object) } as AbilityDef,
-  impulsion: { name: 'Impulsion magnétique', hotkey: 'I', research: 'impulsion', ...(BALANCE.abilities.impulsion as object) } as AbilityDef,
-  invistemp: { name: 'Invisibilité temporaire', hotkey: 'N', research: 'invistemp', ...(BALANCE.abilities.invistemp as object) } as AbilityDef,
+  balisez: { name: 'Balise de révélation', effect: 'Pose une balise qui révèle une zone de la carte pendant un long moment.', hotkey: 'B', ...(BALANCE.abilities.balisez as object) } as AbilityDef,
+  impulsion: { name: 'Impulsion magnétique', effect: 'Les unités d\'une petite zone sont immobilisées quelques secondes.', hotkey: 'I', research: 'impulsion', ...(BALANCE.abilities.impulsion as object) } as AbilityDef,
+  invistemp: { name: 'Invisibilité temporaire', effect: 'L\'Espion devient invisible un moment.', hotkey: 'N', research: 'invistemp', ...(BALANCE.abilities.invistemp as object) } as AbilityDef,
   /** Z Accumulateur (Z.doc): an enemy building frozen 20 s (no attack, no production, unhurt); a beacon that deafens
    * living units; allies round the caster unhurt. Energy costs (55, 130, 170) become cooldowns. */
-  gel: { name: 'Gel électronique', hotkey: 'G', ...(BALANCE.abilities.gel as object) } as AbilityDef,
-  vacarme: { name: 'Balise de vacarme', hotkey: 'V', ...(BALANCE.abilities.vacarme as object) } as AbilityDef,
-  cone: { name: 'Cône de protection', hotkey: 'O', ...(BALANCE.abilities.cone as object) } as AbilityDef,
+  gel: { name: 'Gel électronique', effect: 'Gèle un bâtiment ennemi : il ne tire plus et ne produit plus pendant un moment.', hotkey: 'G', ...(BALANCE.abilities.gel as object) } as AbilityDef,
+  vacarme: { name: 'Balise de vacarme', effect: 'Une balise assourdissante : les unités vivantes autour perdent de la vie et ne peuvent plus attaquer.', hotkey: 'V', ...(BALANCE.abilities.vacarme as object) } as AbilityDef,
+  cone: { name: 'Cône de protection', effect: 'Les alliés autour de l\'Accumulateur ne peuvent pas être blessés un moment.', hotkey: 'O', ...(BALANCE.abilities.cone as object) } as AbilityDef,
   /** Z Centre K (Z.doc): support kits fitted on an own socle anywhere on the map, on top of its weapon. */
-  kitdetection: { name: 'Détection', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
-  kitinvisibilite: { name: 'Invisibilité', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
-  kitreparateur: { name: 'Auto-réparateur', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
-  kitbalise: { name: 'Balise offensive', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
+  kitdetection: { name: 'Détection', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui détecte les unités invisibles.', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
+  kitinvisibilite: { name: 'Invisibilité', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le rend invisible.', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
+  kitreparateur: { name: 'Auto-réparateur', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le répare peu à peu.', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
+  kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
-  canoniem: { name: 'Canon IEM', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
-  observation: { name: 'Observation céleste', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
+  canoniem: { name: 'Canon IEM', effect: 'Prend le contrôle d\'une machine ennemie pendant 50 s, tant que le Centre K tient.', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
+  observation: { name: 'Observation céleste', effect: 'Le télescope révèle une zone et y détecte les unités invisibles.', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
   /**
    * Obélisque (mod « Rappel », a Prisme ability): after a 4 s channel, up to 8 army units within 5 tiles of
    * the target point appear around the Obélisque, then stay dazed 4 s. 100 energy as in the mod; the cooldown
    * is ours (the Prisme took 100 s to regain its 100 energy). `duration` is the channel.
    */
-  rappel: { name: 'Rappel', hotkey: 'R', ...BALANCE.abilities.rappel },
+  rappel: { name: 'Rappel', effect: 'Après une courte canalisation, ramène près de l\'Obélisque les unités de combat proches du point visé.', hotkey: 'R', ...BALANCE.abilities.rappel },
   /** Belluaire (notice): a sweeping blow that hits every enemy on the ground around it. */
-  coupcirculaire: { name: 'Coup circulaire', hotkey: 'C', ...BALANCE.abilities.coupcirculaire },
+  coupcirculaire: { name: 'Coup circulaire', effect: 'Un coup tournoyant qui frappe tous les ennemis au sol autour.', hotkey: 'C', ...BALANCE.abilities.coupcirculaire },
   /** Belluaire (notice): blends into the surroundings, unseen by enemies without detection, for a while. */
-  camouflage: { name: 'Camouflage', hotkey: 'F', ...BALANCE.abilities.camouflage },
+  camouflage: { name: 'Camouflage', effect: 'Se fond dans le décor : invisible pour l\'ennemi sans détection, un moment.', hotkey: 'F', ...BALANCE.abilities.camouflage },
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
-  explosiftoxique: { name: 'Explosif toxique', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
+  explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
-  regenerant: { name: 'Régénérant', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
+  regenerant: { name: 'Régénérant', effect: 'L\'allié visé ne peut plus être blessé un moment, puis les toxines le laissent à 1 PV.', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
   /** Alchimiste (notice): a living unit fallen near the point rises and fights for a while as a Cadavre réanimé. */
-  reanimation: { name: 'Réanimation', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
+  reanimation: { name: 'Réanimation', effect: 'Une unité vivante tombée près du point se relève et combat un moment pour vous.', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
   /** Phalangiste (notice): a napalm charge on a vehicle near the point: an enemy one is burnt and stopped, an ally one repaired. */
-  napalm: { name: 'Charge de napalm', hotkey: 'N', target: 'point', research: 'chargenapalm', ...BALANCE.abilities.napalm },
+  napalm: { name: 'Charge de napalm', effect: 'Sur un véhicule : un ennemi brûle et s\'arrête, un allié est réparé.', hotkey: 'N', target: 'point', research: 'chargenapalm', ...BALANCE.abilities.napalm },
   /** Créature (notice): burrows, unseen, and bursts out when an enemy comes near; again to come out. */
-  enfouissement: { name: 'Enfouissement', hotkey: 'F', research: 'enfouissement', ...BALANCE.abilities.enfouissement },
+  enfouissement: { name: 'Enfouissement', effect: 'S\'enterre, invisible, et surgit quand un ennemi approche ; encore pour ressortir.', hotkey: 'F', research: 'enfouissement', ...BALANCE.abilities.enfouissement },
   /** Assassin (notice): overwhelms the mind of the enemy nearest the point, which cannot move nor fight for a while. */
-  chocmental: { name: 'Choc mental', hotkey: 'M', target: 'point', research: 'chocmental', ...BALANCE.abilities.chocmental },
+  chocmental: { name: 'Choc mental', effect: 'L\'ennemi visé ne peut plus bouger ni combattre un moment.', hotkey: 'M', target: 'point', research: 'chocmental', ...BALANCE.abilities.chocmental },
   /** Druide (notice): a perfect energy double of the ally nearest the point, for a while. */
-  double: { name: 'Double énergétique', hotkey: 'O', target: 'point', ...BALANCE.abilities.double },
+  double: { name: 'Double énergétique', effect: 'Crée un double d\'énergie de l\'allié visé, pour un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.double },
   /** Druide (notice): a bolt of plasma on the enemy nearest the point. */
-  deflagration: { name: 'Déflagration', hotkey: 'G', target: 'point', research: 'deflagration', ...BALANCE.abilities.deflagration },
+  deflagration: { name: 'Déflagration', effect: 'Un trait de plasma sur l\'ennemi visé.', hotkey: 'G', target: 'point', research: 'deflagration', ...BALANCE.abilities.deflagration },
   /** Druide (notice): no ability can be used inside the zone for a while. */
-  silence: { name: 'Silence des ions', hotkey: 'I', target: 'point', research: 'silence', ...BALANCE.abilities.silence },
+  silence: { name: 'Silence des ions', effect: 'Plus aucune capacité ne peut être utilisée dans la zone, un moment.', hotkey: 'I', target: 'point', research: 'silence', ...BALANCE.abilities.silence },
   /** Porte-disques, Chimère, Dragon (notice): a short-range teleport. */
-  teleport: { name: 'Téléportation', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleport },
+  teleport: { name: 'Téléportation', effect: 'Une courte téléportation au point visé.', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleport },
   /** Baliste plasma (notice): the cannon spins, firing at every enemy around. */
-  feucirculaire: { name: 'Feu circulaire', hotkey: 'F', research: 'feucirculaire', ...BALANCE.abilities.feucirculaire },
+  feucirculaire: { name: 'Feu circulaire', effect: 'Le canon tourne sur lui-même et tire sur tous les ennemis autour.', hotkey: 'F', research: 'feucirculaire', ...BALANCE.abilities.feucirculaire },
   /** Espion (notice): with another Espion, a time corridor: the units round this one appear by the other. */
-  couloir: { name: 'Couloir temporel', hotkey: 'C', research: 'couloir', ...BALANCE.abilities.couloir },
+  couloir: { name: 'Couloir temporel', effect: 'Avec un second Espion : les unités autour de celui-ci apparaissent près de l\'autre.', hotkey: 'C', research: 'couloir', ...BALANCE.abilities.couloir },
   /** Voyageur (notice): a cloak of negative energy over itself and the allies round it. */
-  manteau: { name: 'Manteau', hotkey: 'M', research: 'manteau', ...BALANCE.abilities.manteau },
+  manteau: { name: 'Manteau', effect: 'Un manteau d\'énergie négative sur le Voyageur et les alliés autour.', hotkey: 'M', research: 'manteau', ...BALANCE.abilities.manteau },
   /** Voyageur (notice): itself and the allies round it appear by the friendly building nearest the point. */
-  teleportgroupe: { name: 'Téléportation de groupe', hotkey: 'T', target: 'point', research: 'teleportation', ...BALANCE.abilities.teleportgroupe },
+  teleportgroupe: { name: 'Téléportation de groupe', effect: 'Le Voyageur et les alliés autour apparaissent près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', research: 'teleportation', ...BALANCE.abilities.teleportgroupe },
   /** Voyageur (notice): the ally nearest the point sends back part of the damage it takes. */
-  renvoi: { name: 'Sphère de renvoi', hotkey: 'R', target: 'point', research: 'renvoi', ...BALANCE.abilities.renvoi },
+  renvoi: { name: 'Sphère de renvoi', effect: 'L\'allié visé renvoie une partie des dégâts qu\'il reçoit.', hotkey: 'R', target: 'point', research: 'renvoi', ...BALANCE.abilities.renvoi },
   /** Béhémoth (notice): phases out, unhurt and unable to fight, for a while. */
-  dephasage: { name: 'Déphasage', hotkey: 'D', research: 'dephasage', ...BALANCE.abilities.dephasage },
+  dephasage: { name: 'Déphasage', effect: 'Se déphase : ne peut plus être blessé ni combattre, un moment.', hotkey: 'D', research: 'dephasage', ...BALANCE.abilities.dephasage },
   /** Orbe de commandement (notice, Observatoire): reveals a very wide zone. */
-  observatoire: { name: 'Observatoire', hotkey: 'V', research: 'observatoire', ...BALANCE.abilities.observatoire },
+  observatoire: { name: 'Observatoire', effect: 'Révèle une très large zone de la carte.', hotkey: 'V', research: 'observatoire', ...BALANCE.abilities.observatoire },
   /** Trône (notice, Relais de canon orbital): a plasma beam from orbit on a point an Espion watches. */
-  canonorbital: { name: 'Canon orbital', hotkey: 'C', research: 'relais', ...BALANCE.abilities.canonorbital },
+  canonorbital: { name: 'Canon orbital', effect: 'Un rayon de plasma depuis l\'orbite, sur un point qu\'un Espion surveille.', hotkey: 'C', research: 'relais', ...BALANCE.abilities.canonorbital },
   /** Trône (notice, Porte de déphasage): the Isdaris units round the point phase out for a while. */
-  portedephasage: { name: 'Porte de déphasage', hotkey: 'P', research: 'porte', ...BALANCE.abilities.portedephasage },
+  portedephasage: { name: 'Porte de déphasage', effect: 'Les unités Isdaris autour du point se déphasent un moment.', hotkey: 'P', research: 'porte', ...BALANCE.abilities.portedephasage },
   /** Char Pégase (notice): takes off (shooting only at flyers) or lands. */
-  decollage: { name: 'Décollage / atterrissage', hotkey: 'D', research: 'decollage', ...BALANCE.abilities.decollage },
+  decollage: { name: 'Décollage / atterrissage', effect: 'Décolle (ne tire alors que sur les volants) ou atterrit.', hotkey: 'D', research: 'decollage', ...BALANCE.abilities.decollage },
   /** Caserne volante: lifts off, a slow flyer that trains nothing until it lands. */
-  envol: { name: 'Décoller', hotkey: 'D', target: 'self', ...BALANCE.abilities.envol },
-  atterrissage: { name: 'Atterrir', hotkey: 'D', target: 'point', ...BALANCE.abilities.atterrissage },
+  envol: { name: 'Décoller', effect: 'Décolle : vole lentement et ne produit plus rien tant qu\'elle n\'a pas atterri.', hotkey: 'D', target: 'self', ...BALANCE.abilities.envol },
+  atterrissage: { name: 'Atterrir', effect: 'Atterrit au point visé et reprend la production.', hotkey: 'D', target: 'point', ...BALANCE.abilities.atterrissage },
   /** Trône (Concentrateur): a wall of energy across the map point, no unit nor shot goes through it. */
-  murenergie: { name: "Mur d'énergie", hotkey: 'M', research: 'concentrateur', ...BALANCE.abilities.murenergie },
+  murenergie: { name: "Mur d'énergie", effect: 'Un mur d\'énergie à travers le point : ni unité ni tir ne le traverse.', hotkey: 'M', research: 'concentrateur', ...BALANCE.abilities.murenergie },
   /** Gaïa (notice): appears by the friendly building nearest the point. */
-  teleportgaia: { name: 'Téléportation de Gaïa', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleportgaia },
+  teleportgaia: { name: 'Téléportation de Gaïa', effect: 'Gaïa apparaît près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleportgaia },
   /** Gaïa (notice): a magic arrow on the enemy nearest the point. */
-  flechegaia: { name: 'Flèche de Gaïa', hotkey: 'F', target: 'point', ...BALANCE.abilities.flechegaia },
+  flechegaia: { name: 'Flèche de Gaïa', effect: 'Une flèche magique sur l\'ennemi visé.', hotkey: 'F', target: 'point', ...BALANCE.abilities.flechegaia },
   /** Thor (notice, « Courroux du marteau »): his next blow hits several times as hard. */
-  courroux: { name: 'Courroux du marteau', hotkey: 'C', target: 'self', ...BALANCE.abilities.courroux },
+  courroux: { name: 'Courroux du marteau', effect: 'Son prochain coup frappe plusieurs fois plus fort.', hotkey: 'C', target: 'self', ...BALANCE.abilities.courroux },
   /** Odin (notice, « Foudre puissante »): a bolt on the enemy nearest the point, which it stuns. */
-  foudre: { name: 'Foudre puissante', hotkey: 'F', target: 'point', ...BALANCE.abilities.foudre },
+  foudre: { name: 'Foudre puissante', effect: 'Un éclair sur l\'ennemi visé, qu\'il étourdit.', hotkey: 'F', target: 'point', ...BALANCE.abilities.foudre },
   /** Athéna (notice): she and the troops round her hit much harder for a while. */
-  cridegueurre: { name: 'Cri de guerre', hotkey: 'C', target: 'self', ...BALANCE.abilities.cridegueurre },
+  cridegueurre: { name: 'Cri de guerre', effect: 'Athéna et les troupes autour frappent bien plus fort un moment.', hotkey: 'C', target: 'self', ...BALANCE.abilities.cridegueurre },
   /** Isis (notice): heals every wounded living ally round her. */
-  soinsdivins: { name: 'Soins divins', hotkey: 'O', target: 'self', ...BALANCE.abilities.soinsdivins },
+  soinsdivins: { name: 'Soins divins', effect: 'Soigne tous les alliés vivants blessés autour d\'Isis.', hotkey: 'O', target: 'self', ...BALANCE.abilities.soinsdivins },
   /** Isis (notice): raises allies fallen lately round her (`max` of them). */
-  resurrection: { name: 'Résurrection', hotkey: 'R', target: 'self', ...BALANCE.abilities.resurrection },
+  resurrection: { name: 'Résurrection', effect: 'Relève des alliés tombés depuis peu autour d\'Isis.', hotkey: 'R', target: 'self', ...BALANCE.abilities.resurrection },
   /** Frigg (notice): takes control of the enemy nearest the point for a while. */
-  soumission: { name: 'Soumission divine', hotkey: 'O', target: 'point', ...BALANCE.abilities.soumission },
+  soumission: { name: 'Soumission divine', effect: 'Prend le contrôle de l\'ennemi visé, un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.soumission },
   /** Frigg (notice): she and the troops round her vanish from sight, long. */
-  voile: { name: 'Voile de nuage', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
+  voile: { name: 'Voile de nuage', effect: 'Frigg et les troupes autour disparaissent de la vue, longtemps.', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
   /** Hadès (notice): a ray that splits to strike every enemy unit he sees. */
-  rayonmort: { name: 'Rayon de mort', hotkey: 'R', target: 'self', ...BALANCE.abilities.rayonmort },
+  rayonmort: { name: 'Rayon de mort', effect: 'Un rayon qui se divise et frappe chaque ennemi que voit Hadès.', hotkey: 'R', target: 'self', ...BALANCE.abilities.rayonmort },
   /** Hadès (notice): travels under ground to the point. */
-  voyage: { name: 'Voyage souterrain', hotkey: 'V', target: 'point', ...BALANCE.abilities.voyage },
+  voyage: { name: 'Voyage souterrain', effect: 'Hadès voyage sous terre jusqu\'au point visé.', hotkey: 'V', target: 'point', ...BALANCE.abilities.voyage },
   /** Hadès (notice): ghosts that cannot be hurt rise round him, for a while. */
-  armeeenfers: { name: 'Armée des enfers', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
+  armeeenfers: { name: 'Armée des enfers', effect: 'Des spectres invulnérables se lèvent autour d\'Hadès, un moment.', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
-  nuee: { name: 'Nuée nauséabonde', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
+  nuee: { name: 'Nuée nauséabonde', effect: 'Une nuée blesse les ennemis autour d\'Osiris et lui rend leur vie.', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
   /** Yggdrasill (notice, Déracinement): uproots to walk, and takes root again at the point. */
-  deraciner: { name: 'Déraciner', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
-  enraciner: { name: 'Enraciner', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
+  deraciner: { name: 'Déraciner', effect: 'S\'arrache du sol pour marcher ; on le replante ensuite au point voulu.', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
+  enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
   /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
-  transe: { name: 'Transe enragée', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
+  transe: { name: 'Transe enragée', effect: 'Une transe furieuse : ses coups sont bien plus forts un moment.', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
   /** Sphinx (notice, Peau de roc): turned to stone, slower and slower to shoot, but heavily armoured, mending. */
-  statue: { name: 'Forme de statue', hotkey: 'R', target: 'self', research: 'peauroc', ...BALANCE.abilities.statue },
+  statue: { name: 'Forme de statue', effect: 'Se change en pierre : très blindé et se répare, mais tire de plus en plus lentement.', hotkey: 'R', target: 'self', research: 'peauroc', ...BALANCE.abilities.statue },
   /** Athéna (notice): her owl flies over a zone and shows it a while. */
-  chouette: { name: 'Chouette', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
+  chouette: { name: 'Chouette', effect: 'La chouette d\'Athéna survole une zone et la montre un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
   /** Prêtresse (notice): on an ally, ends what harms it; on an enemy, what helps it, and hurts summoned ones badly. */
-  dissipation: { name: 'Dissipation', hotkey: 'D', target: 'point', ...BALANCE.abilities.dissipation },
+  dissipation: { name: 'Dissipation', effect: 'Sur un allié, retire ce qui lui nuit ; sur un ennemi, ce qui l\'aide, et blesse durement les invocations.', hotkey: 'D', target: 'point', ...BALANCE.abilities.dissipation },
   /** Élémentaire (notice): Mutation to another form, and Fusion of two into a Golem. */
-  formefeu: { name: 'Forme de feu', hotkey: 'J', target: 'self', ...BALANCE.abilities.mutation },
-  formeeau: { name: 'Forme d’eau', hotkey: 'Y', target: 'self', ...BALANCE.abilities.mutation },
-  formeterre: { name: 'Forme de terre', hotkey: 'K', target: 'self', ...BALANCE.abilities.mutation },
-  formeair: { name: 'Forme d’air', hotkey: 'Q', target: 'self', ...BALANCE.abilities.mutation },
-  fusion: { name: 'Fusion en Golem', hotkey: 'U', target: 'self', ...BALANCE.abilities.fusion },
+  formefeu: { name: 'Forme de feu', effect: 'Change de forme : feu.', hotkey: 'J', target: 'self', ...BALANCE.abilities.mutation },
+  formeeau: { name: 'Forme d’eau', effect: 'Change de forme : eau.', hotkey: 'Y', target: 'self', ...BALANCE.abilities.mutation },
+  formeterre: { name: 'Forme de terre', effect: 'Change de forme : terre.', hotkey: 'K', target: 'self', ...BALANCE.abilities.mutation },
+  formeair: { name: 'Forme d’air', effect: 'Change de forme : air.', hotkey: 'Q', target: 'self', ...BALANCE.abilities.mutation },
+  fusion: { name: 'Fusion en Golem', effect: 'Deux Élémentaires fusionnent en un Golem.', hotkey: 'U', target: 'self', ...BALANCE.abilities.fusion },
   // Ultimate spells (notice): charged at the Temple primordial while the mythology's three gods stand, cast by any of them.
   /** Scandinave: an avatar of the serpent Jörmungandr fights by the god a while, and feeds on the dead. */
-  jormungand: { name: 'Appel de Jörmungand', hotkey: 'U', target: 'point', ultimate: 'scandinave', ...BALANCE.abilities.jormungand },
+  jormungand: { name: 'Appel de Jörmungand', effect: 'Un avatar du serpent Jörmungand combat aux côtés du dieu un moment et se nourrit des morts.', hotkey: 'U', target: 'point', ultimate: 'scandinave', ...BALANCE.abilities.jormungand },
   /** Grec: lightning over a wide zone, allies too; the mightier a unit, the more it suffers. */
-  tempetezeus: { name: 'Tempête de Zeus', hotkey: 'U', target: 'point', ultimate: 'grec', ...BALANCE.abilities.tempetezeus },
+  tempetezeus: { name: 'Tempête de Zeus', effect: 'La foudre frappe une large zone, alliés compris ; plus une unité est puissante, plus elle souffre.', hotkey: 'U', target: 'point', ultimate: 'grec', ...BALANCE.abilities.tempetezeus },
   /** Égyptien: the enemies of the zone blinded and held long (machines more briefly). */
-  amonra: { name: "Flamboiement d'Amon-Râ", hotkey: 'U', target: 'point', ultimate: 'egyptien', ...BALANCE.abilities.amonra },
+  amonra: { name: "Flamboiement d'Amon-Râ", effect: 'Les ennemis de la zone sont aveuglés et immobilisés longtemps (les machines moins).', hotkey: 'U', target: 'point', ultimate: 'egyptien', ...BALANCE.abilities.amonra },
   /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
-  pluiedefeu: { name: 'Pluie de feu', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
+  pluiedefeu: { name: 'Pluie de feu', effect: 'Des météores en feu sur tous les ennemis d\'une zone.', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
   /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
-  tempete: { name: 'Tempête de sable', hotkey: 'T', target: 'point', ...BALANCE.abilities.tempete },
+  tempete: { name: 'Tempête de sable', effect: 'Les unités ennemies à distance dans la zone ne peuvent plus tirer un moment.', hotkey: 'T', target: 'point', ...BALANCE.abilities.tempete },
 };
 export const OBSERVATION = BALANCE.rules.observation;
 export const RAPPEL = BALANCE.rules.rappel;
