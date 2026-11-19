@@ -534,7 +534,7 @@ export class Hud {
 
   private makePinUi(): void {
     this.pinUi.hidden = true;
-    this.pinUi.innerHTML = '<button class="pin-ok" aria-label="Poser" title="Poser (appui long : poser et continuer)">✓</button><button class="pin-no" aria-label="Annuler" title="Annuler">✕</button>';
+    this.pinUi.innerHTML = '<button class="cmd pin-ok" aria-label="Poser" title="Poser (appui long : poser et continuer)">✓</button><button class="cmd pin-no" aria-label="Annuler" title="Annuler">✕</button>';
     document.body.append(this.pinUi);
     const ok = this.pinUi.querySelector<HTMLElement>('.pin-ok')!;
     // Placed on release; held LONG_MS or more, the order stays armed. The time held is read from the events

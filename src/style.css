@@ -1030,13 +1030,15 @@ body.touch .hud-banner button { min-height: 44px; }
 /* Touch screens, placing a building: ✓ places it (a long press: places it and keeps the order), ✕ drops it
    (game/hud.ts pinUi), just below the footprint. */
 .pin-ui { position: fixed; z-index: 7; display: flex; gap: 14px; transform: translateX(-50%); pointer-events: none; }
-.pin-ui button {
-  pointer-events: auto; width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.6);
-  font: 700 24px/1 system-ui, sans-serif; color: #fff; cursor: pointer; touch-action: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-}
-.pin-ui .pin-ok { background: #2f9e44; }
-.pin-ui .pin-no { background: #b3261e; }
+/* They are command buttons (.cmd): each side's own look (wood and steel, Isdaris glass, Dieux marble, Z LCD), only
+   larger, the mark in a size a thumb finds, a red ✕. */
+.pin-ui .cmd { pointer-events: auto; width: 52px; height: 52px; padding: 0; touch-action: none; font-size: 26px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7)); }
+body[class] .pin-ui .cmd { font-size: 26px; }
+body[class] .pin-ui .pin-no { color: #ff7a6a; }
+/* Z: the console's screen behind them (dark glass, scan lines), as they float over the map, not on the console. */
+body.z .pin-ui .cmd { background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px), var(--screen); }
+body.z .pin-ui .cmd:is(:hover, .vhover) { background: var(--phos); }
+body.z .pin-ui .pin-no { color: #ff6a4a; text-shadow: 0 0 4px rgba(255, 90, 60, 0.7); }
 
 /* Z socle's weapon (game/hud.ts placeMenu): an extra LCD screen in the Z console's style, as wide as the command
    card and standing on it, its weapons in a grid like the card's; it unfolds upwards from the socle's button, which
