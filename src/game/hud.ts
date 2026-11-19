@@ -108,6 +108,9 @@ export class Hud {
   private buildMenu: false | 'basic' | 'advanced' = false;
   /** Z Plate-forme: the socle whose weapon is being picked before it is queued. */
   private weaponMenu: string | null = null;
+  /** Its weapons, in a menu dropped under the socle's button (`menu`). */
+  private menuItems: Button[] = [];
+  private readonly menu = el('div', 'cmd-menu');
   private placing: string | null = null;
   /** The building type being placed, if any. */
   get placingType(): string | null {
@@ -215,6 +218,23 @@ export class Hud {
       clearTimeout(tipTimer);
       this.tip.hidden = true;
     });
+    this.menu.hidden = true;
+    document.body.append(this.menu);
+    this.menu.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-wkey]')?.dataset.wkey;
+      const item = this.menuItems.find((x) => x.key === k);
+      if (item) this.pressMenu(item);
+    });
+    // A click or tap anywhere but the menu or its socle's button closes it.
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        const t = e.target as HTMLElement;
+        if (this.weaponMenu && !this.menu.contains(t) && !t.closest?.('.cmd.open')) this.weaponMenu = null;
+      },
+      true,
+    );
     // A finger has no hover: a long press shows the tooltip (and presses nothing); a short one presses on release.
     let held: { b: Button; long: boolean; timer: number } | null = null;
     this.card.addEventListener('pointerdown', (e) => {
@@ -270,6 +290,17 @@ export class Hud {
         return;
       }
       const key = e.key === 'Escape' ? 'Escape' : e.key.toUpperCase();
+      if (this.menuItems.length) {
+        // The open weapon menu takes its keys and Escape first; any other key closes it and goes on.
+        const item = this.menuItems.find((x) => x.key === key);
+        if (item || key === 'Escape') {
+          e.preventDefault();
+          if (item && !e.repeat) this.pressMenu(item);
+          else this.weaponMenu = null;
+          return;
+        }
+        this.weaponMenu = null;
+      }
       const slot = this.gridKeys ? GRID_CODES.indexOf(e.code) : -1;
       // In grid mode a letter only presses the buttons past the grid (and Escape still cancels).
       const b = slot >= 0 ? this.buttons[slot] : this.buttons.find((x, i) => x.key === key && (!this.gridKeys || key === 'Escape' || i >= GRID_CODES.length));
@@ -773,6 +804,7 @@ export class Hud {
   private activeType: string | null = null;
 
   private buttonsFor(): Button[] {
+    this.menuItems = [];
     const own = this.input.own();
     if (!own.some((o) => o.type === this.activeType)) this.activeType = null;
     const ids = own.map((e) => e.id);
@@ -866,6 +898,7 @@ export class Hud {
     // Queue in the least busy of the selected buildings.
     const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
     // Z: a socle's weapon is picked before it is queued, for good; the machine gun comes free.
+    // It drops down under the socle's button (the card stays), so the second step shows as one.
     if (this.weaponMenu && !b.def.trains?.includes(this.weaponMenu)) this.weaponMenu = null;
     if (this.weaponMenu) {
       const t = this.weaponMenu;
@@ -875,14 +908,13 @@ export class Hud {
         cmd({ kind: 'train', ids: order, type: t, weapon });
         this.weaponMenu = null;
       };
-      return [
-        { label: `${d.name} : Mitrailleuse`, icon: t, key: 'M', cost: d.cost, reason: lack, action: queue() },
+      this.menuItems = [
+        { label: 'Mitrailleuse', key: 'M', cost: d.cost, reason: lack, action: queue() },
         ...d.weapons!.map((k) => {
           const kit = WEAPONS[k];
           const reason = lack ?? this.world.needs(this.player, kit.research);
-          return { label: `${d.name} : ${kit.name}`, icon: t, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
+          return { label: kit.name, key: kit.hotkey, cost: withKit(d, k), reason, action: queue(k) };
         }),
-        { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (this.weaponMenu = null) },
       ];
     }
     const list: Button[] = (b.def.trains ?? []).map((t) => {
@@ -952,9 +984,16 @@ export class Hud {
   private updateCard(): void {
     this.buttons = this.buttonsFor();
     const p = this.world.players[this.player];
-    const key = this.buttons.map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + this.gridKeys;
-    if (key === this.cardKey) return;
+    const key = [...this.buttons, ...this.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + this.gridKeys + this.weaponMenu;
+    if (key === this.cardKey) return this.placeMenu();
     this.cardKey = key;
+    this.menu.innerHTML = this.menuItems
+      .map((b) => {
+        const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
+        const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
+        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? ''}"><kbd>${b.key}</kbd><span>${b.label}</span>${cost}</button>`;
+      })
+      .join('');
     this.tip.hidden = true; // its button may be gone
     this.card.innerHTML = this.buttons
       .map((b) => {
@@ -962,9 +1001,32 @@ export class Hud {
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const pic = b.icon ? img(b.icon, '') : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : '';
         const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
-        return `<button class="cmd${off}${anim}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+        const open = this.weaponMenu && b.icon === this.weaponMenu ? ' open' : '';
+        return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
+    this.placeMenu();
+  }
+
+  /** The weapon menu under its socle's button (above it when the screen ends below), or hidden. */
+  private placeMenu(): void {
+    const at = this.menuItems.length ? this.card.querySelector<HTMLElement>('.cmd.open') : null;
+    this.menu.hidden = !at;
+    if (!at) {
+      this.weaponMenu = null; // its socle no longer on the card (another selection)
+      return;
+    }
+    const r = at.getBoundingClientRect();
+    const h = this.menu.offsetHeight;
+    this.menu.style.left = `${Math.max(4, Math.min(innerWidth - this.menu.offsetWidth - 4, r.left))}px`;
+    this.menu.style.top = `${r.bottom + 4 + h <= innerHeight ? r.bottom + 4 : Math.max(4, r.top - h - 4)}px`;
+  }
+
+  /** A weapon picked in the menu (a click, a tap or its key). */
+  private pressMenu(b: Button): void {
+    if (b.reason || (b.cost && !afford(this.world.players[this.player], b.cost))) return this.audio.play('error', 0.4);
+    this.audio.play('click');
+    b.action();
   }
 
   /** Fills and places the tooltip above a command button. */

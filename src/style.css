@@ -1033,3 +1033,19 @@ body.touch .hud-banner button { min-height: 44px; }
 }
 .pin-ui .pin-ok { background: #2f9e44; }
 .pin-ui .pin-no { background: #b3261e; }
+
+/* Z socle's weapon: a menu dropped under the socle's button, which stays lit (game/hud.ts placeMenu). */
+.cmd.open { outline: 2px solid #ffd970; outline-offset: -2px; box-shadow: 0 0 10px rgba(255, 217, 112, 0.7); }
+.cmd-menu {
+  position: fixed; z-index: 12; display: flex; flex-direction: column; min-width: 190px; padding: 3px;
+  background: rgba(8, 12, 18, 0.95); border: 1px solid rgba(255, 217, 112, 0.7); border-radius: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+}
+.cmd-menu-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-height: 34px; background: none; border: 0; border-radius: 3px;
+  color: #e8eef4; font: 600 13px var(--ui, system-ui), sans-serif; text-align: left; cursor: pointer;
+}
+.cmd-menu-item:is(:hover, .vhover) { background: rgba(255, 217, 112, 0.15); }
+.cmd-menu-item.off { opacity: 0.5; }
+.cmd-menu-item kbd { min-width: 18px; padding: 1px 4px; border: 1px solid currentColor; border-radius: 3px; font: 600 11px var(--ui, system-ui); opacity: 0.8; text-align: center; }
+.cmd-menu-item span { flex: 1; }
+.cmd-menu-item small { opacity: 0.85; white-space: nowrap; }
