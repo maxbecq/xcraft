@@ -1920,12 +1920,13 @@ export class EntityRenderer {
       // In a bunker: not drawn (the Fortin shows its occupants in its command card).
       v.root.visible = !e.inside;
       if (e.inside) continue;
-      if (e.owner >= 0 && e.owner !== player) {
+      // Others' things, and the minerals and wells, only once found.
+      if (e.owner !== player) {
         const now = sees(e);
         v.seen ||= now;
         v.root.visible = e.def.kind === 'unit' ? now : v.seen;
         if (!v.root.visible) continue;
-        // A building seen before, out of sight now: a frozen grey ghost of what was last seen.
+        // A building (or a mineral, a well) seen before, out of sight now: a frozen grey ghost of what was last seen.
         if (!now) {
           if (!v.ghost) toGhost(v);
           continue;

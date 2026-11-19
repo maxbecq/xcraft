@@ -25,6 +25,9 @@ export class Minimap {
   /** Left-click hook (e.g. attack-move); return true to keep the camera still. */
   intercept: (x: number, y: number) => boolean = () => false;
 
+  /** The player's fog of war as last drawn (0 never explored, 1 explored, 2 in sight). */
+  private known?: Uint8Array;
+
   constructor(map: GameMap, private readonly rig: CameraRig, size = 200) {
     this.canvas.width = this.canvas.height = size;
     this.canvas.className = 'minimap';
@@ -83,6 +86,7 @@ export class Minimap {
 
   /** Redraws the ground darkened by the player's fog of war. */
   fog(tiles: Uint8Array): void {
+    this.known = tiles;
     const d = this.image.data;
     // Grey where explored but out of sight (as on the terrain, FOG_GLSL); where never explored, the map's layout
     // stays readable, very dark (the terrain itself is black there).
@@ -111,8 +115,13 @@ export class Minimap {
 
     for (const e of world.entities.values()) {
       if (e.type === 'minerai' || e.type === 'puits') {
+        // Only once found: dimmed while out of sight, hidden where never explored.
+        const state = this.known?.[e.ty * this.tiles.width + e.tx] ?? 2;
+        if (!state) continue;
+        ctx.globalAlpha = state === 2 ? 1 : 0.45;
         ctx.fillStyle = e.type === 'minerai' ? '#ffb060' : '#c08bff';
         ctx.fillRect(e.tx, e.ty, e.type === 'puits' ? 3 : 1, e.type === 'puits' ? 3 : 1);
+        ctx.globalAlpha = 1;
         continue;
       }
       if (e.owner < 0 || !sees(e)) continue;

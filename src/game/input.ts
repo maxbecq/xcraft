@@ -631,7 +631,8 @@ export class Input {
       let o: Object3D | null = hit.object;
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);
-      if (!e || !hit.object.visible || e.inside || e.def.kind === 'unit') continue;
+      // Not what the fog hides (its root is hidden: a mineral never found, a building never seen).
+      if (!e || !hit.object.visible || !o!.visible || e.inside || e.def.kind === 'unit') continue;
       return e;
     }
     let best: Entity | undefined;
