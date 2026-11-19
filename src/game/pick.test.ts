@@ -67,6 +67,22 @@ describe('what the ray under the cursor picks', () => {
     expect(pickAt([{ e: drone, seen: false }, { e: centre, seen: true }], none, none)).toBe(centre);
   });
 
+  it('a unit behind a building, its model met by the ray and shown as a silhouette, is clicked through to', () => {
+    expect(pickAt([{ e: centre, seen: true }, { e: drone, seen: true, xray: true }], none, none)).toBe(drone);
+  });
+
+  it('the same unit the fog hides (no silhouette) is not: the building', () => {
+    expect(pickAt([{ e: centre, seen: true }, { e: drone, seen: false, xray: true }], none, none)).toBe(centre);
+  });
+
+  it("the Plate-forme's deck over a Quadripode whose model the ray does not meet stays the Plate-forme", () => {
+    expect(pickAt([{ e: deck, seen: true }], () => quadripode, none)).toBe(deck);
+  });
+
+  it('a well behind a building has no silhouette: the building', () => {
+    expect(pickAt([{ e: centre, seen: true }, { e: well, seen: true }], () => well, () => well)).toBe(centre);
+  });
+
   it('nothing on the ray nor in a zone: the nearest resource', () => {
     expect(pickAt([], none, () => well)).toBe(well);
   });

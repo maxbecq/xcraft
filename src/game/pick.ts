@@ -31,11 +31,16 @@ export function nearestCatch(x: number, y: number, catches: Catch[]): Entity | u
 
 /**
  * What a click picks. `hits`: what the ray under the cursor meets, nearest first (a unit with `seen`: not hidden by the
- * fog). The nearest it meets wins, a building as much as a unit or a resource: a click on the front of a building
- * standing before a well, or on a Plate-forme's deck over a Quadripode, takes the building. Only when the ray meets
- * nothing do the wider catch zones of units and resources decide (`caught`), then the nearest resource (`near`).
+ * fog; `xray`: the mesh met is drawn as a silhouette where a building hides it). The nearest it meets wins, a building
+ * as much as a unit or a resource: a click on the front of a building standing before a well, or on a Plate-forme's
+ * deck over a Quadripode, takes the building. One exception: a unit the ray meets further on, through the building,
+ * on its very model and shown there as a silhouette, wins (a click through to it). Only when the ray meets nothing do
+ * the wider catch zones of units and resources decide (`caught`), then the nearest resource (`near`).
  */
-export function pickAt(hits: { e: Entity; seen: boolean }[], caught: () => Entity | undefined, near: () => Entity | undefined): Entity | undefined {
-  const hit = hits.find(({ e, seen }) => e.def.kind !== 'unit' || seen);
-  return hit ? hit.e : (caught() ?? near());
+export function pickAt(hits: { e: Entity; seen: boolean; xray?: boolean }[], caught: () => Entity | undefined, near: () => Entity | undefined): Entity | undefined {
+  const i = hits.findIndex(({ e, seen }) => e.def.kind !== 'unit' || seen);
+  if (i < 0) return caught() ?? near();
+  const first = hits[i].e;
+  if (first.def.kind !== 'building') return first;
+  return hits.slice(i + 1).find(({ e, seen, xray }) => e.def.kind === 'unit' && seen && xray)?.e ?? first;
 }

@@ -4,6 +4,7 @@ import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 import { type Catch, nearestCatch, pickAt } from './pick';
+import { silhouetted } from '../render/xray';
 
 const DRAG_PX = 5;
 /** A unit is caught this far outside the box its model fills on screen, so a click need not land on a thin limb. */
@@ -676,7 +677,7 @@ export class Input {
    */
   private entityAt(x: number, y: number): Entity | undefined {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
-    const hits: { e: Entity; seen: boolean }[] = [];
+    const hits: { e: Entity; seen: boolean; xray: boolean }[] = [];
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
       if (hit.object.userData.noPick) continue;
@@ -685,7 +686,7 @@ export class Input {
       const e = o && this.world.entities.get(o.userData.id);
       // Not what the fog hides (its root is hidden: a mineral never found, a building never seen).
       if (!e || !hit.object.visible || !o!.visible || e.inside) continue;
-      hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e) });
+      hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e), xray: silhouetted(hit.object) });
     }
     return pickAt(hits, () => this.caughtAt(x, y), () => {
       let best: Entity | undefined;

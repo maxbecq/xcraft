@@ -53,6 +53,12 @@ export function xrayable(model: Object3D, owner: number): void {
   });
 }
 
+/** Whether this mesh is drawn as a silhouette where a building hides it (a living unit's, on its side's layer). */
+export function silhouetted(o: Object3D): boolean {
+  for (let l = 1; l <= TEAM_COLORS.length; l++) if (o.layers.isEnabled(l)) return true;
+  return false;
+}
+
 /** Takes a unit off the silhouettes (a corpse). */
 export function unxray(model: Object3D): void {
   model.traverse((o) => {
