@@ -469,6 +469,14 @@ export class Input {
     if (own.some((e) => (e.def as BuildingDef).trains?.length)) this.hooks.ordered?.(x, z, target, true);
   }
 
+  /** The rally point of the selected producers (buildings, Dieux gods), from the card's button: shown with its arrows. */
+  rallyAt(x: number, z: number, target?: Entity): void {
+    const ids = this.own().filter((e) => (e.def as UnitDef).trains?.length).map((e) => e.id);
+    if (!ids.length) return;
+    this.hooks.issue({ player: this.player, kind: 'rally', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id });
+    this.hooks.ordered?.(x, z, target, true);
+  }
+
   /** Drops dead entities from the selection. */
   prune(): void {
     for (const id of this.selected) if (!this.world.entities.has(id)) this.selected.delete(id);

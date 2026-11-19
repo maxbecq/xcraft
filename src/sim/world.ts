@@ -190,6 +190,8 @@ export type Command =
   | { player: number; kind: 'move'; ids: number[]; x: number; y: number; queue?: boolean }
   /** Right-click: move, gather, construct, return cargo or set a rally point, depending on the target. */
   | { player: number; kind: 'smart'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
+  /** The rally point of the selected producers (buildings, and Dieux gods, whose right click moves them), as `smart`'s. */
+  | { player: number; kind: 'rally'; ids: number[]; x: number; y: number; target?: number }
   | { player: number; kind: 'stop'; ids: number[] }
   /** Hold position: stop, and from then on only shoot what comes within reach, never step out to chase. */
   | { player: number; kind: 'hold'; ids: number[] }

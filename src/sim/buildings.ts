@@ -360,8 +360,8 @@ export function beside(this: World, t: Entity, from: Entity): { kind: 'move'; x:
 /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
 export function spawnBeside(this: World, type: string, b: Entity): Entity {
   if (b.def.kind === 'unit') {
-    // At a god's feet, on its rally side (in front by default).
-    const toward = b.rally ?? { x: b.x, y: b.y - FP };
+    // At a god's feet, in front of it: the rally point, if any, is then walked to (rallyOn).
+    const toward = { x: b.x, y: b.y - FP };
     const d = dist(b.x, b.y, toward.x, toward.y) || 1;
     const reach = b.radius + FP;
     const [tx, ty] = this.grid.nearestOpen(tileOf(b.x + idiv((toward.x - b.x) * reach, d)), tileOf(b.y + idiv((toward.y - b.y) * reach, d)), -1);

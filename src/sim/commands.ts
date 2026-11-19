@@ -69,6 +69,11 @@ export function apply(this: World, c: Command): void {
     case 'smart':
       this.smart(c, units, buildings);
       return;
+    case 'rally': {
+      const t = this.target(c);
+      for (const e of mine) if ((e.def as UnitDef).trains?.length && e.buildLeft === 0 && !e.inside) this.setRally(e, c, t);
+      return;
+    }
     case 'attack': {
       const t = this.target(c);
       const fighters = units.filter((e) => this.weapon(e));
@@ -295,13 +300,7 @@ export function apply(this: World, c: Command): void {
 
 export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units: Entity[], buildings: Entity[]): void {
   const t = this.target(c);
-  for (const b of buildings) {
-    if (!(b.def as BuildingDef).trains) continue;
-    // On a thing (unit, building, field), the rally point is that thing, at its middle; else the spot clicked.
-    const on = t && t.id !== b.id ? t : undefined;
-    b.rally = on ? { x: on.x, y: on.y } : { x: c.x, y: c.y };
-    b.rallyTarget = on?.id ?? 0;
-  }
+  for (const b of buildings) if ((b.def as BuildingDef).trains) this.setRally(b, c, t);
   const movers: Entity[] = [];
   for (const e of units) {
     const worker = (e.def as UnitDef).worker;
@@ -328,6 +327,13 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
 }
 
 /** A command's target, only if the player can see it (no clicking enemies through the fog). */
+/** On a thing (unit, building, field), the rally point is that thing, at its middle; else the spot clicked. */
+export function setRally(this: World, b: Entity, c: { x: number; y: number }, t: Entity | undefined): void {
+  const on = t && t.id !== b.id ? t : undefined;
+  b.rally = on ? { x: on.x, y: on.y } : { x: c.x, y: c.y };
+  b.rallyTarget = on?.id ?? 0;
+}
+
 export function target(this: World, c: { player: number; target?: number }): Entity | undefined {
   const t = c.target !== undefined ? this.entities.get(c.target) : undefined;
   return t && (t.owner < 0 || this.sees(c.player, t)) ? t : undefined;

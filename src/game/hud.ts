@@ -450,8 +450,8 @@ export class Hud {
   }
 
   private aim(x: number, z: number, target?: Entity, queue = false): void {
-    // Rally point: the selected producers' right click, on the ground, a unit or a resource.
-    if (this.aimed === 'rally') return this.input.orderAt(x, z, target, queue);
+    // Rally point: of the selected producers, on the ground, a unit or a resource (as a building's right click).
+    if (this.aimed === 'rally') return this.input.rallyAt(x, z, target);
     if (this.aimed === 'patrol') {
       // Patrol: between where each unit stands and the point clicked.
       this.audio.play('order');
@@ -749,6 +749,8 @@ export class Hud {
       const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
       const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
       if (g) list.push({ label: `Niveau ${g.lvl + 1}`, cmd: 'niveau', type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
+      // A god that summons troops has a rally point too; its right click moves it, so only this button sets one.
+      if (units.some((u) => (u.def as UnitDef).trains?.length)) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => this.setTargeting(true, true, 'rally') });
       // The Artefacterie's improvements, once there is one, for a selected god with room left.
       const buyers = units.filter((u) => (u.def as UnitDef).levels);
       if (buyers.length && [...this.world.entities.values()].some((b) => b.owner === this.player && b.type === 'artefacterie' && b.buildLeft === 0)) {

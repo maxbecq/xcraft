@@ -164,6 +164,53 @@ describe('rally point', () => {
     }
   });
 
+  describe('a Dieux god that summons troops', () => {
+    const gods = Object.entries(DEFS).filter(([, d]) => d.kind === 'unit' && (d as UnitDef).trains?.length).map(([t]) => t);
+
+    it('every one of them takes a rally point from the button, its troops coming out in front then going there', () => {
+      expect(gods).toEqual(expect.arrayContaining(['gaia', 'thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris']));
+      for (const t of gods) {
+        const w = new World(createMap());
+        const god = w.spawn(t, 0, 20 * FP, 20 * FP);
+        w.step([{ player: 0, kind: 'rally', ids: [god.id], x: 30 * FP, y: 26 * FP }]);
+        expect(god.rally, t).toEqual({ x: 30 * FP, y: 26 * FP });
+        const troop = (DEFS[t] as UnitDef).trains![0];
+        god.queue = [troop];
+        god.trainLeft = 1;
+        w.step([]);
+        const u = [...w.entities.values()].find((e) => e.type === troop && e.owner === 0);
+        expect(u, t).toBeDefined();
+        expect(u!.y, t).toBeLessThan(god.y); // in front of the god (north), not on the rally side
+        expect(u!.order, t).toMatchObject({ kind: 'move', x: 30 * FP, y: 26 * FP });
+      }
+    });
+
+    it('its right click still moves it and sets no rally point; moving it leaves a rally point on the ground where it is', () => {
+      const w = new World(createMap());
+      const god = w.spawn('thor', 0, 20 * FP, 20 * FP);
+      w.step([{ player: 0, kind: 'smart', ids: [god.id], x: 26 * FP, y: 20 * FP }]);
+      expect(god.rally).toBeNull();
+      expect(god.order?.kind).toBe('move');
+      w.step([{ player: 0, kind: 'rally', ids: [god.id], x: 14 * FP, y: 24 * FP }]);
+      run(w, 3);
+      expect(god.x).toBeGreaterThan(21 * FP);
+      expect(god.rally).toEqual({ x: 14 * FP, y: 24 * FP });
+    });
+
+    it('a rally point on a thing works for it as for a building', () => {
+      const w = new World(createMap());
+      const god = w.spawn('odin', 0, 20 * FP, 20 * FP);
+      const foe = w.spawn('legionnaire', 1, 24 * FP, 18 * FP);
+      w.step([{ player: 0, kind: 'rally', ids: [god.id], x: foe.x, y: foe.y, target: foe.id }]);
+      expect(god.rallyTarget).toBe(foe.id);
+      god.queue = ['nain'];
+      god.trainLeft = 1;
+      w.step([]);
+      const u = [...w.entities.values()].find((e) => e.type === 'nain')!;
+      expect(u.order).toMatchObject({ kind: 'attack', target: foe.id });
+    });
+  });
+
   describe('a unit out of the building goes by what the rally point is on', () => {
     const setup = () => {
       const w = new World(createMap());
