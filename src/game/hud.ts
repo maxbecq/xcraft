@@ -256,8 +256,9 @@ export class Hud {
       else if (press) this.press(held.b);
       held = null;
     };
-    this.card.addEventListener('pointerup', () => release(true));
-    this.card.addEventListener('pointercancel', () => release(false));
+    // On the window: the card may be rebuilt between the press and the release, its button gone from the page.
+    window.addEventListener('pointerup', () => release(true));
+    window.addEventListener('pointercancel', () => release(false));
     this.panel.addEventListener('pointerdown', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
       if (q) return this.cancelSlot(q);
