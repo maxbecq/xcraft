@@ -12,7 +12,7 @@ import { Post } from './render/post';
 import { Paving } from './render/paving';
 import { PowerNet } from './render/power';
 import { Overlay } from './render/overlay';
-import { EntityRenderer, MINERAL_VARIANTS, loadModels } from './render/units';
+import { EntityRenderer, MINERAL_VARIANTS, WEAPON_MODELS, loadModels } from './render/units';
 import { type BuildingDef, DEFS, FACTIONS, type Faction, LOOKS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -706,6 +706,8 @@ async function compileScene(catalog: [string, number][]): Promise<void> {
   for (const [type, owner] of catalog) {
     if (DEFS[type].kind === 'resource') continue; // already on the map
     spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP);
+    // Each weapon module on its socles too: a weapon first seen mid-game would compile then.
+    for (const kit of (DEFS[type] as { weapons?: string[] }).weapons ?? []) spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP).kit = kit;
     if (DEFS[type].kind === 'building') spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP).buildLeft = 1;
   }
   const shapes = new EntityRenderer(scene, map);
@@ -763,7 +765,7 @@ const shown = ATTRACT
   ? [...new Set([...world.entities.values()].map((e) => e.type))]
   : Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade' && (!('faction' in DEFS[t]) || factions.includes(DEFS[t].faction)));
 const ready = Promise.all([
-  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
+  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
   decor.load(scene, (m) => fogMaterial(m, fog, map)),
 ]);
 ready.then(() => loading?.style.setProperty('--p', '1'));

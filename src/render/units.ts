@@ -1,14 +1,14 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
+  MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, Raycaster, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { armillaries, LIFE_GLSL } from './life';
 import { type GameMap, heightAt } from '../map';
@@ -631,6 +631,12 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         // Rust, damp and grime: heavy on buildings, light on soldiers, none on mineral fields.
         // Isdaris technology stays almost pristine.
         const d = DEFS[type];
+        if (type.startsWith('zw_')) {
+          // A Z weapon module: the light wear and rim of the Z machines it sits on.
+          gltf.scene.traverse((o) => o instanceof Mesh && (weather(o.material as Material, 0.05), rimLight(o.material as Material, 0.45)));
+          templates.set(type, share(gltf.scene));
+          return;
+        }
         const isdaris = !!d && 'faction' in d && d.faction !== 'humains'; // Isdaris and Z
         const amount = type.startsWith('minerai') || type === 'puits' ? 0 : (d?.kind === 'unit' ? 0.35 : 1) * (isdaris ? 0.15 : 1);
         if (amount) gltf.scene.traverse((o) => o instanceof Mesh && weather(o.material as Material, amount));
@@ -1076,6 +1082,8 @@ interface View {
   dimmed?: Object3D[];
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
+  /** Z socle: the weapon module mounted on its back (see weaponModule), and the module's name. */
+  weapon?: { name: string; o: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
@@ -1139,6 +1147,24 @@ interface InsectLeg {
 const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 /** Height of the Z Plate-forme's deck, where the socles are built. */
 const PLATFORM_DECK = 0.37;
+/**
+ * Z socle weapons: one module per weapon (tools/blender/models.py zw_<weapon>, Blender stand-ins a Meshy model can
+ * replace: origin under the centre of its mounting ring, ring 0.64 across, pointing glTF +Z), the same on every socle.
+ * A socle built without a weapon carries the free default machine gun.
+ */
+export const WEAPON_MODELS = [...Object.keys(WEAPONS), 'mitrailleuse'].map((k) => `zw_${k}`);
+/** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
+const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
+  mastodonte: { size: 0.5 },
+  octopode: { size: 0.5 },
+};
+/** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
+function weaponModule(e: Entity): string {
+  if (!(e.def as { weapons?: string[] }).weapons) return '';
+  if (e.kit) return `zw_${e.kit}`;
+  return e.def.kind === 'unit' ? 'zw_mitrailleuse' : '';
+}
+
 /** Buildings seated into the ground (how far they sink, in tiles): the Z headquarters looked set down on the sand. */
 const SEATED: Record<string, number> = { intelligence: 0.08, supreme: 0.08 };
 let contactMaterial: MeshBasicMaterial | undefined;
@@ -1799,6 +1825,41 @@ export class EntityRenderer {
     this.views.clear();
   }
 
+  /**
+   * Puts weapon module `name` on a socle's back ('' takes it off): found by a ray dropped on the body's centre (legs,
+   * fans and the pick box left out), sized against the body's width, on the body so it walks, leans, grows and falls with it.
+   */
+  private mount(v: View, e: Entity, name: string): void {
+    if (v.weapon) {
+      v.weapon.o.removeFromParent();
+      free(v.weapon.o);
+      v.weapon = undefined;
+    }
+    if (!name || !templates.has(name)) return;
+    const body = v.model.children[0];
+    const parts: Object3D[] = [];
+    body.traverse((o) => {
+      if ((o as Mesh).isMesh && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
+    });
+    v.root.updateMatrixWorld(true);
+    const box = new Box3();
+    for (const o of parts) box.expandByObject(o, true);
+    const centre = box.getCenter(new Vector3());
+    const tune = WEAPON_MOUNTS[e.type] ?? {};
+    const size = box.getSize(new Vector3());
+    const across = Math.min(size.x, size.z);
+    const ray = new Raycaster(new Vector3(centre.x, box.max.y + 1, centre.z + (tune.forward ?? 0) * across), new Vector3(0, -1, 0));
+    const hit = ray.intersectObjects(parts, false)[0];
+    const at = hit ? hit.point : new Vector3(centre.x, box.max.y, centre.z);
+    const o = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
+    // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
+    o.position.copy(body.worldToLocal(at.clone()));
+    o.scale.setScalar(((tune.size ?? 0.7) * across) / 0.64 / body.getWorldScale(new Vector3()).x);
+    o.traverse((m) => (m.userData.noPick = true));
+    body.add(o);
+    v.weapon = { name, o };
+  }
+
   private release(v: View): void {
     free(v.root, [...(v.flash?.saved ?? []), ...(v.ghost ?? [])].map(([, m]) => m));
   }
@@ -2093,6 +2154,8 @@ export class EntityRenderer {
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
+      const wanted = weaponModule(e);
+      if (wanted !== (v.weapon?.name ?? '')) this.mount(v, e, wanted);
       if (v.dock) {
         const addon = hosted.get(e.id);
         const ready = e.buildLeft <= 0;
