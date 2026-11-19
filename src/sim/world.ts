@@ -201,7 +201,8 @@ export type Command =
   | { player: number; kind: 'arm'; ids: number[]; weapon: string }
   /** Z: each selected socle evolves into its next tier, in place (paid per socle). */
   | { player: number; kind: 'evolve'; ids: number[] }
-  | { player: number; kind: 'cancel'; ids: number[] }
+  /** Without `slot`, the last in the queue (or a site being raised); with it, that place in the queue. */
+  | { player: number; kind: 'cancel'; ids: number[]; slot?: number }
   /** Every unit in the given bunkers walks out. */
   | { player: number; kind: 'unload'; ids: number[] }
   /** Each selected unit uses its active ability, if ready; a building's ability (one building per command) aims at (x, y). */

@@ -193,10 +193,13 @@ export function apply(this: World, c: Command): void {
           this.refund(c.player, b.def);
           this.remove(b);
         } else if (b.queue.length) {
-          const t = b.queue.pop()!;
-          const kit = b.kits.pop();
+          const i = c.slot ?? b.queue.length - 1;
+          if (!Number.isSafeInteger(i) || i < 0 || i >= b.queue.length) continue;
+          const [t] = b.queue.splice(i, 1);
+          const [kit] = b.kits.splice(i, 1);
           this.refund(c.player, t === 'niveau' ? { cost: (b.def as UnitDef).levels!.cost[b.lvl - 1] } : { cost: withKit(DEFS[t] as UnitDef | UpgradeDef, kit) });
-          if (b.queue.length) b.trainLeft = Math.max(b.trainLeft, 1);
+          // The one in progress taken out: the next starts afresh, as when it is queued first.
+          if (b.queue.length) b.trainLeft = i === 0 && c.slot !== undefined ? this.trainTime(b, b.queue[0]) : Math.max(b.trainLeft, 1);
         }
       }
       return;

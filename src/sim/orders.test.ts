@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMap } from '../map';
+import { DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { type Entity, World } from './world';
 
@@ -240,5 +241,43 @@ describe('rally point', () => {
       w.rallyOn(u, b);
       expect(u.order).toMatchObject({ kind: 'move', x: last.x, y: last.y });
     });
+  });
+});
+
+describe('cancelling from the queue', () => {
+  const setup = () => {
+    const w = new World(createMap());
+    w.players[0].minerals = w.players[0].energy = 5000;
+    w.spawn('conseil', 0, 10 * FP, 10 * FP); // supply
+    w.spawn('grenier', 0, 30 * FP, 10 * FP);
+    const b = w.spawn('caserne', 0, 20 * FP, 20 * FP);
+    for (const t of ['auxiliaire', 'legionnaire', 'auxiliaire']) w.step([{ player: 0, kind: 'train', ids: [b.id], type: t }]);
+    run(w, 1);
+    return { w, b, p: w.players[0] };
+  };
+
+  it('takes out the one clicked, refunded, the one in progress going on', () => {
+    const { w, b, p } = setup();
+    const [left, m] = [b.trainLeft, p.minerals];
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id], slot: 1 }]);
+    expect(b.queue).toEqual(['auxiliaire', 'auxiliaire']);
+    expect(p.minerals - m).toBe((DEFS.legionnaire as UnitDef).cost.minerals);
+    expect(b.trainLeft).toBe(left - 1);
+  });
+
+  it('the one in progress taken out, the next starts with its whole time', () => {
+    const { w, b } = setup();
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id], slot: 0 }]);
+    expect(b.queue).toEqual(['legionnaire', 'auxiliaire']);
+    expect(b.trainLeft).toBe(w.trainTime(b, 'legionnaire') - 1);
+  });
+
+  it('without a place, the last one, as before; a place out of the queue does nothing', () => {
+    const { w, b } = setup();
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id] }]);
+    expect(b.queue).toEqual(['auxiliaire', 'legionnaire']);
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id], slot: 5 }]);
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id], slot: -1 }]);
+    expect(b.queue).toEqual(['auxiliaire', 'legionnaire']);
   });
 });
