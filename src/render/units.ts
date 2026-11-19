@@ -2144,7 +2144,8 @@ export class EntityRenderer {
         }
         if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
         if (v.pools) v.pools.visible = e.buildLeft === 0;
-        if (v.arms) this.assemble(v, e, now / 1000);
+        // The Plate-forme builds on its deck, with its robot arms when its model has them (the Blender one did).
+        if (v.arms || e.type === 'plateforme') this.assemble(v, e, now / 1000);
       }
     }
   }
@@ -2211,7 +2212,7 @@ export class EntityRenderer {
       v.fab.line.position.y = h - v.root.position.y + 0.01;
       (v.fab.line.material as MeshBasicMaterial).opacity = 0.5 + 0.3 * Math.abs(Math.sin(t * 8));
     }
-    v.arms!.forEach((a, i) => {
+    v.arms?.forEach((a, i) => {
       const ease = (o: Object3D | undefined, axis: 'x' | 'y' | 'z', to: number) => {
         if (o) o.rotation[axis] += (to - o.rotation[axis]) * 0.12;
       };
