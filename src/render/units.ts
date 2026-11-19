@@ -1782,6 +1782,23 @@ export class EntityRenderer {
     return v.root.position.y + h;
   }
 
+  /**
+   * Takes every view off the scene, freeing geometry and skeletons but not materials: a throwaway renderer's, made only
+   * to compile each type's programs (main.ts compileScene), which must outlive it for the real views to come.
+   */
+  clear(): void {
+    for (const v of this.views.values()) {
+      this.scene.remove(v.root);
+      v.root.traverse((o) => {
+        const m = o as Mesh;
+        if (m.geometry && !SHARED.has(m.geometry)) m.geometry.dispose();
+        const skeleton = (o as SkinnedMesh).isSkinnedMesh ? (o as SkinnedMesh).skeleton : undefined;
+        if (skeleton && !SHARED.has(skeleton)) skeleton.dispose();
+      });
+    }
+    this.views.clear();
+  }
+
   private release(v: View): void {
     free(v.root, [...(v.flash?.saved ?? []), ...(v.ghost ?? [])].map(([, m]) => m));
   }

@@ -25,7 +25,7 @@ import { stableShadowDepth } from './render/shadowdepth';
 import { drawXray } from './render/xray';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
-import type { Command, Entity, SandboxTool } from './sim/world';
+import { type Command, type Entity, type SandboxTool, World } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } from './terrain';
 import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
@@ -694,8 +694,20 @@ document.addEventListener('change', (e) => {
  * for it: the shadow pass's programs, the silhouettes' and those that differ from one object to the next (skinned,
  * shadowed) are built too.
  */
-async function compileScene(): Promise<void> {
+async function compileScene(catalog: [string, number][]): Promise<void> {
   units.sync(world, 0, input.selected, PLAYER, sees, seenAt);
+  // Every type the match can show (`catalog`: type and owner, for its colours), built and, for buildings, being built,
+  // in a world of its own never stepped (the match's ids and simulation untouched), drawn by a renderer of its own:
+  // a type first trained or built mid-game compiled its shaders then (the Marché held a frame 1.25 s, CPU slowed 4 times).
+  const spare = new World(map, world.players.length);
+  spare.players.forEach((p, i) => (p.faction = world.players[i].faction));
+  for (const [type, owner] of catalog) {
+    if (DEFS[type].kind === 'resource') continue; // already on the map
+    spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP);
+    if (DEFS[type].kind === 'building') spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP).buildLeft = 1;
+  }
+  const shapes = new EntityRenderer(scene, map);
+  shapes.sync(spare, 0, new Set(), PLAYER, () => true, () => true);
   stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
   const into = post.sceneTarget;
   renderer.setRenderTarget(into);
@@ -738,6 +750,7 @@ async function compileScene(): Promise<void> {
     rig.target.copy(target);
     rig.viewHeight = view;
     rig.update(aspect);
+    shapes.clear();
   }
 }
 
@@ -758,7 +771,7 @@ if (!ATTRACT) {
   // Never waited for more than 3 s: a page the browser does not draw (a tab opened behind, never shown) may never
   // finish compiling shaders, and its match, so the other player's too, would not start until it is shown.
   const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, 3000))]);
-  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene()]).then(() => {}))).then(start);
+  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene(portraits)]).then(() => {}))).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();
