@@ -637,14 +637,14 @@ const BASE: Record<string, object> = {
     abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise', 'canoniem'], researches: ['canoniem'],
   },
   canoniem: research('Canon IEM', 'C', "Le Centre K prend le contrôle d'une machine ennemie pendant 50 s.", undefined, 'z'),
-  rquadripode: research('Plan du Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
-  rhexapode: research("Plan de l'Hexapode", 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
-  rcoleoptere: research('Plan du Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
-  roctopode: research("Plan de l'Octopode", 'O', 'Débloque le socle Octopode.', { supreme: 1, optimisation: 1 }, 'z'),
+  rquadripode: research('Socle du Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
+  rhexapode: research("Socle de l'Hexapode", 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
+  rcoleoptere: research('Socle du Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
+  roctopode: research("Socle de l'Octopode", 'O', 'Débloque le socle Octopode.', { supreme: 1, optimisation: 1 }, 'z'),
   roctopode2: tier('roctopode', 'Octopode', 2, 'O'),
-  rmastodonte: research('Plan du Mastodonte', 'M', 'Débloque le socle Mastodonte.', { supreme: 1, optimisation: 1 }, 'z'),
+  rmastodonte: research('Socle du Mastodonte', 'M', 'Débloque le socle Mastodonte.', { supreme: 1, optimisation: 1 }, 'z'),
   rmastodonte2: tier('rmastodonte', 'Mastodonte', 2, 'M'),
-  rbarge: research('Plan de la Barge', 'B', 'Débloque la Barge, socle volant de transport.', { supreme: 1 }, 'z'),
+  rbarge: research('Socle de la Barge', 'B', 'Débloque la Barge, socle volant de transport.', { supreme: 1 }, 'z'),
   rbarge2: tier('rbarge', 'Barge', 2, 'B'),
   rquadripode2: tier('rquadripode', 'Quadripode', 2, 'Q'),
   rquadripode3: tier('rquadripode', 'Quadripode', 3, 'Q'),
@@ -783,11 +783,11 @@ function research(name: string, hotkey: string, effect: string, requires?: Recor
   return { kind: 'upgrade', name, effect, line: '', level: 1, requires, faction, hotkey };
 }
 
-/** A Z socle research's next level (Z.doc): the socle may evolve into this tier in the field. Named « Plan du … » so a
+/** A Z socle research's next level (Z.doc): the socle may evolve into this tier in the field. Named « Socle du … » so a
  * research never reads as the unit it unlocks (« Requiert : Quadripode » on the Quadripode's own button). */
 function tier(line: string, socle: string, level: number, hotkey: string): object {
   const of = socle === 'Barge' ? 'de la ' : /^[AEIOUH]/.test(socle) ? "de l'" : 'du ';
-  return { kind: 'upgrade', name: `Plan ${of}${socle} T${level}`, effect: `Les ${socle}s peuvent évoluer en T${level} sur le terrain.`, line, level, faction: 'z', hotkey };
+  return { kind: 'upgrade', name: `Socle ${of}${socle} T${level}`, effect: `Les ${socle}s peuvent évoluer en T${level} sur le terrain.`, line, level, faction: 'z', hotkey };
 }
 
 /** An Isdaris extension (notice): built onto a major building, here researched there; unlocks units and research. */
