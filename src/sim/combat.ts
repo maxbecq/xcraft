@@ -542,7 +542,8 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
     if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
     if (t.inside) continue; // sheltering in a bunker: hit the bunker
     const d = this.gap(e, t);
-    if (d > range || !this.sees(e.owner, t)) continue;
+    // No rank brings the score under d: past the best already, it cannot win (rank costs a weapon lookup).
+    if (d > range || d > bestScore || !this.sees(e.owner, t)) continue;
     const score = d + [0, 3 * FP, 8 * FP][this.rank(t)];
     // Ties go to the oldest entity, as when every entity was scanned in order.
     if (score < bestScore || (score === bestScore && t.id < best!.id)) [best, bestScore] = [t, score];
