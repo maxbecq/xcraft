@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMap } from '../map';
-import { DEFS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { type Entity, World } from './world';
 
@@ -151,6 +151,17 @@ describe('rally point', () => {
     w.step([{ player: 0, kind: 'smart', ids: [a.id], x: field.x + 300, y: field.y - 200, target: field.id }]);
     expect(a.rallyTarget).toBe(field.id);
     expect(a.rally).toEqual({ x: field.x, y: field.y }); // the thing's middle, not the spot clicked on it
+  });
+
+  it('every building that trains units takes one (its flag is drawn from it); one that trains none takes none', () => {
+    const producers = Object.entries(DEFS).filter(([, d]) => d.kind === 'building' && (d as BuildingDef).trains?.length).map(([t]) => t);
+    expect(producers).toEqual(expect.arrayContaining(['conseil', 'caserne', 'casernevolante', 'portail', 'nanoassembleur', 'obelisque', 'intelligence', 'plateforme', 'asgaard']));
+    for (const t of [...producers, 'trone', 'orbecommandement']) {
+      const w = new World(createMap());
+      const b = w.spawn(t, 0, 20 * FP, 20 * FP);
+      w.step([{ player: 0, kind: 'smart', ids: [b.id], x: 30 * FP, y: 24 * FP }]);
+      expect(b.rally, t).toEqual(producers.includes(t) ? { x: 30 * FP, y: 24 * FP } : null);
+    }
   });
 
   describe('a unit out of the building goes by what the rally point is on', () => {

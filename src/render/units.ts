@@ -2283,13 +2283,13 @@ export class EntityRenderer {
     this.bursts.push({ pts, vel, age: 0 });
   }
 
-  /** A small flag planted on the rally point of each selected building of ours that has one. */
+  /** A small flag planted on the rally point of each selected thing of ours that has one (a flying Caserne keeps its own). */
   private readonly rallyFlags: Group[] = [];
 
   private syncRallyFlags(world: World, selected: ReadonlySet<number>, player: number, now: number): void {
     const points = [...selected]
       .map((id) => world.entities.get(id))
-      .filter((e): e is Entity => !!e && e.owner === player && e.def.kind === 'building' && !!e.rally)
+      .filter((e): e is Entity => !!e && e.owner === player && !!e.rally)
       .map((e) => e.rally!);
     while (this.rallyFlags.length < points.length) {
       const flag = rallyFlag();

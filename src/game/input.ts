@@ -464,7 +464,9 @@ export class Input {
     const own = this.own();
     if (!own.length) return;
     this.hooks.issue({ player: this.player, kind: 'smart', ids: own.map((e) => e.id), x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
-    this.hooks.ordered?.(x, z, target, own.every((e) => e.def.kind === 'building'));
+    // Buildings alone: only those that train something take a rally point; the others take no order at all.
+    if (!own.every((e) => e.def.kind === 'building')) return this.hooks.ordered?.(x, z, target);
+    if (own.some((e) => (e.def as BuildingDef).trains?.length)) this.hooks.ordered?.(x, z, target, true);
   }
 
   /** Drops dead entities from the selection. */
