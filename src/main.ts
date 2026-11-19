@@ -35,6 +35,7 @@ import { addDeposits } from './render/deposits';
 import { connect, every, NO_DIRECT, readRoom, stateHash, type NetStatus } from './net';
 import { countMatch, countTitle } from './stats';
 import { asFaction, SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, stored, toggleFullscreen, wantsFullscreen } from './game/settings';
+import { decodeSeats } from './game/seats';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { downloadReplay, readReplay, type Replay, saveReplay } from './game/replay';
 
@@ -105,10 +106,7 @@ const slots: Slot[] = REPLAY
   : SANDBOX
     ? [{ control: 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 }]
   : params.has('p')
-    ? params.get('p')!.split(',').slice(0, 4).map((s, i) => {
-        const [control, faction, team] = s.split('.');
-        return { control: control || 'normal', faction: asFaction(faction), team: Number(team) || i };
-      })
+    ? decodeSeats(params.get('p')!)
     : [
         { control: NET_ROLE ? 'net' : SPECTATE ? (params.get('ai0') ?? 'normal') : 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 },
         { control: NET_ROLE ? 'net' : (params.get(SPECTATE ? 'ai1' : 'ai') ?? 'normal'), faction: asFaction(params.get('adversaire') ?? stored('xcraft.adversaire')), team: 1 },

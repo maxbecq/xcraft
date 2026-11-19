@@ -9,6 +9,7 @@ import { BIOMES, type Biome } from '../render/biome';
 import { TEAM_COLORS } from '../render/units';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
+import { encodeSeats } from './seats';
 import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, toggleFullscreen, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
@@ -408,9 +409,6 @@ function launch(s: Setup, sandbox = false): void {
   }
   const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
   if (sandbox) return void (location.search = `?sandbox&${keep}${sandboxPicked.size ? `&outils=${[...sandboxPicked].join(',')}` : ''}`);
-  const seated = s.sides.filter((x) => x.control !== 'none');
-  // With two players, each is its own team whatever was picked; with more, teams as chosen.
-  const teams = seated.length > 2 && !seated.every((x) => x.team === seated[0].team);
-  const p = seated.map((x, i) => `${x.control}.${x.faction}.${teams ? x.team : i}`).join(',');
+  const p = encodeSeats(s.sides.filter((x) => x.control !== 'none'));
   location.search = a.control === 'you' ? `?play&p=${p}&${keep}` : `?spectate&speed=${s.speed}&p=${p}&${keep}`;
 }
