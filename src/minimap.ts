@@ -68,20 +68,26 @@ export class Minimap {
       const p = point(e);
       this.rig.lookAt(p.x, p.y);
     };
+    // Only a press that moved the camera drags it on: one that gave an order (right button, or a command armed) leaves
+    // it where it is, however the pointer shakes before the release (a finger always does).
+    let dragging = false;
     this.canvas.addEventListener('pointerdown', (e) => {
+      dragging = false;
       const p = point(e);
       if (e.button === 2) return this.onOrder(p.x, p.y);
-      if (this.intercept(p.x, p.y)) return;
+      if (e.button !== 0 || this.intercept(p.x, p.y)) return;
       try {
         this.canvas.setPointerCapture(e.pointerId);
       } catch {
         // a held pointer (Pointer Lock) refuses capture: game/pointerlock.ts keeps the press on this canvas
       }
+      dragging = true;
       move(e);
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      if (e.buttons & 1) move(e);
+      if (dragging && e.buttons & 1) move(e);
     });
+    for (const type of ['pointerup', 'pointercancel']) this.canvas.addEventListener(type, () => (dragging = false));
   }
 
   /** Redraws the ground darkened by the player's fog of war. */
