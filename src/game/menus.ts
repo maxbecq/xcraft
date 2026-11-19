@@ -366,6 +366,8 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     else lobby.send({ camp: setup.camps[me] });
     refresh();
   };
+  /** « Lancer »'s page change, a moment after telling the other side: Retour or Réessayer call it off. */
+  let going = 0;
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
     const m = button?.dataset.m;
@@ -383,12 +385,15 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       // The setup as it stands now is the match, on both pages, whatever comes in meanwhile.
       const final: LobbySetup = { ...setup, camps: [...setup.camps] };
       lobby.send({ go: final });
-      // A moment for the message to leave before the page does.
-      setTimeout(() => play(final), 300);
+      // A moment for the message to leave before the page does (called off by Retour or Réessayer meanwhile).
+      clearTimeout(going);
+      going = window.setTimeout(() => play(final), 300);
     } else if (m === 'retry') {
+      clearTimeout(going);
       lobby.close();
       showLobby(menu, host ? newRoom() : room, host);
     } else if (m === 'back') {
+      clearTimeout(going);
       lobby.close();
       history.replaceState(null, '', location.pathname);
       showHome();

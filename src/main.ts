@@ -246,10 +246,13 @@ function rematch(status: NetStatus, room?: string): void {
   }
 }
 let rematchAsked = false;
+/** The network game's own clock (it steps the match in a background tab and watches the other side), stopped at the end. */
+let stopNetClock: (() => void) | undefined;
 /** The match is over for the network: said, kept as a replay, and the other side told. */
 function endNet(title: string, detail: string): void {
   if (netOver) return;
   netOver = true;
+  stopNetClock?.();
   link?.leave();
   keepGame();
   netBanner.hidden = false;
@@ -940,7 +943,7 @@ function start(): void {
   // must go on, or the other player would be stuck. A worker's clock steps it then, and watches for an absent other side.
   let framed = performance.now();
   if (net)
-    every(50, () => {
+    stopNetClock = every(50, () => {
       if (performance.now() - framed > 250) advance(Math.min(clock.getDelta(), 1), false);
       watchNet();
     });
