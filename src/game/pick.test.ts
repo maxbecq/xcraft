@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '../sim/world';
-import { type Catch, nearestCatch } from './pick';
+import { type Catch, nearestCatch, pickAt } from './pick';
 
-const thing = (id: number, kind: 'unit' | 'resource') => ({ id, def: { kind } }) as unknown as Entity;
+const thing = (id: number, kind: 'unit' | 'resource' | 'building') => ({ id, def: { kind } }) as unknown as Entity;
 const unit = (e: Entity, x0: number, y0: number, x1: number, y1: number): Catch => ({ e, r: { x0, y0, x1, y1 }, margin: 10, min: 34 });
 const field = (e: Entity, x0: number, y0: number, x1: number, y1: number): Catch => ({ e, r: { x0, y0, x1, y1 }, margin: 18, min: 48 });
 
@@ -35,5 +35,39 @@ describe('what a click catches among units and resources', () => {
     const over = [field(ore, 100, 100, 160, 130), unit(serf, 140, 90, 160, 130)];
     expect(nearestCatch(152, 112, over)).toBe(serf);
     expect(nearestCatch(118, 112, over)).toBe(ore);
+  });
+});
+
+describe('what the ray under the cursor picks', () => {
+  const centre = thing(10, 'building');
+  const well = thing(11, 'resource');
+  const deck = thing(12, 'building');
+  const quadripode = thing(13, 'unit');
+  const drone = thing(14, 'unit');
+  const none = () => undefined;
+
+  it('the front of a building standing before a well takes the building, whatever the wider zones say', () => {
+    const hits = [{ e: centre, seen: true }, { e: well, seen: true }];
+    expect(pickAt(hits, () => well, () => well)).toBe(centre);
+  });
+
+  it("a Plate-forme's deck over a Quadripode takes the Plate-forme", () => {
+    expect(pickAt([{ e: deck, seen: true }, { e: quadripode, seen: true }], () => quadripode, none)).toBe(deck);
+  });
+
+  it('a unit standing in front of a building is still the one picked', () => {
+    expect(pickAt([{ e: quadripode, seen: true }, { e: deck, seen: true }], none, none)).toBe(quadripode);
+  });
+
+  it('a lone small drone missed by the ray is still caught by its wider zone', () => {
+    expect(pickAt([], () => drone, none)).toBe(drone);
+  });
+
+  it('a unit the fog hides is passed over for what lies behind it', () => {
+    expect(pickAt([{ e: drone, seen: false }, { e: centre, seen: true }], none, none)).toBe(centre);
+  });
+
+  it('nothing on the ray nor in a zone: the nearest resource', () => {
+    expect(pickAt([], none, () => well)).toBe(well);
   });
 });

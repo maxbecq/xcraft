@@ -3,7 +3,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
-import { type Catch, nearestCatch } from './pick';
+import { type Catch, nearestCatch, pickAt } from './pick';
 
 const DRAG_PX = 5;
 /** A unit is caught this far outside the box its model fills on screen, so a click need not land on a thin limb. */
@@ -676,7 +676,7 @@ export class Input {
    */
   private entityAt(x: number, y: number): Entity | undefined {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
-    let building: Entity | undefined;
+    const hits: { e: Entity; seen: boolean }[] = [];
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
       if (hit.object.userData.noPick) continue;
@@ -685,22 +685,20 @@ export class Input {
       const e = o && this.world.entities.get(o.userData.id);
       // Not what the fog hides (its root is hidden: a mineral never found, a building never seen).
       if (!e || !hit.object.visible || !o!.visible || e.inside) continue;
-      if (e.def.kind === 'resource' || (e.def.kind === 'unit' && this.sees(e))) return e;
-      building ??= e;
+      hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e) });
     }
-    const caught = this.caughtAt(x, y);
-    if (caught) return caught;
-    if (building) return building;
-    let best: Entity | undefined;
-    let bestD = RESOURCE_PICK_PX;
-    const hidden = new Set(this.hooks.roots().filter((r) => !r.visible).map((r) => r.userData.id));
-    for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'resource' || hidden.has(e.id)) continue;
-      const s = this.screenOf(e);
-      const d = Math.hypot(s.x - x, s.y - y);
-      if (d < bestD) [best, bestD] = [e, d];
-    }
-    return best;
+    return pickAt(hits, () => this.caughtAt(x, y), () => {
+      let best: Entity | undefined;
+      let bestD = RESOURCE_PICK_PX;
+      const hidden = new Set(this.hooks.roots().filter((r) => !r.visible).map((r) => r.userData.id));
+      for (const e of this.world.entities.values()) {
+        if (e.def.kind !== 'resource' || hidden.has(e.id)) continue;
+        const s = this.screenOf(e);
+        const d = Math.hypot(s.x - x, s.y - y);
+        if (d < bestD) [best, bestD] = [e, d];
+      }
+      return best;
+    });
   }
 
   /** The unit or resource whose catch zone holds the point (see nearestCatch). */

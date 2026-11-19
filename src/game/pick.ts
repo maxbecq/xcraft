@@ -28,3 +28,14 @@ export function nearestCatch(x: number, y: number, catches: Catch[]): Entity | u
   }
   return best;
 }
+
+/**
+ * What a click picks. `hits`: what the ray under the cursor meets, nearest first (a unit with `seen`: not hidden by the
+ * fog). The nearest it meets wins, a building as much as a unit or a resource: a click on the front of a building
+ * standing before a well, or on a Plate-forme's deck over a Quadripode, takes the building. Only when the ray meets
+ * nothing do the wider catch zones of units and resources decide (`caught`), then the nearest resource (`near`).
+ */
+export function pickAt(hits: { e: Entity; seen: boolean }[], caught: () => Entity | undefined, near: () => Entity | undefined): Entity | undefined {
+  const hit = hits.find(({ e, seen }) => e.def.kind !== 'unit' || seen);
+  return hit ? hit.e : (caught() ?? near());
+}
