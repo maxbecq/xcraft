@@ -25,6 +25,8 @@ interface Button {
   seconds?: number;
   /** The ability it uses, whose effect the tooltip explains. */
   ability?: string;
+  /** The Z weapon it is about (fitted, bought or researched): its pictogram stands for its icon (WEAPON_GLYPHS). */
+  weapon?: string;
   action: () => void;
 }
 
@@ -925,11 +927,11 @@ export class Hud {
         this.weaponMenu = null;
       };
       this.menuItems = [
-        { label: 'Mitrailleuse', key: 'M', cmd: 'mitrailleuse', cost: d.cost, reason: lack, action: queue() },
+        { label: 'Mitrailleuse', key: 'M', weapon: 'mitrailleuse', cost: d.cost, reason: lack, action: queue() },
         ...d.weapons!.map((k) => {
           const kit = WEAPONS[k];
           const reason = lack ?? this.world.needs(this.player, kit.research);
-          return { label: kit.name, key: kit.hotkey, cmd: k, cost: withKit(d, k), reason, action: queue(k) };
+          return { label: kit.name, key: kit.hotkey, weapon: k, cost: withKit(d, k), reason, action: queue(k) };
         }),
       ];
     }
@@ -957,7 +959,7 @@ export class Hud {
       for (const k of (b.def as BuildingDef).weapons!) {
         const kit = WEAPONS[k];
         const reason = this.world.needs(this.player, kit.research) ?? (bare.length ? undefined : 'Déjà armé');
-        list.push({ label: kit.name, key: kit.hotkey, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
+        list.push({ label: kit.name, key: kit.hotkey, weapon: k, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
       }
     }
     // Z Pods: one add-on each, raised beside it (Plate-forme, Tourelle).
@@ -987,7 +989,9 @@ export class Hud {
       if (Object.keys((DEFS[t] as UpgradeDef).requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !this.world.level(this.player, (DEFS[r] as UpgradeDef).line))) continue;
       const d = DEFS[t] as UpgradeDef;
       const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+      // A Z weapon's research (and its tiers) shows that weapon's pictogram.
+      const weapon = Object.keys(WEAPONS).find((k) => WEAPONS[k].research === d.line || WEAPONS[k].research === t);
+      list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
     }
     // Last, so the other buttons keep their places (and grid keys).
     if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => this.setTargeting(true, true, 'rally') });
@@ -1007,8 +1011,7 @@ export class Hud {
       .map((b) => {
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-        const glyph = WEAPON_GLYPHS[b.cmd ?? ''] ?? '';
-        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? b.label}"><kbd>${b.key}</kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${glyph}"/></svg><span>${b.label}</span>${cost}</button>`;
+        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? b.label}"><kbd>${b.key}</kbd>${weaponIcon(b.weapon)}<span>${b.label}</span>${cost}</button>`;
       })
       .join('');
     this.tip.hidden = true; // its button may be gone
@@ -1016,7 +1019,7 @@ export class Hud {
       .map((b) => {
         const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
         const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-        const pic = b.icon ? img(b.icon, '') : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : '';
+        const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : '';
         const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
         const open = this.weaponMenu && b.icon === this.weaponMenu ? ' open' : '';
         return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
@@ -1062,7 +1065,7 @@ export class Hud {
     if (!b) return;
     const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
     const p = this.world.players[this.player];
-    const lines: string[] = [`<b>${b.label}</b> <kbd>${this.keyLabel(b)}</kbd>`];
+    const lines: string[] = [`${b.weapon ? weaponIcon(b.weapon) : ''}<b>${b.label}</b> <kbd>${this.keyLabel(b)}</kbd>`];
     if (b.cost) {
       const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
       if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
@@ -1214,6 +1217,11 @@ const WEAPON_GLYPHS: Record<string, string> = {
   reparateur: 'M15 4a4 4 0 0 0-1 6l-8 8 2 2 8-8a4 4 0 0 0 6-1l-3-1-1-3z',
   accumulateur: 'M4 8h14v8H4zM18 11h2v2h-2M7 10v4M10 10v4M13 10v4',
 };
+
+/** A Z weapon's pictogram (WEAPON_GLYPHS), the one drawing used on the weapon panel, the command card and tooltips. */
+function weaponIcon(k?: string): string {
+  return `<svg class="ico-weapon" viewBox="0 0 24 24" aria-hidden="true"><path d="${WEAPON_GLYPHS[k ?? ''] ?? ''}"/></svg>`;
+}
 
 function progress(label: string, f: number): string {
   return `<div class="info">${label}</div><div class="bar"><div style="width:${Math.round(100 * f)}%"></div></div>`;
