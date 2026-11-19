@@ -343,6 +343,7 @@ export class World {
       this.block(e, 1);
     }
     this.entities.set(e.id, e);
+    this.aurasAt = -1;
     if (this.cells) this.file(e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
     if (owner >= 0 && e.type === 'drone' && this.level(owner, 'sonderobuste')) this.fortify(e);
@@ -655,6 +656,9 @@ export class World {
   /** Players with a Balise offensive standing, as of tick `beaconsAt` (Z). */
   beacons = new Set<number>();
   beaconsAt = -1;
+  /** Entities with a shield aura (Réserve psy, Voyageur), as of tick `aurasAt`; -1 after a spawn or a change of type. */
+  auras: Entity[] = [];
+  aurasAt = -1;
 
   queueing = false;
 

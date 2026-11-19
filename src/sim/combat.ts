@@ -233,9 +233,14 @@ export function regenerate(this: World, e: Entity): void {
 }
 
 export function nearShieldAura(this: World, e: Entity): boolean {
-  for (const b of this.entities.values()) {
+  // The aura sources, listed once a tick (again after a spawn or a change of type); the dead ones skipped.
+  if (this.aurasAt !== this.tick) {
+    this.aurasAt = this.tick;
+    this.auras = [...this.entities.values()].filter((b) => (b.def as BuildingDef).shieldAura);
+  }
+  for (const b of this.auras) {
     const r = (b.def as BuildingDef).shieldAura;
-    if (b.owner === e.owner && r && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r * FP) return true;
+    if (this.entities.get(b.id) === b && b.owner === e.owner && r && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r * FP) return true;
   }
   return false;
 }

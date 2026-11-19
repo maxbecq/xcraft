@@ -314,6 +314,7 @@ export function morph(this: World, b: Entity, type: string): void {
 export function retype(this: World, e: Entity, type: string): void {
   const def = DEFS[type] as UnitDef | BuildingDef;
   const hp = e.hp / e.maxHp;
+  this.aurasAt = -1;
   e.type = type;
   e.def = def;
   e.maxHp = def.hp;
