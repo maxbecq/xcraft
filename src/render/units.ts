@@ -2061,12 +2061,12 @@ export class EntityRenderer {
         const air = flies(e);
         if (air !== !!v.ring.userData.air) this.airRing(v.ring, air);
         if (air) {
-          // In flight: the ring rides just under the model, drawn over the scenery, tied to the ground by a thread.
+          // In flight: the ring rides just under the model, tied to the ground by a faint thread.
           const h = Math.max(0.3, v.model.position.y - 0.1);
           v.ring.position.y = h;
           const thread = v.ring.userData.thread as Mesh;
           thread.scale.y = h;
-          (thread.material as MeshBasicMaterial).opacity = 0.45 * (v.ring.userData.core as MeshBasicMaterial).opacity;
+          (thread.material as MeshBasicMaterial).opacity = 0.25 * (v.ring.userData.core as MeshBasicMaterial).opacity;
           (v.ring.userData.spot as Mesh).position.y = 0.06 - h;
         } else this.drape(v.ring, x, z, v.root.position.y);
       }
@@ -2416,7 +2416,8 @@ export class EntityRenderer {
     (ring.userData.thread as Mesh).visible = (ring.userData.spot as Mesh).visible = on;
     for (const m of ring.children as Mesh[]) {
       if (m.userData.air) continue;
-      (m.material as Material).depthTest = !on;
+      // Depth-tested in flight too: the flyer's own body hides the part of the ring behind it (never drawn over it).
+      (m.material as Material).depthTest = true;
       m.renderOrder = on ? 10 : 2;
       if (!on) continue;
       // Flat again (it was laid over the ground).
