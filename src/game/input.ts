@@ -681,7 +681,7 @@ export class Input {
     return picked.map((e) => e.id);
   }
 
-  private groundAt(x: number, y: number): Vector3 | null {
+  groundAt(x: number, y: number): Vector3 | null {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     return this.raycaster.intersectObject(this.hooks.terrain)[0]?.point ?? null;
   }

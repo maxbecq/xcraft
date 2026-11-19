@@ -2,7 +2,8 @@ import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
-import { FP, ticks } from '../sim/fixed';
+import { FP, TICK_RATE, ticks } from '../sim/fixed';
+import { GRID_REACH, PlaceGrid } from '../render/placegrid';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
 import type { Audio } from '../audio';
 import type { Input } from './input';
@@ -121,6 +122,9 @@ export class Hud {
   online = false;
   private readonly tip = el('div', 'cmd-tip');
   private readonly ghost: Mesh;
+  private readonly grid: PlaceGrid;
+  /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
+  private gridKey = '';
 
   constructor(
     private readonly world: World,
@@ -187,6 +191,7 @@ export class Hud {
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
+    this.grid = new PlaceGrid(scene, map);
 
     // Tooltip: shown almost at once (80 ms) over a command, with its cost, what it is and what it still needs.
     this.tip.hidden = true;
@@ -382,6 +387,11 @@ export class Hud {
     }
     const spot = ground && this.spot(this.placing, ground);
     const worker = this.workers()[0];
+    // A Z Pod with no room for its add-on beside it would never get one.
+    if (spot && worker && this.addonRoom(this.placing, spot) === null) {
+      this.notify([{ player: this.player, kind: 'error', text: 'Pas de place pour l’extension du Pod.' }]);
+      return true;
+    }
     if (spot && worker) {
       this.issue({ player: this.player, kind: 'build', ids: [worker.id], type: this.placing, tx: spot[0], ty: spot[1], queue: shift });
       if (!shift) {
@@ -877,18 +887,72 @@ export class Hud {
     return [Math.round(ground.x - def.size / 2), Math.round(ground.z - def.size / 2)];
   }
 
+  /**
+   * For a building with add-ons (Z Pod) at `spot`: where its largest add-on would go, or null if no side has room;
+   * undefined for any other building.
+   */
+  private addonRoom(type: string, spot: [number, number]): [number, number] | null | undefined {
+    const def = DEFS[type] as BuildingDef;
+    if (!def.addons?.length) return undefined;
+    const big = [...def.addons].sort((a, b) => (DEFS[b] as BuildingDef).size - (DEFS[a] as BuildingDef).size)[0];
+    return this.world.addonSpotAt(big, spot[0], spot[1], def.size, this.player) ?? null;
+  }
+
   private updateGhost(): void {
     const g = this.input.hover;
     const spot = this.placing && g ? this.spot(this.placing, g) : null;
     this.ghost.visible = !!spot;
+    if (!this.placing || !g) {
+      this.grid.hide();
+      this.gridKey = '';
+    }
     if (!spot || !this.placing) return;
-    const size = (DEFS[this.placing] as BuildingDef).size;
-    const ok = this.world.canPlace(this.placing, spot[0], spot[1], this.player);
+    const def = DEFS[this.placing] as BuildingDef;
+    const size = def.size;
+    const room = this.addonRoom(this.placing, spot);
+    const ok = this.world.canPlace(this.placing, spot[0], spot[1], this.player) && room !== null;
+    this.updateGrid(this.placing, g!);
+    let addon: { tx: number; ty: number; size: number; ok: boolean } | null = null;
+    if (room !== undefined) {
+      // The add-on's room: where it would go, or (none free) against the east side, in red.
+      const big = Math.max(...def.addons!.map((t) => (DEFS[t] as BuildingDef).size));
+      const [tx, ty] = room ?? [spot[0] + size, spot[1] + Math.floor((size - big) / 2)];
+      addon = { tx, ty, size: big, ok: room !== null };
+    }
+    this.grid.footprint(spot[0], spot[1], size, ok, addon);
     (this.ghost.material as MeshBasicMaterial).color.set(ok ? 0x55ff66 : 0xff4444);
     this.ghost.scale.set(size, 1, size);
     const cx = spot[0] + size / 2;
     const cz = spot[1] + size / 2;
     this.ghost.position.set(cx, heightAt(this.map, cx, cz) + 0.15, cz);
+  }
+
+  /** The placement grid's tiles round the cursor, redrawn when it changes tile and once a second (sites come and go). */
+  private updateGrid(type: string, at: Vector3): void {
+    const cx = Math.floor(at.x);
+    const cy = Math.floor(at.z);
+    const key = `${type}|${cx}|${cy}|${Math.floor(this.world.tick / TICK_RATE)}`;
+    if (key === this.gridKey) return;
+    this.gridKey = key;
+    // As far as the screen's corners reach on the ground (the sky beyond the map: the most it draws).
+    let reach = 0;
+    for (const [x, y] of [[0, 0], [innerWidth, 0], [0, innerHeight], [innerWidth, innerHeight]]) {
+      const p = this.input.groundAt(x, y);
+      reach = Math.max(reach, p ? Math.hypot(p.x - at.x, p.z - at.z) : GRID_REACH);
+    }
+    const def = DEFS[type] as BuildingDef;
+    const net = this.world.powerNetwork(this.player);
+    let fits = (x: number, y: number) => this.world.tileFits(type, x, y, this.player, net);
+    if (def.energyRate) {
+      // Extractors: the free wells light up, every other tile is red.
+      const free = new Set<number>();
+      for (const w of this.world.entities.values()) {
+        if (w.type !== 'puits' || !this.world.canPlace(type, w.tx, w.ty, this.player)) continue;
+        for (let y = w.ty; y < w.ty + def.size; y++) for (let x = w.tx; x < w.tx + def.size; x++) free.add(y * this.map.width + x);
+      }
+      fits = (x, y) => free.has(y * this.map.width + x);
+    }
+    this.grid.cellsAt(cx, cy, reach, fits);
   }
 }
 

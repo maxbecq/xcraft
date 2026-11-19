@@ -59,11 +59,29 @@ export function misplaced(this: World, def: BuildingDef, tx: number, ty: number,
 
 /** Where a Pod's add-on goes: against one of its sides, the first free one (east, west, south, north). */
 export function addonSpot(this: World, pod: Entity, type: string): [number, number] | undefined {
+  return this.addonSpotAt(type, pod.tx, pod.ty, (pod.def as BuildingDef).size, pod.owner);
+}
+
+/** The same for a Pod of size `own` at (tx, ty), placed or not (the placement preview checks its add-on has room). */
+export function addonSpotAt(this: World, type: string, tx: number, ty: number, own: number, player: number): [number, number] | undefined {
   const size = (DEFS[type] as BuildingDef).size;
-  const own = (pod.def as BuildingDef).size;
   const mid = idiv(own - size, 2);
-  const spots: [number, number][] = [[pod.tx + own, pod.ty + mid], [pod.tx - size, pod.ty + mid], [pod.tx + mid, pod.ty + own], [pod.tx + mid, pod.ty - size]];
-  return spots.find(([tx, ty]) => this.canPlace(type, tx, ty, pod.owner));
+  const spots: [number, number][] = [[tx + own, ty + mid], [tx - size, ty + mid], [tx + mid, ty + own], [tx + mid, ty - size]];
+  return spots.find(([x, y]) => this.canPlace(type, x, y, player));
+}
+
+/**
+ * Could this building cover tile (x, y)? canPlace one tile at a time, for the placement grid: open, flat, and in the
+ * power field or on the creep where it must be. (The whole footprint also needs one level, away from a cliff, and an
+ * emitter must join the network: canPlace checks those for the building as a whole.)
+ */
+export function tileFits(this: World, type: string, x: number, y: number, player: number, net = this.powerNetwork(player)): boolean {
+  const def = DEFS[type] as BuildingDef;
+  if (!this.grid.open(x, y) || this.grid.flatLevel(x, y) < 0) return false;
+  // `net`: the player's power network, worked out once for a whole grid of tiles. canPlace wants the building's
+  // centre in the field: this tile counts if it lies within reach of a centre that is (half the footprint's diagonal).
+  const slack = Math.ceil((def.size - 1) * FP * Math.SQRT1_2);
+  return !def.needsPower || net.some((b) => dist(b.x, b.y, x * FP + FP / 2, y * FP + FP / 2) <= (b.def as BuildingDef).power! * FP + slack);
 }
 
 /** Ticks a building takes to raise: Z ones 20 % faster with Déploiement rapide. */
