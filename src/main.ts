@@ -1034,13 +1034,7 @@ function start(): void {
     }
     post.render();
     lap('render');
-    rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, () => ({
-      tick: world.tick,
-      ticks: stepped,
-      units: unitsOnScreen(),
-      moving: false,
-      events: { ...happened },
-    }));
+    if (rec.on) rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, { tick: world.tick, ticks: stepped, events: { ...happened } }, unitsOnScreen);
     stepped = 0;
     for (const k in happened) delete happened[k];
   };

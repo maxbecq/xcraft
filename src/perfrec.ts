@@ -21,8 +21,12 @@ export interface SpikeContext {
   events?: Record<string, number>;
 }
 
+/** What a frame knows of itself when it ends (the rest is worked out only for a spike). */
+export type FrameFacts = Pick<SpikeContext, 'tick' | 'ticks' | 'events'>;
+
 /** A frame's work, kept until the next frame shows whether it came late. */
 interface FrameDone {
+  facts: FrameFacts;
   start: number;
   work: number;
   steps: Record<string, number>;
@@ -82,7 +86,7 @@ export class PerfRecorder {
   private textures = 0;
   private camera = '';
   private prev: FrameDone | null = null;
-  private context: (() => SpikeContext) | null = null;
+  private unitsOnScreen: (() => number) | null = null;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -144,10 +148,10 @@ export class PerfRecorder {
       const b = BUCKETS.findIndex((x) => gap < x);
       this.hist[b < 0 ? BUCKETS.length : b]++;
     }
-    if (gap > SPIKE && this.prev && this.context) {
+    if (gap > SPIKE && this.prev && this.unitsOnScreen) {
       // A collection between the two frames shows here, before the next frame's own.
       const heap = heapNow();
-      this.spike(gap, now - this.lastEnd, this.prev, this.context(), this.heap > heap ? (this.heap - heap) / 1048576 : 0);
+      this.spike(gap, now - this.lastEnd, this.prev, this.unitsOnScreen(), this.heap > heap ? (this.heap - heap) / 1048576 : 0);
     }
     this.frameStart = this.stepStart = now;
     this.steps = {};
@@ -166,11 +170,14 @@ export class PerfRecorder {
     if (this.on) this.steps[name] = (this.steps[name] ?? 0) + ms;
   }
 
-  /** At the end of a frame's work; `context` is only asked for if the next frame comes late. */
-  end(cameraAt: string, context: () => SpikeContext): void {
+  /**
+   * At the end of a frame's work. `facts` are taken now: the game clears its counts for the next frame right after.
+   * `unitsOnScreen`, costlier, is only asked for if the next frame comes late.
+   */
+  end(cameraAt: string, facts: FrameFacts, unitsOnScreen: () => number): void {
     if (!this.on) return;
     const now = performance.now();
-    this.context = context;
+    this.unitsOnScreen = unitsOnScreen;
     for (const [k, ms] of Object.entries(this.steps)) {
       const t = (this.totals[k] ??= { sum: 0, max: 0 });
       t.sum += ms;
@@ -187,6 +194,7 @@ export class PerfRecorder {
     const programs = info.programs?.length ?? 0;
     const textures = info.memory.textures;
     this.prev = {
+      facts,
       start: this.frameStart,
       work: now - this.frameStart,
       steps: this.steps,
@@ -204,7 +212,7 @@ export class PerfRecorder {
   }
 
   /** The frame before came this late: what it did, and what the browser did after it. */
-  private spike(gap: number, outside: number, f: FrameDone, ctx: SpikeContext, freedAfter: number): void {
+  private spike(gap: number, outside: number, f: FrameDone, units: number, freedAfter: number): void {
     this.spikeCount++;
     const r = (x: number) => Math.round(x * 10) / 10;
     const long = this.longTasks.filter((l) => l.at + l.ms > f.start && l.at < f.start + gap).map((l) => Math.round(l.ms));
@@ -214,7 +222,7 @@ export class PerfRecorder {
       work: r(f.work),
       steps: Object.fromEntries(Object.entries(f.steps).filter(([, ms]) => ms >= 1).map(([k, ms]) => [k, r(ms)])),
       outside: r(outside),
-      ctx: { ...ctx, moving: f.moving },
+      ctx: { ...f.facts, units, moving: f.moving },
     };
     if (f.freed + freedAfter > 0.5) spike.gc = r(f.freed + freedAfter);
     if (long.length) spike.long = long;
