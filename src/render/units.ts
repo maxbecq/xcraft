@@ -1253,11 +1253,15 @@ function gaitCycle(body: Object3D, legs: InsectLeg[]): number {
   }
   body.updateMatrixWorld(true);
   const pivot = new Vector3();
+  // Reach on the ground, hip to foot: legs splayed forwards or back (generated models) reach further than their
+  // sideways extent alone, and a short reach makes the feet patter.
   const reach =
     legs.reduce((sum, l) => {
       const box = new Box3().setFromObject(l.o);
       l.o.getWorldPosition(pivot);
-      return sum + Math.max(Math.abs(box.min.x - pivot.x), Math.abs(box.max.x - pivot.x));
+      const dx = Math.max(Math.abs(box.min.x - pivot.x), Math.abs(box.max.x - pivot.x));
+      const dz = Math.max(Math.abs(box.min.z - pivot.z), Math.abs(box.max.z - pivot.z));
+      return sum + Math.hypot(dx, dz);
     }, 0) / legs.length;
   return 2 * (2 * reach * Math.sin(GAIT_SWING));
 }
