@@ -14,12 +14,20 @@ import { isoOffset } from '../camera';
  */
 export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
-export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme'];
+export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur'];
 /**
  * A picture's size against the model it stands on. The Intelligence suprême's model is drawn 10 % larger
  * (LOOK_SCALE); its picture is painted over the Intelligence centrale's with the same base, and keeps it.
  */
 const SPRITE_SCALE: Record<string, number> = { supreme: 1 / 1.1 };
+/**
+ * Where the model under a picture painted over another building's sits, fitted on the picture by their bases
+ * (printed by tools/sprites/depth.py): its scale and its shift on the ground, in its building's units.
+ */
+const SPRITE_PROXY: Record<string, { scale: number; x: number; z: number }> = {
+  podsup: { scale: 1.073, x: -0.079, z: 0.046 },
+  supreme: { scale: 0.891, x: -0.177, z: 0.08 },
+};
 /**
  * The model's turn when baked and when drawn: none, as the 3D buildings stand (a corner to the camera). A picture
  * drawn from another side (a 2D concept) would turn the model under it to match.
@@ -244,6 +252,11 @@ export function dressSprite(model: Object3D, type: string, teamColor: number): b
   const holder = new Upright();
   const turned = new Group();
   turned.rotation.y = SPRITE_YAW[type] ?? 0;
+  const fit = SPRITE_PROXY[type];
+  if (fit) {
+    turned.scale.setScalar(fit.scale);
+    turned.position.set(fit.x, 0, fit.z);
+  }
   for (const c of [...model.children]) turned.add(c);
   turned.traverse((o) => {
     if (!(o instanceof Mesh)) return;
