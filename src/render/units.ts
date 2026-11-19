@@ -2896,12 +2896,6 @@ export class EntityRenderer {
       cargo.name = 'cargo';
       cargo.position.set(0, 0.62, -0.2);
       pivot.add(cargo);
-    } else if (e.type === 'drone') {
-      // The Drone's load, cut out of its bin (concepts-z/splitcargo.py): golden like the ore it digs, not the
-      // crystal blue Rodin painted it.
-      pivot.getObjectByName('cargo')?.traverse((m) => {
-        if ((m as Mesh).isMesh) (m as Mesh).material = ore;
-      });
     }
     const [core, halo] = e.owner === player ? RINGS.own : e.owner < 0 ? RINGS.neutral : this.hostile(e.owner, player) ? RINGS.enemy : RINGS.ally;
     const ring = new Group();
