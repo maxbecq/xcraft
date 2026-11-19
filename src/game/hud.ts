@@ -85,6 +85,7 @@ export class Hud {
    * a click on a row selects that producer and shows it. */
   readonly prodToggle = el('button', 'chip prod-toggle');
   private readonly prod = el('div', 'prod-panel');
+  private readonly prodList = el('div', 'prod-list');
   private prodKey = '';
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
@@ -153,7 +154,19 @@ export class Hud {
       this.prod.hidden = true;
     }
     this.prodToggle.classList.toggle('on', !this.prod.hidden);
+    const close = el('button', 'prod-close');
+    close.textContent = '×';
+    close.title = 'Fermer';
+    close.addEventListener('click', () => this.toggleProd());
+    this.prod.append(close, this.prodList);
     document.body.append(this.prod);
+    // On a touch screen, a tap anywhere else closes it (and does nothing more on the map).
+    window.addEventListener('pointerdown', (e) => {
+      const t = e.target as Node;
+      if (e.pointerType !== 'touch' || this.prod.hidden || this.prod.contains(t) || this.prodToggle.contains(t)) return;
+      this.toggleProd();
+      if (t instanceof HTMLCanvasElement) e.stopPropagation();
+    }, { capture: true });
     this.prod.addEventListener('click', (e) => {
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       const b = this.world.entities.get(id);
@@ -256,7 +269,7 @@ export class Hud {
     const key = producers.map((e) => `${e.id}:${e.queue.join(',')}`).join('|');
     if (key !== this.prodKey) {
       this.prodKey = key;
-      this.prod.innerHTML = producers.length
+      this.prodList.innerHTML = producers.length
         ? producers
             .map((e) => {
               const queue = e.queue.map((t, i) => `<span class="${i ? '' : 'now'}">${img(t, DEFS[t].name)}${i ? '' : '<i></i>'}</span>`).join('');
