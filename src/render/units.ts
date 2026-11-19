@@ -1083,7 +1083,7 @@ interface View {
   /** Z walkers: where the gait was last stepped, its phase, and the ground covered by one cycle. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number };
   /** Z socle: the weapon module mounted on its back (see weaponModule), and the module's name. */
-  weapon?: { name: string; o: Object3D };
+  weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
@@ -1870,7 +1870,8 @@ export class EntityRenderer {
     o.scale.setScalar((((tune.size ?? 0.7) * across) / 0.64 / body.getWorldScale(new Vector3()).x) * (fit.scale ?? 1));
     o.traverse((m) => (m.userData.noPick = true));
     body.add(o);
-    v.weapon = { name, o };
+    // The Déchiqueteur's moving parts (concepts-z/splitsaw.py): its arm and the saw blade at its tip.
+    v.weapon = { name, o, arm: o.getObjectByName('zw_arm'), saw: o.getObjectByName('zw_saw') };
   }
 
   private release(v: View): void {
@@ -2407,6 +2408,9 @@ export class EntityRenderer {
     const ease = (o: Object3D | undefined, axis: 'x' | 'y' | 'z', target: number, rate = 0.25) => {
       if (o) o.rotation[axis] += (target - o.rotation[axis]) * rate;
     };
+    // A shredder holds its saw up and lowers it to the ground in front to cut, spinning hard.
+    if (v.weapon?.arm) ease(v.weapon.arm, 'x', fighting ? 0.3 : -0.45, 0.12);
+    if (v.weapon?.saw) v.weapon.saw.rotation.x += dt * (fighting ? 18 : 3);
     const step = moving ? Math.sin(phase) : 0;
     ease(v.limbs.legL, 'x', step * 0.75);
     ease(v.limbs.legR, 'x', -step * 0.75);
