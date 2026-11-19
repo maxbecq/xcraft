@@ -548,26 +548,14 @@ export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void
         vFogUv = (modelMatrix * fogWorld).xz / mapSize;`,
       );
     shader.fragmentShader = shader.fragmentShader
-      // mapSize is already declared on the ground (untile).
-      .replace('#include <common>', `#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;${shader.fragmentShader.includes('uniform vec2 mapSize') ? '' : '\nuniform vec2 mapSize;'}`)
-      // Outside the map (the land beyond the edges, its rocks): the fog of the edge around, averaged over a ring
-      // that widens with the distance (so a corner takes both its edges, not one tile carried out in straight
-      // bands), and dimmer further out. It tells nothing the edge does not. Inside, the tile's own fog.
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
+      // Outside the map (the land beyond the edges, its rocks): no fog at all, its own colours a quarter darker to
+      // mark the map's limit. Inside, the tile's fog.
       .replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
-        vec2 fogLo = 0.5 / mapSize;
-        vec2 fogIn = clamp(vFogUv, fogLo, 1.0 - fogLo);
-        float fogOut = length((vFogUv - fogIn) * mapSize);
-        float fogV = texture2D(fogMap, fogIn).r;
-        if (fogOut > 0.0) {
-          for (int i = 0; i < 8; i++) {
-            float a = float(i) * 0.7854;
-            fogV += texture2D(fogMap, clamp(vFogUv + vec2(cos(a), sin(a)) * (fogOut * 1.5 + 0.5) / mapSize, fogLo, 1.0 - fogLo)).r;
-          }
-          fogV = fogV / 9.0 * (1.0 - 0.6 * smoothstep(2.0, 20.0, fogOut));
-        }
-        ${FOG_GLSL('fogV')}`,
+        if (any(lessThan(vFogUv, vec2(0.0))) || any(greaterThan(vFogUv, vec2(1.0)))) gl_FragColor.rgb *= 0.75;
+        else ${FOG_GLSL('texture2D(fogMap, vFogUv).r')}`,
       );
   };
 }
