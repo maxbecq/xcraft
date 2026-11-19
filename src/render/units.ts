@@ -1,3 +1,4 @@
+import { unxray, xrayable } from './xray';
 import {
   Sprite, SpriteMaterial,  AdditiveBlending, BackSide, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, CapsuleGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationAction, type AnimationClip, LoopOnce, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry, ShaderMaterial, type Material, type Scene, type Texture, Points, PointsMaterial,
@@ -1804,6 +1805,7 @@ export class EntityRenderer {
             v.playing = die;
           }
           unflash(v);
+          unxray(v.model);
           toCorpse(v.model);
           const d = DEFS[v.type] as UnitDef | undefined;
           this.burst(v.root.position.clone().setY(v.root.position.y + (v.model.position.y > 0.5 ? v.model.position.y : 0) + 0.5), !!d?.mechanical || d?.faction === 'z');
@@ -2579,6 +2581,7 @@ export class EntityRenderer {
         break;
       }
     }
+    if (v.unit) xrayable(pivot, e.owner);
     this.views.set(e.id, v);
     return v;
   }

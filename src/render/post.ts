@@ -1,6 +1,7 @@
 import { type Camera, type Material, type Mesh, type Object3D, type OrthographicCamera, PMREMGenerator, type Scene, type Sprite, Vector2, type WebGLRenderer } from 'three';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { inkPass } from './ink';
+import { drawXray, XrayPass } from './xray';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -41,6 +42,7 @@ export class Post {
     const size = renderer.getSize(new Vector2());
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new XrayPass(scene, camera));
     this.ao = new GTAOPass(scene, camera, size.x, size.y);
     this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1.2, samples: light ? 8 : 16 });
     this.ao.blendIntensity = 0.85;
@@ -101,6 +103,7 @@ export class Post {
     if (this.composer) this.composer.render();
     else {
       this.renderer.render(this.scene, this.camera);
+      drawXray(this.renderer, this.scene, this.camera);
       this.renderer.autoClear = false;
       this.renderer.render(this.fx, this.camera);
       this.renderer.autoClear = true;

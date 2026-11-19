@@ -829,7 +829,14 @@ export class World {
         const total = ticks((b.def as BuildingDef).buildTime);
         b.buildLeft--;
         this.grow(b, total);
-        if (b.buildLeft === 0) this.say(b.owner, `Construction terminée : ${b.def.name}.`, 'done');
+        if (b.buildLeft === 0) {
+          this.say(b.owner, `Construction terminée : ${b.def.name}.`, 'done');
+          // Those that built it from behind (out of the camera's sight: it looks from +x +y) come out round the front
+          // corner, where they can be seen and picked; one with orders queued goes on with them instead.
+          const half = idiv((b.def as BuildingDef).size * FP, 2) + FP;
+          const behind = [...this.entities.values()].filter((w) => w.order?.kind === 'construct' && w.order.target === b.id && !w.next.length && w.x - b.x + (w.y - b.y) < 0);
+          this.moveGroup(behind, b.x + half, b.y + half);
+        }
         return;
       }
       case 'gather':

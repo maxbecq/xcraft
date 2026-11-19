@@ -46,3 +46,22 @@ describe('an abandoned building site', () => {
     });
   }
 });
+
+describe('a building finished', () => {
+  it('its builders who stood behind it (out of sight) come round to the front', () => {
+    const w = createMatch(['humains', 'humains']);
+    w.players[0].minerals = 99999;
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    let spot: [number, number] | undefined;
+    for (let r = 8; !spot && r < 20; r++) for (let d = -r; d <= r && !spot; d++) {
+      const [tx, ty] = [Math.round(hq.x / FP) + d, Math.round(hq.y / FP) + r];
+      if (w.canPlace('grenier', tx, ty, 0) && w.grid.open(tx - 3, ty - 3)) spot = [tx, ty];
+    }
+    const serf = w.spawn('serf', 0, (spot![0] - 3) * FP, (spot![1] - 3) * FP);
+    w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx: spot![0], ty: spot![1] }]);
+    run(w, (DEFS.grenier as BuildingDef).buildTime + 20);
+    const b = [...w.entities.values()].find((e) => e.type === 'grenier' && e.owner === 0)!;
+    expect(b.buildLeft).toBe(0);
+    expect(serf.x - b.x + (serf.y - b.y)).toBeGreaterThan(0);
+  });
+});
