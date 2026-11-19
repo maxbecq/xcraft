@@ -299,6 +299,8 @@ const input = new Input(world, map, PLAYER, {
   issue,
   focus: (x, z) => rig.lookAt(x, z),
   click: (button, ground, shift, target) => hud.click(button, ground, shift, target),
+  grab: (x, y) => hud.grab(x, y),
+  drag: (ground) => hud.drag(ground),
   ordered: (x, z, target, rally) => {
     overlay.mark(PLAYER, x, z, target, rally);
     audio.play(target && target.owner >= 0 && world.hostile(PLAYER, target.owner) ? 'target' : 'order');

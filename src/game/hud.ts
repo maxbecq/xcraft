@@ -1,5 +1,5 @@
 import BALANCE from '../balance.json';
-import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, type Vector3 } from 'three';
+import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, Vector3 } from 'three';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, LOOKS, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP, TICK_RATE, ticks } from '../sim/fixed';
@@ -194,6 +194,7 @@ export class Hud {
     this.ghost.visible = false;
     scene.add(this.ghost);
     this.grid = new PlaceGrid(scene, map);
+    this.makePinUi();
 
     // Tooltip: shown almost at once (80 ms) over a command, with its cost, what it is and what it still needs.
     this.tip.hidden = true;
@@ -414,12 +415,24 @@ export class Hud {
       this.placing = null;
       return true;
     }
+    // A finger does not place at the first tap: it moves the footprint there; ✓ places it (see pinUi).
+    if (this.input.touching) {
+      if (ground) this.pin = ground.clone();
+      return true;
+    }
+    this.place(ground, shift);
+    return true;
+  }
+
+  /** The building being placed, ordered at `ground` (Shift: and kept armed for the next). */
+  private place(ground: Vector3 | null, shift: boolean): void {
+    if (!this.placing) return;
     const spot = ground && this.spot(this.placing, ground);
     const worker = this.workers()[0];
     // A Z Pod with no room for its add-on beside it would never get one.
     if (spot && worker && this.addonRoom(this.placing, spot) === null) {
       this.notify([{ player: this.player, kind: 'error', text: 'Pas de place pour l’extension du Pod.' }]);
-      return true;
+      return;
     }
     if (spot && worker) {
       this.issue({ player: this.player, kind: 'build', ids: [worker.id], type: this.placing, tx: spot[0], ty: spot[1], queue: shift });
@@ -431,7 +444,65 @@ export class Hud {
         this.input.selected.delete(worker.id);
       }
     }
-    return true;
+  }
+
+  /**
+   * Touch screens: the footprint stays where it was put (`pin`, on the ground) rather than under a finger that has no
+   * hover. A finger on it drags it; a tap elsewhere on the map moves it there; ✓ places the building, a long press on
+   * ✓ places it and keeps the order armed for another; ✕ drops the order.
+   */
+  private pin: Vector3 | null = null;
+  private readonly pinUi = el('div', 'pin-ui');
+
+  /** A finger down at (x, y) on the footprint (or a tile round it) takes hold of it. */
+  grab(x: number, y: number): boolean {
+    if (!this.placing || !this.pin) return false;
+    const g = this.input.groundAt(x, y);
+    const spot = this.spot(this.placing, this.pin);
+    if (!g || !spot) return false;
+    const size = (DEFS[this.placing] as BuildingDef).size;
+    return g.x >= spot[0] - 1 && g.x <= spot[0] + size + 1 && g.z >= spot[1] - 1 && g.z <= spot[1] + size + 1;
+  }
+
+  /** The held footprint follows the finger. */
+  drag(ground: Vector3 | null): void {
+    if (ground && this.placing) this.pin = ground.clone();
+  }
+
+  private makePinUi(): void {
+    this.pinUi.hidden = true;
+    this.pinUi.innerHTML = '<button class="pin-ok" aria-label="Poser" title="Poser (appui long : poser et continuer)">✓</button><button class="pin-no" aria-label="Annuler" title="Annuler">✕</button>';
+    document.body.append(this.pinUi);
+    const ok = this.pinUi.querySelector<HTMLElement>('.pin-ok')!;
+    // Placed on release; held LONG_MS or more, the order stays armed. The time held is read from the events
+    // themselves (a busy frame cannot turn a tap into a long press); the timer only buzzes when it is long enough.
+    const LONG_MS = 500;
+    let down = -1;
+    let buzz = 0;
+    ok.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      down = e.timeStamp;
+      clearTimeout(buzz);
+      buzz = window.setTimeout(() => navigator.vibrate?.(15), LONG_MS);
+    });
+    ok.addEventListener('pointerup', (e) => {
+      clearTimeout(buzz);
+      if (down < 0) return;
+      const keep = e.timeStamp - down >= LONG_MS;
+      down = -1;
+      this.audio.play('click');
+      this.place(this.pin, keep);
+    });
+    for (const type of ['pointerleave', 'pointercancel']) {
+      ok.addEventListener(type, () => {
+        clearTimeout(buzz);
+        down = -1;
+      });
+    }
+    this.pinUi.querySelector<HTMLElement>('.pin-no')!.addEventListener('click', () => {
+      this.audio.play('click');
+      this.placing = null;
+    });
   }
 
   /** Left-click on the minimap: attack-move when targeting. */
@@ -937,9 +1008,21 @@ export class Hud {
   }
 
   private updateGhost(): void {
-    const g = this.placing ? this.input.aim() : this.input.hover;
+    const touch = !!this.placing && this.input.touching;
+    if (!this.placing) this.pin = null;
+    else if (touch && !this.pin) this.pin = this.input.aim()?.clone() ?? null;
+    const g = this.placing ? (touch ? this.pin : this.input.aim()) : this.input.hover;
     const spot = this.placing && g ? this.spot(this.placing, g) : null;
     this.ghost.visible = !!spot;
+    this.pinUi.hidden = !(touch && spot);
+    if (touch && spot && this.placing) {
+      // Just below the footprint's corner nearest the camera (it looks from +x +y), kept on screen.
+      const size = (DEFS[this.placing] as BuildingDef).size;
+      const [x, z] = [spot[0] + size, spot[1] + size];
+      const s = this.input.toScreen(new Vector3(x, heightAt(this.map, x, z), z));
+      this.pinUi.style.left = `${Math.min(innerWidth - 60, Math.max(60, s.x))}px`;
+      this.pinUi.style.top = `${Math.min(innerHeight - 60, Math.max(8, s.y + 10))}px`;
+    }
     if (!this.placing || !g) {
       this.grid.hide();
       this.gridKey = '';

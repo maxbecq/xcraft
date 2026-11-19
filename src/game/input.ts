@@ -36,6 +36,10 @@ export interface InputHooks {
   /** A finger let go of a drag at this speed (pixels per second); 0, 0 when a finger touches down. */
   fling?: (vx: number, vy: number) => void;
   zoom: (factor: number) => void;
+  /** Touch: a finger down here takes hold of something the HUD shows on the map (a building's footprint); true if so. */
+  grab?: (x: number, y: number) => boolean;
+  /** Touch: that finger moved, to this ground point (tiles). */
+  drag?: (ground: Vector3 | null) => void;
 }
 
 const LONG_PRESS_MS = 400;
@@ -149,7 +153,7 @@ const GRAB = cursorSized(44, {
 /** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
 const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
-type TouchMode = 'pending' | 'pan' | 'box' | 'pinch';
+type TouchMode = 'pending' | 'pan' | 'box' | 'pinch' | 'held';
 
 /** Mouse and keyboard: selection, control groups and right-click orders for the local player. */
 export class Input {
@@ -158,6 +162,14 @@ export class Input {
   hover: Vector3 | null = null;
   /** A finger was the last to touch the map, and where (screen pixels): it has no hover to aim with. */
   private touchy = false;
+  get touching(): boolean {
+    return this.touchy;
+  }
+  /** Screen pixels of a ground point (tiles). */
+  toScreen(p: Vector3): { x: number; y: number } {
+    const v = p.clone().project(this.hooks.camera());
+    return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
+  }
   private touchAt: { x: number; y: number } | null = null;
   private aimed = { key: '', at: null as Vector3 | null };
 
@@ -307,6 +319,10 @@ export class Input {
     this.hooks.fling?.(0, 0); // a finger down catches a sliding view
     this.panVel = { x: 0, y: 0, t: performance.now() };
     clearTimeout(this.longPress);
+    if (this.touches.size === 1 && this.hooks.grab?.(e.clientX, e.clientY)) {
+      this.touchMode = 'held'; // dragging what the HUD showed there, not the map
+      return;
+    }
     if (this.touches.size === 1) {
       this.touchMode = 'pending';
       this.dragStart = null;
@@ -355,6 +371,7 @@ export class Input {
       this.touchMode = 'pan';
       clearTimeout(this.longPress);
     }
+    if (this.touchMode === 'held') return this.hooks.drag?.(this.groundAt(e.clientX, e.clientY));
     if (this.touchMode === 'pan') {
       this.hooks.pan(dx, dy);
       // The finger's speed, smoothed over the last few moves, for the slide after it lets go.

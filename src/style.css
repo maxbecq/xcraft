@@ -1022,3 +1022,14 @@ body.touch .hud-banner button { min-height: 44px; }
   content: '✕'; position: absolute; inset: 0; display: grid; place-items: center;
   background: rgba(110, 8, 0, 0.5); color: #ff7060; font: 700 18px/1 system-ui, sans-serif; text-shadow: 0 0 3px #000;
 }
+
+/* Touch screens, placing a building: ✓ places it (a long press: places it and keeps the order), ✕ drops it
+   (game/hud.ts pinUi), just below the footprint. */
+.pin-ui { position: fixed; z-index: 7; display: flex; gap: 14px; transform: translateX(-50%); pointer-events: none; }
+.pin-ui button {
+  pointer-events: auto; width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.6);
+  font: 700 24px/1 system-ui, sans-serif; color: #fff; cursor: pointer; touch-action: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.pin-ui .pin-ok { background: #2f9e44; }
+.pin-ui .pin-no { background: #b3261e; }
