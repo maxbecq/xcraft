@@ -12,7 +12,7 @@ import { isoOffset } from '../camera';
  * plane (the Z fabrication) cuts it at the right height. The model itself stays, invisible: it casts the shadow, is
  * hit by clicks and carries the hover halo and the fabrication armature.
  */
-export const SPRITES = new URLSearchParams(location.search).get('sprites') !== '0';
+export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
 export const SPRITE_TYPES = ['pod', 'intelligence'];
 /**
