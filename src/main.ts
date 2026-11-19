@@ -702,8 +702,8 @@ if (document.fullscreenEnabled && !TOUCH) {
     else keyboard?.unlock?.();
   });
   // Browsers only go fullscreen on a click or key press, and loading a match reloads the page:
-  // with the option on, the first one in the match does it.
-  if (!ATTRACT && wantsFullscreen()) {
+  // with the option on, the first one on the page (title menus or match) does it.
+  if (wantsFullscreen()) {
     // Captured, so it runs before the map's own press (which may hold the pointer).
     const enter = () => {
       fullscreenAsked = performance.now();

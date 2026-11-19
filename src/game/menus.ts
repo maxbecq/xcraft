@@ -9,7 +9,7 @@ import { BIOMES, type Biome } from '../render/biome';
 import { TEAM_COLORS } from '../render/units';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
-import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, wantsFullscreen } from './settings';
+import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, toggleFullscreen, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
 let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality, TOUCH: boolean;
@@ -128,6 +128,8 @@ function showOptions(menu: HTMLElement): void {
       } catch {
         // private browsing: the pause menu's button still works
       }
+      // Ticking it is the click the browser asks for: the menus go fullscreen at once.
+      if ((field as HTMLInputElement).checked !== !!document.fullscreenElement) toggleFullscreen();
       return;
     }
     const v = field.value;
