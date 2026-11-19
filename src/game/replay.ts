@@ -1,5 +1,6 @@
 /** Replays: a game kept as the commands the simulation took, saved, opened from a file and played back. */
-import type { Faction } from '../data';
+import { type Faction, FACTIONS } from '../data';
+import { MAPS } from '../maps';
 import type { Command } from '../sim/world';
 
 export const REPLAY_KEY = 'xcraft.replay';
@@ -17,14 +18,56 @@ export interface Replay {
   ticks: [number, Command[]][];
 }
 
-/** The replay to play: one opened from a file this session, else the last saved game. */
+/** Largest replay accepted (a long game is a few megabytes). */
+export const REPLAY_MAX_BYTES = 32 * 1024 * 1024;
+
+/**
+ * A replay read from text (storage or a file), checked before anything plays it: its version, its ticks (pairs of a
+ * tick ≥ 0 and its commands, in order), each command's player among the replay's, its sides (known factions, teams and
+ * handicaps one each). An unknown map falls back to the original one, a missing biome to the desert. The reason in
+ * French when it is not a replay that can be played.
+ */
+export function parseReplay(text: string): Replay | string {
+  const bad = 'Ce fichier n’est pas un replay Xcraft lisible';
+  if (text.length > REPLAY_MAX_BYTES) return `${bad} (trop gros).`;
+  let r: Replay;
+  try {
+    r = JSON.parse(text);
+  } catch {
+    return `${bad}.`;
+  }
+  if (!r || typeof r !== 'object' || r.v !== 1) return `${bad} (version inconnue).`;
+  const n = Array.isArray(r.factions) ? r.factions.length : 0;
+  if (n < 1 || n > 4 || !r.factions.every((f) => typeof f === 'string' && f in FACTIONS)) return `${bad} (camps inconnus).`;
+  const counted = (a: unknown, ok: (v: unknown) => boolean) => Array.isArray(a) && a.length === n && a.every(ok);
+  if (r.teams !== undefined && !counted(r.teams, (t) => Number.isInteger(t) && (t as number) >= 0)) return `${bad} (équipes).`;
+  if (!counted(r.handicap, (h) => typeof h === 'number' && Number.isFinite(h))) return `${bad} (handicaps).`;
+  if (!Array.isArray(r.ticks)) return `${bad} (commandes).`;
+  let last = -1;
+  for (const entry of r.ticks) {
+    if (!Array.isArray(entry) || entry.length !== 2) return `${bad} (commandes).`;
+    const [tick, cmds] = entry;
+    if (!Number.isInteger(tick) || tick < 0 || tick <= last || !Array.isArray(cmds)) return `${bad} (commandes).`;
+    last = tick;
+    for (const c of cmds) if (!c || typeof c !== 'object' || !Number.isInteger(c.player) || c.player < 0 || c.player >= n) return `${bad} (joueur inconnu).`;
+  }
+  if (r.map !== undefined && (typeof r.map !== 'string' || !MAPS[r.map])) delete r.map;
+  if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
+  return r;
+}
+
+/** The replay to play: one opened from a file this session, else the last saved game. One that does not check out
+ * is dropped from this session (so it does not stay in the way). */
 export function readReplay(): Replay | null {
-  for (const read of [() => sessionStorage.getItem(REPLAY_KEY), () => localStorage.getItem(REPLAY_KEY)]) {
+  for (const [store, read] of [['session', () => sessionStorage.getItem(REPLAY_KEY)], ['local', () => localStorage.getItem(REPLAY_KEY)]] as const) {
     try {
-      const r = JSON.parse(read() ?? 'null') as Replay | null;
-      if (r?.v === 1 && Array.isArray(r.ticks)) return r;
+      const text = read();
+      if (!text) continue;
+      const r = parseReplay(text);
+      if (typeof r !== 'string') return r;
+      if (store === 'session') sessionStorage.removeItem(REPLAY_KEY);
     } catch {
-      // unavailable or not a replay: try the next place
+      // storage unavailable: try the next place
     }
   }
   return null;
@@ -58,16 +101,17 @@ export function openReplayFile(): void {
   input.type = 'file';
   input.accept = 'application/json,.json';
   input.onchange = async () => {
-    const text = await input.files?.[0]?.text();
-    if (!text) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > REPLAY_MAX_BYTES) return alert('Ce fichier n’est pas un replay Xcraft lisible (trop gros).');
+    const r = parseReplay(await file.text());
+    if (typeof r === 'string') return alert(r);
     try {
-      const r = JSON.parse(text) as Replay;
-      if (r.v !== 1 || !Array.isArray(r.ticks)) throw new Error('not a replay');
-      sessionStorage.setItem(REPLAY_KEY, text);
-      playReplay(r);
+      sessionStorage.setItem(REPLAY_KEY, JSON.stringify(r));
     } catch {
-      alert('Ce fichier n’est pas un replay Xcraft.');
+      return alert('Ce replay ne tient pas dans le stockage du navigateur.');
     }
+    playReplay(r);
   };
   input.click();
 }

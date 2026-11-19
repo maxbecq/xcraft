@@ -54,6 +54,11 @@ const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('r
 let saved = false;
 /** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
 const REPLAY = params.has('replay') ? readReplay() : null;
+// Asked for a replay but none checks out (dropped, damaged): back to the menus rather than a game nobody asked for.
+if (params.has('replay') && !REPLAY) {
+  alert('Aucun replay lisible à rejouer.');
+  location.replace(location.pathname);
+}
 const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
