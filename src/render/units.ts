@@ -481,7 +481,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches
   'barge', 'zespion', 'centrerecherche', 'pod', 'tourelle',
   // and with Meshy (smart topology t2.5 for units, t2 for buildings, 3000 faces, n1 texture)
-  'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation'];
+  'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation',
+  // and with Rodin (fal) or Tripo: the last Blender sketches
+  'intelligence', 'assimilateur', 'plateforme', 'armement', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
@@ -1132,6 +1134,30 @@ interface InsectLeg {
 const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 /** Height of the Z Plate-forme's deck, where the socles are built. */
 const PLATFORM_DECK = 0.37;
+/** Buildings seated into the ground (how far they sink, in tiles): the Z headquarters looked set down on the sand. */
+const SEATED: Record<string, number> = { intelligence: 0.08, supreme: 0.08 };
+let contactMaterial: MeshBasicMaterial | undefined;
+/** A soft dark disc under a building's foot, `size` tiles across, so its base meets the ground. */
+function contactShadow(size: number): Mesh {
+  if (!contactMaterial) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const r = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+    r.addColorStop(0, 'rgba(0,0,0,0.55)');
+    r.addColorStop(0.6, 'rgba(0,0,0,0.35)');
+    r.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 128, 128);
+    contactMaterial = new MeshBasicMaterial({ map: new CanvasTexture(c), transparent: true, depthWrite: false });
+  }
+  const geo = new PlaneGeometry(size * 1.25, size * 1.25).rotateX(-Math.PI / 2);
+  const m = new Mesh(geo, contactMaterial); // shared material; the geometry goes with the view
+  m.position.y = 0.03;
+  m.renderOrder = -1;
+  m.userData.noPick = true;
+  return m;
+}
 const DOCK_STEEL = new MeshStandardMaterial({ color: 0x5a4636, metalness: 0.6, roughness: 0.55 });
 const DOCK_CYAN = new MeshBasicMaterial({ color: 0x5ff3ff });
 
@@ -2409,6 +2435,11 @@ export class EntityRenderer {
     }
     const pivot = new Group(); // animated wrapper, so the model keeps its own transform
     pivot.add(body);
+    if (SEATED[e.type] !== undefined) {
+      // Set into the ground rather than standing on it: sunk a little, a soft contact shadow round its foot.
+      body.position.y -= SEATED[e.type];
+      root.add(contactShadow((e.def as BuildingDef).size));
+    }
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
     // A unit drawn with a building's model (Caserne volante in flight) keeps the building's size.
     if (e.def.kind === 'unit' && DEFS[LOOKS[e.type] ?? e.type]?.kind !== 'building') body.scale.setScalar(UNIT_SCALE);
