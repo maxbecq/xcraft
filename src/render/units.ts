@@ -1436,9 +1436,28 @@ const RING_RISE = 0.35;
  * float in mid-air, as by a building at a cliff's foot); the wall hides the part of the ring behind it. */
 const RING_CLIFF = 0.6;
 
-/** A struck unit shows white this long (s): who is under fire reads at a glance in a melee. */
+/**
+ * A struck unit lights up this long (s), its own textures kept: who is under fire reads at a glance in a melee,
+ * without turning into a flat white shape. Each of its materials is swapped for a brightened copy, made once.
+ */
+const FLASH_S = 0.12;
 const HIT_FLASH = new MeshBasicMaterial({ color: 0xfff2e6 });
-const FLASH_S = 0.09;
+const lit = new WeakMap<Material, Material>();
+function hitTint(m: Material): Material {
+  let t = lit.get(m);
+  if (!t) {
+    const s = m as MeshStandardMaterial;
+    if (s.isMeshStandardMaterial) {
+      const c = s.clone();
+      c.emissive.setHex(0xfff0e0);
+      c.emissiveMap = null;
+      c.emissiveIntensity = 0.22;
+      t = c;
+    } else t = HIT_FLASH;
+    lit.set(m, t);
+  }
+  return t;
+}
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', -1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
@@ -1952,9 +1971,11 @@ export class EntityRenderer {
       if (e.def.kind === 'unit' && v.hp !== undefined && hp < v.hp && !v.flash) {
         const saved: [Mesh, Material | Material[]][] = [];
         v.model.traverse((o) => {
-          if (o instanceof Mesh && o.visible && !(o.material as Material).transparent) {
+          // Only what is drawn: not the hidden boxes some models carry (a Z machine's material.visible = false hull).
+          const mats = ([] as Material[]).concat(o instanceof Mesh ? o.material : []);
+          if (o instanceof Mesh && o.visible && mats.every((m) => m.visible && !m.transparent)) {
             saved.push([o, o.material]);
-            o.material = HIT_FLASH;
+            o.material = Array.isArray(o.material) ? o.material.map(hitTint) : hitTint(o.material);
           }
         });
         v.flash = { left: FLASH_S, saved };

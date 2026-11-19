@@ -694,7 +694,8 @@ export class Input {
         for (const b of skin.skeleton.bones) box.expandByPoint(b.getWorldPosition(v));
         const pad = BONE_PAD * root.scale.x;
         if (!box.isEmpty()) box.expandByVector(v.set(pad, pad, pad));
-      } else if ((o as Mesh).isMesh) {
+      } else if ((o as Mesh).isMesh && ([] as { visible: boolean }[]).concat((o as Mesh).material).every((m) => m.visible)) {
+        // A mesh whose material is hidden (a Z machine's hull box) is not drawn: it does not widen the catch.
         const g = (o as Mesh).geometry;
         if (!g.boundingBox) g.computeBoundingBox();
         box.union(scratch.copy(g.boundingBox!).applyMatrix4(o.matrixWorld));
