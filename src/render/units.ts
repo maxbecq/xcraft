@@ -1005,6 +1005,8 @@ interface View {
   /** Z building being fabricated: a ring of cyan light at the height being laid. */
   seam?: Mesh;
   /** Z building being fabricated: its own materials cut by a plane rising from `bottom` to `top`. */
+  /** Z Pod: docking ports pulsing on its sides while it has no add-on, and the gantry reaching out to the add-on it has. */
+  dock?: { ports: Object3D; arm: Object3D; glow: MeshBasicMaterial; y: number; reach: number };
   /** Z Plate-forme: its robot arms (upper part, forearm with the welding spark), animated while it builds. */
   arms?: { upper: Object3D; tip?: Object3D }[];
   /** Z Plate-forme: the socle being built on its deck, fabricated layer by layer as training goes on. */
@@ -1053,6 +1055,44 @@ interface InsectLeg {
 const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 /** Height of the Z Plate-forme's deck, where the socles are built. */
 const PLATFORM_DECK = 0.37;
+const DOCK_STEEL = new MeshStandardMaterial({ color: 0x5a4636, metalness: 0.6, roughness: 0.55 });
+const DOCK_CYAN = new MeshBasicMaterial({ color: 0x5ff3ff });
+
+/** A Z Pod's docking gear (see View.dock): four open ports, one a side at the model's edge (`reach`), and a gantry
+ * along +x from the Pod's centre. */
+function podDock(reach: number, height: number): NonNullable<View['dock']> {
+  const y = Math.min(height * 0.4, 0.55);
+  const glow = owned(new MeshBasicMaterial({ color: 0x5ff3ff, transparent: true, depthWrite: false, side: DoubleSide }));
+  const ports = new Group();
+  for (let k = 0; k < 4; k++) {
+    const side = new Group();
+    side.rotation.y = (k * Math.PI) / 2;
+    const collar = new Mesh(new BoxGeometry(0.2, 0.5, 0.6), DOCK_STEEL);
+    collar.position.set(reach, y, 0);
+    // Open jaws, waiting for an add-on to clamp.
+    const jaws = [-1, 1].map((d) => {
+      const jaw = new Mesh(new BoxGeometry(0.36, 0.08, 0.1), DOCK_STEEL);
+      jaw.position.set(reach + 0.22, y + d * 0.2, 0);
+      jaw.rotation.z = d * 0.35;
+      return jaw;
+    });
+    const ring = new Mesh(new RingGeometry(0.1, 0.18, 24), glow);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.set(reach + 0.11, y, 0);
+    side.add(collar, ...jaws, ring);
+    ports.add(side);
+  }
+  // Unit-long pieces from x = 0 to 1, stretched to the add-on.
+  const arm = new Group();
+  const beam = new Mesh(new BoxGeometry(1, 0.18, 0.36).translate(0.5, 0, 0), DOCK_STEEL);
+  const strip = new Mesh(new BoxGeometry(1, 0.04, 0.1).translate(0.5, 0.11, 0), DOCK_CYAN);
+  const rails = [-1, 1].map((d) => new Mesh(new BoxGeometry(1, 0.14, 0.05).translate(0.5, 0.14, d * 0.17), DOCK_STEEL));
+  arm.add(beam, strip, ...rails);
+  arm.position.y = y;
+  arm.visible = false;
+  for (const o of [ports, arm]) o.traverse((m) => (m.userData.noPick = true));
+  return { ports, arm, glow, y, reach };
+}
 /** Seconds a Z drone takes to scuttle to the centre of the site it raised. */
 const DEPLOY_WALK = 0.6;
 /** Seconds it takes to settle and spread its legs into a base. */
@@ -1695,6 +1735,8 @@ export class EntityRenderer {
       return false;
     });
     this.hostile = (a, b) => world.hostile(a, b);
+    const hosted = new Map<number, Entity>(); // Z Pod id -> its add-on
+    for (const e of world.entities.values()) if (e.host) hosted.set(e.host, e);
     for (const e of world.entities.values()) {
       const old = this.views.get(e.id);
       if (old && (old.type !== e.type || old.owner !== e.owner)) {
@@ -1791,6 +1833,23 @@ export class EntityRenderer {
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
+      if (v.dock) {
+        const addon = hosted.get(e.id);
+        const ready = e.buildLeft <= 0;
+        v.dock.ports.visible = ready && !addon;
+        v.dock.glow.opacity = 0.45 + 0.4 * Math.sin(now / 300);
+        v.dock.arm.visible = ready && !!addon;
+        if (addon) {
+          // From the Pod's side to the add-on's, unfolding as the add-on rises.
+          const dx = (addon.x - e.x) / FP, dz = (addon.y - e.y) / FP;
+          const gap = Math.hypot(dx, dz);
+          const from = v.dock.reach, to = gap - (addon.def as BuildingDef).size / 2 + 0.6;
+          const grown = addon.buildLeft > 0 ? 1 - addon.buildLeft / world.buildTicks(addon) : 1;
+          v.dock.arm.rotation.y = Math.atan2(-dz, dx);
+          v.dock.arm.position.set((dx / gap) * from, v.dock.y, (dz / gap) * from);
+          v.dock.arm.scale.x = Math.max(0.01, (to - from) * grown);
+        }
+      }
       if (e.type === 'minerai') {
         // Fields shrink as they are mined out, and their small geodes go one by one.
         const body = v.model.children[0];
@@ -2305,8 +2364,14 @@ export class EntityRenderer {
       hit.position.copy(box.getCenter(new Vector3()));
       pivot.add(hit);
     }
+    let dock: View['dock'];
+    if (e.type === 'pod' || e.type === 'podsup') {
+      const box = new Box3().setFromObject(body).getSize(new Vector3());
+      dock = podDock(Math.min(box.x, box.z) * 0.42, box.y);
+      root.add(dock.ports, dock.arm);
+    }
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {
