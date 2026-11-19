@@ -474,7 +474,9 @@ const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip 
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire'];
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
+  // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
+  'minotaure', 'temple'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
@@ -545,6 +547,8 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   return m;
 }
 
+// The Dieux keep their marble white: no team tint on pale plates (that is for Isdaris armour).
+const isDieux = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'dieux';
 const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'humains';
 
 /** Loads the Blender models; types without one keep their placeholder. */
@@ -562,7 +566,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type))));
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type) && !isDieux(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
