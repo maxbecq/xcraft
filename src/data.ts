@@ -360,11 +360,11 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Athéna (notice): she and the troops round her hit much harder for a while. */
   cridegueurre: { name: 'Cri de guerre', hotkey: 'C', target: 'self', ...BALANCE.abilities.cridegueurre },
   /** Isis (notice): heals every wounded living ally round her. */
-  soinsdivins: { name: 'Soins divins', hotkey: 'S', target: 'self', ...BALANCE.abilities.soinsdivins },
+  soinsdivins: { name: 'Soins divins', hotkey: 'O', target: 'self', ...BALANCE.abilities.soinsdivins },
   /** Isis (notice): raises allies fallen lately round her (`max` of them). */
   resurrection: { name: 'Résurrection', hotkey: 'R', target: 'self', ...BALANCE.abilities.resurrection },
   /** Frigg (notice): takes control of the enemy nearest the point for a while. */
-  soumission: { name: 'Soumission divine', hotkey: 'S', target: 'point', ...BALANCE.abilities.soumission },
+  soumission: { name: 'Soumission divine', hotkey: 'O', target: 'point', ...BALANCE.abilities.soumission },
   /** Frigg (notice): she and the troops round her vanish from sight, long. */
   voile: { name: 'Voile de nuage', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
   /** Hadès (notice): a ray that splits to strike every enemy unit he sees. */
@@ -565,7 +565,7 @@ const BASE: Record<string, object> = {
   deflagration: isd('Déflagration', 'G', 'Les Druides lancent un éclair de plasma dévastateur.', { laboratoire: 1 }),
   silence: isd('Silence des ions', 'I', "Les Druides empêchent l'usage des capacités dans une zone.", { laboratoire: 1 }),
   assembleur: extension('Assembleur inférieur', 'A', 'Véhicules terrestres : Porte-disques, Baliste plasma.'),
-  balise: extension('Balise', 'B', 'Unités aériennes : Espion, Chimère, Dragon, Béhémoth.'),
+  balise: extension('Balise', 'L', 'Unités aériennes : Espion, Chimère, Dragon, Béhémoth.'),
   totem: extension('Totem', 'T', 'Voyageurs, et recherches de combat des véhicules.'),
   ...upgrades('assembleuratk', 'Attaque assembleur', 'K', { totem: 1 }, 'isdaris'),
   ...upgrades('assembleurarmor', 'Blindage assembleur', 'J', { totem: 1 }, 'isdaris'),
@@ -715,7 +715,7 @@ const BASE: Record<string, object> = {
   /** Hadès's Armée des enfers: ghosts that cannot be hurt, for a while. */
   fantome: { kind: 'unit', name: 'Fantôme', radius: 0.4, lifetime: 20, faction: 'dieux', hotkey: 'F' },
   /** Isis's priestess: heals, no attack; Dissipation. */
-  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'P' },
+  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'E' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, ability: 'transe', faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
@@ -757,7 +757,7 @@ const BASE: Record<string, object> = {
   armurezodiacale: research('Armure zodiacale', 'Z', 'Titans : plus de vie et de blindage.', { hades: 1 }, 'dieux'),
   offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
   // Artefacterie (notice, Frigg): a god buys up to 4 improvements, where it stands, the same one several times if it likes.
-  artforce: research('Force', 'Y', 'Le dieu frappe plus fort.', { artefacterie: 1 }, 'dieux'),
+  artforce: research('Force', 'G', 'Le dieu frappe plus fort.', { artefacterie: 1 }, 'dieux'),
   artresistance: research('Résistance', 'J', 'Le dieu gagne de l’armure.', { artefacterie: 1 }, 'dieux'),
   artagilite: research('Agilité', 'K', 'Le dieu frappe plus vite.', { artefacterie: 1 }, 'dieux'),
   artvitesse: research('Vitesse', 'Q', 'Le dieu se déplace plus vite.', { artefacterie: 1 }, 'dieux'),
