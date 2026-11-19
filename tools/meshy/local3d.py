@@ -14,7 +14,8 @@ optional), then <session>-<model>.png last (mv, so it is never read half-written
 until it is empty, into queue/done/ (glb + log, glb also copied to "output") or
 queue/failed/ (png + json + log), and appends one line to queue/recap.log.
 Env: LOCAL3D_HOME (default ~/xcraft-3d/trellis-silicon), LOCAL3D_PIPELINE (512 | 1024 | 1024_cascade, default 512),
-     LOCAL3D_TEXTURE (512 | 1024 | 2048, default 1024), BAKE_MAX_FACES (default 3000).
+     LOCAL3D_TEXTURE (512 | 1024 | 2048, default 1024), BAKE_MAX_FACES (default 3000),
+     LOCAL3D_STEPS (sampler steps, default 12), LOCAL3D_COLOR_MATCH (1: baked colours moved toward the input).
 On the M1 Max 64 GB: 512 takes about 4 min and 16 GB; 1024 takes 10 min and 32 GB, and its mesh came out cut to a
 sliver by the GPU watchdog with no error, so stay on 512.
 Each attempt at each image runs in a fresh child process (--one), which loads the model and exits: MPS memory
@@ -81,9 +82,9 @@ def one(src, dst, seed):
     # Texture baked straight onto a light mesh: Blender's decimation (simplify.mjs) stalls near 12 700 faces on the
     # raw 190 000-face output (non-manifold edges).
     os.environ.setdefault("BAKE_MAX_FACES", "3000")
-    import torch
     from PIL import Image
     from trellis_silicon.core import WatchdogEmptyMeshError, generate_glb, load_pipeline
+    import torch  # after trellis_silicon.core, which sets PYTORCH_ENABLE_MPS_FALLBACK (segment_reduce has no MPS kernel)
 
     # No colour cut: TRELLIS.2's own remover (BiRefNet) gets the plain image. A corner flood fill left the drop
     # shadows, which TRELLIS modelled as dark sheets, and a chroma cut ate grey, white or brown parts of the object;
@@ -100,7 +101,9 @@ def one(src, dst, seed):
                     m.register_forward_hook(lambda *_: torch.mps.synchronize())
     try:
         result = generate_glb(pipeline, im, seed=seed, pipeline_type=PIPELINE, texture_size=TEXTURE,
-                              output_base=os.path.join(tempfile.mkdtemp(), "out"))
+                              output_base=os.path.join(tempfile.mkdtemp(), "out"),
+                              steps=int(os.environ.get("LOCAL3D_STEPS", 0)) or None,  # 0: the pipeline's 12
+                              color_match=os.environ.get("LOCAL3D_COLOR_MATCH") == "1")  # bake toward the input's colours
     except WatchdogEmptyMeshError:
         sys.exit(CUT)
     os.replace(result["glb_path"], dst)
