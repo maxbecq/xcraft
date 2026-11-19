@@ -1602,6 +1602,14 @@ export class EntityRenderer {
   constructor(private readonly scene: Scene, private readonly map: GameMap) {}
 
   /** A view gone for good: what it allocated for itself (not what it shares with the models) is freed. */
+  /** A view's model size, measured once (the tower a Pod's gantry reaches); undefined while it has no view yet. */
+  private measure(id: number): Vector3 | undefined {
+    const m = this.views.get(id)?.model;
+    if (!m) return undefined;
+    const box = new Box3().setFromObject(m.children[0] ?? m, true);
+    return (m.userData.size = box.getSize(new Vector3()));
+  }
+
   private release(v: View): void {
     free(v.root, v.flash?.saved.map(([, m]) => m) ?? []);
   }
@@ -1874,11 +1882,15 @@ export class EntityRenderer {
           // From the Pod's side to the add-on's, unfolding as the add-on rises.
           const dx = (addon.x - e.x) / FP, dz = (addon.y - e.y) / FP;
           const gap = Math.hypot(dx, dz);
-          const from = v.dock.reach, to = gap - (addon.def as BuildingDef).size / 2 + 0.6;
+          // A tower (Tourelle, Vacarme) is met halfway up its side, sloping; the Plate-forme's flat deck at the Pod's height.
+          const tower = (LOOKS[addon.type] ?? addon.type) === 'tourelle';
+          const size = tower ? this.views.get(addon.id)?.model.userData.size as Vector3 | undefined ?? this.measure(addon.id) : undefined;
+          const from = v.dock.reach, to = size ? gap - Math.min(size.x, size.z) * 0.4 : gap - (addon.def as BuildingDef).size / 2 + 0.6;
+          const rise = size ? size.y * 0.5 - v.dock.y : 0;
           const grown = addon.buildLeft > 0 ? 1 - addon.buildLeft / world.buildTicks(addon) : 1;
-          v.dock.arm.rotation.y = Math.atan2(-dz, dx);
+          v.dock.arm.rotation.set(0, Math.atan2(-dz, dx), Math.atan2(rise, to - from), 'YZX');
           v.dock.arm.position.set((dx / gap) * from, v.dock.y, (dz / gap) * from);
-          v.dock.arm.scale.x = Math.max(0.01, (to - from) * grown);
+          v.dock.arm.scale.x = Math.max(0.01, Math.hypot(to - from, rise) * grown);
         }
       }
       if (e.type === 'minerai') {
