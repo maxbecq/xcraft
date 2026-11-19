@@ -2005,6 +2005,10 @@ export class EntityRenderer {
       const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
       if (foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach) v.target = Math.atan2(foe.x - e.x, foe.y - e.y);
       else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
+      else if (o?.kind === 'gather' && o.phase === 'mine') {
+        const field = world.entities.get(o.target);
+        if (field) v.target = Math.atan2(field.x - e.x, field.y - e.y); // a miner faces the crystal it works
+      }
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       const ground = heightAt(this.map, x, z);
       v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
@@ -2302,6 +2306,8 @@ export class EntityRenderer {
       for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
     }
     const a = (e.def as UnitDef).attack;
+    // A Z drone mining leans into the crystal with a drill's judder (the sparks come from main.ts).
+    const mining = e.type === 'drone' && !moving && e.order?.kind === 'gather' && e.order.phase === 'mine';
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
     const melee = !!a && a.range < 1;
@@ -2332,7 +2338,7 @@ export class EntityRenderer {
     const rolling = !!v.wheels;
     const bob = hover + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
-    ease(body, 'x', moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, 0.15);
+    ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
     ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);

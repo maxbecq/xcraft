@@ -970,9 +970,10 @@ function start(): void {
     hud.update();
     lap('hud');
     for (const e of world.entities.values()) {
-      // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site).
+      // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site); a Z drone
+      // drilling a crystal throws the same.
       const o = e.order;
-      if (e.type === 'serf' && e.x === e.px && e.y === e.py && sees(e) && ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct')) {
+      if ((e.type === 'serf' || e.type === 'drone') && e.x === e.px && e.y === e.py && sees(e) && ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct')) {
         const t = world.entities.get(o.target);
         if (t) {
           const x = e.x / FP;
