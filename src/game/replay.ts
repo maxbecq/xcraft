@@ -30,14 +30,14 @@ export function readReplay(): Replay | null {
   return null;
 }
 
-/** Keeps the game as the "last game" (games that do not fit in storage are just not kept). */
+/** Keeps the game as the "last game"; false when it could not be written (storage full or blocked). */
 export function saveReplay(r: Replay): boolean {
   try {
     localStorage.setItem(REPLAY_KEY, JSON.stringify(r));
+    return true;
   } catch {
-    // storage full or blocked
+    return false;
   }
-  return true;
 }
 
 export function playReplay(r: Replay | null): void {

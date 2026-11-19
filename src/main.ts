@@ -145,10 +145,17 @@ if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
 const record: Replay = { v: 1, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
 const replayed = new Map(REPLAY?.ticks ?? []);
+/** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,
+ * and the player is told, quietly, unless the page is going. */
+let keepTried = false;
+function keepGame(quiet = false): void {
+  if (saved || keepTried || REPLAY || ATTRACT || !record.ticks.length) return;
+  keepTried = true;
+  saved = saveReplay(record);
+  if (!saved && !quiet) hud.notify([{ player: PLAYER, kind: 'alert', text: 'Replay non conservé : stockage du navigateur plein ou bloqué. « Enregistrer le replay » le télécharge.' }]);
+}
 // A game left before its end is kept too.
-window.addEventListener('pagehide', () => {
-  if (!saved && !REPLAY && !ATTRACT && record.ticks.length) saved = saveReplay(record);
-});
+window.addEventListener('pagehide', () => keepGame(true));
 const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
@@ -239,7 +246,7 @@ function endNet(title: string, detail: string): void {
   if (netOver) return;
   netOver = true;
   link?.leave();
-  if (!saved && record.ticks.length) saved = saveReplay(record);
+  keepGame();
   netBanner.hidden = false;
   netBanner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>`;
 }
@@ -915,7 +922,7 @@ function start(): void {
         stepped++;
         for (const ev of world.events) happened[ev.kind] = (happened[ev.kind] ?? 0) + 1;
       }
-      if (world.winner !== null && !REPLAY && !ATTRACT && !saved) saved = saveReplay(record);
+      if (world.winner !== null) keepGame();
       pending = [];
       hud.notify(world.events);
       if (drawn) effects.collect(world, seenAt);
