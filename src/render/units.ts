@@ -478,7 +478,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
   'minotaure', 'temple', 'gaia',
   // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches
-  'barge', 'zespion', 'centrerecherche', 'pod', 'tourelle'];
+  'barge', 'zespion', 'centrerecherche', 'pod', 'tourelle',
+  // and with Meshy (smart topology t2.5 for units, t2 for buildings, 3000 faces, n1 texture)
+  'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
@@ -491,11 +493,11 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
  * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
  * dull rust-and-dust textures (Human buildings): more saturation and light, so they read on the ground.
  */
-function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false): MeshStandardMaterial {
+function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false, matte = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
   const living = vivid && !unit;
-  const shiny = unit && !ivory;
+  const shiny = unit && !ivory && !matte; // the Z's rusted steel stays matte
   m.onBeforeCompile = (shader) => {
     shader.uniforms.teamColor = { value: team };
     shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
@@ -549,8 +551,10 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   return m;
 }
 
-// The Dieux keep their marble white: no team tint on pale plates (that is for Isdaris armour).
-const isDieux = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'dieux';
+// Pale plates take the team colour on Isdaris armour only: the Dieux keep their marble white, and on the Z's
+// rusted steel it blurred into a blue sheen.
+const isIsdaris = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'isdaris';
+const isZ = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'z';
 const isHuman = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'humains';
 
 /** Loads the Blender models; types without one keep their placeholder. */
@@ -558,9 +562,9 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // Meshy models are meshopt-compressed
   let done = 0;
   const count = <T,>(p: Promise<T>, total: number) => p.finally(() => onProgress?.(++done, total));
-  const todo = types.filter((type) => !LOOKS[type]);
+  // A type drawn with another's model (LOOKS) is loaded only if it has a Meshy model of its own.
+  const todo = types.filter((type) => !LOOKS[type] || STATIC_MESHY.includes(type));
   await Promise.all(
-    // Types drawn with another's model (LOOKS) have no file of their own.
     todo.map((type) => count((async () => {
       const character = CHARACTERS[type];
       const meshy = !new URLSearchParams(location.search).has('proc');
@@ -568,7 +572,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         try {
           const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${type}-meshy.glb`);
           gltf.scene.traverse((o) => {
-            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && !isHuman(type) && !isDieux(type))));
+            if (o instanceof Mesh && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
@@ -817,7 +821,7 @@ export function preview(type: string, owner: number): { object: Group; clips: An
 
 /** A copy of a Blender model; `seed` picks its graffiti. */
 function model(type: string, team: Material, seed = 0): Group {
-  type = LOOKS[type] ?? type;
+  if (!templates.has(type)) type = LOOKS[type] ?? type;
   const r = rigged.get(type);
   if (r) {
     const g = new Group();
