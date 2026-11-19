@@ -432,8 +432,8 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
   };
 }
 
-/** How far the land goes on beyond the map's edges, in tiles (enough for the widest view at a corner). */
-const OUT_R = 48; // a multiple of the outskirts' grid step
+/** How far the land goes on beyond the map's edges, in tiles: past the fade to black (see fogMaterial). */
+const OUT_R = 6; // a multiple of the outskirts' grid step
 const smooth01 = (t: number) => {
   const c = Math.min(1, Math.max(0, t));
   return c * c * (3 - 2 * c);
@@ -453,11 +453,11 @@ export function outskirtHeight(map: GameMap, x: number, z: number): number {
   return edge * (1 - t) + far * t - 0.08;
 }
 
-/** Land beyond the map's edges, fading into a haze of the planet's colour, so the world seems to go on. Not playable. */
+/** A short band of land beyond the map's edges, under the edge's fog, fading to black (see fogMaterial). Not playable. */
 function outskirts(map: GameMap, gMap: Texture, gNormal: Texture, rMap: Texture): Group {
   const b = new Builder();
   const up = new Vector3(0, 1, 0);
-  const STEP = 3; // coarse: gentle land, mostly in the haze
+  const STEP = 3; // coarse: gentle land, soon in the dark
   const cache = new Map<number, [Vector3, Color]>();
   const vert = (x: number, z: number): [Vector3, Color] => {
     const key = (z + OUT_R) * 4096 + x + OUT_R;
@@ -466,8 +466,7 @@ function outskirts(map: GameMap, gMap: Texture, gNormal: Texture, rMap: Texture)
     const h = outskirtHeight(map, x, z);
     const lv = Math.min(2, Math.max(0, Math.round(h / LEVEL_HEIGHT)));
     const c = B.levels[lv].clone().lerp(B.patch, Math.max(0, noise(x, z, 9, 3) - 0.3) * 1.6 * (1 - smooth01(outDist(map, x, z) / 20) * 0.6)).lerp(B.sand, Math.max(0, noise(x, z, 14, 9) - 0.55) * 1.8);
-    // A little darker than the playable ground, so the map's limit still reads.
-    c.multiplyScalar((0.94 + noise(x, z, 2, 5) * 0.12) * 0.8);
+    c.multiplyScalar(0.94 + noise(x, z, 2, 5) * 0.12);
     const v: [Vector3, Color] = [new Vector3(x, h, z), c];
     cache.set(key, v);
     return v;
@@ -479,28 +478,13 @@ function outskirts(map: GameMap, gMap: Texture, gNormal: Texture, rMap: Texture)
       b.quad(v.map((p) => p[0]), v.map((p) => p[1]), up);
     }
   }
-  const haze = B.levels[0].clone().multiplyScalar(0.4).lerp(new Color(B.background), 0.35);
   const mat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(0.8, 0.8), roughness: 0.95 });
   untile(mat, rMap, B.rock.clone().lerp(new Color(0x86888d), 0.55), false, undefined, map);
-  mat.customProgramCacheKey = () => 'outskirts';
-  const prev = mat.onBeforeCompile;
-  mat.onBeforeCompile = (shader, r) => {
-    prev.call(mat, shader, r);
-    shader.uniforms.hazeColor = { value: new Vector3(...haze.clone().convertLinearToSRGB().toArray()) };
-    shader.uniforms.hazeFrom = { value: OUT_R * 0.25 };
-    shader.uniforms.hazeTo = { value: OUT_R * 0.85 };
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 hazeColor;\nuniform float hazeFrom;\nuniform float hazeTo;')
-      // After the fog of war (also on dithering): the haze is in output colours, like the plane underneath.
-      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-        float outD = length(max(vec2(0.0), max(-vGround, vGround - mapSize)));
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeColor, smoothstep(hazeFrom, hazeTo, outD));`);
-  };
   const g = new Group();
   const land = b.mesh(mat);
   land.userData.noPick = true;
-  // Beyond the land, a plain sheet of the haze colour, so the background never shows.
-  const sheet = new Mesh(new PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: haze, toneMapped: false }));
+  // Beyond the land, a plain black sheet, so the background never shows.
+  const sheet = new Mesh(new PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0x000000, toneMapped: false }));
   sheet.position.set(map.width / 2, -6, map.height / 2);
   sheet.material.userData.fogged = true;
   sheet.userData.noPick = true;
@@ -548,14 +532,16 @@ export function fogMaterial(mat: Material, fog: DataTexture, map: GameMap): void
         vFogUv = (modelMatrix * fogWorld).xz / mapSize;`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;')
-      // Outside the map (the land beyond the edges, its rocks): no fog at all, its own colours a quarter darker to
-      // mark the map's limit. Inside, the tile's fog.
+      // mapSize is already declared on the ground (untile).
+      .replace('#include <common>', `#include <common>\nvarying vec2 vFogUv;\nuniform sampler2D fogMap;${shader.fragmentShader.includes('uniform vec2 mapSize') ? '' : '\nuniform vec2 mapSize;'}`)
+      // The tile's fog; beyond the map's edges (the land out there, its rocks), the nearest edge tile's, then black
+      // two to four tiles out: the map ends in the dark.
       .replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
-        if (any(lessThan(vFogUv, vec2(0.0))) || any(greaterThan(vFogUv, vec2(1.0)))) gl_FragColor.rgb *= 0.75;
-        else ${FOG_GLSL('texture2D(fogMap, vFogUv).r')}`,
+        vec2 fogLo = 0.5 / mapSize;
+        ${FOG_GLSL('texture2D(fogMap, clamp(vFogUv, fogLo, 1.0 - fogLo)).r')}
+        gl_FragColor.rgb *= 1.0 - smoothstep(2.0, 4.0, length((vFogUv - clamp(vFogUv, 0.0, 1.0)) * mapSize));`,
       );
   };
 }

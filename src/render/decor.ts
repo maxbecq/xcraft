@@ -95,10 +95,10 @@ export class Decor {
     this.outskirts();
   }
 
-  /** A few rocks and dead trees on the land beyond the map's edges, near it (further out, the haze hides them). */
+  /** A few rocks and dead trees on the land beyond the map's edges, near it (further out it is dark). */
   private outskirts(): void {
     const { width: W, height: H } = this.map;
-    const R = 14;
+    const R = 4; // further out it is dark
     for (let y = -R; y < H + R; y += 2) {
       for (let x = -R; x < W + R; x += 2) {
         if (x >= -1 && y >= -1 && x <= W && y <= H) continue;
