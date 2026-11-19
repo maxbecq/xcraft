@@ -3,6 +3,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Command, type Entity, type World, flies } from '../sim/world';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
+import { type Catch, nearestCatch } from './pick';
 
 const DRAG_PX = 5;
 /** A unit is caught this far outside the box its model fills on screen, so a click need not land on a thin limb. */
@@ -11,7 +12,10 @@ const PICK_MARGIN_PX = 10;
 const PICK_MIN_PX = 34;
 /** Flesh round a rigged character's bones, in world units: its posed skeleton is what is measured. */
 const BONE_PAD = 0.14;
-/** Mineral fields and geysers are small on screen: a wider catch, so a worker order lands on them. */
+/** Mineral fields and wells lie flat and low on screen: a wider catch round their outline, so an order lands on them. */
+const RESOURCE_MARGIN_PX = 18;
+const RESOURCE_MIN_PX = 48;
+/** Last resort for a field with no model drawn: within this distance of its middle. */
 const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
 const scratch = new Box3();
@@ -617,14 +621,13 @@ export class Input {
   }
 
   /**
-   * Entity under the cursor. A unit wins over a building or a field: the unit whose model, as drawn on screen, is
-   * nearest the cursor, caught a little outside its outline (PICK_MARGIN_PX, at least PICK_MIN_PX across); only then
-   * the building or field the ray hits, else the closest resource.
+   * Entity under the cursor. A unit or a resource the ray meets (its very model) wins. Else units and resources are
+   * ranked together by how near their drawn outline is to the cursor, each caught a little outside it (resources more
+   * generously): see nearestCatch. Only then the building the ray hits, else the closest resource's middle.
    */
   private entityAt(x: number, y: number): Entity | undefined {
-    const unit = this.unitAt(x, y);
-    if (unit) return unit;
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
+    let building: Entity | undefined;
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
       // Scaffolding, selection rings and light pools are see-through for clicks.
       if (hit.object.userData.noPick) continue;
@@ -632,13 +635,18 @@ export class Input {
       while (o && o.userData.id === undefined) o = o.parent;
       const e = o && this.world.entities.get(o.userData.id);
       // Not what the fog hides (its root is hidden: a mineral never found, a building never seen).
-      if (!e || !hit.object.visible || !o!.visible || e.inside || e.def.kind === 'unit') continue;
-      return e;
+      if (!e || !hit.object.visible || !o!.visible || e.inside) continue;
+      if (e.def.kind === 'resource' || (e.def.kind === 'unit' && this.sees(e))) return e;
+      building ??= e;
     }
+    const caught = this.caughtAt(x, y);
+    if (caught) return caught;
+    if (building) return building;
     let best: Entity | undefined;
     let bestD = RESOURCE_PICK_PX;
+    const hidden = new Set(this.hooks.roots().filter((r) => !r.visible).map((r) => r.userData.id));
     for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'resource') continue;
+      if (e.def.kind !== 'resource' || hidden.has(e.id)) continue;
       const s = this.screenOf(e);
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < bestD) [best, bestD] = [e, d];
@@ -646,29 +654,22 @@ export class Input {
     return best;
   }
 
-  /** The unit whose catch zone holds the point: outside every outline, the nearest outline; inside several, the nearest centre. */
-  private unitAt(x: number, y: number): Entity | undefined {
+  /** The unit or resource whose catch zone holds the point (see nearestCatch). */
+  private caughtAt(x: number, y: number): Entity | undefined {
     const roots = new Map<number, Object3D>();
     for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
-    let best: Entity | undefined;
-    let bestD = Infinity;
-    let bestC = Infinity;
+    const catches: Catch[] = [];
     for (const e of this.world.entities.values()) {
-      if (e.def.kind !== 'unit' || e.inside || !this.sees(e)) continue;
+      const resource = e.def.kind === 'resource';
+      if (!resource && (e.def.kind !== 'unit' || e.inside || !this.sees(e))) continue;
       const feet = this.screenOf(e);
       if (Math.abs(feet.x - x) > 400 || Math.abs(feet.y - y) > 400) continue;
       const root = roots.get(e.id);
+      if (resource && root && !root.visible) continue; // a field the fog still hides
       const r = (root && this.modelRect(root)) ?? { x0: feet.x, y0: feet.y, x1: feet.x, y1: feet.y };
-      const cx = (r.x0 + r.x1) / 2;
-      const cy = (r.y0 + r.y1) / 2;
-      const hx = Math.max((r.x1 - r.x0) / 2 + PICK_MARGIN_PX, PICK_MIN_PX / 2);
-      const hy = Math.max((r.y1 - r.y0) / 2 + PICK_MARGIN_PX, PICK_MIN_PX / 2);
-      if (Math.abs(x - cx) > hx || Math.abs(y - cy) > hy) continue;
-      const d = Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.y0 - y, 0, y - r.y1));
-      const c = Math.hypot(x - cx, y - cy);
-      if (d < bestD || (d === bestD && c < bestC)) [best, bestD, bestC] = [e, d, c];
+      catches.push(resource ? { e, r, margin: RESOURCE_MARGIN_PX, min: RESOURCE_MIN_PX } : { e, r, margin: PICK_MARGIN_PX, min: PICK_MIN_PX });
     }
-    return best;
+    return nearestCatch(x, y, catches);
   }
 
   /** The screen box an entity's drawn model fills (rings, halos and other see-through parts left out), or null. */
