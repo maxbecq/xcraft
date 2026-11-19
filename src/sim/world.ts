@@ -437,10 +437,23 @@ export class World {
 
   private see(): void {
     for (const v of this.vision) v.begin();
+    // A disc a player already got this pass (same tile, radius and height: a crowd on one tile) is not revealed again.
+    const W = this.grid.width;
+    const done = this.vision.map(() => new Set<number>());
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
-      for (const a of this.team[e.owner]) this.vision[a].reveal(tileOf(e.x), tileOf(e.y), r, flies(e));
+      const tx = tileOf(e.x);
+      const ty = tileOf(e.y);
+      const high = flies(e);
+      const k = Number.isInteger(r) && r >= 0 && r < 1024 && tx >= 0 && tx < W && ty >= 0 ? ((ty * W + tx) * 1024 + r) * 2 + (high ? 1 : 0) : -1;
+      for (const a of this.team[e.owner]) {
+        if (k >= 0) {
+          if (done[a].has(k)) continue;
+          done[a].add(k);
+        }
+        this.vision[a].reveal(tx, ty, r, high);
+      }
     }
     for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), s.radius ?? OBSERVATION.radius);
     for (const d of this.detected) d.clear();
@@ -451,13 +464,16 @@ export class World {
       if (!r || d.buildLeft > 0) continue;
       for (const u of this.entities.values()) if (u.owner === d.owner && u.def.kind === 'unit' && !flies(u) && dist(u.x, u.y, d.x, d.y) <= toFp(r)) this.shrouded.add(u.id);
     }
+    // The detectors and their range, listed once (at the first hidden unit) rather than for each hidden unit.
+    let detectors: [Entity, number][] | undefined;
     for (const e of this.entities.values()) {
       if (!this.hidden(e)) continue;
       for (const s of this.scans) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= toFp(s.radius ?? OBSERVATION.radius)) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
-      for (const s of this.entities.values()) {
+      detectors ??= [...this.entities.values()].flatMap((s): [Entity, number][] => {
         const r = (s.def as UnitDef | BuildingDef).detector ?? (s.type === 'plesiosaure' && this.level(s.owner, 'oeilpercant') ? BALANCE.rules.upgrades.oeilpercant : YGGDRASILL.includes(s.type) && this.level(s.owner, 'prescience') ? BALANCE.rules.upgrades.prescience : s.support & KIT.detection ? (s.def as UnitDef).sight : 0);
-        if (r && this.hostile(s.owner, e.owner) && s.buildLeft === 0 && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
-      }
+        return r && s.buildLeft === 0 ? [[s, r]] : [];
+      });
+      for (const [s, r] of detectors) if (this.hostile(s.owner, e.owner) && dist(s.x, s.y, e.x, e.y) <= r * FP) for (const a of this.team[s.owner]) this.detected[a].add(e.id);
     }
   }
 
