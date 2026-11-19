@@ -51,6 +51,37 @@ export function goTo(this: World, e: Entity, x: number, y: number): boolean {
   return this.follow(e);
 }
 
+/** Long paths searched this tick, for the units given the same far order with them (see pathFor). */
+const SHARED_MIN = 16;
+
+/**
+ * Tiles from a unit to a goal tile, as Grid.findPath gives them. A group sent far in one order made as many searches
+ * in one tick as it has units (18 of them on le-col held a tick 27 to 37 ms): a unit standing within 2 tiles of where
+ * a long path searched this tick starts, headed within 3 tiles of where it ends, takes that path instead, when it can
+ * walk straight onto its first tile and from its last to its own goal (cliffs and buildings checked as for any step).
+ */
+export function pathFor(this: World, e: Entity, gx: number, gy: number): number[] {
+  const g = this.grid;
+  const w = g.width;
+  const sx = tileOf(e.x);
+  const sy = tileOf(e.y);
+  if (this.searchedAt !== this.tick) [this.searched, this.searchedAt] = [[], this.tick];
+  const centre = (t: number) => [(t % w) * FP + FP / 2, Math.floor(t / w) * FP + FP / 2] as const;
+  for (const s of this.searched) {
+    if (Math.abs(s.sx - sx) > 2 || Math.abs(s.sy - sy) > 2 || Math.abs(s.gx - gx) > 3 || Math.abs(s.gy - gy) > 3) continue;
+    const last = s.tiles[s.tiles.length - 1];
+    if (!g.lineWalkable(e.x, e.y, ...centre(s.tiles[0]))) continue;
+    const goal = gy * w + gx;
+    if (goal === last) return s.tiles.slice();
+    if (!g.lineWalkable(...centre(last), ...centre(goal))) continue;
+    return [...s.tiles, goal];
+  }
+  const tiles = g.findPath(sx, sy, gx, gy);
+  // Only a path that reached its goal is lent: one that fell short ended on the nearest tile it could.
+  if (tiles.length >= SHARED_MIN && tiles[tiles.length - 1] === gy * w + gx) this.searched.push({ sx, sy, gx, gy, tiles });
+  return tiles;
+}
+
 /** Builds a smoothed waypoint path from the entity to a point. */
 export function plan(this: World, e: Entity, x: number, y: number): void {
   const g = this.grid;
@@ -64,7 +95,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   let gy = Math.min(g.height - 1, Math.max(0, tileOf(y)));
   const exact = g.open(gx, gy);
   if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy));
-  const tiles = g.findPath(tileOf(e.x), tileOf(e.y), gx, gy);
+  const tiles = this.pathFor(e, gx, gy);
   const pts: number[] = [];
   for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);
   const end = tiles.length ? tiles[tiles.length - 1] : tileOf(e.y) * g.width + tileOf(e.x);
