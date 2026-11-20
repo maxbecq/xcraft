@@ -102,3 +102,17 @@ describe('map files', () => {
     }
   });
 });
+
+describe('the Volcan and Astéroïdes planets', () => {
+  it('only change the look: every map is the same ground for them as for any planet, and a match starts on it', () => {
+    for (const def of Object.values(MAPS)) {
+      const plain = buildMap(def, 2, '');
+      for (const biome of ['volcan', 'asteroides']) {
+        const m = buildMap(def, 2, biome);
+        expect([...m.level]).toEqual([...plain.level]);
+        expect([...(m.chasm ?? [])]).toEqual([...(plain.chasm ?? [])]);
+        expect(createMatch(['humains', 'z'], undefined, def.id, biome).entities.size).toBeGreaterThan(0);
+      }
+    }
+  });
+});
