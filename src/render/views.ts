@@ -37,7 +37,7 @@ export interface View {
    * ground speed (tiles a second, smoothed) and the stride it sets. */
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number; crouch: number; speed: number; stride: number };
   /** Z socle: the weapon module mounted on its back (see weaponModule), and the module's name. */
-  weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D; reach?: number };
+  weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D; reach?: number; mod?: Object3D; tip?: Vector3 };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */

@@ -208,6 +208,12 @@ export class EntityRenderer {
   /** Height of the top of a view's model in the world (its full height, measured once, above where it stands);
    * undefined while it has no view yet. The overlay hangs a building's health bar just above it. */
   /** Where a Z Plate-forme's welding torch ends (world), for its sparks; none if its model has no cut-out arm. */
+  /** Where a unit's or building's weapon module has its muzzle (world); none if it shows none. */
+  muzzle(id: number): Vector3 | undefined {
+    const w = this.views.get(id)?.weapon;
+    return w?.mod && w.tip ? w.mod.localToWorld(w.tip.clone()) : undefined;
+  }
+
   weld(id: number): Vector3 | undefined {
     return this.views.get(id)?.model.getObjectByName('zarm_0_weld')?.getWorldPosition(new Vector3());
   }
@@ -302,6 +308,10 @@ export class EntityRenderer {
     }
     const at = body.localToWorld(spot.setY(top > -Infinity ? top : box.max.y));
     let o: Object3D = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
+    // Its muzzle, in its own frame: the middle of its front, halfway up (the Lance-flammes' jet starts there).
+    const mod = o;
+    const own = new Box3().setFromObject(mod, true);
+    const tip = new Vector3((own.min.x + own.max.x) / 2, (own.min.y + own.max.y) / 2, own.max.z);
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
     o.rotation.y = fit.yaw ?? 0;
     const support = ZSUPPORTS[e.type];
@@ -342,7 +352,7 @@ export class EntityRenderer {
       saw.position.z *= k;
       reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
     }
-    v.weapon = { name, o, arm, saw, reach };
+    v.weapon = { name, o, arm, saw, reach, mod, tip };
   }
 
   private release(v: View): void {

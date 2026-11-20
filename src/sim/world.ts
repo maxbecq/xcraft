@@ -264,8 +264,9 @@ export interface Shot {
   x2: number;
   y2: number;
   kind: 'ranged' | 'melee' | 'heal';
-  /** Shooter's type, for its sound. */
+  /** Shooter's type, for its sound, and the shooter (render: a Lance-flammes keeps its jet going). */
   type?: string;
+  id?: number;
   /** Shooter and target fly. */
   air1?: boolean;
   air2?: boolean;

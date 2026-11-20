@@ -279,6 +279,7 @@ hud.focus = (x, y) => rig.lookAt(x, y);
 minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
+effects.muzzle = (id) => units.muzzle(id);
 effects.density = GFX.particles;
 const overlay = new Overlay(map);
 overlay.top = (id, built) => units.top(id, built);

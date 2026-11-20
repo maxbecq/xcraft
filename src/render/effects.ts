@@ -6,11 +6,15 @@ import {
 } from 'three';
 import type { Audio, Sfx } from '../audio';
 import { DEFS, FLY_HEIGHT } from '../data';
+import BALANCE from '../balance.json';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Shot, World } from '../sim/world';
 
 const MAX_PARTICLES = 1200;
+/** The Lance-flammes' cooldown (seconds, a shot keeps its jet going that long), and the flame sprites it throws a second. */
+const FLAME_COOLDOWN = BALANCE.weapons.flammes.cooldown;
+const FLAME_RATE = 220;
 const BUILDING_SIZES: Record<string, number> = { conseil: 5, caserne: 3, grenier: 2, mine: 3 };
 
 /** Soft round sprite textures, drawn once. */
@@ -105,6 +109,12 @@ export class Effects {
   /** Share of particles spawned (src/quality.ts): fewer, each a draw call, on low-end graphics. */
   density = 1;
 
+  /** Where a Z weapon's muzzle is (world), by the shooter's id (render/units.ts); none if it shows none. */
+  muzzle: (id: number) => Vector3 | undefined = () => undefined;
+  /** Lance-flammes firing, by shooter: from its nozzle to its target until `left` runs out (a shot every cooldown
+   * keeps it going), `spill` the particles owed between frames. */
+  private readonly jets = new Map<number, { id: number; from: Vector3; to: Vector3; left: number; spill: number }>();
+
   /** Sprites go to `fx` (drawn after ambient occlusion); debris, which casts shadows, to the main scene. */
   constructor(private readonly fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {}
 
@@ -125,6 +135,15 @@ export class Effects {
       // Isdaris shoot light; the Orbe throws plasma.
       const faction = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction;
       this.audio.play(s.type === 'orbe' ? 'plasma' : s.kind === 'ranged' && faction === 'isdaris' ? 'ray' : s.kind, 0.6);
+      const shooter = s.id === undefined ? undefined : world.entities.get(s.id);
+      if (shooter?.kit === 'flammes' && s.kind === 'ranged') {
+        const to = this.at(s.x2, s.y2, 0.4 + (s.air2 ? FLY_HEIGHT : 0));
+        const from = this.at(s.x1, s.y1, 0.55 + (s.air1 ? FLY_HEIGHT : 0));
+        const jet = this.jets.get(s.id!) ?? { id: s.id!, from, to, left: 0, spill: 0 };
+        [jet.from, jet.to, jet.left] = [from, to, FLAME_COOLDOWN * 1.15];
+        this.jets.set(s.id!, jet);
+        continue;
+      }
       this.shot(s);
     }
     for (const c of world.casts) {
@@ -453,6 +472,39 @@ export class Effects {
     }
   }
 
+  /**
+   * One frame of a Lance-flammes' jet: a cone of flame from its nozzle to its target (white-yellow core, orange body,
+   * red tips, widening as they go), a flickering glow at the nozzle, a little dark smoke rising where it lands. Its
+   * sprites share the flame and glow textures of the fires, so no new shader.
+   */
+  private flameJet(jet: { id: number; from: Vector3; to: Vector3; spill: number }, dt: number): void {
+    const from = this.muzzle(jet.id) ?? jet.from;
+    const dir = jet.to.clone().sub(from);
+    const reach = Math.max(0.3, dir.length());
+    dir.divideScalar(reach);
+    const life = 0.35;
+    const speed = reach / life;
+    // Many at once share a budget: the flames thin out rather than overflow the particle pool.
+    jet.spill += dt * FLAME_RATE * Math.min(1, 6 / this.jets.size);
+    for (; jet.spill >= 1; jet.spill--) {
+      // Born anywhere along the jet, as if already that far on its way: a continuous cone, not puffs from the nozzle.
+      const u = Math.random();
+      const at = from.clone().addScaledVector(dir, u * reach * 0.95).add(rnd(0.02 + 0.1 * u * reach));
+      const v = dir.clone().multiplyScalar(speed).add(rnd(speed * 0.08));
+      const left = life * (1 - u) + 0.06;
+      const w = 0.12 + 0.3 * u * Math.min(reach, 2);
+      const f = Math.random();
+      // The hot core near the nozzle, the body orange, red at the tips.
+      const color = u < 0.3 && f < 0.6 ? 0xfff0b0 : u < 0.75 ? (f < 0.5 ? 0xffb030 : 0xff7a14) : f < 0.5 ? 0xff6010 : 0xd83a10;
+      this.spawn(f < 0.5 ? this.tex.glow : this.tex.flame, color, at, v, left, w, w * 1.4, 0.9, -0.6, true);
+    }
+    if (Math.random() < dt * 30) this.spawn(this.tex.glow, 0xff9a30, from.clone(), new Vector3(), 0.08, 0.3, 0.45, 1, 0, true);
+    if (Math.random() < dt * 20) this.spawn(this.tex.glow, 0xff6a10, jet.to.clone().add(rnd(0.15)), new Vector3(0, 0.5, 0), 0.15, 0.3, 0.6, 0.8, 0, true);
+    if (Math.random() < dt * 5) {
+      this.spawn(this.tex.smoke, 0x2c2622, jet.to.clone().add(rnd(0.2)), rnd(0.2).setY(0.7 + Math.random() * 0.4), 1.2, 0.2, 0.7, 0.5, -0.1, false);
+    }
+  }
+
   private spawn(tex: Texture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean): void {
     if (this.density < 1 && Math.random() > this.density) return; // render only: the simulation never sees it
     let p = this.pool.find((q) => !q.active);
@@ -477,6 +529,11 @@ export class Effects {
   }
 
   update(dt: number): void {
+    for (const jet of this.jets.values()) {
+      jet.left -= dt;
+      if (jet.left <= 0) this.jets.delete(jet.id);
+      else this.flameJet(jet, dt);
+    }
     for (const p of this.pool) {
       if (!p.active) continue;
       p.age += dt;

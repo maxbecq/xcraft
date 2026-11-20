@@ -483,7 +483,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     this.lastAlert[t.owner] = this.tick;
     this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
   }
-  this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, air1: flies(e), air2: flies(t) });
+  this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, id: e.id, air1: flies(e), air2: flies(t) });
   if (own) return;
   // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
   if (e.inside) e = this.entities.get(e.inside) ?? e;
