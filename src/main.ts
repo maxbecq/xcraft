@@ -42,7 +42,7 @@ import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
-import { downloadReplay, GAME_VERSION, type Replay, saveReplay, withReplayBiome } from './game/replay';
+import { downloadReplay, GAME_VERSION, type Replay, replaySource, saveReplay, withReplayBiome } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
 /** The game just played has been kept as the last game. */
@@ -344,7 +344,7 @@ document.addEventListener('click', (e) => {
     button!.textContent = 'Revanche : en attente de votre adversaire…';
     link.again();
   } else if (p === 'restart' && link) return;
-  else if (p === 'replay') downloadReplay(record);
+  else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : record); // watching one: the file itself, whole
   else if (p === 'perfrec') rec.save({ ticks: world.tick, winner: world.winner });
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
@@ -495,7 +495,7 @@ function start(): void {
       netGame.stalledSince = 0;
       const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : net ? net.step(world.tick, pending) : [...pending, ...ais.flatMap((ai) => ai.think())];
       if (net && world.tick % 100 === 0) net.check(world.tick, fingerprint(world));
-      if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
+      if (cmds.length && !ATTRACT && !REPLAY) record.ticks.push([world.tick, cmds]);
       world.step(cmds);
       if (rec.on) {
         stepped++;

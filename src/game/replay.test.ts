@@ -3,7 +3,7 @@ import { AI } from '../ai/ai';
 import { MAPS, mapFile } from '../maps';
 import { commandOk } from '../net';
 import { createMatch } from '../sim/setup';
-import { GAME_VERSION, parseReplay, type Replay, REPLAY_MAX_BYTES, versionNote, withReplayBiome } from './replay';
+import { GAME_VERSION, parseReplay, type Replay, REPLAY_MAX_BYTES, replaySource, versionNote, withReplayBiome } from './replay';
 
 const good = { v: 1, map: 'origine', factions: ['humains', 'z'], teams: [0, 1], biome: 'glace', handicap: [100, 100], ticks: [[3, [{ player: 0, kind: 'stop', ids: [1] }]], [9, [{ player: 1, kind: 'stop', ids: [2] }]]] };
 const text = (r: object) => JSON.stringify(r);
@@ -111,5 +111,12 @@ describe('replays read from storage or a file', () => {
     expect(r.lostMap).toBe('constructor');
     expect(mapFile('constructor')).toBe(MAPS.origine);
     expect(mapFile('toString')).toBe(MAPS.origine);
+  });
+
+  it('saves a replay being watched as its file was: whole, with its own map', () => {
+    expect(replaySource(parseReplay(text(good)) as Replay)).toEqual(good);
+    const lost = replaySource(parseReplay(text({ ...good, map: 'nulle-part' })) as Replay);
+    expect(lost).toEqual({ ...good, map: 'nulle-part' });
+    expect((parseReplay(text(lost)) as Replay).lostMap).toBe('nulle-part'); // opened again: the same
   });
 });

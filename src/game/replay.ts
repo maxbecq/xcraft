@@ -121,6 +121,12 @@ export function playReplay(r: Replay | null): void {
   if (r) location.search = `?replay&speed=2&biome=${r.biome}`;
 }
 
+/** A replay as its file was, to save again: whole, with its own map's id (even one this version lacks). */
+export function replaySource(r: Replay): Replay {
+  const { lostMap, ...source } = r;
+  return lostMap ? { ...source, map: lostMap } : source;
+}
+
 export function downloadReplay(r: Replay): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(r)], { type: 'application/json' }));
