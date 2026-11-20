@@ -314,4 +314,14 @@ describe('lockstep between two browsers', () => {
     guest.lost();
     expect(guest.take('ABCD')).toBe(null);
   });
+
+  it('never takes a Bac à sable switch from the other side, wherever it stands in the list', () => {
+    const lock = new Lockstep(0, () => {}, () => 0);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const move = { player: 1, kind: 'move', ids: [1], x: 1, y: 2 };
+    lock.receive({ t: START, c: [move, { player: 1, kind: 'sandbox', ids: [], tool: 'fog', on: true }], a: 0 });
+    expect(lock.ready(START)).toBe(false);
+    expect(lock.rejected).toBe(1);
+    warn.mockRestore();
+  });
 });

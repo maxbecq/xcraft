@@ -79,7 +79,7 @@ export class Lockstep {
       // one stays within its delay of `next`; the store is bounded by how far this side has played, not by what came.
       if (!int(t) || t > this.next + WINDOW) return this.reject('tick out of reach', m);
       if (t >= this.missing && !this.theirs.has(t)) {
-        if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return this.reject('malformed orders', m);
+        if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every((c) => commandOk(c))) return this.reject('malformed orders', m);
         // The other side only ever orders its own units.
         this.theirs.set(t, (m.c as Command[]).map((cmd) => ({ ...cmd, player: 1 - this.player })));
         while (this.theirs.has(this.missing)) this.missing++;
@@ -404,14 +404,20 @@ const FIELDS: Record<string, Record<string, string>> = {
   ability: { x: 'n?', y: 'n?', name: 's?' },
   trade: { sell: 's' },
   attack: { x: 'n', y: 'n', target: 'n?', queue: 'b?' },
-  // 'sandbox': one-player matches only, never online
 };
-/** Whether an order from the other side has the shape the simulation expects; anything else never reaches it. */
-export function commandOk(c: unknown): boolean {
-  if (!isRecord(c) || typeof c.kind !== 'string' || !Object.hasOwn(FIELDS, c.kind)) return false;
+/** The Bac à sable's switches: one-player matches (and their replays) only, never online. */
+const SANDBOX_FIELDS = { tool: 's', on: 'b' };
+/**
+ * Whether an order (from the other side, or a replay file) has the shape the simulation expects; anything else never
+ * reaches it. `sandbox`: the Bac à sable's switches are allowed too.
+ */
+export function commandOk(c: unknown, sandbox = false): boolean {
+  if (!isRecord(c) || typeof c.kind !== 'string') return false;
+  const fields = sandbox && c.kind === 'sandbox' ? SANDBOX_FIELDS : Object.hasOwn(FIELDS, c.kind) ? FIELDS[c.kind] : null;
+  if (!fields) return false;
   if (!Array.isArray(c.ids) || c.ids.length > MAX_IDS || !c.ids.every(int)) return false;
   if (c.kind === 'trade' && c.sell !== 'minerals' && c.sell !== 'energy') return false;
-  return Object.entries(FIELDS[c.kind]).every(([k, t]) => {
+  return Object.entries(fields).every(([k, t]) => {
     const v = c[k];
     if (t.endsWith('?') && v === undefined) return true;
     return t[0] === 'n' ? num(v) : t[0] === 's' ? word(v) : typeof v === 'boolean';

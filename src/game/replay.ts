@@ -1,6 +1,7 @@
 /** Replays: a game kept as the commands the simulation took, saved, opened from a file and played back. */
 import { type Faction, FACTIONS } from '../data';
 import { DEFAULT_MAP, MAPS } from '../maps';
+import { commandOk } from '../net';
 import type { Command } from '../sim/world';
 
 export const REPLAY_KEY = 'xcraft.replay';
@@ -43,7 +44,8 @@ export function parseReplay(text: string): Replay | string {
   if (n < 1 || n > 4 || !r.factions.every((f) => typeof f === 'string' && f in FACTIONS)) return `${bad} (camps inconnus).`;
   const counted = (a: unknown, ok: (v: unknown) => boolean) => Array.isArray(a) && a.length === n && a.every(ok);
   if (r.teams !== undefined && !counted(r.teams, (t) => Number.isInteger(t) && (t as number) >= 0)) return `${bad} (équipes).`;
-  if (!counted(r.handicap, (h) => typeof h === 'number' && Number.isFinite(h))) return `${bad} (handicaps).`;
+  // A harvest handicap is a whole percent (AI levels: 60 to 130).
+  if (!counted(r.handicap, (h) => Number.isInteger(h) && (h as number) >= 0 && (h as number) <= 1000)) return `${bad} (handicaps).`;
   if (!Array.isArray(r.ticks)) return `${bad} (commandes).`;
   let last = -1;
   for (const entry of r.ticks) {
@@ -51,7 +53,11 @@ export function parseReplay(text: string): Replay | string {
     const [tick, cmds] = entry;
     if (!Number.isInteger(tick) || tick < 0 || tick <= last || !Array.isArray(cmds)) return `${bad} (commandes).`;
     last = tick;
-    for (const c of cmds) if (!c || typeof c !== 'object' || !Number.isInteger(c.player) || c.player < 0 || c.player >= n) return `${bad} (joueur inconnu).`;
+    for (const c of cmds) {
+      if (!c || typeof c !== 'object' || !Number.isInteger(c.player) || c.player < 0 || c.player >= n) return `${bad} (joueur inconnu).`;
+      // The same check as an order from the network; a Bac à sable (one player) has its switches too.
+      if (!commandOk(c, n === 1)) return `${bad} (commande invalide).`;
+    }
   }
   if (r.map !== undefined && (typeof r.map !== 'string' || !MAPS[r.map])) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
@@ -111,7 +117,13 @@ export function openReplayFile(): void {
     const file = input.files?.[0];
     if (!file) return;
     if (file.size > REPLAY_MAX_BYTES) return alert('Ce fichier n’est pas un replay Xcraft lisible (trop gros).');
-    const r = parseReplay(await file.text());
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      return alert('Ce fichier n’a pas pu être lu.');
+    }
+    const r = parseReplay(text);
     if (typeof r === 'string') return alert(r);
     try {
       sessionStorage.setItem(REPLAY_KEY, JSON.stringify(r));
