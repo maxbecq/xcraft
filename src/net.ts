@@ -71,21 +71,22 @@ export class Lockstep {
    * other side is then counted absent).
    */
   receive(raw: unknown): void {
-    if (!isRecord(raw)) return;
+    if (!isRecord(raw)) return this.reject('not an object', raw);
     const m = raw;
     this.heard = this.now();
     // Acknowledged: never past what we have sent, so a wild value cannot empty what is still owed.
     if (int(m.a) && m.a <= this.next) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
     if ('t' in m) {
       const t = m.t;
-      if (!int(t) || t < this.missing || t > this.missing + WINDOW || this.theirs.has(t)) return; // sent again, or out of reach
-      if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return;
+      if (int(t) && (t < this.missing || this.theirs.has(t))) return; // sent again: a resend crossing an ack
+      if (!int(t) || t > this.missing + WINDOW) return this.reject('tick out of reach', m);
+      if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return this.reject('malformed orders', m);
       // The other side only ever orders its own units.
       this.theirs.set(t, (m.c as Command[]).map((cmd) => ({ ...cmd, player: 1 - this.player })));
       while (this.theirs.has(this.missing)) this.missing++;
     } else if ('h' in m) {
       // Only recent fingerprints (one every 100 ticks), a few at a time.
-      if (!int(m.h) || !int(m.v) || Math.abs(m.h - this.missing) > 1000) return;
+      if (!int(m.h) || !int(m.v) || Math.abs(m.h - this.missing) > 1000) return this.reject('malformed fingerprint', m);
       this.their.set(m.h, m.v);
       if (this.their.size > 16) this.their.delete(this.their.keys().next().value!);
       this.compare(m.h);
@@ -99,6 +100,12 @@ export class Lockstep {
       // The orders must arrive before their tick comes, a full round trip later at worst: the slowest recent one, plus a tick.
       this.delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, Math.ceil(Math.max(...this.trips) / 50) + 1));
     } else if ('bye' in m) this.left = true;
+  }
+
+  /** Messages refused so far; only the first few are logged, so a flood cannot fill the console. */
+  rejected = 0;
+  private reject(why: string, m: unknown): void {
+    if (++this.rejected <= 5) console.warn(`Message ignoré (${why}) :`, JSON.stringify(m)?.slice(0, 200));
   }
 
   /** The other side's match runs: its first orders came (before, its page may still be loading). */

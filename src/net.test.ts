@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { newRoom, readRoom } from './net';
 
 describe('friend codes', () => {
@@ -207,6 +207,19 @@ describe('lockstep between two browsers', () => {
     expect(lock.delay).toBeGreaterThanOrEqual(2);
     expect(lock.delay).toBeLessThanOrEqual(15);
     for (const cmds of stores.theirs.values()) for (const c of cmds) expect(commandOk(c) && c.player === 1).toBe(true);
+  });
+
+  it('logs a refused message, a few times only, and not a resend', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const lock = new Lockstep(0, () => {}, () => 0);
+    lock.receive({ t: START, c: [], a: 0 });
+    lock.receive({ t: START, c: [], a: 0 }); // the same tick again: a resend, normal
+    expect(lock.rejected).toBe(0);
+    const bad: unknown[] = [null, 'x', { t: 10 ** 9, c: [] }, { t: START + 1, c: 'x' }, { t: START + 1, c: [{ kind: 'nope' }] }, { h: 1.5, v: 1 }, { h: 10 ** 7, v: 1 }];
+    for (const m of [...bad, ...bad]) expect(() => lock.receive(m)).not.toThrow();
+    expect(lock.rejected).toBe(bad.length * 2);
+    expect(warn).toHaveBeenCalledTimes(5);
+    warn.mockRestore();
   });
 
   it('lets every kind of order a player gives through, and nothing malformed', () => {
