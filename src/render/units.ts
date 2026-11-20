@@ -93,9 +93,11 @@ const ZSUPPORTS: Record<string, { model: string; top: number }> = {
 };
 WEAPON_MODELS.push(...Object.values(ZSUPPORTS).map((s) => s.model));
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
-const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number; apex?: boolean }> = {
+const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number; apex?: boolean; meleeSize?: number; saw?: number }> = {
   mastodonte: { size: 0.5 },
-  octopode: { size: 0.5 },
+  // The Déchiqueteur in the same proportion to its body as the Quadripode's.
+  octopode: { size: 0.5, meleeSize: 0.7 },
+  hexapode: { saw: 1.22 },
   // Buildings: a turret on the roof, not a module the width of the whole building.
   // Centred on its dome's axis: its bounding box takes in the capsules on its sides.
   assimilateur: { size: 0.4, apex: true },
@@ -275,9 +277,9 @@ export class EntityRenderer {
     const bodyScale = body.getWorldScale(new Vector3()).x;
     const across = Math.min(size.x, size.z) * bodyScale;
     const fit = WEAPON_TUNE[name] ?? {};
-    const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
     // A walker's melee module sits on its head, its arm reaching down in front of it (see below).
     const melee = MELEE.has(name) && e.def.kind === 'unit' && !ZSUPPORTS[e.type];
+    const scale = ((((melee ? tune.meleeSize : undefined) ?? tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
     const spot = new Vector3(centre.x, 0, melee ? box.max.z - 0.2 * scale : centre.z + (tune.forward ?? 0) * size.z);
     // On the highest of the rays dropped round its foot: on a mounting ring's rim, not down its hole.
     const down = new Vector3(0, -1, 0).transformDirection(body.matrixWorld);
@@ -318,8 +320,9 @@ export class EntityRenderer {
       // From the box on the head, the arm dives forwards and down so a saw twice its modelled size comes in front of the
       // head at the height of the front knees, where it can reach what it fights: the arm's length fitted to it, the saw
       // kept round.
-      saw.scale.multiplyScalar(SAW_GROWTH);
-      const sawR = SAW_RADIUS * SAW_GROWTH * scale;
+      const growth = SAW_GROWTH * (tune.saw ?? 1);
+      saw.scale.multiplyScalar(growth);
+      const sawR = SAW_RADIUS * growth * scale;
       const knee = body.getObjectByName('zshin_0_l') ?? body.getObjectByName('zshin_0_r');
       const kneeY = knee ? body.worldToLocal(knee.getWorldPosition(new Vector3())).y : box.min.y + 0.3 * size.y;
       const target = new Vector3(centre.x, Math.max(kneeY, box.min.y + sawR), box.max.z + sawR + 0.03 * size.z).sub(o.position).divideScalar(scale).sub(arm.position);
