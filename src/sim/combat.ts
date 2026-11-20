@@ -206,19 +206,24 @@ export function fortify(this: World, u: Entity): void {
 }
 
 /** Damage that goes through shields first; armour only protects hp. */
-export function hurt(this: World, t: Entity, damage: number): void {
+/** Damage taken, and what it really took off (shield and hit points), protections and armour counted. */
+export function hurt(this: World, t: Entity, damage: number): number {
   t.lastHit = this.tick;
-  if (t.invuln > 0 || t.phased > 0) return;
+  if (t.invuln > 0 || t.phased > 0) return 0;
   // Z Gel électronique: a frozen building is unhurt; Cône de protection: allies round its caster too.
-  if (t.frozen > 0 && t.def.kind === 'building') return;
-  if (t.def.kind === 'unit' && this.coned(t)) return;
+  if (t.frozen > 0 && t.def.kind === 'building') return 0;
+  if (t.def.kind === 'unit' && this.coned(t)) return 0;
   if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
   const absorbed = Math.min(t.shield, damage);
   t.shield -= absorbed;
   if (damage > absorbed) {
     const armor = ('armor' in t.def ? t.def.armor : 0) + (t.def.kind === 'unit' && t.owner >= 0 ? this.armorBonus(t) : 0);
-    t.hp -= Math.max(1, damage - absorbed - (absorbed > 0 ? 0 : armor));
+    const lost = Math.max(1, damage - absorbed - (absorbed > 0 ? 0 : armor));
+    const had = Math.max(0, t.hp);
+    t.hp -= lost;
+    return absorbed + Math.min(lost, had);
   }
+  return absorbed;
 }
 
 /** Shields recharge a few seconds after the last hit (at once, and faster, near a psy reserve); some units heal. */
@@ -430,9 +435,9 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   // Danse du soldat (notice; mod: two thirds of the shots from afar, not blows, spells or splash): the Assassin dodges.
   if (t.type === 'assassin' && a.range >= 1) damage = idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100);
-  this.hurt(t, damage);
+  const dealt = this.hurt(t, damage);
   // Armée des enfers (notice): a ghost vanishes once it has dealt its share of damage (or when its time is up).
-  if (e.type === 'fantome' && (e.dealt += damage) >= U.fantomeDamage) e.hp = 0;
+  if (e.type === 'fantome' && (e.dealt += dealt) >= U.fantomeDamage) e.hp = 0;
   // Z Jet sonique: every ground unit on the line from the shooter to its target is hit too, friend or foe (Z.doc).
   if (a.line) {
     const [lx, ly] = [t.x - e.x, t.y - e.y];

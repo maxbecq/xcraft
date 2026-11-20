@@ -381,4 +381,19 @@ describe('audit gaps', () => {
     expect(spy.speed).toBe(w.baseSpeed(spy));
     expect(spy.speed).toBeLessThan(fast);
   });
+
+  it('a ghost spends its share only on damage really dealt, not on a target that takes none', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ghost = w.spawn('fantome', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('phalangiste', 1, 31 * FP, 30 * FP);
+    const a = w.weapon(ghost)!;
+    foe.invuln = ticks(60);
+    for (let i = 0; i < 100; i++) w.hit(ghost, foe, a);
+    expect(ghost.dealt).toBe(0);
+    expect(ghost.hp).toBeGreaterThan(0);
+    foe.invuln = 0;
+    const before = foe.hp + foe.shield;
+    w.hit(ghost, foe, a);
+    expect(ghost.dealt).toBe(before - foe.hp - foe.shield);
+  });
 });
