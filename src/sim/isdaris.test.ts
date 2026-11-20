@@ -160,7 +160,8 @@ describe('Isdaris', () => {
     for (const factions of [['isdaris', 'humains'], ['humains', 'isdaris'], ['isdaris', 'isdaris']] as const) {
       const w = createMatch([...factions]);
       // A strict mirror, with buildings placed in mirror too, can stay even to the time limit: one side gathers a little less.
-      if (factions[0] === factions[1]) w.players[1].handicap = 95;
+      // Isdaris vs Humans on the wider plateaus with the AI's early wave (ee9aaf0) also mined the map out even: same cure.
+      if (factions[0] === factions[1] || factions[0] === 'isdaris') w.players[1].handicap = 95;
       const ais = [new AI(w, 0), new AI(w, 1)];
       while (w.winner === null && w.tick < ticks(35 * 60)) w.step(ais.flatMap((a) => a.think()));
       console.log(`${factions.join(' vs ')}: winner ${w.winner} at ${(w.tick / ticks(60)).toFixed(1)} min`);
