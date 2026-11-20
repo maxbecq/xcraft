@@ -12,7 +12,9 @@ export const QUALITY_KEY = 'xcraft.quality';
 export const QUALITY: Record<Quality, { pixelRatio: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number }> = {
   basse: { pixelRatio: 1, post: 'off', shadows: 0, particles: 0.4 },
   moyenne: { pixelRatio: 1.25, post: 'light', shadows: 2048, particles: 1 },
-  haute: { pixelRatio: 2, post: 'full', shadows: 4096, particles: 1 },
+  // 1.5, not 2: on a Retina Mac under Safari the full post-processing at 2 (3456x1902) held the frame at about 19 ms
+  // while our own work took 11, the graphics chip's fill; 1.5 draws 44 % fewer pixels in every full-screen pass.
+  haute: { pixelRatio: 1.5, post: 'full', shadows: 4096, particles: 1 },
 };
 
 /**
