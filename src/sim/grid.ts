@@ -18,6 +18,11 @@ export class Grid {
    * terrain test is worked out once here (it was half the cost of a long path's search); buildings stay checked live.
    */
   private readonly sides: Uint8Array;
+  /**
+   * Per tile, the eight steps (bit d: DX[d], DY[d]) that terrain alone allows (canStep through buildings): findPath
+   * then only checks the tiles a step crosses for buildings, the very test canStep makes.
+   */
+  private readonly steps: Uint8Array;
   /** Each tile's lowest corner level (level(), on the map), worked out once: vision asks it for every tile it reveals. */
   readonly lowest: Int8Array;
 
@@ -40,6 +45,10 @@ export class Grid {
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < map.width; x++)
         for (const [bit, dx, dy] of SIDES) if (this.terrainStep(x, y, x + dx, y + dy, true)) this.sides[y * map.width + x] |= bit;
+    this.steps = new Uint8Array(map.width * map.height);
+    for (let y = 0; y < map.height; y++)
+      for (let x = 0; x < map.width; x++)
+        for (let d = 0; d < 8; d++) if (this.canStep(x, y, x + DX[d], y + DY[d], true)) this.steps[y * map.width + x] |= 1 << d;
   }
 
   inside(x: number, y: number): boolean {
@@ -136,6 +145,7 @@ export class Grid {
   private seen = new Int32Array(0);
   private done = new Int32Array(0);
   private search = 0;
+  private readonly heap = new Heap();
 
   findPath(sx: number, sy: number, gx: number, gy: number): number[] {
     const w = this.width;
@@ -147,7 +157,9 @@ export class Grid {
     if (this.cost.length !== n) [this.cost, this.from, this.seen, this.done] = [new Int32Array(n), new Int32Array(n), new Int32Array(n), new Int32Array(n)];
     const run = ++this.search;
     const { cost: g, from, seen, done } = this;
-    const heap = new Heap();
+    const heap = this.heap;
+    heap.clear();
+    const { steps, blocked } = this;
     const h = (i: number) => {
       const dx = Math.abs((i % w) - gx);
       const dy = Math.abs(Math.floor(i / w) - gy);
@@ -170,11 +182,14 @@ export class Grid {
       if (cur === goal) break;
       const cx = cur % w;
       const cy = Math.floor(cur / w);
+      const open = steps[cur];
       for (let d = 0; d < 8; d++) {
+        if (!(open & (1 << d))) continue;
         const nx = cx + DX[d];
         const ny = cy + DY[d];
-        if (!this.canStep(cx, cy, nx, ny)) continue;
         const ni = ny * w + nx;
+        // canStep's buildings: the tile stepped onto, and for a diagonal the two it passes between.
+        if (blocked[ni] !== 0 || (d >= 4 && (blocked[cy * w + nx] !== 0 || blocked[ny * w + cx] !== 0))) continue;
         const ng = g[cur] + (d < 4 ? 10 : 14);
         if (seen[ni] === run && ng >= g[ni]) continue;
         seen[ni] = run;
@@ -210,44 +225,77 @@ const SIDES: [number, number, number][] = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8,
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
 
-/** Min-heap of (priority, value); ties pop in insertion order, so results are deterministic. */
+/**
+ * Min-heap of (priority, value); ties pop in insertion order, so results are deterministic. In typed arrays kept from
+ * one search to the next (an array per entry made garbage at every push); the same order as ever.
+ */
 class Heap {
-  private readonly items: [number, number, number][] = [];
+  private pri = new Int32Array(1024);
+  private ord = new Int32Array(1024);
+  private val = new Int32Array(1024);
+  size = 0;
   private seq = 0;
-  get size(): number {
-    return this.items.length;
+
+  /** Empty again, insertion order counted from 0, as a new heap. */
+  clear(): void {
+    this.size = this.seq = 0;
   }
+
+  private less(i: number, j: number): boolean {
+    return this.pri[i] < this.pri[j] || (this.pri[i] === this.pri[j] && this.ord[i] < this.ord[j]);
+  }
+
+  private move(from: number, to: number): void {
+    this.pri[to] = this.pri[from];
+    this.ord[to] = this.ord[from];
+    this.val[to] = this.val[from];
+  }
+
   push(priority: number, value: number): void {
-    const a = this.items;
-    a.push([priority, this.seq++, value]);
-    let i = a.length - 1;
+    if (this.size === this.pri.length) {
+      const grow = (a: Int32Array) => {
+        const b = new Int32Array(a.length * 2);
+        b.set(a);
+        return b;
+      };
+      [this.pri, this.ord, this.val] = [grow(this.pri), grow(this.ord), grow(this.val)];
+    }
+    // Sift up with a hole: the new entry is written once, where it lands.
+    const { pri, ord } = this;
+    const o = this.seq++;
+    let i = this.size++;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (!less(a[i], a[p])) break;
-      [a[i], a[p]] = [a[p], a[i]];
+      if (!(priority < pri[p] || (priority === pri[p] && o < ord[p]))) break;
+      this.move(p, i);
       i = p;
     }
+    pri[i] = priority;
+    ord[i] = o;
+    this.val[i] = value;
   }
+
   pop(): number {
-    const a = this.items;
-    const top = a[0];
-    const last = a.pop()!;
-    if (a.length > 0) {
-      a[0] = last;
+    const top = this.val[0];
+    const last = --this.size;
+    if (last > 0) {
+      // Sift the last entry down from the root, with a hole.
+      const { pri, ord, val } = this;
+      const [lp, lo, lv] = [pri[last], ord[last], val[last]];
       let i = 0;
       for (;;) {
         const l = 2 * i + 1;
+        if (l >= last) break;
         const r = l + 1;
-        let m = i;
-        if (l < a.length && less(a[l], a[m])) m = l;
-        if (r < a.length && less(a[r], a[m])) m = r;
-        if (m === i) break;
-        [a[i], a[m]] = [a[m], a[i]];
+        const m = r < last && this.less(r, l) ? r : l;
+        if (!(pri[m] < lp || (pri[m] === lp && ord[m] < lo))) break;
+        this.move(m, i);
         i = m;
       }
+      pri[i] = lp;
+      ord[i] = lo;
+      val[i] = lv;
     }
-    return top[2];
+    return top;
   }
 }
-
-const less = (a: [number, number, number], b: [number, number, number]) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);

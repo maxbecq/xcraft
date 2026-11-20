@@ -16,3 +16,84 @@ it('canStep from its per-tile sides answers as the tiles themselves do, building
             for (const t of [false, true]) if (g.canStep(x, y, x + dx, y + dy, t) !== slow(x, y, x + dx, y + dy, t)) expect([def.id, x, y, dx, dy, t]).toBe('the same');
   }
 });
+
+it('findPath gives the very paths of the plain A* it replaces (canStep per neighbour, a heap of arrays)', () => {
+  const DX = [0, 1, 0, -1, 1, 1, -1, -1];
+  const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
+  const reference = (g: Grid, sx: number, sy: number, gx: number, gy: number): number[] => {
+    const w = g.width;
+    const [start, goal] = [sy * w + sx, gy * w + gx];
+    if (start === goal) return [];
+    const cost = new Map<number, number>();
+    const from = new Map<number, number>();
+    const done = new Set<number>();
+    const heap: [number, number, number][] = [];
+    let seq = 0;
+    const less = (a: [number, number, number], b: [number, number, number]) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+    const push = (p: number, v: number) => {
+      heap.push([p, seq++, v]);
+      for (let i = heap.length - 1; i > 0; ) {
+        const q = (i - 1) >> 1;
+        if (!less(heap[i], heap[q])) break;
+        [heap[i], heap[q]] = [heap[q], heap[i]];
+        i = q;
+      }
+    };
+    const pop = () => {
+      const top = heap[0];
+      const last = heap.pop()!;
+      if (heap.length) {
+        heap[0] = last;
+        for (let i = 0; ; ) {
+          const [l, r] = [2 * i + 1, 2 * i + 2];
+          let m = i;
+          if (l < heap.length && less(heap[l], heap[m])) m = l;
+          if (r < heap.length && less(heap[r], heap[m])) m = r;
+          if (m === i) break;
+          [heap[i], heap[m]] = [heap[m], heap[i]];
+          i = m;
+        }
+      }
+      return top[2];
+    };
+    const h = (i: number) => {
+      const dx = Math.abs((i % w) - gx);
+      const dy = Math.abs(Math.floor(i / w) - gy);
+      return 10 * (dx + dy) - 6 * Math.min(dx, dy);
+    };
+    cost.set(start, 0);
+    push(h(start), start);
+    let [best, bestH] = [start, h(start)];
+    while (heap.length) {
+      const cur = pop();
+      if (done.has(cur)) continue;
+      done.add(cur);
+      if (h(cur) < bestH) [best, bestH] = [cur, h(cur)];
+      if (cur === goal) break;
+      const [cx, cy] = [cur % w, Math.floor(cur / w)];
+      for (let d = 0; d < 8; d++) {
+        const [nx, ny] = [cx + DX[d], cy + DY[d]];
+        if (!g.canStep(cx, cy, nx, ny)) continue;
+        const ni = ny * w + nx;
+        const ng = cost.get(cur)! + (d < 4 ? 10 : 14);
+        if (cost.has(ni) && ng >= cost.get(ni)!) continue;
+        cost.set(ni, ng);
+        from.set(ni, cur);
+        push(ng + h(ni), ni);
+      }
+    }
+    const path: number[] = [];
+    for (let i = best; i !== start; i = from.get(i)!) path.push(i);
+    return path.reverse();
+  };
+  for (const def of Object.values(MAPS)) {
+    const g = new Grid(buildMap(def));
+    let seed = 3;
+    const rand = (n: number) => Math.floor(((seed = (seed * 16807) % 2147483647) / 2147483647) * n);
+    for (let i = 0; i < g.blocked.length; i++) if (rand(100) < 8) g.blocked[i] = 1;
+    for (let k = 0; k < 60; k++) {
+      const [sx, sy, gx, gy] = [rand(g.width), rand(g.height), rand(g.width), rand(g.height)];
+      expect(g.findPath(sx, sy, gx, gy)).toEqual(reference(g, sx, sy, gx, gy));
+    }
+  }
+});
