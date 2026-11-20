@@ -1,5 +1,5 @@
 import { Box3, Vector3, Mesh, Object3D, Matrix4, Quaternion } from 'three';
-import type { View } from './units';
+import type { View } from './views';
 
 /** A Z walker's leg (zleg_<pair>_<l|r>), pivoting at the hip, its shin (zshin_) at the knee; legs of one group step together. */
 export interface InsectLeg {
