@@ -39,6 +39,7 @@ import { countMatch, countTitle } from './stats';
 import { SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { cameraControls } from './game/scroll';
+import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
 import { downloadReplay, type Replay, saveReplay } from './game/replay';
@@ -185,6 +186,12 @@ const input = new Input(world, map, PLAYER, {
   pan: (dx, dy) => rig.panPixels(dx, dy),
   fling: (vx, vy) => rig.fling(vx, vy),
   zoom: (f) => rig.zoomBy(f),
+  marking: {
+    start: (x, y, target) => marking.start(x, y, target),
+    move: (x, y) => marking.move(x, y),
+    end: (x, y) => marking.end(x, y),
+    cancel: () => marking.close(),
+  },
 }, renderer.domElement, SPECTATE);
 /** Windowed: the pointer stays in the game (Pointer Lock), so edge scrolling never loses it off the window. */
 /** When the first click asked for fullscreen: no lock in the same gesture (Safari stalls on both at once). */
@@ -210,6 +217,7 @@ function showRecButtons(): void {
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.online = !!NET_ROLE;
+const marking = new Marking(hud);
 hud.gridKeys = SCROLL.grid && !TOUCH;
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);

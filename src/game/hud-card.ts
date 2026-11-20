@@ -287,7 +287,7 @@ function lcdTree(h: Hud): boolean {
 }
 
 /** One command button; `extra` goes inside it, after the cost, and `style` on it (a tree node's place). */
-function buttonHtml(h: Hud, b: Button, extra = '', cls = '', style = ''): string {
+export function buttonHtml(h: Hud, b: Button, extra = '', cls = '', style = ''): string {
   const p = h.world.players[h.player];
   const cost = b.cost ? `<small${b.cost.minerals && b.cost.energy ? ' class="two"' : ''}>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
   const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';

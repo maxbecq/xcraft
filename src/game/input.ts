@@ -41,6 +41,9 @@ export interface InputHooks {
   grab?: (x: number, y: number) => boolean;
   /** Touch: that finger moved, to this ground point (tiles). */
   drag?: (ground: Vector3 | null) => void;
+  /** Touch, trial controls: a long press on one's own thing opens its commands round the finger (true if so); then
+   * the finger moves over them, lets go, or the press is taken back. */
+  marking?: { start: (x: number, y: number, target: Entity) => boolean; move: (x: number, y: number) => void; end: (x: number, y: number) => void; cancel: () => void };
 }
 
 const LONG_PRESS_MS = 400;
@@ -154,7 +157,7 @@ const GRAB = cursorSized(44, {
 /** Cross-fade between the arrow and the hover brackets (and between hover colours), in ms. */
 const FADE_MS = 180;
 const ORDER_FRAME_MS = 70;
-type TouchMode = 'pending' | 'pan' | 'box' | 'pinch' | 'held';
+type TouchMode = 'pending' | 'pan' | 'box' | 'pinch' | 'held' | 'marking';
 
 /** Mouse and keyboard: selection, control groups and right-click orders for the local player. */
 export class Input {
@@ -260,6 +263,7 @@ export class Input {
       if (this.touches.size) return;
       // A touch the browser took back ends any box it was drawing: the next press starts afresh.
       clearTimeout(this.longPress);
+      if (this.touchMode === 'marking') this.hooks.marking?.cancel();
       this.touchMode = null;
       this.dragStart = null;
       this.box.hidden = true;
@@ -333,6 +337,12 @@ export class Input {
       this.longPress = window.setTimeout(() => {
         const t = this.touches.get(id);
         if (this.touchMode !== 'pending' || !t) return;
+        const hit = this.entityAt(t.sx, t.sy);
+        if (hit && hit.owner === this.player && this.hooks.marking?.start(t.sx, t.sy, hit)) {
+          this.touchMode = 'marking';
+          navigator.vibrate?.(15);
+          return;
+        }
         this.touchMode = 'box';
         this.dragStart = { x: t.sx, y: t.sy };
         // From nothing at the new start: the last box's size would show until the finger moves.
@@ -341,6 +351,7 @@ export class Input {
         navigator.vibrate?.(15);
       }, LONG_PRESS_MS);
     } else {
+      if (this.touchMode === 'marking') this.hooks.marking?.cancel();
       this.touchMode = 'pinch';
       this.box.hidden = true;
       this.dragStart = null;
@@ -373,6 +384,7 @@ export class Input {
       clearTimeout(this.longPress);
     }
     if (this.touchMode === 'held') return this.hooks.drag?.(this.groundAt(e.clientX, e.clientY));
+    if (this.touchMode === 'marking') return this.hooks.marking?.move(e.clientX, e.clientY);
     if (this.touchMode === 'pan') {
       this.hooks.pan(dx, dy);
       // The finger's speed, smoothed over the last few moves, for the slide after it lets go.
@@ -395,6 +407,7 @@ export class Input {
     const start = this.dragStart;
     this.dragStart = null;
     this.box.hidden = true;
+    if (mode === 'marking') return this.hooks.marking?.end(e.clientX, e.clientY);
     // Let go while still moving (not after a pause): the view slides on.
     if (mode === 'pan' && performance.now() - this.panVel.t < 60) this.hooks.fling?.(this.panVel.x, this.panVel.y);
     if (mode === 'box' && start) {
