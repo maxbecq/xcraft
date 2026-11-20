@@ -335,7 +335,8 @@ export class Hud {
 
   private attack(x: number, z: number, target?: Entity, queue = false): void {
     const ids = this.input.own().map((e) => e.id);
-    const enemy = target && this.world.hostile(target.owner, this.player) ? target.id : undefined;
+    // Any unit or building clicked, our own and our allies' too (Attaquer, then a click on it); not a resource.
+    const enemy = target && target.owner >= 0 ? target.id : undefined;
     this.audio.play('target');
     this.issue({ player: this.player, kind: 'attack', ids, x: Math.round(x * FP), y: Math.round(z * FP), target: enemy, queue });
   }

@@ -77,9 +77,12 @@ export function apply(this: World, c: Command): void {
     case 'attack': {
       const t = this.target(c);
       const fighters = units.filter((e) => this.weapon(e));
-      if (t && this.hostile(t.owner, c.player)) {
+      // An explicit attack may also aim at one's own side (or an ally's): to finish off a wounded unit, deny a kill,
+      // clear a building. Never at a resource or a neutral thing.
+      if (t && t.owner >= 0 && (this.hostile(t.owner, c.player) || t.def.kind !== 'resource')) {
         // Those that cannot hit it (a flyer, for melee) attack-move to where it is.
         for (const e of fighters) {
+          if (e === t) continue; // no unit strikes itself
           if (reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
           else this.setOrder(e, { kind: 'attackMove', x: t.x, y: t.y, target: 0 });
         }

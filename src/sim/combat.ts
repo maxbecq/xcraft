@@ -466,11 +466,14 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       if (dist(o.x, o.y, t.x, t.y) <= toFp(splash)) this.hurt(o, idiv(a.damage + upgrade, 2));
     }
   }
-  if (this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
+  // Struck by its own side (an explicit attack order): no alarm, and nobody strikes back.
+  const own = e.owner >= 0 && t.owner >= 0 && !this.hostile(e.owner, t.owner);
+  if (!own && this.tick - (this.lastAlert[t.owner] ?? -Infinity) > ticks(15)) {
     this.lastAlert[t.owner] = this.tick;
     this.say(t.owner, t.def.kind === 'building' ? 'Votre base est attaquée !' : 'Vos troupes sont attaquées !', 'alert');
   }
   this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: a.range < 1 ? 'melee' : 'ranged', type: e.type, air1: flies(e), air2: flies(t) });
+  if (own) return;
   // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
   if (e.inside) e = this.entities.get(e.inside) ?? e;
   const td = t.def as UnitDef;

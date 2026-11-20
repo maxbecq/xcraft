@@ -103,3 +103,36 @@ describe('combat', () => {
     expect(play()).toBe(play());
   });
 });
+
+describe('attacking one\'s own side (explicit order only)', () => {
+  it('hits an own or allied unit on an attack order, never on its own, and the victim does not strike back', () => {
+    const w = new World(createMap(), 3);
+    w.setTeams([0, 0, 1]);
+    const [a] = army(w, 0, 'auxiliaire', 40, 60, 1);
+    const [mine] = army(w, 0, 'auxiliaire', 42, 60, 1);
+    const [ally] = army(w, 1, 'auxiliaire', 40, 63, 1);
+    // Side by side, nobody fights on their own.
+    run(w, 3);
+    expect([mine.hp, ally.hp]).toEqual([mine.maxHp, ally.maxHp]);
+    expect(a.order).toBeNull();
+    // A plain right-click (smart) on one's own unit follows it.
+    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: mine.x, y: mine.y, target: mine.id }]);
+    run(w, 2);
+    expect(mine.hp).toBe(mine.maxHp);
+    // The attack command, then a click on it: it is struck, and stays put.
+    w.step([{ player: 0, kind: 'attack', ids: [a.id], x: mine.x, y: mine.y, target: mine.id }]);
+    run(w, 4);
+    expect(mine.hp).toBeLessThan(mine.maxHp);
+    expect(mine.order).toBeNull();
+    // An ally's unit too.
+    w.step([{ player: 0, kind: 'attack', ids: [a.id], x: ally.x, y: ally.y, target: ally.id }]);
+    run(w, 4);
+    expect(ally.hp).toBeLessThan(ally.maxHp);
+    expect(ally.order).toBeNull();
+    // A unit told to attack itself does not.
+    const hp = a.hp;
+    w.step([{ player: 0, kind: 'attack', ids: [a.id], x: a.x, y: a.y, target: a.id }]);
+    run(w, 2);
+    expect(a.hp).toBe(hp);
+  });
+});
