@@ -127,6 +127,8 @@ body .hud-toasts .hud-toast.bump { animation: toast-bump 0.25s ease-out; }
 .hud-banner.won h1 { color: var(--amber); }
 .hud-banner .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .hud-banner .row button { min-width: 0; }
+.hud-banner .row .measures { flex-basis: 100%; margin: 4px 0 0; max-width: 34em; text-align: center; font: 600 16px/1.4 var(--ui, sans-serif); color: #f2ead8; text-shadow: 0 1px 4px #000; }
+.hud-banner .row .measures b { color: var(--amber); word-break: break-all; }
 
 /* ---------------------------------------------------------------- menu, tools, help */
 

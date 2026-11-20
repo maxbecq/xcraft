@@ -3,7 +3,7 @@ import { AI } from '../ai/ai';
 import { MAPS, mapFile } from '../maps';
 import { commandOk } from '../net';
 import { createMatch } from '../sim/setup';
-import { GAME_VERSION, parseReplay, type Replay, REPLAY_MAX_BYTES, replaySource, versionNote, withReplayBiome } from './replay';
+import { GAME_VERSION, measuresFile, parseReplay, type Replay, REPLAY_MAX_BYTES, replaySource, versionNote, withReplayBiome } from './replay';
 
 const good = { v: 1, map: 'origine', factions: ['humains', 'z'], teams: [0, 1], biome: 'glace', handicap: [100, 100], ticks: [[3, [{ player: 0, kind: 'stop', ids: [1] }]], [9, [{ player: 1, kind: 'stop', ids: [2] }]]] };
 const text = (r: object) => JSON.stringify(r);
@@ -118,5 +118,18 @@ describe('replays read from storage or a file', () => {
     const lost = replaySource(parseReplay(text({ ...good, map: 'nulle-part' })) as Replay);
     expect(lost).toEqual({ ...good, map: 'nulle-part' });
     expect((parseReplay(text(lost)) as Replay).lostMap).toBe('nulle-part'); // opened again: the same
+  });
+});
+
+describe('measures file (telemetry and replay in one)', () => {
+  it('is named by the sides and the local time, holds both, and opens as the replay alone', () => {
+    const perf = { v: 1, frames: 1200, gap: { p50: 16.7 } };
+    const f = measuresFile(good as Replay, perf, new Date(2026, 10, 20, 9, 5));
+    expect(f.name).toBe('xcraft-mesures-humains-z-2026-11-20T09h05.json');
+    const both = JSON.parse(f.text);
+    expect(both.perf).toEqual(perf);
+    const { perf: _, ...replay } = both;
+    expect(replay).toEqual(good);
+    expect(parseReplay(f.text)).toEqual(good); // « Ouvrir un replay » takes it, the telemetry left out
   });
 });

@@ -42,7 +42,7 @@ import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
-import { downloadReplay, GAME_VERSION, type Replay, replaySource, saveReplay, withReplayBiome } from './game/replay';
+import { downloadReplay, GAME_VERSION, measuresFile, type Replay, replaySource, saveFile, saveReplay, withReplayBiome } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
 /** The game just played has been kept as the last game. */
@@ -113,6 +113,8 @@ function keepGame(quiet = false): void {
 }
 // A game left before its end is kept too.
 window.addEventListener('pagehide', () => keepGame(true));
+// The tab closed while measuring: the measures handed to the downloads, if the browser still takes them (no dialog).
+window.addEventListener('pagehide', () => measuresOnce());
 const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
@@ -148,7 +150,10 @@ let pending: Command[] = [];
 // Bac à sable: the options picked before the match (`&outils=unlimited,instant,reveal`), turned on at its first tick.
 if (SANDBOX) for (const tool of params.get('outils')?.split(',') ?? []) if (tool in SANDBOX_TOOLS) pending.push({ player: PLAYER, kind: 'sandbox', ids: [], tool: tool as SandboxTool, on: true });
 
-const netGame = new NetGame(world, record, biome, keepGame);
+const netGame = new NetGame(world, record, biome, () => {
+  keepGame();
+  measuresOnce();
+});
 const { link, net } = netGame;
 
 
@@ -213,7 +218,25 @@ function answer(kind: 'ack' | 'go'): void {
 /** The telemetry's buttons, in the pause menu and the end-of-game banner, while it records. */
 function showRecButtons(): void {
   pause.querySelector<HTMLElement>('[data-p="perfrec"]')!.hidden = !rec.on;
-  hud.endButtons = rec.on ? '<button data-p="perfrec">Enregistrer les mesures</button>' : '';
+  hud.endButtons = !rec.on ? '' : measured ? `<p class="measures">Les mesures de la partie sont dans le dossier Téléchargements : <b>${measured}</b>.<br>Envoyez ce fichier à l'équipe du jeu. Rien ne s'est téléchargé ? « Enregistrer à nouveau ».</p><button data-p="perfrec">Enregistrer à nouveau</button>` : '<button data-p="perfrec">Enregistrer les mesures</button>';
+}
+/** The measures file's name once saved (« Enregistrer les performances »): saved by itself at the end of the game,
+ * or on leaving it, once; the banner then says where it went. */
+let measured = '';
+function saveMeasures(): void {
+  if (!rec.on || ATTRACT) return;
+  const f = measuresFile(REPLAY ? replaySource(REPLAY) : record, JSON.parse(rec.report({ ticks: world.tick, winner: world.winner })));
+  measured ||= f.name; // saved again under the same name (the banner says it)
+  saveFile(measured, f.text);
+  showRecButtons();
+  if (world.winner !== null) hud.banner.hidden = true; // drawn again with the file's name
+}
+/** Saved once by itself: at the end, or on leaving before it (a save by hand mid-game does not count). */
+let autoSaved = false;
+function measuresOnce(): void {
+  if (autoSaved || !rec.on) return;
+  autoSaved = true;
+  saveMeasures();
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.online = !!NET_ROLE;
@@ -338,17 +361,24 @@ document.addEventListener('click', (e) => {
     pauseOptions.hidden = !pauseOptions.hidden;
   }
   else if (p === 'fullscreen') toggleFullscreen();
-  else if (p === 'restart' && !net) location.reload();
+  else if (p === 'restart' && !net) {
+    const fresh = rec.on && !autoSaved;
+    measuresOnce();
+    setTimeout(() => location.reload(), fresh ? 400 : 0);
+  }
   else if (p === 'restart' && link && !netGame.rematchAsked) {
     netGame.rematchAsked = true;
     button!.textContent = 'Revanche : en attente de votre adversaire…';
     link.again();
   } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : record); // watching one: the file itself, whole
-  else if (p === 'perfrec') rec.save({ ticks: world.tick, winner: world.winner });
+  else if (p === 'perfrec') saveMeasures();
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
-    location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`;
+    // Left before the end, measuring: the measures saved first, the page left a moment later so the download goes through.
+    const fresh = rec.on && !autoSaved;
+    measuresOnce();
+    setTimeout(() => (location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`), fresh ? 400 : 0);
   }
 });
 // Captured first: while paused, game hotkeys do nothing; F1, F10 and Escape close the menu.
@@ -501,7 +531,10 @@ function start(): void {
         stepped++;
         for (const ev of world.events) happened[ev.kind] = (happened[ev.kind] ?? 0) + 1;
       }
-      if (world.winner !== null) keepGame();
+      if (world.winner !== null) {
+        keepGame();
+        measuresOnce();
+      }
       pending = [];
       hud.notify(world.events);
       if (drawn) effects.collect(world, seenAt);

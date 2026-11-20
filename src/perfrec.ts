@@ -258,16 +258,6 @@ export class PerfRecorder {
     });
   }
 
-  /** Saves the report as a file and copies it, for players who would rather paste it. */
-  save(extra?: Record<string, unknown>): void {
-    const text = this.report(extra);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    a.download = `xcraft-perf-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    navigator.clipboard?.writeText(text).catch(() => {});
-  }
 }
 
 /** JavaScript heap in use (bytes; Chrome only, else 0). */

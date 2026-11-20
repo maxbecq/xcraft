@@ -69,6 +69,7 @@ export function parseReplay(text: string): Replay | string {
   if (n > Math.max(...MAPS[r.map ?? DEFAULT_MAP].players)) return `${bad} (plus de camps que la carte n’a de places).`;
   if (r.version !== undefined && (typeof r.version !== 'string' || !/^[\w.-]{1,24}$/.test(r.version))) delete r.version;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
+  delete (r as { perf?: unknown }).perf; // a measures file (measuresFile) carries its telemetry beside the replay
   return r;
 }
 
@@ -128,11 +129,26 @@ export function replaySource(r: Replay): Replay {
 }
 
 export function downloadReplay(r: Replay): void {
+  saveFile(`xcraft-${r.factions.join('-')}-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`, JSON.stringify(r));
+}
+
+/** A file handed to the browser's downloads (no dialog, no server). */
+export function saveFile(name: string, text: string): void {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(r)], { type: 'application/json' }));
-  a.download = `xcraft-${r.factions.join('-')}-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`;
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
+/**
+ * The measures of a game, one file to send: the replay itself (it opens as a replay, `Ouvrir un replay`) with the
+ * telemetry beside it under `perf`. Named by the sides and the local date and time: xcraft-mesures-humains-z-2026-11-20T14h05.json.
+ */
+export function measuresFile(r: Replay, perf: unknown, at = new Date()): { name: string; text: string } {
+  const two = (n: number) => String(n).padStart(2, '0');
+  const when = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}h${two(at.getMinutes())}`;
+  return { name: `xcraft-mesures-${r.factions.join('-')}-${when}.json`, text: JSON.stringify({ ...r, perf }) };
 }
 
 /** Lets the player pick a replay file, then plays it. */
