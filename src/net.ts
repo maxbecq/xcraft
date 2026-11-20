@@ -409,11 +409,12 @@ const FIELDS: Record<string, Record<string, string>> = {
 const SANDBOX_FIELDS = { tool: 's', on: 'b' };
 /**
  * Whether an order (from the other side, or a replay file) has the shape the simulation expects; anything else never
- * reaches it. `sandbox`: the Bac à sable's switches are allowed too.
+ * reaches it. `sandbox`: the Bac à sable's switches are allowed too. `replay`: an AI giving up too (a replay file; never
+ * from the network, where nobody gives up a game between friends).
  */
-export function commandOk(c: unknown, sandbox = false): boolean {
+export function commandOk(c: unknown, sandbox = false, replay = false): boolean {
   if (!isRecord(c) || typeof c.kind !== 'string') return false;
-  const fields = sandbox && c.kind === 'sandbox' ? SANDBOX_FIELDS : Object.hasOwn(FIELDS, c.kind) ? FIELDS[c.kind] : null;
+  const fields = sandbox && c.kind === 'sandbox' ? SANDBOX_FIELDS : replay && c.kind === 'resign' ? {} : Object.hasOwn(FIELDS, c.kind) ? FIELDS[c.kind] : null;
   if (!fields) return false;
   if (!Array.isArray(c.ids) || c.ids.length > MAX_IDS || !c.ids.every(int)) return false;
   if (c.kind === 'trade' && c.sell !== 'minerals' && c.sell !== 'energy') return false;

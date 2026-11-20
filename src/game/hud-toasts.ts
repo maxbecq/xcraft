@@ -98,7 +98,10 @@ export function showEnd(h: Hud): void {
     const team = h.world.players.filter((p) => p.team === h.world.players[h.world.winner!]?.team);
     const sides = [...new Set(team.map((p) => FACTIONS[p.faction].name))].join(', ');
     const title = !h.spectator ? (won ? 'Victoire !' : 'Défaite…') : team.length > 1 ? `Victoire de l'équipe ${team[0].team + 1} (${sides})` : `Victoire des ${sides}`;
-    h.banner.innerHTML = `<h1>${title}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
+    // Won because the other side gave up (an AI that had lost), not by razing its last building.
+    const quit = h.world.players.some((p) => p.resigned && p.team !== team[0].team);
+    const note = !quit ? '' : `<p>${h.spectator ? 'Le camp vaincu abandonne.' : won ? "L'adversaire abandonne." : 'Votre équipe abandonne.'}</p>`;
+    h.banner.innerHTML = `<h1>${title}</h1>${note}<div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
     h.banner.classList.toggle('won', won || h.spectator);
     h.banner.hidden = false;
   }

@@ -227,3 +227,42 @@ describe('AI Z Refuge', () => {
     }
   });
 });
+
+describe('AI resignation', () => {
+  /** Player 1 left with its buildings only: no unit, no mineral. */
+  const ruined = (minerals: number) => {
+    const w = createMatch();
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    w.players[1].minerals = minerals;
+    w.players[1].energy = 0;
+    return w;
+  };
+
+  it('gives up a minute after the game is lost, and the other side wins', () => {
+    const w = ruined(0);
+    const ai = new AI(w, 1);
+    let warned = false;
+    while (w.winner === null && w.tick < ticks(90)) {
+      w.step(ai.think());
+      warned ||= w.events.some((e) => e.player === 0 && e.text === "L'adversaire abandonne.");
+    }
+    expect(w.players[1].resigned).toBe(true);
+    expect(w.winner).toBe(0);
+    expect(warned).toBe(true);
+    expect(w.tick).toBeGreaterThanOrEqual(ticks(60));
+  }, 60_000);
+
+  it('never gives up while it can still pay for a worker', () => {
+    const w = ruined(100);
+    const ai = new AI(w, 1);
+    while (w.winner === null && w.tick < ticks(120)) w.step(ai.think());
+    expect(w.players[1].resigned).toBeFalsy();
+    expect(w.winner).toBe(null);
+  }, 60_000);
+
+  it('is refused in a match with one player (Bac à sable)', () => {
+    const w = createMatch(['humains']);
+    w.step([{ player: 0, kind: 'resign', ids: [] }]);
+    expect(w.players[0].resigned).toBeFalsy();
+  });
+});

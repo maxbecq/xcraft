@@ -101,6 +101,8 @@ export class AI {
    * cleared it in one corner and not in the mirror); a spot tried MAX_TRIES times with nothing built there is given up.
    */
   private tried = new Map<string, number>();
+  /** Since when the game has looked lost (see `lost`), with the bank then: minerals, and energy if a Marché could sell it. */
+  private hopeless: { since: number; minerals: number; energy: number } | null = null;
 
   private readonly faction: FactionDef;
 
@@ -127,8 +129,9 @@ export class AI {
   think(): Command[] {
     const w = this.world;
     // Every AI on the same tick: offset by seat, the second one always saw the first one's moves a tick older than its own.
-    if (w.tick % THINK_EVERY !== 0 || w.winner !== null) return [];
+    if (w.tick % THINK_EVERY !== 0 || w.winner !== null || w.players[this.player].resigned) return [];
     const mine = [...w.entities.values()].filter((e) => e.owner === this.player);
+    if (this.lost(mine)) return [{ player: this.player, kind: 'resign', ids: [] }];
     const home = mine.find((e) => e.type === this.faction.hq);
     if (!home) return this.lastStand(mine);
     const s = this.survey(mine, home);
@@ -1047,6 +1050,30 @@ export class AI {
   }
 
   /** No council left: throw everything at the enemy. */
+  /**
+   * The game is lost and we give up rather than wait for the enemy to raze a dead town: for a full minute, no unit
+   * but workers (and Gaïa, who comes back), nothing being trained, not enough to pay for any of our units, a worker
+   * included, and no income (minerals, or energy a Marché could sell, never went up).
+   */
+  private lost(mine: Entity[]): boolean {
+    const w = this.world;
+    const p = w.players[this.player];
+    const f = this.faction;
+    const market = mine.some((e) => e.type === 'marche' && e.buildLeft === 0);
+    const cannotPay = [f.worker, ...f.army.map(([t]) => t)].every((t) => {
+      const c = (DEFS[t] as UnitDef).cost;
+      return !((p.minerals >= c.minerals && p.energy >= c.energy) || (market && p.minerals + p.energy >= c.minerals + c.energy));
+    });
+    const beaten =
+      cannotPay &&
+      !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder) || (e.def.kind !== 'resource' && e.queue.length > 0));
+    const h = this.hopeless;
+    if (!beaten) this.hopeless = null;
+    else if (!h || p.minerals > h.minerals || (market && p.energy > h.energy)) this.hopeless = { since: w.tick, minerals: p.minerals, energy: p.energy };
+    else if (w.tick - h.since >= ticks(60)) return true;
+    return false;
+  }
+
   private lastStand(mine: Entity[]): Command[] {
     const army = mine.filter((e) => e.def.kind === 'unit' && !e.order);
     const target = [...this.world.entities.values()].find((e) => this.world.hostile(e.owner, this.player) && e.def.kind === 'building');

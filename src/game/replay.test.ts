@@ -68,6 +68,9 @@ describe('replays read from storage or a file', () => {
     const sandbox = { kind: 'sandbox', ids: [], tool: 'fog', on: true };
     expect(refused(one(sandbox))).toBe(true);
     expect(refused({ ...one(sandbox), factions: ['humains'], teams: [0], handicap: [100] })).toBe(false);
+    // An AI giving up: in a replay, never from the network.
+    expect(refused(one({ kind: 'resign', ids: [] }))).toBe(false);
+    expect(commandOk({ player: 0, kind: 'resign', ids: [] })).toBe(false);
     for (const h of [-1, 1e9, 50.5, NaN]) expect(refused({ ...good, handicap: [100, h] })).toBe(true);
   });
 
@@ -81,7 +84,7 @@ describe('replays read from storage or a file', () => {
     const bad: unknown[] = [];
     while (world.tick < 20 * 60 * 8 && world.winner === null) {
       const cmds = ais.flatMap((ai) => ai.think());
-      for (const c of cmds) if (!commandOk(JSON.parse(JSON.stringify(c)))) bad.push(c);
+      for (const c of cmds) if (!commandOk(JSON.parse(JSON.stringify(c)), false, true)) bad.push(c);
       world.step(cmds);
     }
     expect(bad.slice(0, 3)).toEqual([]);

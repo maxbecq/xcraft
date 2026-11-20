@@ -217,6 +217,8 @@ export interface Player {
   unlimited?: boolean;
   instant?: boolean;
   reveal?: boolean;
+  /** Gave up (an AI that had lost): out of the match, its buildings standing or not. */
+  resigned?: boolean;
 }
 
 export type Command =
@@ -249,7 +251,9 @@ export type Command =
   | { player: number; kind: 'attack'; ids: number[]; x: number; y: number; target?: number; queue?: boolean }
   /** Bac à sable only (a match with one player): one of its options turned on or off. Orders like any other, so a
    * replay plays them back. */
-  | { player: number; kind: 'sandbox'; ids: number[]; tool: SandboxTool; on: boolean };
+  | { player: number; kind: 'sandbox'; ids: number[]; tool: SandboxTool; on: boolean }
+  /** The player gives up. Only the AI sends it; a network game refuses it (net.ts has no fields for it). */
+  | { player: number; kind: 'resign'; ids: number[] };
 
 export type SandboxTool = 'unlimited' | 'instant' | 'reveal';
 
@@ -658,11 +662,11 @@ export class World {
     if (e.trainLeft2 > 1) e.trainLeft2 = 1;
   }
 
-  /** A player with no building left is defeated; the last team standing wins (`winner` is one of its players). A
+  /** A player with no building left, or who resigned, is defeated; the last team standing wins (`winner` is one of its players). A
    * match with one player (Bac à sable) never ends. */
   private judge(): void {
     if (this.winner !== null || this.players.length < 2) return;
-    const alive = this.players.filter((p) => [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
+    const alive = this.players.filter((p) => !p.resigned && [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
     if (alive.length === 0) this.winner = -1;
     else if (alive.every((p) => p.team === alive[0].team)) this.winner = alive[0].id;
   }

@@ -47,6 +47,13 @@ export function apply(this: World, c: Command): void {
       p[c.tool] = !!c.on;
       return;
     }
+    case 'resign': {
+      const p = this.players[c.player];
+      if (!p || p.resigned || this.winner !== null || this.players.length < 2) return;
+      p.resigned = true;
+      for (const o of this.players) if (o !== p) this.say(o.id, o.team === p.team ? 'Votre allié abandonne.' : "L'adversaire abandonne.", 'alert');
+      return;
+    }
     case 'stop':
     case 'hold':
       units.forEach((e) => {
