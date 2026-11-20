@@ -188,13 +188,45 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
     const { glow, glossy, lava } = B.chasm;
     // Lava gives its own light: drawn as it is, bright where molten, dark where crusted over.
     const floorMat = lava
-      ? new MeshBasicMaterial({ vertexColors: true, map: lavaTexture() })
+      ? moltenLava(new MeshBasicMaterial({ vertexColors: true, map: lavaTexture() }))
       : new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
     const floorMesh = floor.mesh(floorMat);
     floorMesh.receiveShadow = true;
     g.add(floorMesh);
   }
   return g;
+}
+
+/** Seconds of lava flow, advanced each frame by main.ts (rendering only). */
+export const lavaTime = { value: 0 };
+
+/**
+ * Lava that moves, slowly: the crust's cracks drift and swirl (the texture read twice, warped and drifting apart),
+ * and its bright seams breathe, brighter and dimmer in slow waves that roll across the pool.
+ */
+function moltenLava(m: MeshBasicMaterial): MeshBasicMaterial {
+  m.customProgramCacheKey = () => 'lava';
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.lavaTime = lavaTime;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float lavaTime;')
+      .replace(
+        '#include <map_fragment>',
+        `vec2 lavaW = vMapUv * 5.0; // world x, z (the floor's uv is position / 5)
+        float lt = lavaTime;
+        vec2 lavaDrift = vec2(0.009, 0.005) * lt;
+        vec2 lavaSwirl = vec2(sin(lavaW.y * 0.8 + lt * 0.21), cos(lavaW.x * 0.7 - lt * 0.17)) * 0.03;
+        vec4 lavaA = texture2D(map, vMapUv + lavaDrift + lavaSwirl);
+        vec4 lavaB = texture2D(map, vMapUv * 0.73 - lavaSwirl.yx * 1.4 - lavaDrift * 0.6 + vec2(0.37, 0.11));
+        // Mostly one reading or the other, so the cracks stay sharp; where they meet, they flow into each other.
+        float lavaMix = smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(dot(lavaW, vec2(0.23, 0.17)) + lt * 0.11));
+        vec4 sampledDiffuseColor = mix(lavaA, lavaB, lavaMix);
+        float lavaBreath = 0.5 + 0.5 * sin(lt * 0.8 + dot(lavaW, vec2(0.41, 0.29)) + sin(lavaW.x * 0.27 - lavaW.y * 0.19) * 2.5);
+        sampledDiffuseColor.rgb *= 1.0 + smoothstep(0.35, 0.9, sampledDiffuseColor.r) * (lavaBreath - 0.35) * 0.45;
+        diffuseColor *= sampledDiffuseColor;`,
+      );
+  };
+  return m;
 }
 
 let leanMap: GameMap;

@@ -4,14 +4,15 @@ import { type GameMap, LEVEL_HEIGHT, heightAt } from '../map';
 /**
  * The volcano's air: embers rising from the lava in the chasms, and slow smoke from the lava and from vents in the
  * ground. Points animated on the graphics card from the clock (nothing per frame on the CPU but the clock), dimmed
- * by the fog of war like the ground. Rendering only.
+ * by the fog of war like the ground. Rendering only. With `bubbles`, now and then a bright dome swells on the lava
+ * and bursts, throwing a few embers: at most BUBBLES at a time.
  */
 export class Embers {
   readonly root = new Group();
   private readonly time = { value: 0 };
   private readonly scale = { value: 1 };
 
-  constructor(map: GameMap, fog: DataTexture, lavaDepth: number, count: number) {
+  constructor(map: GameMap, fog: DataTexture, lavaDepth: number, count: number, bubbles = true) {
     this.root.userData.noPick = true;
     let seed = 1234;
     const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -38,6 +39,36 @@ export class Embers {
         alpha: '1.0',
       }));
     }
+    if (lava.length && bubbles) {
+      const spots: [number, number, number][] = [];
+      const seeds: number[] = [];
+      for (let i = 0; i < BUBBLES; i++) {
+        const [x, y] = lava[Math.floor(rand() * lava.length)];
+        spots.push([x + 0.5, lavaY + 0.02, y + 0.5]);
+        seeds.push(rand());
+      }
+      // Each bubble's cycle (shared by its embers): a few seconds of rest, then it swells (u < 0.8) and bursts.
+      // It comes back elsewhere in its tile each time.
+      const cycle = 'float per = 7.0 + seed * 6.0; float c = time / per + seed * 13.0; float u = fract(c) * 3.0; float n = floor(c); p.xz += (vec2(fract(sin(n * 12.9 + seed * 78.2) * 43758.5), fract(sin(n * 39.3 + seed * 11.1) * 24634.6)) - 0.5) * 0.8;';
+      this.root.add(points(spots, seeds, {
+        uniforms, blending: NormalBlending,
+        motion: cycle,
+        size: '(u < 0.8 ? 0.2 + u * 0.8 : 0.0)',
+        colour: 'mix(vec3(0.7, 0.22, 0.03), vec3(1.0, 0.62, 0.18), u * 1.25)',
+        alpha: '(u < 0.8 ? smoothstep(0.0, 0.15, u) : 0.0)',
+        // A dome: a hot highlight off-centre, darker crust towards the rim.
+        shade: 'gl_FragColor.rgb *= 1.1 - d * 0.6 + 0.4 * (1.0 - smoothstep(0.0, 0.45, length(gl_PointCoord - vec2(0.38, 0.35)) * 2.0));',
+      }));
+      // Three embers per bubble, flung up and out as it bursts.
+      const k = [0, 1, 2];
+      this.root.add(points(spots.flatMap((s) => k.map(() => s)), seeds.flatMap((s) => k.map(() => s)), {
+        uniforms, blending: AdditiveBlending,
+        motion: `${cycle} float t = clamp((u - 0.8) / 0.9, 0.0, 1.0); float a = float(gl_VertexID % 3) * 2.0944 + seed * 6.0; p += vec3(cos(a) * 0.6 * t, t * 2.2 - t * t * 1.4, sin(a) * 0.6 * t);`,
+        size: '(u >= 0.8 && t < 1.0 ? 0.11 : 0.0)',
+        colour: 'mix(vec3(1.0, 0.85, 0.35), vec3(0.9, 0.2, 0.02), t) * (1.0 - t)',
+        alpha: '1.0',
+      }));
+    }
     this.root.add(points(Math.ceil(count / 6), () => at(rand() < 0.6), rand, {
       uniforms, blending: NormalBlending,
       // Smoke: slow, high, widening, grey, faint.
@@ -55,15 +86,26 @@ export class Embers {
   }
 }
 
-function points(
-  count: number, at: () => [number, number, number], rand: () => number,
-  o: { uniforms: Record<string, { value: unknown }>; blending: typeof AdditiveBlending | typeof NormalBlending; motion: string; size: string; colour: string; alpha: string },
-): Points {
-  const pos: number[] = [];
-  const seeds: number[] = [];
-  for (let i = 0; i < count; i++) {
-    pos.push(...at());
-    seeds.push(rand());
+/** At most this many bubbles on the lava at once. */
+const BUBBLES = 12;
+
+type Look = { uniforms: Record<string, { value: unknown }>; blending: typeof AdditiveBlending | typeof NormalBlending; motion: string; size: string; colour: string; alpha: string; shade?: string };
+
+/** `count` points placed by `at`, each with a random seed; or the given places and seeds. */
+function points(count: number, at: () => [number, number, number], rand: () => number, o: Look): Points;
+function points(at: [number, number, number][], seeds: number[], o: Look): Points;
+function points(a: number | [number, number, number][], b: (() => [number, number, number]) | number[], c: (() => number) | Look, d?: Look): Points {
+  let pos: number[] = [];
+  let seeds: number[] = [];
+  const o = (d ?? c) as Look;
+  if (typeof a === 'number') {
+    for (let i = 0; i < a; i++) {
+      pos.push(...(b as () => [number, number, number])());
+      seeds.push((c as () => number)());
+    }
+  } else {
+    pos = a.flat();
+    seeds = b as number[];
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
@@ -95,6 +137,7 @@ function points(
       void main() {
         float d = length(gl_PointCoord - 0.5) * 2.0;
         gl_FragColor = vec4(vColour, vAlpha * (1.0 - smoothstep(0.4, 1.0, d)));
+        ${o.shade ?? ''}
       }`,
   });
   const p = new Points(g, m);
