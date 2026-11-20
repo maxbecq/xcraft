@@ -1206,3 +1206,5 @@ body.z.lcd .hud-toasts { right: auto; left: 50%; translate: -50% 0; bottom: 214p
   body.tactile:not(.lcd) .tools { bottom: calc(100px + env(safe-area-inset-bottom)); right: auto; max-width: calc(100vw - 16px); }
   body.tactile:not(.lcd) .hud-toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
+/* Trial touch controls: the selection panel says each thing once: no « 75 / 75 » under a health bar that shows it. */
+body.tactile .hud-panel .hp + .info { display: none; }
