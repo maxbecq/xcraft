@@ -1,6 +1,6 @@
 import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, MYTHS, type Mythology, type UnitDef, type UpgradeDef, KIT, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { el, img, noIcon, pictogram, weaponIcon, Z_GLYPHS } from './glyphs';
 import { type GameMap, heightAt } from '../map';
 import { FP, TICK_RATE, ticks } from '../sim/fixed';
@@ -10,6 +10,7 @@ import type { Audio } from '../audio';
 import type { Input } from './input';
 import { Portrait } from '../render/portrait';
 import { showEnd, showEvents } from './hud-toasts';
+import { ultimatePct, updatePanel } from './hud-panel';
 
 interface Button {
   label: string;
@@ -60,7 +61,7 @@ export class Hud {
   readonly mapSlot = el('div', 'slot map-slot');
   private readonly panel = el('div', 'hud-panel');
   /** Selection text, beside the live portrait. */
-  private readonly details = el('div', 'details');
+  readonly details = el('div', 'details');
   readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
   readonly toasts = el('div', 'hud-toasts');
@@ -134,7 +135,7 @@ export class Hud {
     readonly world: World,
     private readonly map: GameMap,
     readonly player: number,
-    private readonly input: Input,
+    readonly input: Input,
     scene: Scene,
     private readonly issue: (c: Command) => void,
     readonly audio: Audio,
@@ -326,20 +327,7 @@ export class Hud {
   }
 
   /** The selection's details, rebuilt only when more than its bars changed (so a hover or a tooltip on them holds). */
-  private detailsKey = '';
-  private setDetails(html: string): void {
-    const bars = /width:[\d.e+-]+%/g;
-    const key = html.replace(bars, '');
-    if (key !== this.detailsKey) {
-      this.detailsKey = key;
-      this.details.innerHTML = html;
-      return;
-    }
-    const widths = html.match(bars) ?? [];
-    this.details.querySelectorAll<HTMLElement>('[style*="width"]').forEach((el, i) => {
-      if (widths[i]) el.style.width = widths[i].slice(6);
-    });
-  }
+  detailsKey = '';
 
   private toggleProd(): void {
     this.prod.hidden = !this.prod.hidden;
@@ -619,7 +607,7 @@ export class Hud {
     this.count(nrg, p.energy);
     sup.lastChild!.textContent = `${s.used}/${s.max}`;
     sup.classList.toggle('full', s.used >= s.max);
-    this.updatePanel();
+    updatePanel(this);
     this.updateIdle();
     this.updateIdleProd();
     this.updateProd();
@@ -627,105 +615,6 @@ export class Hud {
     this.updateCard();
     this.updateGhost();
     showEnd(this);
-  }
-
-  // ---------------------------------------------------------------- selection panel
-
-  private updatePanel(): void {
-    const sel = [...this.input.selected].map((id) => this.world.entities.get(id)).filter((e): e is Entity => !!e);
-    this.portrait.show(sel.length === 1 ? sel[0].type : null, sel[0]?.owner);
-    this.portrait.canvas.hidden = sel.length !== 1;
-    if (sel.length === 0) {
-      this.setDetails('');
-      return;
-    }
-    if (sel.length > 1) {
-      this.setDetails(`<div class="grid">${sel
-        .slice(0, 24)
-        .map((e) => `<div class="tile${e.type === this.activeType ? ' active' : ''}${performance.now() - (this.hitAt.get(e.id) ?? -1e9) < 500 ? ' hurt' : ''}" data-id="${e.id}" style="--hp:${e.hp / e.maxHp}">${img(e.type, e.def.name)}</div>`)
-        .join('')}</div>`);
-      return;
-    }
-    const e = sel[0];
-    let html = `<div class="name">${e.def.name}${(e.def as UnitDef).levels ? ` <small>niveau ${e.lvl}</small>` : ''}</div>`;
-    if (e.def.kind === 'resource') {
-      html += `<div class="info">${Number.isFinite(e.amount) ? `${e.amount} restants` : 'Inépuisable'}</div>`;
-    } else {
-      if (e.maxShield) html += `<div class="hp shield"><div style="width:${(100 * e.shield) / e.maxShield}%"></div></div>`;
-      html += `<div class="hp"><div style="width:${(100 * e.hp) / e.maxHp}%"></div></div><div class="info">${e.hp} / ${e.maxHp}${e.maxShield ? ` · bouclier ${e.shield} / ${e.maxShield}` : ''}</div>`;
-    }
-    if (e.def.kind === 'building') {
-      const def = e.def as BuildingDef;
-      // Construction or production: a block of its own, set beside the rest on wide screens.
-      if (e.buildLeft > 0) {
-        html += `<div class="prod">${progress('Construction', 1 - e.buildLeft / ticks(def.buildTime))}</div>`;
-      } else if (e.queue.length) {
-        const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
-        html += `<div class="prod">${progress(first.name, 1 - e.trainLeft / ticks(first.buildTime))}`;
-        // Each one in the queue: a click (or a tap) takes it out, refunded.
-        const own = e.owner === this.player && !this.spectator;
-        html += `<div class="queue">${e.queue
-          .map((t, i) => {
-            const name = e.kits[i] ? `${DEFS[t].name} : ${WEAPONS[e.kits[i]].name}` : DEFS[t].name;
-            return own ? `<span class="cancel" data-of="${e.id}" data-slot="${i}" title="${name}. Clic : annuler">${img(t, name)}</span>` : `<span>${img(t, name)}</span>`;
-          })
-          .join('')}</div></div>`;
-      }
-    }
-    // The Temple primordial: each mythology's ultimate, charging while its three gods stand.
-    if (e.type === 'primordial' && e.buildLeft === 0 && e.owner === this.player) {
-      html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => progress(`${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})`, this.ultimatePct(m) / 100)).join('')}</div>`;
-    }
-    if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
-    // Carriers and bunkers: who is inside, each with its health; a click on one lets it out (as in SC2).
-    const aboard = [...this.world.entities.values()].filter((u) => u.inside === e.id);
-    if (aboard.length) {
-      const out = e.owner === this.player && !this.spectator ? ' (clic : débarquer)' : '';
-      html += `<div class="prod cargo"><div class="info">À bord : ${aboard.length}</div><div class="grid">${aboard
-        .map((u) => `<div class="tile" data-unload="${u.id}" data-of="${e.id}" style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${out}">${img(u.type, u.def.name)}</div>`)
-        .join('')}</div></div>`;
-    }
-    if ((e.def as UnitDef).weapons) {
-      const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
-      const kits = [[KIT.detection, 'Détection'], [KIT.invisibilite, 'Invisibilité'], [KIT.reparateur, 'Auto-réparateur'], [KIT.balise, 'Balise offensive']].filter(([bit]) => e.support & (bit as number)).map(([, n]) => n);
-      html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}${kits.length ? ` · Kits : ${kits.join(', ')}` : ''}${e.seizedLeft ? ' · Capturé (Canon IEM)' : ''}</div>`;
-    }
-    if (e.def.kind !== 'resource') html += this.stats(e);
-    this.setDetails(html);
-    this.portrait.render();
-  }
-
-  /** How far a mythology's ultimate has charged, in percent. */
-  private ultimatePct(m: Mythology): number {
-    return Math.floor((100 * (this.world.players[this.player].ultimates?.[m] ?? 0)) / ticks(BALANCE.units.primordial.charge));
-  }
-
-  /**
-   * Fighting stats of the selected unit or building, for anyone looking (spectators too): attack and armour with
-   * their research bonus, range, rate of fire, speed and sight.
-   */
-  private stats(e: Entity): string {
-    const fmt = (v: number) => (Math.round(v * 10) / 10).toLocaleString('fr-FR');
-    const plus = (n: number) => (n > 0 ? ` <em>+${n}</em>` : '');
-    const parts: string[] = [];
-    const a = this.world.weapon(e);
-    if (a) {
-      // shortcut: only the faction's attack research is counted, not the rarer unit-specific bonuses (Acide, Conseil's aura…).
-      const line = e.owner >= 0 ? this.world.attackLine(e, a) : '';
-      const up = e.owner >= 0 && e.def.kind === 'unit' && !(e.def as UnitDef).worker ? this.world.level(e.owner, line) * Math.max(1, Math.round(a.damage / 10)) : 0;
-      parts.push(`<span title="Dégâts par coup">Attaque ${a.damage}${plus(up)}</span>`);
-      parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
-      parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
-    }
-    if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
-    if ('armor' in e.def) {
-      // The world keeps the armour research to itself; read it rather than copy its many cases.
-      const bonus = e.def.kind === 'unit' && e.owner >= 0 ? this.world.armorBonus(e) : 0;
-      parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
-    }
-    if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed)}</span>`);
-    if ('sight' in e.def) parts.push(`<span>Vue ${e.def.sight}</span>`);
-    return parts.length ? `<div class="stats">${parts.join('')}</div>` : '';
   }
 
   // ---------------------------------------------------------------- command card
@@ -736,7 +625,7 @@ export class Hud {
   }
 
   /** The active kind in a mixed selection (Tab): its abilities and production are the ones on the card. */
-  private activeType: string | null = null;
+  activeType: string | null = null;
 
   private buttonsFor(): Button[] {
     this.menuItems = [];
@@ -784,7 +673,7 @@ export class Hud {
         const casters = units.filter((u) => this.world.abilitiesFor(u).includes(ab));
         const ready = casters.filter((u) => u.abilityCd === 0).length;
         const a = ABILITIES[ab];
-        const reason = this.world.needs(this.player, a.research) ?? (a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${this.ultimatePct(a.ultimate)} %` : undefined);
+        const reason = this.world.needs(this.player, a.research) ?? (a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${ultimatePct(this, a.ultimate)} %` : undefined);
         // Aimed ones wait for a click on the map (gold reticle); the others go at once.
         const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
         list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
@@ -1120,10 +1009,6 @@ export class Hud {
     }
     this.grid.cellsAt(cx, cy, reach, fits);
   }
-}
-
-function progress(label: string, f: number): string {
-  return `<div class="info">${label}</div><div class="bar"><div style="width:${Math.round(100 * f)}%"></div></div>`;
 }
 
 function afford(p: { minerals: number; energy: number }, c: Cost): boolean {
