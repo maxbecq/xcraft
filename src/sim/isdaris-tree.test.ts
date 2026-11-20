@@ -80,4 +80,23 @@ describe('Isdaris tree (notice 1.2-1)', () => {
     run(w, 1);
     expect(w.entities.has(target.id)).toBe(false);
   });
+
+  it('the orbital cannon strikes what stands under it when it lands, not what stood there at the order', () => {
+    const w = isdaris();
+    w.players[0].upgrades.relais = 1;
+    w.players[0].energy = 1000;
+    const t = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    w.spawn('espion', 0, ...at(58, 60));
+    const leaver = w.spawn('legionnaire', 1, ...at(60, 60));
+    const comer = w.spawn('legionnaire', 1, ...at(60, 80));
+    leaver.frozen = comer.frozen = ticks(30); // they stay where they are put
+    const [x, y] = [leaver.x, leaver.y];
+    w.step([{ player: 0, kind: 'ability', ids: [t.id], name: 'canonorbital', x, y }]);
+    run(w, 2);
+    [leaver.x, leaver.y] = [x, y + 20 * FP];
+    [comer.x, comer.y] = [x, y];
+    run(w, 5);
+    expect(leaver.hp).toBe(leaver.maxHp);
+    expect(w.entities.has(comer.id)).toBe(false);
+  });
 });
