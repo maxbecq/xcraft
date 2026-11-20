@@ -2709,9 +2709,36 @@ def zw_mitrailleuse(p):
         cyl(p["dark"], 0.015, 0.09, (x, 0.22, 0.32), verts=6)
 
 
+def zsupport_assimilateur(p):
+    """The Assimilateur's weapon mount: an armoured crown clamped round the dome on its lid, above the glass tank, with
+    a team-colour band and four lights, a plate on top. Sized to the building's width (1 across), its origin on top of
+    the dome; the weapon sits on its plate (ZSUPPORTS in render/units.ts)."""
+    cyl(p["rust"], 0.135, 0.08, (0, 0, -0.025), verts=16, r2=0.12)
+    cyl(p["team"], 0.138, 0.02, (0, 0, -0.03), verts=16)
+    for k in range(8):  # clamps down onto the lid
+        a = k * math.pi / 4
+        box(p["dark"], (0.03, 0.02, 0.06), (math.cos(a) * 0.135, math.sin(a) * 0.135, -0.05), rot=(0, 0, a + math.pi / 2))
+    for k in range(4):
+        a = k * math.pi / 2 + math.pi / 4
+        box(p["cyan_glow"], (0.02, 0.02, 0.015), (math.cos(a) * 0.125, math.sin(a) * 0.125, 0.008), rot=(0, 0, a))
+    cyl(p["steel"], 0.11, 0.02, (0, 0, 0.025), verts=16)
+
+
+def zsupport_tourelle(p):
+    """The Tourelle's weapon mount: an armoured sleeve over its cap with a team-colour band and four lights, a steel
+    plate on top. Sized to the tower's width (1 across), its origin on top of the cap."""
+    cyl(p["rust"], 0.3, 0.12, (0, 0, 0.0), verts=16, r2=0.27)
+    cyl(p["team"], 0.306, 0.03, (0, 0, -0.005), verts=16)
+    for k in range(4):
+        a = k * math.pi / 2 + math.pi / 4
+        box(p["cyan_glow"], (0.04, 0.04, 0.025), (math.cos(a) * 0.28, math.sin(a) * 0.28, 0.035), rot=(0, 0, a))
+    cyl(p["steel"], 0.24, 0.025, (0, 0, 0.0725), verts=16)
+
+
 ZWEAPONS = {f"zw_{k}": f for k, f in [("laser", zw_laser), ("flammes", zw_flammes), ("roquettes", zw_roquettes), ("dechiqueteur", zw_dechiqueteur),
             ("jetsonique", zw_jetsonique), ("arc", zw_arc), ("canonx04", zw_canonx04), ("reparateur", zw_reparateur),
             ("accumulateur", zw_accumulateur), ("mitrailleuse", zw_mitrailleuse)]}
+ZWEAPONS.update({"zsupport_assimilateur": zsupport_assimilateur, "zsupport_tourelle": zsupport_tourelle})
 
 MODELS = {
     "baliste": baliste, "espion": espion, "dragon": dragon, "voyageur": voyageur, "behemoth": behemoth,

@@ -85,6 +85,13 @@ const PLATFORM_DECK = 0.37;
  * otherwise is set right in WEAPON_TUNE, the code needing nothing else.
  */
 export const WEAPON_MODELS = [...Object.keys(WEAPONS), 'mitrailleuse'].map((k) => `zw_${k}`);
+/** Buildings that buy a weapon carry it on a mount of their own (tools/blender/models.py zsupport_<type>): built 1
+ * across for the building's width, its origin on the roof, the weapon on its plate `top` higher. */
+const ZSUPPORTS: Record<string, { model: string; top: number }> = {
+  assimilateur: { model: 'zsupport_assimilateur', top: 0.035 },
+  tourelle: { model: 'zsupport_tourelle', top: 0.085 },
+};
+WEAPON_MODELS.push(...Object.values(ZSUPPORTS).map((s) => s.model));
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
 const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
   mastodonte: { size: 0.5 },
@@ -251,19 +258,31 @@ export class EntityRenderer {
     const ray = new Raycaster(new Vector3(centre.x, box.max.y + 1, centre.z + (tune.forward ?? 0) * across), new Vector3(0, -1, 0));
     const hit = ray.intersectObjects(parts, false)[0];
     const at = hit ? hit.point : new Vector3(centre.x, box.max.y, centre.z);
-    const o = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
+    let o: Object3D = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
     const fit = WEAPON_TUNE[name] ?? {};
     o.rotation.y = fit.yaw ?? 0;
-    // Socles only: on a building the collar would be a wide flat disc.
+    // Socles only: a building's weapon sits on the building's own mount.
     if (e.def.kind === 'unit') {
       SHARED.add(WEAPON_COLLAR);
       o.add(new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]));
     }
     const bodyScale = body.getWorldScale(new Vector3()).x;
     const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
-    o.position.copy(body.worldToLocal(at.clone()));
-    o.scale.setScalar(scale);
+    const support = ZSUPPORTS[e.type];
+    if (support && templates.has(support.model)) {
+      // On the building's mount: the weapon is the mount's child, at its plate.
+      const holder = model(support.model, teamMaterials[e.owner] ?? teamMaterials[0]);
+      holder.position.copy(body.worldToLocal(at.clone()));
+      holder.scale.setScalar(across / bodyScale);
+      o.position.set(0, support.top, 0);
+      o.scale.setScalar((scale * bodyScale) / across);
+      holder.add(o);
+      o = holder;
+    } else {
+      o.position.copy(body.worldToLocal(at.clone()));
+      o.scale.setScalar(scale);
+    }
     o.traverse((m) => (m.userData.noPick = true));
     body.add(o);
     delete v.model.userData.top; // the health bar goes above the weapon (see top)
