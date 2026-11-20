@@ -1365,18 +1365,18 @@ function legBasis(m: Matrix4, x: Vector3, n: Vector3): Matrix4 {
 function legRig(l: InsectLeg, pivot: Object3D): LegIK | undefined {
   const parent = l.o.parent;
   if (!l.shin || !parent) return undefined;
-  let low: Vector3 | undefined;
-  const p = new Vector3();
+  const pts: Vector3[] = [];
   l.shin.traverse((m) => {
     const pos = (m as Mesh).isMesh ? (m as Mesh).geometry.getAttribute('position') : undefined;
-    for (let i = 0; i < (pos?.count ?? 0); i++) {
-      p.fromBufferAttribute(pos!, i).applyMatrix4(m.matrixWorld);
-      if (!low || p.y < low.y) low = p.clone();
-    }
+    for (let i = 0; i < (pos?.count ?? 0); i++) pts.push(new Vector3().fromBufferAttribute(pos!, i).applyMatrix4(m.matrixWorld));
   });
-  if (!low) return undefined;
+  if (!pts.length) return undefined;
   const kneeW = l.shin.getWorldPosition(new Vector3());
   const hipW = l.o.getWorldPosition(new Vector3());
+  // The foot: the middle of the sole, not its lowest corner (a flat foot pad, the Octopode's, has many).
+  const bottom = Math.min(...pts.map((q) => q.y));
+  const sole = pts.filter((q) => q.y < bottom + 0.04 * (hipW.y - bottom));
+  const low = sole.reduce((sum, q) => sum.add(q), new Vector3()).divideScalar(sole.length);
   const hip = l.o.position.clone();
   const knee = parent.worldToLocal(kneeW.clone());
   const foot = parent.worldToLocal(low.clone());
@@ -1388,6 +1388,9 @@ function legRig(l: InsectLeg, pivot: Object3D): LegIK | undefined {
   const dir = foot.clone().sub(hip).normalize();
   const pole = knee.clone().sub(hip);
   pole.addScaledVector(dir, -pole.dot(dir));
+  // Lifted: a leg standing almost straight (the Octopode's) has its knee barely off the hip-foot line, and bent
+  // either way at random, its shin flipping up. Next to nothing for a leg hanging straight down.
+  pole.addScaledVector(UP.clone().addScaledVector(dir, -UP.dot(dir)), 0.3 * knee.distanceTo(hip));
   if (pole.lengthSq() < 1e-10) pole.copy(UP).addScaledVector(dir, -UP.dot(dir));
   pole.normalize();
   return {
