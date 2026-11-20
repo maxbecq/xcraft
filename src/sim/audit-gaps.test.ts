@@ -287,4 +287,14 @@ describe('audit gaps', () => {
       expect(Math.abs(u.x - 60 * FP)).toBeLessThan(3 * FP);
     }
   });
+
+  it('the Élémentaire de feu\'s breath burns the ground units round its target', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const fire = w.spawn('elementaire', 0, 30 * FP, 30 * FP);
+    const t = w.spawn('auxiliaire', 1, 33 * FP, 30 * FP);
+    const by = w.spawn('auxiliaire', 1, 33 * FP + FP / 2, 30 * FP);
+    const hp = by.hp;
+    w.hit(fire, t, w.weapon(fire)!);
+    expect(by.hp).toBeLessThan(hp);
+  });
 });
