@@ -93,6 +93,9 @@ export const GLYPHS: Record<string, string> = {
   transfertgroupe: 'M4 7h.01M4 12h.01M4 17h.01M8 9.5h.01M8 14.5h.01M11 12h10M17 8l4 4-4 4',
   lumiereardente: 'M12 2a4 4 0 1 0 0 8 4 4 0 1 0 0-8M8 12l-4 9M12 12v9M16 12l4 9',
   jetdesable: 'M2 12h6M3 8l5 2.5M3 16l5-2.5M15 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6M15 5v2M15 17v2M19 12h2M11 12h1',
+  // The Orbe plasma lifts off its energy field (an orb rising off the ground), and is set down again (the orb lowered onto it).
+  redeploiement: 'M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8M12 2v5M9 4l3-3 3 3M3 21h18',
+  ancrer: 'M12 2a4 4 0 1 0 0 8 4 4 0 1 0 0-8M12 12v6M9 15l3 3 3-3M3 21h18',
 };
 
 /** A pictogram drawn in phosphor strokes on a 24 px box: the command's colour, so it inverts with the button. */
