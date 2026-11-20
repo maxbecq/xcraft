@@ -21,7 +21,7 @@ export class Post {
 
   /** `fx` holds particles: drawn after ambient occlusion, which would otherwise shade their quads. */
   /** `light` (phones and tablets): fewer occlusion samples, half-size bloom, no SMAA (the ink line already hides most jaggies). */
-  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean, light = false) {
+  constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean, light = false, warmShadows = 1) {
     // Soft image-based light so metal and glass pick up reflections.
     const environment = () => new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = environment();
@@ -75,6 +75,7 @@ export class Post {
     if (!new URLSearchParams(location.search).has('noink')) {
       this.ink = inkPass(this.ao.depthTexture, this.ao.normalTexture, camera as OrthographicCamera);
       this.ink.uniforms.resolution.value.set(size.x * renderer.getPixelRatio(), size.y * renderer.getPixelRatio());
+      this.ink.uniforms.warmShadows.value = warmShadows;
       composer.addPass(this.ink);
     }
     const fxPass = new RenderPass(fx, camera);

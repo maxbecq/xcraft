@@ -103,8 +103,8 @@ export function groundTextures(style?: string): [Texture, Texture] {
 }
 
 /** A picture from public/textures, repeating; it shows once loaded (the ground is drawn plain until then). */
-function picture(name: string, colour: boolean, repeat = 1): Texture {
-  const t = new TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}.jpg`);
+export function picture(name: string, colour: boolean, repeat = 1, ext = 'jpg'): Texture {
+  const t = new TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}.${ext}`);
   t.wrapS = t.wrapT = RepeatWrapping;
   t.colorSpace = colour ? SRGBColorSpace : NoColorSpace;
   t.repeat.set(repeat, repeat);

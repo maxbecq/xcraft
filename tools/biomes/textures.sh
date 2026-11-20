@@ -19,6 +19,7 @@ seamless "$SRC/sol-basalte-openai.png" /tmp/basalte.png
 magick /tmp/basalte.png -modulate 105,110 -level 0%,62%,1.05 -quality 88 "$OUT/volcan-sol.jpg"
 normal /tmp/basalte.png "$OUT/volcan-sol-n.jpg" 2.5
 seamless "$SRC/sol-asteroide-openai.png" /tmp/asteroide.png
-magick /tmp/asteroide.png -quality 88 "$OUT/asteroides-sol.jpg"
+# Near-black regolith, colour drained to a faint warm grey: the planet's levels set how dark it lands.
+magick /tmp/asteroide.png -modulate 85,30 -quality 88 "$OUT/asteroides-sol.jpg"
 normal /tmp/asteroide.png "$OUT/asteroides-sol-n.jpg" 3
 ls -l "$OUT"

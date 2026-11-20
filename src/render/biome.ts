@@ -27,6 +27,8 @@ export interface Biome {
   exposure: number;
   /** Multiplies the colours of scenery (rocks, wrecks…). */
   decorTint: Color;
+  /** How much the painterly grade warms dark tones (1 when unset; 0 keeps a near-black ground black, not brown). */
+  warmShadows?: number;
   /** Height of sand dunes over the open ground, if any. */
   dunes?: number;
   /** Scattered stones in plain grey. */
@@ -144,22 +146,23 @@ export const BIOMES: Record<string, Biome> = {
     // Lava a short way down, bright and glossy.
     chasm: { depth: 1.0, floor: new Color(0xd84a10), glow: new Color(0xff3a00), glossy: true, lava: true },
   },
-  // Big flat asteroids over space, a banded gas giant beyond: dusty brown regolith, craters, chasms into the void.
+  // Big flat asteroids over space, a banded gas giant beyond: near-black regolith, craters, chasms into the void.
   asteroides: {
     id: 'asteroides',
     name: 'Astéroïdes',
-    levels: [new Color(0xe6e0da), new Color(0xd8d2cc), new Color(0xf4eee8)],
-    patch: new Color(0xb8aea4),
-    sand: new Color(0xd8ccbc),
-    ramp: new Color(0x9a8e82),
-    rock: new Color(0x6e6258),
-    rockDark: new Color(0x221c18),
+    levels: [new Color(0x5a5c62), new Color(0x525459), new Color(0x66686e)],
+    patch: new Color(0x303236),
+    sand: new Color(0x56585e),
+    ramp: new Color(0x46484d),
+    rock: new Color(0x2c2d31),
+    rockDark: new Color(0x0a0908),
     veins: null,
     sun: { color: 0xfff0dc, intensity: 3.4 },
     sky: { color: 0x9aa8d0, ground: 0x2a2018, intensity: 0.8 },
     background: 0x020207,
     exposure: 1.0,
-    decorTint: new Color(0.7, 0.66, 0.62),
+    warmShadows: 0,
+    decorTint: new Color(0.34, 0.33, 0.32),
     ground: 'asteroides',
     greyStones: true,
     space: true,

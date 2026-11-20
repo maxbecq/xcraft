@@ -285,7 +285,7 @@ const keys = camera.keys;
 const viewW = () => Math.max(1, window.innerWidth);
 const viewH = () => Math.max(1, window.innerHeight);
 renderer.setSize(viewW(), viewH());
-const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light');
+const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light', biome.warmShadows);
 window.addEventListener('resize', () => {
   renderer.setSize(viewW(), viewH());
   post.setSize(viewW(), viewH());
