@@ -51,6 +51,8 @@ export function updatePanel(h: Hud): void {
     } else if (e.queue.length) {
       const first = DEFS[e.queue[0]] as UnitDef | UpgradeDef;
       html += `<div class="prod">${progress(first.name, 1 - e.trainLeft / ticks(first.buildTime))}`;
+      // Miniportail: the second line, on the unit second in the queue.
+      if (e.trainLeft2) html += progress(DEFS[e.queue[1]].name, 1 - e.trainLeft2 / h.world.trainTime(e, e.queue[1]));
       // Each one in the queue: a click (or a tap) takes it out, refunded.
       const own = e.owner === h.player && !h.spectator;
       html += `<div class="queue">${e.queue

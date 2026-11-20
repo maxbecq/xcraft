@@ -78,3 +78,42 @@ describe('queues', () => {
     expect(s.next.length).toBe(1);
   });
 });
+
+describe('Miniportail', () => {
+  const gate = (mini: boolean) => {
+    const w = createMatch(['isdaris', 'humains']);
+    const p = w.players[0]; p.minerals = 99999; p.energy = 99999;
+    const robot = of(w, 0, 'moissonneur')[0];
+    w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'portail', tx: 18, ty: 18 }]);
+    run(w, 70);
+    const b = of(w, 0, 'portail')[0];
+    expect(b.buildLeft).toBe(0);
+    if (mini) p.upgrades.miniportail = 1;
+    return { w, b };
+  };
+
+  it('the Portail with its Miniportail trains the first two of its queue at once', () => {
+    for (const mini of [false, true]) {
+      const { w, b } = gate(mini);
+      const n0 = of(w, 0, 'archer').length;
+      w.step([{ player: 0, kind: 'train', ids: [b.id], type: 'archer' }, { player: 0, kind: 'train', ids: [b.id], type: 'archer' }]);
+      const t = w.trainTime(b, 'archer');
+      for (let i = 0; i < t + 1; i++) w.step([]);
+      expect(of(w, 0, 'archer').length - n0).toBe(mini ? 2 : 1);
+      expect(b.queue.length).toBe(mini ? 0 : 1);
+    }
+  });
+
+  it('the third in the queue takes up the line freed, and a cancelled second loses its progress', () => {
+    const { w, b } = gate(true);
+    const t = w.trainTime(b, 'archer');
+    w.step([0, 1, 2].map(() => ({ player: 0, kind: 'train' as const, ids: [b.id], type: 'archer' })));
+    for (let i = 0; i < t / 2; i++) w.step([]);
+    expect(b.trainLeft2).toBeGreaterThan(0);
+    w.step([{ player: 0, kind: 'cancel', ids: [b.id], slot: 1 }]);
+    // The archer that was third now runs on the second line, from the start.
+    expect(b.queue.length).toBe(2);
+    expect(b.trainLeft2).toBe(t - 1);
+    expect(b.trainLeft).toBeLessThan(t / 2 + 2);
+  });
+});

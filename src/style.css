@@ -921,7 +921,7 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
 .prod-row span.who img { width: 30px; height: 30px; }
 .prod-row span.now { width: 32px; height: 32px; border-color: #ffd970; }
 .prod-row span.now img { width: 30px; height: 30px; }
-.prod-row span.now i { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: #7dff8a; box-shadow: 0 0 4px #7dff8a; }
+.prod-row span i { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: #7dff8a; box-shadow: 0 0 4px #7dff8a; }
 .chip.flash { animation: chip-flash 0.9s ease-out; }
 @keyframes chip-flash { 0%, 30% { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255, 230, 150, 0.95)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .chip.flash { animation: none; } }

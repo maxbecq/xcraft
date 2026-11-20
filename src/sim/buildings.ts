@@ -181,7 +181,6 @@ export function trainTime(this: World, b: Entity, type: string): number {
   const t = idiv(ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime), b.def.kind === 'unit' ? b.lvl : 1);
   if (DEFS[type].kind !== 'unit') return t;
   let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
-  if (b.type === 'portail' && this.level(b.owner, 'miniportail')) speedup += BALANCE.rules.upgrades.miniportailSpeedup;
   // The Grand Conseil plans production: every unit comes out faster while it stands.
   if ([...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0)) speedup += BALANCE.rules.upgrades.grandConseilSpeedup;
   // Z.doc: the Intelligence suprême turns drones out in 75 % of their time (Production accélérée).
@@ -234,6 +233,14 @@ export function produce(this: World, b: Entity): void {
       b.rally.y = t.y;
     }
   }
+  // Miniportail (notice: a second production building): the unit second in the queue is made alongside the first.
+  if (!b.trainLeft2 && b.type === 'portail' && b.queue.length > 1 && DEFS[b.queue[1]].kind === 'unit' && this.level(b.owner, 'miniportail'))
+    b.trainLeft2 = this.trainTime(b, b.queue[1]);
+  if (b.trainLeft2 && --b.trainLeft2 === 0) {
+    const [type] = b.queue.splice(1, 1);
+    const [kit] = b.kits.splice(1, 1);
+    this.deliver(b, type, kit ?? '');
+  }
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
@@ -241,18 +248,18 @@ export function produce(this: World, b: Entity): void {
       b.arts.push(type);
       if (b.boost === 0) b.speed = this.baseSpeed(b);
       this.say(b.owner, `${b.def.name} : ${DEFS[type].name} (${b.arts.length}/${BALANCE.rules.upgrades.artefacts.max}).`, 'done');
-      if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+      this.next(b);
       return;
     }
     if (type === 'niveau') {
       this.ascend(b);
-      if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+      this.next(b);
       return;
     }
     const up = DEFS[type];
     if (up.kind === 'building') {
       this.morph(b, type);
-      if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+      this.next(b);
       return;
     }
     if (up.kind === 'upgrade') {
@@ -262,19 +269,30 @@ export function produce(this: World, b: Entity): void {
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && (u.type === 'drone' || u.type === 'dronecombat')) this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
       if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'armurezodiacale'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
-      if (b.queue.length) b.trainLeft = ticks((DEFS[b.queue[0]] as UpgradeDef).buildTime);
+      this.next(b);
       return;
     }
-    const u = this.spawnBeside(type, b);
-    u.kit = kit;
-    // Cuve génétique: Créatures come in pairs.
-    if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
-      const twin = this.spawnBeside(type, b);
-      this.rallyOn(twin, b);
-    }
-    this.rallyOn(u, b);
-    if (b.queue.length) b.trainLeft = this.trainTime(b, b.queue[0]);
+    this.deliver(b, type, kit);
+    this.next(b);
   }
+}
+
+/** The first of a queue done: the next starts, from where the Miniportail's second line had brought it. */
+export function next(this: World, b: Entity): void {
+  if (b.queue.length) b.trainLeft = b.trainLeft2 || this.trainTime(b, b.queue[0]);
+  b.trainLeft2 = 0;
+}
+
+/** A unit trained: out beside its producer, to the rally point. */
+export function deliver(this: World, b: Entity, type: string, kit: string): void {
+  const u = this.spawnBeside(type, b);
+  u.kit = kit;
+  // Cuve génétique: Créatures come in pairs.
+  if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
+    const twin = this.spawnBeside(type, b);
+    this.rallyOn(twin, b);
+  }
+  this.rallyOn(u, b);
 }
 
 /**

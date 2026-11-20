@@ -589,7 +589,7 @@ const BASE: Record<string, object> = {
   // Mod: « Chimère » (green Nano-assembleur), a flying hunter: ion blaster, 21 a second, air and ground.
   chimere: { kind: 'unit', name: 'Chimère', radius: 0.45, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'C' },
   // Isdaris research (notice); extensions are researched on their host building.
-  miniportail: extension('Miniportail', 'M', 'Unités du Portail formées 25 % plus vite.'),
+  miniportail: extension('Miniportail', 'M', 'Le Portail forme deux unités à la fois.'),
   cuvegenetique: extension('Cuve génétique', 'U', 'Les Créatures arrivent par deux.'),
   laboratoire: extension('Laboratoire', 'L', 'Druides, et recherches de combat de l\'infanterie.'),
   ...upgrades('portailatk', 'Attaque portail', 'K', { laboratoire: 1 }, 'isdaris'),
