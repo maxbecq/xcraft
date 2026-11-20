@@ -17,7 +17,7 @@ import { AI } from './ai/ai';
 import { commandOk, Lockstep, START, type Message } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
-import type { Command } from './sim/world';
+import type { Command, World } from './sim/world';
 
 /** A seeded random number, so a failing case plays the same again. */
 const rng = (seed: number) => () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
@@ -36,7 +36,7 @@ interface Link {
  * draws a frame every 16 ms (a background one every 50 ms) and steps its simulation as the lockstep allows.
  * Returns both worlds and every tick's orders as each side carried them out.
  */
-function play(ticks: number, link: Link) {
+function play(ticks: number, link: Link, orders?: (world: World, player: number) => Command[]) {
   let now = 0;
   const queue: { at: number; to: number; m: Message }[] = [];
   const sides = [0, 1].map((player) => {
@@ -66,7 +66,7 @@ function play(ticks: number, link: Link) {
       s.last = now;
       s.lock.poll();
       while (s.acc >= 50 && s.world.tick < ticks && s.lock.ready(s.world.tick)) {
-        const cmds = s.lock.step(s.world.tick, s.ai.think());
+        const cmds = s.lock.step(s.world.tick, orders ? orders(s.world, s.lock.player) : s.ai.think());
         if (s.world.tick % 100 === 0) s.lock.check(s.world.tick, fingerprint(s.world));
         if (cmds.length) s.log.push([s.world.tick, cmds]);
         s.world.step(cmds);
@@ -106,6 +106,42 @@ describe('lockstep between two browsers', () => {
       expect(a.lock.desync).toBeNull();
       expect(b.lock.desync).toBeNull();
     });
+
+  it('keeps both games identical over 1500 ticks of random orders from both sides, on a lossy jittery link', () => {
+    // Each side gives, at random ticks, random orders to random units of its own, and now and then to the other
+    // side's units or to nothing: any of the kinds a player can give, at random places.
+    const r = rng(23);
+    const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length)];
+    const orders = (world: World, player: number): Command[] => {
+      if (r() > 0.15) return [];
+      const units = [...world.entities.values()].filter((e) => e.def.kind === 'unit' && (r() < 0.9 ? e.owner === player : e.owner >= 0));
+      const buildings = [...world.entities.values()].filter((e) => e.def.kind === 'building' && e.owner === player);
+      const ids = units.filter(() => r() < 0.5).map((e) => e.id);
+      const x = Math.floor(r() * world.map.width * 1024);
+      const y = Math.floor(r() * world.map.height * 1024);
+      const kind = pick(['move', 'smart', 'attack', 'patrol', 'stop', 'hold', 'train', 'build', 'cancel', 'rally']);
+      const queue = r() < 0.3;
+      switch (kind) {
+        case 'train': return buildings.length ? [{ player, kind, ids: [pick(buildings).id], type: pick(['serf', 'moissonneur', 'caserne', 'auxiliaire']) }] : [];
+        case 'build': return ids.length ? [{ player, kind, ids: ids.slice(0, 1), type: pick(['caserne', 'grenier', 'pylone']), tx: Math.floor(x / 1024), ty: Math.floor(y / 1024), queue }] : [];
+        case 'cancel': return buildings.length ? [{ player, kind, ids: [pick(buildings).id] }] : [];
+        case 'rally': return buildings.length ? [{ player, kind, ids: [pick(buildings).id], x, y }] : [];
+        case 'stop': case 'hold': return [{ player, kind, ids }];
+        default: return [{ player, kind, ids, x, y, queue } as Command];
+      }
+    };
+    const net = rng(29);
+    const [a, b] = play(1500, { latency: () => 30 + net() * 200, lost: () => net() < 0.1 }, orders);
+    expect(a.world.tick).toBe(1500);
+    expect(b.world.tick).toBe(1500);
+    expect(a.log.filter(([, c]) => c.some((x) => x.player === 0)).length).toBeGreaterThan(50);
+    expect(a.log.filter(([, c]) => c.some((x) => x.player === 1)).length).toBeGreaterThan(50);
+    expect(a.log).toEqual(b.log);
+    expect(fingerprint(a.world)).toBe(fingerprint(b.world));
+    expect(fingerprint(replay(a.log, 1500))).toBe(fingerprint(a.world));
+    expect(a.lock.desync).toBeNull();
+    expect(b.lock.desync).toBeNull();
+  });
 
   it('follows the round trip with its input delay, and never runs an order early', () => {
     const [fast] = play(200, { latency: () => 5, lost: () => false });
