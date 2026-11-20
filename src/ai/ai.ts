@@ -84,6 +84,8 @@ export class AI {
   private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
   private wave = new Set<number>();
+  /** Enemy fighters and armed buildings we have seen: hp and shields, damage per second, as last seen. */
+  private foes = new Map<number, [number, number]>();
   /**
    * Where a new wave goes first: the middle of the road between our headquarters and the enemy's, the road always
    * found from the lower seat to the higher. Each army taking the road its own pathfinding gives it, two armies on
@@ -660,7 +662,7 @@ export class AI {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || (atHome.length > 0 && this.mapDry()))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || (atHome.length > 0 && this.mapDry()) || (minute >= 10 && atHome.length >= this.plan.wave && this.dominates(atHome)))) {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
@@ -799,22 +801,42 @@ export class AI {
    * Wave units in a fight they cannot win: around each one, our soldiers against the visible enemy soldiers and
    * defences, each side weighed by hp and shields times damage per second (a group's strength grows with both).
    */
-  private outmatched(wave: Entity[]): Entity[] {
+  private visibleFoes(): Entity[] {
     const w = this.world;
-    const foes = [...w.entities.values()].filter((e) => {
+    return [...w.entities.values()].filter((e) => {
       const a = (e.def as UnitDef | BuildingDef).attack;
-      return this.world.hostile(e.owner, this.player) && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
+      return w.hostile(e.owner, this.player) && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
     });
-    const power = (group: Entity[]) => {
-      let hp = 0;
-      let dps = 0;
-      for (const e of group) {
-        const a = (e.def as UnitDef | BuildingDef).attack!;
-        hp += e.hp + e.shield;
-        dps += a.damage / a.cooldown;
-      }
-      return hp * dps;
-    };
+  }
+
+  private dps(e: Entity): number {
+    const a = (e.def as UnitDef | BuildingDef).attack!;
+    return a.damage / a.cooldown;
+  }
+
+  /** A group's fighting power: its hp and shields times its damage per second. */
+  private power(group: [number, number][]): number {
+    let hp = 0;
+    let dps = 0;
+    for (const [h, d] of group) [hp, dps] = [hp + h, dps + d];
+    return hp * dps;
+  }
+
+  /**
+   * The army at home is three times as strong as every enemy fighter and armed building we have seen (as last seen):
+   * it goes, however few. The wave size only grows, and a side that could not reach it (soldiers in a Fortin, workers
+   * counted in its supply) sat at home over the enemy's last buildings until the time limit.
+   */
+  private dominates(atHome: Entity[]): boolean {
+    for (const e of this.visibleFoes()) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+    for (const id of this.foes.keys()) if (!this.world.entities.has(id)) this.foes.delete(id);
+    const known = this.power([...this.foes.values()]);
+    return known > 0 && this.power(atHome.filter((u) => (u.def as UnitDef).attack).map((u) => [u.hp + u.shield, this.dps(u)])) >= 3 * known;
+  }
+
+  private outmatched(wave: Entity[]): Entity[] {
+    const foes = this.visibleFoes();
+    const power = (group: Entity[]) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e)]));
     const out = new Set<Entity>();
     for (const u of wave) {
       if (out.has(u)) continue;
