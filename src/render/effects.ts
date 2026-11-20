@@ -1,4 +1,4 @@
-import { TEAM_COLORS } from './units';
+import { TEAM_COLORS } from './models';
 import {
   AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
   type Scene, Sprite,

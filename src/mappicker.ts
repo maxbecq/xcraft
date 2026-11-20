@@ -1,6 +1,6 @@
 import { CORNERS, MAPS, type MapFile, buildMap, turnsOf } from './maps';
 import { rotateFootprint } from './map';
-import { TEAM_COLORS } from './render/units';
+import { TEAM_COLORS } from './render/models';
 import { tileColor } from './terrain';
 import './mappicker.css';
 

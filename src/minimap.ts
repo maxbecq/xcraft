@@ -1,5 +1,5 @@
 import type { CameraRig } from './camera';
-import { TEAM_COLORS } from './render/units';
+import { TEAM_COLORS } from './render/models';
 import { FP } from './sim/fixed';
 import type { Entity, World } from './sim/world';
 import type { GameMap } from './map';

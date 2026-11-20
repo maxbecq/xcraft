@@ -6,7 +6,7 @@ import { newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
 import { BIOMES, type Biome } from '../render/biome';
-import { TEAM_COLORS } from '../render/units';
+import { TEAM_COLORS } from '../render/models';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
 import { encodeSeats } from './seats';

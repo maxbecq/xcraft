@@ -1,5 +1,5 @@
 import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, Mesh, PerspectiveCamera, Scene, Texture, Vector3, WebGLRenderer } from 'three';
-import { freePreview, preview } from './units';
+import { freePreview, preview } from './models';
 
 /**
  * The selected entity, alive in the selection panel: its own model turning slowly (units play their idle

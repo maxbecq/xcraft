@@ -1,6 +1,6 @@
 import { type Camera, DepthTexture, MeshBasicMaterial, type Object3D, type Material, type Mesh, type Scene, Vector2, type WebGLRenderer, WebGLRenderTarget } from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
-import { TEAM_COLORS } from './units';
+import { TEAM_COLORS } from './models';
 
 /**
  * Units seen through the buildings that hide them (SC2's silhouettes): a unit behind a building shows as a flat shape
