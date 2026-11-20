@@ -26,6 +26,8 @@ export const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 export const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
 /** Alone against the AI, the game's speed is a setting (never online: both machines must step alike). */
 export const SOLO = (params.has('play') || SANDBOX) && !NET_ROLE;
+/** Phones and tablets: touch controls, lighter rendering. */
+export const TOUCH = matchMedia('(pointer: coarse)').matches;
 export const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
 const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
 export const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
