@@ -14,7 +14,7 @@ import { isoOffset } from '../camera';
  */
 export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
-export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche'];
+export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche', 'centresocles'];
 /**
  * A picture's size against the model it stands on. The Intelligence suprême's model is drawn 10 % larger
  * (LOOK_SCALE); its picture is painted over the Intelligence centrale's with the same base, and keeps it.
