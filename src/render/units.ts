@@ -888,8 +888,8 @@ export class EntityRenderer {
     if (!ring.userData.thread) {
       const color = (ring.userData.core as MeshBasicMaterial).color;
       const glow = { color, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending };
-      const thread = new Mesh(new CylinderGeometry(0.012, 0.012, 1, 4).translate(0, -0.5, 0), new MeshBasicMaterial(glow));
-      const spot = new Mesh(new RingGeometry(0.1, 0.17, 24).rotateX(-Math.PI / 2), new MeshBasicMaterial({ ...glow, opacity: 0.6 }));
+      const thread = new Mesh(new CylinderGeometry(0.012, 0.012, 1, 4).translate(0, -0.5, 0), owned(new MeshBasicMaterial(glow)));
+      const spot = new Mesh(new RingGeometry(0.1, 0.17, 24).rotateX(-Math.PI / 2), owned(new MeshBasicMaterial({ ...glow, opacity: 0.6 })));
       for (const m of [thread, spot]) {
         m.userData.air = true;
         m.userData.noPick = true;
