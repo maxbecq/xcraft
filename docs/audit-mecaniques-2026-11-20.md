@@ -923,5 +923,113 @@ Toutes les statistiques des Dieux restent provisoires (`BALANCE.md` l. 42-52). A
 
 ## Suivi de la phase 2
 
-À compléter au fil des commits de comblement.
+Chaque manque comblé a son commit et son test, dans `src/sim/audit-gaps.test.ts` sauf mention contraire. Chaque commit change `World.hash` dans les parties où la mécanique sert : c'est attendu pour un changement de règle.
+
+### Ce qui a été comblé
+
+| Camp | Mécanique | Commit | Référence suivie | Chiffres |
+|---|---|---|---|---|
+| Humains, Dieux | Réparation par le Serf (bâtiments et machines) et par l'Esprit (bâtiments seulement) ; l'IA répare avec tout ouvrier qui le peut | `2bc9d35` | notice l. 37 et 314 | Esprit 8 PV/s (XC.doc) ; Serf 4 PV/s, **chiffre provisoire**, celui du drone Z ; un quart de la valeur pour une réparation complète, comme le drone |
+| Humains | Réservoir de substances : Gaz euphorisants, Acide dissolvant (après Acide anti-structure, à la place du bonus passif), Explosion suicidaire | `24ed775` | notice l. 69 | Gaz : +25 % vitesse et cadence, 30 s, rayon 3, portée 8 (mod). Acide : 400 (fiche), portée 5 (mod). Explosion : 356 en rayon 4, armure ignorée (mod). Recharges 60 s (Gaz) et 40 s (Acide) : **chiffres provisoires**, le jeu n'a pas d'énergie d'unité |
+| Humains | Régénérant en zone (tous les alliés vivants de la zone) | `15be3b7` | notice, fiche, mod | rayon du jeu (1,5) conservé ; la fiche dit 4 |
+| Humains | Festin de l'Allosaure (dévore un cadavre organique proche) | `368212a` | notice l. 88 | 50 % de la vie, recharge 60 s (mod) ; rayon 3, **chiffre provisoire** |
+| Humains | Mines chimiques du Char Pégase : invisibles, 5 en réserve, une de plus toutes les 12 s | `f0819dc` | notice l. 79, fiche, mod | 160 en rayon 1, un quart jusqu'à 1,25 (mod) ; mine 50 PV ; gratuite comme dans le mod (la fiche dit 35/20) |
+| Isdaris | Danse du soldat : l'Assassin ne prend que 67 % des tirs à distance | `7828de5` | notice l. 195 | 0,67 (mod) ; la fiche dit 33 % d'esquive |
+| Isdaris | Bouclier de plasma des cinq bâtiments majeurs : invulnérable, ne tire ni ne produit ; l'IA s'en sert sous le tiers de sa vie | `8f972c0` | notice l. 223, 236, 245 | 10 s, recharge 90 s (mod ; la fiche dit 20 s), recharge à part |
+| Isdaris | Canon orbital : frappe 6 s après l'ordre, adversaires prévenus, cible marquée | `ced25db` | fiche, mod | 6 s (mod ; la fiche dit 5 s) |
+| Isdaris | Trône d'Altar Sargon unique | `e10c350` | fiche | — |
+| Isdaris | Second temps de la Porte de déphasage : le groupe encore déphasé est téléporté où l'on veut, hors de sa forme déphasée | `a25077b` | notice l. 261 | gratuit, sans recharge propre (la fiche dit 300 d'énergie, recharge 300 s) |
+| Z | Gravité alourdie (Accumulateur) : ennemis à 18 cases ralentis de 50 %, 25 % plus lents à frapper, tant qu'ils restent dans la zone | `c737d7a` | notice l. 537, fiche | rayon et effets de la fiche ; recharge 103 s (205 d'énergie divisés par 2, comme les autres sorts de l'Accumulateur) ; durée 60 s, **chiffre provisoire** |
+| Z | Sonde robuste profite aussi au Drone de combat | `a575c7a` | fiche l. 721 | +25 PV (fiche) |
+| Dieux | Lumière ardente (Apollon) : vitesse et cadence de l'infanterie ennemie divisées par deux ; l'IA la lance | `687c5b2` | notice l. 363 | XC.doc : 25 à 45 s, zone 100 à 233, mise à l'échelle de la Tempête (1,8 à 4,1 cases) ; recharge 40 s comme la Tempête, portée 8 |
+| Dieux | Jet de sable (Seth) : un véhicule ennemi ne garde qu'un dixième de sa vitesse et frappe dix fois moins vite ; l'IA le lance | `eec951e` | notice l. 367 | 8 s, recharge 20 s, portée 6 : **chiffres provisoires** (aucune source) |
+| Dieux | Seth plus cruel avec les blessés | `122cdb7` | notice l. 367, `camp-dieux.md` | +50 % contre une unité sous la moitié de sa vie : **chiffre provisoire** |
+| Dieux | Fantômes de l'Armée des enfers : disparaissent après 300 dégâts infligés ou 20 s | `e3e2d19` | notice l. 386 | 300 (`camp-dieux.md` q16), **chiffre provisoire** |
+| Dieux | Frigg et l'Élémentaire d'eau planent : passent falaises et eau, mais sont touchés comme des unités au sol | `8304778` | notice l. 333 et 380 | — |
+| Dieux | Souffle de zone de l'Élémentaire de feu | `fd93b04` | notice l. 334 | zone 0,8 (`camp-dieux.md`) |
+| Dieux | Amon-Râ aveugle aussi : les unités tenues ne voient plus qu'à une case | `354caae` | notice l. 405 | — |
+
+Autres effets de ces commits :
+
+- un sort pointé sur un bâtiment se lance dès que son bord est à portée (avant, le lanceur restait bloqué contre un grand bâtiment) ;
+- un état « cadence » (`pace`) sur les entités porte la vitesse et le temps entre deux coups en pourcentage ; il sert aux Gaz euphorisants, à la Lumière ardente, à la Gravité alourdie et au Jet de sable ;
+- deux tests de scénario de `src/sim/v2.test.ts` ont changé avec la Danse du soldat : un Assassin détecté bat maintenant 5 Auxiliaires (il en fallait 5 pour le tuer, il en faut 6), et un Assassin seul détruit une Orbe plasma (l'Orbe gagnait).
+
+### Signalements pour l'équilibreur
+
+Aucun chiffre existant n'a été retouché. À valider :
+
+- tous les chiffres marqués « **chiffre provisoire, à valider par l'équilibreur** » dans le tableau ci-dessus ;
+- la Danse du soldat renforce beaucoup l'Assassin : il détruit seul une Orbe plasma ;
+- les écarts entre le jeu et les sources listés dans les sections des camps (Humains : poison, Explosif toxique, Napalm, Mine, Croissance, taux du Marché, rayon du Régénérant ; Isdaris : Manteau, Module déphasant, Canon orbital, Sphère de renvoi, Choc mental, bouclier du Robot moissonneur, Récepteur armé, Omniscience, Robots améliorés ; Dieux : Jörmungand à 1500 PV au lieu d'« indestructible ») ;
+- `acideBonus` (+30 contre les machines pour la Cuve) a disparu avec l'Acide dissolvant actif.
+
+### Ce qui n'a pas été fait, et pourquoi
+
+| Camp | Élément | Raison |
+|---|---|---|
+| Humains | Passagers du Fortin et du Scarabée qui lancent leurs sorts de l'intérieur | demande de pouvoir sélectionner les passagers dans l'interface : chantier d'interface à part |
+| Humains | Perte de 50 % de vie des passagers quand l'abri tombe ; 3 places du Scarabée | fiche seule ; la notice ne le dit pas |
+| Humains | Mode aérien du Pégase (vitesse, vue, cadence), Trébuchet incendiaire, zone de la Tour alchimistique, Bourdon qui porte un véhicule | aucune source ne donne de chiffre : à fixer par l'équilibreur avant tout code |
+| Humains | Entrepôts | fiche seule, absente de la notice |
+| Isdaris | Double énergétique qui n'attaque pas | notice ambiguë (« double parfait ») : voir les décisions |
+| Isdaris | Partage des dégâts de la Sphère de renvoi | la notice (« une partie des dégâts ») est déjà respectée ; le partage moitié-moitié est un chiffre de la fiche et du mod |
+| Isdaris | Orbe plasma mobile | la notice (« se déplacer lentement ») et la fiche (redéploiement en 35 s) divergent : voir les décisions |
+| Isdaris | Matérialisation par l'Obélisque | gros changement de l'interface et de l'IA : voir les décisions |
+| Z | Énergie de l'Espion, du Réparateur et de l'Accumulateur | simplification déjà choisie (recharges) ; à reprendre en un lot si on la rétablit |
+| Z | Détection de l'IC, Refuge, 3 annexes par Pod, Réparateur sur les bâtiments, armes de la notice absentes de la fiche | la notice et la fiche divergent : voir les décisions |
+| Dieux | Bonus de la forme de terre contre l'infanterie, imprécision du Golem contre les cibles mobiles | aucun chiffre ; à fixer par l'équilibreur |
+| Tous | IA : véhicules humains, recherches et sorts jamais utilisés (Humains, Isdaris, Z, Dieux) | réglages de l'IA qui demandent une mesure : à faire avec la session d'équilibrage, sur demande de la session principale |
+
+### Visuels manquants
+
+Rien n'a été généré. En attendant :
+
+- la Mine chimique utilise le modèle et l'icône de remplacement du jeu ;
+- les boutons Gaz euphorisants, Acide dissolvant, Explosion suicidaire, Festin, Mine chimique, Bouclier de plasma, Transfert du groupe, Gravité alourdie, Lumière ardente et Jet de sable n'ont pas d'icône propre ;
+- seuls la cible du Canon orbital (un anneau) et son tir ont un effet visuel ; les autres nouveaux sorts n'en ont pas.
+
+## Décisions pour l'utilisateur
+
+Chaque point porte une recommandation. Les détails sont dans la section du camp.
+
+### Humains
+
+1. **Bourdon et Dirigeable** : une unité (notice) ou deux (fiche) ? Recommandation : une, comme la notice et le jeu.
+2. **Guilde alchimistique** : absente de la notice, présente dans la fiche et le mod. Recommandation : la laisser absente.
+3. **Grand Conseil** : prérequis et bonus (10 % dans le jeu, 25 % dans la fiche). Recommandation : demander les chiffres à l'équilibreur.
+4. **Caserne volante** : le prérequis du Marché n'a pas de source. Recommandation : le retirer, ou le garder faute de mieux.
+5. **Festin** : cadavres (notice, fait) ou unité vivante (mod) ? Recommandation : garder les cadavres.
+6. **Fin du Régénérant** : 1 PV (jeu), -80 % de la vie maximale (fiche) ou mort (mod) ? Recommandation : garder 1 PV, plus proche de la notice (« mort presque sûre »).
+7. **Stimulant, Charge, prérequis des niveaux 2 et 3** : ajouts du jeu, absents des trois sources. Recommandation : les garder.
+
+### Isdaris
+
+8. **Prérequis de l'Assassin et du Dragon** : la notice et la fiche échangent l'Autel et la Pyramide. Recommandation : garder la notice.
+9. **Mur d'énergie** : au Trône (notice) ou au Druide (fiche, mod) ? Recommandation : garder la notice.
+10. **Extensions par bâtiment majeur** : 3 (notice) ou 2 sur 3 (fiche) ? Recommandation : 3.
+11. **Miniportail** : seconde file de production (notice) ou accélération de 25 % (jeu) ? Recommandation : à trancher ; la seconde file est plus fidèle.
+12. **Matérialisation** : par l'Obélisque avec recharge (notice, fiche, mod) ou par le robot (jeu) ? Recommandation : garder le robot pour l'ergonomie.
+13. **Orbe plasma mobile** : déplacement lent (notice) ou redéploiement en 35 s (fiche, mod) ? Recommandation : un déracinement comme l'Yggdrasill (l'Orbe devient une unité lente, puis se repose), plus proche de la notice.
+14. **Double énergétique** : copie qui combat (jeu) ou illusion sans attaque (fiche, mod) ? Recommandation : illusion, deux sources sur trois.
+15. **Porte-disques contre les volants** : la notice et la fiche disent sol et air, le jeu sol seul. Question de chiffres pour l'équilibreur.
+
+### Z
+
+16. **Creep obligatoire pour construire** (notice) : recommandation, ne pas l'imposer (Z peine déjà à démarrer).
+17. **Canon IEM** : immobilisation de zone (notice) ou prise de contrôle 50 s (fiche, en place) ? Recommandation : garder la fiche.
+18. **Détection de l'Intelligence centrale** (notice seule) : recommandation, ne pas l'ajouter (l'Espion détecte tôt).
+19. **Refuge des drones dans l'IC, jusqu'à 3 annexes par Pod, Réparateur sur les bâtiments** (notice seule) : à trancher ; les annexes multiples sont compatibles avec la fiche.
+20. **Laser concentré, Désintégrateur, Arc offensif** (notice seule, sans chiffre) : recommandation, ne pas les faire (`Z.doc` fait foi).
+21. **Énergie des unités de soutien** : recommandation, garder les recharges pour l'instant.
+
+### Dieux
+
+22. **Qui bâtit le Temple de vénération, la Fontaine et l'Artefacterie** : Thor, Osiris et Frigg (notice) ou Gaïa avec ces dieux pour prérequis (jeu) ? Recommandation : garder le jeu et corriger `camp-dieux.md`.
+23. **Panthéon** : notice ou XC.doc 2008 ? Recommandation : la notice.
+24. **Forme de base chétive de l'Élémentaire** : recommandation, garder le jeu (invocation directe en forme de feu).
+25. **Osiris, « torrents de pourriture »** : simple texte ou sort Putréfaction de XC.doc ? Recommandation : texte.
+26. **Golem et Titan mécaniques** (`camp-dieux.md` q12) : recommandation, oui, après accord de l'équilibreur.
+27. **Taille de la Lumière ardente** : échelle de XC.doc (fait, 1,8 à 4,1 cases) ou « large zone » plus grande ? Recommandation : garder, et laisser l'équilibreur juger.
+28. **Jörmungand « indestructible »** : invulnérable, ou beaucoup de PV ? Pour l'équilibreur.
 
