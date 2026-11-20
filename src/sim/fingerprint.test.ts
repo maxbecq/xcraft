@@ -79,10 +79,15 @@ describe('the state fingerprint', () => {
   });
 
   it('stays cheap: it runs every 100 ticks', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 50; i++) fingerprint(world);
-    const each = (performance.now() - t0) / 50;
+    // Best of 9 series: a loaded machine only slows some series, a real complexity jump slows them all.
+    const series = Array.from({ length: 9 }, () => {
+      const t0 = performance.now();
+      for (let i = 0; i < 10; i++) fingerprint(world);
+      return (performance.now() - t0) / 10;
+    });
+    const each = Math.min(...series);
     console.log(`fingerprint: ${each.toFixed(3)} ms, ${world.entities.size} entities`);
+    // About 0.35 ms on an idle machine: 3 ms leaves room for load, not for a 10x slowdown.
     expect(each).toBeLessThan(3);
   });
 });
