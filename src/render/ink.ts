@@ -54,7 +54,7 @@ export function inkPass(depth: Texture, normal: Texture, camera: OrthographicCam
         // Painterly grade: more saturation, warmer shadows, slightly lifted blacks.
         float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
         c.rgb = mix(vec3(l), c.rgb, 1.22);
-        c.rgb += vec3(0.035, 0.018, -0.01) * (1.0 - l);
+        c.rgb += vec3(0.035, 0.018, -0.01) * (1.0 - l) * smoothstep(0.0, 0.04, l); // the dark past the map's edge stays black
         c.rgb = mix(c.rgb, inkColor, edge * inkStrength);
         // Paper grain and a soft vignette.
         c.rgb *= 0.97 + 0.06 * hash(floor(vUv * resolution / 2.0));
