@@ -33,11 +33,15 @@ export interface Biome {
   greyStones?: boolean;
   /** Built world instead of natural ground ('city': metal decks, wall cladding, neon, a void below). */
   style?: 'city';
+  /** Ground pictures instead of the drawn ground (public/textures/<name>-sol.jpg and its normal map). */
+  ground?: 'volcan' | 'asteroides';
+  /** Floating rocks over space: chasms and the map's edges open onto the void (see render/space.ts). */
+  space?: boolean;
   /**
    * Chasms on natural ground (the city has its own void): how deep the floor lies, in levels; its colour; a glow
    * from below (or none); and a smooth, glossy floor (ice).
    */
-  chasm: { depth: number; floor: Color; glow?: Color; glossy?: boolean };
+  chasm: { depth: number; floor: Color; glow?: Color; glossy?: boolean; lava?: boolean };
 }
 
 export const BIOMES: Record<string, Biome> = {
@@ -118,6 +122,49 @@ export const BIOMES: Record<string, Biome> = {
     greyStones: true,
     // A glacier in a hollow: a smooth sheet of blue ice a level and a half down.
     chasm: { depth: 1.6, floor: new Color(0x6aa2c8), glow: new Color(0x1c5a8a), glossy: true },
+  },
+  // Black basalt in wide cracked slabs, lava glowing in the cracks and filling the chasms, a smoky red sky.
+  volcan: {
+    id: 'volcan',
+    name: 'Volcan',
+    levels: [new Color(0xd4d6da), new Color(0xc8cace), new Color(0xe2e4e8)],
+    patch: new Color(0x3a3a3e),
+    sand: new Color(0x8a7a70),
+    ramp: new Color(0x8a807a),
+    rock: new Color(0x403a38),
+    rockDark: new Color(0x0e0c0c),
+    veins: new Color(0xff5a14),
+    sun: { color: 0xffe0cc, intensity: 2.8 },
+    sky: { color: 0x8a7a80, ground: 0x4a1c0c, intensity: 0.9 },
+    background: 0x070302,
+    exposure: 1.05,
+    decorTint: new Color(0.32, 0.29, 0.28),
+    ground: 'volcan',
+    greyStones: true,
+    // Lava a short way down, bright and glossy.
+    chasm: { depth: 1.0, floor: new Color(0xd84a10), glow: new Color(0xff3a00), glossy: true, lava: true },
+  },
+  // Big flat asteroids over space, a banded gas giant beyond: dusty brown regolith, craters, chasms into the void.
+  asteroides: {
+    id: 'asteroides',
+    name: 'Astéroïdes',
+    levels: [new Color(0xe6e0da), new Color(0xd8d2cc), new Color(0xf4eee8)],
+    patch: new Color(0xb8aea4),
+    sand: new Color(0xd8ccbc),
+    ramp: new Color(0x9a8e82),
+    rock: new Color(0x6e6258),
+    rockDark: new Color(0x221c18),
+    veins: null,
+    sun: { color: 0xfff0dc, intensity: 3.4 },
+    sky: { color: 0x9aa8d0, ground: 0x2a2018, intensity: 0.8 },
+    background: 0x020207,
+    exposure: 1.0,
+    decorTint: new Color(0.7, 0.66, 0.62),
+    ground: 'asteroides',
+    greyStones: true,
+    space: true,
+    // The asteroid's thickness down to its broken underside: no floor, space below.
+    chasm: { depth: 4, floor: new Color(0x000000) },
   },
   // An abandoned megacity: decks of riveted plates over a void, neon in the seams, rain-dark steel.
   ville: {

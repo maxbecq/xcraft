@@ -5,7 +5,7 @@ import {
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
-import { crackMask, fbm, groundTextures, rockTextures } from './render/textures';
+import { crackMask, fbm, groundImages, groundTextures, rockTextures } from './render/textures';
 
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
 /** Current planet look; set before building the terrain. */
@@ -102,11 +102,14 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       if (chasm(x, y)) {
-        if (!pit) continue; // open onto the void
+        if (!pit || B.space) continue; // open onto the void (the city's lower levels, space under the asteroids)
         const v = CORNER_POS.map(([cx, cy]): [Vector3, Color] => {
           const n = noise(x + cx, y + cy, 4, 61);
           // Ice: drifts of snow and darker clear patches; rock: dark scree.
-          const c = B.chasm.glossy
+          const c = B.chasm.lava
+            ? // Lava: glowing, under drifting plates of dark crust.
+              B.chasm.floor.clone().lerp(new Color(0xffc040), Math.max(0, 0.5 - n)).lerp(new Color(0x1a0804), Math.min(1, Math.max(0, noise(x + cx, y + cy, 3, 67) - 0.45) * 3))
+            : B.chasm.glossy
             ? B.chasm.floor.clone().lerp(new Color(0xf4f8fc), Math.max(0, noise(x + cx, y + cy, 7, 67) - 0.45) * 1.6).multiplyScalar(0.8 + n * 0.35)
             : B.chasm.floor.clone().multiplyScalar(0.6 + n * 0.8);
           return [new Vector3(x + cx, floorY + (B.chasm.glossy ? 0 : (n - 0.5) * 0.5), y + cy), c];
@@ -140,6 +143,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   }
 
   // Straight cliff walls along tile edges, from each tile down to any lower neighbour (or off the map).
+  const skirt = B.space ? B.chasm.depth * LEVEL_HEIGHT : 2.5;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       if (chasm(x, y) && !pit) continue;
@@ -151,7 +155,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
         // A chasm: down to its floor, or (city) only the deck's slab edge; the parking levels below are drawn by cityUnderdeck.
         if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = pit ? [floorY, floorY] : [-DECK_SLAB, -DECK_SLAB];
         else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
-        else [ba, bb] = [Math.min(ta, tb) - 2.5, Math.min(ta, tb) - 2.5]; // skirt around the map
+        else [ba, bb] = [Math.min(ta, tb) - skirt, Math.min(ta, tb) - skirt]; // skirt around the map (an asteroid's thick edge)
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
         const p0 = new Vector2(x + CORNER_POS[c[0]][0], y + CORNER_POS[c[0]][1]);
         const p1 = new Vector2(x + CORNER_POS[c[1]][0], y + CORNER_POS[c[1]][1]);
@@ -160,14 +164,14 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
     }
   }
 
-  const [gMap, gNormal] = groundTextures(B.style);
+  const [gMap, gNormal] = B.ground ? groundImages(B.ground) : groundTextures(B.style);
   const [rMap, rNormal] = rockTextures(B.style);
-  const groundMat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(0.8, 0.8), roughness: 0.95 });
+  const groundMat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(B.ground ? 1.5 : 0.8, B.ground ? 1.5 : 0.8), roughness: 0.95 });
   if (B.veins) {
     // Strange worlds: light glows up through the cracks.
     groundMat.emissiveMap = crackMask(B.style);
     groundMat.emissive = B.veins;
-    groundMat.emissiveIntensity = B.style === 'city' ? 1.2 : 2.2;
+    groundMat.emissiveIntensity = B.style === 'city' ? 1.2 : B.ground === 'volcan' ? 1.6 : 2.2;
   }
   untile(groundMat, rMap, B.rock.clone().lerp(new Color(B.greyStones || B.style ? 0x86888d : 0x8a8378), 0.55), B.style === 'city', roads, map);
   const groundMesh = ground.mesh(groundMat);
@@ -179,10 +183,13 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   cliffMesh.castShadow = true;
   const g = new Group();
   g.add(groundMesh, cliffMesh);
-  if (pit) g.add(outskirts(map, gMap, gNormal, rMap));
+  if (pit && !B.space) g.add(outskirts(map, gMap, gNormal, rMap));
   if (pit && map.chasm && B.chasm.glossy) {
-    const { glow, glossy } = B.chasm;
-    const floorMat = new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
+    const { glow, glossy, lava } = B.chasm;
+    // Lava gives its own light: drawn as it is, bright where molten, dark where crusted over.
+    const floorMat = lava
+      ? new MeshBasicMaterial({ vertexColors: true })
+      : new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
     const floorMesh = floor.mesh(floorMat);
     floorMesh.receiveShadow = true;
     g.add(floorMesh);
@@ -358,7 +365,7 @@ class Builder {
     this.tri([p[0], p[2], p[3]], [c[0], c[2], c[3]], facing, wallUv);
   }
 
-  mesh(material: MeshStandardMaterial): Mesh {
+  mesh(material: Material): Mesh {
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute(this.pos, 3));
     g.setAttribute('color', new Float32BufferAttribute(this.col, 3));
@@ -371,7 +378,9 @@ class Builder {
 /** Blends the colour texture with a second, rotated and larger sample of itself, so its repetition does not show. */
 function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = false, roads?: Texture, map?: GameMap): void {
   // grid: deck plates, kept aligned (no rotated second sample, no bedrock slabs, only darker grimy plates).
-  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile') + (roads ? '-roads' : '');
+  // A ground picture (B.ground) has its own rock and stones: no painted bedrock slabs over it.
+  const plain = !!B.ground;
+  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile') + (roads ? '-roads' : '') + (plain ? '-plain' : '');
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
@@ -404,8 +413,8 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
         vec4 texelColor = mix(texture2D(map, vMapUv), texture2D(map, uv2), ${grid ? '0.0' : '0.45'});
         // Second material: flat slabs of bedrock breaking through the dirt, outlined like a painting.
         float n = gFbm(vGround * 0.16);
-        float slab = smoothstep(0.6, 0.62, n);
-        float rim = smoothstep(0.585, 0.6, n) - slab;
+        float slab = ${plain ? '0.0' : 'smoothstep(0.6, 0.62, n)'};
+        float rim = ${plain ? '0.0' : 'smoothstep(0.585, 0.6, n) - slab'};
         vec4 rockTex = texture2D(rockMap, vGround * 0.33);
         texelColor.rgb = ${grid ? 'texelColor.rgb * (1.0 - slab * 0.3)' : 'mix(texelColor.rgb, rockTex.rgb * slabColor * 1.6, slab)'};
         texelColor.rgb *= 1.0 - rim * 0.55;

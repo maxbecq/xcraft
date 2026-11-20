@@ -1,4 +1,4 @@
-import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, NoColorSpace, type Texture } from 'three';
+import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, NoColorSpace, type Texture, TextureLoader } from 'three';
 
 // Procedural textures, generated once at start: no image files to ship.
 
@@ -100,6 +100,21 @@ export function groundTextures(style?: string): [Texture, Texture] {
   // Directional brush strokes on top of the relief.
   const shade = (h: number, u: number, v: number) => 0.84 + h * 0.3 + (fbm(u * 0.6 + v * 0.2, v * 2.2, 3, 8, 41) - 0.5) * 0.22;
   return bake(512, height, shade, 6);
+}
+
+/** A picture from public/textures, repeating; it shows once loaded (the ground is drawn plain until then). */
+function picture(name: string, colour: boolean, repeat = 1): Texture {
+  const t = new TextureLoader().load(`${import.meta.env.BASE_URL}textures/${name}.jpg`);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.colorSpace = colour ? SRGBColorSpace : NoColorSpace;
+  t.repeat.set(repeat, repeat);
+  t.anisotropy = 4;
+  return t;
+}
+
+/** Ground pictures of a planet (tools/biomes/textures.sh): colour and normal map, one picture over 8 tiles. */
+export function groundImages(name: string): [Texture, Texture] {
+  return [picture(`${name}-sol`, true, 0.62), picture(`${name}-sol-n`, false, 0.62)];
 }
 
 /** White where the ground texture has cracks: used to make glowing veins on strange worlds. */
