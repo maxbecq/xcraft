@@ -1,5 +1,5 @@
 import { type GameMap, cornerLevels, cutCorner } from '../map';
-import { FP, idiv, isqrt, tileOf } from './fixed';
+import { FP, isqrt, tileOf } from './fixed';
 
 /** Ground passability: cliffs from the map plus tiles blocked by buildings. */
 export class Grid {
@@ -123,13 +123,21 @@ export class Grid {
   lineWalkable(ax: number, ay: number, bx: number, by: number): boolean {
     const len = isqrt((bx - ax) ** 2 + (by - ay) ** 2);
     const n = Math.max(1, Math.ceil(len / (FP / 4)));
+    const [ddx, ddy, w] = [bx - ax, by - ay, this.width];
     let tx = tileOf(ax);
     let ty = tileOf(ay);
+    // tileOf and idiv written out, and each step tested as findPath does (terrain mask, then buildings): this runs
+    // four times a tile along every line a path is smoothed with.
     for (let i = 1; i <= n; i++) {
-      const nx = tileOf(ax + idiv((bx - ax) * i, n));
-      const ny = tileOf(ay + idiv((by - ay) * i, n));
+      const nx = Math.floor((ax + Math.trunc((ddx * i) / n)) / FP);
+      const ny = Math.floor((ay + Math.trunc((ddy * i) / n)) / FP);
       if (nx === tx && ny === ty) continue;
-      if (Math.abs(nx - tx) > 1 || Math.abs(ny - ty) > 1 || !this.canStep(tx, ty, nx, ny)) return false;
+      const dx = nx - tx;
+      const dy = ny - ty;
+      if (dx < -1 || dx > 1 || dy < -1 || dy > 1) return false;
+      if (tx < 0 || ty < 0 || tx >= w || ty >= this.height) {
+        if (!this.canStep(tx, ty, nx, ny)) return false;
+      } else if (!(this.steps[ty * w + tx] & (1 << DIR[(dy + 1) * 3 + dx + 1])) || this.blocked[ny * w + nx] !== 0 || (dx !== 0 && dy !== 0 && (this.blocked[ty * w + nx] !== 0 || this.blocked[ny * w + tx] !== 0))) return false;
       tx = nx;
       ty = ny;
     }
@@ -223,6 +231,8 @@ export class Grid {
 /** canStep's sides: bit, and the step across it. */
 const SIDES: [number, number, number][] = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]];
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
+/** The step index d (DX, DY) of a move by (dx, dy), at (dy + 1) * 3 + dx + 1. */
+const DIR = [7, 0, 4, 3, -1, 1, 6, 2, 5];
 const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
 
 /**

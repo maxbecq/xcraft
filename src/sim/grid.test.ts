@@ -97,3 +97,31 @@ it('findPath gives the very paths of the plain A* it replaces (canStep per neigh
     }
   }
 });
+
+it('lineWalkable answers as when it asked canStep at each step', () => {
+  for (const def of Object.values(MAPS)) {
+    const g = new Grid(buildMap(def));
+    let seed = 9;
+    const rand = (n: number) => Math.floor(((seed = (seed * 16807) % 2147483647) / 2147483647) * n);
+    for (let i = 0; i < g.blocked.length; i++) if (rand(100) < 10) g.blocked[i] = 1;
+    const reference = (ax: number, ay: number, bx: number, by: number) => {
+      const len = Math.floor(Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2));
+      const n = Math.max(1, Math.ceil(len / 256));
+      let [tx, ty] = [Math.floor(ax / 1024), Math.floor(ay / 1024)];
+      for (let i = 1; i <= n; i++) {
+        const nx = Math.floor((ax + Math.trunc(((bx - ax) * i) / n)) / 1024);
+        const ny = Math.floor((ay + Math.trunc(((by - ay) * i) / n)) / 1024);
+        if (nx === tx && ny === ty) continue;
+        if (Math.abs(nx - tx) > 1 || Math.abs(ny - ty) > 1 || !g.canStep(tx, ty, nx, ny)) return false;
+        [tx, ty] = [nx, ny];
+      }
+      return true;
+    };
+    for (let k = 0; k < 3000; k++) {
+      const ax = rand((g.width + 4) * 1024) - 2048;
+      const ay = rand((g.height + 4) * 1024) - 2048;
+      const [bx, by] = [ax + rand(24 * 1024) - 12 * 1024, ay + rand(24 * 1024) - 12 * 1024];
+      expect(g.lineWalkable(ax, ay, bx, by)).toBe(reference(ax, ay, bx, by));
+    }
+  }
+});
