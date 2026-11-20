@@ -34,6 +34,6 @@ export function fingerprint(world: World): number {
     for (const [k, v] of Object.entries(e)) if (k !== 'def') value(v, 3);
   }
   for (const p of world.players) value(p, 2);
-  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.recalls, world.strikes]) value(lasting, 3);
+  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.recalls, world.strikes, world.phaseGroups]) value(lasting, 3);
   return h >>> 0;
 }

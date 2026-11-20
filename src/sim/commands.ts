@@ -283,6 +283,23 @@ export function apply(this: World, c: Command): void {
         if (need) return void this.say(c.player, need);
         return void this.centreK(b, kind, c.x, c.y);
       }
+      if (kind === 'transfertgroupe') {
+        // Second step of the Porte de déphasage: the latest group still phased goes to the point, out of phase.
+        const need = this.needs(c.player, ab.research);
+        if (need) return void this.say(c.player, need);
+        const g = this.phaseGroups.filter((g) => g.owner === c.player).pop();
+        const units = g ? g.ids.map((id) => this.entities.get(id)).filter((u): u is Entity => !!u && u.hp > 0 && u.phased > 0 && !u.inside) : [];
+        if (!g || !units.length) return void this.say(c.player, 'Aucun groupe déphasé.');
+        this.phaseGroups.splice(this.phaseGroups.indexOf(g), 1);
+        const [x, y] = [c.x, c.y];
+        this.teleports.push({ phase: 'start', owner: c.player, x1: units[0].x, y1: units[0].y, x2: x, y2: y, ids: units.map((u) => u.id) });
+        for (const u of units) {
+          u.phased = 0;
+          this.place(u, x, y);
+        }
+        this.teleports.push({ phase: 'end', owner: c.player, x1: units[0].x, y1: units[0].y, x2: x, y2: y, ids: units.map((u) => u.id) });
+        return;
+      }
       if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
       const need = this.needs(c.player, ab.research);
       if (need) return void this.say(c.player, need);
@@ -299,7 +316,14 @@ export function apply(this: World, c: Command): void {
         for (const p of this.players) if (p.id !== c.player) this.say(p.id, 'Frappe orbitale imminente !', 'alert');
       }
       if (kind === 'murenergie') this.wall(c.player, b, c.x, c.y, ab.radius!, ticks(ab.duration));
-      if (kind === 'portedephasage') for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) u.phased = ticks(ab.duration);
+      if (kind === 'portedephasage') {
+        const ids: number[] = [];
+        for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) {
+          u.phased = ticks(ab.duration);
+          ids.push(u.id);
+        }
+        if (ids.length) this.phaseGroups.push({ owner: c.player, ids, left: ticks(ab.duration) });
+      }
       this.casts.push({ kind: kind === 'canonorbital' ? 'canonorbitalvise' : kind, x: c.x, y: c.y });
       this.players[c.player].energy -= ab.energy!;
       b.abilityCd = ticks(ab.cooldown);

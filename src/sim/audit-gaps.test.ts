@@ -267,4 +267,24 @@ describe('audit gaps', () => {
     run(w, 3);
     expect(frigg.hp).toBeLessThan(hp);
   });
+
+  it('the Porte de déphasage\'s second step sends the group still phased anywhere, out of phase', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].upgrades.porte = 1;
+    w.players[0].energy = 1000;
+    const trone = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    const a = w.spawn('archer', 0, 40 * FP, 40 * FP);
+    const b = w.spawn('archer', 0, 41 * FP, 40 * FP);
+    const x0 = a.x;
+    w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'transfertgroupe', x: 60 * FP, y: 30 * FP }]);
+    expect(Math.abs(a.x - x0)).toBeLessThan(FP); // nothing phased: nothing goes
+    w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'portedephasage', x: a.x, y: a.y }]);
+    expect(a.phased).toBeGreaterThan(0);
+    expect(b.phased).toBeGreaterThan(0);
+    w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'transfertgroupe', x: 60 * FP, y: 30 * FP }]);
+    for (const u of [a, b]) {
+      expect(u.phased).toBe(0);
+      expect(Math.abs(u.x - 60 * FP)).toBeLessThan(3 * FP);
+    }
+  });
 });

@@ -360,6 +360,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   canonorbital: { name: 'Canon orbital', effect: 'Un rayon de plasma depuis l\'orbite, sur un point qu\'un Espion surveille.', hotkey: 'C', research: 'relais', ...BALANCE.abilities.canonorbital },
   /** Trône (notice, Porte de déphasage): the Isdaris units round the point phase out for a while. */
   portedephasage: { name: 'Porte de déphasage', effect: 'Les unités Isdaris autour du point se déphasent un moment.', hotkey: 'P', research: 'porte', ...BALANCE.abilities.portedephasage },
+  /** Notice: the second, optional step of the Porte de déphasage: the group still phased is sent anywhere, out of phase. */
+  transfertgroupe: { name: 'Transfert du groupe', effect: 'Téléporte où l\'on veut le groupe encore déphasé par la Porte ; il y arrive hors de sa forme déphasée.', hotkey: 'G', research: 'porte', target: 'point', cooldown: 0, duration: 0 },
   /** Char Pégase (notice): takes off (shooting only at flyers) or lands. */
   decollage: { name: 'Décollage / atterrissage', effect: 'Décolle (ne tire alors que sur les volants) ou atterrit.', hotkey: 'D', research: 'decollage', ...BALANCE.abilities.decollage },
   /** Caserne volante: lifts off, a slow flyer that trains nothing until it lands. */
@@ -563,7 +565,7 @@ const BASE: Record<string, object> = {
   },
   // Notice: « Trône d'Altar Sargon », the last major building: Béhémoths, and the ultimate powers of its extensions.
   trone: {
-    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, unique: true, abilities: ['canonorbital', 'portedephasage', 'murenergie', 'bouclierplasma'], faction: 'isdaris', hotkey: 'A',
+    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, unique: true, abilities: ['canonorbital', 'portedephasage', 'transfertgroupe', 'murenergie', 'bouclierplasma'], faction: 'isdaris', hotkey: 'A',
     researches: ['relais', 'porte', 'concentrateur'],
   },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).

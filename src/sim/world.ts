@@ -35,7 +35,7 @@ export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying || e.ai
 /** Moves over cliffs, water and buildings: the flyers, and the units that hover but are hit as ground units. */
 export const soars = (e: Entity): boolean => flies(e) || !!(e.def as UnitDef).hover;
 /** A building ability's cooldown: the Canon IEM and the Bouclier de plasma keep their own, apart from the building's other ability. */
-export const cdOf = (b: Entity, name: string): number => (name === 'canoniem' ? b.iemCd : name === 'bouclierplasma' ? b.plasmaCd : b.abilityCd);
+export const cdOf = (b: Entity, name: string): number => (name === 'canoniem' ? b.iemCd : name === 'bouclierplasma' ? b.plasmaCd : name === 'transfertgroupe' ? 0 : b.abilityCd);
 /** Workers that repair, by type: hp a second, share of the worth a full repair costs, machines as well as buildings. */
 export const REPAIR: Record<string, { hp: number; percent: number; units: boolean }> = BALANCE.rules.repair;
 /** Can a worker of this type repair that (own, finished, wounded) thing? */
@@ -316,6 +316,8 @@ export class World {
   casts: Cast[] = [];
   /** Rappels channelling, with ticks left. */
   recalls: { owner: number; from: number; x: number; y: number; ids: number[]; left: number }[] = [];
+  /** Groups phased by a Porte de déphasage, which the Trône may still send elsewhere while they are phased. */
+  phaseGroups: { owner: number; ids: number[]; left: number }[] = [];
   /** Canon orbital shots on their way: they strike when `left` runs out. */
   strikes: { owner: number; x: number; y: number; left: number }[] = [];
   readonly vision: Vision[];
@@ -409,6 +411,7 @@ export class World {
     this.recalls = this.recalls.filter((r) => r.left > 0);
     for (const s of this.strikes) if (--s.left === 0) this.orbitalHit(s);
     this.strikes = this.strikes.filter((s) => s.left > 0);
+    this.phaseGroups = this.phaseGroups.filter((g) => --g.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) {
       // Shift: orders go after what the units are already doing; otherwise they replace it all (setOrder).
