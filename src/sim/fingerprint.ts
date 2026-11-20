@@ -4,8 +4,9 @@ import type { World } from './world';
  * A fingerprint of the whole simulated state, compared every few seconds between the two players' games of a network
  * match: every field of every entity (position, health, orders and the orders queued after them, production queues,
  * kits, cooldowns, timers…), every player's resources and research, and the lasting effects on the ground (scans,
- * walls, silences, storms, recalls). Taken field by field in the order the simulation set them, which both games
- * share. Static data (`def`) and this tick's events, already counted through their effects, are left out.
+ * walls, silences, storms, recalls, bodies, units coming back) and the next id. Taken field by field in the order
+ * the simulation set them, which both games share. Static data (`def`) and this tick's events, already counted
+ * through their effects, are left out.
  */
 export function fingerprint(world: World): number {
   let h = 2166136261;
@@ -34,6 +35,10 @@ export function fingerprint(world: World): number {
     for (const [k, v] of Object.entries(e)) if (k !== 'def') value(v, 3);
   }
   for (const p of world.players) value(p, 2);
-  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.recalls, world.strikes, world.phaseGroups]) value(lasting, 3);
+  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.recalls, world.strikes, world.phaseGroups, world.corpses]) value(lasting, 3);
+  // Private to the World but lasting: units coming back (Gaïa), and the next id (an entity made on one side only).
+  const inside = world as unknown as { respawns: unknown; nextId: number };
+  value(inside.respawns, 3);
+  mix(inside.nextId);
   return h >>> 0;
 }

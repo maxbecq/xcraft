@@ -70,6 +70,19 @@ describe('the state fingerprint', () => {
       other.silences.push({ x: 1, y: 2, r: 3, until: 4 });
       return () => other.silences.pop();
     });
+    check('a body left on the ground', () => {
+      other.corpses.push({ x: 1, y: 2, tick: 3, owner: 0, type: 'serf' });
+      return () => other.corpses.pop();
+    });
+    const inside = other as unknown as { respawns: { owner: number; type: string; at: number }[]; nextId: number };
+    check('a unit coming back', () => {
+      inside.respawns.push({ owner: 0, type: 'serf', at: 9 });
+      return () => inside.respawns.pop();
+    });
+    check('the next id', () => {
+      inside.nextId++;
+      return () => inside.nextId--;
+    });
     check('a research level', () => {
       const p = other.players[0];
       const was = p.upgrades;
