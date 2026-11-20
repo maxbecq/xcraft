@@ -274,7 +274,7 @@ export function updateCard(h: Hud): void {
   h.tip.hidden = true; // its button may be gone
   h.card.innerHTML = h.buttons
     .map((b) => {
-      const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
+      const cost = b.cost ? `<small${b.cost.minerals && b.cost.energy ? ' class="two"' : ''}>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
       const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
       const glyph = p.faction === 'z' ? Z_GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')] : undefined;
       const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';

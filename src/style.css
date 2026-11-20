@@ -927,6 +927,13 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   }
 }
+/* Computers: a command with a picture and two costs (minerals and energy, on two lines) keeps a smaller picture at the
+   top, so the costs below never cover it. */
+@media (min-height: 561px) and (min-width: 821px) {
+  body[class] .cmd.has-icon:has(small.two) { justify-content: flex-start; padding-top: 3px; }
+  body[class] .cmd.has-icon:has(small.two) img { width: 22px; height: 22px; }
+  body[class] .cmd small.two { line-height: 1; }
+}
 /* Phones: a command with both a picture and a cost keeps the picture at the top, so the cost below never covers it. */
 @media (max-height: 560px), (max-width: 820px) {
   body[class] .cmd.has-icon:has(small) { justify-content: flex-start; padding-top: 2px; }
