@@ -280,7 +280,7 @@ export function updateCard(h: Hud): void {
       const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
       const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
       const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
-      return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
+      return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label.replace(/^Extension : /, 'Ext. ')}</span>${cost}</button>`; // short enough for the button (the tooltip says it whole)
     })
     .join('');
   placeMenu(h);

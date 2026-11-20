@@ -81,7 +81,11 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
 .cmd.has-icon span { display: none; }
 /* Command pictograms already carry their side's look (wood, halo, marble, LCD): no side filter on them. */
 .cmd img.ico-cmd { filter: none !important; }
-.cmd span { max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+/* A label without a picture stays inside its button: up to two lines, cut short after that. */
+.cmd span { max-width: 100%; overflow: hidden; overflow-wrap: anywhere; hyphens: auto; text-align: center; text-transform: uppercase; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+/* Small enough for two lines between the hotkey and the cost. */
+body[class] .cmd:not(.has-icon) span { font-size: 10px; line-height: 1.05; letter-spacing: 0; }
+body[class] .cmd:not(.has-icon) small { white-space: nowrap; font-size: 10px; letter-spacing: 0; }
 
 /* ---------------------------------------------------------------- resources, toasts, banner */
 
@@ -930,6 +934,9 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
 /* Computers: a command with a picture and two costs (minerals and energy, on two lines) keeps a smaller picture at the
    top, so the costs below never cover it. */
 @media (min-height: 561px) and (min-width: 821px) {
+  /* Humains: the hotkey sits at the bottom left, so two costs keep two lines on the right, under a label set higher. */
+  body.humains .cmd:not(.has-icon):has(small.two) { justify-content: flex-start; padding-top: 5px; }
+  body.humains .cmd:not(.has-icon) small.two { width: min-content; white-space: normal; text-align: right; line-height: 1; }
   body[class] .cmd.has-icon:has(small.two) { justify-content: flex-start; padding-top: 3px; }
   body[class] .cmd.has-icon:has(small.two) img { width: 22px; height: 22px; }
   body[class] .cmd small.two { line-height: 1; }
@@ -939,6 +946,7 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
   body[class] .cmd.has-icon:has(small) { justify-content: flex-start; padding-top: 2px; }
   body[class] .cmd.has-icon:has(small) img { width: 20px; height: 20px; }
   body[class] .cmd small { line-height: 1; white-space: nowrap; font-size: 10px; }
+  body[class] .cmd:not(.has-icon):has(small) { justify-content: flex-start; padding-top: 3px; } /* the label above its cost (no hotkey here) */
 }
 /* Phones held upright: while something is in production, the name keeps one line, the bars close up, the stats step
    aside and the queue sits at the end of the production bar, so it fits in the panel's 84 px instead of being cut off. */
