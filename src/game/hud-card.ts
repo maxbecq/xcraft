@@ -91,7 +91,7 @@ export function buttonsFor(h: Hud): Button[] {
       return [
         ...f.buildable.filter((t) => lcdTree(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced')).map((t) => {
           const d = DEFS[t] as BuildingDef;
-          return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t) || undefined, action: () => (h.placing = t) };
+          return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => (h.placing = t) };
         }),
         { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (h.buildMenu = false) },
       ];
@@ -142,7 +142,7 @@ export function buttonsFor(h: Hud): Button[] {
       const d = DEFS[t] as UnitDef;
       const order = units.filter((u) => (u.def as UnitDef).trains?.includes(t)).sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
       const lvl = h.world.entities.get(order[0])?.lvl ?? 1;
-      list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, seconds: Math.round(d.buildTime / lvl), reason: h.world.lacks(h.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
+      list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, seconds: Math.round(d.buildTime / lvl), reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
     }
     // Dieux: the next level of a selected god, bought at the god (the lowest-levelled first).
     const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
@@ -177,7 +177,7 @@ export function buttonsFor(h: Hud): Button[] {
   if (h.weaponMenu) {
     const t = h.weaponMenu;
     const d = DEFS[t] as UnitDef;
-    const lack = h.world.lacks(h.player, t) || undefined;
+    const lack = h.world.lacks(h.player, t, built(h)) || undefined;
     const queue = (weapon?: string) => () => {
       cmd({ kind: 'train', ids: order, type: t, weapon });
       h.weaponMenu = null;
@@ -194,7 +194,7 @@ export function buttonsFor(h: Hud): Button[] {
   const list: Button[] = (b.def.trains ?? []).map((t) => {
     const d = DEFS[t] as UnitDef;
     const action = d.weapons ? () => (h.weaponMenu = t) : () => cmd({ kind: 'train', ids: order, type: t });
-    return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t) || undefined, action };
+    return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action };
   });
   if (b.def.bunker) {
     const ids = same.map((o) => o.id);
@@ -222,7 +222,7 @@ export function buttonsFor(h: Hud): Button[] {
   for (const t of (b.def as BuildingDef).addons ?? []) {
     const d = DEFS[t] as BuildingDef;
     const free = same.find((o) => h.world.addonsOf(o) < BALANCE.rules.z.podAddons);
-    const reason = h.world.lacks(h.player, t) || (free ? undefined : 'Add-ons au complet');
+    const reason = h.world.lacks(h.player, t, built(h)) || (free ? undefined : 'Add-ons au complet');
     list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
   }
   // Isdaris: turning into a stronger building, in place.
@@ -230,7 +230,7 @@ export function buttonsFor(h: Hud): Button[] {
     const d = DEFS[t] as BuildingDef;
     const idle = same.find((o) => o.queue.length === 0);
     if (!idle) continue;
-    list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
+    list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
   }
   // Marché: trade one resource for the other.
   if (b.type === 'marche') {
@@ -247,7 +247,7 @@ export function buttonsFor(h: Hud): Button[] {
     const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
     // A Z weapon's research (and its tiers) shows that weapon's pictogram.
     const weapon = Object.keys(WEAPONS).find((k) => WEAPONS[k].research === d.line || WEAPONS[k].research === t);
-    list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
+    list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
   }
   // Last, so the other buttons keep their places (and grid keys).
   if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => h.setTargeting(true, true, 'rally') });
@@ -259,14 +259,14 @@ export function buttonsFor(h: Hud): Button[] {
 
 export function updateCard(h: Hud): void {
   const bk = `${h.world.tick}|${[...h.input.selected].join()}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.gridKeys}`;
-  if (bk === h.buttonsKey) return relink(h), placeMenu(h);
+  if (bk === h.buttonsKey) return placeMenu(h);
   h.buttonsKey = bk;
   h.buttons = buttonsFor(h);
   const p = h.world.players[h.player];
   // The LCD tree ticks what is built: a building finished while it is open must redraw it, though no button changed.
-  const built = lcdTree(h) && h.buildMenu ? [...h.world.entities.values()].filter((e) => e.owner === h.player && e.buildLeft === 0).map((e) => e.type).sort().join() : '';
-  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + built;
-  if (key === h.cardKey) return relink(h), placeMenu(h);
+  const ticks = lcdTree(h) && h.buildMenu ? [...built(h)].map(([t, n]) => t + n).sort().join() : '';
+  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + ticks;
+  if (key === h.cardKey) return placeMenu(h);
   h.cardKey = key;
   h.menu.innerHTML = h.menuItems
     .map((b) => {
@@ -279,7 +279,7 @@ export function updateCard(h: Hud): void {
   const tree = lcdTree(h) && !!h.buildMenu && h.workers().length > 0;
   h.card.classList.toggle('tree', tree);
   h.card.innerHTML = tree ? treeHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
-  if (tree) drawLinks(h.card);
+  if (tree) drawLinks(h.card), relinkOnResize(h.card);
   placeMenu(h);
 }
 
@@ -332,14 +332,14 @@ function treeHtml(h: Hud): string {
     row.set(t, r);
     free[c] = r + 1;
   }
-  const has = (t: string) => [...h.world.entities.values()].some((e) => e.owner === h.player && e.type === t && e.buildLeft === 0);
+  const has = (t: string) => (built(h).get(t) ?? 0) > 0;
   const at = (t: string) => ` style="grid-column:${depth.get(t)! + 1};grid-row:${row.get(t)! + 1}" data-t="${t}" data-req="${needs(t).join(' ')}"`;
   const html = nodes.map((t) => {
     const tick = has(t) ? ' have' : '';
     const b = btn.get(t);
     if (b) return buttonHtml(h, b, b.reason ? `<em>${b.reason}</em>` : '', ` node${tick}`, at(t));
     const src = from(t);
-    const why = h.world.lacks(h.player, t);
+    const why = h.world.lacks(h.player, t, built(h));
     return `<div class="node ghost${tick}${why && !tick ? ' off' : ''}"${at(t)}>${img(t, '')}<span>${DEFS[t].name}</span><em>${src ? `évolution : ${DEFS[src].name}` : 'à obtenir'}</em></div>`;
   });
   const back = h.buttons.find((b) => !b.icon);
@@ -347,13 +347,28 @@ function treeHtml(h: Hud): string {
   return html.join('');
 }
 
-/** The tree's links drawn again when the card changes size (a window resized, a phone turned). */
-function relink(h: Hud): void {
-  const c = h.card;
-  if (c.classList.contains('tree') && c.dataset.size !== `${c.clientWidth}x${c.clientHeight}`) {
-    c.querySelector('svg.links')?.remove();
-    drawLinks(c);
-  }
+/** The local player's finished buildings by type, counted once a tick for every requirement check and tick of the card. */
+const builtCache = new WeakMap<object, { tick: number; player: number; n: Map<string, number> }>();
+function built(h: Hud): Map<string, number> {
+  const c = builtCache.get(h.world);
+  if (c && c.tick === h.world.tick && c.player === h.player) return c.n;
+  const n = h.world.builtCounts(h.player);
+  builtCache.set(h.world, { tick: h.world.tick, player: h.player, n });
+  return n;
+}
+
+/** Redraws the tree's links when the card changes size (a window resized, a phone turned); made on first use (browser only). */
+let linker: ResizeObserver | undefined;
+function relinkOnResize(card: HTMLElement): void {
+  linker ??= new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      const c = target as HTMLElement;
+      if (!c.classList.contains('tree') || c.dataset.size === `${c.clientWidth}x${c.clientHeight}`) continue;
+      c.querySelector('svg.links')?.remove();
+      drawLinks(c);
+    }
+  });
+  linker.observe(card);
 }
 
 /** The tree's links, drawn under its nodes once they are laid out: amber, dashed towards a locked building. */

@@ -710,10 +710,19 @@ export class World {
     return this.players[player].upgrades[line] ?? 0;
   }
 
-  lacks(player: number, type: string): string {
+  /** How many finished buildings (and units) of each type a player has: one pass, for many requirement checks. */
+  builtCounts(player: number): Map<string, number> {
+    const n = new Map<string, number>();
+    for (const e of this.entities.values()) if (e.owner === player && e.buildLeft === 0) n.set(e.type, (n.get(e.type) ?? 0) + 1);
+    return n;
+  }
+
+  /** What `type` still requires, or ''. `built`: builtCounts(player), when the caller checks many types at once. */
+  lacks(player: number, type: string, built?: Map<string, number>): string {
     if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
+    const count = (t: string) => (built ??= this.builtCounts(player)).get(t) ?? 0;
     const any = (DEFS[type] as BuildingDef).requiresAny;
-    if (any && [...this.entities.values()].filter((b) => b.owner === player && any.of.includes(b.type) && b.buildLeft === 0).length < any.count) {
+    if (any && any.of.reduce((s, t) => s + count(t), 0) < any.count) {
       return `Requiert : ${any.count} parmi ${any.of.map((t) => DEFS[t].name).join(', ')}`;
     }
     const req = (DEFS[type] as UpgradeDef | UnitDef | BuildingDef).requires ?? {};
@@ -721,7 +730,7 @@ export class World {
       .filter(([t, n]) =>
         DEFS[t].kind === 'upgrade'
           ? this.level(player, (DEFS[t] as UpgradeDef).line) < (DEFS[t] as UpgradeDef).level
-          : [...this.entities.values()].filter((b) => b.owner === player && b.type === t && b.buildLeft === 0).length < n,
+          : count(t) < n,
       )
       .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].name));
     return missing.length ? `Requiert : ${missing.join(', ')}` : '';
