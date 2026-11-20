@@ -251,8 +251,9 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
     };
   }
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
-  // Units glow in their team colour along the silhouette, so sides read at a glance in a melee.
-  if (unit) rimLight(m, shiny ? 1.0 : 0.5, team.toArray());
+  // Units glow in their team colour along the silhouette, so sides read at a glance in a melee. Human soldiers
+  // (shiny) were at 1.0: a bright blue outline round every figure and vehicle, which read as dirty from afar.
+  if (unit) rimLight(m, shiny ? 0.3 : 0.5, team.toArray());
   else rimLight(m, rim);
   return m;
 }
