@@ -5,7 +5,7 @@
  */
 import { ACESFilmicToneMapping, Box3, DirectionalLight, Group, HemisphereLight, OrthographicCamera, PMREMGenerator, Scene, ShaderMaterial, Vector3, WebGLRenderer } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { loadModels, preview } from '../../src/render/units';
+import { loadModels, preview } from '../../src/render/models';
 import { cameraAxes, DEPTH_RANGE, SPRITE_PPU, SPRITE_YAW } from '../../src/render/sprites';
 
 const params = new URLSearchParams(location.search);
