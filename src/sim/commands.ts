@@ -256,7 +256,8 @@ export function apply(this: World, c: Command): void {
         if (!ab) return;
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
-        const casters = units.filter((e) => this.abilitiesFor(e).includes(c.name!) && e.abilityCd === 0);
+        // An ability without cooldown (Explosion suicidaire) is ready whatever the caster used before.
+        const casters = units.filter((e) => this.abilitiesFor(e).includes(c.name!) && (e.abilityCd === 0 || !ab.cooldown));
         if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
         if (c.x === undefined || c.y === undefined || !casters.length) return;
         const [x, y] = [c.x, c.y];

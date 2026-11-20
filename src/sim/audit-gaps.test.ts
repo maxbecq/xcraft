@@ -37,4 +37,43 @@ describe('audit gaps', () => {
     expect(porte.hp).toBe(porte.maxHp);
     expect(BALANCE.rules.repair.esprit.hp).toBe(8); // XC.doc 2008
   });
+
+  it('the Réservoir de substances: Gaz euphorisants, Acide dissolvant after its research, Explosion suicidaire', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const cuve = w.spawn('cuve', 0, 30 * FP, 30 * FP);
+    const aux = w.spawn('auxiliaire', 0, 34 * FP, 30 * FP);
+    const speed = aux.speed;
+    w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'gazeuphorisants', x: aux.x, y: aux.y }]);
+    run(w, 1);
+    expect(aux.pace).toBeGreaterThan(0);
+    expect(aux.speed).toBeGreaterThan(speed);
+    expect(aux.paceAtk).toBe(80); // 25 % faster: 1 / 1.25
+    run(w, 31);
+    expect(aux.speed).toBe(speed);
+
+    const foe = w.spawn('portail', 1, 40 * FP, 30 * FP);
+    foe.buildLeft = 0;
+    const hp = foe.hp + foe.shield;
+    cuve.abilityCd = 0;
+    cuve.frozen = aux.frozen = ticks(60); // their guns quiet, to count the acid alone
+    w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'acidedissolvant', x: foe.x, y: foe.y }]);
+    run(w, 10);
+    expect(foe.hp + foe.shield).toBe(hp); // no research yet
+    w.players[0].upgrades.acide = 1;
+    w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'acidedissolvant', x: foe.x, y: foe.y }]);
+    expect(cuve.order?.kind).toBe('cast');
+    run(w, 10);
+    expect(hp - foe.hp - foe.shield).toBe(400);
+
+    cuve.frozen = 0;
+    const near = w.spawn('archer', 1, cuve.x + 2 * FP, cuve.y);
+    const far = w.spawn('archer', 1, cuve.x + 8 * FP, cuve.y);
+    const [nearHp, farHp] = [near.hp + near.shield, far.hp + far.shield];
+    w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'explosioncuve' }]);
+    run(w, 1);
+    expect(w.entities.has(cuve.id)).toBe(false);
+    expect(w.entities.has(near.id) ? nearHp - near.hp - near.shield : nearHp).toBeGreaterThanOrEqual(Math.min(nearHp, 356));
+    expect(far.hp + far.shield).toBe(farHp);
+  });
+
 });

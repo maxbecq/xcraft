@@ -162,6 +162,11 @@ export interface Entity {
   statue: number;
   /** Ticks left slowed by the Élémentaire d'eau's icy shot. */
   chill: number;
+  /** Ticks left under a change of pace (Gaz euphorisants, Lumière ardente, Gravité alourdie), with its walking speed and
+   * its time between blows in percent of the usual (100: unchanged). */
+  pace: number;
+  paceMove: number;
+  paceAtk: number;
   /** Dieux: the Artefacterie's improvements this god bought (ARTEFACTS), in order. */
   arts: string[];
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
@@ -342,7 +347,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -417,6 +422,7 @@ export class World {
       if (e.swarm > 0) e.swarm--;
       if (e.statue > 0 && --e.statue === 0) e.speed = this.baseSpeed(e);
       if (e.chill > 0 && --e.chill === 0 && e.boost === 0) e.speed = this.baseSpeed(e);
+      if (e.pace > 0 && --e.pace === 0 && e.boost === 0) e.speed = this.baseSpeed(e);
       if (e.charm > 0 && --e.charm === 0) this.turn(e, e.charmOwner);
       // Once a second, staggered: Osiris's putrid aura and swarm, the Fontaine du Nil.
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
@@ -760,7 +766,9 @@ export class World {
       case 'cast': {
         const ab = spell(o.ability, e.lvl);
         if (e.abilityCd > 0) return this.setOrder(e, null);
-        if (dist(e.x, e.y, o.x, o.y) > toFp(ab.range ?? 0)) {
+        // Aimed at a building: its edge is near enough (a big one's middle may be out of reach).
+        const on = [...this.entities.values()].find((b) => b.def.kind === 'building' && Math.abs(b.x - o.x) * 2 <= (b.def as BuildingDef).size * FP && Math.abs(b.y - o.y) * 2 <= (b.def as BuildingDef).size * FP);
+        if ((on ? this.gap(e, on) : dist(e.x, e.y, o.x, o.y)) > toFp(ab.range ?? 0)) {
           if (this.goTo(e, o.x, o.y)) this.setOrder(e, null);
           return;
         }

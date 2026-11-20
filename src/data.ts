@@ -309,6 +309,10 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
   explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
+  /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
+  gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment.', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
+  acidedissolvant: { name: 'Acide dissolvant', effect: 'Un torrent d\'acide sur un bâtiment ennemi : de très lourds dégâts.', hotkey: 'Q', target: 'point', research: 'acide', ...(BALANCE.abilities.acidedissolvant as object) } as AbilityDef,
+  explosioncuve: { name: 'Explosion suicidaire', effect: 'La cuve explose : toutes les unités au sol autour et les bâtiments ennemis sont gravement touchés.', hotkey: 'X', ...(BALANCE.abilities.explosioncuve as object) } as AbilityDef,
   regenerant: { name: 'Régénérant', effect: 'L\'allié visé ne peut plus être blessé un moment, puis les toxines le laissent à 1 PV.', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
   /** Alchimiste (notice): a living unit fallen near the point rises and fights for a while as a Cadavre réanimé. */
   reanimation: { name: 'Réanimation', effect: 'Une unité vivante tombée près du point se relève et combat un moment pour vous.', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
@@ -462,7 +466,7 @@ const BASE: Record<string, object> = {
     kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, faction: 'humains', hotkey: 'G',
   },
   // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
-  cuve: { kind: 'unit', name: 'Réservoir de substances', radius: 0.7, mechanical: true, faction: 'humains', hotkey: 'V' },
+  cuve: { kind: 'unit', name: 'Réservoir de substances', radius: 0.7, mechanical: true, abilities: ['gazeuphorisants', 'acidedissolvant', 'explosioncuve'], faction: 'humains', hotkey: 'V' },
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
@@ -496,7 +500,7 @@ const BASE: Record<string, object> = {
   charlourd: research('Char lourd', 'L', 'Chars Pégase : +15 dégâts, +2 armure.'),
   cocktail: research('Cocktail alchimistique', 'K', "Les Alchimistes lancent l'Explosif toxique."),
   regenerant: research('Régénérant chimique', 'R', 'Les Alchimistes lancent le Régénérant sur leurs alliés.'),
-  acide: research('Acide anti-structure', 'Q', 'Réservoirs de substances : gros bonus contre les bâtiments et les machines.'),
+  acide: research('Acide anti-structure', 'Q', 'Les Réservoirs de substances peuvent dissoudre un bâtiment ennemi sous l\'acide.'),
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
   decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.'),
   chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins."),

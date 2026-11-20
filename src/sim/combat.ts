@@ -131,7 +131,7 @@ export function baseSpeed(this: World, e: Entity): number {
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
   if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
-  const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) / 100;
+  const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * (e.pace > 0 ? e.paceMove : 100) / 10000;
   return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
 }
 
@@ -357,6 +357,7 @@ export function strike(this: World, e: Entity, t: Entity): void {
   const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
   if (e.statue > 0) e.cooldown = idiv(e.cooldown * BALANCE.rules.upgrades.statue.rate, 100);
+  if (e.pace > 0) e.cooldown = Math.max(1, idiv(e.cooldown * e.paceAtk, 100));
   this.hit(e, t, a);
   // Z Arc électrique: more enemies in reach, in front of the shooter (within 67.5° of its line to the target).
   if (a.targets && a.targets > 1) {
@@ -386,7 +387,6 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   let bonus = machine ? (a.vsMechanical ?? 0) : 0;
   if (machine && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
   if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
-  if (machine && e.type === 'cuve' && this.level(e.owner, 'acide')) bonus += U.acideBonus;
   let upgrade = 0;
   if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(a.damage / 10));
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;

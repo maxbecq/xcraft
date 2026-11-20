@@ -56,7 +56,7 @@ const FORMS: Record<string, string> = { formefeu: 'elementaire', formeeau: 'elem
 export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability): void {
   const def = e.def as UnitDef;
   const ab = name && spell(name, e.lvl);
-  if (!ab || ab.target === 'point' || e.abilityCd > 0 || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
+  if (!ab || ab.target === 'point' || (e.abilityCd > 0 && ab.cooldown) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
     // Allies round the caster unhurt for a while (an aura: out of it, no more).
@@ -140,6 +140,15 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.place(g, mx, my);
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
+    return;
+  } else if (name === 'explosioncuve') {
+    // The Cuve blows itself up: every unit on the ground around, friend or foe, and the enemy buildings take the blast, armour or not.
+    for (const t of [...this.entities.values()]) {
+      if (t === e || t.def.kind === 'resource' || t.hp <= 0 || t.inside || (t.def.kind === 'unit' ? flies(t) : !this.hostile(t.owner, e.owner))) continue;
+      if (this.gap(e, t) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+    }
+    this.casts.push({ kind: name, x: e.x, y: e.y });
+    e.hp = 0;
     return;
   } else if (name === 'transe') {
     e.war = ticks(ab.duration);
@@ -339,6 +348,17 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     t.reflect = ticks(ab.duration);
   } else if (name === 'explosiftoxique') {
     for (const t of near((t) => this.hostile(t.owner, e.owner))) t.poison = Math.max(t.poison, ticks(ab.duration));
+  } else if (name === 'gazeuphorisants') {
+    // Allies of the zone (living ones) walk and strike faster for a while.
+    const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
+    if (!allies.length) return false;
+    for (const t of allies) this.setPace(t, ticks(ab.duration), 100 + ab.damage!, idiv(10000, 100 + ab.damage!));
+  } else if (name === 'acidedissolvant') {
+    // A torrent of acid on the enemy building nearest the point.
+    const b = [...this.entities.values()].filter((t) => t.def.kind === 'building' && this.hostile(t.owner, e.owner) && t.hp > 0 && dist(t.x, t.y, x, y) <= toFp(ab.radius! + (t.def as BuildingDef).size / 2)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+    if (!b) return false;
+    this.hurt(b, ab.damage!);
+    this.shots.push({ x1: e.x, y1: e.y, x2: b.x, y2: b.y, kind: 'ranged' });
   } else if (name === 'regenerant') {
     const t = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical)[0];
     if (!t) return false;
@@ -361,6 +381,14 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
   this.casts.push({ kind: name, x, y });
   return true;
+}
+
+/** A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. */
+export function setPace(this: World, t: Entity, left: number, move: number, atk: number): void {
+  t.pace = left;
+  t.paceMove = move;
+  t.paceAtk = atk;
+  if (t.boost === 0) t.speed = this.baseSpeed(t);
 }
 
 /** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
