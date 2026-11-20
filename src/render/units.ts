@@ -95,9 +95,12 @@ WEAPON_MODELS.push(...Object.values(ZSUPPORTS).map((s) => s.model));
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
 const WEAPON_MOUNTS: Record<
   string,
-  { size?: number; forward?: number; apex?: boolean; meleeSize?: number; saw?: number; grow?: Record<string, number> }
+  { size?: number; forward?: number; apex?: boolean; meleeSize?: number; saw?: number; grow?: Record<string, number>; sink?: Record<string, number> }
 > = {
-  mastodonte: { size: 0.5 },
+  // Its modules sank onto its back where they stood on its ridge (module units), the Jet sonique a little smaller.
+  mastodonte: { size: 0.5, grow: { zw_jetsonique: 0.85 }, sink: { zw_laser: 0.08, zw_arc: 0.12 } },
+  // Its modules at the Quadripode's proportion to its body (the Déchiqueteur aside: its rule is still open).
+  coleoptere: { grow: { '*': 0.7 } },
   // The Déchiqueteur in the same proportion to its body as the Quadripode's; the other modules larger (the rocket pod
   // most), towards the front of its long back.
   octopode: { size: 0.5, meleeSize: 0.7, forward: 0.08, grow: { '*': 1.3, zw_roquettes: 1.5 } },
@@ -313,6 +316,7 @@ export class EntityRenderer {
       o = holder;
     } else {
       o.position.copy(body.worldToLocal(at.clone()));
+      o.position.y -= (tune.sink?.[name] ?? 0) * scale;
       o.scale.setScalar(scale);
     }
     o.traverse((m) => (m.userData.noPick = true));
