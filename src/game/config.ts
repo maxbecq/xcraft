@@ -1,7 +1,7 @@
 import { type Faction } from '../data';
 import { DEFAULT_MAP, mapFile } from '../maps';
 import { seatsOf } from '../mappicker';
-import { readReplay } from './replay';
+import { readReplay, versionNote } from './replay';
 import { decodeSeats } from './seats';
 import { asFaction, SCROLL, stored } from './settings';
 
@@ -23,6 +23,7 @@ if (params.has('replay') && !REPLAY) {
 }
 // A map this version does not have: played on the original one, which may not follow the game (said before it starts).
 if (REPLAY?.lostMap) alert(`Carte « ${REPLAY.lostMap} » inconnue de cette version : le replay se joue sur la carte d'origine et peut ne pas suivre la partie.`);
+else if (REPLAY && versionNote(REPLAY)) alert(versionNote(REPLAY));
 export const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 export const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));

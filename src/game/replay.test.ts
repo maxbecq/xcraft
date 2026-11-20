@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import { commandOk } from '../net';
 import { createMatch } from '../sim/setup';
-import { parseReplay, REPLAY_MAX_BYTES } from './replay';
+import { GAME_VERSION, parseReplay, type Replay, REPLAY_MAX_BYTES, versionNote, withReplayBiome } from './replay';
 
 const good = { v: 1, map: 'origine', factions: ['humains', 'z'], teams: [0, 1], biome: 'glace', handicap: [100, 100], ticks: [[3, [{ player: 0, kind: 'stop', ids: [1] }]], [9, [{ player: 1, kind: 'stop', ids: [2] }]]] };
 const text = (r: object) => JSON.stringify(r);
@@ -84,5 +84,21 @@ describe('replays read from storage or a file', () => {
       world.step(cmds);
     }
     expect(bad.slice(0, 3)).toEqual([]);
+  });
+
+  it('says when a replay comes from another version of the game, whose rules may differ', () => {
+    const r = (version?: unknown) => parseReplay(text({ ...good, version })) as Replay;
+    expect(versionNote(r(GAME_VERSION))).toBe(null);
+    expect(versionNote(r('0.9.10'))).toContain('0.9.10');
+    expect(versionNote(r())).toContain('antérieure');
+    expect(r('<b>x</b>').version).toBeUndefined(); // shown on screen: never markup
+  });
+
+  it("plays on the replay's own planet, whatever the address or the settings say", () => {
+    const params = new URLSearchParams('replay&speed=2&biome=volcan');
+    const p = withReplayBiome(params, parseReplay(text(good)) as Replay);
+    expect(p.get('biome')).toBe('glace');
+    expect(p.get('speed')).toBe('2');
+    expect(withReplayBiome(params, null).get('biome')).toBe('volcan');
   });
 });

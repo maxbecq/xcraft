@@ -42,7 +42,7 @@ import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
-import { downloadReplay, type Replay, saveReplay } from './game/replay';
+import { downloadReplay, GAME_VERSION, type Replay, saveReplay, withReplayBiome } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
 /** The game just played has been kept as the last game. */
@@ -65,7 +65,7 @@ const GFX = QUALITY[QUALITY_LEVEL];
 renderer.setPixelRatio(Math.min(Number(params.get('pr')) || GFX.pixelRatio, window.devicePixelRatio));
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
-const biome = pickBiome(params);
+const biome = pickBiome(withReplayBiome(params, REPLAY));
 renderer.toneMappingExposure = biome.exposure;
 renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFShadowMap;
@@ -100,7 +100,7 @@ const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.cont
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
-const record: Replay = { v: 1, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
 const replayed = new Map(REPLAY?.ticks ?? []);
 /** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,
  * and the player is told, quietly, unless the page is going. */

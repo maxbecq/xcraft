@@ -9,6 +9,8 @@ export const REPLAY_KEY = 'xcraft.replay';
 /** A game as the commands the simulation took, tick by tick; replaying them rebuilds it exactly. */
 export interface Replay {
   v: 1;
+  /** The game's version that played it (the simulation's rules change with it); missing in older replays. */
+  version?: string;
   /** Map id; missing in replays from before map files (the original map). */
   map?: string;
   /** A map this version does not have, replaced by the original one (said to the viewer: the game may differ). */
@@ -65,8 +67,27 @@ export function parseReplay(text: string): Replay | string {
   }
   // Every side needs a start on the map it plays on (the original one for a map this version lacks).
   if (n > Math.max(...MAPS[r.map ?? DEFAULT_MAP].players)) return `${bad} (plus de camps que la carte n’a de places).`;
+  if (r.version !== undefined && (typeof r.version !== 'string' || !/^[\w.-]{1,24}$/.test(r.version))) delete r.version;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   return r;
+}
+
+/** This build's version, written into the replays it saves. */
+export const GAME_VERSION = typeof __VERSION__ === 'string' ? __VERSION__ : 'dev';
+
+/** What to say before playing a replay from another version (its rules may differ: it may not follow the game), or null. */
+export function versionNote(r: Replay): string | null {
+  if (r.version === GAME_VERSION) return null;
+  const which = r.version ? `de la version ${r.version}` : 'd’une version antérieure';
+  return `Replay ${which} (jeu en ${GAME_VERSION}) : les règles ont pu changer depuis, la partie rejouée peut s’écarter de l’originale.`;
+}
+
+/** The page's address with the replay's own planet: the map's shape may depend on it, so it wins over the URL and the settings. */
+export function withReplayBiome(params: URLSearchParams, r: Replay | null): URLSearchParams {
+  if (!r) return params;
+  const p = new URLSearchParams(params);
+  p.set('biome', r.biome);
+  return p;
 }
 
 /** The replay to play: one opened from a file this session, else the last saved game. One that does not check out
