@@ -378,6 +378,7 @@ body.z .cmd span { max-width: 100%; font-size: 12px; letter-spacing: -0.03em; }
   /* The slot is the minimap's own square (not its grid cell's width), so the porthole round it stays round. The
      porthole stands taller than the console: raised so its foot clears the screen's bottom edge, it rises over the
      map above instead. */
+  body.z { --wl: 296px; } /* the left wing as wide as the porthole's ring, so the dip's cut no longer clips its upper right */
   body.z .map-slot { overflow: visible; border-radius: 50%; border: 0; margin: -62px 0 0 34px; justify-self: center; align-self: start; width: max-content; height: max-content; }
   body.z .map-slot canvas { clip-path: circle(50%); }
   /* hublot.webp is 939×786 with its opening 482 across, centred at (434.5, 377.5): drawn at its own proportions, the
