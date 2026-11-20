@@ -37,7 +37,7 @@ import { addDeposits } from './render/deposits';
 import { every, readRoom } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { countMatch, countTitle } from './stats';
-import { SANDBOX_TOOLS, type Controls, fmt, rememberSandbox, sandboxRemembered, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
+import { SANDBOX_TOOLS, type Controls, fmt, rememberSandbox, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
@@ -473,9 +473,13 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
     if (field.type === 'checkbox') {
       issue({ player: PLAYER, kind: 'sandbox', ids: [], tool, on: (field as HTMLInputElement).checked });
       rememberSandbox(tool, (field as HTMLInputElement).checked);
-      // « Recommencer » reloads this URL: it carries the options as they stand now.
+      // « Recommencer » reloads this URL: it carries this match's options as they stand now (the ones it was
+      // launched with, this one switched), not the ones kept on this browser.
       const url = new URL(location.href);
-      const kept = [...sandboxRemembered()].join(',');
+      const on = new Set((url.searchParams.get('outils') ?? '').split(',').filter((t) => t in SANDBOX_TOOLS));
+      if ((field as HTMLInputElement).checked) on.add(tool);
+      else on.delete(tool);
+      const kept = [...on].join(',');
       if (kept) url.searchParams.set('outils', kept);
       else url.searchParams.delete('outils');
       history.replaceState(history.state, '', url);
