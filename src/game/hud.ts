@@ -9,6 +9,7 @@ import type { Command, Entity, GameEvent, World } from '../sim/world';
 import type { Audio } from '../audio';
 import type { Input } from './input';
 import { Portrait } from '../render/portrait';
+import { showEnd, showEvents } from './hud-toasts';
 
 interface Button {
   label: string;
@@ -51,13 +52,6 @@ window.addEventListener('keydown', (e) => {
   if (GRID_CODES.includes(e.code) && /^\p{L}$/u.test(e.key)) gridLabel[e.code] = e.key.toUpperCase();
 }, true);
 
-/** The sign before each message: refused (no entry), done (a tick), under attack (a shield with a bang). */
-const SIGNS: Record<GameEvent['kind'], string> = {
-  error: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M5.5 14.5l9-9" stroke="currentColor" stroke-width="2.4"/></svg>',
-  done: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 10.5l4.2 4.2L16.5 5.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  alert: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5l7 2.6v5.2c0 4.4-3 7.6-7 9.2-4-1.6-7-4.8-7-9.2V4.1z" fill="currentColor"/><path d="M10 5.5v5.5M10 13.5v1.4" stroke="#1a0604" stroke-width="2.4" stroke-linecap="round"/></svg>',
-};
-
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
   private readonly bar = el('div', 'hud-bar');
@@ -69,18 +63,18 @@ export class Hud {
   private readonly details = el('div', 'details');
   readonly portrait = new Portrait();
   private readonly card = el('div', 'hud-card');
-  private readonly toasts = el('div', 'hud-toasts');
+  readonly toasts = el('div', 'hud-toasts');
   /** Where the last attack alert happened (tiles): Space or a click on its message goes there. */
   alertAt: { x: number; y: number } | null = null;
   /** Set by the game: marks an alert on the minimap, and moves the view. */
   ping: (x: number, y: number) => void = () => {};
   focus: (x: number, y: number) => void = () => {};
   /** Hit points (and shield) of our things at the last tick, to find where an attack lands. */
-  private readonly lastHp = new Map<number, number>();
+  readonly lastHp = new Map<number, number>();
   /** When each of ours was last hurt (ms), for the red edge on its picture in the selection. */
-  private readonly hitAt = new Map<number, number>();
+  readonly hitAt = new Map<number, number>();
   /** Our workers on their way to build, by id, with what: to name a building cancelled for want of resources. */
-  private readonly sites = new Map<number, string>();
+  readonly sites = new Map<number, string>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   private idleCount = 0;
@@ -125,7 +119,7 @@ export class Hud {
   private scanning = false;
   /** Unit ability being aimed (none: a building's). */
   private aimed?: string;
-  private readonly banner = el('div', 'hud-banner');
+  readonly banner = el('div', 'hud-banner');
   /** More buttons for the end-of-game banner (the telemetry's). */
   endButtons = '';
   /** A match against a friend online: the end offers a rematch instead of a new game. */
@@ -137,15 +131,15 @@ export class Hud {
   private gridKey = '';
 
   constructor(
-    private readonly world: World,
+    readonly world: World,
     private readonly map: GameMap,
-    private readonly player: number,
+    readonly player: number,
     private readonly input: Input,
     scene: Scene,
     private readonly issue: (c: Command) => void,
-    private readonly audio: Audio,
+    readonly audio: Audio,
     /** Watching (AI against AI, a replay): the players' own messages are not shown. */
-    private readonly spectator = false,
+    readonly spectator = false,
   ) {
     this.panel.classList.add('slot');
     this.panel.append(this.portrait.canvas, this.details);
@@ -606,80 +600,7 @@ export class Hud {
   }
 
   notify(events: GameEvent[]): void {
-    // The world's alert says only "attacked": the place is the last of ours that lost health this tick.
-    let hit: Entity | undefined;
-    if (this.lastHp.size > 2 * this.world.entities.size + 64) {
-      this.lastHp.clear(); // forget the dead now and then
-      this.hitAt.clear();
-    }
-    for (const e of this.world.entities.values()) {
-      if (e.owner !== this.player) continue;
-      const was = this.lastHp.get(e.id);
-      if (was !== undefined && e.hp + e.shield < was) {
-        hit = e;
-        this.hitAt.set(e.id, performance.now());
-      }
-      this.lastHp.set(e.id, e.hp + e.shield);
-    }
-    // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none.
-    if (this.spectator) return;
-    // A worker that reached its site but could no longer pay drops its build order with a bare "Pas assez de…":
-    // say what was lost, as an alert pointing at the worker (it comes long after the order, often off screen).
-    const dropped = [...this.sites].filter(([id]) => this.world.entities.get(id)?.order?.kind !== 'build');
-    this.sites.clear();
-    for (const e of this.world.entities.values()) if (e.owner === this.player && e.order?.kind === 'build') this.sites.set(e.id, e.order.type);
-    for (let ev of events) {
-      if (ev.player !== this.player) continue;
-      let at: { x: number; y: number } | undefined;
-      if (ev.kind === 'alert' && hit) at = { x: hit.x / FP, y: hit.y / FP };
-      const site = ev.kind === 'error' && ev.text.startsWith('Pas assez') ? dropped.shift() : undefined;
-      const worker = site && this.world.entities.get(site[0]);
-      if (site) {
-        ev = { ...ev, kind: 'alert', text: `${DEFS[site[1]].name} : construction annulée, ${ev.text[0].toLowerCase()}${ev.text.slice(1)}` };
-        if (worker) at = { x: worker.x / FP, y: worker.y / FP };
-      }
-      // The same message again: its line counts up (×2, ×3…) and stays on, instead of piling up.
-      const same = [...this.toasts.children].find((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('gone') && c.dataset.kind === ev.kind && c.dataset.text === ev.text);
-      if (same) {
-        const n = Number(same.dataset.n) + 1;
-        same.dataset.n = String(n);
-        same.querySelector('.times')!.textContent = `×${n}`;
-        same.classList.remove('bump');
-        void same.offsetWidth; // restart the bump
-        same.classList.add('bump');
-        this.toasts.append(same); // newest at the bottom
-        this.expire(same, ev.kind);
-        if (performance.now() - Number(same.dataset.sound) > 400) {
-          this.audio.play(ev.kind);
-          same.dataset.sound = String(performance.now());
-        }
-        continue;
-      }
-      const t = el('div', `hud-toast ${ev.kind}`);
-      t.innerHTML = SIGNS[ev.kind];
-      Object.assign(t.dataset, { kind: ev.kind, text: ev.text, n: '1', sound: String(performance.now()) });
-      if (at) {
-        const to = at;
-        this.alertAt = to;
-        this.ping(to.x, to.y);
-        t.title = 'Aller voir (Espace ou Entrée)';
-        t.addEventListener('click', () => this.focus(to.x, to.y));
-      }
-      this.audio.play(ev.kind);
-      t.append(ev.text, el('b', 'times'));
-      this.toasts.append(t);
-      this.expire(t, ev.kind);
-      while (this.toasts.children.length > 4) this.toasts.firstChild!.remove();
-    }
-  }
-
-  /** (Re)starts a message's life: it fades after a while, shorter for a refusal, longer for an attack. */
-  private expire(t: HTMLElement, kind: GameEvent['kind']): void {
-    const life = kind === 'alert' ? 5000 : kind === 'done' ? 3000 : 2200;
-    clearTimeout(Number(t.dataset.fade));
-    clearTimeout(Number(t.dataset.drop));
-    t.dataset.fade = String(setTimeout(() => t.classList.add('gone'), life));
-    t.dataset.drop = String(setTimeout(() => t.remove(), life + 300));
+    showEvents(this, events);
   }
 
   /** Space: the view goes to the last attack. */
@@ -705,13 +626,7 @@ export class Hud {
     this.updateGroups();
     this.updateCard();
     this.updateGhost();
-    if (this.world.winner !== null && this.banner.hidden) {
-      // The winner is one player of the winning team: an ally's victory is ours too (our own buildings lost or not).
-      const won = this.world.players[this.world.winner]?.team === this.world.players[this.player]?.team;
-      this.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${this.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${this.endButtons}</div>`;
-      this.banner.classList.toggle('won', won);
-      this.banner.hidden = false;
-    }
+    showEnd(this);
   }
 
   // ---------------------------------------------------------------- selection panel
