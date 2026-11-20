@@ -421,6 +421,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       }
     }
   }
+  // Danse du soldat (notice; mod: two thirds of the shots from afar, not blows, spells or splash): the Assassin dodges.
+  if (t.type === 'assassin' && a.range >= 1) damage = idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100);
   this.hurt(t, damage);
   // Z Jet sonique: every ground unit on the line from the shooter to its target is hit too, friend or foe (Z.doc).
   if (a.line) {

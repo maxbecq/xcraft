@@ -122,4 +122,23 @@ describe('audit gaps', () => {
     expect(w.entities.has(mine.id)).toBe(false);
     expect(w.entities.has(foe.id) ? hp - foe.hp - foe.shield : hp).toBeGreaterThanOrEqual(Math.min(hp, 100));
   });
+
+  it('the Assassin dodges a third of the shots from afar (Danse du soldat), not the blows', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const assassin = w.spawn('assassin', 0, 30 * FP, 30 * FP);
+    const archer = w.spawn('archer', 0, 30 * FP, 34 * FP);
+    const shooter = w.spawn('auxiliaire', 1, 40 * FP, 30 * FP);
+    const brute = w.spawn('legionnaire', 1, 40 * FP, 34 * FP);
+    const a = w.weapon(shooter)!;
+    const before = (t: Entity) => t.hp + t.shield;
+    const [h1, h2] = [before(assassin), before(archer)];
+    w.hit(shooter, assassin, a);
+    w.hit(shooter, archer, a);
+    expect(h1 - before(assassin)).toBeLessThan(h2 - before(archer));
+    const m = w.weapon(brute)!;
+    const [h3, h4] = [before(assassin), before(archer)];
+    w.hit(brute, assassin, m);
+    w.hit(brute, archer, m);
+    expect(h3 - before(assassin)).toBe(h4 - before(archer));
+  });
 });
