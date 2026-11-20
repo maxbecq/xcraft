@@ -189,13 +189,15 @@ export class EntityRenderer {
     return this.views.get(id)?.model.getObjectByName('zarm_0_weld')?.getWorldPosition(new Vector3());
   }
 
-  top(id: number): number | undefined {
+  top(id: number, built = true): number | undefined {
     const v = this.views.get(id);
     if (!v) return undefined;
     let h = v.model.userData.top as number | undefined;
     if (h === undefined) {
       v.root.updateWorldMatrix(true, true);
-      h = v.model.userData.top = new Box3().setFromObject(v.model, true).max.y - v.root.position.y;
+      h = new Box3().setFromObject(v.model, true).max.y - v.root.position.y;
+      // Kept once built only: a building site's model is still rising (kept then, the bar stayed at its foot).
+      if (built) v.model.userData.top = h;
     }
     return v.root.position.y + h;
   }

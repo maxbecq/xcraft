@@ -30,7 +30,7 @@ export class Overlay {
   showQueue = false;
 
   /** Where a building's model tops out in the world (set by the game from the entity renderer); undefined: not drawn yet. */
-  top: (id: number) => number | undefined = () => undefined;
+  top: (id: number, built: boolean) => number | undefined = () => undefined;
 
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     const dpr = window.devicePixelRatio;
@@ -55,7 +55,7 @@ export class Overlay {
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       // A building's bar sits just above its model's real top (a tower is far taller than its footprint says).
-      const top = size ? this.top(e.id) : undefined;
+      const top = size ? this.top(e.id, e.buildLeft === 0) : undefined;
       const y = top !== undefined ? top + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (soars(e) ? FLY_HEIGHT : 0);
       this.v.set(x, y, z).project(camera);
       if (this.v.z > 1) continue;

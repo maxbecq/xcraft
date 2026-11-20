@@ -248,7 +248,7 @@ const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 effects.density = GFX.particles;
 const overlay = new Overlay(map);
-overlay.top = (id) => units.top(id);
+overlay.top = (id, built) => units.top(id, built);
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
