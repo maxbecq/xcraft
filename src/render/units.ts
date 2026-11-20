@@ -17,7 +17,6 @@ import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShad
 import { dropTexture, spark, reserveFx, assimFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
 // Kept for main.ts, which imports them from here.
-export { MINERAL_VARIANTS, loadModels } from './models';
 
 /** Turning speed of units, in radians per second. */
 const TURN_SPEED = 9;
