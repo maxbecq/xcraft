@@ -108,7 +108,7 @@ function stats(h: Hud, e: Entity): string {
   }
   if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
   if ('armor' in e.def) {
-    // The world keeps the armour research to itself; read it rather than copy its many cases.
+    // The world's own armour research, read rather than copied (its cases are many).
     const bonus = e.def.kind === 'unit' && e.owner >= 0 ? h.world.armorBonus(e) : 0;
     parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
   }
