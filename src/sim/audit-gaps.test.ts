@@ -396,4 +396,20 @@ describe('audit gaps', () => {
     w.hit(ghost, foe, a);
     expect(ghost.dealt).toBe(before - foe.hp - foe.shield);
   });
+
+  it('the group transfer leaves behind a unit that has changed sides since it was phased', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].upgrades.porte = 1;
+    w.players[0].energy = 1000;
+    const trone = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    const a = w.spawn('archer', 0, 40 * FP, 40 * FP);
+    const b = w.spawn('archer', 0, 41 * FP, 40 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'portedephasage', x: a.x, y: a.y }]);
+    b.owner = 1; // taken over (Soumission divine)
+    const bx = b.x;
+    w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'transfertgroupe', x: 60 * FP, y: 30 * FP }]);
+    expect(Math.abs(a.x - 60 * FP)).toBeLessThan(3 * FP);
+    expect(b.x).toBe(bx);
+    expect(b.phased).toBeGreaterThan(0);
+  });
 });

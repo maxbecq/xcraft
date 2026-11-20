@@ -291,7 +291,7 @@ export function apply(this: World, c: Command): void {
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
         const g = this.phaseGroups.filter((g) => g.owner === c.player).pop();
-        const units = g ? g.ids.map((id) => this.entities.get(id)).filter((u): u is Entity => !!u && u.hp > 0 && u.phased > 0 && !u.inside) : [];
+        const units = g ? g.ids.map((id) => this.entities.get(id)).filter((u): u is Entity => !!u && u.owner === g.owner && u.hp > 0 && u.phased > 0 && !u.inside) : [];
         if (!g || !units.length) return void this.say(c.player, 'Aucun groupe déphasé.');
         this.phaseGroups.splice(this.phaseGroups.indexOf(g), 1);
         const [x, y] = [c.x, c.y];
