@@ -17,7 +17,7 @@ it('canStep from its per-tile sides answers as the tiles themselves do, building
   }
 });
 
-it('findPath gives the very paths of the plain A* it replaces (canStep per neighbour, a heap of arrays)', () => {
+it('findPath gives the very paths of a plain A* (canStep per neighbour, a heap of arrays, ties by place on the line)', () => {
   const DX = [0, 1, 0, -1, 1, 1, -1, -1];
   const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
   const reference = (g: Grid, sx: number, sy: number, gx: number, gy: number): number[] => {
@@ -30,8 +30,15 @@ it('findPath gives the very paths of the plain A* it replaces (canStep per neigh
     const heap: [number, number, number][] = [];
     let seq = 0;
     const less = (a: [number, number, number], b: [number, number, number]) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+    // Equal costs: nearest the line from start to goal, then on its left, then furthest along it.
+    const tie = (i: number) => {
+      const [lx, ly, rx, ry] = [gx - sx, gy - sy, (i % w) - sx, Math.floor(i / w) - sy];
+      const cross = lx * ry - ly * rx;
+      return (Math.abs(cross) * 2 + (cross < 0 ? 1 : 0)) * 2 ** 26 + (2 ** 25 - (lx * rx + ly * ry));
+    };
     const push = (p: number, v: number) => {
-      heap.push([p, seq++, v]);
+      seq++;
+      heap.push([p, tie(v), v]);
       for (let i = heap.length - 1; i > 0; ) {
         const q = (i - 1) >> 1;
         if (!less(heap[i], heap[q])) break;

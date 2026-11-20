@@ -121,16 +121,27 @@ export class Grid {
 
   /** Can a unit walk in a straight line between two fixed-point points? */
   lineWalkable(ax: number, ay: number, bx: number, by: number): boolean {
+    // A start on a tile edge lies in the tile ahead along that axis, or, not moving along it, in both (both must do).
+    const starts = (a: number, b: number) => (a % FP !== 0 ? [tileOf(a)] : b > a ? [a / FP] : b < a ? [a / FP - 1] : [a / FP - 1, a / FP]);
+    for (const tx of starts(ax, bx)) for (const ty of starts(ay, by)) if (!this.walkLine(ax, ay, bx, by, tx, ty)) return false;
+    return true;
+  }
+
+  /**
+   * lineWalkable from a start tile. Samples on a tile edge stay in the tile they come from: floor put them beyond it
+   * on one side of the map and short of it on the other, and a line and its mirror were judged differently.
+   */
+  private walkLine(ax: number, ay: number, bx: number, by: number, tx: number, ty: number): boolean {
     const len = isqrt((bx - ax) ** 2 + (by - ay) ** 2);
     const n = Math.max(1, Math.ceil(len / (FP / 4)));
     const [ddx, ddy, w] = [bx - ax, by - ay, this.width];
-    let tx = tileOf(ax);
-    let ty = tileOf(ay);
     // tileOf and idiv written out, and each step tested as findPath does (terrain mask, then buildings): this runs
     // four times a tile along every line a path is smoothed with.
     for (let i = 1; i <= n; i++) {
-      const nx = Math.floor((ax + Math.trunc((ddx * i) / n)) / FP);
-      const ny = Math.floor((ay + Math.trunc((ddy * i) / n)) / FP);
+      const sx = ax + Math.trunc((ddx * i) / n);
+      const sy = ay + Math.trunc((ddy * i) / n);
+      const nx = sx % FP === 0 ? tx : Math.floor(sx / FP);
+      const ny = sy % FP === 0 ? ty : Math.floor(sy / FP);
       if (nx === tx && ny === ty) continue;
       const dx = nx - tx;
       const dy = ny - ty;
@@ -168,6 +179,16 @@ export class Grid {
     const heap = this.heap;
     heap.clear();
     const { steps, blocked } = this;
+    // Equal costs are settled by the tiles' place relative to the line from start to goal (nearest it, then on its
+    // left, then furthest along): the same for a map turned round, where the order of the eight directions was not,
+    // and a unit took another road from the mirror of its spot.
+    const [lx, ly] = [gx - sx, gy - sy];
+    const tie = (i: number) => {
+      const rx = (i % w) - sx;
+      const ry = Math.floor(i / w) - sy;
+      const cross = lx * ry - ly * rx;
+      return (Math.abs(cross) * 2 + (cross < 0 ? 1 : 0)) * 2 ** 26 + (2 ** 25 - (lx * rx + ly * ry));
+    };
     const h = (i: number) => {
       const dx = Math.abs((i % w) - gx);
       const dy = Math.abs(Math.floor(i / w) - gy);
@@ -175,7 +196,7 @@ export class Grid {
     };
     g[start] = 0;
     seen[start] = run;
-    heap.push(h(start), start);
+    heap.push(h(start), start, tie(start));
     let best = start;
     let bestH = h(start);
     while (heap.size > 0) {
@@ -203,7 +224,7 @@ export class Grid {
         seen[ni] = run;
         g[ni] = ng;
         from[ni] = cur;
-        heap.push(ng + h(ni), ni);
+        heap.push(ng + h(ni), ni, tie(ni));
       }
     }
     const path: number[] = [];
@@ -212,16 +233,37 @@ export class Grid {
   }
 
   /** Nearest open tile to (x, y), searching outward in rings; prefers tiles at `level` (so a target on a cliff is approached from the top). */
-  nearestOpen(x: number, y: number, level = -1): [number, number] {
+  /**
+   * `from` (a tile, or between tiles): of a ring's tiles, the one nearest it, then on the left of the line from it to
+   * (x, y), then furthest along it, rather than the first in the scan's fixed order. A unit and the mirror of its spot
+   * then pick mirrored tiles; without `from`, the scan's order as ever.
+   */
+  nearestOpen(x: number, y: number, level = -1, from?: [number, number]): [number, number] {
     let fallback: [number, number] | null = null;
+    let found: [number, number] | null = null;
+    const better = (a: [number, number], b: [number, number] | null) => {
+      if (!from || !b) return !b;
+      const key = ([px, py]: [number, number]) => {
+        const [rx, ry, lx, ly] = [px - from[0], py - from[1], x - from[0], y - from[1]];
+        const cross = lx * ry - ly * rx;
+        return [rx * rx + ry * ry, cross < 0 ? 1 : 0, -(lx * rx + ly * ry), Math.abs(cross)];
+      };
+      const [ka, kb] = [key(a), key(b)];
+      for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i];
+      return false;
+    };
     for (let r = 0; r < Math.max(this.width, this.height); r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !this.open(x + dx, y + dy)) continue;
-          if (level < 0 || this.level(x + dx, y + dy) === level) return [x + dx, y + dy];
-          fallback ??= [x + dx, y + dy];
+          const t: [number, number] = [x + dx, y + dy];
+          if (level < 0 || this.level(x + dx, y + dy) === level) {
+            if (!from) return t;
+            if (better(t, found)) found = t;
+          } else if (better(t, fallback)) fallback = t;
         }
       }
+      if (found) return found;
       if (fallback && r >= 6) return fallback;
     }
     return fallback ?? [x, y];
@@ -241,7 +283,7 @@ const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
  */
 class Heap {
   private pri = new Int32Array(1024);
-  private ord = new Int32Array(1024);
+  private ord = new Float64Array(1024);
   private val = new Int32Array(1024);
   size = 0;
   private seq = 0;
@@ -261,18 +303,20 @@ class Heap {
     this.val[to] = this.val[from];
   }
 
-  push(priority: number, value: number): void {
+  /** `tie` orders entries of equal priority (lowest first); without it, the order they came in. */
+  push(priority: number, value: number, tie = this.seq): void {
     if (this.size === this.pri.length) {
-      const grow = (a: Int32Array) => {
-        const b = new Int32Array(a.length * 2);
+      const grow = <T extends Int32Array | Float64Array>(a: T, make: (n: number) => T) => {
+        const b = make(a.length * 2);
         b.set(a);
         return b;
       };
-      [this.pri, this.ord, this.val] = [grow(this.pri), grow(this.ord), grow(this.val)];
+      [this.pri, this.ord, this.val] = [grow(this.pri, (n) => new Int32Array(n)), grow(this.ord, (n) => new Float64Array(n)), grow(this.val, (n) => new Int32Array(n))];
     }
     // Sift up with a hole: the new entry is written once, where it lands.
     const { pri, ord } = this;
-    const o = this.seq++;
+    const o = tie;
+    this.seq++;
     let i = this.size++;
     while (i > 0) {
       const p = (i - 1) >> 1;

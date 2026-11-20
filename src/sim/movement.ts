@@ -27,11 +27,14 @@ export function goNear(this: World, e: Entity, tx: number, ty: number, size: num
   // only made units coming from the west or north take another path than those from the east or south.
   // When that tile is blocked (a neighbouring mineral at a corner), aim inside: the nearest open tile to the
   // rectangle itself, not to its neighbour, which may be on the far side of it.
+  // One unit past the edge on every side (the left or top edge itself lies inside, the right or bottom one outside,
+  // so the same point by both rules left a scene and its mirror a unit apart), one unit inside it when aiming inside.
   if (!e.goal) {
-    const [ox, oy] = [nx === tx * FP ? nx - 1 : nx, ny === ty * FP ? ny - 1 : ny];
+    const out = (v: number, lo: number, hi: number) => (v === lo ? v - 1 : v === hi ? v + 1 : v);
+    const [ox, oy] = [out(nx, tx * FP, (tx + size) * FP), out(ny, ty * FP, (ty + size) * FP)];
     // ...and only if that tile is at the rectangle's level: below a cliff, the rectangle is reached from the top.
     if (this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true)) this.plan(e, ox, oy);
-    else this.plan(e, Math.min(nx, (tx + size) * FP - 1), Math.min(ny, (ty + size) * FP - 1));
+    else this.plan(e, Math.max(tx * FP + 1, Math.min(nx, (tx + size) * FP - 1)), Math.max(ty * FP + 1, Math.min(ny, (ty + size) * FP - 1)));
   }
   if (!this.follow(e)) return;
   // Path done (it ends on the open tile beside the rectangle): step straight at the edge.
@@ -96,7 +99,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   let gx = Math.min(g.width - 1, Math.max(0, tileOf(x)));
   let gy = Math.min(g.height - 1, Math.max(0, tileOf(y)));
   const exact = g.open(gx, gy);
-  if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy));
+  if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy), [tileOf(e.x), tileOf(e.y)]);
   const tiles = this.pathFor(e, gx, gy);
   const pts: number[] = [];
   for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);
@@ -178,7 +181,8 @@ export function evict(this: World, e: Entity): void {
   const x = tileOf(e.x);
   const y = tileOf(e.y);
   if (this.grid.open(x, y)) return;
-  const [ox, oy] = this.grid.nearestOpen(x, y, this.grid.level(x, y));
+  // Ties toward the map's centre: no other direction is known here, and the scan's order did not turn with the map.
+  const [ox, oy] = this.grid.nearestOpen(x, y, this.grid.level(x, y), [(this.grid.width - 1) / 2, (this.grid.height - 1) / 2]);
   const d = dist(e.x, e.y, ox * FP + FP / 2, oy * FP + FP / 2);
   const s = Math.min(e.speed, d);
   if (d > 0) this.tryMove(e, e.x + idiv((ox * FP + FP / 2 - e.x) * s, d), e.y + idiv((oy * FP + FP / 2 - e.y) * s, d), true);
@@ -193,6 +197,17 @@ export function touchesIdleFriend(this: World, e: Entity): boolean {
 }
 
 /** Moves if the step crosses no cliff or obstacle (`throughBuildings`: cliffs only). */
+/** Along one axis, from `from` to `to` (fixed point): the (tile before, tile after) pairs to check (see tryMove). */
+function sides(from: number, to: number): [number, number][] {
+  const edge = (v: number) => v % FP === 0;
+  if (to === from) return edge(from) ? [[from / FP - 1, from / FP - 1], [from / FP, from / FP]] : [[tileOf(from), tileOf(from)]];
+  const up = to > from;
+  // An edge point belongs to the tile on the side the unit comes from.
+  const a = edge(from) ? (up ? from / FP : from / FP - 1) : tileOf(from);
+  const b = edge(to) ? (up ? to / FP - 1 : to / FP) : tileOf(to);
+  return [[a, b]];
+}
+
 export function tryMove(this: World, e: Entity, nx: number, ny: number, throughBuildings = false): boolean {
   if (flies(e)) {
     if (nx < 0 || ny < 0 || nx >= this.grid.width * FP || ny >= this.grid.height * FP) return false;
@@ -200,11 +215,18 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
     e.y = ny;
     return true;
   }
-  const ax = tileOf(e.x);
-  const ay = tileOf(e.y);
-  const bx = tileOf(nx);
-  const by = tileOf(ny);
-  if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings))) return false;
+  // Never stopping on a tile edge (one unit short of it, on the side it comes from), and a point on one counting in the
+  // tile it comes from, or in both when not moving along that axis: floor alone put it in the tile beyond on one side
+  // of the map and short of it on the other, so a scene and its mirror were let through a cliff's corner differently.
+  if (nx !== e.x && nx % FP === 0) nx -= Math.sign(nx - e.x);
+  if (ny !== e.y && ny % FP === 0) ny -= Math.sign(ny - e.y);
+  const xs = sides(e.x, nx);
+  const ys = sides(e.y, ny);
+  for (const [ax, bx] of xs) {
+    for (const [ay, by] of ys) {
+      if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings))) return false;
+    }
+  }
   e.x = nx;
   e.y = ny;
   return true;
@@ -248,10 +270,14 @@ export function separate(this: World): void {
   };
   // Buckets two tiles wide: look far enough that the two widest bodies (gods, 1.3 tiles) still meet.
   const reach = idiv(2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + 2 * FP - 1, 2 * FP);
+  // Pairs (i, j) in id order whatever the buckets they lie in: bucket by bucket, the order turned with the map, and a
+  // scene and its mirror pushed their units apart in different orders, so not to mirror positions.
+  const near: number[] = [];
   for (let i = 0; i < n; i++) {
     const e = units[i];
     const bx = tileOf(e.x) >> 1;
     const by = tileOf(e.y) >> 1;
+    near.length = 0;
     for (let dy = -reach; dy <= reach; dy++) {
       for (let dx = -reach; dx <= reach; dx++) {
         const b = index.get(key(bx + dx, by + dy));
@@ -269,15 +295,14 @@ export function separate(this: World): void {
           if (m[mid] <= i) q = mid + 1;
           else hi = mid;
         }
-        for (; q < m.length; q++) {
-          const j = m[q];
-          const f = units[j];
-          if (air[j] !== air[i]) continue;
-          this.pushApart(e, f);
-          moved(i);
-          moved(j);
-        }
+        for (; q < m.length; q++) if (air[m[q]] === air[i]) near.push(m[q]);
       }
+    }
+    if (near.length > 1) near.sort((p, q) => p - q);
+    for (const j of near) {
+      this.pushApart(e, units[j]);
+      moved(i);
+      moved(j);
     }
   }
 }

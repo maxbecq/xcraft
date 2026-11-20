@@ -352,10 +352,20 @@ export function moveGroup(this: World, units: Entity[], x: number, y: number): v
  * the march, the units nearest the point in the front row, each row filled left to right as the units stand. All of
  * it is reckoned along the march, not the map's axes, so two mirrored groups get mirrored blocks (no side favoured).
  */
+/**
+ * A sum of positions over n, to the nearest, halves to the even: as the map's width in fixed point is even, the mean
+ * of mirrored positions is the mirror of the mean (rounding toward zero put it one unit off on one side).
+ */
+function mean(sum: number, n: number): number {
+  const q = Math.floor(sum / n);
+  const twice = 2 * (sum - q * n);
+  return twice > n || (twice === n && q % 2 !== 0) ? q + 1 : q;
+}
+
 export function formation(this: World, units: Entity[], to?: [number, number]): [number[], number[], boolean] {
   const n = Math.max(1, units.length);
-  const cx = idiv(units.reduce((s, e) => s + e.x, 0), n);
-  const cy = idiv(units.reduce((s, e) => s + e.y, 0), n);
+  const cx = mean(units.reduce((s, e) => s + e.x, 0), n);
+  const cy = mean(units.reduce((s, e) => s + e.y, 0), n);
   const compact = units.every((e) => dist(e.x, e.y, cx, cy) < 4 * FP);
   if (compact || !to || units.length === 1) return [units.map((e) => (compact ? e.x - cx : 0)), units.map((e) => (compact ? e.y - cy : 0)), compact];
   // The march: from the group's centre to the point (straight "down" if it is already there).
