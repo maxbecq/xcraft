@@ -459,7 +459,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   t.lastAttacker = e.id;
   t.lastHitBy = e.owner;
-  // Sphère de renvoi: part of the blow goes back to the attacker.
+  // Sphère de renvoi: part of the blow goes back to the attacker, whoever it is (own side too: kept on purpose, rule 47).
   if (t.reflect > 0 && e.def.kind === 'unit' && e.hp > 0) this.hurt(e, Math.max(1, idiv((a.damage + bonus) * U.renvoiPercent, 100)));
   // Lames empoisonnées: a Belluaire's blade poisons living units.
   if (e.type === 'belluaire' && t.def.kind === 'unit' && !machine && this.level(e.owner, 'lamesempoisonnees')) t.poison = ticks(U.poison.seconds);

@@ -135,4 +135,16 @@ describe('attacking one\'s own side (explicit order only)', () => {
     run(w, 2);
     expect(a.hp).toBe(hp);
   });
+
+  it('a Sphère de renvoi sends friendly fire back too, by design, and still nobody strikes back', () => {
+    const w = new World(createMap(), 2);
+    const [a] = army(w, 0, 'auxiliaire', 40, 60, 1);
+    const [mine] = army(w, 0, 'auxiliaire', 41, 60, 1);
+    mine.reflect = ticks(30);
+    w.step([{ player: 0, kind: 'attack', ids: [a.id], x: mine.x, y: mine.y, target: mine.id }]);
+    run(w, 4);
+    expect(mine.hp).toBeLessThan(mine.maxHp);
+    expect(a.hp).toBeLessThan(a.maxHp); // the Sphère answers any blow, whoever strikes (rule 47 exception)
+    expect(mine.order).toBeNull();
+  });
 });
