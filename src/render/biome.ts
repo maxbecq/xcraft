@@ -7,11 +7,14 @@ import { DECK_SLAB } from '../terrain';
 import { Grid } from '../sim/grid';
 import { expansion } from '../sim/setup';
 import type { World } from '../sim/world';
+import type { MapFile } from '../maps';
 
 /** Look of a planet: ground and cliff palette, light, sky and glowing ground veins. Rendering only. */
 export interface Biome {
   id: string;
   name: string;
+  /** Only on the maps drawn for it (MapFile.biomes); the others are offered on every map. */
+  special?: boolean;
   /** Ground colour per cliff level (low, mid, high). */
   levels: [Color, Color, Color];
   patch: Color;
@@ -150,6 +153,7 @@ export const BIOMES: Record<string, Biome> = {
   asteroides: {
     id: 'asteroides',
     name: 'Astéroïdes',
+    special: true,
     levels: [new Color(0x5a5c62), new Color(0x525459), new Color(0x66686e)],
     patch: new Color(0x303236),
     sand: new Color(0x56585e),
@@ -190,16 +194,26 @@ export const BIOMES: Record<string, Biome> = {
   },
 };
 
-/** Biome from `?biome=`, else the last one chosen in the menu, else the desert. */
-export function pickBiome(params: URLSearchParams): Biome {
+/** The planets offered on this map: every common one, plus the special ones it was drawn for. */
+export function biomesFor(map: Pick<MapFile, 'biomes'>): Biome[] {
+  return Object.values(BIOMES).filter((b) => !b.special || !!map.biomes?.includes(b.id));
+}
+
+/** This planet if the map takes it, else the desert (an unknown id, or a special planet from an old link, setting or replay). */
+export function fitBiome(id: string | null | undefined, map: Pick<MapFile, 'biomes'>): Biome {
+  const b = id && Object.hasOwn(BIOMES, id) ? BIOMES[id] : null; // own ids only: `constructor` is not a planet
+  return b && (!b.special || !!map.biomes?.includes(b.id)) ? b : BIOMES.desert;
+}
+
+/** Biome from `?biome=`, else the last one chosen in the menu, else the desert; one the map does not take falls back too. */
+export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biomes'>): Biome {
   let stored: string | null = null;
   try {
     stored = localStorage.getItem('xcraft.biome');
   } catch {
     // storage unavailable: fine
   }
-  const id = params.get('biome') ?? stored ?? 'desert';
-  return Object.hasOwn(BIOMES, id) ? BIOMES[id] : BIOMES.desert; // own ids only: `constructor` is not a planet
+  return fitBiome(params.get('biome') ?? stored, map);
 }
 
 /**

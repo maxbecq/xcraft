@@ -65,7 +65,7 @@ const GFX = QUALITY[QUALITY_LEVEL];
 renderer.setPixelRatio(Math.min(Number(params.get('pr')) || GFX.pixelRatio, window.devicePixelRatio));
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
-const biome = pickBiome(withReplayBiome(params, REPLAY));
+const biome = pickBiome(withReplayBiome(params, REPLAY), MAP);
 renderer.toneMappingExposure = biome.exposure;
 renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFShadowMap;

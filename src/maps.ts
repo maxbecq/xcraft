@@ -17,6 +17,8 @@ export interface MapFile {
   symmetry: 'rot180' | 'rot90' | 'auto';
   /** Points near which ragged edges stay straight (default: both ends of every ramp). */
   calm?: [number, number][];
+  /** Special planets this map was drawn for (render/biome.ts `special`), offered beside the common ones. */
+  biomes?: string[];
   terrain: Shape[];
   bases: BaseSpot[];
 }

@@ -5,7 +5,7 @@ import { mapCards, seatsOf } from '../mappicker';
 import { newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
-import { BIOMES, type Biome } from '../render/biome';
+import { BIOMES, type Biome, biomesFor, fitBiome } from '../render/biome';
 import { TEAM_COLORS } from '../render/models';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
@@ -181,6 +181,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   };
   if (sandbox) s.sides[0].control = 'you';
   const chosen = mapFile(s.map);
+  s.biome = fitBiome(s.biome, chosen).id; // a planet the newly chosen map does not take
   const watching = s.sides[0].control !== 'you';
   const title = sandbox ? 'Bac à sable' : 'Nouvelle partie';
   const seats = sandbox
@@ -199,7 +200,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     ${seats}
     <fieldset class="options"><legend>Partie</legend>
       ${compact ? `<label>Carte <button type="button" data-m="maps" class="map-change">${chosen.name}</button></label>` : ''}
-      <label>Planète ${select('biome', Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), s.biome)}</label>
+      <label>Planète ${select('biome', Object.fromEntries(biomesFor(chosen).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
     ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}
@@ -298,7 +299,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     <fieldset class="seats"><legend>Joueurs</legend>${seat(0)}${seat(1)}</fieldset>
     <fieldset class="maps${host ? '' : ' fixed'}"></fieldset>
     <fieldset class="options"><legend>Partie</legend><label>Planète ${
-      host ? `<select data-k="biome">${options(Object.fromEntries(Object.values(BIOMES).map((b) => [b.id, b.name])), setup.biome)}</select>` : '<span class="lobby-other lobby-biome"></span>'
+      host ? '<select data-k="biome"></select>' : '<span class="lobby-other lobby-biome"></span>'
     }</label></fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="retry" hidden>Réessayer</button>${host ? '<button data-m="go" class="go" disabled>Lancer la partie</button>' : ''}</div>`;
   const $ = <T extends HTMLElement>(q: string) => menu.querySelector<T>(q);
@@ -314,6 +315,8 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     const key = `${setup.map}/${setup.biome}`;
     if (key !== drawnMaps) {
       drawnMaps = key;
+      const planets = $<HTMLSelectElement>('select[data-k="biome"]');
+      if (planets) planets.innerHTML = options(Object.fromEntries(biomesFor(mapFile(setup.map)).map((b) => [b.id, b.name])), setup.biome);
       const cards = mapCards(mapFile(setup.map).id, setup.biome);
       $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
     }
@@ -377,6 +380,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     const m = button?.dataset.m;
     if (button?.dataset.map && host) {
       setup.map = button.dataset.map;
+      setup.biome = fitBiome(setup.biome, mapFile(setup.map)).id;
       lobby.send({ setup });
       refresh();
     } else if (m === 'copy') {
