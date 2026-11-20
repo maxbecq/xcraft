@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import BALANCE from '../balance.json';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
-import { type Entity, World } from './world';
+import { type Entity, World, flies, soars } from './world';
+import { reaches } from '../data';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const run = (w: World, seconds: number) => {
@@ -249,5 +250,21 @@ describe('audit gaps', () => {
     }
     expect(ghost.hp).toBe(0);
     expect(ghost.dealt).toBeGreaterThanOrEqual(BALANCE.rules.upgrades.fantomeDamage);
+  });
+
+  it('Frigg and the Élémentaire d\'eau hover over the terrain but are hit as ground units', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const frigg = w.spawn('frigg', 0, 30 * FP, 30 * FP);
+    const eau = w.spawn('elemeau', 0, 32 * FP, 30 * FP);
+    const brute = w.spawn('legionnaire', 1, 31 * FP, 31 * FP);
+    for (const u of [frigg, eau]) {
+      expect(soars(u)).toBe(true);
+      expect(flies(u)).toBe(false);
+      expect(reaches(w.weapon(brute)!, flies(u))).toBe(true);
+    }
+    const hp = frigg.hp;
+    w.step([{ player: 1, kind: 'attack', ids: [brute.id], x: frigg.x, y: frigg.y, target: frigg.id }]);
+    run(w, 3);
+    expect(frigg.hp).toBeLessThan(hp);
   });
 });

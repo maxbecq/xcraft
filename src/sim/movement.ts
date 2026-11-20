@@ -1,7 +1,7 @@
 /** Movement: paths, following them, pace, stepping aside, separation. */
 import { type UnitDef } from '../data';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, tileOf } from './fixed';
-import { flies, type Entity, type World } from './world';
+import { soars, type Entity, type World } from './world';
 
 const REACH = FP / 4;
 
@@ -10,7 +10,7 @@ export function reachRect(this: World, e: Entity, tx: number, ty: number, size: 
   const nx = Math.max(tx * FP, Math.min(e.x, (tx + size) * FP));
   const ny = Math.max(ty * FP, Math.min(e.y, (ty + size) * FP));
   if (dist(e.x, e.y, nx, ny) > e.radius + REACH) return false;
-  return flies(e) || this.grid.canStep(tileOf(e.x), tileOf(e.y), ...rectTile(tx, ty, size, e.x, e.y), true);
+  return soars(e) || this.grid.canStep(tileOf(e.x), tileOf(e.y), ...rectTile(tx, ty, size, e.x, e.y), true);
 }
 
 /** The rectangle's tile nearest to a point. */
@@ -92,7 +92,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   const g = this.grid;
   e.goal = { x, y };
   e.blockedTicks = 0;
-  if (flies(e)) {
+  if (soars(e)) {
     e.path = [Math.max(0, Math.min(g.width * FP - 1, x)), Math.max(0, Math.min(g.height * FP - 1, y))];
     return;
   }
@@ -209,7 +209,7 @@ function sides(from: number, to: number): [number, number][] {
 }
 
 export function tryMove(this: World, e: Entity, nx: number, ny: number, throughBuildings = false): boolean {
-  if (flies(e)) {
+  if (soars(e)) {
     if (nx < 0 || ny < 0 || nx >= this.grid.width * FP || ny >= this.grid.height * FP) return false;
     e.x = nx;
     e.y = ny;
@@ -251,7 +251,7 @@ export function separate(this: World): void {
     const e = units[i];
     x0[i] = e.x;
     y0[i] = e.y;
-    air[i] = flies(e) ? 1 : 0;
+    air[i] = soars(e) ? 1 : 0;
     const k = key(tileOf(e.x) >> 1, tileOf(e.y) >> 1);
     let b = index.get(k);
     if (b === undefined) {

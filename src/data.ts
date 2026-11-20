@@ -73,6 +73,8 @@ export interface UnitDef {
   beast?: boolean;
   /** Flies: straight over cliffs and buildings, out of reach of melee and ground-only weapons. */
   flying?: boolean;
+  /** Hovers: moves over cliffs and water like a flyer, but is hit as a ground unit (Frigg, Élémentaire d'eau). */
+  hover?: boolean;
   /** Reveals invisible enemies within this radius (tiles). */
   detector?: number;
   /** Active ability (key of ABILITIES). */
@@ -718,7 +720,7 @@ const BASE: Record<string, object> = {
    * merge into a Golem. */
   elementaire: { kind: 'unit', name: 'Élémentaire de feu', radius: 0.45, abilities: ['formeeau', 'formeterre', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
   /** Water form: an icy shot from afar. */
-  elemeau: { kind: 'unit', name: 'Élémentaire d’eau', radius: 0.45, abilities: ['formefeu', 'formeterre', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
+  elemeau: { kind: 'unit', name: 'Élémentaire d’eau', radius: 0.45, hover: true, abilities: ['formefeu', 'formeterre', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
   /** Earth form: very slow, very hardy, blades against infantry. */
   elemterre: { kind: 'unit', name: 'Élémentaire de terre', radius: 0.5, abilities: ['formefeu', 'formeeau', 'formeair', 'fusion'], faction: 'dieux', hotkey: 'E' },
   /** Air form: flies, very fast, strikes flyers only. */
@@ -727,7 +729,7 @@ const BASE: Record<string, object> = {
   golem: { kind: 'unit', name: 'Golem', radius: 0.9, faction: 'dieux', hotkey: 'G' },
   // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
   /** Frigg ignores the ground (cliffs, water): she flies. */
-  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, flying: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
+  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, hover: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
   hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
   osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
   /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */

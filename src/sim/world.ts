@@ -32,6 +32,8 @@ export type Order =
 
 /** Flying units go straight over cliffs and buildings. */
 export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying || e.airborne;
+/** Moves over cliffs, water and buildings: the flyers, and the units that hover but are hit as ground units. */
+export const soars = (e: Entity): boolean => flies(e) || !!(e.def as UnitDef).hover;
 /** A building ability's cooldown: the Canon IEM and the Bouclier de plasma keep their own, apart from the building's other ability. */
 export const cdOf = (b: Entity, name: string): number => (name === 'canoniem' ? b.iemCd : name === 'bouclierplasma' ? b.plasmaCd : b.abilityCd);
 /** Workers that repair, by type: hp a second, share of the worth a full repair costs, machines as well as buildings. */
@@ -486,7 +488,7 @@ export class World {
       const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
       const tx = tileOf(e.x);
       const ty = tileOf(e.y);
-      const high = flies(e);
+      const high = soars(e);
       const k = Number.isInteger(r) && r >= 0 && r < 1024 && tx >= 0 && tx < W && ty >= 0 ? ((ty * W + tx) * 1024 + r) * 2 + (high ? 1 : 0) : -1;
       for (const a of this.team[e.owner]) {
         if (k >= 0) {
@@ -750,7 +752,7 @@ export class World {
     // A god summons only while it stands still (even pushed onto a blocked tile, which it steps off without a goal).
     if (e.queue.length && !e.goal && e.held === 0) this.produce(e);
     // Caught under a new building (with or without orders): walk out first.
-    if (!flies(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
+    if (!soars(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
     // Célérité naine: a Nain leaps at the enemy it goes for.
     if (e.type === 'nain' && e.order?.kind === 'attack' && e.abilityCd === 0 && e.boost === 0 && this.level(e.owner, 'celerite')) {
@@ -777,7 +779,7 @@ export class World {
     const o = e.order;
     if (!o) {
       if ((this.tick + e.id) % 4 === 0) this.acquire(e);
-      if (!e.order && !flies(e)) this.evict(e);
+      if (!e.order && !soars(e)) this.evict(e);
       return;
     }
     switch (o.kind) {

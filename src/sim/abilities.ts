@@ -2,7 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
-import { flies, type Entity, type World } from './world';
+import { flies, soars, type Entity, type World } from './world';
 
 /** Rappel: holds the army units around (x, y) for the channel; false if there are none. */
 export function recall(this: World, b: Entity, x: number, y: number): boolean {
@@ -127,7 +127,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   } else if (name!.startsWith('forme')) {
     // Mutation: another form, its wounds kept; a flyer only lands on open ground.
     const into = FORMS[name!];
-    if (flies(e) && !(DEFS[into] as UnitDef).flying && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible de se poser ici.');
+    if (soars(e) && !(DEFS[into] as UnitDef).flying && !(DEFS[into] as UnitDef).hover && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible de se poser ici.');
     this.transmute(e, into);
   } else if (name === 'fusion') {
     // Two Élémentaires, any forms, merge into a Golem, which takes a while to set.
@@ -439,7 +439,7 @@ export function setPace(this: World, t: Entity, left: number, move: number, atk:
 
 /** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
 export function place(this: World, t: Entity, x: number, y: number): void {
-  if (!flies(t)) {
+  if (!soars(t)) {
     const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1);
     [x, y] = [ox * FP + FP / 2, oy * FP + FP / 2];
   }
@@ -465,7 +465,7 @@ export function wall(this: World, owner: number, from: Entity, x: number, y: num
   }
   for (const i of tiles) this.grid.blocked[i]++;
   this.walls.push({ owner, tiles: [...tiles], left });
-  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !flies(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
 }
 
 /** Where a shot from (x1, y1) to (x2, y2) meets a Mur d'énergie, if it does. */

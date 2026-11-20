@@ -9,7 +9,7 @@ import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef, WE
 import { armillaries } from './life';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
-import { type Entity, type World, flies } from '../sim/world';
+import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
@@ -490,7 +490,7 @@ export class EntityRenderer {
       }
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       const ground = heightAt(this.map, x, z);
-      v.ground = !flies(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
+      v.ground = !soars(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
       v.root.position.set(x, v.ground, z);
       const hp = e.hp + e.shield;
       if (e.def.kind === 'unit' && v.hp !== undefined && hp < v.hp && !v.flash) {
@@ -537,7 +537,7 @@ export class EntityRenderer {
         (v.ring.userData.halo as MeshBasicMaterial).opacity = 0.22 * fresh + 0.45 * flash;
         (v.ring.userData.core as MeshBasicMaterial).opacity = 0.55 + 0.4 * fresh + 0.6 * flash;
         (v.ring.userData.dial as Mesh).visible = dialMat.opacity > 0;
-        const air = flies(e);
+        const air = soars(e);
         if (air !== !!v.ring.userData.air) this.airRing(v.ring, air);
         if (air) {
           // In flight: the ring rides just under the model, tied to the ground by a faint thread.
@@ -815,7 +815,7 @@ export class EntityRenderer {
     const body = v.model.children[0];
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
     // Hovering robots float; walkers bounce with their stride.
-    const flying = flies(e);
+    const flying = soars(e);
     const hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
     // Wheeled robots rumble over the ground rather than bounce.
     const rolling = !!v.wheels;

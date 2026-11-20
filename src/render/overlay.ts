@@ -2,7 +2,7 @@ import { Vector3, type Camera } from 'three';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import { type Entity, type Order, type World, flies } from '../sim/world';
+import { type Entity, type Order, type World, soars } from '../sim/world';
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 /** A rally point's arrows dive this long (ms), then its ring opens and fades for RALLY_RING. */
@@ -56,7 +56,7 @@ export class Overlay {
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       // A building's bar sits just above its model's real top (a tower is far taller than its footprint says).
       const top = size ? this.top(e.id) : undefined;
-      const y = top !== undefined ? top + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (flies(e) ? FLY_HEIGHT : 0);
+      const y = top !== undefined ? top + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (soars(e) ? FLY_HEIGHT : 0);
       this.v.set(x, y, z).project(camera);
       if (this.v.z > 1) continue;
       const sx = ((this.v.x + 1) / 2) * w;

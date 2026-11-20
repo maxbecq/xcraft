@@ -1,7 +1,7 @@
 import { Box3, Raycaster, Vector2, Vector3, type Camera, type Mesh, type Object3D, type SkinnedMesh } from 'three';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import { type Command, type Entity, type World, flies } from '../sim/world';
+import { type Command, type Entity, type World, soars } from '../sim/world';
 import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 import { type Catch, nearestCatch, pickAt } from './pick';
 import { silhouetted } from '../render/xray';
@@ -575,7 +575,7 @@ export class Input {
   private screenOf(e: Entity, lift = 0.4): { x: number; y: number } {
     const x = e.x / FP;
     const z = e.y / FP;
-    const v = new Vector3(x, heightAt(this.map, x, z) + lift + (flies(e) ? FLY_HEIGHT : 0), z).project(this.hooks.camera());
+    const v = new Vector3(x, heightAt(this.map, x, z) + lift + (soars(e) ? FLY_HEIGHT : 0), z).project(this.hooks.camera());
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
   }
 

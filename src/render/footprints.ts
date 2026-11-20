@@ -2,7 +2,7 @@ import { Color, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matri
 import type { UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
-import { flies, type Entity, type World } from '../sim/world';
+import { soars, type Entity, type World } from '../sim/world';
 
 /** Grounds that keep a print, and its colour (darker than the ground, drawn see-through). */
 const GROUNDS: Record<string, number> = { glace: 0x2e3f52, desert: 0x4a2e16, lune: 0x161618 };
@@ -86,7 +86,7 @@ export class Footprints {
     let changed = false;
     for (const e of world.entities.values()) {
       const r = e.def.kind === 'unit' ? (e.def as UnitDef).radius : 0;
-      if (r < HEAVY || flies(e) || e.inside || !sees(e)) continue;
+      if (r < HEAVY || soars(e) || e.inside || !sees(e)) continue;
       const x = e.x / FP;
       const z = e.y / FP;
       const was = this.last.get(e.id);
