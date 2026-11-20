@@ -1,6 +1,6 @@
 /** The HUD's messages (toasts) and the end-of-game banner. */
 import type { Entity, GameEvent } from '../sim/world';
-import { DEFS } from '../data';
+import { DEFS, FACTIONS } from '../data';
 import { FP } from '../sim/fixed';
 import { el } from './glyphs';
 import type { Hud } from './hud';
@@ -94,8 +94,12 @@ export function showEnd(h: Hud): void {
   if (h.world.winner !== null && h.banner.hidden) {
     // The winner is one player of the winning team: an ally's victory is ours too (our own buildings lost or not).
     const won = h.world.players[h.world.winner]?.team === h.world.players[h.player]?.team;
-    h.banner.innerHTML = `<h1>${won ? 'Victoire !' : 'Défaite…'}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
-    h.banner.classList.toggle('won', won);
+    // Watched (spectating, a replay): nobody's victory or defeat, the winning side named.
+    const team = h.world.players.filter((p) => p.team === h.world.players[h.world.winner!]?.team);
+    const sides = [...new Set(team.map((p) => FACTIONS[p.faction].name))].join(', ');
+    const title = !h.spectator ? (won ? 'Victoire !' : 'Défaite…') : team.length > 1 ? `Victoire de l'équipe ${team[0].team + 1} (${sides})` : `Victoire des ${sides}`;
+    h.banner.innerHTML = `<h1>${title}</h1><div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
+    h.banner.classList.toggle('won', won || h.spectator);
     h.banner.hidden = false;
   }
 }
