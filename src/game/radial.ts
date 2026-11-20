@@ -63,10 +63,10 @@ export class Marking {
   move(x: number, y: number): void {
     const near = this.nearest(x, y);
     if (near === this.over) return;
-    this.over?.classList.remove('vhover');
+    this.over?.classList.remove('lit');
     this.over = near;
     if (near) {
-      near.classList.add('vhover');
+      near.classList.add('lit');
       showTip(this.h, near);
     } else this.h.tip.hidden = true;
   }
@@ -94,7 +94,9 @@ export class Marking {
     if (this.weapons) pressMenu(h, b);
     else pressButton(h, b);
     // It opened a list (the buildings, a socle's weapons): that list in the ring, to tap in.
-    if (`${h.buildMenu}|${h.weaponMenu}` !== before && (h.buildMenu || h.weaponMenu)) {
+    // With the Machines' LCD console, Construire draws its tech tree there: the ring steps aside for it.
+    const tree = !!h.buildMenu && document.body.classList.contains('lcd') && document.body.classList.contains('z');
+    if (!tree && `${h.buildMenu}|${h.weaponMenu}` !== before && (h.buildMenu || h.weaponMenu)) {
       const list = buttonsFor(h);
       if (this.show(this.cx, this.cy, h.weaponMenu ? h.menuItems : list, !!h.weaponMenu)) return void (this.sticky = true);
     }

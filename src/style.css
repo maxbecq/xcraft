@@ -1181,7 +1181,8 @@ body.z.lcd .hud-toasts { right: auto; left: 50%; translate: -50% 0; bottom: 214p
 .marking { position: fixed; z-index: 11; width: 0; height: 0; pointer-events: none; }
 .marking .cmd { position: absolute; left: -27px; top: -27px; width: 54px; height: 54px; pointer-events: auto; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7); }
 .marking::before { content: ''; position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
-.marking .cmd.vhover { transform-origin: center; scale: 1.18; }
+.marking .cmd.lit { scale: 1.2; outline: 2px solid currentColor; outline-offset: 1px; }
+body.z .marking .cmd { background: var(--screen), #061014; } /* the LCD cells are see-through on the console, not over the map */
 /* Trial touch controls, phones (not with the Machines' LCD console, which lays itself out): a thin bar across the top
    for resources and supply, the menu button at its left; the quick actions (army, base, idle workers and producers,
    production, groups) in a row just above the console, within the thumb's reach. */
