@@ -311,6 +311,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
   /** Char Pégase (notice, 2010 sheet, mod): invisible chemical mines, 5 in stock, one more every 12 s, 160 damage. */
   posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve, refaites peu à peu).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
+  /** Isdaris major buildings (notice: Obélisque, Portail, Psycho-assembleur, Orbe de commandement, Trône): a plasma shield
+   * that makes it unhurt for a while, unable to shoot or produce (sheet and mod « Déphasage »; the mod's 10 s, cooldown 90). */
+  bouclierplasma: { name: 'Bouclier de plasma', effect: 'Le bâtiment devient invulnérable un moment, mais ne tire et ne produit plus.', hotkey: 'J', target: 'self', ...(BALANCE.abilities.bouclierplasma as object) } as AbilityDef,
   /** Allosaure (notice): feasts on a corpse nearby to heal; the mod's 50 % and 60 s. */
   festin: { name: 'Festin', effect: 'Dévore un cadavre organique tout proche et regagne une bonne part de sa vie.', hotkey: 'F', ...(BALANCE.abilities.festin as object) } as AbilityDef,
   /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
@@ -520,7 +523,7 @@ const BASE: Record<string, object> = {
   druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'deflagration', 'silence'], faction: 'isdaris', hotkey: 'D' },
   // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
   assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', faction: 'isdaris', hotkey: 'X' },
-  obelisque: { kind: 'building', name: 'Obélisque', size: 5, trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', faction: 'isdaris', hotkey: 'O' },
+  obelisque: { kind: 'building', name: 'Obélisque', size: 5, trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
   emetteur: { kind: 'building', name: 'Émetteur', size: 2, warp: true, morphs: ['pylonesanglant', 'deflecteur'], faction: 'isdaris', hotkey: 'E' },
   // Notice: an Émetteur turned « Déflecteur »: an aura of invisibility over the allied infantry and vehicles round it.
   deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'D' },
@@ -529,7 +532,7 @@ const BASE: Record<string, object> = {
   pylonesanglant: { kind: 'building', name: 'Pylône sanglant', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'P' },
   reservepsy: { kind: 'building', name: 'Réserve psy', size: 2, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'P' },
   portail: {
-    kind: 'building', name: 'Portail', size: 3, trains: ['archer', 'creature', 'druide', 'assassin'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'T',
+    kind: 'building', name: 'Portail', size: 3, trains: ['archer', 'creature', 'druide', 'assassin'], warp: true, needsPower: true, abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'T',
     researches: ['miniportail', 'cuvegenetique', 'laboratoire', 'portailatk1', 'portailatk2', 'portailatk3', 'portailarmor1', 'portailarmor2', 'portailarmor3', 'enfouissement', 'deflagration', 'silence'],
   },
   recepteur: { kind: 'building', name: 'Récepteur', size: 3, warp: true, morphs: ['recepteurarme'], faction: 'isdaris', hotkey: 'R' },
@@ -539,17 +542,17 @@ const BASE: Record<string, object> = {
   orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'B' },
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: {
-    kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N',
+    kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'N',
     researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'teleportation', 'manteau', 'feucirculaire', 'couloir'],
   },
   // Notice: « Orbe de commandement », the fourth major building, for large battles: shields research, and its extensions.
   orbecommandement: {
-    kind: 'building', name: 'Orbe de commandement', size: 3, requires: { nanoassembleur: 1 }, warp: true, needsPower: true, ability: 'observatoire', faction: 'isdaris', hotkey: 'C',
+    kind: 'building', name: 'Orbe de commandement', size: 3, requires: { nanoassembleur: 1 }, warp: true, needsPower: true, ability: 'observatoire', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'C',
     researches: ['autel', 'pyramide', 'observatoire', 'bouclier1', 'bouclier2', 'bouclier3', 'robots', 'cercle1', 'cercle2', 'chocmental', 'boostgenetique', 'teleportrapide', 'canonlourd', 'dephasage', 'renvoi', 'omniscience'],
   },
   // Notice: « Trône d'Altar Sargon », the last major building: Béhémoths, and the ultimate powers of its extensions.
   trone: {
-    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, abilities: ['canonorbital', 'portedephasage', 'murenergie'], faction: 'isdaris', hotkey: 'A',
+    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, abilities: ['canonorbital', 'portedephasage', 'murenergie', 'bouclierplasma'], faction: 'isdaris', hotkey: 'A',
     researches: ['relais', 'porte', 'concentrateur'],
   },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).

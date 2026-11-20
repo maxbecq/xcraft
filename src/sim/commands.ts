@@ -2,7 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
-import { type Order, flies, repairs, type Entity, type Command, type World } from './world';
+import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
 /** The supply building of each faction, for the "not enough supply" message. */
 const SUPPLY_NAMES: Record<Faction, string> = { humains: 'greniers', isdaris: 'réserves psy', z: 'pods', dieux: "branches d'Yggdrasill" };
@@ -249,7 +249,7 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'ability': {
-      const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && (c.name === 'canoniem' ? b.iemCd : b.abilityCd) === 0);
+      const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && cdOf(b, c.name!) === 0);
       if (c.name && !named) {
         // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
         const ab = ABILITIES[c.name];
@@ -268,6 +268,13 @@ export function apply(this: World, c: Command): void {
       const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
       if (b && c.name === 'envol') return void this.takeOff(b);
       if (b && c.name === 'deraciner') return void this.uproot(b);
+      if (b && c.name === 'bouclierplasma') {
+        const ab = ABILITIES.bouclierplasma;
+        b.phased = ticks(ab.duration);
+        b.plasmaCd = ticks(ab.cooldown);
+        this.casts.push({ kind: c.name, x: b.x, y: b.y });
+        return;
+      }
       if (!b || c.x === undefined || c.y === undefined) return;
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];

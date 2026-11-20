@@ -1,7 +1,7 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
-import type { Command } from '../sim/world';
+import { type Command, cdOf } from '../sim/world';
 import { img, pictogram, weaponIcon, Z_GLYPHS } from './glyphs';
 import type { Hud } from './hud';
 import { ultimatePct } from './hud-panel';
@@ -203,7 +203,7 @@ export function buttonsFor(h: Hud): Button[] {
   for (const name of abilitiesOf(b.def as BuildingDef)) {
     const a = ABILITIES[name];
     if (a.research && !h.world.level(h.player, a.research)) continue;
-    const ready = same.some((o) => (name === 'canoniem' ? o.iemCd : o.abilityCd) === 0);
+    const ready = same.some((o) => cdOf(o, name) === 0);
     const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => h.setTargeting(true, true, name);
     list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
   }

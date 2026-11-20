@@ -190,8 +190,8 @@ export function operate(this: World, b: Entity): void {
     return;
   }
   const def = b.def as BuildingDef;
-  // Z Gel électronique: neither shoots nor produces while frozen.
-  if (b.frozen > 0) return;
+  // Z Gel électronique, Isdaris Bouclier de plasma: neither shoots nor produces while frozen or phased.
+  if (b.frozen > 0 || b.phased > 0) return;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
   const attack = this.weapon(b);
   if (attack && b.cooldown === 0) {

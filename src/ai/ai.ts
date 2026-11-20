@@ -202,6 +202,11 @@ export class AI {
         if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
       }
     }
+
+    // Isdaris: a major building under fire, below a third of its hit points and shield, raises its Bouclier de plasma.
+    for (const b of buildings.filter((b) => abilitiesOf(b.def as BuildingDef).includes('bouclierplasma') && b.buildLeft === 0 && b.plasmaCd === 0 && b.phased === 0 && 3 * (b.hp + b.shield) < b.maxHp + b.maxShield)) {
+      ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'bouclierplasma' });
+    }
   }
 
   /** The buildings wanted this turn, most urgent first, and the tech state they depend on. */

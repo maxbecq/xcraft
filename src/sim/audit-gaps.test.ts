@@ -141,4 +141,25 @@ describe('audit gaps', () => {
     w.hit(brute, archer, m);
     expect(h3 - before(assassin)).toBe(h4 - before(archer));
   });
+
+  it('an Isdaris major building raises its plasma shield: unhurt, no shooting or production, for a while', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [obelisque] = of(w, 0, 'obelisque');
+    w.players[0].minerals = 1000;
+    w.step([{ player: 0, kind: 'train', ids: [obelisque.id], type: 'moissonneur' }]);
+    w.step([{ player: 0, kind: 'ability', ids: [obelisque.id], name: 'bouclierplasma' }]);
+    expect(obelisque.phased).toBeGreaterThan(0);
+    expect(obelisque.plasmaCd).toBeGreaterThan(0);
+    expect(obelisque.abilityCd).toBe(0); // the Rappel stays ready
+    const [hp, shield] = [obelisque.hp, obelisque.shield];
+    w.hurt(obelisque, 500);
+    expect([obelisque.hp, obelisque.shield]).toEqual([hp, shield]);
+    const left = obelisque.trainLeft;
+    run(w, 5);
+    expect(obelisque.trainLeft).toBe(left); // production on hold
+    run(w, 6);
+    expect(obelisque.phased).toBe(0);
+    w.hurt(obelisque, 500);
+    expect(obelisque.hp + obelisque.shield).toBeLessThan(hp + shield);
+  });
 });

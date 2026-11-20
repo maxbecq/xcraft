@@ -293,6 +293,7 @@
     "coupcirculaire": { "cooldown": 12, "duration": 0, "radius": 1.6, "damage": 30 },
     "camouflage": { "cooldown": 30, "duration": 8 },
     "explosiftoxique": { "cooldown": 25, "duration": 8, "range": 7, "radius": 2.5, "damage": 4 },
+    "bouclierplasma": { "cooldown": 90, "duration": 10 },
     "posermine": { "cooldown": 12, "duration": 0, "radius": 1, "damage": 160, "max": 5 },
     "festin": { "cooldown": 60, "duration": 0, "radius": 3, "damage": 50 },
     "gazeuphorisants": { "cooldown": 60, "duration": 30, "range": 8, "radius": 3, "damage": 25 },
