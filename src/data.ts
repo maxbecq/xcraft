@@ -287,6 +287,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
    * living units; allies round the caster unhurt. Energy costs (55, 130, 170) become cooldowns. */
   gel: { name: 'Gel électronique', effect: 'Gèle un bâtiment ennemi : il ne tire plus et ne produit plus pendant un moment.', hotkey: 'G', ...(BALANCE.abilities.gel as object) } as AbilityDef,
   vacarme: { name: 'Balise de vacarme', effect: 'Une balise assourdissante : les unités vivantes autour perdent de la vie et ne peuvent plus attaquer.', hotkey: 'V', ...(BALANCE.abilities.vacarme as object) } as AbilityDef,
+  /** Z.doc and the notice: for a while, enemy units within 18 tiles of the caster walk half as fast and strike 25 % slower,
+   * as long as they stay in it. 205 energy becomes a cooldown, like the others (energy / 2); the duration is provisional. */
+  gravite: { name: 'Gravité alourdie', effect: 'Un long moment, les ennemis d\'une très vaste zone autour du socle se déplacent et attaquent bien plus lentement.', hotkey: 'R', ...(BALANCE.abilities.gravite as object) } as AbilityDef,
   cone: { name: 'Cône de protection', effect: 'Les alliés autour de l\'Accumulateur ne peuvent pas être blessés un moment.', hotkey: 'O', ...(BALANCE.abilities.cone as object) } as AbilityDef,
   /** Z Centre K (Z.doc): support kits fitted on an own socle anywhere on the map, on top of its weapon. */
   kitdetection: { name: 'Détection', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui détecte les unités invisibles.', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
@@ -681,7 +684,7 @@ const BASE: Record<string, object> = {
   rjetsonique: research('Jet sonique', 'J', 'Onde qui frappe tout sur sa ligne, alliés compris.', { supreme: 1 }, 'z'),
   rarc: research('Arc électrique', 'A', 'Frappe trois cibles à la fois devant le socle.', { supreme: 1 }, 'z'),
   rreparateur: research('Réparateur', 'P', 'Nanites qui réparent les machines alliées proches.', { supreme: 1 }, 'z'),
-  raccumulateur: research('Accumulateur', 'C', 'Gel électronique, Balise de vacarme, Cône de protection.', { supreme: 1, optimisation: 1 }, 'z'),
+  raccumulateur: research('Accumulateur', 'C', 'Gel électronique, Balise de vacarme, Cône de protection, Gravité alourdie.', { supreme: 1, optimisation: 1 }, 'z'),
   rcanonx04: research('Canon X-04', 'X', 'Artillerie de zone à longue portée pour les socles terrestres.', { supreme: 1, optimisation: 1 }, 'z'),
   // Z Accumulateur: the Balise de vacarme, a small invulnerable-free beacon that deafens living units around it.
   vacarme: { kind: 'building', name: 'Balise de vacarme', size: 1, faction: 'z', hotkey: 'V', morphOnly: true },
@@ -895,7 +898,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   accumulateur: weaponDef('accumulateur', 'Accumulateur', 'C', 'raccumulateur'),
 };
 /** Z weapons that bring abilities rather than an attack (Accumulateur, Z.doc). */
-export const WEAPON_ABILITIES: Record<string, string[]> = { accumulateur: ['gel', 'vacarme', 'cone'] };
+export const WEAPON_ABILITIES: Record<string, string[]> = { accumulateur: ['gel', 'vacarme', 'cone', 'gravite'] };
 
 const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(

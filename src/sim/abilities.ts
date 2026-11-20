@@ -62,6 +62,8 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     // Allies round the caster unhurt for a while (an aura: out of it, no more).
     if (e.cone === 0) this.cones++;
     e.cone = ticks(ab.duration);
+  } else if (name === 'gravite') {
+    e.gravity = ticks(ab.duration);
   } else if (name === 'invistemp') {
     e.camo = ticks(ab.duration);
   } else if (name === 'enfouissement') {

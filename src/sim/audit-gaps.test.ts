@@ -170,4 +170,23 @@ describe('audit gaps', () => {
     w.spawn('trone', 0, 30 * FP, 30 * FP);
     expect(w.lacks(0, 'trone')).toBe('Un seul par joueur.');
   });
+
+  it('the Accumulateur\'s Gravité alourdie slows the enemies of a vast zone round it while they stay in it', () => {
+    const w = createMatch(['z', 'humains']);
+    w.players[0].upgrades.raccumulateur = 1;
+    const acc = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    acc.kit = 'accumulateur';
+    const foe = w.spawn('auxiliaire', 1, 40 * FP, 30 * FP);
+    const far = w.spawn('auxiliaire', 1, 60 * FP, 30 * FP);
+    const speed = foe.speed;
+    w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'gravite' }]);
+    expect(acc.gravity).toBeGreaterThan(0);
+    run(w, 1.1);
+    expect(foe.speed).toBeLessThan(speed);
+    expect(foe.paceAtk).toBe(125);
+    expect(far.pace).toBe(0);
+    foe.x = 70 * FP; // out of the zone
+    run(w, 2.2);
+    expect(foe.speed).toBe(speed);
+  });
 });

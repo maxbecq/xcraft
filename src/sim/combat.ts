@@ -159,6 +159,11 @@ export function pulse(this: World, e: Entity): void {
     const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
     for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
   }
+  // Gravité alourdie: the enemies in the aura are slowed until a little after the next pulse; out of it, it wears off.
+  if (e.gravity > 0) {
+    const g = ABILITIES.gravite;
+    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, e.owner) && dist(t.x, t.y, e.x, e.y) <= toFp(g.radius!)) this.setPace(t, ticks(1) + 1, 100 - g.damage!, g.max!);
+  }
   if (e.swarm > 0) {
     const ab = spell('nuee', e.lvl);
     let taken = 0;

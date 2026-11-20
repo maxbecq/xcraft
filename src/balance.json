@@ -277,6 +277,7 @@
     "gel": { "cooldown": 28, "duration": 20, "radius": 2, "range": 5, "target": "point" },
     "vacarme": { "cooldown": 65, "duration": 60, "radius": 4, "range": 8, "damage": 10, "target": "point" },
     "cone": { "cooldown": 85, "duration": 60, "radius": 3 },
+    "gravite": { "cooldown": 103, "duration": 60, "radius": 18, "damage": 50, "max": 125 },
     "balisez": { "cooldown": 10, "duration": 50, "radius": 4, "range": 6, "target": "point" },
     "impulsion": { "cooldown": 40, "duration": 5, "radius": 2, "range": 3, "target": "point" },
     "invistemp": { "cooldown": 40, "duration": 20 },

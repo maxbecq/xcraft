@@ -266,7 +266,7 @@ describe('Z', () => {
     expect(hurt.hp).toBeGreaterThan(110);
     // Accumulateur: Cône de protection keeps the allies round the caster unhurt.
     const acc = at('quadripode', 0, 70, 70, 'accumulateur');
-    expect(w.abilitiesFor(acc)).toEqual(['gel', 'vacarme', 'cone']);
+    expect(w.abilitiesFor(acc)).toEqual(['gel', 'vacarme', 'cone', 'gravite']);
     const guarded = at('hexapode', 0, 71, 70);
     w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'cone' }]);
     const before = guarded.hp;
