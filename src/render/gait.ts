@@ -35,6 +35,9 @@ interface LegIK {
   root: Vector3;
   /** Thigh plus shin, in world units. */
   reach: number;
+  /** How far the body can sink while walking before this leg, its foot planted anywhere along its stride, folds its
+   * shin up over the knee (world units). */
+  sink: number;
   /** World position of the foot, where the last swing began, whether it is in the air, and whether `at` is valid. */
   at: Vector3;
   lift: Vector3;
@@ -163,7 +166,7 @@ export function legRig(l: InsectLeg, pivot: Object3D): LegIK | undefined {
   pole.addScaledVector(UP.clone().addScaledVector(dir, -UP.dot(dir)), 0.3 * knee.distanceTo(hip));
   if (pole.lengthSq() < 1e-10) pole.copy(UP).addScaledVector(dir, -UP.dot(dir));
   pole.normalize();
-  return {
+  const ik: LegIK = {
     hip,
     l1: knee.distanceTo(hip),
     l2: foot.distanceTo(knee),
@@ -180,14 +183,45 @@ export function legRig(l: InsectLeg, pivot: Object3D): LegIK | undefined {
     lift: new Vector3(),
     swing: false,
     ready: false,
+    sink: 0,
   };
+  // The foot gathered as it walks (see walk), planted from a stride ahead to a stride behind, raised as far as the
+  // knee allows.
+  const toLocal = new Matrix4().copy(parent.matrixWorld).invert().multiply(pivot.matrixWorld);
+  const rise = (c: number) =>
+    Math.min(
+      ...[-1, -0.5, 0, 0.5, 1].map((k) => {
+        const f = ik.home.clone();
+        f.z += (ik.root.z - ik.home.z) * GATHER + k * STRIDE * ik.reach;
+        f.y += c;
+        const d = f.applyMatrix4(toLocal).sub(hip);
+        const s = clampReach(ik, d.length());
+        return kneeRise(ik, d.normalize(), bendPole(ik, d, new Vector3()), s);
+      }),
+    );
+  let [lo, hi] = [0, Math.max(0, ik.root.y - ik.home.y)];
+  if (rise(hi) >= 0) lo = hi;
+  else
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      if (rise(mid) >= 0) lo = mid;
+      else hi = mid;
+    }
+  ik.sink = lo;
+  return ik;
 }
 
-/** How far a walker sinks on its legs while walking, against its hip height: its knees bend, and its feet reach further. */
+/** How far a walker sinks on its legs while walking, against its hip height: its knees bend, and its feet reach further.
+ * Less for legs that would fold their shins up (see walkCrouch). */
 export const CROUCH = 0.3;
 /** Walking, each foot steps round a spot pulled from its rest spot this far back towards its hip, front to back: generated
  * models stand with their legs splayed far forwards and back, which leaves them no reach to stride. */
 const GATHER = 0.6;
+/** Half a stride at most, against the leg's reach, as far as walkCrouch looks. */
+const STRIDE = 0.25;
+
+/** How far (world units) a walker with these legs and hip height sinks while walking. */
+export const walkCrouch = (legs: InsectLeg[], hip: number) => Math.min(CROUCH * hip, ...legs.map((l) => l.ik!.sink));
 
 /** How far (world units) this foot can go forwards or back of the spot it steps round, the body crouched by `crouch`. */
 function legRoom(ik: LegIK, crouch: number): number {
@@ -197,16 +231,42 @@ function legRoom(ik: LegIK, crouch: number): number {
   return Math.sqrt(Math.max(0, (0.95 * ik.reach) ** 2 - x * x - y * y)) - Math.abs(z);
 }
 
+/** Hip-to-foot distance `s` (femur's parent frame) within what the leg can do. */
+const clampReach = (ik: LegIK, s: number) => Math.min((ik.l1 + ik.l2) * 0.999, Math.max(Math.abs(ik.l1 - ik.l2) * 1.02 + 1e-5, s));
+
+/** The way the knee stands out for a foot along unit `d` (femur's parent frame): its rest way, turned with the leg. */
+function bendPole(ik: LegIK, d: Vector3, out: Vector3): Vector3 {
+  _tq.setFromUnitVectors(ik.dir, d);
+  out.copy(ik.pole).applyQuaternion(_tq);
+  return out.addScaledVector(d, -out.dot(d)).normalize();
+}
+
+/** How far the knee stands above the foot, less a margin, the foot `s` from the hip along unit `d`. A long femur on a
+ * short shin (the Quadripode's) with its foot closer to the hip than its own length folds its shin up over the knee,
+ * whichever way the knee points. */
+function kneeRise(ik: LegIK, d: Vector3, pole: Vector3, s: number): number {
+  const a = (ik.l1 * ik.l1 - ik.l2 * ik.l2 + s * s) / (2 * s);
+  return (a - s) * d.y + Math.sqrt(Math.max(0, ik.l1 * ik.l1 - a * a)) * pole.y - 0.3 * ik.l2;
+}
+
 /** Bends a leg so its foot reaches `target` (world), the knee standing out the way it does at rest. Matrices up to
- * date above the femur. */
-function reachFoot(l: InsectLeg, ik: LegIK, target: Vector3): void {
+ * date above the femur. In the `air`, the leg unfolds as much as it takes to keep its foot hanging under the knee,
+ * and lifts it a little less. */
+function reachFoot(l: InsectLeg, ik: LegIK, target: Vector3, air = false): void {
   const t = l.o.parent!.worldToLocal(_ta.copy(target));
   const d = _tb.subVectors(t, ik.hip);
-  const dist = Math.min((ik.l1 + ik.l2) * 0.999, Math.max(Math.abs(ik.l1 - ik.l2) * 1.02 + 1e-5, d.length()));
+  let dist = clampReach(ik, d.length());
   d.normalize();
-  _tq.setFromUnitVectors(ik.dir, d);
-  const pole = _tc.copy(ik.pole).applyQuaternion(_tq);
-  pole.addScaledVector(d, -pole.dot(d)).normalize();
+  const pole = bendPole(ik, d, _tc);
+  if (air && kneeRise(ik, d, pole, dist) < 0) {
+    let [lo, hi] = [dist, (ik.l1 + ik.l2) * 0.999];
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      if (kneeRise(ik, d, pole, mid) < 0) lo = mid;
+      else hi = mid;
+    }
+    dist = hi;
+  }
   const a = (ik.l1 * ik.l1 - ik.l2 * ik.l2 + dist * dist) / (2 * dist);
   const knee = _td.copy(ik.hip).addScaledVector(d, a).addScaledVector(pole, Math.sqrt(Math.max(0, ik.l1 * ik.l1 - a * a)));
   t.copy(ik.hip).addScaledVector(d, dist); // the foot, at reach
@@ -260,7 +320,7 @@ export function walk(v: View, dt: number, moving: boolean, visible: boolean): vo
   const g = v.gait!;
   const reach = legs.reduce((sum, l) => sum + l.ik!.reach, 0) / legs.length;
   // As long as the speed asks for, within what every leg can reach with the body crouched.
-  const room = Math.max(0.15 * reach, 1.6 * Math.min(...legs.map((l) => legRoom(l.ik!, CROUCH * g.hip))));
+  const room = Math.max(0.15 * reach, 1.6 * Math.min(...legs.map((l) => legRoom(l.ik!, g.crouch))));
   g.stride = Math.min(room, Math.max(0.4 * room, g.speed * 0.32));
   g.cycle = 2 * g.stride;
   if (!visible) {
@@ -312,6 +372,6 @@ export function walk(v: View, dt: number, moving: boolean, visible: boolean): vo
       ik.shadow.position.set(target.x - v.root.position.x, 0.03, target.z - v.root.position.z);
       ik.shadow.scale.setScalar(Math.max(0.4, 1 - (target.y - home.y) / Math.max(step, 0.01)));
     }
-    reachFoot(l, ik, target); // last: it reuses the scratch vectors home and target live in
+    reachFoot(l, ik, target, ik.swing || !moving); // last: it reuses the scratch vectors home and target live in
   }
 }

@@ -11,7 +11,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, flies } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
-import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, CROUCH, WALK_STRIDE, play, stepGait, walk } from './gait';
+import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, wellFx, rallyFlag, animateRally } from './unitfx';
@@ -820,7 +820,7 @@ export class EntityRenderer {
     // Wheeled robots rumble over the ground rather than bounce.
     const rolling = !!v.wheels;
     // Walkers with knees crouch as they walk, and rise a little on each step.
-    const crouch = moving && v.limbs.insect?.[0]?.ik ? -CROUCH * v.gait!.hip : 0;
+    const crouch = moving && v.limbs.insect?.[0]?.ik ? -v.gait!.crouch : 0;
     const bob = hover + crouch + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
     ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
@@ -1129,10 +1129,11 @@ export class EntityRenderer {
     }
     // Wheels roll by the ground covered: with a cycle of 2π the phase is the distance itself. Legs with knees set
     // their cycle from their stride as they go (see walk).
+    const hip = insect?.[0].o.getWorldPosition(new Vector3()).y ?? 0;
     const gait = insect
-      ? { x: 0, z: 0, phase: e.id, cycle: rigged ? 1 : gaitCycle(body, insect), hip: insect[0].o.getWorldPosition(new Vector3()).y, speed: 0, stride: 0.5 }
+      ? { x: 0, z: 0, phase: e.id, cycle: rigged ? 1 : gaitCycle(body, insect), hip, crouch: rigged ? walkCrouch(insect, hip) : 0, speed: 0, stride: 0.5 }
       : wheels.length
-        ? { x: 0, z: 0, phase: 0, cycle: Math.PI * 2, hip: 0, speed: 0, stride: 0 }
+        ? { x: 0, z: 0, phase: 0, cycle: Math.PI * 2, hip: 0, crouch: 0, speed: 0, stride: 0 }
         : undefined;
     if (insect || wheels.length) {
       // Z walkers are mostly thin legs: an invisible box round the whole body catches clicks between them.
