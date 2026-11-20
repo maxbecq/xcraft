@@ -95,6 +95,10 @@ export function hitTint(m: Material): Material {
     const s = m as MeshStandardMaterial;
     if (s.isMeshStandardMaterial) {
       const c = s.clone();
+      // A clone drops the shader patches (team paint, rims): the flash showed without them, and compiled a program
+      // of its own mid-fight. The same patches, so the same program (but for an emissive map taken off).
+      c.onBeforeCompile = s.onBeforeCompile;
+      c.customProgramCacheKey = s.customProgramCacheKey;
       c.emissive.setHex(0xfff0e0);
       c.emissiveMap = null;
       c.emissiveIntensity = 0.22;

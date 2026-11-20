@@ -1,4 +1,4 @@
-import { type DirectionalLight, type Object3D, type Scene, Vector3, type WebGLRenderer } from 'three';
+import { type DirectionalLight, type Material, Mesh, type Object3D, type Scene, Vector3, type WebGLRenderer } from 'three';
 import type { CameraRig } from '../camera';
 import { DEFS } from '../data';
 import { FP } from '../sim/fixed';
@@ -6,6 +6,7 @@ import { type Entity, World } from '../sim/world';
 import type { Post } from './post';
 import { stableShadowDepth } from './shadowdepth';
 import { burstSamples, EntityRenderer } from './units';
+import { hitTint } from './views';
 import { drawXray } from './xray';
 
 /** What the match's warm-up draws with: the match's own renderer, scene, camera and sun. */
@@ -85,6 +86,17 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     renderer.shadowMap.needsUpdate = true; // its programs too (the map is only drawn when asked for)
     renderer.render(scene, rig.camera);
     drawXray(renderer, scene, rig.camera, into); // the buildings' depth and the silhouettes, one per side
+    // Once more with every unit of the catalogue lit by a hit (views.ts hitTint): a material that loses its emissive
+    // map then needs a program of its own, which the first hits of a fight compiled.
+    const lit: [Mesh, Material | Material[]][] = [];
+    for (const root of shapes.roots)
+      root.traverse((o) => {
+        if (!(o instanceof Mesh)) return;
+        lit.push([o, o.material]);
+        o.material = Array.isArray(o.material) ? o.material.map(hitTint) : hitTint(o.material);
+      });
+    renderer.render(scene, rig.camera);
+    for (const [o, mat] of lit) o.material = mat;
   } finally {
     scissor(false);
     renderer.setScissorTest(false);
