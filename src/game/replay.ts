@@ -1,6 +1,6 @@
 /** Replays: a game kept as the commands the simulation took, saved, opened from a file and played back. */
 import { type Faction, FACTIONS } from '../data';
-import { MAPS } from '../maps';
+import { DEFAULT_MAP, MAPS } from '../maps';
 import type { Command } from '../sim/world';
 
 export const REPLAY_KEY = 'xcraft.replay';
@@ -57,6 +57,8 @@ export function parseReplay(text: string): Replay | string {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
   }
+  // Every side needs a start on the map it plays on (the original one for a map this version lacks).
+  if (n > Math.max(...MAPS[r.map ?? DEFAULT_MAP].players)) return `${bad} (plus de camps que la carte n’a de places).`;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   return r;
 }

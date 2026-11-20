@@ -45,6 +45,14 @@ describe('replays read from storage or a file', () => {
     expect((r as { biome: string }).biome).toBe('desert');
   });
 
+  it('refuses more sides than the map it plays on has starts', () => {
+    const four = { factions: ['humains', 'z', 'dieux', 'isdaris'], teams: [0, 1, 2, 3], handicap: [100, 100, 100, 100] };
+    expect(refused({ ...good, ...four, map: 'le-col' })).toBe(true);
+    expect(refused({ ...good, ...four, map: 'origine' })).toBe(false);
+    expect(refused({ ...good, factions: ['humains', 'z', 'z'], teams: [0, 1, 1], handicap: [100, 100, 100], map: 'l-anneau' })).toBe(true);
+    expect(refused({ ...good, ...four, map: 'nulle-part' })).toBe(false); // played on the original map, which has four
+  });
+
   it('refuses a file too big to be a replay', () => {
     expect(refused('x'.repeat(REPLAY_MAX_BYTES + 1))).toBe(true);
   });
