@@ -13,7 +13,7 @@ import { encodeSeats } from './seats';
 import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, toggleFullscreen, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
-let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality, TOUCH: boolean;
+let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality;
 let controlFields: (inMatch: boolean) => string;
 let controlChange: (field: HTMLInputElement | HTMLSelectElement) => boolean;
 export function initMenus(page: {
@@ -23,11 +23,10 @@ export function initMenus(page: {
   MAP: MapFile;
   perf: PerfHud;
   DETECTED: Quality;
-  TOUCH: boolean;
   controlFields: typeof controlFields;
   controlChange: typeof controlChange;
 }): void {
-  ({ myFaction, foeFaction, biome, MAP, perf, DETECTED, TOUCH, controlFields, controlChange } = page);
+  ({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange } = page);
 }
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */
@@ -113,7 +112,7 @@ function showOptions(menu: HTMLElement): void {
       <label>Graphismes <select data-k="quality">${Object.entries(options)
         .map(([v, label]) => `<option value="${v}"${v === before ? ' selected' : ''}>${label}</option>`)
         .join('')}</select></label>
-      ${document.fullscreenEnabled && !TOUCH ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
+      ${document.fullscreenEnabled ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
     ${controlFields(false)}
     ${perf.field()}

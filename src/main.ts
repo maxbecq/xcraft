@@ -389,14 +389,14 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   // Shaders compiled in the background (parallel compile where the browser has it) rather than in one long first frame.
   ready.then(() => renderer.compileAsync(scene, rig.camera)).catch(() => {}).then(start);
-  initMenus({ myFaction, foeFaction, biome, MAP, perf, DETECTED, TOUCH, controlFields, controlChange });
+  initMenus({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange });
   const friend = readRoom(params.get('ami') ?? '');
   if (friend) showLobby(document.body.appendChild(Object.assign(document.createElement('div'), { className: 'menu' })), friend, params.has('hote'));
   else showHome();
   loading?.classList.add('mini'); // the menu does not wait for the scene behind it
 }
 
-if (document.fullscreenEnabled && !TOUCH) {
+if (document.fullscreenEnabled) { // phones too (Android; an iPhone has no fullscreen for pages)
   const button = pause.querySelector<HTMLElement>('[data-p="fullscreen"]')!;
   button.hidden = false;
   document.addEventListener('fullscreenchange', () => {
