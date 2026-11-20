@@ -60,6 +60,37 @@ export const Z_GLYPHS: Record<string, string> = {
   rbarge: 'M2 13h20l-4 6H6zM6 13V9h12v4M12 9V4M9 4h6',
 };
 
+/** The same strokes for every camp's commands that have no picture of their own: the Isdaris extensions (an icon only,
+ * the name in the tooltip) and the abilities added with the mechanics audit. Drawn in the button's colour. */
+export const GLYPHS: Record<string, string> = {
+  ...Z_GLYPHS,
+  // Isdaris extensions
+  miniportail: 'M7 20V11a5 5 0 0 1 10 0v9M5 20h14M2 9h3M2 13h3M2 17h3',
+  cuvegenetique: 'M7 4h10M8 4v13a4 3 0 0 0 8 0V4M10 10.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 1 0 0-2.6M14 13.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 1 0 0-2.6',
+  laboratoire: 'M9 3h6M10 3v6l-5 10a1.5 1.5 0 0 0 1.3 2h11.4a1.5 1.5 0 0 0 1.3-2l-5-10V3M7.5 15h9',
+  assembleur: 'M3 14h18l-3-5H7zM7 16a2 2 0 1 0 0 4 2 2 0 1 0 0-4M17 16a2 2 0 1 0 0 4 2 2 0 1 0 0-4',
+  balise: 'M12 8v12M12 11C9 7 5 7 2 9c3 1 6 2 10 5 4-3 7-4 10-5-3-2-7-2-10 2',
+  totem: 'M8 3h8v6H8zM7 9h10v6H7zM8 15h8v6H8zM10.5 6h.01M13.5 6h.01M10.5 12h.01M13.5 12h.01',
+  autel: 'M4 14h16M6 14v7M18 14v7M3 21h18M12 11c-2.5-2-1-4.5 0-7 1.5 2.5 2.5 5 0 7z',
+  pyramide: 'M12 3L2 20h20zM12 3v17M7 12h10',
+  observatoire: 'M3 20h18M5 20v-6a7 7 0 0 1 14 0v6M11 9l5-5M13 11l5-5',
+  porte: 'M5 21V9a7 7 0 0 1 14 0v12M3 21h18M9 21v-8a3 3 0 0 1 6 0v8M12 2v2',
+  concentrateur: 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18M12 7a5 5 0 1 0 0 10 5 5 0 1 0 0-10M13 9l-3 4h4l-3 4',
+  relais: 'M5 20l3-3M4 10a10 10 0 0 0 10 10zM9 15l6-6M15 7a2 2 0 1 0 0 4 2 2 0 1 0 0-4M18 2a6 6 0 0 1 4 4',
+  // Abilities from the mechanics audit
+  gravite: 'M4 21h16M8 3v11M5 11l3 3 3-3M16 3v11M13 11l3 3 3-3',
+  posermine: 'M6 17a6 4 0 0 1 12 0zM12 13V9M8.5 10.5L7 8M15.5 10.5L17 8M3 20h18',
+  bouclierplasma: 'M2 20a10 12 0 0 1 20 0M6 20v-5h12v5M10 15v-3h4v3M2 20h20',
+  festin: 'M7 7l10 10M7 7a2 2 0 1 0-3-1M7 7a2 2 0 1 0-1-3M17 17a2 2 0 1 0 3 1M17 17a2 2 0 1 0 1 3',
+  gazeuphorisants: 'M6 15a4 4 0 0 1 1-8 5 5 0 0 1 9 1 3.5 3.5 0 0 1 1 7zM12 22v-6M9 19l3-3 3 3',
+  acidedissolvant: 'M12 3c3 5 5 7 5 10a5 5 0 0 1-10 0c0-3 2-5 5-10zM9.5 13a2.5 2.5 0 0 0 2.5 2.5M5 22h14',
+  explosioncuve: 'M12 2l2 6 6-2-4 5 5 4h-6l1 6-4-4-4 4 1-6H3l5-4-4-5 6 2z',
+  regenerant: 'M12 21s-8-5-8-11a4 4 0 0 1 8-2 4 4 0 0 1 8 2c0 6-8 11-8 11zM12 9v6M9 12h6',
+  transfertgroupe: 'M4 7h.01M4 12h.01M4 17h.01M8 9.5h.01M8 14.5h.01M11 12h10M17 8l4 4-4 4',
+  lumiereardente: 'M12 2a4 4 0 1 0 0 8 4 4 0 1 0 0-8M8 12l-4 9M12 12v9M16 12l4 9',
+  jetdesable: 'M2 12h6M3 8l5 2.5M3 16l5-2.5M15 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6M15 5v2M15 17v2M19 12h2M11 12h1',
+};
+
 /** A pictogram drawn in phosphor strokes on a 24 px box: the command's colour, so it inverts with the button. */
 export function pictogram(d: string): string {
   return `<svg class="ico-weapon" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;

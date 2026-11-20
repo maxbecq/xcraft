@@ -2,7 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
-import { img, pictogram, weaponIcon, Z_GLYPHS } from './glyphs';
+import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
 import { ultimatePct } from './hud-panel';
 
@@ -276,11 +276,11 @@ export function updateCard(h: Hud): void {
     .map((b) => {
       const cost = b.cost ? `<small${b.cost.minerals && b.cost.energy ? ' class="two"' : ''}>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
       const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-      const glyph = p.faction === 'z' ? Z_GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')] : undefined;
+      const glyph = GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')];
       const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
       const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
       const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
-      return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label.replace(/^Extension : /, 'Ext. ')}</span>${cost}</button>`; // short enough for the button (the tooltip says it whole)
+      return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
     })
     .join('');
   placeMenu(h);

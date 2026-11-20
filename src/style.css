@@ -1088,6 +1088,7 @@ body.z .cmd.open { outline-color: var(--phos); box-shadow: 0 0 10px rgba(141, 25
    an Assimilateur's weapons) and in tooltips, drawn in the text's colour. */
 .ico-weapon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgba(141, 255, 138, 0.6)); }
 .cmd .ico-weapon { width: 30px; height: 30px; }
+body:not(.z) .ico-weapon { filter: drop-shadow(0 0 2px currentColor); } /* the other camps' strokes glow in their own colour */
 .cmd-tip .ico-weapon { width: 20px; height: 20px; margin-right: 6px; vertical-align: -4px; }
 .cmd-menu-item span { max-width: 100%; overflow: hidden; font-size: 10px; line-height: 1.05; text-align: center; hyphens: auto; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .cmd-menu-item small { font-size: 10px; opacity: 0.9; white-space: nowrap; }
