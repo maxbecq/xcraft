@@ -41,6 +41,26 @@ export const stored = (k: string) => {
 /** Bac à sable: its options, all off unless picked (before the match or in the pause menu's options). */
 export const SANDBOX_TOOLS = { unlimited: 'Ressources illimitées', instant: 'Construction, production et recherche instantanées', reveal: 'Carte révélée (sans brouillard)' } as const;
 
+/** Bac à sable: the options last picked, before or during a match, ticked again for the next one. */
+const SANDBOX_KEY = 'xcraft.sandbox';
+export function sandboxRemembered(): Set<string> {
+  try {
+    return new Set((localStorage.getItem(SANDBOX_KEY) ?? '').split(',').filter((t) => t in SANDBOX_TOOLS));
+  } catch {
+    return new Set(); // private browsing: all off
+  }
+}
+export function rememberSandbox(tool: string, on: boolean): void {
+  const picked = sandboxRemembered();
+  if (on) picked.add(tool);
+  else picked.delete(tool);
+  try {
+    localStorage.setItem(SANDBOX_KEY, [...picked].join(','));
+  } catch {
+    // private browsing: for this match only
+  }
+}
+
 export const asFaction = (v: string | null): Faction => (v === 'isdaris' || v === 'z' || v === 'dieux' ? v : 'humains');
 
 /** Fullscreen: chosen in the options for this computer, toggled from the pause menu. */

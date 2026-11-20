@@ -36,7 +36,7 @@ import { addDeposits } from './render/deposits';
 import { every, readRoom } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { countMatch, countTitle } from './stats';
-import { SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
+import { SANDBOX_TOOLS, type Controls, fmt, rememberSandbox, sandboxRemembered, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
@@ -466,7 +466,16 @@ if (document.fullscreenEnabled) { // phones too (Android; an iPhone has no fulls
 function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   const tool = field.dataset.sandbox as SandboxTool | undefined;
   if (tool && tool in SANDBOX_TOOLS) {
-    if (field.type === 'checkbox') issue({ player: PLAYER, kind: 'sandbox', ids: [], tool, on: (field as HTMLInputElement).checked });
+    if (field.type === 'checkbox') {
+      issue({ player: PLAYER, kind: 'sandbox', ids: [], tool, on: (field as HTMLInputElement).checked });
+      rememberSandbox(tool, (field as HTMLInputElement).checked);
+      // « Recommencer » reloads this URL: it carries the options as they stand now.
+      const url = new URL(location.href);
+      const kept = [...sandboxRemembered()].join(',');
+      if (kept) url.searchParams.set('outils', kept);
+      else url.searchParams.delete('outils');
+      history.replaceState(history.state, '', url);
+    }
     return true;
   }
   if (field.dataset.k === 'debug') {

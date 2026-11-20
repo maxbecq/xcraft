@@ -10,7 +10,7 @@ import { TEAM_COLORS } from '../render/models';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
 import { encodeSeats } from './seats';
-import { asFaction, FULLSCREEN_KEY, SANDBOX_TOOLS, stored, toggleFullscreen, wantsFullscreen } from './settings';
+import { asFaction, FULLSCREEN_KEY, rememberSandbox, SANDBOX_TOOLS, sandboxRemembered, stored, toggleFullscreen, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
 let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality;
@@ -156,8 +156,8 @@ const COMPACT = matchMedia('(max-width: 820px), (max-height: 600px)');
  * loads from the URL. On small screens `step` shows the maps alone, then the rest. `sandbox`: Bac à sable, the
  * player's faction alone.
  */
-/** Bac à sable: the options picked before the match (all off at first). */
-const sandboxPicked = new Set<string>();
+/** Bac à sable: the options picked before the match (the last ones picked, kept on this browser). */
+const sandboxPicked = sandboxRemembered();
 
 function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map', sandbox = false): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
@@ -207,7 +207,12 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement | HTMLInputElement;
     const tool = el.dataset.sandbox;
-    if (tool) return void ((el as HTMLInputElement).checked ? sandboxPicked.add(tool) : sandboxPicked.delete(tool));
+    if (tool) {
+      const on = (el as HTMLInputElement).checked;
+      if (on) sandboxPicked.add(tool);
+      else sandboxPicked.delete(tool);
+      return rememberSandbox(tool, on);
+    }
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
