@@ -1163,6 +1163,9 @@ body.z.lcd .hud-card::-webkit-scrollbar-thumb { background: var(--phos-dim); bor
 body.z.lcd .hud-card.more { mask-image: linear-gradient(to right, #000 calc(100% - 60px), rgba(0, 0, 0, 0.25)); }
 body.z.lcd .hud-card.tree > .node { position: relative; z-index: 1; width: 146px; height: auto; min-height: 34px; flex-wrap: wrap; row-gap: 0; padding: 4px 8px; background: rgba(7, 18, 22, 0.95); }
 body.z.lcd .hud-card.tree > .node.have { border-color: var(--phos); }
+/* Pointed at: inverted like every command (the node's own dark ground would leave its dark text unreadable). */
+body.z.lcd .hud-card.tree > .node:is(:hover, .vhover) { background: var(--phos); }
+body.z.lcd .hud-card.tree > .node:is(:hover, .vhover) em { color: #3a2608; }
 body.z.lcd .hud-card.tree > .node.have > span::after { content: ' ✓'; }
 body.z.lcd .hud-card.tree > .node span { font-size: 12px; white-space: normal; }
 body.z.lcd .hud-card.tree > .node em { flex-basis: 100%; font: 11px/1.15 var(--lcd); font-style: normal; color: #ffb43a; text-shadow: none; opacity: 0.85; white-space: normal; }
@@ -1232,6 +1235,7 @@ body.tactile .hud-panel .hp + .info { display: none; }
   body.z.lcd .console:has(.hud-card.tree) > .hud-panel { display: none; }
   body.z.lcd .hud-card.tree { max-width: calc(100vw - 150px); }
 }
+<<<<<<< HEAD
 
 /* Option « Replier les panneaux » (touch screens): idle, the selection sheet and the commands slide down out of sight,
    the minimap drops to the bottom and the console's plate goes; a tab at the bottom brings them back. */
@@ -1247,3 +1251,15 @@ body[class] .console.tucked::before, body[class] .console.tucked::after { displa
 }
 .console-tab::before { content: '▲'; }
 body.z .console-tab { border-color: var(--phos, #6ff4ff); color: var(--phos, #6ff4ff); }
+=======
+/* Phones on their side, the build tree compact: small nodes in small print, and all the height above the minimap, so
+   the whole tree (Assimilateur, the Centres, Retour) shows in the 390 px instead of its first two rows. */
+@media (max-height: 560px) and (orientation: landscape) {
+  body.z.lcd .hud-card.tree { max-height: calc(100vh - 92px - env(safe-area-inset-top)); gap: 4px 14px; padding: 6px 8px; }
+  body.z.lcd .hud-card.tree > :is(.node, .ghost) { width: 124px; min-height: 0; padding: 2px 5px; gap: 3px; }
+  body.z.lcd .hud-card.tree > .node span, body.z.lcd .hud-card.tree > .ghost span { font-size: 10px; line-height: 1.05; }
+  body.z.lcd .hud-card.tree > :is(.node, .ghost) :is(small, em) { font-size: 9px; line-height: 1.05; }
+  body.z.lcd .hud-card.tree > :is(.node, .ghost) :is(img, svg) { width: 14px; height: 14px; }
+  body.z.lcd .hud-card.tree > .back { width: auto; }
+}
+>>>>>>> 3715d12 (fix(hud): on a phone on its side the LCD build tree shows whole: compact nodes (124 px, small print, small pictures) and all the height above the minimap, so the Assimilateur, the Centres and Retour no longer hide under the frame; a tree node pointed at turns phosphor like every command (its own dark ground had left its dark text unreadable) (QA 0.9.101, B4))
