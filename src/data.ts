@@ -397,6 +397,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
   nuee: { name: 'Nuée nauséabonde', effect: 'Une nuée blesse les ennemis autour d\'Osiris et lui rend leur vie.', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
   /** Yggdrasill (notice, Déracinement): uproots to walk, and takes root again at the point. */
   deraciner: { name: 'Déraciner', effect: 'S\'arrache du sol pour marcher ; on le replante ensuite au point voulu.', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
+  /** Isdaris Orbe plasma (notice: « capable de se déplacer lentement » ; fiche: Redéploiement, 50 minerals, every 35 s). */
+  redeploiement: { name: 'Redéploiement', effect: 'L’Orbe se détache et se déplace lentement, sans tirer ; on la repose ensuite dans un champ d’énergie.', hotkey: 'R', target: 'self', ...BALANCE.abilities.redeploiement },
+  ancrer: { name: 'Reposer', effect: 'Se repose au point visé, dans un champ d’énergie, et tire de nouveau peu après.', hotkey: 'R', target: 'point', ...BALANCE.abilities.ancrer },
   enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
   /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
   transe: { name: 'Transe enragée', effect: 'Une transe furieuse : ses coups sont bien plus forts un moment.', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
@@ -552,7 +555,9 @@ const BASE: Record<string, object> = {
   // Mod: « Récepteur armé », the Récepteur with a plasma arc (as the Orbe's), still drawing energy.
   recepteurarme: { kind: 'building', name: 'Récepteur armé', size: 3, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'A' },
   // Mod: « Orbe plasmique ».
-  orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'B' },
+  orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, ability: 'redeploiement', faction: 'isdaris', hotkey: 'B' },
+  /** Redéploiement: an Orbe plasma on the move; it does not shoot until set down again. */
+  orbemob: { kind: 'unit', name: 'Orbe plasma (en mouvement)', radius: 0.9, ability: 'ancrer', faction: 'isdaris', hotkey: 'B' },
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: {
     kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'N',
@@ -922,7 +927,7 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod', vacarme: 'tourelle' };
+export const LOOKS: Record<string, string> = { fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod', vacarme: 'tourelle' };
 /** Size of those stand-in models against the original's. */
 export const LOOK_SCALE: Record<string, number> = { grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15, vacarme: 0.5 };
 

@@ -327,4 +327,34 @@ describe('audit gaps', () => {
     w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
     expect(w.addonsOf(pod)).toBe(BALANCE.rules.z.podAddons);
   });
+
+  it('the Orbe plasma moves slowly, without shooting, and is set down again in a power field (Redéploiement)', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const p = w.players[0];
+    p.minerals = 1000;
+    const [obe] = of(w, 0, 'obelisque');
+    // Two free spots in the Obélisque's field.
+    const spots: [number, number][] = [];
+    for (let dy = -8; dy <= 8 && spots.length < 2; dy++)
+      for (let dx = -8; dx <= 8 && spots.length < 2; dx++) {
+        const [tx, ty] = [obe.tx + dx, obe.ty + dy];
+        if (w.canPlace('orbe', tx, ty, 0) && !spots.some(([x, y]) => Math.abs(x - tx) < 4 && Math.abs(y - ty) < 4)) spots.push([tx, ty]);
+      }
+    expect(spots).toHaveLength(2);
+    const orbe = w.spawn('orbe', 0, (spots[0][0] + 1) * FP, (spots[0][1] + 1) * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'redeploiement' }]);
+    expect(orbe.type).toBe('orbemob');
+    expect(orbe.speed).toBeGreaterThan(0);
+    expect(w.weapon(orbe)).toBeUndefined();
+    expect(p.minerals).toBe(1000 - 50); // sheet
+    // Out of any field: refused.
+    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'ancrer', x: orbe.x + 40 * FP, y: orbe.y }]);
+    run(w, 1);
+    expect(orbe.type).toBe('orbemob');
+    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'ancrer', x: (spots[1][0] + 1) * FP, y: (spots[1][1] + 1) * FP }]);
+    run(w, 30);
+    expect(orbe.type).toBe('orbe');
+    expect([orbe.tx, orbe.ty]).toEqual(spots[1]);
+    expect(orbe.abilityCd).toBeGreaterThan(0); // 35 s before the next one (sheet)
+  });
 });
