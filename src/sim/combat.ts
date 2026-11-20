@@ -589,9 +589,10 @@ export function patient(this: World, e: Entity): Entity | undefined {
   const mender = !(e.def as UnitDef).heal;
   const range = (mender ? WEAPONS[e.kit].healRange! + 2 : (e.def as UnitDef).sight) * FP;
   for (const t of this.entities.values()) {
-    if (t === e || t.owner !== e.owner || t.def.kind !== 'unit' || t.hp >= t.maxHp || t.hp <= 0) continue;
-    if (mender && !(t.def as UnitDef).mechanical) continue;
-    if (dist(e.x, e.y, t.x, t.y) > range) continue;
+    if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
+    // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
+    if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || (mender && !(t.def as UnitDef).mechanical)) continue;
+    if ((t.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];
   }

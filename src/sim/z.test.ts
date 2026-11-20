@@ -440,3 +440,18 @@ describe('Z Refuge (notice)', () => {
     expect(drones.filter((d) => d.inside).length).toBe(0);
   });
 });
+
+describe('Z Réparateur (notice: « véhicules et bâtiments »)', () => {
+  it('mends a damaged building of its side, not one being raised', () => {
+    const w = createMatch(['z', 'humains']);
+    const [ic] = of(w, 0, 'intelligence');
+    const medic = w.spawn('quadripode', 0, ic.x + 4 * FP, ic.y);
+    medic.kit = 'reparateur';
+    ic.hp = 1000;
+    run(w, 3);
+    expect(ic.hp).toBeGreaterThan(1030); // the creep alone gives back 3 in that time
+    const site = w.spawn('pod', 0, ic.x + 6 * FP, ic.y + 6 * FP);
+    site.buildLeft = 100;
+    expect(w.patient(medic)).toBe(ic);
+  });
+});
