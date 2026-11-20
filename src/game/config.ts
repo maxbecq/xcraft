@@ -1,0 +1,60 @@
+import { type Faction } from '../data';
+import { DEFAULT_MAP, mapFile } from '../maps';
+import { seatsOf } from '../mappicker';
+import { readReplay } from './replay';
+import { decodeSeats } from './seats';
+import { asFaction, SCROLL, stored } from './settings';
+
+/** What this page plays, read once from its address (and the last menu choices): who, where, and how. */
+export const params = new URLSearchParams(location.search);
+/** `?spectate`: watch the AI play itself, without fog. */
+/** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
+/** `?net=host|join&room=ABCD`: a two-player game over the network (the host is player 0). */
+export const NET_ROLE = params.get('net');
+/** `?sandbox&camp=…&map=…&biome=…`: Bac à sable, one player alone on the map, no opponent, with test switches. */
+export const SANDBOX = params.has('sandbox') && !params.has('replay') && !NET_ROLE;
+export const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE && !SANDBOX;
+/** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
+export const REPLAY = params.has('replay') ? readReplay() : null;
+// Asked for a replay but none checks out (dropped, damaged): back to the menus rather than a game nobody asked for.
+if (params.has('replay') && !REPLAY) {
+  alert('Aucun replay lisible à rejouer.');
+  location.replace(location.pathname);
+}
+export const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
+/** `?speed=4`: simulation speed multiplier. */
+export const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));
+/** Alone against the AI, the game's speed is a setting (never online: both machines must step alike). */
+export const SOLO = (params.has('play') || SANDBOX) && !NET_ROLE;
+export const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
+const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
+export const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
+
+/** Factions: the player's and the AI's, from the URL or the last menu choice. */
+/** The map: a replay's, else from the URL, else the last one picked. */
+export const MAP = mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
+/** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
+export interface Slot {
+  control: string;
+  faction: Faction;
+  team: number;
+}
+/**
+ * The players: `?p=you.humains.0,hard.isdaris.1,…` (controller, faction, team for each), else the two-player
+ * parameters (`camp` and `adversaire` are player 0's and player 1's factions, also over the network).
+ */
+export const slots: Slot[] = REPLAY
+  ? REPLAY.factions.map((faction, i) => ({ control: 'replay', faction, team: REPLAY.teams?.[i] ?? i }))
+  : SANDBOX
+    ? [{ control: 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 }]
+  : params.has('p')
+    ? decodeSeats(params.get('p')!)
+    : [
+        { control: NET_ROLE ? 'net' : SPECTATE ? (params.get('ai0') ?? 'normal') : 'you', faction: asFaction(params.get('camp') ?? stored('xcraft.camp')), team: 0 },
+        { control: NET_ROLE ? 'net' : (params.get(SPECTATE ? 'ai1' : 'ai') ?? 'normal'), faction: asFaction(params.get('adversaire') ?? stored('xcraft.adversaire')), team: 1 },
+      ];
+// A Bac à sable (or its replay) has one player.
+if (slots.length < 2 && !SANDBOX && !REPLAY) slots.push({ control: 'normal', faction: 'humains', team: 1 });
+slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the map has starts
+export const factions = slots.map((s) => s.faction);
+export const [myFaction, foeFaction = asFaction(stored('xcraft.adversaire'))] = factions; // a Bac à sable has no opponent
