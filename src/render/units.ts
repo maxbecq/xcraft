@@ -100,7 +100,7 @@ const WEAPON_MOUNTS: Record<
   // Its modules sank onto its back where they stood on its ridge (module units), the Jet sonique a little smaller.
   mastodonte: { size: 0.5, grow: { zw_jetsonique: 0.85 }, sink: { zw_laser: 0.08, zw_arc: 0.12 } },
   // Its modules at the Quadripode's proportion to its body (the Déchiqueteur aside: its rule is still open).
-  coleoptere: { grow: { '*': 0.7 } },
+  coleoptere: { grow: { '*': 0.7 }, sink: { zw_arc: 0.07 } },
   // The Déchiqueteur in the same proportion to its body as the Quadripode's; the other modules larger (the rocket pod
   // most), towards the front of its long back.
   octopode: { size: 0.5, meleeSize: 0.7, forward: 0.08, grow: { '*': 1.3, zw_roquettes: 1.5 } },
