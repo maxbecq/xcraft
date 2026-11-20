@@ -309,6 +309,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
   explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
+  /** Char Pégase (notice, 2010 sheet, mod): invisible chemical mines, 5 in stock, one more every 12 s, 160 damage. */
+  posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve, refaites peu à peu).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
   /** Allosaure (notice): feasts on a corpse nearby to heal; the mod's 50 % and 60 s. */
   festin: { name: 'Festin', effect: 'Dévore un cadavre organique tout proche et regagne une bonne part de sa vie.', hotkey: 'F', ...(BALANCE.abilities.festin as object) } as AbilityDef,
   /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
@@ -458,7 +460,7 @@ const BASE: Record<string, object> = {
   // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
   bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
-  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
+  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', abilities: ['posermine'], faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
   alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
@@ -468,6 +470,8 @@ const BASE: Record<string, object> = {
     kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, faction: 'humains', hotkey: 'G',
   },
   // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
+  /** Laid by a Char Pégase, never trained. */
+  minechimique: { kind: 'unit', name: 'Mine chimique', radius: 0.3, cloaked: true, mechanical: true, faction: 'humains', hotkey: 'M' },
   cuve: { kind: 'unit', name: 'Réservoir de substances', radius: 0.7, mechanical: true, abilities: ['gazeuphorisants', 'acidedissolvant', 'explosioncuve'], faction: 'humains', hotkey: 'V' },
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },

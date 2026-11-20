@@ -141,6 +141,14 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
     return;
+  } else if (name === 'posermine') {
+    // Char Pégase: a chemical mine from its stock, under it, on the ground only; its own cooldown is the stock.
+    if (e.airborne) return void this.say(e.owner, 'Les mines se posent au sol.');
+    if (e.charges === 0) return void this.say(e.owner, 'Plus de mine en réserve.');
+    e.charges--;
+    this.spawnBeside('minechimique', e);
+    this.casts.push({ kind: name, x: e.x, y: e.y });
+    return;
   } else if (name === 'festin') {
     // Allosaure: devours the nearest fresh organic corpse and gets back a share of its health.
     const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)[0];
@@ -388,6 +396,17 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
   this.casts.push({ kind: name, x, y });
   return true;
+}
+
+/** A chemical mine: when an enemy walker comes within its radius, it blows up (full damage there, a quarter a little further). */
+export function mineTrigger(this: World, m: Entity): void {
+  const ab = ABILITIES.posermine;
+  const r = toFp(ab.radius!);
+  const foes = [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= idiv(r * 5, 4) + t.radius);
+  if (!foes.some((t) => dist(t.x, t.y, m.x, m.y) <= r + t.radius)) return;
+  for (const t of foes) this.hit(m, t, { damage: dist(t.x, t.y, m.x, m.y) <= r + t.radius ? ab.damage! : idiv(ab.damage!, 4), range: 99, cooldown: 0 });
+  this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
+  m.hp = 0;
 }
 
 /** A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. */
