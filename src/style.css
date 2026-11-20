@@ -1182,3 +1182,27 @@ body.z.lcd .hud-toasts { right: auto; left: 50%; translate: -50% 0; bottom: 214p
 .marking .cmd { position: absolute; left: -27px; top: -27px; width: 54px; height: 54px; pointer-events: auto; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7); }
 .marking::before { content: ''; position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
 .marking .cmd.vhover { transform-origin: center; scale: 1.18; }
+/* Trial touch controls, phones (not with the Machines' LCD console, which lays itself out): a thin bar across the top
+   for resources and supply, the menu button at its left; the quick actions (army, base, idle workers and producers,
+   production, groups) in a row just above the console, within the thumb's reach. */
+@media (max-height: 560px), (max-width: 820px) {
+  body.tactile:not(.lcd) .hud-bar {
+    left: 0; right: 0; top: 0; justify-content: center; gap: 14px; border: 0; border-radius: 0; box-shadow: none;
+    padding: calc(3px + env(safe-area-inset-top)) 8px 3px 48px; font-size: 14px; background: rgba(0, 0, 0, 0.55);
+  }
+  body.tactile:not(.lcd) .tools {
+    top: auto; left: 8px; right: 8px; width: auto; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    bottom: calc(194px + env(safe-area-inset-bottom));
+  }
+  body.tactile:not(.lcd) .tools .tool[data-t="menu"] {
+    position: fixed; top: env(safe-area-inset-top); left: 4px; min-width: 36px; min-height: 26px; padding: 0 6px; font-size: 20px;
+  }
+  body.tactile:not(.lcd) .tools .tool[data-t="menu"] span { display: none; }
+  body.tactile:not(.lcd) .hud-toasts { bottom: calc(250px + env(safe-area-inset-bottom)); }
+  body.tactile:not(.lcd) .prod-panel { left: 8px; top: calc(30px + env(safe-area-inset-top)); max-width: calc(100vw - 16px); }
+}
+/* On its side, the console is one row: the actions sit lower. */
+@media (max-height: 560px) and (orientation: landscape) {
+  body.tactile:not(.lcd) .tools { bottom: calc(100px + env(safe-area-inset-bottom)); right: auto; max-width: calc(100vw - 16px); }
+  body.tactile:not(.lcd) .hud-toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
+}
