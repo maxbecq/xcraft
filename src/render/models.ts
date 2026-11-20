@@ -113,6 +113,7 @@ const darkStone = mat(0x7d7464);
 const wood = mat(0x7a5634);
 export const ore = mat(0xffc070, { emissive: 0xa0400c, roughness: 0.5 }); // a lump of glowing geode
 const wellGlow = mat(0x9b5cff, { emissive: 0x5a20c0, roughness: 0.3 });
+const toxic = mat(0x9aff4a, { emissive: 0x3a9a10, roughness: 0.35 }); // the chemical mine's charge
 /** Models built by tools/blender/models.py, by entity type. */
 export const templates = new Map<string, Group>();
 /**
@@ -740,6 +741,20 @@ function placeholder(type: string, team: Material): Group {
       add(new CylinderGeometry(1.4, 1.5, 0.12, 20), darkStone, 0, 0.06, 0);
       add(new CylinderGeometry(0.8, 0.8, 0.14, 20), wellGlow, 0, 0.08, 0);
       break;
+    case 'minechimique': {
+      // Char Pégase's chemical mine: a squat steel drum half dug in, a team band, a glowing green charge under a grille
+      // and three pressure prongs.
+      add(new CylinderGeometry(0.26, 0.3, 0.12, 14), steel, 0, 0.04, 0);
+      add(new CylinderGeometry(0.265, 0.265, 0.04, 14), team, 0, 0.1, 0);
+      add(new CylinderGeometry(0.14, 0.17, 0.08, 12), toxic, 0, 0.14, 0);
+      add(new BoxGeometry(0.3, 0.02, 0.03), steel, 0, 0.19, 0);
+      add(new BoxGeometry(0.03, 0.02, 0.3), steel, 0, 0.19, 0);
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        add(new CylinderGeometry(0.012, 0.012, 0.12, 5), steel, Math.cos(a) * 0.2, 0.18, Math.sin(a) * 0.2);
+      }
+      break;
+    }
     default: {
       // New buildings without a model: a block of their footprint, team-coloured on top.
       const d = DEFS[type];
