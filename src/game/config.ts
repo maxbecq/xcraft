@@ -21,6 +21,8 @@ if (params.has('replay') && !REPLAY) {
   alert('Aucun replay lisible à rejouer.');
   location.replace(location.pathname);
 }
+// A map this version does not have: played on the original one, which may not follow the game (said before it starts).
+if (REPLAY?.lostMap) alert(`Carte « ${REPLAY.lostMap} » inconnue de cette version : le replay se joue sur la carte d'origine et peut ne pas suivre la partie.`);
 export const SPECTATE = params.has('spectate') || ATTRACT || !!REPLAY;
 /** `?speed=4`: simulation speed multiplier. */
 export const SPEED = Math.min(16, Math.max(0.25, Number(params.get('speed')) || 1));

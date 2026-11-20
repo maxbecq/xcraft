@@ -10,6 +10,8 @@ export interface Replay {
   v: 1;
   /** Map id; missing in replays from before map files (the original map). */
   map?: string;
+  /** A map this version does not have, replaced by the original one (said to the viewer: the game may differ). */
+  lostMap?: string;
   factions: Faction[];
   /** Each player's team; missing in replays from before teams (everyone alone). */
   teams?: number[];
@@ -51,7 +53,10 @@ export function parseReplay(text: string): Replay | string {
     last = tick;
     for (const c of cmds) if (!c || typeof c !== 'object' || !Number.isInteger(c.player) || c.player < 0 || c.player >= n) return `${bad} (joueur inconnu).`;
   }
-  if (r.map !== undefined && (typeof r.map !== 'string' || !MAPS[r.map])) delete r.map;
+  if (r.map !== undefined && (typeof r.map !== 'string' || !MAPS[r.map])) {
+    r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
+    delete r.map;
+  }
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   return r;
 }

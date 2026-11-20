@@ -41,6 +41,7 @@ describe('replays read from storage or a file', () => {
     const r = parseReplay(text({ ...good, map: 'nulle-part', biome: 3 }));
     expect(typeof r).toBe('object');
     expect((r as { map?: string }).map).toBeUndefined();
+    expect((r as { lostMap?: string }).lostMap).toBe('nulle-part');
     expect((r as { biome: string }).biome).toBe('desert');
   });
 
