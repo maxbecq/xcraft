@@ -263,7 +263,9 @@ export function updateCard(h: Hud): void {
   h.buttonsKey = bk;
   h.buttons = buttonsFor(h);
   const p = h.world.players[h.player];
-  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu;
+  // The LCD tree ticks what is built: a building finished while it is open must redraw it, though no button changed.
+  const built = lcdTree(h) && h.buildMenu ? [...h.world.entities.values()].filter((e) => e.owner === h.player && e.buildLeft === 0).map((e) => e.type).sort().join() : '';
+  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + built;
   if (key === h.cardKey) return relink(h), placeMenu(h);
   h.cardKey = key;
   h.menu.innerHTML = h.menuItems
