@@ -1056,7 +1056,9 @@ body[class] .pin-ui .pin-no { color: #ff7a6a; }
 /* Z: the console's screen behind them (dark glass, scan lines), as they float over the map, not on the console. */
 body.z .pin-ui .cmd { background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px), var(--screen); }
 body.z .pin-ui .cmd:is(:hover, .vhover) { background: var(--phos); }
-body.z .pin-ui .pin-no { color: #ff6a4a; text-shadow: 0 0 4px rgba(255, 90, 60, 0.7); }
+/* Z: both in the console's cyan, as the Z commands are (the marks tell them apart), not green and red. */
+body.z .pin-ui :is(.pin-ok, .pin-no) { color: var(--phos); text-shadow: var(--glow); }
+body.z .pin-ui :is(.pin-ok, .pin-no):is(:hover, .vhover) { color: #04120a; text-shadow: none; }
 
 /* Z socle's weapon (game/hud.ts placeMenu): an extra LCD screen in the Z console's style, as wide as the command
    card and standing on it, its weapons in a grid like the card's; it unfolds upwards from the socle's button, which
