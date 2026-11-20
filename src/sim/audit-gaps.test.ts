@@ -184,8 +184,8 @@ describe('audit gaps', () => {
     expect(acc.gravity).toBeGreaterThan(0);
     run(w, 1.1);
     expect(foe.speed).toBeLessThan(speed);
-    expect(foe.paceAtk).toBe(125);
-    expect(far.pace).toBe(0);
+    expect(w.paceOf(foe)[1]).toBe(125);
+    expect(far.heavy).toBe(0);
     foe.x = 70 * FP; // out of the zone
     run(w, 2.2);
     expect(foe.speed).toBe(speed);
@@ -358,18 +358,27 @@ describe('audit gaps', () => {
     expect(orbe.abilityCd).toBeGreaterThan(0); // 35 s before the next one (sheet)
   });
 
-  it('slows add up: each keeps the stronger value and the longer time, Gravité no longer wipes out Jet de sable', () => {
-    const w = createMatch(['dieux', 'z']);
+  it('Jet de sable under Gravité alourdie keeps its own 8 s, then only the Gravité slow is left', () => {
+    const w = createMatch(['z', 'dieux']);
     const g = BALANCE.abilities.gravite;
     const jet = BALANCE.abilities.jetdesable;
-    const tank = w.spawn('pegase', 1, 34 * FP, 30 * FP);
-    w.setPace(tank, ticks(jet.duration), jet.damage, 10000 / jet.damage);
-    w.setPace(tank, ticks(1) + 1, 100 - g.damage, g.max); // a Gravité pulse
-    expect([tank.pace, tank.paceMove, tank.paceAtk]).toEqual([ticks(jet.duration), jet.damage, 10000 / jet.damage]);
-    const aux = w.spawn('auxiliaire', 1, 36 * FP, 30 * FP);
-    w.setPace(aux, ticks(1) + 1, 100 - g.damage, g.max);
-    w.setPace(aux, ticks(jet.duration), jet.damage, 10000 / jet.damage);
-    expect([aux.pace, aux.paceMove, aux.paceAtk]).toEqual([ticks(jet.duration), jet.damage, 10000 / jet.damage]);
+    w.players[0].upgrades.raccumulateur = 1;
+    const acc = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    acc.kit = 'accumulateur';
+    const tank = w.spawn('pegase', 1, 36 * FP, 30 * FP);
+    tank.frozen = ticks(60);
+    w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'gravite' }]);
+    run(w, 1.1);
+    expect(w.paceOf(tank)).toEqual([100 - g.damage, g.max]);
+    w.setPace(tank, ticks(jet.duration), jet.damage, 10000 / jet.damage); // Seth's Jet de sable
+    expect(w.paceOf(tank)).toEqual([jet.damage, 10000 / jet.damage]);
+    run(w, jet.duration - 1);
+    expect(w.paceOf(tank)).toEqual([jet.damage, 10000 / jet.damage]);
+    run(w, 1.1);
+    expect(tank.pace).toBe(0);
+    expect(tank.heavy).toBeGreaterThan(0);
+    expect(w.paceOf(tank)).toEqual([100 - g.damage, g.max]);
+    expect(tank.speed).toBe(w.baseSpeed(tank));
   });
 
   it('the Méga-Espion is slowed like any other unit', () => {

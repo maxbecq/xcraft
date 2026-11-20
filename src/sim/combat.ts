@@ -131,7 +131,7 @@ export function baseSpeed(this: World, e: Entity): number {
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
   const mega = e.type === 'zespion' && this.level(e.owner, 'megaespion');
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
-  const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * (e.pace > 0 ? e.paceMove : 100) / 10000;
+  const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
   return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
 }
 
@@ -162,7 +162,11 @@ export function pulse(this: World, e: Entity): void {
   // Gravité alourdie: the enemies in the aura are slowed until a little after the next pulse; out of it, it wears off.
   if (e.gravity > 0) {
     const g = ABILITIES.gravite;
-    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, e.owner) && dist(t.x, t.y, e.x, e.y) <= toFp(g.radius!)) this.setPace(t, ticks(1) + 1, 100 - g.damage!, g.max!);
+    for (const t of this.entities.values()) {
+      if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || !this.hostile(t.owner, e.owner) || dist(t.x, t.y, e.x, e.y) > toFp(g.radius!)) continue;
+      t.heavy = ticks(1) + 1;
+      if (t.boost === 0) t.speed = this.baseSpeed(t);
+    }
   }
   if (e.swarm > 0) {
     const ab = spell('nuee', e.lvl);
@@ -367,7 +371,7 @@ export function strike(this: World, e: Entity, t: Entity): void {
   const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
   if (e.statue > 0) e.cooldown = idiv(e.cooldown * BALANCE.rules.upgrades.statue.rate, 100);
-  if (e.pace > 0) e.cooldown = Math.max(1, idiv(e.cooldown * e.paceAtk, 100));
+  if (e.pace > 0 || e.heavy > 0) e.cooldown = Math.max(1, idiv(e.cooldown * this.paceOf(e)[1], 100));
   this.hit(e, t, a);
   // Z Arc électrique: more enemies in reach, in front of the shooter (within 67.5° of its line to the target).
   if (a.targets && a.targets > 1) {

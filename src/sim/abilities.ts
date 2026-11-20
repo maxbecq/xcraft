@@ -429,17 +429,26 @@ export function orbitalHit(this: World, s: World['strikes'][number]): void {
   this.casts.push({ kind: 'canonorbital', x: s.x, y: s.y });
 }
 
+/** Of two paces in percent, the stronger: the farther from 100 %. */
+const strong = (a: number, b: number) => (Math.abs(a - 100) >= Math.abs(b - 100) ? a : b);
+
 /**
  * A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. Over one still
- * running, each value keeps the stronger of the two (the farther from 100 %) and the time the longer.
+ * running, each value keeps the stronger of the two and the time the longer.
  */
 export function setPace(this: World, t: Entity, left: number, move: number, atk: number): void {
-  const strong = (a: number, b: number) => (Math.abs(a - 100) >= Math.abs(b - 100) ? a : b);
   if (t.pace > 0) [left, move, atk] = [Math.max(left, t.pace), strong(t.paceMove, move), strong(t.paceAtk, atk)];
   t.pace = left;
   t.paceMove = move;
   t.paceAtk = atk;
   if (t.boost === 0) t.speed = this.baseSpeed(t);
+}
+
+/** The pace in force, walking and time between blows in percent: the stronger of its timed one and Gravité's aura. */
+export function paceOf(this: World, e: Entity): [number, number] {
+  const g = ABILITIES.gravite;
+  const [move, atk] = e.pace > 0 ? [e.paceMove, e.paceAtk] : [100, 100];
+  return e.heavy > 0 ? [strong(move, 100 - g.damage!), strong(atk, g.max!)] : [move, atk];
 }
 
 /** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
