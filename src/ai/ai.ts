@@ -315,7 +315,10 @@ export class AI {
         ? 0
         : (techIdle ? Math.min(...techUnits.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
           (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
-    return { reserve, researchReserve, unitReserve, wantSupreme, gatewaysKeep, nextResearch };
+    // Z: the minerals of that next step are kept from the socles once three quarters of its energy is there (the socles
+    // ate them all: the Centre d'optimisation never came, and the 500 energy kept for it piled up past 600, unspent).
+    const zKeep = zTech && p.energy >= ((DEFS[zTech] as BuildingDef).cost.energy * 3) / 4 ? (DEFS[zTech] as BuildingDef).cost.minerals : 0;
+    return { reserve, researchReserve, unitReserve, wantSupreme, gatewaysKeep, nextResearch, zKeep };
   }
 
   /** Wanted buildings: add-ons on their hosts, the rest by a builder, while the bank allows. */
@@ -440,7 +443,7 @@ export class AI {
 
   /** Units from the production buildings. */
   private soldiers(ctx: Turn): void {
-    const { w, f, p, mine, army, buildings, free, rally, firstTech, saving, reserve, researchReserve, unitReserve, wantSupreme, gatewaysKeep, nextResearch } = ctx;
+    const { w, f, mine, army, buildings, free, rally, firstTech, saving, reserve, researchReserve, unitReserve, zKeep, gatewaysKeep, nextResearch } = ctx;
     // Its energy at hand, the next research also keeps its minerals from the units.
     const researchCost = nextResearch && (DEFS[nextResearch] as UpgradeDef).cost;
     ctx.keep = researchCost && ctx.energy - researchReserve >= researchCost.energy ? researchCost.minerals : 0;
@@ -462,10 +465,9 @@ export class AI {
       if (saving || c.queue.length > (this.easy ? 0 : 1) || free - ctx.out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), army, ctx.minerals);
       const def = DEFS[type] as UnitDef;
-      // Z: the minerals of the Intelligence suprême are kept once its energy is there (the units ate them all); its
-      // energy, kept from the energy-hungry socles only, never holds back one that costs none.
-      const supreme = wantSupreme && p.energy >= 300 ? 300 : 0;
-      if (ctx.minerals - ctx.keep - gatewaysKeep - supreme < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z ? 0 : reserve) < def.cost.energy) continue;
+      // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
+      // the energy-hungry socles only, never holds back one that costs none.
+      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z ? 0 : reserve) < def.cost.energy) continue;
       // Z: a socle waits until its weapon is affordable too, rather than leave with the machine gun.
       const weapon = this.weaponFor(def, ctx.energy - unitReserve);
       const cost = withKit(def, weapon);
