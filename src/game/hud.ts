@@ -1,8 +1,8 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, Vector3 } from 'three';
-import { type BuildingDef, DEFS, FACTIONS, type UnitDef } from '../data';
-import { el, img, noIcon } from './glyphs';
+import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { el, noIcon } from './glyphs';
 import { type GameMap, heightAt } from '../map';
-import { FP, TICK_RATE, ticks } from '../sim/fixed';
+import { FP, TICK_RATE } from '../sim/fixed';
 import { GRID_REACH, PlaceGrid } from '../render/placegrid';
 import type { Command, Entity, GameEvent, World } from '../sim/world';
 import type { Audio } from '../audio';
@@ -10,11 +10,12 @@ import type { Input } from './input';
 import { Portrait } from '../render/portrait';
 import { showEnd, showEvents } from './hud-toasts';
 import { updatePanel } from './hud-panel';
+import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
-  private readonly bar = el('div', 'hud-bar');
+  readonly bar = el('div', 'hud-bar');
   /** Bottom console: minimap slot, selection panel, command card. */
   private readonly console = el('div', 'console');
   readonly mapSlot = el('div', 'slot map-slot');
@@ -37,19 +38,19 @@ export class Hud {
   readonly sites = new Map<number, string>();
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
-  private idleCount = 0;
+  idleCount = 0;
   /** Production buildings with an empty queue: a click goes through them one by one. */
   readonly idleProd = el('button', 'chip idle-prod');
-  private idleProdCount = 0;
+  idleProdCount = 0;
   /** The production panel (F3 or its button): every producer of ours, what it makes and how far along, idle ones dimmed;
    * a click on a row selects that producer and shows it. */
   readonly prodToggle = el('button', 'chip prod-toggle');
-  private readonly prod = el('div', 'prod-panel');
-  private readonly prodList = el('div', 'prod-list');
-  private prodKey = '';
+  readonly prod = el('div', 'prod-panel');
+  readonly prodList = el('div', 'prod-list');
+  prodKey = '';
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
-  private groupsKey = '';
+  groupsKey = '';
   buttons: Button[] = [];
   /** Hotkeys by place in the card rather than by name (Options). */
   gridKeys = false;
@@ -110,7 +111,7 @@ export class Hud {
     this.idleProd.addEventListener('click', () => this.input.selectIdleProducer());
     this.prodToggle.title = 'Production (F3) : toutes les files d’un coup d’œil';
     this.prodToggle.hidden = spectator;
-    this.prodToggle.addEventListener('click', () => this.toggleProd());
+    this.prodToggle.addEventListener('click', () => toggleProd(this));
     try {
       this.prod.hidden = localStorage.getItem('xcraft.prod') !== '1' || spectator;
     } catch {
@@ -120,19 +121,19 @@ export class Hud {
     const close = el('button', 'prod-close');
     close.textContent = '×';
     close.title = 'Fermer';
-    close.addEventListener('click', () => this.toggleProd());
+    close.addEventListener('click', () => toggleProd(this));
     this.prod.append(close, this.prodList);
     document.body.append(this.prod);
     // On a touch screen, a tap anywhere else closes it (and does nothing more on the map).
     window.addEventListener('pointerdown', (e) => {
       const t = e.target as Node;
       if (e.pointerType !== 'touch' || this.prod.hidden || this.prod.contains(t) || this.prodToggle.contains(t)) return;
-      this.toggleProd();
+      toggleProd(this);
       if (t instanceof HTMLCanvasElement) e.stopPropagation();
     }, { capture: true });
     this.prod.addEventListener('click', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
-      if (q) return this.cancelSlot(q);
+      if (q) return cancelSlot(this, q);
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       const b = this.world.entities.get(id);
       if (!b || b.owner !== this.player) return;
@@ -143,7 +144,7 @@ export class Hud {
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'F3' || spectator) return;
       e.preventDefault();
-      this.toggleProd();
+      toggleProd(this);
     });
     this.groups.addEventListener('click', (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-g]')?.dataset.g;
@@ -213,7 +214,7 @@ export class Hud {
     window.addEventListener('pointercancel', () => release(false));
     this.panel.addEventListener('pointerdown', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
-      if (q) return this.cancelSlot(q);
+      if (q) return cancelSlot(this, q);
       const out = (e.target as HTMLElement).closest<HTMLElement>('[data-unload]');
       if (out) {
         const of = Number(out.dataset.of);
@@ -271,115 +272,8 @@ export class Hud {
     });
   }
 
-  /** A click on a queued icon (selection panel or production panel): that one out of the queue. */
-  private cancelSlot(q: HTMLElement): void {
-    const id = Number(q.dataset.of);
-    const slot = Number(q.dataset.slot);
-    if (this.world.entities.get(id)?.owner !== this.player) return;
-    this.audio.play('click');
-    this.issue({ player: this.player, kind: 'cancel', ids: [id], slot });
-  }
-
   /** The selection's details, rebuilt only when more than its bars changed (so a hover or a tooltip on them holds). */
   detailsKey = '';
-
-  private toggleProd(): void {
-    this.prod.hidden = !this.prod.hidden;
-    this.prodToggle.classList.toggle('on', !this.prod.hidden);
-    this.prodKey = '';
-    try {
-      localStorage.setItem('xcraft.prod', this.prod.hidden ? '0' : '1');
-    } catch {
-      // private browsing: open for this game only
-    }
-  }
-
-  /** The production panel: rows rebuilt when a queue changes, progress bars moved every frame. */
-  private updateProd(): void {
-    if (!this.prodToggle.firstChild) this.prodToggle.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].barracks, '')}<b>≡</b>`;
-    if (this.prod.hidden) return;
-    const producers = [...this.world.entities.values()]
-      .filter((e) => e.owner === this.player && e.buildLeft === 0 && (e.def.kind === 'building' ? !!(e.def as BuildingDef).trains?.length || e.queue.length > 0 : e.queue.length > 0))
-      .sort((a, b) => Number(!a.queue.length) - Number(!b.queue.length) || a.type.localeCompare(b.type) || a.id - b.id);
-    const key = producers.map((e) => `${e.id}:${e.queue.join(',')}`).join('|');
-    if (key !== this.prodKey) {
-      this.prodKey = key;
-      this.prodList.innerHTML = producers.length
-        ? producers
-            .map((e) => {
-              const queue = e.queue.map((t, i) => `<span class="cancel${i ? '' : ' now'}" data-of="${e.id}" data-slot="${i}" title="${DEFS[t].name}. Clic : annuler">${img(t, DEFS[t].name)}${i ? '' : '<i></i>'}</span>`).join('');
-              return `<button class="prod-row${e.queue.length ? '' : ' idle'}" data-id="${e.id}" title="${e.def.name}${e.queue.length ? '' : ' : à l’arrêt'}"><span class="who">${img(e.type, e.def.name)}</span>${queue || '<em>à l’arrêt</em>'}</button>`;
-            })
-            .join('')
-        : '<em>Aucun bâtiment de production</em>';
-    }
-    for (const bar of this.prod.querySelectorAll<HTMLElement>('.prod-row')) {
-      const e = this.world.entities.get(Number(bar.dataset.id));
-      const fill = bar.querySelector<HTMLElement>('.now i');
-      if (!e || !fill || !e.queue.length) continue;
-      // The world's time for it: a god's level shortens it.
-      fill.style.width = `${Math.round(100 * (1 - e.trainLeft / this.world.trainTime(e, e.queue[0])))}%`;
-    }
-  }
-
-  private updateGroups(): void {
-    const list = this.input.groupList().map(([k, es]) => {
-      const count = new Map<string, number>();
-      for (const e of es) count.set(e.type, (count.get(e.type) ?? 0) + 1);
-      const type = [...count].sort((a, b) => b[1] - a[1])[0][0];
-      return { k, type, n: es.length };
-    });
-    const set = this.input.groupSet;
-    const key = list.map((g) => `${g.k}${g.type}${g.n}`).join('|') + set.time;
-    if (key === this.groupsKey) return;
-    this.groupsKey = key;
-    const fresh = performance.now() - set.time < 500 ? set.key : '';
-    this.groups.innerHTML = list
-      .map((g) => `<button class="chip${g.k === fresh ? ' flash' : ''}" data-g="${g.k}" title="Groupe ${g.k.slice(5)} : ${DEFS[g.type].name}"><kbd>${g.k.slice(5)}</kbd>${img(g.type, '')}<b>${g.n}</b></button>`)
-      .join('');
-  }
-
-  private updateIdle(): void {
-    const n = this.input.idleWorkers().length;
-    if (n === this.idleCount) return;
-    if (!this.idle.firstChild) this.idle.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].worker, '')}<b></b>`;
-    this.idle.lastChild!.textContent = String(n);
-    this.idle.hidden = n === 0;
-    if (n > this.idleCount) {
-      this.idle.classList.remove('flash');
-      void this.idle.offsetWidth;
-      this.idle.classList.add('flash');
-    }
-    this.idleCount = n;
-  }
-
-  /** The idle-production chip: how many production buildings stand with an empty queue. */
-  private updateIdleProd(): void {
-    const p = this.input.idleProducers().length;
-    if (p !== this.idleProdCount) {
-      if (!this.idleProd.firstChild) this.idleProd.innerHTML = `${img(FACTIONS[this.world.players[this.player].faction].barracks, '')}<b></b>`;
-      this.idleProd.lastChild!.textContent = String(p);
-      this.idleProd.hidden = p === 0;
-      if (p > this.idleProdCount) {
-        this.idleProd.classList.remove('flash');
-        void this.idleProd.offsetWidth;
-        this.idleProd.classList.add('flash');
-      }
-      this.idleProdCount = p;
-    }
-  }
-
-  /** Sets a resource's count; it flashes as it goes up (income) or down (spending). */
-  private count(span: HTMLElement, value: number): void {
-    const text = span.lastChild!;
-    const before = Number(text.textContent);
-    text.textContent = String(value);
-    if (Number.isNaN(before) || before === value) return;
-    const dir = value > before ? 'gain' : 'spend';
-    span.classList.remove('gain', 'spend');
-    void span.offsetWidth;
-    span.classList.add(dir);
-  }
 
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
   click(button: number, ground: Vector3 | null, shift: boolean, target?: Entity): boolean {
@@ -529,21 +423,12 @@ export class Hud {
   }
 
   update(): void {
-    const p = this.world.players[this.player];
-    const s = this.world.supply(this.player);
-    const secs = Math.floor((this.world.tick / ticks(60)) * 60);
-    if (!this.bar.children.length) this.bar.innerHTML = '<span class="res clock">-</span><span class="res min"><i></i>-</span><span class="res nrg"><i></i>-</span><span class="res sup"><i></i>-</span>';
-    const [clock, min, nrg, sup] = this.bar.children as HTMLCollectionOf<HTMLElement>;
-    clock.lastChild!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-    this.count(min, p.minerals);
-    this.count(nrg, p.energy);
-    sup.lastChild!.textContent = `${s.used}/${s.max}`;
-    sup.classList.toggle('full', s.used >= s.max);
+    updateBar(this);
     updatePanel(this);
-    this.updateIdle();
-    this.updateIdleProd();
-    this.updateProd();
-    this.updateGroups();
+    updateIdle(this);
+    updateIdleProd(this);
+    updateProd(this);
+    updateGroups(this);
     updateCard(this);
     this.updateGhost();
     showEnd(this);
