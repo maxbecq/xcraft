@@ -18,6 +18,8 @@ export class Grid {
    * terrain test is worked out once here (it was half the cost of a long path's search); buildings stay checked live.
    */
   private readonly sides: Uint8Array;
+  /** Each tile's lowest corner level (level(), on the map), worked out once: vision asks it for every tile it reveals. */
+  readonly lowest: Int8Array;
 
   constructor(map: GameMap) {
     this.width = map.width;
@@ -32,6 +34,8 @@ export class Grid {
         this.cut[y * map.width + x] = cutCorner(map, x, y) >= 0 ? 1 : 0;
       }
     }
+    this.lowest = new Int8Array(map.width * map.height);
+    for (let i = 0; i < this.lowest.length; i++) this.lowest[i] = Math.min(this.corners[i * 4], this.corners[i * 4 + 1], this.corners[i * 4 + 2], this.corners[i * 4 + 3]);
     this.sides = new Uint8Array(map.width * map.height);
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < map.width; x++)
