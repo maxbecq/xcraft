@@ -303,4 +303,15 @@ describe('lockstep between two browsers', () => {
     expect(guest.take(room)).toBe(room);
     expect(guest.take('WXYZ')).toBe(null); // once
   });
+
+  it('starts no rematch once the other side is gone', () => {
+    const host = new Rematch(0);
+    host.theyAsk();
+    host.lost();
+    expect(host.ask()).toBe(null);
+    const guest = new Rematch(1);
+    guest.ask();
+    guest.lost();
+    expect(guest.take('ABCD')).toBe(null);
+  });
 });

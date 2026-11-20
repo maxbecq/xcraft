@@ -207,7 +207,7 @@ const FIND_MS = 60_000;
  * takes the same guest back, the guest calls again; the orders lost meanwhile are sent again. `onStatus` hears every
  * change; 'left' (the other side quit, or another page took its place) and 'error' are final.
  */
-export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void; again: () => void } {
+export function connect(player: number, room: string, onStatus: (s: NetStatus, detail?: string) => void): { lock: Lockstep; leave: () => void; again: () => void; lost: () => void } {
   let conn: DataConnection | null = null;
   const lock = new Lockstep(player, (m) => {
     sendOn(conn, m);
@@ -310,6 +310,8 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       sendOn(conn, { again: 1 } satisfies Message);
       go(again.ask());
     },
+    /** The other side is gone after the end: whatever comes later starts no rematch. */
+    lost: () => again.lost(),
     leave: () => {
       // Not to a side that has already gone: its channel is closing.
       if (status !== 'left') sendOn(conn, { bye: 1 } satisfies Message);
@@ -343,6 +345,10 @@ export class Rematch {
     if (this.player !== 1 || !this.asked || this.done || typeof room !== 'string' || readRoom(room) !== room) return null;
     this.done = true;
     return room;
+  }
+  /** The other side is gone: no rematch any more. */
+  lost(): void {
+    this.done = true;
   }
   private room(): string | null {
     if (this.player !== 0 || !this.asked || !this.theyAsked || this.done) return null;

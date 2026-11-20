@@ -10,6 +10,8 @@ import { downloadReplay, type Replay } from './replay';
 const FORFEIT_MS = 60_000;
 /** Shorter waits go unsaid: a hiccup, not a problem. */
 const QUIET_MS = 2000;
+/** After the end, a link cut this long: the other side is taken as gone, and no rematch can be agreed. */
+const GONE_AFTER_END_MS = 10_000;
 
 /** A network game's link to the other side, and what it says on screen: waiting, cuts, forfeits, the rematch. */
 export class NetGame {
@@ -25,6 +27,8 @@ export class NetGame {
   cutSince = 0;
   stalledSince = 0;
   rematchAsked = false;
+  /** The other side gone after the end: no rematch. */
+  private gone = false;
   /** The network game's own clock (it steps the match in a background tab and watches the other side), stopped at the end. */
   stopNetClock: (() => void) | undefined;
   private warned = '';
@@ -112,7 +116,16 @@ export class NetGame {
    * it); a side still linked but sending no orders loses by forfeit. A few times a second, even in a background tab.
    */
   watchNet(): void {
-    if (!this.netStarted || this.netOver || !this.net || this.world.winner !== null) return;
+    if (!this.netStarted || this.netOver || !this.net) return;
+    if (this.world.winner !== null) {
+      // A side that closed its page without a word (a crash, a lost network) is only seen as a cut that lasts.
+      if (this.cutSince && !this.gone && performance.now() - this.cutSince > GONE_AFTER_END_MS) {
+        this.gone = true;
+        this.link?.lost();
+        this.rematch('left');
+      }
+      return;
+    }
     const say = (text: string) => {
       if (text === this.warned) return;
       this.warned = text;
