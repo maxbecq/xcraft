@@ -1,5 +1,5 @@
 import {
-  CanvasTexture, Color, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  CanvasTexture, Color, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PlaneGeometry, Quaternion, RepeatWrapping, SRGBColorSpace, SphereGeometry, Vector3,
 } from 'three';
 import { isoOffset } from '../camera';
@@ -51,7 +51,6 @@ export class Space {
       }
       geo.computeVertexNormals();
       const mesh = new InstancedMesh(geo, rock, count);
-      mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       const m = new Matrix4();
       const q = new Quaternion();
       for (let i = 0; i < count; i++) {
