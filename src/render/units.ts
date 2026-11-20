@@ -89,6 +89,9 @@ export const WEAPON_MODELS = [...Object.keys(WEAPONS), 'mitrailleuse'].map((k) =
 const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
   mastodonte: { size: 0.5 },
   octopode: { size: 0.5 },
+  // Buildings: a turret on the roof, not a module the width of the whole building.
+  assimilateur: { size: 0.4 },
+  tourelle: { size: 0.6 },
 };
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
@@ -232,8 +235,11 @@ export class EntityRenderer {
     if (!name || !templates.has(name)) return;
     const body = v.model.children[0];
     const parts: Object3D[] = [];
+    // The model only: not its effects (the Assimilateur's bubbles and glow stand above its roof).
+    const fx = new Set<Object3D>();
+    v.fx?.group.traverse((o) => fx.add(o));
     body.traverse((o) => {
-      if ((o as Mesh).isMesh && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
+      if ((o as Mesh).isMesh && !fx.has(o) && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
     });
     v.root.updateMatrixWorld(true);
     const box = new Box3();
@@ -249,13 +255,18 @@ export class EntityRenderer {
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
     const fit = WEAPON_TUNE[name] ?? {};
     o.rotation.y = fit.yaw ?? 0;
-    SHARED.add(WEAPON_COLLAR);
-    const collar = new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]);
-    o.add(collar);
+    // Socles only: on a building the collar would be a wide flat disc.
+    if (e.def.kind === 'unit') {
+      SHARED.add(WEAPON_COLLAR);
+      o.add(new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]));
+    }
+    const bodyScale = body.getWorldScale(new Vector3()).x;
+    const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
     o.position.copy(body.worldToLocal(at.clone()));
-    o.scale.setScalar((((tune.size ?? 0.7) * across) / 0.64 / body.getWorldScale(new Vector3()).x) * (fit.scale ?? 1));
+    o.scale.setScalar(scale);
     o.traverse((m) => (m.userData.noPick = true));
     body.add(o);
+    delete v.model.userData.top; // the health bar goes above the weapon (see top)
     // The Déchiqueteur's moving parts (concepts-z/splitsaw.py): its arm and the saw blade at its tip.
     v.weapon = { name, o, arm: o.getObjectByName('zw_arm'), saw: o.getObjectByName('zw_saw') };
   }

@@ -65,7 +65,7 @@ export interface View {
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
   /** Energy well: its living pool (see wellFx). */
-  fx?: { update(dt: number, t: number): void };
+  fx?: { group: Object3D; update(dt: number, t: number): void };
   heading: number;
   /** Flyers: ground height under them, eased so they glide over cliffs instead of jumping. */
   ground?: number;
