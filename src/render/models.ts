@@ -199,7 +199,7 @@ const meshySkins = new Map<string, MeshStandardMaterial[]>();
  * Repaints the texture's blue team stripes in the team colour, with a faint glow. `vivid` lifts
  * dull rust-and-dust textures (Human buildings): more saturation and light, so they read on the ground.
  */
-function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false, matte = false): MeshStandardMaterial {
+function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid = false, unit = false, ivory = false, matte = false, human = false): MeshStandardMaterial {
   const m = source.clone();
   const team = new Color(color);
   const living = vivid && !unit;
@@ -252,8 +252,9 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   }
   m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee. Human soldiers
-  // (shiny) were at 1.0: a bright blue outline round every figure and vehicle, which read as dirty from afar.
-  if (unit) rimLight(m, shiny ? 0.3 : 0.5, team.toArray());
+  // are at 0.3: at 1.0 a bright blue outline ran round every figure and vehicle, which read as dirty from afar.
+  // The Dieux keep 1.0: on their white marble (the Minotaure) it is most of their team colour.
+  if (unit) rimLight(m, shiny ? (human ? 0.3 : 1.0) : 0.5, team.toArray());
   else rimLight(m, rim);
   return m;
 }
@@ -281,7 +282,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
           gltf.scene.traverse((o) => {
             // From the model's own textured material, not whichever part comes first (a plain added part, the
             // Drone's bin floor, made it the whole model's skin).
-            if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type))));
+            if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
@@ -324,7 +325,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
               o.computeBoundingSphere();
               o.boundingSphere!.radius *= 2.5;
             });
-            rigged.set(type, { scene: share(gltf.scene), clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type))) });
+            rigged.set(type, { scene: share(gltf.scene), clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type), false, isHuman(type))) });
             return;
           }
         } catch {
