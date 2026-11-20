@@ -200,7 +200,7 @@ export function grows(this: World, u: Entity): boolean {
 export function fortify(this: World, u: Entity): void {
   // Sonde robuste (Z): a flat 25 hp for drones; Mega-Espion: 60 hp and some speed; Croissance économique: a share for Humans.
   if (u.type === 'zespion') u.speed = this.baseSpeed(u);
-  const extra = u.type === 'drone' ? BALANCE.rules.z.sondeRobusteHp : u.type === 'zespion' ? BALANCE.rules.z.megaEspion.hp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
+  const extra = u.type === 'drone' || u.type === 'dronecombat' ? BALANCE.rules.z.sondeRobusteHp : u.type === 'zespion' ? BALANCE.rules.z.megaEspion.hp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
   u.maxHp += extra;
   u.hp += extra;
 }

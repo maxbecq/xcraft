@@ -673,7 +673,7 @@ const BASE: Record<string, object> = {
   ...upgrades('zblindage', 'Blindage des socles', 'B', undefined, 'z'),
   titane: research('Blindage de titane', 'T', 'Blindage des bâtiments +2.', undefined, 'z'),
   deploiement: research('Déploiement rapide', 'R', 'Les bâtiments se construisent 20 % plus vite.', undefined, 'z'),
-  sonderobuste: research('Sonde robuste', 'S', 'Points de vie des drones +25.', { supreme: 1 }, 'z'),
+  sonderobuste: research('Sonde robuste', 'S', 'Points de vie des drones et des drones de combat +25.', { supreme: 1 }, 'z'),
   impulsion: research('Impulsion magnétique', 'I', "L'Espion immobilise les unités d'une petite zone 5 s.", undefined, 'z'),
   invistemp: research('Invisibilité temporaire', 'N', "L'Espion devient invisible 20 s.", { supreme: 1 }, 'z'),
   megaespion: research('Mega-Espion', 'M', "L'Espion gagne 60 PV, 1 de vision et de la vitesse.", undefined, 'z'),

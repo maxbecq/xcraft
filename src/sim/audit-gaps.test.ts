@@ -189,4 +189,13 @@ describe('audit gaps', () => {
     run(w, 2.2);
     expect(foe.speed).toBe(speed);
   });
+
+  it('Sonde robuste also strengthens the Drone de combat (Z.doc)', () => {
+    const w = createMatch(['z', 'humains']);
+    const before = w.spawn('dronecombat', 0, 30 * FP, 30 * FP);
+    const hp = before.maxHp;
+    w.players[0].upgrades.sonderobuste = 1;
+    const after = w.spawn('dronecombat', 0, 32 * FP, 30 * FP);
+    expect(after.maxHp).toBe(hp + BALANCE.rules.z.sondeRobusteHp);
+  });
 });
