@@ -1147,13 +1147,22 @@ body.z.lcd .hud-card .cmd:is(:hover, .vhover) :is(kbd, small) { color: #04120a; 
 }
 /* LCD console, Construire: the build list as a tech tree, a column per step of requirements, amber links under the
    nodes (drawn by hud-card.ts once laid out), locked buildings dim with what they lack, built ones ticked. */
-body.z.lcd .hud-card.tree { display: grid; grid-template-columns: none; grid-auto-columns: max-content; grid-auto-rows: max-content; gap: 8px 22px; position: relative; flex: none; max-width: min(940px, 72vw); max-height: 52vh; overflow: auto; padding: 10px 12px; }
+body.z.lcd .hud-card.tree { display: grid; grid-template-columns: none; grid-auto-columns: max-content; grid-auto-rows: max-content; gap: 8px 22px; position: relative; flex: none; max-width: min(940px, calc(100vw - 560px)); max-height: 52vh; overflow: auto; padding: 10px 12px; }
+/* Wider or taller than its room (narrow screens, phones): it scrolls, and says so with phosphor scrollbars that stay
+   drawn (not the system's overlay ones, hidden until used) and, while more lies to the right, a fading right edge. */
+body.z.lcd .hud-card::-webkit-scrollbar { width: 6px; height: 6px; }
+body.z.lcd .hud-card::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.45); }
+body.z.lcd .hud-card::-webkit-scrollbar-thumb { background: var(--phos-dim); border-radius: 3px; }
+@supports not selector(::-webkit-scrollbar) { body.z.lcd .hud-card { scrollbar-width: thin; scrollbar-color: var(--phos-dim) rgba(0, 0, 0, 0.45); } }
+body.z.lcd .hud-card.more { mask-image: linear-gradient(to right, #000 calc(100% - 60px), rgba(0, 0, 0, 0.25)); }
 body.z.lcd .hud-card.tree > .node { position: relative; z-index: 1; width: 146px; height: auto; min-height: 34px; flex-wrap: wrap; row-gap: 0; padding: 4px 8px; background: rgba(7, 18, 22, 0.95); }
 body.z.lcd .hud-card.tree > .node.have { border-color: var(--phos); }
 body.z.lcd .hud-card.tree > .node.have > span::after { content: ' ✓'; }
 body.z.lcd .hud-card.tree > .node span { font-size: 12px; white-space: normal; }
 body.z.lcd .hud-card.tree > .node em { flex-basis: 100%; font: 11px/1.15 var(--lcd); font-style: normal; color: #ffb43a; text-shadow: none; opacity: 0.85; white-space: normal; }
-body.z.lcd .hud-card.tree > .node.off { opacity: 0.55; }
+/* Locked: dimmed contents on an opaque node, so the links behind never show through its text. */
+body.z.lcd .hud-card.tree > .node.off { opacity: 1; }
+body.z.lcd .hud-card.tree > .node.off > * { opacity: 0.5; }
 body.z.lcd .hud-card.tree > .ghost { flex-wrap: wrap; row-gap: 0; display: flex; align-items: center; gap: 8px; border: 1px dashed var(--phos-dim); color: var(--phos); font: 13px/1.1 var(--lcd); text-shadow: var(--glow); }
 body.z.lcd .hud-card.tree > .ghost img { width: 20px; height: 20px; filter: brightness(2.4) contrast(1.1) drop-shadow(0 0 2px rgba(111, 244, 255, 0.6)); }
 body.z.lcd .hud-card.tree > .back { width: auto; }

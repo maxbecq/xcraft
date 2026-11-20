@@ -278,6 +278,7 @@ export function updateCard(h: Hud): void {
   h.tip.hidden = true; // its button may be gone
   const tree = lcdTree(h) && !!h.buildMenu && h.workers().length > 0;
   h.card.classList.toggle('tree', tree);
+  if (!tree) h.card.classList.remove('more');
   h.card.innerHTML = tree ? treeHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
   if (tree) drawLinks(h.card), relinkOnResize(h.card);
   placeMenu(h);
@@ -369,11 +370,21 @@ function relinkOnResize(card: HTMLElement): void {
     }
   });
   linker.observe(card);
+  if (!card.dataset.scrolls) {
+    card.dataset.scrolls = '1';
+    card.addEventListener('scroll', () => moreRight(card), { passive: true });
+  }
+}
+
+/** Marks a tree that has more to the right than it shows (its right edge fades), until scrolled to its end. */
+function moreRight(card: HTMLElement): void {
+  card.classList.toggle('more', card.classList.contains('tree') && card.scrollLeft + card.clientWidth < card.scrollWidth - 2);
 }
 
 /** The tree's links, drawn under its nodes once they are laid out: amber, dashed towards a locked building. */
 function drawLinks(card: HTMLElement): void {
   card.dataset.size = `${card.clientWidth}x${card.clientHeight}`;
+  moreRight(card);
   const box = card.getBoundingClientRect();
   const rect = new Map([...card.querySelectorAll<HTMLElement>('[data-t]')].map((n) => [n.dataset.t!, n]));
   const paths = { open: '', lock: '' };
@@ -386,7 +397,8 @@ function drawLinks(card: HTMLElement): void {
       const y1 = a.top + a.height / 2 - box.top + card.scrollTop;
       const x2 = b.left - box.left + card.scrollLeft;
       const y2 = b.top + b.height / 2 - box.top + card.scrollTop;
-      const mx = Math.round((x1 + x2) / 2);
+      // The bend just before the node's own column: a link that skips a column runs along its row, not down through its nodes.
+      const mx = Math.round(Math.max(x1 + 6, x2 - 11));
       paths[n.classList.contains('off') ? 'lock' : 'open'] += `M${Math.round(x1)} ${Math.round(y1)}H${mx}V${Math.round(y2)}H${Math.round(x2)}`;
     }
   }
