@@ -552,7 +552,7 @@ const BASE: Record<string, object> = {
   },
   // Notice: « Trône d'Altar Sargon », the last major building: Béhémoths, and the ultimate powers of its extensions.
   trone: {
-    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, abilities: ['canonorbital', 'portedephasage', 'murenergie', 'bouclierplasma'], faction: 'isdaris', hotkey: 'A',
+    kind: 'building', name: "Trône d'Altar Sargon", size: 4, requires: { orbecommandement: 1 }, warp: true, needsPower: true, unique: true, abilities: ['canonorbital', 'portedephasage', 'murenergie', 'bouclierplasma'], faction: 'isdaris', hotkey: 'A',
     researches: ['relais', 'porte', 'concentrateur'],
   },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).

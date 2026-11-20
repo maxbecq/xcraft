@@ -162,4 +162,12 @@ describe('audit gaps', () => {
     w.hurt(obelisque, 500);
     expect(obelisque.hp + obelisque.shield).toBeLessThan(hp + shield);
   });
+
+  it('the Trône is unique (2010 sheet)', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.spawn('orbecommandement', 0, 20 * FP, 30 * FP);
+    expect(w.lacks(0, 'trone')).toBeFalsy();
+    w.spawn('trone', 0, 30 * FP, 30 * FP);
+    expect(w.lacks(0, 'trone')).toBe('Un seul par joueur.');
+  });
 });
