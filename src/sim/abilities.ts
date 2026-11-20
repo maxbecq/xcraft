@@ -280,7 +280,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     }
   } else if (name === 'amonra') {
     // Blinded and held where they stand; machines shake it off sooner.
-    for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
+    for (const t of near((t) => this.hostile(t.owner, e.owner))) t.held = t.blind = Math.max(t.held, ticks((t.def as UnitDef).mechanical ? ab.duration / 3 : ab.duration));
   } else if (name === 'enraciner') {
     // Back into its own form at the point, where the ground allows; it fights again a few seconds later.
     if (e.charm || e.seizedLeft) {

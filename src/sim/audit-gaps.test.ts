@@ -297,4 +297,19 @@ describe('audit gaps', () => {
     w.hit(fire, t, w.weapon(fire)!);
     expect(by.hp).toBeLessThan(hp);
   });
+
+  it('Amon-Râ blinds the enemies it holds: they see next to nothing', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
+    const aux = w.spawn('auxiliaire', 1, 36 * FP, 30 * FP);
+    w.players[0].ultimates = { egyptien: 1e9 } as never;
+    aux.frozen = ticks(60);
+    run(w, 1);
+    expect(w.sees(1, seth)).toBe(true);
+    w.castAt(seth, 'amonra', aux.x, aux.y);
+    expect(aux.held).toBeGreaterThan(0);
+    expect(aux.blind).toBe(aux.held);
+    run(w, 1);
+    expect(w.sees(1, seth)).toBe(false);
+  });
 });
