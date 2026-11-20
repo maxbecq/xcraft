@@ -323,11 +323,12 @@ export class AI {
     const { w, f, home, builders, buildings, wants, building, outpost } = ctx;
     // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
     for (const b of buildings) this.tried.delete(`${b.tx},${b.ty}`);
-    // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with no add-on yet; without one, a Pod first.
-    const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && !buildings.some((a) => a.host === b.id));
+    // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
+    const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
     for (let i = 0; i < wants.length; i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
-      const host = hosts.shift();
+      const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
+      const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
       const def = DEFS[wants[i]] as BuildingDef;
       if (host && ctx.minerals >= def.cost.minerals && ctx.energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });

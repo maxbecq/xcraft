@@ -166,4 +166,27 @@ describe('AI', () => {
     expect(w.lacks(0, 'supreme')).not.toBe('');
     expect(trained).toBe(true);
   });
+  it('Z: raises an add-on on a Pod with room, never retrying a Pod that has none or is full', () => {
+    const w = createMatch(['z', 'humains']);
+    const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
+    const boxed = w.spawn('pod', 0, ic.x + 10 * FP, ic.y);
+    const full = w.spawn('pod', 0, ic.x + 4 * FP, ic.y - 10 * FP);
+    for (let i = 0; i < 3; i++) w.spawn('tourelle', 0, (50 + 4 * i) * FP, 50 * FP).host = full.id;
+    const open = w.spawn('pod', 0, ic.x + 4 * FP, ic.y + 10 * FP);
+    for (let i = 0; i < ticks(30); i++) w.step([]); // creep
+    // Wall the first Pod in: towers of its own on every side left free.
+    for (let spot; (spot = w.addonSpot(boxed, 'tourelle') ?? w.addonSpot(boxed, 'plateforme')); ) w.spawn('tourelle', 0, (spot[0] + 1) * FP, (spot[1] + 1) * FP);
+    expect(w.addonSpot(boxed, 'plateforme')).toBeUndefined();
+    w.players[0].minerals = 3000;
+    w.players[0].energy = 1000;
+    const ai = new AI(w, 0);
+    const hosts: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const cmds = ai.think();
+      for (const c of cmds) if (c.kind === 'train' && c.type && ['plateforme', 'tourelle'].includes(c.type)) hosts.push(...c.ids);
+      w.step(cmds);
+    }
+    expect(hosts.length).toBeGreaterThan(0);
+    expect(hosts.every((id) => id === open.id)).toBe(true);
+  });
 });
