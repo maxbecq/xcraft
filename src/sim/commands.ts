@@ -2,7 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
-import { type Order, flies, type Entity, type Command, type World } from './world';
+import { type Order, flies, repairs, type Entity, type Command, type World } from './world';
 
 /** The supply building of each faction, for the "not enough supply" message. */
 const SUPPLY_NAMES: Record<Faction, string> = { humains: 'greniers', isdaris: 'réserves psy', z: 'pods', dieux: "branches d'Yggdrasill" };
@@ -310,8 +310,8 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
       this.setOrder(e, { kind: 'heal', target: t.id });
     } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
       this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
-    } else if (worker && e.type === 'drone' && t && t !== e && t.owner === e.owner && t.hp < t.maxHp && t.buildLeft === 0 && (t.def.kind === 'building' || (t.def as UnitDef).mechanical)) {
-      // Z.doc: a drone repairs Z buildings and machines, 4 hp a second, against resources.
+    } else if (worker && t && t !== e && t.owner === e.owner && t.hp < t.maxHp && t.buildLeft === 0 && repairs(e.type, t)) {
+      // Z.doc: a drone repairs Z buildings and machines; the notice: the Serf too, the Esprit buildings only.
       this.setOrder(e, { kind: 'repair', target: t.id, owedM: 0, owedE: 0 });
     } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp && !(t.def as BuildingDef).absorbs) {
       this.setOrder(e, { kind: 'construct', target: t.id });

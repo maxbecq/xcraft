@@ -32,6 +32,10 @@ export type Order =
 
 /** Flying units go straight over cliffs and buildings. */
 export const flies = (e: Entity): boolean => !!(e.def as UnitDef).flying || e.airborne;
+/** Workers that repair, by type: hp a second, share of the worth a full repair costs, machines as well as buildings. */
+export const REPAIR: Record<string, { hp: number; percent: number; units: boolean }> = BALANCE.rules.repair;
+/** Can a worker of this type repair that (own, finished, wounded) thing? */
+export const repairs = (type: string, t: Entity): boolean => !!REPAIR[type] && (t.def.kind === 'building' || (REPAIR[type].units && !!(t.def as UnitDef).mechanical));
 
 export interface Entity {
   id: number;
@@ -854,11 +858,11 @@ export class World {
         }
         if (this.tick % TICK_RATE !== 0) return;
         // A full repair costs a quarter of what it is worth (a proposal: Z.doc says « contre ressources »).
-        const R = BALANCE.rules.z;
-        const heal = Math.min(R.repairHp, b.maxHp - b.hp);
+        const R = REPAIR[e.type];
+        const heal = Math.min(R.hp, b.maxHp - b.hp);
         const cost = (b.def as { cost: Cost }).cost;
-        o.owedM += idiv(cost.minerals * R.repairPercent * heal * 10, b.maxHp);
-        o.owedE += idiv(cost.energy * R.repairPercent * heal * 10, b.maxHp);
+        o.owedM += idiv(cost.minerals * R.percent * heal * 10, b.maxHp);
+        o.owedE += idiv(cost.energy * R.percent * heal * 10, b.maxHp);
         const p = this.players[e.owner];
         const m = idiv(o.owedM, 1000);
         const en = idiv(o.owedE, 1000);

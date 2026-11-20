@@ -2,7 +2,7 @@ import { ABILITIES, abilitiesOf, spell, KIT, type BuildingDef, DEFS, FACTIONS, R
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
-import { type Command, type Entity, type World, flies } from '../sim/world';
+import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
 export interface Plan {
@@ -194,8 +194,8 @@ export class AI {
       if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: site.x, y: site.y, target: site.id });
     }
 
-    // Z: a drone repairs a building that has lost 40 % of its hit points, one drone each, with minerals to spare.
-    if (f === FACTIONS.z && p.minerals > 200) {
+    // A worker that can repair (drone, serf, esprit) repairs a building that has lost 40 % of its hit points, one each, with minerals to spare.
+    if (REPAIR[f.worker] && p.minerals > 200) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
         if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty]);
