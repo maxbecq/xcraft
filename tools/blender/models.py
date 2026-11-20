@@ -2710,18 +2710,31 @@ def zw_mitrailleuse(p):
 
 
 def zsupport_assimilateur(p):
-    """The Assimilateur's weapon mount: an armoured crown clamped round the dome on its lid, above the glass tank, with
-    a team-colour band and four lights, a plate on top. Sized to the building's width (1 across), its origin on top of
-    the dome; the weapon sits on its plate (ZSUPPORTS in render/units.ts)."""
-    cyl(p["rust"], 0.135, 0.08, (0, 0, -0.025), verts=16, r2=0.12)
-    cyl(p["team"], 0.138, 0.02, (0, 0, -0.03), verts=16)
-    for k in range(8):  # clamps down onto the lid
-        a = k * math.pi / 4
-        box(p["dark"], (0.03, 0.02, 0.06), (math.cos(a) * 0.135, math.sin(a) * 0.135, -0.05), rot=(0, 0, a + math.pi / 2))
+    """The Assimilateur's weapon mount: a superstructure in the building's own dark steel and rust, clear of its glass
+    tank. Five thin posts stand on pads on its rim and carry an open ring above the dome, braced by three spokes to the
+    plate the weapon sits on, with a team-colour band and four lights. Measured on the model (render/units.ts mount):
+    the rim's top is 0.25 of its width below the dome's top, 0.34 out from the dome's axis, all round the side the
+    camera sees; the back of the model is open, so no post stands there. Sized to the building's width (1 across), its
+    origin on top of the dome (ZSUPPORTS in render/units.ts)."""
+    R, low, ring = 0.34, -0.25, 0.035
+    for deg in (300, 345, 30, 75, 120):  # in the game's frame, from +X towards +Z; Blender's Y is the game's -Z
+        a = -math.radians(deg)
+        c, s = math.cos(a), math.sin(a)
+        box(p["zrust"], (0.09, 0.075, 0.022), (c * R, s * R, low + 0.011), rot=(0, 0, a))  # pad on the rim
+        box(p["zdark"], (0.05, 0.05, 0.035), (c * R, s * R, low + 0.039), rot=(0, 0, a))  # its shoe
+        box(p["zdark"], (0.032, 0.032, ring - low - 0.05), (c * R, s * R, (ring + low + 0.05) / 2), rot=(0, 0, a))  # post
+        box(p["cyan_glow"], (0.012, 0.012, 0.045), (c * (R + 0.018), s * (R + 0.018), ring - 0.06), rot=(0, 0, a))
+    for k in range(18):  # the ring, open in its middle: the dome shows through
+        a = k * math.pi / 9
+        box(p["zdark"], (0.045, 2 * R * math.sin(math.pi / 18) + 0.01, 0.032), (math.cos(a) * R, math.sin(a) * R, ring), rot=(0, 0, a))
+    for k in range(3):  # spokes
+        a = k * 2 * math.pi / 3 + math.pi / 6
+        box(p["zrust"], (R - 0.1, 0.035, 0.028), (math.cos(a) * (R + 0.1) / 2, math.sin(a) * (R + 0.1) / 2, ring), rot=(0, 0, a))
+    cyl(p["team"], 0.12, 0.02, (0, 0, ring), verts=16)
+    cyl(p["zsteel"], 0.105, 0.025, (0, 0, ring + 0.02), verts=16)
     for k in range(4):
         a = k * math.pi / 2 + math.pi / 4
-        box(p["cyan_glow"], (0.02, 0.02, 0.015), (math.cos(a) * 0.125, math.sin(a) * 0.125, 0.008), rot=(0, 0, a))
-    cyl(p["steel"], 0.11, 0.02, (0, 0, 0.025), verts=16)
+        box(p["cyan_glow"], (0.02, 0.02, 0.012), (math.cos(a) * 0.095, math.sin(a) * 0.095, ring + 0.035), rot=(0, 0, a))
 
 
 def zsupport_tourelle(p):

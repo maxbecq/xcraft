@@ -88,16 +88,17 @@ export const WEAPON_MODELS = [...Object.keys(WEAPONS), 'mitrailleuse'].map((k) =
 /** Buildings that buy a weapon carry it on a mount of their own (tools/blender/models.py zsupport_<type>): built 1
  * across for the building's width, its origin on the roof, the weapon on its plate `top` higher. */
 const ZSUPPORTS: Record<string, { model: string; top: number }> = {
-  assimilateur: { model: 'zsupport_assimilateur', top: 0.035 },
+  assimilateur: { model: 'zsupport_assimilateur', top: 0.068 },
   tourelle: { model: 'zsupport_tourelle', top: 0.085 },
 };
 WEAPON_MODELS.push(...Object.values(ZSUPPORTS).map((s) => s.model));
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
-const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
+const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number; apex?: boolean }> = {
   mastodonte: { size: 0.5 },
   octopode: { size: 0.5 },
   // Buildings: a turret on the roof, not a module the width of the whole building.
-  assimilateur: { size: 0.4 },
+  // Centred on its dome's axis: its bounding box takes in the capsules on its sides.
+  assimilateur: { size: 0.4, apex: true },
   tourelle: { size: 0.6 },
 };
 /** Melee modules: on the head, reaching out in front of it, so they can touch what they fight. */
@@ -254,14 +255,21 @@ export class EntityRenderer {
     // Measured in the body's own frame (glTF +Z forward), whatever way the unit faces.
     const toBody = body.matrixWorld.clone().invert();
     const box = new Box3();
-    const q = new Vector3();
+    const points: Vector3[] = [];
     for (const o of parts) {
       const m = o as Mesh;
       const local = new Matrix4().multiplyMatrices(toBody, m.matrixWorld);
-      for (let i = 0; i < m.geometry.getAttribute('position').count; i++) box.expandByPoint(m.getVertexPosition(i, q).applyMatrix4(local));
+      for (let i = 0; i < m.geometry.getAttribute('position').count; i++) points.push(m.getVertexPosition(i, new Vector3()).applyMatrix4(local));
     }
+    box.setFromPoints(points);
     const centre = box.getCenter(new Vector3());
     const tune = WEAPON_MOUNTS[e.type] ?? {};
+    if (tune.apex) {
+      // The middle of its highest points: the top of the dome.
+      const high = points.filter((p) => p.y > box.max.y - 0.03 * (box.max.y - box.min.y));
+      centre.x = high.reduce((sum, p) => sum + p.x, 0) / high.length;
+      centre.z = high.reduce((sum, p) => sum + p.z, 0) / high.length;
+    }
     const size = box.getSize(new Vector3());
     const bodyScale = body.getWorldScale(new Vector3()).x;
     const across = Math.min(size.x, size.z) * bodyScale;
