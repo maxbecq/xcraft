@@ -237,4 +237,17 @@ describe('audit gaps', () => {
     w.hit(seth, hurt, w.weapon(seth)!);
     expect(b - hurt.hp).toBeGreaterThan(a - fresh.hp);
   });
+
+  it('a ghost of the Armée des enfers vanishes once it has dealt its share of damage', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ghost = w.spawn('fantome', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('phalangiste', 1, 31 * FP, 30 * FP);
+    const a = w.weapon(ghost)!;
+    for (let i = 0; i < 100 && ghost.hp > 0 && foe.hp > 0; i++) {
+      foe.hp = foe.maxHp;
+      w.hit(ghost, foe, a);
+    }
+    expect(ghost.hp).toBe(0);
+    expect(ghost.dealt).toBeGreaterThanOrEqual(BALANCE.rules.upgrades.fantomeDamage);
+  });
 });
