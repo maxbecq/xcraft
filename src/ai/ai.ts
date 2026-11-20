@@ -371,10 +371,12 @@ export class AI {
     const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
     const councilHome = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
+    // At its own price (a Dieux esprit costs 75: with 85 minerals left and no esprit, they never made one again).
+    const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
     // Z: the Intelligence centrale turns into the Intelligence suprême only with an empty queue: no drone then.
-    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && ctx.minerals >= 100 && free > 0 && !wants.includes(f.supply) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
+    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && ctx.minerals >= workerCost && free > 0 && !wants.includes(f.supply) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
-      ctx.minerals -= 100;
+      ctx.minerals -= workerCost;
     } else if (f === FACTIONS.z && minute > 8 && workerHome && workerHome.queue.length === 0 && free > 0 && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
       // One Espion (Z.doc): it detects, and goes along with the waves.
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: 'zespion' });
