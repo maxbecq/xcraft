@@ -129,10 +129,10 @@ function levelled(a: Attack, damage: number): Attack {
 export function baseSpeed(this: World, e: Entity): number {
   const d = e.def as UnitDef;
   // Z socles: the speed of their tier (Z.doc); the Espion with Mega-Espion.
-  if (e.type === 'zespion' && this.level(e.owner, 'megaespion')) return speedPerTick(d.speed + BALANCE.rules.z.megaEspion.speed);
+  const mega = e.type === 'zespion' && this.level(e.owner, 'megaespion');
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * (e.pace > 0 ? e.paceMove : 100) / 10000;
-  return speedPerTick(((d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
+  return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed) * (100 + fast) * stone) / 10000);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */

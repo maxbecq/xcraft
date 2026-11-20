@@ -429,8 +429,13 @@ export function orbitalHit(this: World, s: World['strikes'][number]): void {
   this.casts.push({ kind: 'canonorbital', x: s.x, y: s.y });
 }
 
-/** A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. */
+/**
+ * A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. Over one still
+ * running, each value keeps the stronger of the two (the farther from 100 %) and the time the longer.
+ */
 export function setPace(this: World, t: Entity, left: number, move: number, atk: number): void {
+  const strong = (a: number, b: number) => (Math.abs(a - 100) >= Math.abs(b - 100) ? a : b);
+  if (t.pace > 0) [left, move, atk] = [Math.max(left, t.pace), strong(t.paceMove, move), strong(t.paceAtk, atk)];
   t.pace = left;
   t.paceMove = move;
   t.paceAtk = atk;

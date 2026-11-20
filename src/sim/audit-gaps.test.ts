@@ -357,4 +357,28 @@ describe('audit gaps', () => {
     expect([orbe.tx, orbe.ty]).toEqual(spots[1]);
     expect(orbe.abilityCd).toBeGreaterThan(0); // 35 s before the next one (sheet)
   });
+
+  it('slows add up: each keeps the stronger value and the longer time, Gravité no longer wipes out Jet de sable', () => {
+    const w = createMatch(['dieux', 'z']);
+    const g = BALANCE.abilities.gravite;
+    const jet = BALANCE.abilities.jetdesable;
+    const tank = w.spawn('pegase', 1, 34 * FP, 30 * FP);
+    w.setPace(tank, ticks(jet.duration), jet.damage, 10000 / jet.damage);
+    w.setPace(tank, ticks(1) + 1, 100 - g.damage, g.max); // a Gravité pulse
+    expect([tank.pace, tank.paceMove, tank.paceAtk]).toEqual([ticks(jet.duration), jet.damage, 10000 / jet.damage]);
+    const aux = w.spawn('auxiliaire', 1, 36 * FP, 30 * FP);
+    w.setPace(aux, ticks(1) + 1, 100 - g.damage, g.max);
+    w.setPace(aux, ticks(jet.duration), jet.damage, 10000 / jet.damage);
+    expect([aux.pace, aux.paceMove, aux.paceAtk]).toEqual([ticks(jet.duration), jet.damage, 10000 / jet.damage]);
+  });
+
+  it('the Méga-Espion is slowed like any other unit', () => {
+    const w = createMatch(['z', 'dieux']);
+    w.players[0].upgrades.megaespion = 1;
+    const spy = w.spawn('zespion', 0, 30 * FP, 30 * FP);
+    const fast = w.baseSpeed(spy);
+    w.setPace(spy, ticks(5), 50, 125);
+    expect(spy.speed).toBe(w.baseSpeed(spy));
+    expect(spy.speed).toBeLessThan(fast);
+  });
 });
