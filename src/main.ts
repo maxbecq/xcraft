@@ -17,7 +17,6 @@ import { loadSprites } from './render/sprites';
 import { type BuildingDef, DEFS, FACTIONS, LOOKS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
-import { MAPS } from './maps';
 import { PerfHud } from './perf';
 import { Footprints } from './render/footprints';
 import { compileScene } from './render/prewarm';
@@ -28,15 +27,16 @@ import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, setBiome, UNDER_DECK } from './terrain';
-import { BIOMES, cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
+import { cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
-import { connect, every, NO_DIRECT, readRoom, type NetStatus } from './net';
+import { every, readRoom } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { countMatch, countTitle } from './stats';
 import { SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, toggleFullscreen, wantsFullscreen } from './game/settings';
 import { initMenus, showHome, showLobby } from './game/menus';
 import { cameraControls } from './game/scroll';
+import { NetGame } from './game/netui';
 import { downloadReplay, type Replay, saveReplay } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SOLO, SPECTATE } from './game/config';
 
@@ -137,120 +137,8 @@ let pending: Command[] = [];
 // Bac à sable: the options picked before the match (`&outils=unlimited,instant,reveal`), turned on at its first tick.
 if (SANDBOX) for (const tool of params.get('outils')?.split(',') ?? []) if (tool in SANDBOX_TOOLS) pending.push({ player: PLAYER, kind: 'sandbox', ids: [], tool: tool as SandboxTool, on: true });
 
-// Network game: a banner while waiting for the other player, or once the link is lost.
-const netBanner = document.createElement('div');
-netBanner.className = 'net-banner';
-netBanner.hidden = true;
-document.body.append(netBanner);
-/** The room, as a code reads (an address typed or cut short may hold anything); none if it is not one. */
-const ROOM = readRoom(params.get('room') ?? '');
-/** A map or planet this build does not have would be swapped for the default one, on this side only: the two games would differ. */
-const UNKNOWN = !!NET_ROLE && (!MAPS[params.get('map') ?? ''] || !BIOMES[params.get('biome') ?? '']);
-const NO_ROOM = !!NET_ROLE && !ROOM;
-const link = NET_ROLE && ROOM && !UNKNOWN ? connect(PLAYER, ROOM, (status, detail) => showNet(status, detail)) : null;
-const net = link?.lock ?? null;
-/** The other side has been here: the match runs (before, nobody's clock starts). */
-let netStarted = false;
-/** The match ended for the network: a forfeit, or the two games no longer alike. Nothing more is simulated. */
-let netOver = false;
-/** Since when the link has been cut, and since when the game has been waiting for the other side's orders (0: not). */
-let cutSince = 0;
-let stalledSince = 0;
-/** Without a word from the other side for this long, the match is won by forfeit. */
-const FORFEIT_MS = 60_000;
-/** Shorter waits go unsaid: a hiccup, not a problem. */
-const QUIET_MS = 2000;
-function showNet(status: NetStatus, detail?: string): void {
-  if (netOver) return;
-  if (status === 'connected') {
-    if (!netStarted) countMatch('en-ligne', MAP.id, factions[PLAYER]);
-    netStarted = true;
-    cutSince = stalledSince = 0;
-    netBanner.hidden = true;
-    return;
-  }
-  if (status === 'reconnecting') {
-    cutSince = performance.now();
-    return; // watchNet tells, once the cut lasts
-  }
-  if (status === 'again' || status === 'go' || (status === 'left' && world.winner !== null)) return rematch(status, detail);
-  if (status === 'left') return endNet('Victoire par abandon', detail ?? "L'adversaire a quitté la partie.");
-  netBanner.hidden = false;
-  // The network in the way: a fresh try may go through (another network, the friend's page reloaded).
-  const retry = detail === NO_DIRECT ? '<button data-n="retry">Réessayer</button>' : '';
-  if (status === 'waiting') netBanner.innerHTML = `<h2>En attente de votre adversaire…</h2>${detail ? `<p>${detail}</p>` : ''}${retry}<button data-n="quit">Annuler</button>`;
-  else if (status === 'connecting') netBanner.innerHTML = `<h2>Connexion à la partie…</h2>${detail ? `<p>${detail}</p>` : ''}${retry}<button data-n="quit">Annuler</button>`;
-  else netBanner.innerHTML = `<h2>Connexion impossible</h2>${detail ? `<p>${detail}</p>` : ''}<button data-n="quit">Menu principal</button>`;
-}
-/** After the end: the other side wants a rematch, both do (`room`: where), or it left and there will be none. */
-function rematch(status: NetStatus, room?: string): void {
-  const button = document.querySelector<HTMLButtonElement>('.hud-banner [data-p="restart"]');
-  if (status === 'go') {
-    // The host's page leaves a moment after telling the other, so the room's name gets there.
-    setTimeout(() => (location.search = `?net=${NET_ROLE}&room=${room}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${biome.id}&map=${MAP.id}`), PLAYER === 0 ? 300 : 0);
-  } else if (button && status === 'again') button.textContent = rematchAsked ? 'Revanche…' : 'Revanche (votre adversaire est prêt)';
-  else if (button) {
-    button.disabled = true;
-    button.textContent = 'Adversaire parti';
-  }
-}
-let rematchAsked = false;
-/** The network game's own clock (it steps the match in a background tab and watches the other side), stopped at the end. */
-let stopNetClock: (() => void) | undefined;
-/** The match is over for the network: said, kept as a replay, and the other side told. */
-function endNet(title: string, detail: string): void {
-  if (netOver) return;
-  netOver = true;
-  stopNetClock?.();
-  link?.leave();
-  keepGame();
-  netBanner.hidden = false;
-  netBanner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>`;
-}
-/**
- * Long waits for the other side, said with the time left. While its match is still loading (none of its orders
- * yet), it is only waited for. A link cut for good ends the match with no winner (each side would otherwise claim
- * it); a side still linked but sending no orders loses by forfeit. A few times a second, even in a background tab.
- */
-let warned = '';
-function watchNet(): void {
-  if (!netStarted || netOver || !net || world.winner !== null) return;
-  const say = (text: string) => {
-    if (text === warned) return;
-    warned = text;
-    netBanner.hidden = false;
-    netBanner.innerHTML = text;
-  };
-  if (!net.started) return say('<h2>En attente de votre ami…</h2><p>Sa partie se charge.</p><button data-n="quit">Annuler</button>');
-  const since = cutSince || stalledSince;
-  const waited = since ? performance.now() - since : 0;
-  if (waited < QUIET_MS) {
-    if (warned) netBanner.hidden = true;
-    warned = '';
-    return;
-  }
-  const left = Math.ceil((FORFEIT_MS - waited) / 1000);
-  if (left <= 0 && cutSince) return endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur ; le replay est enregistré.');
-  if (left <= 0) return endNet('Victoire par abandon', "L'adversaire ne répond plus.");
-  say(`<h2>L'adversaire ne répond plus</h2><p>${cutSince ? 'Connexion coupée, reconnexion…' : 'En attente de ses ordres…'}</p><p>${cutSince ? 'Partie interrompue' : 'Victoire par abandon'} dans ${left} s.</p><button data-n="quit">Quitter la partie</button>`);
-}
-netBanner.addEventListener('click', (e) => {
-  const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
-  if (n === 'replay') downloadReplay(record);
-  else if (n === 'retry') {
-    link?.leave();
-    location.reload();
-  }
-  else if (n === 'quit') {
-    link?.leave();
-    location.search = `?biome=${biome.id}&map=${MAP.id}`;
-  }
-});
-if (NO_ROOM) showNet('error', "Ce lien ne contient pas de code de partie valide (quatre caractères, comme K7QX) : demandez à votre ami de vous le renvoyer.");
-else if (UNKNOWN) showNet('error', 'Carte ou planète inconnue de cette version du jeu : rechargez la page (tous les deux).');
-else if (net) showNet(PLAYER === 0 ? 'waiting' : 'connecting');
-// Leaving the page tells the other side at once, rather than after the silence timeout.
-window.addEventListener('pagehide', () => link?.leave());
+const netGame = new NetGame(world, record, biome, keepGame);
+const { link, net } = netGame;
 
 
 const rig = new CameraRig(map.width, map.height);
@@ -460,8 +348,8 @@ document.addEventListener('click', (e) => {
   }
   else if (p === 'fullscreen') toggleFullscreen();
   else if (p === 'restart' && !net) location.reload();
-  else if (p === 'restart' && link && !rematchAsked) {
-    rematchAsked = true;
+  else if (p === 'restart' && link && !netGame.rematchAsked) {
+    netGame.rematchAsked = true;
     button!.textContent = 'Revanche : en attente de votre adversaire…';
     link.again();
   } else if (p === 'restart' && link) return;
@@ -639,12 +527,12 @@ function start(): void {
     if (!ATTRACT && !(paused && !net)) acc += dt * gameSpeed();
     while (acc >= TICK) {
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
-      if (net && (netOver || !netStarted || !net.ready(world.tick))) {
-        if (netStarted && net.started && !stalledSince) stalledSince = performance.now();
+      if (net && (netGame.netOver || !netGame.netStarted || !net.ready(world.tick))) {
+        if (netGame.netStarted && net.started && !netGame.stalledSince) netGame.stalledSince = performance.now();
         acc = Math.min(acc, TICK);
         break;
       }
-      stalledSince = 0;
+      netGame.stalledSince = 0;
       const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : net ? net.step(world.tick, pending) : [...pending, ...ais.flatMap((ai) => ai.think())];
       if (net && world.tick % 100 === 0) net.check(world.tick, fingerprint(world));
       if (cmds.length && !ATTRACT) record.ticks.push([world.tick, cmds]);
@@ -659,16 +547,16 @@ function start(): void {
       if (drawn) effects.collect(world, seenAt);
       if (drawn && world.tick % 4 === 1) updateFog();
       acc -= TICK;
-      if (net?.desync != null) endNet('Désynchronisation', `Les deux parties ne sont plus identiques (tick ${net.desync}) : elle ne peut pas continuer. Le replay est enregistré.`);
+      if (net?.desync != null) netGame.endNet('Désynchronisation', `Les deux parties ne sont plus identiques (tick ${net.desync}) : elle ne peut pas continuer. Le replay est enregistré.`);
     }
   };
   // Network game: a background tab draws nothing (the browser stops or slows its frames), but its side of the match
   // must go on, or the other player would be stuck. A worker's clock steps it then, and watches for an absent other side.
   let framed = performance.now();
   if (net)
-    stopNetClock = every(50, () => {
+    netGame.stopNetClock = every(50, () => {
       if (performance.now() - framed > 250) advance(Math.min(clock.getDelta(), 1), false);
-      watchNet();
+      netGame.watchNet();
     });
   const frame = (elapsed: number) => {
     mark = performance.now();
