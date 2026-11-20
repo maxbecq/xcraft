@@ -662,12 +662,14 @@ export class AI {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || (atHome.length > 0 && this.mapDry()) || (minute >= 10 && atHome.length >= this.plan.wave && this.dominates(atHome)))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && atHome.length >= this.plan.wave && this.dominates(atHome)))) {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
       // the first rank stays home and summons.
-      for (const g of gods) if ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp) this.wave.add(g.id);
+      // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
+      const dry = this.starved(buildings, ctx.p.minerals);
+      for (const g of gods) if (dry || ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) this.wave.add(g.id);
       this.waves++;
       this.via = this.sharedRoad(home);
     }
@@ -1260,6 +1262,14 @@ export class AI {
   private mapDry(): boolean {
     for (const e of this.world.entities.values()) if (e.type === 'minerai') return false;
     return true;
+  }
+
+  /**
+   * No income left: the map is dry, or no mineral field stands by our bases and we cannot pay for a new one (the
+   * fields left were the enemy's natural, which neither side could take any more: both sat to the time limit).
+   */
+  private starved(buildings: Entity[], minerals: number): boolean {
+    return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
   /** Mineral fields left within reach of any of our finished headquarters. */
