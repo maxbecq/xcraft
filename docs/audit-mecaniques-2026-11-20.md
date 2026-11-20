@@ -1033,3 +1033,62 @@ Chaque point porte une recommandation. Les détails sont dans la section du camp
 27. **Taille de la Lumière ardente** : échelle de XC.doc (fait, 1,8 à 4,1 cases) ou « large zone » plus grande ? Recommandation : garder, et laisser l'équilibreur juger.
 28. **Jörmungand « indestructible »** : invulnérable, ou beaucoup de PV ? Pour l'équilibreur.
 
+
+## Suivi des 28 décisions
+
+L'utilisateur a validé les 28 recommandations le 20 novembre 2026. Branche `claude/audit-decisions`, partie de `origin/main` (0.9.71, `83d4fbf`).
+
+### Faites
+
+| # | Décision | Commit | Ce qui change |
+|---|---|---|---|
+| 13 | Orbe plasma mobile | `6ae693c` | Redéploiement : l'Orbe se détache (50 minerais, fiche), se déplace lentement sans tirer, puis se repose dans un champ d'énergie ; 35 s de recharge (fiche). Vitesse de 0,8 : **chiffre provisoire, à valider par l'équilibreur**. Le délai avant de tirer de nouveau (4 s) reprend celui de l'Yggdrasill : **provisoire aussi**. |
+| 19 (en partie) | Jusqu'à 3 annexes par Pod | `282ee03` | Le Pod porte jusqu'à 3 annexes (notice). L'IA en construit toujours une seule. |
+| 22 | Qui bâtit le Temple, la Fontaine et l'Artefacterie | `fd987dc` | Le jeu ne change pas : Gaïa les bâtit, le dieu doit être vivant. `camp-dieux.md` est corrigé. |
+
+### Rien à changer : le jeu suit déjà la recommandation
+
+| # | Décision | État |
+|---|---|---|
+| 1 | Bourdon et Dirigeable | une seule unité, comme la notice |
+| 2 | Guilde alchimistique | reste absente |
+| 4 | Prérequis du Marché pour la Caserne volante | gardé, faute de source pour un autre |
+| 5 | Festin | cadavres |
+| 6 | Fin du Régénérant | 1 PV |
+| 7 | Stimulant, Charge, prérequis des niveaux 2 et 3 | gardés |
+| 8 | Prérequis de l'Assassin et du Dragon | notice (Autel, Pyramide) |
+| 9 | Mur d'énergie | au Trône (notice) |
+| 10 | Extensions par bâtiment majeur | 3 |
+| 12 | Matérialisation | par le robot |
+| 16 | Creep obligatoire | non imposé |
+| 17 | Canon IEM | prise de contrôle 50 s (fiche) |
+| 18 | Détection de l'Intelligence centrale | non ajoutée |
+| 20 | Laser concentré, Désintégrateur, Arc offensif | non faits |
+| 21 | Énergie des unités de soutien | recharges gardées |
+| 23 | Panthéon | notice |
+| 24 | Forme de base de l'Élémentaire | invocation directe en forme de feu |
+| 25 | « Torrents de pourriture » d'Osiris | texte d'ambiance |
+| 27 | Taille de la Lumière ardente | échelle de XC.doc gardée ; l'équilibreur jugera |
+
+### Pour l'équilibreur
+
+| # | Décision | Pourquoi |
+|---|---|---|
+| 3 | Grand Conseil : prérequis et bonus | 10 % ou 25 % : un chiffre |
+| 15 | Porte-disques contre les volants | un chiffre et une cible |
+| 26 | Golem et Titan mécaniques | la recommandation demande son accord |
+| 28 | Jörmungand « indestructible » | invulnérable ou beaucoup de PV |
+
+### En attente de l'accord
+
+| # | Décision | Pourquoi |
+|---|---|---|
+| 11 | Miniportail en seconde file de production | Pas de recommandation ferme. Une seconde file change la production du Portail et son interface (deux barres, deux files) ; l'accélération de 25 % reste en place. |
+| 14 | Double énergétique en illusion sans attaque | Change le rôle de l'unité : de combattant à leurre. |
+| 19 (reste) | Refuge des drones dans l'IC ; Réparateur sur les bâtiments | Pas de recommandation ferme, et aucun chiffre dans les sources. |
+
+### Non vérifié
+
+- Rien n'a été essayé en partie réelle ; seulement `tsc` et `vitest` (381 tests passés).
+- L'Orbe en mouvement utilise le modèle de l'Orbe et n'a pas de glyphe propre pour Redéploiement et Reposer.
+- Le bras du Pod ne relie qu'une seule annexe ; les autres sont posées sans bras.
