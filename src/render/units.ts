@@ -14,7 +14,7 @@ import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, t
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock } from './sites';
-import { dropTexture, spark, reserveFx, assimFx, wellFx, rallyFlag, animateRally } from './unitfx';
+import { dropTexture, spark, reserveFx, assimFx, forgeFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
 // Kept for main.ts, which imports them from here.
 
@@ -1201,6 +1201,7 @@ export class EntityRenderer {
     }
     fx ??= armillaries(body, e.id) ?? undefined;
     if (e.type === 'assimilateur') fx = assimFx(body, e);
+    if (e.type === 'armement') fx = forgeFx(body, e);
     if (e.type === 'reservepsy') {
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);

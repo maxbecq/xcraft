@@ -321,3 +321,107 @@ export function animateRally(flag: Group, now: number, phase: number): void {
   (wave.material as MeshBasicMaterial).opacity = 0.4 * (1 - k) ** 2;
 }
 const WHITE = new Color(0xffffff);
+
+/** Effects kept sober on the low graphics level (src/quality.ts): no embers, a fainter spill. Set once by main.ts. */
+let lite = false;
+export function setFxLite(on: boolean): void {
+  lite = on;
+}
+
+/** A furnace mouth: a white-hot core low down, in orange going red and out at the rim. */
+let mouthTexture: CanvasTexture | undefined;
+function kilnMouth(): CanvasTexture {
+  if (mouthTexture) return mouthTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 38, 0, 32, 38, 30);
+  grad.addColorStop(0, 'rgba(255,245,200,1)');
+  grad.addColorStop(0.35, 'rgba(255,170,50,0.95)');
+  grad.addColorStop(0.75, 'rgba(230,70,20,0.7)');
+  grad.addColorStop(1, 'rgba(160,20,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  mouthTexture = new CanvasTexture(c);
+  mouthTexture.colorSpace = SRGBColorSpace;
+  return mouthTexture;
+}
+
+/** A soft warm round glow, white at the heart: tinted by the material's colour. */
+let warmTexture: CanvasTexture | undefined;
+function warm(): CanvasTexture {
+  if (warmTexture) return warmTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return (warmTexture = new CanvasTexture(c));
+}
+
+/**
+ * The Z Centre d'armement's forge: the furnace mouth glowing on the back wall inside the dome and flickering, a halo
+ * round it, its warm light spilt on the floor out to the gate, and embers rising from it and drifting out. Rodin left the back wall
+ * plain, so the mouth is drawn here, where the board has it (left of the arm), in the body's frame (glTF +Z forward,
+ * the gate). Nothing shows while the building is being printed.
+ */
+export function forgeFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  const [x, y, z, w, h] = [-0.22, 0.45, -0.09, 0.62, 0.5]; // the mouth, on the back wall (measured on the model)
+  const mouth = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ map: kilnMouth(), transparent: true, depthWrite: false, blending: AdditiveBlending })));
+  mouth.position.set(x, y, z);
+  const halo = new Sprite(owned(new SpriteMaterial({ map: warm(), transparent: true, opacity: 0.35, depthWrite: false, blending: AdditiveBlending, color: 0xff6a20 })));
+  halo.scale.set(w * 2.6, h * 2.6, 1);
+  halo.position.set(x, y, z + 0.15);
+  // The spill: a long warm patch on the floor, from the furnace out through the gate.
+  const spill = new Mesh(new PlaneGeometry(1.3, 1.7).rotateX(-Math.PI / 2), owned(new MeshBasicMaterial({ map: warm(), transparent: true, opacity: 0.3, depthWrite: false, blending: AdditiveBlending, color: 0xff7a30 })));
+  spill.position.set(x * 0.6, 0.09, 0.55);
+  group.add(spill, mouth, halo);
+  const n = lite ? 0 : 14;
+  const pos = new Float32Array(n * 3);
+  const vel = new Float32Array(n * 3);
+  let r = e.id * 9301 + 49297;
+  const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const reset = (i: number) => {
+    pos.set([x + (rand() - 0.5) * w * 0.7, y - h * 0.2 + rand() * h * 0.3, z + 0.05], i * 3);
+    vel.set([(rand() - 0.5) * 0.1, 0.16 + rand() * 0.2, 0.3 + rand() * 0.25], i * 3); // drawn out through the gate
+  };
+  for (let i = 0; i < n; i++) {
+    reset(i);
+    pos[i * 3 + 1] += rand() * 0.5;
+  }
+  const geom = new BufferGeometry();
+  geom.setAttribute('position', new BufferAttribute(pos, 3));
+  const embers = new Points(geom, owned(new PointsMaterial({ map: warm(), size: 6, sizeAttenuation: false, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xffc060 })));
+  embers.frustumCulled = false; // size in pixels: the game's orthographic camera ignores attenuation anyway
+  embers.visible = n > 0;
+  group.add(embers);
+  group.traverse((o) => (o.userData.noPick = true));
+  body.add(group);
+  const seed = e.id * 1.7;
+  return {
+    group,
+    update(dt, t) {
+      group.visible = e.buildLeft === 0;
+      if (!group.visible) return;
+      // A fire's flicker: a slow breath, two quicker waves and a fast shiver.
+      const f = 0.78 + 0.1 * Math.sin(t * 1.1 + seed) + 0.07 * Math.sin(t * 4.3 + seed * 2) + 0.05 * Math.sin(t * 9.7 + seed * 3) + 0.03 * Math.sin(t * 23 + seed);
+      (mouth.material as MeshBasicMaterial).opacity = Math.min(1, 0.75 + 0.3 * (f - 0.78) / 0.25);
+      (halo.material as SpriteMaterial).opacity = 0.5 * f;
+      halo.scale.set(w * (2.4 + 0.4 * f), h * (2.4 + 0.4 * f), 1);
+      (spill.material as MeshBasicMaterial).opacity = (lite ? 0.22 : 0.4) * f;
+      for (let i = 0; i < n; i++) {
+        const j = i * 3;
+        pos[j] += (vel[j] + Math.sin(t * 2.3 + i) * 0.05) * dt;
+        pos[j + 1] += vel[j + 1] * dt;
+        pos[j + 2] += vel[j + 2] * dt;
+        if (pos[j + 1] > 1.0 || pos[j + 2] > 1.3) reset(i); // under the dome's roof, or a little past the gate
+      }
+      if (n) geom.getAttribute('position').needsUpdate = true;
+    },
+  };
+}
