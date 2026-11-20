@@ -55,7 +55,8 @@ describe('a building finished', () => {
     let spot: [number, number] | undefined;
     for (let r = 8; !spot && r < 20; r++) for (let d = -r; d <= r && !spot; d++) {
       const [tx, ty] = [Math.round(hq.x / FP) + d, Math.round(hq.y / FP) + r];
-      if (w.canPlace('grenier', tx, ty, 0) && w.grid.open(tx - 3, ty - 3)) spot = [tx, ty];
+      // The serf stands behind it on the same ground, not below the plateau's cliff.
+      if (w.canPlace('grenier', tx, ty, 0) && w.grid.open(tx - 3, ty - 3) && w.grid.level(tx - 3, ty - 3) === w.grid.level(tx, ty)) spot = [tx, ty];
     }
     const serf = w.spawn('serf', 0, (spot![0] - 3) * FP, (spot![1] - 3) * FP);
     w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx: spot![0], ty: spot![1] }]);

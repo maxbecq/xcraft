@@ -34,8 +34,8 @@ describe('createMap', () => {
     }
     expect(ramps).toBe(26 * RAMP_LENGTH);
     // Each step rises a fraction of a level: no tile is steeper than 1 / RAMP_LENGTH.
-    const [nw, , , sw] = cornerLevels(map, 25, 14);
-    expect(nw - cornerLevels(map, 25, 14)[1]).toBe(SUB / RAMP_LENGTH);
+    const [nw, , , sw] = cornerLevels(map, 30, 14);
+    expect(nw - cornerLevels(map, 30, 14)[1]).toBe(SUB / RAMP_LENGTH);
     expect(nw).toBe(sw);
   });
 

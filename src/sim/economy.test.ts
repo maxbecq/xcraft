@@ -77,8 +77,8 @@ describe('economy', () => {
 
   it('refuses to build on a cliff edge or a ramp', () => {
     const w = createMatch();
-    expect(w.canPlace('caserne', 23, 10)).toBe(false); // straddles levels 2 and 1
-    expect(w.canPlace('grenier', 24, 13)).toBe(false); // on the ramp
+    expect(w.canPlace('caserne', 28, 16)).toBe(false); // straddles levels 2 and 1
+    expect(w.canPlace('grenier', 30, 13)).toBe(false); // on the ramp
     expect(w.canPlace('caserne', 18, 18)).toBe(true);
     expect(w.canPlace('caserne', 12, 12)).toBe(false); // on the council
   });

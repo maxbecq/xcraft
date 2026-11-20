@@ -8,10 +8,10 @@
   "symmetry": "rot180",
   "terrain": [
     { "shape": "octagon", "at": [17, 28], "half": 15, "cut": 8, "ragged": 1, "level": 1 },
-    { "shape": "octagon", "at": [14, 14], "half": 11, "cut": 6, "ragged": 2, "level": 2 },
+    { "shape": "octagon", "at": [16, 16], "half": 13, "cut": 7, "ragged": 2, "level": 2 },
     { "shape": "octagon", "at": [48, 48], "half": 8, "cut": 4, "ragged": 3, "level": 1 },
     { "shape": "octagon", "at": [72, 20], "half": 7, "cut": 3, "ragged": 6, "level": 2 },
-    { "shape": "ramp", "at": [13, 26], "up": "N", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [17, 30], "up": "N", "width": 3, "level": 1 },
     { "shape": "ramp", "at": [33, 33], "up": "W", "width": 2, "level": 0 },
     { "shape": "ramp", "at": [39, 48], "up": "E", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [48, 39], "up": "S", "width": 3, "level": 0 }

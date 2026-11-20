@@ -15,10 +15,10 @@ describe('Caserne volante', () => {
     w.step([{ player: 0, kind: 'ability', ids: [c.id], name: 'envol' }]);
     expect(c.type).toBe('casernevol');
     expect(w.grid.blocked[tile]).toBe(0);
-    w.step([{ player: 0, kind: 'ability', ids: [c.id], name: 'atterrissage', x: 30 * FP + FP / 2, y: 20 * FP + FP / 2 }]);
+    w.step([{ player: 0, kind: 'ability', ids: [c.id], name: 'atterrissage', x: 34 * FP + FP / 2, y: 20 * FP + FP / 2 }]);
     for (let i = 0; i < ticks(15) && c.type !== 'casernevolante'; i++) w.step([]);
     expect(c.type).toBe('casernevolante');
-    expect([c.tx, c.ty]).toEqual([29, 19]);
+    expect([c.tx, c.ty]).toEqual([33, 19]);
     expect(w.grid.blocked[c.ty * w.grid.width + c.tx]).toBe(1);
   });
 });

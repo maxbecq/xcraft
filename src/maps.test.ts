@@ -32,7 +32,7 @@ describe('map files', () => {
       for (let i = 0; i < m.level.length; i++) h = Math.imul(h ^ (m.level[i] + 4 * m.rampStep[i] + 32 * ' NESW'.indexOf(m.ramp[i] ?? ' ') + 256 * (m.chasm?.[i] ?? 0)), 16777619);
       return h >>> 0;
     };
-    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([3352138273, 2794323201, 1881788961]);
+    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([633818735, 4081854761, 3151526511]);
   });
 
   for (const def of Object.values(MAPS)) {

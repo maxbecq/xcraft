@@ -20,13 +20,13 @@ describe('Grid', () => {
   const grid = new Grid(map);
 
   it('blocks walking straight off a cliff', () => {
-    // Main plateau (level 2) east edge is x=24; x=25 at y=10 is level 1 without ramp.
-    expect(grid.canStep(24, 10, 25, 10)).toBe(false);
+    // Main plateau (level 2) east edge is x=29 at y=16; x=30 is level 1 without ramp.
+    expect(grid.canStep(29, 16, 30, 16)).toBe(false);
   });
 
   it('lets units use a ramp', () => {
-    expect(grid.canStep(24, 14, 25, 14)).toBe(true);
-    expect(grid.canStep(25, 14, 26, 14)).toBe(true);
+    expect(grid.canStep(29, 14, 30, 14)).toBe(true);
+    expect(grid.canStep(30, 14, 31, 14)).toBe(true);
   });
 
   it('finds a path from the main base down to the centre, through every step legal', () => {

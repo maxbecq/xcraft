@@ -8,11 +8,11 @@
   "symmetry": "rot90",
   "terrain": [
     { "shape": "octagon", "at": [19, 19], "half": 16, "cut": 9, "level": 1 },
-    { "shape": "octagon", "at": [13, 13], "half": 10, "cut": 5, "level": 2 },
+    { "shape": "octagon", "at": [14, 14], "half": 13, "cut": 9, "level": 2 },
     { "shape": "octagon", "at": [55, 55], "half": 11, "cut": 5, "level": 1 },
     { "shape": "octagon", "at": [36, 36], "half": 5, "cut": 2, "level": 2 },
-    { "shape": "ramp", "at": [24, 12], "up": "W", "width": 3, "level": 1 },
-    { "shape": "ramp", "at": [12, 24], "up": "N", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [28, 12], "up": "W", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [12, 28], "up": "N", "width": 3, "level": 1 },
     { "shape": "ramp", "at": [36, 24], "up": "W", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [24, 36], "up": "N", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [54, 43], "up": "S", "width": 3, "level": 0 }

@@ -71,9 +71,9 @@ describe('combat', () => {
 
   it('cannot see, so cannot shoot, up a cliff', () => {
     const w = new World(createMap());
-    // Main plateau (level 2) edge at x=24; low ground (level 1) right below at x=26.
-    const [high] = army(w, 0, 'auxiliaire', 23, 8, 1);
-    const [low] = army(w, 1, 'auxiliaire', 26, 8, 1);
+    // Main plateau (level 2) edge at x=29; low ground (level 1) right below at x=31.
+    const [high] = army(w, 0, 'auxiliaire', 28, 17, 1);
+    const [low] = army(w, 1, 'auxiliaire', 31, 17, 1);
     run(w, 5);
     expect(w.sees(1, high)).toBe(false);
     expect(w.sees(0, low)).toBe(true);

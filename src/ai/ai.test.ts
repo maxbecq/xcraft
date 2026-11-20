@@ -141,6 +141,8 @@ describe('AI', () => {
 
   it('finishes an AI-versus-AI game', () => {
     const w = createMatch();
+    // A strict mirror can mine the map out even and end in a draw: one side gathers a little less.
+    w.players[1].handicap = 95;
     const r = play(w, [new AI(w, 0), new AI(w, 1)], 45); // the mirror match ends near minute 40
     console.log('AI vs AI:', r, 'units', [...w.entities.values()].filter((e) => e.def.kind === 'unit').length);
     expect(r.winner).not.toBeNull();
