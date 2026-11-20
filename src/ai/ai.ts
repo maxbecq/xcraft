@@ -277,7 +277,7 @@ export class AI {
     // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
     for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
-    const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker);
+    const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker && !(DEFS[t] as BuildingDef).dropoff);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
@@ -444,8 +444,8 @@ export class AI {
     // Minerals piling up while energy holds back the tech (the reserve and the next research): buy energy.
     if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
     else if (market && ctx.energy > 250 && ctx.minerals < 150) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
-    // Man the Fortins with soldiers waiting at home.
-    for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && o.buildLeft === 0)) {
+    // Man the Fortins with soldiers waiting at home (the Z Intelligence shelters drones only).
+    for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && !(o.def as BuildingDef).dropoff && o.buildLeft === 0)) {
       const room = (b.def as BuildingDef).bunker! - mine.filter((u) => u.inside === b.id || (u.order?.kind === 'enter' && u.order.target === b.id)).length;
       const crew = army.filter((u) => !this.wave.has(u.id) && (u.def as UnitDef).attack && (u.def as UnitDef).attack!.range > 1 && u.order?.kind !== 'enter').slice(0, Math.max(0, room));
       if (crew.length) ctx.out.push({ player: this.player, kind: 'smart', ids: crew.map((u) => u.id), x: b.x, y: b.y, target: b.id });
@@ -634,7 +634,7 @@ export class AI {
 
   /** Defend the base, otherwise send a new wave. */
   private muster(ctx: Turn): void {
-    const { w, home, serfs, gods, army, buildings, supply, minute } = ctx;
+    const { w, home, serfs, gods, army, buildings, supply, minute, mine } = ctx;
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
     // Dead or being recalled (Rappel): out of the wave.
     for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
@@ -642,6 +642,9 @@ export class AI {
     // Our base first; else a teammate's base under attack, which the army at home goes to help.
     const allied = [...w.entities.values()].filter((b) => b.def.kind === 'building' && b.owner !== this.player && b.owner >= 0 && !w.hostile(b.owner, this.player));
     const threat = this.threat(buildings) ?? (allied.length ? this.threat(allied) : undefined);
+    const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
+    // The danger gone, the sheltered drones come out (back to work as idle workers).
+    if (!threat) for (const b of shelters) if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
     if (threat) {
       const near = (u: Entity) => dist(u.x, u.y, threat.x, threat.y) < 12 * FP;
       // Outnumbered at home: the wave comes back, unless it is already fighting next to the threat.
@@ -670,6 +673,13 @@ export class AI {
       if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4) {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
         if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
+      }
+      // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat.
+      // Otherwise (a smaller raid, or one elsewhere) they come out and go back to work.
+      const danger = !this.easy && strength(atHome) < threat.strength / 2 && threat.count > 4;
+      for (const b of shelters) {
+        if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
+        else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
     } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && atHome.length >= this.plan.wave && this.dominates(atHome)))) {
       // Easy: never more than its wave cap at once, the rest stays home.

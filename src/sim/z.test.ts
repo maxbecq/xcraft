@@ -422,3 +422,21 @@ describe('Z', () => {
     expect(army.length).toBeGreaterThan(5);
   }, 60_000);
 });
+
+describe('Z Refuge (notice)', () => {
+  it('the drones round the Intelligence shelter inside, five at most, out of reach, and come out on Débarquer', () => {
+    const w = createMatch(['z', 'humains']);
+    const [ic] = of(w, 0, 'intelligence');
+    for (let i = 0; i < 2; i++) w.spawn('drone', 0, ic.x + 4 * FP, ic.y + i * FP);
+    const drones = of(w, 0, 'drone');
+    expect(drones.length).toBe(8);
+    w.step([{ player: 0, kind: 'ability', ids: [ic.id], name: 'refuge' }]);
+    run(w, 8);
+    const inside = drones.filter((d) => d.inside === ic.id);
+    expect(inside.length).toBe(5);
+    // Soldiers stay out.
+    expect(w.boards(w.spawn('auxiliaire', 0, ic.x, ic.y + 5 * FP), ic)).toBe(false);
+    w.step([{ player: 0, kind: 'unload', ids: [ic.id] }]);
+    expect(drones.filter((d) => d.inside).length).toBe(0);
+  });
+});

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
-import type { Entity, World } from '../sim/world';
+import type { Command, Entity, World } from '../sim/world';
 import { AI, DIFFICULTY, teamFocus } from './ai';
 
 /** Plays until someone wins or the time runs out; returns the winner and the game time in minutes. */
@@ -190,5 +190,40 @@ describe('AI', () => {
     }
     expect(hosts.length).toBeGreaterThan(0);
     expect(hosts.every((id) => id === open.id)).toBe(true);
+  });
+});
+
+describe('AI Z Refuge', () => {
+  it('shelters its drones from a raid it cannot hold off, and lets them out once it is gone', () => {
+    const w = createMatch(['z', 'humains']);
+    const ai = new AI(w, 0);
+    const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
+    const foes = [0, 1, 2, 3, 4, 5].map((i) => w.spawn('legionnaire', 1, ic.x + 5 * FP, ic.y + (i - 3) * FP));
+    let cmds: Command[] = [];
+    for (let i = 0; i < ticks(3) && !cmds.some((c) => c.kind === 'ability' && c.name === 'refuge'); i++) {
+      cmds = ai.think();
+      w.step(cmds);
+    }
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'ability', name: 'refuge', ids: [ic.id] }));
+    for (const f of foes) w.remove(f);
+    let out = false;
+    for (let i = 0; i < ticks(5) && !out; i++) {
+      cmds = ai.think();
+      out = cmds.some((c) => c.kind === 'unload');
+      w.step(cmds);
+    }
+    expect(out).toBe(true);
+  });
+
+  it('never sends soldiers to man the Intelligence as a Fortin', () => {
+    const w = createMatch(['z', 'humains']);
+    const ai = new AI(w, 0);
+    const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
+    w.spawn('auxiliaire', 0, ic.x + 5 * FP, ic.y);
+    for (let i = 0; i < ticks(3); i++) {
+      const cmds = ai.think();
+      expect(cmds.some((c) => c.kind === 'smart' && c.target === ic.id)).toBe(false);
+      w.step(cmds);
+    }
   });
 });

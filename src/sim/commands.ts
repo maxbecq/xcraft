@@ -274,6 +274,12 @@ export function apply(this: World, c: Command): void {
       const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
       if (b && c.name === 'envol') return void this.takeOff(b);
       if (b && (c.name === 'deraciner' || c.name === 'redeploiement')) return void this.uproot(b, c.name);
+      if (b && c.name === 'refuge') {
+        // Z Refuge: the drones round the Intelligence go in, as many as it holds (the rest are told it is full).
+        const r = toFp(ABILITIES.refuge.radius!);
+        for (const u of this.entities.values()) if (u.owner === b.owner && !u.inside && u.hp > 0 && this.boards(u, b) && this.gap(u, b) <= r) this.setOrder(u, { kind: 'enter', target: b.id });
+        return;
+      }
       if (b && c.name === 'bouclierplasma') {
         const ab = ABILITIES.bouclierplasma;
         b.phased = ticks(ab.duration);

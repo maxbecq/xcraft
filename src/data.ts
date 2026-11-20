@@ -398,6 +398,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Yggdrasill (notice, Déracinement): uproots to walk, and takes root again at the point. */
   deraciner: { name: 'Déraciner', effect: 'S\'arrache du sol pour marcher ; on le replante ensuite au point voulu.', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
   /** Isdaris Orbe plasma (notice: « capable de se déplacer lentement » ; fiche: Redéploiement, 50 minerals, every 35 s). */
+  /** Intelligence centrale (notice): the drones nearby shelter inside. */
+  refuge: { name: 'Refuge', effect: 'Les drones proches s\'abritent dans l\'Intelligence.', hotkey: 'R', target: 'self', ...BALANCE.abilities.refuge },
   redeploiement: { name: 'Redéploiement', effect: 'L’Orbe se détache et se déplace lentement, sans tirer ; on la repose ensuite dans un champ d’énergie.', hotkey: 'R', target: 'self', ...BALANCE.abilities.redeploiement },
   ancrer: { name: 'Reposer', effect: 'Se repose au point visé, dans un champ d’énergie, et tire de nouveau peu après.', hotkey: 'R', target: 'point', ...BALANCE.abilities.ancrer },
   enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
@@ -640,9 +642,9 @@ const BASE: Record<string, object> = {
   barge: { kind: 'unit', name: 'Barge', radius: 0.7, flying: true, mechanical: true, requires: { rbarge: 1 }, faction: 'z', hotkey: 'B' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
   zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
-  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], faction: 'z', hotkey: 'I' },
+  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], abilities: ['refuge'], faction: 'z', hotkey: 'I' },
   // Z.doc: drones and spies in 75 % of their time (Production accélérée).
-  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
+  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, abilities: ['refuge'], requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).

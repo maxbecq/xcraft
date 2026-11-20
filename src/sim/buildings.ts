@@ -168,6 +168,8 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
+  // Z Refuge (notice): the Intelligence shelters its drones, and only them.
+  if ((b.def as BuildingDef).dropoff) return !!d.worker;
   if (d.worker || d.mechanical || d.beast) return false;
   return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
@@ -306,7 +308,8 @@ export function shelter(this: World, e: Entity): void {
   e.x = e.px = b.x;
   e.y = e.py = b.y;
   const a = this.weapon(e);
-  if (e.cooldown > 0 || !a || flies(b)) return;
+  // Drones in the Refuge only shelter.
+  if (e.cooldown > 0 || !a || flies(b) || (e.def as UnitDef).worker) return;
   const range = toFp(a.range + 1 + this.rangeBonus(e)) + (b.def.kind === 'building' ? b.def.size : 1) * FP / 2;
   const t = this.enemyNear(b, range, false, a);
   if (!t) return;

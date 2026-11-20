@@ -199,7 +199,8 @@ export function buttonsFor(h: Hud): Button[] {
   if (b.def.bunker) {
     const ids = same.map((o) => o.id);
     const inside = [...h.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
-    list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, cmd: 'debarquer', key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
+    // The Intelligence trains its drones on D.
+    list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, cmd: 'debarquer', key: b.def.trains ? 'X' : 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
   }
   // A building's abilities, once researched if they must be.
   for (const name of abilitiesOf(b.def as BuildingDef)) {
