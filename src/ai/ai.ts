@@ -126,7 +126,8 @@ export class AI {
 
   think(): Command[] {
     const w = this.world;
-    if (w.tick % THINK_EVERY !== this.player || w.winner !== null) return [];
+    // Every AI on the same tick: offset by seat, the second one always saw the first one's moves a tick older than its own.
+    if (w.tick % THINK_EVERY !== 0 || w.winner !== null) return [];
     const mine = [...w.entities.values()].filter((e) => e.owner === this.player);
     const home = mine.find((e) => e.type === this.faction.hq);
     if (!home) return this.lastStand(mine);
