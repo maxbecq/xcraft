@@ -101,12 +101,10 @@ const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number; apex?: bo
   assimilateur: { size: 0.4, apex: true },
   tourelle: { size: 0.6 },
 };
-/** Melee modules: on the head, reaching out in front of it, so they can touch what they fight. */
+/** Melee modules: on a walker's back, their arm drawn out to reach in front of its head (see mount). */
 const MELEE = new Set(['zw_dechiqueteur']);
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
-/** The team-colour collar under every module (generated models carry no team colour of their own). */
-const WEAPON_COLLAR = new CylinderGeometry(0.3, 0.33, 0.05, 20).translate(0, 0.025, 0);
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
 function weaponModule(e: Entity): string {
   if (e.type === 'dronecombat') return 'zw_mitrailleuse'; // its one gun, a module like the others: no socle keeps a built-in one
@@ -274,16 +272,14 @@ export class EntityRenderer {
     const bodyScale = body.getWorldScale(new Vector3()).x;
     const across = Math.min(size.x, size.z) * bodyScale;
     const fit = WEAPON_TUNE[name] ?? {};
-    const melee = MELEE.has(name) && e.def.kind === 'unit';
-    const scale = (((melee ? 0.55 : (tune.size ?? 0.7)) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
-    // Where it stands: on the back, or a melee weapon on the head, reaching out in front of it.
-    const spot = new Vector3(centre.x, 0, melee ? box.max.z - 0.2 * scale : centre.z + (tune.forward ?? 0) * size.z);
+    const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
+    const spot = new Vector3(centre.x, 0, centre.z + (tune.forward ?? 0) * size.z);
     // On the highest of the rays dropped round its foot: on a mounting ring's rim, not down its hole.
     const down = new Vector3(0, -1, 0).transformDirection(body.matrixWorld);
     let top = -Infinity;
     for (let k = 0; k <= 8; k++) {
       const a = (k * Math.PI) / 4;
-      const r = k ? (melee ? 0.1 : 0.25) * scale : 0;
+      const r = k ? 0.25 * scale : 0;
       const from = body.localToWorld(new Vector3(spot.x + r * Math.cos(a), box.max.y + 1, spot.z + r * Math.sin(a)));
       const hit = new Raycaster(from, down).intersectObjects(parts, false)[0];
       if (hit) top = Math.max(top, body.worldToLocal(hit.point.clone()).y);
@@ -292,11 +288,6 @@ export class EntityRenderer {
     let o: Object3D = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
     o.rotation.y = fit.yaw ?? 0;
-    // Socles only: a building's weapon sits on the building's own mount.
-    if (e.def.kind === 'unit') {
-      SHARED.add(WEAPON_COLLAR);
-      o.add(new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]));
-    }
     const support = ZSUPPORTS[e.type];
     if (support && templates.has(support.model)) {
       // On the building's mount: the weapon is the mount's child, at its plate.
@@ -315,7 +306,22 @@ export class EntityRenderer {
     body.add(o);
     delete v.model.userData.top; // the health bar goes above the weapon (see top)
     // The Déchiqueteur's moving parts (concepts-z/splitsaw.py): its arm and the saw blade at its tip.
-    v.weapon = { name, o, arm: o.getObjectByName('zw_arm'), saw: o.getObjectByName('zw_saw') };
+    const arm = o.getObjectByName('zw_arm');
+    const saw = o.getObjectByName('zw_saw');
+    let reach: number | undefined;
+    if (MELEE.has(name) && e.def.kind === 'unit' && arm && saw && !support) {
+      // On a walker's back, its arm drawn out and down so the saw comes in front of the head, at the height of the front
+      // knees, where it can reach what it fights: the arm's own length stretched, the saw kept round.
+      const knee = body.getObjectByName('zshin_0_l') ?? body.getObjectByName('zshin_0_r');
+      const kneeY = knee ? body.worldToLocal(knee.getWorldPosition(new Vector3())).y : box.min.y + 0.3 * size.y;
+      const target = new Vector3(centre.x, kneeY, box.max.z + 0.08 * size.z).sub(o.position).divideScalar(scale).sub(arm.position);
+      const tip = saw.position.clone();
+      const k = Math.sqrt(Math.max(1e-4, target.y * target.y + target.z * target.z - tip.y * tip.y)) / tip.z;
+      for (const c of arm.children) if (c !== saw) [c.position.z, c.scale.z] = [c.position.z * k, c.scale.z * k];
+      saw.position.z *= k;
+      reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
+    }
+    v.weapon = { name, o, arm, saw, reach };
   }
 
   private release(v: View): void {
@@ -854,7 +860,8 @@ export class EntityRenderer {
       if (o) o.rotation[axis] += (target - o.rotation[axis]) * rate;
     };
     // A shredder holds its saw up and lowers it to the ground in front to cut, spinning hard.
-    if (v.weapon?.arm) ease(v.weapon.arm, 'x', fighting ? 0.3 : -0.45, 0.12);
+    const reach = v.weapon?.reach;
+    if (v.weapon?.arm) ease(v.weapon.arm, 'x', reach === undefined ? (fighting ? 0.3 : -0.45) : reach - (fighting ? 0 : 0.35), 0.12);
     if (v.weapon?.saw) v.weapon.saw.rotation.x += dt * (fighting ? 18 : 3);
     const step = moving ? Math.sin(phase) : 0;
     ease(v.limbs.legL, 'x', step * 0.75);
