@@ -121,6 +121,35 @@ export const templates = new Map<string, Group>();
  * freed with a view.
  */
 export const SHARED = new WeakSet<object>();
+/**
+ * Z modules modelled on a round base of their own, which doubled the socle or roof under them (module units, from the
+ * module's root, measured on the models): the faces of that disc, below `y` and beyond `r` from its axis, go, and the
+ * module sits down onto what is left (its neck).
+ */
+const WEAPON_DISCS: Record<string, { y: number; r: number }> = {
+  zw_reparateur: { y: 0.06, r: 0.27 },
+  zw_accumulateur: { y: 0.15, r: 0.22 },
+  zw_mitrailleuse: { y: 0.125, r: 0.24 },
+};
+function trimDisc(root: Object3D, cut: { y: number; r: number }): void {
+  root.updateMatrixWorld(true);
+  const v = new Vector3();
+  root.traverse((o) => {
+    const m = o as Mesh;
+    const index = m.isMesh ? m.geometry.index : null;
+    if (!index) return;
+    const pos = m.geometry.getAttribute('position');
+    const kept = (i: number) => (v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld), v.y >= cut.y || Math.hypot(v.x, v.z) <= cut.r);
+    const faces: number[] = [];
+    for (let t = 0; t < index.count; t += 3) {
+      const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+      if (kept(a) || kept(b) || kept(c)) faces.push(a, b, c);
+    }
+    m.geometry.setIndex(faces);
+  });
+  for (const c of root.children) c.position.y -= cut.y;
+}
+
 function share<T extends Object3D>(root: T): T {
   root.traverse((o) => {
     if ((o as Mesh).geometry) SHARED.add((o as Mesh).geometry);
@@ -340,6 +369,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         if (type.startsWith('zw_')) {
           // A Z weapon module: the light wear and rim of the Z machines it sits on.
           gltf.scene.traverse((o) => o instanceof Mesh && (weather(o.material as Material, 0.05), rimLight(o.material as Material, 0.45)));
+          if (WEAPON_DISCS[type]) trimDisc(gltf.scene, WEAPON_DISCS[type]);
           templates.set(type, share(gltf.scene));
           return;
         }
