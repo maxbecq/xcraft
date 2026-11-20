@@ -313,7 +313,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment.', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
   acidedissolvant: { name: 'Acide dissolvant', effect: 'Un torrent d\'acide sur un bâtiment ennemi : de très lourds dégâts.', hotkey: 'Q', target: 'point', research: 'acide', ...(BALANCE.abilities.acidedissolvant as object) } as AbilityDef,
   explosioncuve: { name: 'Explosion suicidaire', effect: 'La cuve explose : toutes les unités au sol autour et les bâtiments ennemis sont gravement touchés.', hotkey: 'X', ...(BALANCE.abilities.explosioncuve as object) } as AbilityDef,
-  regenerant: { name: 'Régénérant', effect: 'L\'allié visé ne peut plus être blessé un moment, puis les toxines le laissent à 1 PV.', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
+  regenerant: { name: 'Régénérant', effect: 'Les alliés de la zone ne peuvent plus être blessés un moment, puis les toxines les laissent à 1 PV.', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
   /** Alchimiste (notice): a living unit fallen near the point rises and fights for a while as a Cadavre réanimé. */
   reanimation: { name: 'Réanimation', effect: 'Une unité vivante tombée près du point se relève et combat un moment pour vous.', hotkey: 'R', target: 'point', ...BALANCE.abilities.reanimation },
   /** Phalangiste (notice): a napalm charge on a vehicle near the point: an enemy one is burnt and stopped, an ally one repaired. */

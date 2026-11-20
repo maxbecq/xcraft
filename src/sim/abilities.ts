@@ -360,9 +360,10 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.hurt(b, ab.damage!);
     this.shots.push({ x1: e.x, y1: e.y, x2: b.x, y2: b.y, kind: 'ranged' });
   } else if (name === 'regenerant') {
-    const t = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical)[0];
-    if (!t) return false;
-    t.invuln = ticks(ab.duration);
+    // Every living ally of the zone (notice « ses troupes », 2010 sheet and mod: an area).
+    const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
+    if (!allies.length) return false;
+    for (const t of allies) t.invuln = ticks(ab.duration);
   } else if (name === 'reanimation') {
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
     if (i < 0) return false;

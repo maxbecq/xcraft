@@ -76,4 +76,14 @@ describe('audit gaps', () => {
     expect(far.hp + far.shield).toBe(farHp);
   });
 
-});
+  it('the Régénérant covers every living ally of its zone', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    w.players[0].upgrades.regenerant = 1;
+    const alch = w.spawn('alchimiste', 0, 30 * FP, 30 * FP);
+    const a = w.spawn('auxiliaire', 0, 33 * FP, 30 * FP);
+    const b = w.spawn('auxiliaire', 0, 33 * FP, 31 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [alch.id], name: 'regenerant', x: a.x, y: (a.y + b.y) / 2 }]);
+    run(w, 1);
+    expect(a.invuln).toBeGreaterThan(0);
+    expect(b.invuln).toBeGreaterThan(0);
+  });});
