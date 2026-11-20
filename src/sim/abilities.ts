@@ -68,7 +68,7 @@ const FORMS: Record<string, string> = { formefeu: 'elementaire', formeeau: 'elem
 export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability): void {
   const def = e.def as UnitDef;
   const ab = name && spell(name, e.lvl);
-  if (!ab || ab.target === 'point' || (e.abilityCd > 0 && ab.cooldown) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
+  if (!ab || e.illusion || ab.target === 'point' || (e.abilityCd > 0 && ab.cooldown) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
     // Allies round the caster unhurt for a while (an aura: out of it, no more).
@@ -229,7 +229,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     [...this.entities.values()]
       .filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= toFp(ab.radius!) && test(t))
       .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
-  if (this.silenced(e.x, e.y)) return false;
+  if (this.silenced(e.x, e.y) || e.illusion) return false;
   if (ab.ultimate) {
     if (!this.ultimateReady(e.owner, ab.ultimate)) {
       this.say(e.owner, `${ab.name} : pas encore chargé au Temple primordial.`);
@@ -270,11 +270,14 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     if (!t) return false;
     t.held = Math.max(t.held, ticks(ab.duration));
   } else if (name === 'double') {
-    const t = near((t) => t.owner === e.owner && t.type !== 'cadavre')[0];
+    // An illusion (fiche « Hallucination », mod): a decoy with the same hit points, which neither attacks nor casts.
+    // Not of a worker, whose copy would still mine and build.
+    const t = near((t) => t.owner === e.owner && t.type !== 'cadavre' && !(t.def as UnitDef).worker)[0];
     if (!t) return false;
     // A tile off on the side of the map's middle (always east, before: west of it from the other corners).
     const copy = this.spawn(t.type, e.owner, t.x + (t.x < idiv(this.map.width * FP, 2) ? FP : -FP), t.y);
     copy.ttl = ticks(ab.duration);
+    copy.illusion = true;
   } else if (name === 'deflagration') {
     const t = [...this.entities.values()]
       .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)

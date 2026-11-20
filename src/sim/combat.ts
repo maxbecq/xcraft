@@ -89,6 +89,8 @@ export function rangeBonus(this: World, e: Entity, t?: Entity): number {
 
 /** The weapon a unit fights with now: Scarabées get one by research, a Char Pégase in the air shoots only at flyers. */
 export function weapon(this: World, e: Entity): Attack | undefined {
+  // Double énergétique (fiche « Hallucination », mod): an illusion has no attack.
+  if (e.illusion) return undefined;
   const a = this.ownWeapon(e);
   // Z Balise offensive: its carrier's attack hits an area (Z.doc: a zone of 3).
   return a && e.support & KIT.balise ? { ...a, splash: BALANCE.rules.z.beaconSplash } : a;
@@ -556,7 +558,8 @@ export function gap(this: World, e: Entity, t: Entity): number {
 
 /** How urgent an enemy is to hit: 0 what shoots back (soldiers, defences), 1 other units (workers), 2 buildings. */
 export function rank(this: World, t: Entity): number {
-  const armed = !!this.weapon(t) && !(t.def as UnitDef).worker;
+  // A Double énergétique looks armed like the unit it copies: the enemy cannot tell it apart.
+  const armed = !!(t.illusion ? this.ownWeapon(t) : this.weapon(t)) && !(t.def as UnitDef).worker;
   return armed ? 0 : t.def.kind === 'unit' ? 1 : 2;
 }
 

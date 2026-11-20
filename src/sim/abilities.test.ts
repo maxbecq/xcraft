@@ -144,3 +144,47 @@ describe('Human carriers and machines (notice 1.2-1)', () => {
     expect(w.weapon(p)).toMatchObject({ air: true, ground: false });
   });
 });
+
+describe('Double énergétique (fiche « Hallucination », mod)', () => {
+  it('makes a decoy of the ally with its hit points, which never hurts the enemy and fades after its time', () => {
+    const w = new World(createMap());
+    const d = w.spawn('druide', 0, ...at(40, 60));
+    const ally = w.spawn('archer', 0, ...at(41, 60));
+    w.step([{ player: 0, kind: 'ability', ids: [d.id], name: 'double', x: ally.x, y: ally.y }]);
+    run(w, 0.2);
+    const copy = [...w.entities.values()].find((e) => e.type === 'archer' && e.id !== ally.id)!;
+    expect(copy.illusion).toBe(true);
+    expect(copy.maxHp).toBe(ally.maxHp);
+    // The enemy takes it for the real one when picking its target.
+    expect(w.rank(copy)).toBe(w.rank(ally));
+    w.remove(ally);
+    w.remove(d);
+    const foe = w.spawn('legionnaire', 1, copy.x + 2 * FP, copy.y);
+    run(w, 10);
+    expect(foe.hp).toBe(foe.maxHp);
+    // The enemy, for its part, takes the decoy for a real one.
+    expect(copy.hp).toBeLessThan(copy.maxHp);
+  });
+
+  it('makes no double of a worker', () => {
+    const w = new World(createMap());
+    const d = w.spawn('druide', 0, ...at(40, 60));
+    const worker = w.spawn('moissonneur', 0, ...at(44, 60));
+    const n = w.entities.size;
+    w.step([{ player: 0, kind: 'ability', ids: [d.id], name: 'double', x: worker.x, y: worker.y }]);
+    run(w, 0.2);
+    expect(w.entities.size).toBe(n);
+  });
+
+  it('lasts 75 s', () => {
+    const w = new World(createMap());
+    const d = w.spawn('druide', 0, ...at(40, 60));
+    const ally = w.spawn('archer', 0, ...at(41, 60));
+    w.step([{ player: 0, kind: 'ability', ids: [d.id], name: 'double', x: ally.x, y: ally.y }]);
+    const copy = () => [...w.entities.values()].find((e) => e.type === 'archer' && e.id !== ally.id);
+    run(w, 74);
+    expect(copy()).toBeDefined();
+    run(w, 2);
+    expect(copy()).toBeUndefined();
+  });
+});

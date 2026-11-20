@@ -335,7 +335,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Assassin (notice): overwhelms the mind of the enemy nearest the point, which cannot move nor fight for a while. */
   chocmental: { name: 'Choc mental', effect: 'L\'ennemi visé ne peut plus bouger ni combattre un moment.', hotkey: 'M', target: 'point', research: 'chocmental', ...BALANCE.abilities.chocmental },
   /** Druide (notice): a perfect energy double of the ally nearest the point, for a while. */
-  double: { name: 'Double énergétique', effect: 'Crée un double d\'énergie de l\'allié visé, pour un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.double },
+  double: { name: 'Double énergétique', effect: 'Crée un leurre de l\'allié visé : mêmes points de vie, mais il n\'attaque pas.', hotkey: 'O', target: 'point', ...BALANCE.abilities.double },
   /** Druide (notice): a bolt of plasma on the enemy nearest the point. */
   deflagration: { name: 'Déflagration', effect: 'Un trait de plasma sur l\'ennemi visé.', hotkey: 'G', target: 'point', research: 'deflagration', ...BALANCE.abilities.deflagration },
   /** Druide (notice): no ability can be used inside the zone for a while. */

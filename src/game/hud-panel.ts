@@ -1,7 +1,7 @@
 /** The selection panel: the live portrait's text beside it, a group's tiles, a queue, the cargo and the fighting stats. */
 import BALANCE from '../balance.json';
 import { ABILITIES, type BuildingDef, DEFS, KIT, MYTHS, type Mythology, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
-import { ticks } from '../sim/fixed';
+import { TICK_RATE, ticks } from '../sim/fixed';
 import type { Entity } from '../sim/world';
 import { img } from './glyphs';
 import type { Hud } from './hud';
@@ -68,6 +68,8 @@ export function updatePanel(h: Hud): void {
     html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => progress(`${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})`, ultimatePct(h, m) / 100)).join('')}</div>`;
   }
   if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
+  // Druide's Double énergétique: its owner alone knows it is a decoy, and for how long.
+  if (e.illusion && e.owner === h.player) html += `<div class="info">Double énergétique · disparaît dans ${Math.ceil(e.ttl / TICK_RATE)} s</div>`;
   // Carriers and bunkers: who is inside, each with its health; a click on one lets it out (as in SC2).
   const aboard = [...h.world.entities.values()].filter((u) => u.inside === e.id);
   if (aboard.length) {

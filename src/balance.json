@@ -307,7 +307,7 @@
     "decollage": { "cooldown": 3, "duration": 1.5 },
     "enfouissement": {"cooldown": 2, "duration": 0, "radius": 2},
     "chocmental": {"cooldown": 25, "duration": 4, "range": 6, "radius": 1.5},
-    "double": {"cooldown": 40, "duration": 30, "range": 6, "radius": 1.5},
+    "double": {"cooldown": 40, "duration": 75, "range": 6, "radius": 1.5},
     "deflagration": {"cooldown": 20, "duration": 0, "range": 7, "radius": 1.5, "damage": 120},
     "silence": {"cooldown": 40, "duration": 10, "range": 8, "radius": 4},
     "teleport": {"cooldown": 30, "duration": 0, "range": 8},
