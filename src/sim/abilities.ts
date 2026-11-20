@@ -340,6 +340,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const foes = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).mechanical);
     if (!foes.length) return false;
     for (const t of foes) this.setPace(t, ticks(ab.duration), ab.damage!, idiv(10000, ab.damage!));
+  } else if (name === 'jetdesable') {
+    // The enemy machine nearest the point: a tenth of its speed, ten times as long between shots.
+    const t = near((t) => this.hostile(t.owner, e.owner) && !!(t.def as UnitDef).mechanical)[0];
+    if (!t) return false;
+    this.setPace(t, ticks(ab.duration), ab.damage!, idiv(10000, ab.damage!));
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'flechegaia') {

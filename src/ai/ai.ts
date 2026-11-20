@@ -877,6 +877,10 @@ export class AI {
           const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
           const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
           if (best && best[1] >= CROWD[name]) cmd = at(u, name, best[0]);
+        } else if (name === 'jetdesable') {
+          // The toughest enemy machine in reach.
+          const pick = inReach.filter((f) => (f.def as UnitDef).mechanical && f.pace === 0).sort((a, b) => b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
+          if (pick) cmd = at(u, name, pick);
         } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre') {
           // The toughest enemy in reach (for the stun, a caster first).
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];

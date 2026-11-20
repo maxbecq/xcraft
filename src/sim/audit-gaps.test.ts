@@ -213,4 +213,16 @@ describe('audit gaps', () => {
     expect(tank.pace).toBe(0); // machines are not blinded
     expect(aux.pace).toBeLessThanOrEqual(ticks(25));
   });
+
+  it('Seth\'s Jet de sable all but stops an enemy vehicle', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
+    const tank = w.spawn('pegase', 1, 34 * FP, 30 * FP);
+    tank.frozen = ticks(60);
+    const speed = tank.speed;
+    w.step([{ player: 0, kind: 'ability', ids: [seth.id], name: 'jetdesable', x: tank.x, y: tank.y }]);
+    run(w, 1);
+    expect(tank.paceAtk).toBe(1000);
+    expect(tank.speed).toBeLessThan(speed / 5);
+  });
 });

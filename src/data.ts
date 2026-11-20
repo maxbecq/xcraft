@@ -420,6 +420,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Apollon (notice; XC.doc 2008 for the numbers, its zones scaled as the Tempête's): enemy infantry of the zone walks and
    * strikes half as fast for a while. */
   lumiereardente: { name: 'Lumière ardente', effect: 'Une lumière insoutenable : l\'infanterie ennemie de la zone se déplace et attaque deux fois moins vite.', hotkey: 'O', target: 'point', ...(BALANCE.abilities.lumiereardente as object) } as AbilityDef,
+  /** Seth (notice): a handful of sand in an enemy vehicle's works, which can hardly move or shoot for a while (numbers
+   * provisional: none in the notice nor in XC.doc). */
+  jetdesable: { name: 'Jet de sable', effect: 'Du sable dans les mécanismes : le véhicule ennemi visé ne peut presque plus bouger ni tirer un moment.', hotkey: 'B', target: 'point', ...(BALANCE.abilities.jetdesable as object) } as AbilityDef,
   /** Seth (notice, « Tempête de sable »): enemy ranged units inside the zone cannot shoot for a while. */
   tempete: { name: 'Tempête de sable', effect: 'Les unités ennemies à distance dans la zone ne peuvent plus tirer un moment.', hotkey: 'T', target: 'point', ...BALANCE.abilities.tempete },
 };
@@ -701,7 +704,7 @@ const BASE: Record<string, object> = {
   gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
   thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
   apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, abilities: ['lumiereardente', 'tempetezeus'], ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
-  seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
+  seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['jetdesable', 'amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
   // passive (rules.auraguerre, rules.auraprotection).
   odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
