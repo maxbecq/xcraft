@@ -57,6 +57,13 @@ export function misplaced(this: World, def: BuildingDef, tx: number, ty: number,
   return def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.";
 }
 
+/** How many add-ons a Pod carries, built or rising. */
+export function addonsOf(this: World, pod: Entity): number {
+  let n = 0;
+  for (const a of this.entities.values()) if (a.host === pod.id) n++;
+  return n;
+}
+
 /** Where a Pod's add-on goes: against one of its sides, the first free one (east, west, south, north). */
 export function addonSpot(this: World, pod: Entity, type: string): [number, number] | undefined {
   return this.addonSpotAt(type, pod.tx, pod.ty, (pod.def as BuildingDef).size, pod.owner);

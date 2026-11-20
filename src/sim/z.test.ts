@@ -36,7 +36,7 @@ describe('Z', () => {
     expect(w.supply(0).max).toBe(25); // Z.doc: 10 + 15
   });
 
-  it('a Pod raises one add-on beside it, no drone spent; the socles wait for the Centre de socles', () => {
+  it('a Pod raises add-ons beside it, no drone spent; the socles wait for the Centre de socles', () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
     p.minerals = 2000;
@@ -50,8 +50,6 @@ describe('Z', () => {
     expect([[pod.tx + 2, pod.ty], [pod.tx - 3, pod.ty], [pod.tx, pod.ty + 2], [pod.tx, pod.ty - 3]]).toContainEqual([pf.tx, pf.ty]);
     expect(of(w, 0, 'drone')).toHaveLength(drones);
     expect(p.minerals).toBe(2000 - 200);
-    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
-    expect(of(w, 0, 'tourelle')).toHaveLength(0); // one per Pod
     run(w, 41);
     expect(pf.buildLeft).toBe(0);
     w.step([{ player: 0, kind: 'train', ids: [pf.id], type: 'quadripode' }]);

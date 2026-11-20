@@ -158,8 +158,8 @@ export function apply(this: World, c: Command): void {
           return;
         }
         if (def.addons?.includes(c.type)) {
-          // Z: a Pod raises one add-on beside it, which assembles itself; no drone is spent.
-          if (b.buildLeft > 0 || [...this.entities.values()].some((a) => a.host === b.id)) continue;
+          // Z: a Pod raises add-ons beside it (notice: up to 3), which assemble themselves; no drone is spent.
+          if (b.buildLeft > 0 || this.addonsOf(b) >= BALANCE.rules.z.podAddons) continue;
           const lack = this.lacks(c.player, c.type);
           if (lack) return void this.say(c.player, lack);
           const spot = this.addonSpot(b, c.type);

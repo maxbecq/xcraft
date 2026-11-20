@@ -218,11 +218,11 @@ export function buttonsFor(h: Hud): Button[] {
       list.push({ label: kit.name, key: kit.hotkey, weapon: k, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
     }
   }
-  // Z Pods: one add-on each, raised beside it (Plate-forme, Tourelle).
+  // Z Pods: up to three add-ons each, raised beside it (Plate-forme, Tourelle).
   for (const t of (b.def as BuildingDef).addons ?? []) {
     const d = DEFS[t] as BuildingDef;
-    const free = same.find((o) => ![...h.world.entities.values()].some((a) => a.host === o.id));
-    const reason = h.world.lacks(h.player, t) || (free ? undefined : 'Déjà un add-on');
+    const free = same.find((o) => h.world.addonsOf(o) < BALANCE.rules.z.podAddons);
+    const reason = h.world.lacks(h.player, t) || (free ? undefined : 'Add-ons au complet');
     list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
   }
   // Isdaris: turning into a stronger building, in place.

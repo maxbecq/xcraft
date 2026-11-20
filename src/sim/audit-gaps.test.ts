@@ -312,4 +312,19 @@ describe('audit gaps', () => {
     run(w, 1);
     expect(w.sees(1, seth)).toBe(false);
   });
+
+  it('a Pod carries up to three add-ons (notice)', () => {
+    const w = createMatch(['z', 'humains']);
+    w.players[0].minerals = 5000;
+    const [ic] = of(w, 0, 'intelligence');
+    const pod = w.spawn('pod', 0, ic.x + 4 * FP, ic.y + 10 * FP);
+    run(w, 30); // its creep spreads
+    // Two already hang on it (set down by hand, the ground round this Pod has room for two more only).
+    for (let i = 0; i < 2; i++) w.spawn('tourelle', 0, (50 + 4 * i) * FP, 50 * FP).host = pod.id;
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
+    expect(w.addonsOf(pod)).toBe(3);
+    expect(w.addonSpot(pod, 'tourelle')).toBeDefined(); // room left, but the Pod is full
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
+    expect(w.addonsOf(pod)).toBe(BALANCE.rules.z.podAddons);
+  });
 });

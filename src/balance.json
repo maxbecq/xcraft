@@ -363,7 +363,7 @@
     "creepRepair": 1,
     "canonDelay": 6,
     "repair": { "drone": { "hp": 4, "percent": 25, "units": true }, "serf": { "hp": 4, "percent": 25, "units": true }, "esprit": { "hp": 8, "percent": 25, "units": false } },
-    "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25 }
+    "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "kitRepair": 3, "beaconPercent": 5, "beaconSplash": 3, "weaponDamage": 86, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25, "podAddons": 3 }
   },
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },
