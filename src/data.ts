@@ -309,6 +309,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
   explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
+  /** Allosaure (notice): feasts on a corpse nearby to heal; the mod's 50 % and 60 s. */
+  festin: { name: 'Festin', effect: 'Dévore un cadavre organique tout proche et regagne une bonne part de sa vie.', hotkey: 'F', ...(BALANCE.abilities.festin as object) } as AbilityDef,
   /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
   gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment.', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
   acidedissolvant: { name: 'Acide dissolvant', effect: 'Un torrent d\'acide sur un bâtiment ennemi : de très lourds dégâts.', hotkey: 'Q', target: 'point', research: 'acide', ...(BALANCE.abilities.acidedissolvant as object) } as AbilityDef,
@@ -476,7 +478,7 @@ const BASE: Record<string, object> = {
   // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
   ankylosaure: { kind: 'unit', name: 'Ankylosaure', radius: 0.9, beast: true, faction: 'humains', hotkey: 'A' },
   // Notice: « Allosaure », a huge flesh-eater that devours infantry (mod « Carnosaurus »: 60, -30 mechanical).
-  allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
+  allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, ability: 'festin', requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
   // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
   // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
   belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, abilities: ['coupcirculaire', 'camouflage'], faction: 'humains', hotkey: 'B' },

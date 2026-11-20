@@ -141,6 +141,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
     return;
+  } else if (name === 'festin') {
+    // Allosaure: devours the nearest fresh organic corpse and gets back a share of its health.
+    const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)[0];
+    if (!c || e.hp >= e.maxHp) return;
+    this.corpses.splice(this.corpses.indexOf(c), 1);
+    e.hp = Math.min(e.maxHp, e.hp + idiv(e.maxHp * ab.damage!, 100));
   } else if (name === 'explosioncuve') {
     // The Cuve blows itself up: every unit on the ground around, friend or foe, and the enemy buildings take the blast, armour or not.
     for (const t of [...this.entities.values()]) {

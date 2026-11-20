@@ -86,4 +86,20 @@ describe('audit gaps', () => {
     run(w, 1);
     expect(a.invuln).toBeGreaterThan(0);
     expect(b.invuln).toBeGreaterThan(0);
-  });});
+  });
+
+  it('the Allosaure feasts on a corpse nearby to heal (notice), half its health (mod)', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const allo = w.spawn('allosaure', 0, 30 * FP, 30 * FP);
+    allo.hp = 100;
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
+    expect(allo.hp).toBe(100); // no corpse
+    const prey = w.spawn('archer', 1, 32 * FP, 30 * FP);
+    prey.hp = 0;
+    w.step([]);
+    expect(w.corpses.length).toBeGreaterThan(0);
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
+    expect(allo.hp).toBe(100 + Math.floor(allo.maxHp / 2));
+    expect(allo.abilityCd).toBeGreaterThan(0);
+  });
+});
