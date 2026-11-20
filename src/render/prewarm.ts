@@ -3,6 +3,7 @@ import type { CameraRig } from '../camera';
 import { DEFS } from '../data';
 import { FP } from '../sim/fixed';
 import { type Entity, World } from '../sim/world';
+import type { Effects } from './effects';
 import type { Post } from './post';
 import { stableShadowDepth } from './shadowdepth';
 import { burstSamples, EntityRenderer } from './units';
@@ -23,6 +24,8 @@ export interface Prewarm {
   sun: DirectionalLight;
   sunOffset: Vector3;
   post: Post;
+  /** The effects, for their particles' and stains' programs. */
+  effects?: Effects;
 }
 
 /**
@@ -54,6 +57,9 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   // The death bursts' points too: the first death of a match compiled their two programs.
   const bursts = burstSamples(new Vector3(map.width / 2, 1, map.height / 2));
   scene.add(...bursts);
+  // The effects' particles and stains too: an ability's first cloud in play compiled them.
+  const fx = m.effects?.samples(new Vector3(map.width / 2, 1, map.height / 2)) ?? [];
+  scene.add(...fx);
   stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
   const into = post.sceneTarget;
   renderer.setRenderTarget(into);
@@ -111,6 +117,10 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     for (const b of bursts) {
       scene.remove(b);
       b.geometry.dispose();
+    }
+    for (const o of fx) {
+      scene.remove(o);
+      ((o as Mesh).material as Material).dispose();
     }
   }
 }

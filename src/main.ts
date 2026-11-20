@@ -392,7 +392,7 @@ if (!ATTRACT) {
   // Never waited for more than 3 s: a page the browser does not draw (a tab opened behind, never shown) may never
   // finish compiling shaders, and its match, so the other player's too, would not start until it is shown.
   const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, 3000))]);
-  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post }, portraits)]).then(() => {}))).then(start);
+  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects }, portraits)]).then(() => {}))).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();

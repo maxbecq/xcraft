@@ -1,7 +1,7 @@
 import { TEAM_COLORS } from './models';
 import {
   AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
-  type Scene, Sprite,
+  type Object3D, type Scene, Sprite,
   SpriteMaterial, type Texture, Vector3,
 } from 'three';
 import type { Audio, Sfx } from '../audio';
@@ -108,6 +108,16 @@ export class Effects {
   /** Sprites go to `fx` (drawn after ambient occlusion); debris, which casts shadows, to the main scene. */
   constructor(private readonly fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {}
 
+  /** One particle and one ground stain, as the effects draw them, for the warm-up to compile their programs
+   * (render/prewarm.ts): the abilities' clouds, rings and stains then cost no shader compile in play. */
+  samples(at: Vector3): Object3D[] {
+    const sprite = new Sprite(new SpriteMaterial({ map: this.tex.glow, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending }));
+    const stain = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2c4a0c, transparent: true, opacity: 0.6, depthWrite: false }));
+    sprite.position.copy(at);
+    stain.position.copy(at);
+    return [sprite, stain];
+  }
+
   /** Collects the effects of the tick that just ran. */
   collect(world: World, seen: (x: number, y: number) => boolean): void {
     for (const s of world.shots) {
@@ -132,6 +142,14 @@ export class Effects {
       }
     }
     for (const tp of world.teleports) if (seen(tp.x1, tp.y1) || seen(tp.x2, tp.y2)) this.audio.play(tp.phase === 'start' ? 'rappel' : 'arrive');
+    // Lasting powers, shown while they last (twice a second): a Gravité alourdie's field round its socle, a Bouclier de
+    // plasma's bubble over its building.
+    if (world.tick % 10 === 0) {
+      for (const e of world.entities.values()) {
+        if (e.gravity > 0 && seen(e.x, e.y)) this.gravityField(this.at(e.x, e.y, 0.05));
+        if (e.phased > 0 && e.def.kind === 'building' && seen(e.x, e.y)) this.bubble(this.at(e.x, e.y, 0), (e.def as { size: number }).size);
+      }
+    }
     for (const d of world.deaths) {
       if (!seen(d.x, d.y)) continue;
       const size = BUILDING_SIZES[d.type];
@@ -233,6 +251,67 @@ export class Effects {
       case 'decollage':
         this.cloud(p, 0xb0a090, 16, 1, 0.4, 1.2, 0.6);
         break;
+      case 'gravite': // the field gathering round the socle (gravityField keeps it while it lasts)
+        this.ring(p, 0xa07aff, 3, 1.4);
+        this.cloud(p, 0xb89aff, 30, 3, 0.2, 2, 0.7);
+        break;
+      case 'lumiereardente': // a blinding flash of sunlight on the zone
+        this.column(p, true);
+        this.ring(p, 0xfff2b0, 2.4, 0.8);
+        this.cloud(p, 0xfff6d0, 44, 2.4, 0.9, 1.1, 1.3);
+        this.spawn(this.tex.glow, 0xfffbe8, p.clone().setY(p.y + 0.6), new Vector3(), 0.5, 2, 6, 1, 0, true); // the glare
+        break;
+      case 'gazeuphorisants': // a pink cloud spreading over the allies
+        this.cloud(p, 0xff8ad8, 40, 3, 0.35, 3.5, 1);
+        this.ring(p, 0xffb0e8, 3, 1);
+        break;
+      case 'festin': // the Allosaure tears into a corpse
+        this.cloud(p, 0xb02020, 30, 1, 0.7, 1.8, 0.7);
+        for (let i = 0; i < 14; i++) this.spawn(this.tex.glow, 0xd83030, p.clone().setY(p.y + 0.4), rnd(1.8).setY(1.5 + Math.random() * 1.5), 0.7, 0.22, 0.1, 1, 9, true);
+        this.decal(p.clone().setY(p.y - 0.07), 1.2, 0x4a0c0c, 20);
+        break;
+      case 'bouclierplasma': // the bubble rises (bubble keeps it while it lasts)
+        this.ring(p, 0x6ae8ff, 2.5, 1);
+        break;
+      case 'jetdesable': // sand thrown into the vehicle's works
+        for (let i = 0; i < 40; i++) this.spawn(this.tex.smoke, 0xc8a86a, p.clone().add(rnd(0.4)), rnd(2.6).setY(0.5 + Math.random() * 0.8), 1.6 + Math.random() * 0.8, 0.5, 1.6, 0.9, 0, false);
+        this.cloud(p, 0xe8cc90, 20, 1.5, 0.3, 2.5, 0.8);
+        break;
+      case 'acidedissolvant': // a torrent of acid: splashes, fumes and a burnt stain
+        for (let i = 0; i < 36; i++) this.spawn(this.tex.glow, 0x9aff3a, p.clone().add(rnd(0.6)).setY(p.y + 0.4), rnd(3).setY(2.5 + Math.random() * 2.5), 1.1, 0.4, 0.15, 1, 9, true);
+        this.cloud(p, 0x7aff3a, 30, 1.8, 0.6, 2.8, 0.9);
+        this.decal(p.clone().setY(p.y - 0.07), 1.8, 0x2c4a0c, 20);
+        break;
+      case 'posermine': // the mine dug in under the tank
+        this.cloud(p, 0x8a7a62, 8, 0.4, 0.3, 0.8, 0.4);
+        break;
+      case 'minechimique': // it goes off: a blast and a green cloud
+        this.explosion(p, 0.6);
+        this.cloud(p, 0x8aff4a, 24, 1.5, 0.3, 2.5, 0.9);
+        break;
+    }
+  }
+
+  /** A Gravité alourdie's field: a faint violet circle at its reach, glows pressed down round the socle. */
+  private gravityField(p: Vector3): void {
+    const R = 18;
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2 + Math.random() * 0.1;
+      this.spawn(this.tex.glow, 0x9a6aff, p.clone().add(new Vector3(Math.cos(a) * R, 1, Math.sin(a) * R)), new Vector3(0, -1.2, 0), 0.9, 0.6, 0.2, 0.55, 0, true);
+    }
+    // Round the socle, motes pressed down to the ground, and a faint ring at its feet.
+    for (let i = 0; i < 14; i++) this.spawn(this.tex.glow, 0xc8aaff, p.clone().add(rnd(3)).setY(p.y + 2 + Math.random()), new Vector3(0, -2.5, 0), 0.8, 0.45, 0.15, 0.85, 0, true);
+    this.ring(p, 0x9a6aff, 2, 0.6);
+  }
+
+  /** A Bouclier de plasma: a shimmering dome of cyan glows over a building of this size. */
+  private bubble(p: Vector3, size: number): void {
+    const r = size * 0.75;
+    for (let i = 0; i < 50; i++) {
+      const t = Math.random() * Math.PI * 2;
+      const f = Math.acos(Math.random()); // upper half
+      const at = p.clone().add(new Vector3(r * Math.sin(f) * Math.cos(t), r * Math.cos(f) + 0.2, r * Math.sin(f) * Math.sin(t)));
+      this.spawn(this.tex.glow, 0x6ae8ff, at, new Vector3(), 0.7, 0.8, 0.7, 0.5, 0, true);
     }
   }
 
