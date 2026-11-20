@@ -1045,6 +1045,10 @@ L'utilisateur a validé les 28 recommandations le 20 novembre 2026. Branche `cla
 | 13 | Orbe plasma mobile | `6ae693c` | Redéploiement : l'Orbe se détache (50 minerais, fiche), se déplace lentement sans tirer, puis se repose dans un champ d'énergie ; 35 s de recharge (fiche). Vitesse de 0,8 : **chiffre provisoire, à valider par l'équilibreur**. Le délai avant de tirer de nouveau (4 s) reprend celui de l'Yggdrasill : **provisoire aussi**. |
 | 19 (en partie) | Jusqu'à 3 annexes par Pod | `282ee03` | Le Pod porte jusqu'à 3 annexes (notice). L'IA en construit toujours une seule. |
 | 22 | Qui bâtit le Temple, la Fontaine et l'Artefacterie | `fd987dc` | Le jeu ne change pas : Gaïa les bâtit, le dieu doit être vivant. `camp-dieux.md` est corrigé. |
+| 11 | Miniportail en seconde file de production | `49842b3` | Le Portail forme les deux premières unités de sa file en même temps, sur deux barres ; l'accélération de 25 % est retirée. Le coût reste 200/200 et 60 s. **Le débit du Portail double : à valider par l'équilibreur.** |
+| 14 | Double énergétique en illusion sans attaque | `2e7fa2e` | La copie garde les PV de l'allié, mais n'attaque pas et ne lance rien. Durée de 75 s Normal (fiche, au lieu de 30), soit environ 54 s de partie ; seul son propriétaire voit le temps restant. L'ennemi le cible comme l'unité qu'il imite. Pas de double d'un ouvrier, qui minerait et bâtirait encore : **choix fait ici, à signaler**. |
+| 19 (reste) | Refuge des drones dans l'IC | `331e83a` | L'Intelligence centrale et la suprême abritent 5 drones (**chiffre provisoire**, la notice dit « plusieurs »). Bouton Refuge : les drones à 8 cases ou moins entrent (**rayon provisoire**). Débarquer passe sur X, D formant les drones. L'IA abrite ses drones contre un raid trop fort et les fait sortir après. |
+| 19 (reste) | Réparateur sur les bâtiments | `20dc5b6` | Le Réparateur répare aussi les bâtiments finis de son camp, au même rythme que les machines. |
 
 ### Rien à changer : le jeu suit déjà la recommandation
 
@@ -1081,11 +1085,7 @@ L'utilisateur a validé les 28 recommandations le 20 novembre 2026. Branche `cla
 
 ### En attente de l'accord
 
-| # | Décision | Pourquoi |
-|---|---|---|
-| 11 | Miniportail en seconde file de production | Pas de recommandation ferme. Une seconde file change la production du Portail et son interface (deux barres, deux files) ; l'accélération de 25 % reste en place. |
-| 14 | Double énergétique en illusion sans attaque | Change le rôle de l'unité : de combattant à leurre. |
-| 19 (reste) | Refuge des drones dans l'IC ; Réparateur sur les bâtiments | Pas de recommandation ferme, et aucun chiffre dans les sources. |
+Plus rien : l'utilisateur a approuvé les décisions 11, 14 et 19 le 20 novembre 2026 au soir (branche `claude/audit-attente`, partie de `origin/main` 0.9.93). Elles sont dans le tableau des décisions faites.
 
 ### Non vérifié
 
