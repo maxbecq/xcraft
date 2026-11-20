@@ -57,6 +57,10 @@ export interface Entity {
   goal: { x: number; y: number } | null;
   path: number[];
   blockedTicks: number;
+  /** Along a path: its length and the nearest the unit came to its waypoint, and the steps since it last got nearer (follow). */
+  wn: number;
+  wd: number;
+  still: number;
   /** The bunker (Fortin) this unit shelters in, or 0. */
   inside: number;
   /** A target found out of reach (under a cliff, say), left alone until `ignoreUntil`. */
@@ -331,7 +335,7 @@ export class World {
       radius: def.kind === 'unit' ? toFp(def.radius) : (size * FP) / 2,
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
-      order: null, goal: null, path: [], blockedTicks: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
+      order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,

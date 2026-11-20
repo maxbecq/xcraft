@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMap } from '../map';
-import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, FACTIONS, type UnitDef } from '../data';
+import { createMatch } from './setup';
 import { FP, ticks } from './fixed';
 import { type Entity, World } from './world';
 
@@ -359,5 +360,27 @@ describe('Shift-queued orders', () => {
     // A new move without Shift replaces it all.
     w.step([{ player: 0, kind: 'move', ids: [serf.id], x: at(40, 60)[0], y: at(40, 60)[1] }]);
     expect(serf.next).toHaveLength(0);
+  });
+});
+
+describe('a mixed group sent far (QA B1)', () => {
+  it('arrives whole: no two units left walking into each other at a cliff edge', () => {
+    // 20 Z of four kinds before their Intelligence centrale on origine, three Shift moves, then one move across the
+    // map. The far order given at these ticks left two Hexapodes pushing each other for good before the fix.
+    for (const delay of [0, 21, 47]) {
+      const w = createMatch(['z', 'humains'], [0, 1], 'origine');
+      for (const e of [...w.entities.values()]) if (e.owner === 1) w.remove(e);
+      const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === FACTIONS.z.hq)!;
+      const kinds = ['drone', 'quadripode', 'hexapode', 'coleoptere'];
+      const ids: number[] = [];
+      for (let i = 0; i < 20; i++) ids.push(w.spawn(kinds[i % 4], 0, hq.x + ((i % 5) - 2) * 1100, hq.y + (4 + Math.floor(i / 5)) * 1100).id);
+      const [hx, hy] = [hq.x / FP, hq.y / FP];
+      for (const [x, y] of [[hx + 8, hy + 4], [hx + 10, hy + 9], [hx + 3, hy + 10]]) w.step([{ player: 0, kind: 'move', ids, x: Math.round(x * FP), y: Math.round(y * FP), queue: true }]);
+      for (let i = 0; i < delay; i++) w.step([]);
+      w.step([{ player: 0, kind: 'move', ids, x: 78 * FP, y: 76 * FP }]);
+      for (let i = 0; i < ticks(120); i++) w.step([]);
+      const left = ids.map((id) => w.entities.get(id)!).filter((e) => Math.hypot(e.x / FP - 78, e.y / FP - 76) >= 6);
+      expect(left.map((e) => `${e.type} at ${Math.round(e.x / FP)},${Math.round(e.y / FP)} (order given ${delay} ticks on)`)).toEqual([]);
+    }
   });
 });

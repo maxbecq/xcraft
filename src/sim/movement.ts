@@ -53,6 +53,8 @@ export function goTo(this: World, e: Entity, x: number, y: number): boolean {
 
 /** Long paths searched this tick, for the units given the same far order with them (see pathFor). */
 const SHARED_MIN = 16;
+/** Ticks without getting nearer its waypoint before a unit replans (follow). */
+const STILL = TICK_RATE;
 
 /**
  * Tiles from a unit to a goal tile, as Grid.findPath gives them. A group sent far in one order made as many searches
@@ -121,6 +123,22 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
 /** Advances along the path; true once it is exhausted. */
 export function follow(this: World, e: Entity): boolean {
   if (e.path.length === 0) return true;
+  // Two units heading for the same waypoint from either side of it (a group following one path, QA B1): tryMove never
+  // fails, separate pushes them back as far as they step, so blockedTicks never rose and they stood there for good. A
+  // second without getting nearer its waypoint, or reaching one, and it replans.
+  // Only on a move: in a fight (a chase, an attack-move pressing on, a crowd round a building) getting no nearer for
+  // a while is the fight itself, and replanning there kept armies from ever finishing a base.
+  const walk = e.order?.kind === 'move';
+  const near = walk ? dist(e.x, e.y, e.path[0], e.path[1]) : 0;
+  if (!walk || e.path.length !== e.wn || near < e.wd) {
+    e.wn = e.path.length;
+    e.wd = near;
+    e.still = 0;
+  } else if (++e.still > STILL && e.goal) {
+    e.still = 0;
+    this.plan(e, e.goal.x, e.goal.y);
+    if (e.path.length === 0) return true;
+  }
   // Intermediate waypoints count as reached within half a tile, so a crowd never circles one point.
   // Only skip when the next waypoint is in straight reach, so corners around cliffs are still respected.
   if (e.path.length > 2 && dist(e.x, e.y, e.path[0], e.path[1]) <= FP / 2 && this.grid.lineWalkable(e.x, e.y, e.path[2], e.path[3])) e.path.splice(0, 2);
