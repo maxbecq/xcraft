@@ -5,6 +5,7 @@ import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
 import { ultimatePct } from './hud-panel';
+import { SCROLL } from './settings';
 
 export interface Button {
   label: string;
@@ -88,7 +89,7 @@ export function buttonsFor(h: Hud): Button[] {
     if (h.buildMenu && h.workers().length) {
       const f = FACTIONS[h.world.players[h.player].faction];
       return [
-        ...f.buildable.filter((t) => f.advanced.includes(t) === (h.buildMenu === 'advanced')).map((t) => {
+        ...f.buildable.filter((t) => lcdTree(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced')).map((t) => {
           const d = DEFS[t] as BuildingDef;
           return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t) || undefined, action: () => (h.placing = t) };
         }),
@@ -114,7 +115,8 @@ export function buttonsFor(h: Hud): Button[] {
     }
     if (h.workers().length) {
       list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (h.buildMenu = 'basic') });
-      list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
+      // The LCD console shows every building at once, as a tree: no second, « advanced » list.
+      if (!lcdTree(h)) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
     }
     // One button per active ability among the selected units; each ready unit uses it.
     for (const ab of new Set(units.flatMap((u) => h.world.abilitiesFor(u)))) {
@@ -257,12 +259,12 @@ export function buttonsFor(h: Hud): Button[] {
 
 export function updateCard(h: Hud): void {
   const bk = `${h.world.tick}|${[...h.input.selected].join()}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.gridKeys}`;
-  if (bk === h.buttonsKey) return placeMenu(h);
+  if (bk === h.buttonsKey) return relink(h), placeMenu(h);
   h.buttonsKey = bk;
   h.buttons = buttonsFor(h);
   const p = h.world.players[h.player];
   const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu;
-  if (key === h.cardKey) return placeMenu(h);
+  if (key === h.cardKey) return relink(h), placeMenu(h);
   h.cardKey = key;
   h.menu.innerHTML = h.menuItems
     .map((b) => {
@@ -272,18 +274,106 @@ export function updateCard(h: Hud): void {
     })
     .join('');
   h.tip.hidden = true; // its button may be gone
-  h.card.innerHTML = h.buttons
-    .map((b) => {
-      const cost = b.cost ? `<small${b.cost.minerals && b.cost.energy ? ' class="two"' : ''}>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-      const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-      const glyph = GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')];
-      const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
-      const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
-      const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
-      return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
-    })
-    .join('');
+  const tree = lcdTree(h) && !!h.buildMenu && h.workers().length > 0;
+  h.card.classList.toggle('tree', tree);
+  h.card.innerHTML = tree ? treeHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
+  if (tree) drawLinks(h.card);
   placeMenu(h);
+}
+
+/** The Machines' LCD console (option) draws its build list as a tech tree. */
+function lcdTree(h: Hud): boolean {
+  return SCROLL.lcd && h.world.players[h.player].faction === 'z';
+}
+
+/** One command button; `extra` goes inside it, after the cost, and `style` on it (a tree node's place). */
+function buttonHtml(h: Hud, b: Button, extra = '', cls = '', style = ''): string {
+  const p = h.world.players[h.player];
+  const cost = b.cost ? `<small${b.cost.minerals && b.cost.energy ? ' class="two"' : ''}>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
+  const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
+  const glyph = GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')];
+  const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
+  const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
+  const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
+  return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}${cls}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}${style}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}${extra}</button>`;
+}
+
+/**
+ * The build list as a tech tree: a column per step of requirements (DEFS.requires), each building in the row of the
+ * first thing it needs, so the links run straight. A requirement that is not built but evolved into (the Intelligence
+ * suprême) stands in the tree too, as a node that cannot be clicked, linked to what it evolves from. Locked buildings
+ * are greyed with what they lack (World.lacks); built ones are ticked. Links are drawn once laid out (drawLinks).
+ */
+function treeHtml(h: Hud): string {
+  const btn = new Map(h.buttons.filter((b) => b.icon).map((b) => [b.icon!, b]));
+  const from = (t: string) => [...btn.keys()].find((s) => (DEFS[s] as BuildingDef).morphs?.includes(t));
+  const needs = (t: string): string[] => {
+    const r = Object.keys((DEFS[t] as BuildingDef).requires ?? {}).filter((x) => DEFS[x]?.kind === 'building');
+    const src = btn.has(t) ? undefined : from(t);
+    return src ? [src, ...r] : r;
+  };
+  // Every building of the list and every building they need, recursively.
+  const nodes: string[] = [];
+  const add = (t: string) => {
+    if (nodes.includes(t)) return;
+    needs(t).forEach(add);
+    nodes.push(t);
+  };
+  [...btn.keys()].forEach(add);
+  const depth = new Map<string, number>();
+  for (const t of nodes) depth.set(t, Math.max(-1, ...needs(t).map((r) => depth.get(r) ?? 0)) + 1);
+  const row = new Map<string, number>();
+  const free: number[] = [];
+  for (const t of [...nodes].sort((a, b) => depth.get(a)! - depth.get(b)!)) {
+    const c = depth.get(t)!;
+    const r = Math.max(free[c] ?? 0, ...needs(t).map((x) => row.get(x) ?? 0));
+    row.set(t, r);
+    free[c] = r + 1;
+  }
+  const has = (t: string) => [...h.world.entities.values()].some((e) => e.owner === h.player && e.type === t && e.buildLeft === 0);
+  const at = (t: string) => ` style="grid-column:${depth.get(t)! + 1};grid-row:${row.get(t)! + 1}" data-t="${t}" data-req="${needs(t).join(' ')}"`;
+  const html = nodes.map((t) => {
+    const tick = has(t) ? ' have' : '';
+    const b = btn.get(t);
+    if (b) return buttonHtml(h, b, b.reason ? `<em>${b.reason}</em>` : '', ` node${tick}`, at(t));
+    const src = from(t);
+    const why = h.world.lacks(h.player, t);
+    return `<div class="node ghost${tick}${why && !tick ? ' off' : ''}"${at(t)}>${img(t, '')}<span>${DEFS[t].name}</span><em>${src ? `évolution : ${DEFS[src].name}` : 'à obtenir'}</em></div>`;
+  });
+  const back = h.buttons.find((b) => !b.icon);
+  if (back) html.push(buttonHtml(h, back, '', ' node back', ` style="grid-column:1;grid-row:${free.reduce((m, v) => Math.max(m, v ?? 0), 0) + 1}"`));
+  return html.join('');
+}
+
+/** The tree's links drawn again when the card changes size (a window resized, a phone turned). */
+function relink(h: Hud): void {
+  const c = h.card;
+  if (c.classList.contains('tree') && c.dataset.size !== `${c.clientWidth}x${c.clientHeight}`) {
+    c.querySelector('svg.links')?.remove();
+    drawLinks(c);
+  }
+}
+
+/** The tree's links, drawn under its nodes once they are laid out: amber, dashed towards a locked building. */
+function drawLinks(card: HTMLElement): void {
+  card.dataset.size = `${card.clientWidth}x${card.clientHeight}`;
+  const box = card.getBoundingClientRect();
+  const rect = new Map([...card.querySelectorAll<HTMLElement>('[data-t]')].map((n) => [n.dataset.t!, n]));
+  const paths = { open: '', lock: '' };
+  for (const n of rect.values()) {
+    const b = n.getBoundingClientRect();
+    for (const r of (n.dataset.req ?? '').split(' ').filter(Boolean)) {
+      const a = rect.get(r)?.getBoundingClientRect();
+      if (!a) continue;
+      const x1 = a.right - box.left + card.scrollLeft;
+      const y1 = a.top + a.height / 2 - box.top + card.scrollTop;
+      const x2 = b.left - box.left + card.scrollLeft;
+      const y2 = b.top + b.height / 2 - box.top + card.scrollTop;
+      const mx = Math.round((x1 + x2) / 2);
+      paths[n.classList.contains('off') ? 'lock' : 'open'] += `M${Math.round(x1)} ${Math.round(y1)}H${mx}V${Math.round(y2)}H${Math.round(x2)}`;
+    }
+  }
+  card.insertAdjacentHTML('afterbegin', `<svg class="links" width="${card.scrollWidth}" height="${card.scrollHeight}" aria-hidden="true"><path d="${paths.open}"/><path class="lock" d="${paths.lock}"/></svg>`);
 }
 
 /**
