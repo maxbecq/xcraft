@@ -117,6 +117,29 @@ export function groundImages(name: string): [Texture, Texture] {
   return [picture(`${name}-sol`, true, 0.62), picture(`${name}-sol-n`, false, 0.62)];
 }
 
+/** Molten lava under a crust: dark plates, bright seams between them, brighter where the crust thins. */
+export function lavaTexture(): Texture {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const [u, v] = [x / size, y / size];
+      const seam = 1 - Math.min(1, Math.abs(fbm(u, v, 3, 7, 83) - 0.5) * 9);
+      const thin = Math.max(0, fbm(u, v, 3, 3, 89) - 0.45) * 2;
+      const k = Math.min(1, 0.32 + seam * 0.8 + thin * 0.5 + fbm(u, v, 2, 24, 97) * 0.12);
+      img.data.set([k * 255, k * 235, k * 200, 255], (y * size + x) * 4);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
 /** White where the ground texture has cracks: used to make glowing veins on strange worlds. */
 export function crackMask(style?: string): Texture {
   const size = 512;

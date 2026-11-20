@@ -5,7 +5,7 @@ import {
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
-import { crackMask, fbm, groundImages, groundTextures, rockTextures } from './render/textures';
+import { crackMask, fbm, groundImages, groundTextures, lavaTexture, rockTextures } from './render/textures';
 
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
 /** Current planet look; set before building the terrain. */
@@ -188,7 +188,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
     const { glow, glossy, lava } = B.chasm;
     // Lava gives its own light: drawn as it is, bright where molten, dark where crusted over.
     const floorMat = lava
-      ? new MeshBasicMaterial({ vertexColors: true })
+      ? new MeshBasicMaterial({ vertexColors: true, map: lavaTexture() })
       : new MeshStandardMaterial({ vertexColors: true, roughness: glossy ? 0.25 : 1, metalness: glossy ? 0.05 : 0, emissive: glow ?? new Color(0), emissiveIntensity: 0.2 });
     const floorMesh = floor.mesh(floorMat);
     floorMesh.receiveShadow = true;

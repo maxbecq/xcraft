@@ -29,7 +29,7 @@ export class Space {
     this.layer([stars], 0.96);
 
     // The gas giant, far down beyond the map's north corner (the top of the screen).
-    const giant = new Mesh(new SphereGeometry(22, 48, 32), new MeshStandardMaterial({ map: giantTexture(), roughness: 1, emissive: new Color(0x3a2a18), emissiveIntensity: 0.6 }));
+    const giant = new Mesh(new SphereGeometry(13, 48, 32), new MeshStandardMaterial({ map: giantTexture(), roughness: 1, emissive: new Color(0x3a2a18), emissiveIntensity: 0.6 }));
     giant.position.copy(under(-28, -28, 260)); // follows the camera almost wholly: always up the view, beyond the map's far side
     giant.rotation.set(0.35, 0.8, 0.25);
     this.layer([giant], 0.97);
