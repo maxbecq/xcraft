@@ -101,8 +101,11 @@ const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number; apex?: bo
   assimilateur: { size: 0.4, apex: true },
   tourelle: { size: 0.6 },
 };
-/** Melee modules: on a walker's back, their arm drawn out to reach in front of its head (see mount). */
+/** Melee modules: on a walker's head, their arm reaching down in front of it (see mount). */
 const MELEE = new Set(['zw_dechiqueteur']);
+/** The Déchiqueteur's saw on a walker: its radius as modelled (module units), and how much larger it is drawn. */
+const SAW_RADIUS = 0.14;
+const SAW_GROWTH = 2;
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
@@ -273,13 +276,15 @@ export class EntityRenderer {
     const across = Math.min(size.x, size.z) * bodyScale;
     const fit = WEAPON_TUNE[name] ?? {};
     const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
-    const spot = new Vector3(centre.x, 0, centre.z + (tune.forward ?? 0) * size.z);
+    // A walker's melee module sits on its head, its arm reaching down in front of it (see below).
+    const melee = MELEE.has(name) && e.def.kind === 'unit' && !ZSUPPORTS[e.type];
+    const spot = new Vector3(centre.x, 0, melee ? box.max.z - 0.2 * scale : centre.z + (tune.forward ?? 0) * size.z);
     // On the highest of the rays dropped round its foot: on a mounting ring's rim, not down its hole.
     const down = new Vector3(0, -1, 0).transformDirection(body.matrixWorld);
     let top = -Infinity;
     for (let k = 0; k <= 8; k++) {
       const a = (k * Math.PI) / 4;
-      const r = k ? 0.25 * scale : 0;
+      const r = k ? (melee ? 0.1 : 0.25) * scale : 0;
       const from = body.localToWorld(new Vector3(spot.x + r * Math.cos(a), box.max.y + 1, spot.z + r * Math.sin(a)));
       const hit = new Raycaster(from, down).intersectObjects(parts, false)[0];
       if (hit) top = Math.max(top, body.worldToLocal(hit.point.clone()).y);
@@ -309,14 +314,17 @@ export class EntityRenderer {
     const arm = o.getObjectByName('zw_arm');
     const saw = o.getObjectByName('zw_saw');
     let reach: number | undefined;
-    if (MELEE.has(name) && e.def.kind === 'unit' && arm && saw && !support) {
-      // On a walker's back, its arm drawn out and down so the saw comes in front of the head, at the height of the front
-      // knees, where it can reach what it fights: the arm's own length stretched, the saw kept round.
+    if (melee && arm && saw) {
+      // From the box on the head, the arm dives forwards and down so a saw twice its modelled size comes in front of the
+      // head at the height of the front knees, where it can reach what it fights: the arm's length fitted to it, the saw
+      // kept round.
+      saw.scale.multiplyScalar(SAW_GROWTH);
+      const sawR = SAW_RADIUS * SAW_GROWTH * scale;
       const knee = body.getObjectByName('zshin_0_l') ?? body.getObjectByName('zshin_0_r');
       const kneeY = knee ? body.worldToLocal(knee.getWorldPosition(new Vector3())).y : box.min.y + 0.3 * size.y;
-      const target = new Vector3(centre.x, kneeY, box.max.z + 0.08 * size.z).sub(o.position).divideScalar(scale).sub(arm.position);
+      const target = new Vector3(centre.x, Math.max(kneeY, box.min.y + sawR), box.max.z + sawR + 0.03 * size.z).sub(o.position).divideScalar(scale).sub(arm.position);
       const tip = saw.position.clone();
-      const k = Math.sqrt(Math.max(1e-4, target.y * target.y + target.z * target.z - tip.y * tip.y)) / tip.z;
+      const k = Math.max(0.5, Math.sqrt(Math.max(1e-4, target.y * target.y + target.z * target.z - tip.y * tip.y)) / tip.z);
       for (const c of arm.children) if (c !== saw) [c.position.z, c.scale.z] = [c.position.z * k, c.scale.z * k];
       saw.position.z *= k;
       reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
