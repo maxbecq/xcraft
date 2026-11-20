@@ -53,9 +53,9 @@ const frame = (now: number) => {
   sun.position.copy(rig.target).add(SUN_OFFSET);
   sun.target.position.copy(rig.target);
   space?.update(rig.target);
-  renderer.setSize(innerWidth, innerHeight);
   renderer.render(scene, rig.camera);
   requestAnimationFrame(frame);
 };
+addEventListener('resize', () => renderer.setSize(innerWidth, innerHeight));
 requestAnimationFrame(frame);
 Object.assign(window, { preview: { rig } });
