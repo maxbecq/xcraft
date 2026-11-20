@@ -223,14 +223,11 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   };
   const peer = player === 0 ? new Peer(peerId(room)) : new Peer();
   const began = performance.now();
-  /** A rematch asked for, by us and by them. The host picks its room once both have. */
-  let asked = false;
-  let theyAsked = false;
-  const rematch = () => {
-    if (!asked || !theyAsked || player !== 0) return;
-    const next = newRoom();
-    sendOn(conn, { go: next } satisfies Message);
-    onStatus('go', next);
+  const again = new Rematch(player);
+  const go = (room: string | null) => {
+    if (!room) return;
+    if (player === 0) sendOn(conn, { go: room } satisfies Message);
+    onStatus('go', room);
   };
   let dialed = -Infinity;
   /** The guest's call under way; when a guest first knocked at the host without getting in; the network blamed once. */
@@ -272,12 +269,9 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         set('connected');
       } else if (c !== conn) return;
       else if ('again' in m) {
-        theyAsked = true;
         onStatus('again');
-        rematch();
-      } else if ('go' in m) {
-        if (typeof m.go === 'string' && readRoom(m.go) === m.go) onStatus('go', m.go);
-      }
+        go(again.theyAsk());
+      } else if ('go' in m) go(again.take(m.go));
       else {
         lock.receive(m);
         if (lock.left) set('left', "L'adversaire a quitté la partie.");
@@ -313,9 +307,8 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     lock,
     /** Leaving on purpose: the other side is told at once. */
     again: () => {
-      asked = true;
       sendOn(conn, { again: 1 } satisfies Message);
-      rematch();
+      go(again.ask());
     },
     leave: () => {
       // Not to a side that has already gone: its channel is closing.
@@ -324,6 +317,38 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       peer.destroy();
     },
   };
+}
+
+/**
+ * The rematch at the end of a network match: each side asks (only from the end screen), then the host names a new room
+ * and tells the guest. A guest takes a room only from the host, once it asked itself, and only once; a host takes none.
+ */
+export class Rematch {
+  private asked = false;
+  private theyAsked = false;
+  private done = false;
+  constructor(private readonly player: number) {}
+  /** We ask: the room to go to when that makes both (on the host's side), else null. */
+  ask(): string | null {
+    this.asked = true;
+    return this.room();
+  }
+  /** They ask: as `ask`. */
+  theyAsk(): string | null {
+    this.theyAsked = true;
+    return this.room();
+  }
+  /** A room the other side sent: the one to go to, or null when it is not for us to take. */
+  take(room: unknown): string | null {
+    if (this.player !== 1 || !this.asked || this.done || typeof room !== 'string' || readRoom(room) !== room) return null;
+    this.done = true;
+    return room;
+  }
+  private room(): string | null {
+    if (this.player !== 0 || !this.asked || !this.theyAsked || this.done) return null;
+    this.done = true;
+    return newRoom();
+  }
 }
 
 /**

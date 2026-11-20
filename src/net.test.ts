@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { newRoom, readRoom } from './net';
+import { newRoom, readRoom, Rematch } from './net';
 
 describe('friend codes', () => {
   it('are read from the code or the whole link, and nothing else', () => {
@@ -286,5 +286,21 @@ describe('lockstep between two browsers', () => {
     const b = new Lockstep(1, () => {});
     b.receive({ bye: 1 });
     expect(b.left).toBe(true);
+  });
+
+  it("goes to a rematch only once both asked, on the host's word, and once", () => {
+    const host = new Rematch(0);
+    const guest = new Rematch(1);
+    expect(guest.take('ABCD')).toBe(null); // in the middle of the match: nobody asked
+    expect(host.take('ABCD')).toBe(null); // a host never takes a room
+    expect(host.theyAsk()).toBe(null);
+    expect(guest.theyAsk()).toBe(null); // a guest never names one
+    const room = host.ask();
+    expect(room && readRoom(room)).toBe(room);
+    expect(host.ask()).toBe(null); // once
+    guest.ask();
+    expect(guest.take('<b>')).toBe(null);
+    expect(guest.take(room)).toBe(room);
+    expect(guest.take('WXYZ')).toBe(null); // once
   });
 });
