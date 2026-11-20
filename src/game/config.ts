@@ -2,7 +2,7 @@ import { type Faction } from '../data';
 import { DEFAULT_MAP, mapFile } from '../maps';
 import { seatsOf } from '../mappicker';
 import { readReplay, versionNote } from './replay';
-import { decodeSeats } from './seats';
+import { decodeSeats, seatOf } from './seats';
 import { asFaction, SCROLL, stored } from './settings';
 
 /** What this page plays, read once from its address (and the last menu choices): who, where, and how. */
@@ -32,8 +32,6 @@ export const SOLO = (params.has('play') || SANDBOX) && !NET_ROLE;
 /** Phones and tablets: touch controls, lighter rendering. */
 export const TOUCH = matchMedia('(pointer: coarse)').matches;
 export const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
-const PLAYER_PARAM = params.get('p')?.split(',').findIndex((s) => s.startsWith('you.')) ?? -1;
-export const PLAYER = NET_ROLE === 'join' ? 1 : Math.max(0, PLAYER_PARAM);
 
 /** Factions: the player's and the AI's, from the URL or the last menu choice. */
 /** The map: a replay's, else from the URL, else the last one picked. */
@@ -61,5 +59,7 @@ export const slots: Slot[] = REPLAY
 // A Bac à sable (or its replay) has one player.
 if (slots.length < 2 && !SANDBOX && !REPLAY) slots.push({ control: 'normal', faction: 'humains', team: 1 });
 slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the map has starts
+/** The local player's seat, among the seats kept (a guest online is player 1). */
+export const PLAYER = seatOf(slots, NET_ROLE === 'join');
 export const factions = slots.map((s) => s.faction);
 export const [myFaction, foeFaction = asFaction(stored('xcraft.adversaire'))] = factions; // a Bac à sable has no opponent

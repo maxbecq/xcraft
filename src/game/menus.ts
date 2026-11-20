@@ -54,11 +54,11 @@ function readSetup(): Setup {
   };
   try {
     const s = JSON.parse(stored('xcraft.setup') ?? 'null') as Setup | null;
-    if (s && Array.isArray(s.sides) && s.sides.length >= 2 && BIOMES[s.biome]) {
+    if (s && Array.isArray(s.sides) && s.sides.length >= 2 && Object.hasOwn(BIOMES, s.biome)) {
       // Older saves had two seats and no teams.
       const old = s.sides;
       s.sides = [0, 1, 2, 3].map((i) => ({ ...fallback.sides[i], ...old[i], team: old[i]?.team ?? i }));
-      if (!MAPS[s.map]) s.map = fallback.map;
+      if (!Object.hasOwn(MAPS, s.map)) s.map = fallback.map;
       return s;
     }
   } catch {
@@ -304,7 +304,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     $('.lobby-status')!.textContent = status;
     $('.lobby-camp')!.textContent = here ? names[setup.camps[1 - me]] : 'en attente…';
     const biomeName = $('.lobby-biome');
-    if (biomeName) biomeName.textContent = BIOMES[setup.biome]?.name ?? '';
+    if (biomeName) biomeName.textContent = Object.hasOwn(BIOMES, setup.biome) ? BIOMES[setup.biome].name : '';
     // The cards' pictures follow the planet: drawn again only when the map or the planet changes.
     const key = `${setup.map}/${setup.biome}`;
     if (key !== drawnMaps) {
@@ -327,7 +327,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&biome=${s.biome}&map=${s.map}`;
   };
   /** A map or planet not in this build: no match. */
-  const unknown = (s: LobbySetup) => !MAPS[s.map] || !BIOMES[s.biome];
+  const unknown = (s: LobbySetup) => !Object.hasOwn(MAPS, s.map) || !Object.hasOwn(BIOMES, s.biome); // own ids only: not `constructor`
   const UNKNOWN_TEXT = "Votre ami a choisi une carte ou une planète que votre version du jeu n'a pas : rechargez la page (tous les deux).";
   const lobby = openLobby(room, host, {
     status: (s, detail) => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
+import { MAPS, mapFile } from '../maps';
 import { commandOk } from '../net';
 import { createMatch } from '../sim/setup';
 import { GAME_VERSION, parseReplay, type Replay, REPLAY_MAX_BYTES, versionNote, withReplayBiome } from './replay';
@@ -100,5 +101,15 @@ describe('replays read from storage or a file', () => {
     expect(p.get('biome')).toBe('glace');
     expect(p.get('speed')).toBe('2');
     expect(withReplayBiome(params, null).get('biome')).toBe('volcan');
+  });
+
+  it('takes no inherited name for a side, a map or a planet', () => {
+    expect(refused({ ...good, factions: ['humains', 'constructor'] })).toBe(true);
+    expect(refused({ ...good, factions: ['humains', '__proto__'] })).toBe(true);
+    const r = parseReplay(text({ ...good, map: 'constructor' })) as Replay;
+    expect(r.map).toBeUndefined();
+    expect(r.lostMap).toBe('constructor');
+    expect(mapFile('constructor')).toBe(MAPS.origine);
+    expect(mapFile('toString')).toBe(MAPS.origine);
   });
 });

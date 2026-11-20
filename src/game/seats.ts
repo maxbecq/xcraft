@@ -26,3 +26,8 @@ export function decodeSeats(p: string): Seat[] {
       return { control: control || 'normal', faction: asFaction(faction), team: Number.isInteger(n) && n >= 0 ? n : i };
     });
 }
+
+/** The local player's seat: a guest online is player 1, else the seat played by `you` among those kept, else 0 (watching). */
+export function seatOf(seats: Seat[], guest: boolean): number {
+  return guest ? 1 : Math.max(0, seats.findIndex((s) => s.control === 'you'));
+}

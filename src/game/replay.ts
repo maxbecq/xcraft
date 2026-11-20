@@ -43,7 +43,7 @@ export function parseReplay(text: string): Replay | string {
   }
   if (!r || typeof r !== 'object' || r.v !== 1) return `${bad} (version inconnue).`;
   const n = Array.isArray(r.factions) ? r.factions.length : 0;
-  if (n < 1 || n > 4 || !r.factions.every((f) => typeof f === 'string' && f in FACTIONS)) return `${bad} (camps inconnus).`;
+  if (n < 1 || n > 4 || !r.factions.every((f) => typeof f === 'string' && Object.hasOwn(FACTIONS, f))) return `${bad} (camps inconnus).`;
   const counted = (a: unknown, ok: (v: unknown) => boolean) => Array.isArray(a) && a.length === n && a.every(ok);
   if (r.teams !== undefined && !counted(r.teams, (t) => Number.isInteger(t) && (t as number) >= 0)) return `${bad} (équipes).`;
   // A harvest handicap is a whole percent (AI levels: 60 to 130).
@@ -61,7 +61,7 @@ export function parseReplay(text: string): Replay | string {
       if (!commandOk(c, n === 1)) return `${bad} (commande invalide).`;
     }
   }
-  if (r.map !== undefined && (typeof r.map !== 'string' || !MAPS[r.map])) {
+  if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
   }

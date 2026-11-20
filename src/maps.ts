@@ -69,8 +69,10 @@ export const DEFAULT_MAP = 'origine';
 
 /** The map with this id, or the original map (said in the console when an id was given: a network game checks it first). */
 export function mapFile(id: string | null | undefined): MapFile {
-  if (id && !MAPS[id]) console.warn(`Carte inconnue : ${id}, remplacée par ${DEFAULT_MAP}`);
-  return MAPS[id ?? ''] ?? MAPS[DEFAULT_MAP];
+  // Own ids only: a name like `constructor` is not a map.
+  const known = !!id && Object.hasOwn(MAPS, id);
+  if (id && !known) console.warn(`Carte inconnue : ${id}, remplacée par ${DEFAULT_MAP}`);
+  return known ? MAPS[id] : MAPS[DEFAULT_MAP];
 }
 
 /** Quarter turns that copy player 0's part for `players` players. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch } from '../sim/setup';
 import type { World } from '../sim/world';
-import { decodeSeats, encodeSeats, type Seat } from './seats';
+import { decodeSeats, encodeSeats, type Seat, seatOf } from './seats';
 
 describe('seats from the menus to the match', () => {
   it('teams chosen in a four-player game reach the match, Équipe 1 (team 0) included on any seat', () => {
@@ -92,5 +92,18 @@ describe('from the menu to the end of the match', () => {
     expect(w.winner).toBe(-1);
     expect(won(w, 0)).toBe(false);
     expect(won(w, 1)).toBe(false);
+  });
+});
+
+describe("the local player's seat", () => {
+  it("is the one played by you among the seats kept, a guest's online, else the first", () => {
+    const seats = decodeSeats('hard.z.0,you.humains.1,normal.dieux.2');
+    expect(seatOf(seats, false)).toBe(1);
+    expect(seatOf(seats, true)).toBe(1);
+    // A seat past the fourth, or past the map's starts, is not kept: never a player the match does not have.
+    const far = decodeSeats('hard.z.0,normal.z.1,normal.z.2,normal.z.3,you.humains.4');
+    expect(seatOf(far, false)).toBe(0);
+    expect(seatOf(decodeSeats('hard.z.0,normal.z.1,you.humains.2').slice(0, 2), false)).toBe(0);
+    expect(seatOf(decodeSeats('hard.z.0,normal.z.1'), false)).toBe(0); // watching
   });
 });

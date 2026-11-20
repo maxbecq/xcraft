@@ -195,7 +195,8 @@ export function pickBiome(params: URLSearchParams): Biome {
   } catch {
     // storage unavailable: fine
   }
-  return BIOMES[params.get('biome') ?? stored ?? 'desert'] ?? BIOMES.desert;
+  const id = params.get('biome') ?? stored ?? 'desert';
+  return Object.hasOwn(BIOMES, id) ? BIOMES[id] : BIOMES.desert; // own ids only: `constructor` is not a planet
 }
 
 /**

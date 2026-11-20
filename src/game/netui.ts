@@ -40,7 +40,7 @@ export class NetGame {
     /** The room, as a code reads (an address typed or cut short may hold anything); none if it is not one. */
     const ROOM = readRoom(params.get('room') ?? '');
     /** A map or planet this build does not have would be swapped for the default one, on this side only: the two games would differ. */
-    const UNKNOWN = !!NET_ROLE && (!MAPS[params.get('map') ?? ''] || !BIOMES[params.get('biome') ?? '']);
+    const UNKNOWN = !!NET_ROLE && (!Object.hasOwn(MAPS, params.get('map') ?? '') || !Object.hasOwn(BIOMES, params.get('biome') ?? ''));
     const NO_ROOM = !!NET_ROLE && !ROOM;
     this.link = NET_ROLE && ROOM && !UNKNOWN ? connect(PLAYER, ROOM, (status, detail) => this.showNet(status, detail)) : null;
     this.net = this.link?.lock ?? null;

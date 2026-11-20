@@ -12,7 +12,7 @@ import { BIOMES } from './render/biome';
 import { Space } from './render/space';
 
 const params = new URLSearchParams(location.search);
-const biome = BIOMES[params.get('biome') ?? 'volcan'] ?? BIOMES.volcan;
+const biome = Object.hasOwn(BIOMES, params.get('biome') ?? '') ? BIOMES[params.get('biome')!] : BIOMES.volcan;
 const def = mapFile(params.get('map') ?? 'les-ponts');
 setBiome(biome);
 const map = buildMap(def, 2, biome.id);
