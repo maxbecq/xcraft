@@ -75,6 +75,9 @@ type Need = ReturnType<AI['need']>;
 type Turn = Survey & Need & ReturnType<AI['budget']> & { keep: number };
 
 /** A computer player. It only acts through commands, like a human. */
+/** A building spot's key: its middle, in half tiles. */
+const spotKey = (tx: number, ty: number, size: number) => `${2 * tx + size},${2 * ty + size}`;
+
 export class AI {
   private waves = 0;
   private trained = 0;
@@ -93,7 +96,10 @@ export class AI {
    * and the side whose base was hit first called its wave back, to be beaten piecemeal at home.
    */
   private via: { x: number; y: number; until: number } | null = null;
-  /** Build orders given per spot ("tx,ty"); a spot tried MAX_TRIES times with nothing built there is given up. */
+  /**
+   * Build orders given per spot, by its middle in half tiles (by its top-left tile, a building of another size there
+   * cleared it in one corner and not in the mirror); a spot tried MAX_TRIES times with nothing built there is given up.
+   */
   private tried = new Map<string, number>();
 
   private readonly faction: FactionDef;
@@ -327,7 +333,7 @@ export class AI {
   private place(ctx: Turn): void {
     const { w, f, home, builders, buildings, wants, building, outpost } = ctx;
     // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
-    for (const b of buildings) this.tried.delete(`${b.tx},${b.ty}`);
+    for (const b of buildings) this.tried.delete(spotKey(b.tx, b.ty, (b.def as BuildingDef).size));
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
     const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
     for (let i = 0; i < wants.length; i++) {
@@ -358,7 +364,8 @@ export class AI {
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       if (taken) continue;
       ctx.out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1], queue: !!chained });
-      this.tried.set(`${spot[0]},${spot[1]}`, (this.tried.get(`${spot[0]},${spot[1]}`) ?? 0) + 1);
+      const k = spotKey(spot[0], spot[1], def.size);
+      this.tried.set(k, (this.tried.get(k) ?? 0) + 1);
       ctx.minerals -= def.cost.minerals;
       ctx.energy -= def.cost.energy;
     }
@@ -1143,10 +1150,10 @@ export class AI {
       // stood two tiles off the mirror of the one in the opposite corner.
       const inset = Math.floor(((DEFS[this.faction.hq] as BuildingDef).size - def.size) / 2);
       const site = expansions(w, this.player).map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
-      return site.find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
+      return site.find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
     }
-    const cx = Math.floor((near ?? home).x / FP);
-    const cy = Math.floor((near ?? home).y / FP);
+    // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
+    const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
     // Prefer the side facing the map centre, where the minerals are not.
     // A site right on a middle line (on an odd-sized map's axis) takes its side from the other line: the same both
     // ways, its mirror's spot was not the mirror of its own.
@@ -1157,18 +1164,20 @@ export class AI {
     for (let r = near ? 1 : 4; r < 14; r++) {
       for (let i = -r; i <= r; i++) {
         for (const [dx, dy] of [[i, r], [r, i], [i, -r], [-r, i]]) {
-          // Centred on the spiral's tile; an even size one tile further toward the corner the base faces from, so
-          // the base in the opposite corner gets the mirror of the spot (floor(size / 2) both ways was one tile off).
-          const tx = cx + dx * sx - (sx > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
-          const ty = cy + dy * sy - (sy > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
+          // Centred on the spiral's point; half a tile left over goes toward the corner the base faces from, so the
+          // base in the opposite corner gets the mirror of the spot, round a middle on a tile's edge too (a tile off).
+          const [hx, hy] = [c2x + 2 * dx * sx - def.size, c2y + 2 * dy * sy - def.size];
+          const tx = sx > 0 ? Math.floor(hx / 2) : Math.ceil(hx / 2);
+          const ty = sy > 0 ? Math.floor(hy / 2) : Math.ceil(hy / 2);
           // Leave a one-tile corridor around every building.
-          if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player) || !this.fresh(tx, ty)) continue;
+          if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player) || !this.fresh(tx, ty, def.size)) continue;
           // Round the base, only on its own plateau: once it was full, a spot on the low ground outside passed.
           if (!near && !this.onPlateau(home, tx, ty, def.size)) continue;
           if (this.closeToResources(tx, ty, def.size) || this.closeToRamp(tx, ty, def.size)) continue;
           // Power-field buildings spread out to cover more ground: none closer to another field than most of its radius.
-          // The road is measured to the spiral's tile, the one the footprint is centred on (the same in the mirror).
-          const [ax, ay] = [cx + dx * sx, cy + dy * sy];
+          // The road is measured to the footprint's middle tile, taken toward the same corner (the same in the mirror).
+          const mid = (t: number, s: number) => t + (s > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
+          const [ax, ay] = [mid(tx, sx), mid(ty, sy)];
           if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay)) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
           if (!this.walkable(home, ax, ay)) continue;
@@ -1211,8 +1220,8 @@ export class AI {
   }
 
   /** Not a spot given up after MAX_TRIES build orders. */
-  private fresh(tx: number, ty: number): boolean {
-    return (this.tried.get(`${tx},${ty}`) ?? 0) < MAX_TRIES;
+  private fresh(tx: number, ty: number, size: number): boolean {
+    return (this.tried.get(spotKey(tx, ty, size)) ?? 0) < MAX_TRIES;
   }
 
   /**
