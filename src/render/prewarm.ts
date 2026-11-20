@@ -1,11 +1,11 @@
-import type { DirectionalLight, Object3D, Scene, Vector3, WebGLRenderer } from 'three';
+import { type DirectionalLight, type Object3D, type Scene, Vector3, type WebGLRenderer } from 'three';
 import type { CameraRig } from '../camera';
 import { DEFS } from '../data';
 import { FP } from '../sim/fixed';
 import { type Entity, World } from '../sim/world';
 import type { Post } from './post';
 import { stableShadowDepth } from './shadowdepth';
-import { EntityRenderer } from './units';
+import { burstSamples, EntityRenderer } from './units';
 import { drawXray } from './xray';
 
 /** What the match's warm-up draws with: the match's own renderer, scene, camera and sun. */
@@ -50,6 +50,9 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   }
   const shapes = new EntityRenderer(scene, map);
   shapes.sync(spare, 0, new Set(), m.player, () => true, () => true);
+  // The death bursts' points too: the first death of a match compiled their two programs.
+  const bursts = burstSamples(new Vector3(map.width / 2, 1, map.height / 2));
+  scene.add(...bursts);
   stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
   const into = post.sceneTarget;
   renderer.setRenderTarget(into);
@@ -93,5 +96,9 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     rig.viewHeight = view;
     rig.update(aspect);
     shapes.clear();
+    for (const b of bursts) {
+      scene.remove(b);
+      b.geometry.dispose();
+    }
   }
 }

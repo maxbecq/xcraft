@@ -117,6 +117,31 @@ const RING_CLIFF = 0.6;
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', -1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
+/** A death burst's material: sparks for a machine, dark drops for the living. */
+function burstMaterial(mechanical: boolean): PointsMaterial {
+  return mechanical
+    ? new PointsMaterial({ map: spark(), size: 9, sizeAttenuation: false, color: 0xffc070, transparent: true, depthWrite: false, blending: AdditiveBlending })
+    : new PointsMaterial({ map: dropTexture(), size: 8, sizeAttenuation: false, transparent: true, depthWrite: false, alphaTest: 0.3 });
+}
+
+/** Kept, never disposed: while they stand, so do the death bursts' two shader programs (see burstSamples). */
+const BURST_KEEP: PointsMaterial[] = [];
+
+/**
+ * A point of each kind of death burst at `at`, for the warm-up to draw (render/prewarm.ts): the first unit to die
+ * compiled both programs mid-game, a small freeze. Their materials are kept for good, so the programs are never let
+ * go either (each burst disposes its own material when it fades, which freed them after a quiet spell).
+ */
+export function burstSamples(at: Vector3): Points[] {
+  return [false, true].map((mechanical) => {
+    const m = burstMaterial(mechanical);
+    BURST_KEEP.push(m);
+    const p = new Points(new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array([at.x, at.y, at.z]), 3)), m);
+    p.userData.noPick = true;
+    return p;
+  });
+}
+
 /** How long a unit takes to fall when it dies, and its death burst lasts (s). */
 const DIE_S = 0.3;
 const BURST_S = 0.4;
@@ -823,9 +848,7 @@ export class EntityRenderer {
     const geom = new BufferGeometry();
     geom.setAttribute('position', new BufferAttribute(pos, 3));
     // Sizes in pixels: the camera is orthographic, where point sizes do not follow the zoom anyway.
-    const pts = new Points(geom, mechanical
-      ? new PointsMaterial({ map: spark(), size: 9, sizeAttenuation: false, color: 0xffc070, transparent: true, depthWrite: false, blending: AdditiveBlending })
-      : new PointsMaterial({ map: dropTexture(), size: 8, sizeAttenuation: false, transparent: true, depthWrite: false, alphaTest: 0.3 }));
+    const pts = new Points(geom, burstMaterial(mechanical));
     pts.userData.noPick = true;
     this.scene.add(pts);
     this.bursts.push({ pts, vel, age: 0 });
