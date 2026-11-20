@@ -1,6 +1,6 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
-  AdditiveBlending, Box3, Plane, BufferAttribute, DoubleSide, CanvasTexture, BoxGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, Matrix4, Plane, BufferAttribute, DoubleSide, CanvasTexture, BoxGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   Object3D, Raycaster, AnimationMixer, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, Points, PointsMaterial,
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
@@ -100,6 +100,8 @@ const WEAPON_MOUNTS: Record<string, { size?: number; forward?: number }> = {
   assimilateur: { size: 0.4 },
   tourelle: { size: 0.6 },
 };
+/** Melee modules: on the head, reaching out in front of it, so they can touch what they fight. */
+const MELEE = new Set(['zw_dechiqueteur']);
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
 /** The team-colour collar under every module (generated models carry no team colour of their own). */
@@ -249,26 +251,44 @@ export class EntityRenderer {
       if ((o as Mesh).isMesh && !fx.has(o) && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
     });
     v.root.updateMatrixWorld(true);
+    // Measured in the body's own frame (glTF +Z forward), whatever way the unit faces.
+    const toBody = body.matrixWorld.clone().invert();
     const box = new Box3();
-    for (const o of parts) box.expandByObject(o, true);
+    const q = new Vector3();
+    for (const o of parts) {
+      const m = o as Mesh;
+      const local = new Matrix4().multiplyMatrices(toBody, m.matrixWorld);
+      for (let i = 0; i < m.geometry.getAttribute('position').count; i++) box.expandByPoint(m.getVertexPosition(i, q).applyMatrix4(local));
+    }
     const centre = box.getCenter(new Vector3());
     const tune = WEAPON_MOUNTS[e.type] ?? {};
     const size = box.getSize(new Vector3());
-    const across = Math.min(size.x, size.z);
-    const ray = new Raycaster(new Vector3(centre.x, box.max.y + 1, centre.z + (tune.forward ?? 0) * across), new Vector3(0, -1, 0));
-    const hit = ray.intersectObjects(parts, false)[0];
-    const at = hit ? hit.point : new Vector3(centre.x, box.max.y, centre.z);
+    const bodyScale = body.getWorldScale(new Vector3()).x;
+    const across = Math.min(size.x, size.z) * bodyScale;
+    const fit = WEAPON_TUNE[name] ?? {};
+    const melee = MELEE.has(name) && e.def.kind === 'unit';
+    const scale = (((melee ? 0.55 : (tune.size ?? 0.7)) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
+    // Where it stands: on the back, or a melee weapon on the head, reaching out in front of it.
+    const spot = new Vector3(centre.x, 0, melee ? box.max.z - 0.2 * scale : centre.z + (tune.forward ?? 0) * size.z);
+    // On the highest of the rays dropped round its foot: on a mounting ring's rim, not down its hole.
+    const down = new Vector3(0, -1, 0).transformDirection(body.matrixWorld);
+    let top = -Infinity;
+    for (let k = 0; k <= 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const r = k ? (melee ? 0.1 : 0.25) * scale : 0;
+      const from = body.localToWorld(new Vector3(spot.x + r * Math.cos(a), box.max.y + 1, spot.z + r * Math.sin(a)));
+      const hit = new Raycaster(from, down).intersectObjects(parts, false)[0];
+      if (hit) top = Math.max(top, body.worldToLocal(hit.point.clone()).y);
+    }
+    const at = body.localToWorld(spot.setY(top > -Infinity ? top : box.max.y));
     let o: Object3D = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
     // In the body's frame (which faces glTF +Z, as the module does): it follows its heading, gait, lean, tier and fall.
-    const fit = WEAPON_TUNE[name] ?? {};
     o.rotation.y = fit.yaw ?? 0;
     // Socles only: a building's weapon sits on the building's own mount.
     if (e.def.kind === 'unit') {
       SHARED.add(WEAPON_COLLAR);
       o.add(new Mesh(WEAPON_COLLAR, teamMaterials[e.owner] ?? teamMaterials[0]));
     }
-    const bodyScale = body.getWorldScale(new Vector3()).x;
-    const scale = (((tune.size ?? 0.7) * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
     const support = ZSUPPORTS[e.type];
     if (support && templates.has(support.model)) {
       // On the building's mount: the weapon is the mount's child, at its plate.
