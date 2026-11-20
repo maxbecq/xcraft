@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFSoftShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
@@ -67,7 +67,7 @@ renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(params);
 renderer.toneMappingExposure = biome.exposure;
 renderer.shadowMap.enabled = GFX.shadows > 0;
-renderer.shadowMap.type = PCFSoftShadowMap;
+renderer.shadowMap.type = PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
