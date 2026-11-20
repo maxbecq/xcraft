@@ -65,7 +65,7 @@ const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
-const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, tempete: 2, impulsion: 3, vacarme: 3 };
+const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
 const GODS = BALANCE.ai.gods as [string, number][];
 

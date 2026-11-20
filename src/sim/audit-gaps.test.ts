@@ -198,4 +198,19 @@ describe('audit gaps', () => {
     const after = w.spawn('dronecombat', 0, 32 * FP, 30 * FP);
     expect(after.maxHp).toBe(hp + BALANCE.rules.z.sondeRobusteHp);
   });
+
+  it('Apollon\'s Lumière ardente halves the pace of the enemy infantry of a zone, longer at higher levels', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = w.spawn('apollon', 0, 30 * FP, 30 * FP);
+    const aux = w.spawn('auxiliaire', 1, 35 * FP, 30 * FP);
+    const tank = w.spawn('pegase', 1, 35 * FP, 31 * FP);
+    aux.frozen = tank.frozen = ticks(60); // quiet, so the god does not chase them
+    const speed = aux.speed;
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'lumiereardente', x: aux.x, y: aux.y }]);
+    run(w, 1);
+    expect(aux.paceAtk).toBe(200);
+    expect(aux.speed).toBeLessThan(speed);
+    expect(tank.pace).toBe(0); // machines are not blinded
+    expect(aux.pace).toBeLessThanOrEqual(ticks(25));
+  });
 });

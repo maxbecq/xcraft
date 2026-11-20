@@ -335,6 +335,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.hit(e, t, { damage: ab.damage!, range: ab.range!, cooldown: 0 });
     t.held = Math.max(t.held, ticks(ab.duration));
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
+  } else if (name === 'lumiereardente') {
+    // Living enemies only (« l'infanterie ennemie »): walking speed and rate of attack halved.
+    const foes = near((t) => this.hostile(t.owner, e.owner) && !(t.def as UnitDef).mechanical);
+    if (!foes.length) return false;
+    for (const t of foes) this.setPace(t, ticks(ab.duration), ab.damage!, idiv(10000, ab.damage!));
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'flechegaia') {

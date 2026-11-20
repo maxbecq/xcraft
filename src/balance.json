@@ -326,6 +326,7 @@
     "flechegaia": { "cooldown": 8, "duration": 0, "range": 7, "radius": 1.5, "damage": 30, "levels": { "damage": [30, 35, 40, 45, 50] } },
     "courroux": { "cooldown": 15, "duration": 10, "levels": { "radius": [0, 1.5, 2, 2.5, 3] } },
     "pluiedefeu": { "cooldown": 30, "duration": 0, "range": 8, "radius": 3, "damage": 80, "levels": { "damage": [80, 100, 140, 200, 280], "radius": [3, 3.75, 3.75, 4.5, 4.5] } },
+    "lumiereardente": { "cooldown": 40, "duration": 25, "range": 8, "radius": 1.8, "damage": 50, "levels": { "duration": [25, 30, 35, 40, 45], "radius": [1.8, 2.4, 3, 3.6, 4.1] } },
     "tempete": { "cooldown": 40, "duration": 10, "range": 8, "radius": 4, "levels": { "duration": [10, 13, 17, 20, 23], "radius": [4, 4.9, 5.8, 6.7, 7.6] } },
     "foudre": { "cooldown": 20, "duration": 2, "range": 7, "radius": 1, "damage": 120, "levels": { "damage": [120, 180, 240, 300, 360], "duration": [2, 3, 3, 4, 5] } },
     "cridegueurre": { "cooldown": 45, "duration": 10, "radius": 3, "damage": 25, "levels": { "damage": [25, 50, 75, 100, 125], "duration": [10, 12, 14, 16, 18], "radius": [3, 3.3, 3.6, 3.9, 4.2] } },
