@@ -1,6 +1,6 @@
 import { AdditiveBlending, BufferAttribute, MeshLambertMaterial, type DataTexture, type Material, Vector2, CatmullRomCurve3, MeshStandardMaterial, TubeGeometry, CanvasTexture, RepeatWrapping, SRGBColorSpace, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { BuildingDef } from '../data';
-import { type GameMap, heightAt } from '../map';
+import { type GameMap, heightAt, LEVEL_HEIGHT } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 
@@ -661,6 +661,9 @@ export class PowerNet {
       }
     }
     pts.push([bx, bz]);
+    // No wire down a cliff: seen from above it reads as a stray line running off to a base below.
+    const h = pts.map(([x, z]) => heightAt(this.map, x, z));
+    if (h.some((y, i) => i > 0 && Math.abs(y - h[i - 1]) > LEVEL_HEIGHT * 0.5)) return;
     this.wire(a, b, pts);
   }
 
