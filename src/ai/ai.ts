@@ -445,8 +445,14 @@ export class AI {
     // Minerals piling up while energy holds back the tech (the reserve and the next research): buy energy.
     if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
     else if (market && ctx.energy > 250 && ctx.minerals < 150) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
-    // Man the Fortins with soldiers waiting at home (the Z Intelligence shelters drones only).
-    for (const b of buildings.filter((o) => (o.def as BuildingDef).bunker && !(o.def as BuildingDef).dropoff && o.buildLeft === 0)) {
+    // Man the Fortins with soldiers waiting at home (the Z Intelligence shelters drones only). With no income left
+    // they come out and join the last waves: a crew sat in its Fortin to the time limit while one new soldier at a
+    // time walked out to die.
+    const bunkers = buildings.filter((o) => (o.def as BuildingDef).bunker && !(o.def as BuildingDef).dropoff && o.buildLeft === 0);
+    if (bunkers.length && this.starved(buildings, ctx.p.minerals)) {
+      const manned = bunkers.filter((b) => mine.some((u) => u.inside === b.id));
+      if (manned.length) ctx.out.push({ player: this.player, kind: 'unload', ids: manned.map((b) => b.id) });
+    } else for (const b of bunkers) {
       const room = (b.def as BuildingDef).bunker! - mine.filter((u) => u.inside === b.id || (u.order?.kind === 'enter' && u.order.target === b.id)).length;
       const crew = army.filter((u) => !this.wave.has(u.id) && (u.def as UnitDef).attack && (u.def as UnitDef).attack!.range > 1 && u.order?.kind !== 'enter').slice(0, Math.max(0, room));
       if (crew.length) ctx.out.push({ player: this.player, kind: 'smart', ids: crew.map((u) => u.id), x: b.x, y: b.y, target: b.id });
