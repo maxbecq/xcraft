@@ -4,9 +4,10 @@ import { FP } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Entity, World } from '../sim/world';
 
-// hud.ts listens for keys as it loads: a bare window is enough to read the cards without a page.
+// hud-card.ts listens for keys as it loads: a bare window is enough to read the cards without a page.
 (globalThis as { window?: unknown }).window ??= { addEventListener() {} };
 const { Hud } = await import('./hud');
+const { buttonsFor } = await import('./hud-card');
 
 type Card = { key: string; label: string }[];
 
@@ -16,7 +17,7 @@ function card(w: World, selected: Entity[], menus: Record<string, unknown> = {})
     world: w, player: 0, input: { own: () => selected }, activeType: null, buildMenu: false, placing: null, targeting: false,
     weaponMenu: null, issue: () => {}, ...menus,
   });
-  return (hud as { buttonsFor(): Card }).buttonsFor();
+  return buttonsFor(hud);
 }
 
 const twice = (c: Card) => {

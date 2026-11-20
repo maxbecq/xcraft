@@ -1,7 +1,6 @@
-import BALANCE from '../balance.json';
 import { BoxGeometry, Mesh, MeshBasicMaterial, type Scene, Vector3 } from 'three';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
-import { el, img, noIcon, pictogram, weaponIcon, Z_GLYPHS } from './glyphs';
+import { type BuildingDef, DEFS, FACTIONS, type UnitDef } from '../data';
+import { el, img, noIcon } from './glyphs';
 import { type GameMap, heightAt } from '../map';
 import { FP, TICK_RATE, ticks } from '../sim/fixed';
 import { GRID_REACH, PlaceGrid } from '../render/placegrid';
@@ -10,48 +9,8 @@ import type { Audio } from '../audio';
 import type { Input } from './input';
 import { Portrait } from '../render/portrait';
 import { showEnd, showEvents } from './hud-toasts';
-import { ultimatePct, updatePanel } from './hud-panel';
-
-interface Button {
-  label: string;
-  /** Entity type whose icon to show. */
-  icon?: string;
-  key: string;
-  /** Command pictogram (public/icons/cmd/<faction>/<cmd>.svg), drawn in the player's side's style; the label goes to the tooltip. */
-  cmd?: string;
-  cost?: Cost;
-  /** Why the button is disabled (unmet prerequisites), shown in its tooltip. */
-  reason?: string;
-  /** What it makes or researches, for the tooltip's details (defaults to the icon). */
-  type?: string;
-  /** Its time in seconds, when not the type's own (a god's level). */
-  seconds?: number;
-  /** The ability it uses, whose effect the tooltip explains. */
-  ability?: string;
-  /** The Z weapon it is about (fitted, bought or researched): its pictogram stands for its icon (WEAPON_GLYPHS). */
-  weapon?: string;
-  action: () => void;
-}
-
-/** A command without its player field. */
-type Order<C = Command> = C extends unknown ? Omit<C, 'player'> : never;
-
-const KEY_LABEL: Record<string, string> = { Escape: 'Échap' };
-
-/** Grid hotkeys (Options): the keys under the left hand, row by row, in the command card's order (4 to a row). Physical
- * keys, so the same places on any layout: A Z E R / Q S D F / W X C V in AZERTY, Q W E R / A S D F / Z X C V in QWERTY. */
-const GRID_CODES = ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyZ', 'KeyX', 'KeyC', 'KeyV'];
-/** What each grid key prints on this keyboard: a guess from the language, then what the keys really typed. */
-const gridLabel: Record<string, string> = Object.fromEntries(
-  GRID_CODES.map((c, i) => [c, (navigator.language?.startsWith('fr') ? 'AZERQSDFWXCV' : 'QWERASDFZXCV')[i]]),
-);
-void (navigator as Navigator & { keyboard?: { getLayoutMap(): Promise<Map<string, string>> } }).keyboard
-  ?.getLayoutMap()
-  .then((m) => GRID_CODES.forEach((c) => m.get(c) && (gridLabel[c] = m.get(c)!.toUpperCase())))
-  .catch(() => {});
-window.addEventListener('keydown', (e) => {
-  if (GRID_CODES.includes(e.code) && /^\p{L}$/u.test(e.key)) gridLabel[e.code] = e.key.toUpperCase();
-}, true);
+import { updatePanel } from './hud-panel';
+import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
@@ -63,7 +22,7 @@ export class Hud {
   /** Selection text, beside the live portrait. */
   readonly details = el('div', 'details');
   readonly portrait = new Portrait();
-  private readonly card = el('div', 'hud-card');
+  readonly card = el('div', 'hud-card');
   readonly toasts = el('div', 'hud-toasts');
   /** Where the last attack alert happened (tiles): Space or a click on its message goes there. */
   alertAt: { x: number; y: number } | null = null;
@@ -91,41 +50,36 @@ export class Hud {
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
   private groupsKey = '';
-  private buttons: Button[] = [];
+  buttons: Button[] = [];
   /** Hotkeys by place in the card rather than by name (Options). */
   gridKeys = false;
-  /** The key printed on a button (and the grid key that presses it, in grid mode). */
-  private keyLabel(b: Button): string {
-    const i = this.buttons.indexOf(b);
-    return this.gridKeys && b.key !== 'Escape' && i >= 0 && i < GRID_CODES.length ? gridLabel[GRID_CODES[i]] : (KEY_LABEL[b.key] ?? b.key);
-  }
-  private cardKey = '';
+  cardKey = '';
   /** Last button pressed and how it reacted, so the card rebuilt by that press keeps the animation. */
-  private pressed = { key: '', anim: '', at: -Infinity };
+  pressed = { key: '', anim: '', at: -Infinity };
   /** Open build menu: basic buildings, or the advanced (tech) ones. */
-  private buildMenu: false | 'basic' | 'advanced' = false;
+  buildMenu: false | 'basic' | 'advanced' = false;
   /** Z Plate-forme: the socle whose weapon is being picked before it is queued. */
-  private weaponMenu: string | null = null;
+  weaponMenu: string | null = null;
   /** Its weapons, in a menu dropped under the socle's button (`menu`). */
-  private menuItems: Button[] = [];
-  private readonly menu = el('div', 'cmd-menu');
-  private placing: string | null = null;
+  menuItems: Button[] = [];
+  readonly menu = el('div', 'cmd-menu');
+  placing: string | null = null;
   /** The building type being placed, if any. */
   get placingType(): string | null {
     return this.placing;
   }
   /** Waiting for a click to attack or attack-move. */
-  private targeting = false;
+  targeting = false;
   /** The click aims a Forge's Observation céleste instead of an attack. */
-  private scanning = false;
+  scanning = false;
   /** Unit ability being aimed (none: a building's). */
-  private aimed?: string;
+  aimed?: string;
   readonly banner = el('div', 'hud-banner');
   /** More buttons for the end-of-game banner (the telemetry's). */
   endButtons = '';
   /** A match against a friend online: the end offers a rematch instead of a new game. */
   online = false;
-  private readonly tip = el('div', 'cmd-tip');
+  readonly tip = el('div', 'cmd-tip');
   private readonly ghost: Mesh;
   private readonly grid: PlaceGrid;
   /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
@@ -137,7 +91,7 @@ export class Hud {
     readonly player: number,
     readonly input: Input,
     scene: Scene,
-    private readonly issue: (c: Command) => void,
+    readonly issue: (c: Command) => void,
     readonly audio: Audio,
     /** Watching (AI against AI, a replay): the players' own messages are not shown. */
     readonly spectator = false,
@@ -209,7 +163,7 @@ export class Hud {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.cmd');
       if (!el || e.pointerType === 'touch') return;
       clearTimeout(tipTimer);
-      tipTimer = window.setTimeout(() => this.showTip(el), 80);
+      tipTimer = window.setTimeout(() => showTip(this, el), 80);
     });
     this.card.addEventListener('pointerout', (e) => {
       if ((e.relatedTarget as HTMLElement | null)?.closest('.cmd') === (e.target as HTMLElement).closest('.cmd')) return;
@@ -222,7 +176,7 @@ export class Hud {
       e.preventDefault();
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-wkey]')?.dataset.wkey;
       const item = this.menuItems.find((x) => x.key === k);
-      if (item) this.pressMenu(item);
+      if (item) pressMenu(this, item);
     });
     // A click or tap anywhere but the menu or its socle's button closes it.
     window.addEventListener(
@@ -239,19 +193,19 @@ export class Hud {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
       const b = this.buttons.find((x) => x.key === el?.dataset.key);
       if (!b || !el) return;
-      if (e.pointerType !== 'touch') return this.press(b);
+      if (e.pointerType !== 'touch') return pressButton(this, b);
       if (held) clearTimeout(held.timer);
       const h: { b: Button; long: boolean; timer: number } = (held = { b, long: false, timer: 0 });
       h.timer = window.setTimeout(() => {
         h.long = true;
-        this.showTip(el);
+        showTip(this, el);
       }, 450);
     });
     const release = (press: boolean) => {
       if (!held) return;
       clearTimeout(held.timer);
       if (held.long) this.tip.hidden = true;
-      else if (press) this.press(held.b);
+      else if (press) pressButton(this, held.b);
       held = null;
     };
     // On the window: the card may be rebuilt between the press and the release, its button gone from the page.
@@ -301,7 +255,7 @@ export class Hud {
         const item = this.menuItems.find((x) => x.key === key);
         if (item || key === 'Escape') {
           e.preventDefault();
-          if (item && !e.repeat) this.pressMenu(item);
+          if (item && !e.repeat) pressMenu(this, item);
           else this.weaponMenu = null;
           return;
         }
@@ -312,7 +266,7 @@ export class Hud {
       const b = slot >= 0 ? this.buttons[slot] : this.buttons.find((x, i) => x.key === key && (!this.gridKeys || key === 'Escape' || i >= GRID_CODES.length));
       if (b) {
         e.preventDefault();
-        if (!e.repeat) this.press(b);
+        if (!e.repeat) pressButton(this, b);
       }
     });
   }
@@ -425,28 +379,6 @@ export class Hud {
     span.classList.remove('gain', 'spend');
     void span.offsetWidth;
     span.classList.add(dir);
-  }
-
-  /** A command button pressed, by click or hotkey: it sinks with a tick, or shakes and says why it is locked. */
-  private press(b: Button): void {
-    const el = this.card.querySelector<HTMLElement>(`[data-key="${CSS.escape(b.key)}"]`);
-    const anim = (name: string) => {
-      this.pressed = { key: b.key, anim: name, at: performance.now() };
-      if (!el) return;
-      el.classList.remove('pressed', 'denied');
-      void el.offsetWidth; // restarts the animation on a repeated press
-      el.classList.add(name);
-      el.addEventListener('animationend', () => el.classList.remove(name), { once: true });
-    };
-    if (b.reason) {
-      this.audio.play('error', 0.4);
-      anim('denied');
-      if (el) this.showTip(el);
-      return;
-    }
-    this.audio.play('click');
-    anim(el?.classList.contains('off') ? 'denied' : 'pressed');
-    b.action();
   }
 
   /** Mouse clicks on the map while placing a building or choosing an attack target. */
@@ -579,7 +511,7 @@ export class Hud {
     this.issue({ player: this.player, kind: 'ability', ids, x: Math.round(x * FP), y: Math.round(z * FP), name: this.aimed });
   }
 
-  private setTargeting(on: boolean, scan = false, ability?: string): void {
+  setTargeting(on: boolean, scan = false, ability?: string): void {
     this.targeting = on;
     this.scanning = on && scan;
     this.aimed = on ? ability : undefined;
@@ -612,14 +544,14 @@ export class Hud {
     this.updateIdleProd();
     this.updateProd();
     this.updateGroups();
-    this.updateCard();
+    updateCard(this);
     this.updateGhost();
     showEnd(this);
   }
 
   // ---------------------------------------------------------------- command card
 
-  private workers(): Entity[] {
+  workers(): Entity[] {
     // Those that place buildings: workers, or Gaïa for the Dieux (their Esprits only harvest).
     return this.input.own().filter((e) => e.def.kind === 'unit' && ((e.def as UnitDef).builder ?? (e.def as UnitDef).worker));
   }
@@ -627,287 +559,10 @@ export class Hud {
   /** The active kind in a mixed selection (Tab): its abilities and production are the ones on the card. */
   activeType: string | null = null;
 
-  private buttonsFor(): Button[] {
-    this.menuItems = [];
-    const own = this.input.own();
-    if (!own.some((o) => o.type === this.activeType)) this.activeType = null;
-    const ids = own.map((e) => e.id);
-    const cmd = (c: Order) => this.issue({ ...c, player: this.player } as Command);
-    if (this.placing) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => (this.placing = null) }];
-    if (this.targeting) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => this.setTargeting(false) }];
-    let units = own.filter((e) => e.def.kind === 'unit');
-    if (units.length) {
-      if (this.buildMenu && this.workers().length) {
-        const f = FACTIONS[this.world.players[this.player].faction];
-        return [
-          ...f.buildable.filter((t) => f.advanced.includes(t) === (this.buildMenu === 'advanced')).map((t) => {
-            const d = DEFS[t] as BuildingDef;
-            return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => (this.placing = t) };
-          }),
-          { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (this.buildMenu = false) },
-        ];
-      }
-      const list: Button[] = [{ label: 'Stop', cmd: 'stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
-      // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
-      const all = units;
-      const sub = units.filter((u) => u.type === this.activeType);
-      if (sub.length) units = sub;
-      if (all.some((u) => this.world.weapon(u))) {
-        list.unshift({ label: 'Attaquer', cmd: 'attaquer', key: 'A', action: () => this.setTargeting(true) });
-        list.push({ label: 'Maintenir', cmd: 'maintenir', key: 'H', action: () => cmd({ kind: 'hold', ids }) });
-        list.push({ label: 'Patrouille', cmd: 'patrouiller', key: 'P', action: () => this.setTargeting(true, false, 'patrol') });
-      }
-      // Carriers (Scarabée, Bourdon with Chargement): let everyone out.
-      const carriers = units.filter((u) => this.world.room(u));
-      if (carriers.length) {
-        const ids = carriers.map((u) => u.id);
-        const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
-        list.push({ label: `Débarquer (${inside})`, cmd: 'debarquer', key: 'D', reason: inside ? undefined : "Personne à l'intérieur", action: () => cmd({ kind: 'unload', ids }) });
-      }
-      if (this.workers().length) {
-        list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (this.buildMenu = 'basic') });
-        list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (this.buildMenu = 'advanced') });
-      }
-      // One button per active ability among the selected units; each ready unit uses it.
-      for (const ab of new Set(units.flatMap((u) => this.world.abilitiesFor(u)))) {
-        const casters = units.filter((u) => this.world.abilitiesFor(u).includes(ab));
-        const ready = casters.filter((u) => u.abilityCd === 0).length;
-        const a = ABILITIES[ab];
-        const reason = this.world.needs(this.player, a.research) ?? (a.ultimate && !this.world.ultimateReady(this.player, a.ultimate) ? `Se charge au Temple primordial : ${ultimatePct(this, a.ultimate)} %` : undefined);
-        // Aimed ones wait for a click on the map (gold reticle); the others go at once.
-        const action = a.target === 'point' ? () => this.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
-        list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
-      }
-      // Z socles: evolve into the next tier, in the field.
-      const evolvers = units.filter((u) => this.world.nextTier(u) && !u.evolving);
-      if (evolvers.length) {
-        const u = evolvers[0];
-        const next = this.world.nextTier(u)!;
-        const research = DEFS[`r${u.type}${u.tier + 1}`] as UpgradeDef;
-        const reason = this.world.level(this.player, `r${u.type}`) <= u.tier ? `Requiert : ${research.name}` : undefined;
-        list.push({ label: `Évoluer en T${u.tier + 1}`, cmd: 'evoluer', key: 'E', cost: next.cost, reason, action: () => cmd({ kind: 'evolve', ids: evolvers.filter((o) => o.tier === u.tier).map((o) => o.id) }) });
-      }
-      // Dieux: the gods summon their troops (in the least busy of the selected ones that can).
-      for (const t of new Set(units.flatMap((u) => (u.def as UnitDef).trains ?? []))) {
-        const d = DEFS[t] as UnitDef;
-        const order = units.filter((u) => (u.def as UnitDef).trains?.includes(t)).sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-        const lvl = this.world.entities.get(order[0])?.lvl ?? 1;
-        list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, seconds: Math.round(d.buildTime / lvl), reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }) });
-      }
-      // Dieux: the next level of a selected god, bought at the god (the lowest-levelled first).
-      const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau')).sort((x, y) => x.lvl - y.lvl);
-      const g = gods.find((u) => u.lvl < (u.def as UnitDef).levels!.hp.length);
-      if (g) list.push({ label: `Niveau ${g.lvl + 1}`, cmd: 'niveau', type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
-      // A god that summons troops has a rally point too; its right click moves it, so only this button sets one.
-      if (units.some((u) => (u.def as UnitDef).trains?.length)) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => this.setTargeting(true, true, 'rally') });
-      // The Artefacterie's improvements, once there is one, for a selected god with room left.
-      const buyers = units.filter((u) => (u.def as UnitDef).levels);
-      if (buyers.length && [...this.world.entities.values()].some((b) => b.owner === this.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
-        const max = BALANCE.rules.upgrades.artefacts.max;
-        const free = buyers.find((u) => this.world.artefacts(u) < max);
-        for (const t of ARTEFACTS) {
-          const d = DEFS[t] as UpgradeDef;
-          list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: free ? undefined : `${max} améliorations au plus par dieu`, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
-        }
-      }
-      const summoning = units.find((u) => u.queue.length);
-      if (summoning) list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
-      return list;
-    }
-    this.buildMenu = false;
-    const b = own.find((o) => o.type === this.activeType) ?? own[0];
-    if (!b || b.def.kind !== 'building') return [];
-    const same = own.filter((o) => o.type === b.type);
-    if (b.buildLeft > 0) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [b.id] }) }];
-    // Queue in the least busy of the selected buildings.
-    const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-    // Z: a socle's weapon is picked before it is queued, for good; the machine gun comes free.
-    // It drops down under the socle's button (the card stays), so the second step shows as one.
-    if (this.weaponMenu && !b.def.trains?.includes(this.weaponMenu)) this.weaponMenu = null;
-    if (this.weaponMenu) {
-      const t = this.weaponMenu;
-      const d = DEFS[t] as UnitDef;
-      const lack = this.world.lacks(this.player, t) || undefined;
-      const queue = (weapon?: string) => () => {
-        cmd({ kind: 'train', ids: order, type: t, weapon });
-        this.weaponMenu = null;
-      };
-      this.menuItems = [
-        { label: 'Mitrailleuse', key: 'M', weapon: 'mitrailleuse', cost: d.cost, reason: lack, action: queue() },
-        ...d.weapons!.map((k) => {
-          const kit = WEAPONS[k];
-          const reason = lack ?? this.world.needs(this.player, kit.research);
-          return { label: kit.name, key: kit.hotkey, weapon: k, cost: withKit(d, k), reason, action: queue(k) };
-        }),
-      ];
-    }
-    const list: Button[] = (b.def.trains ?? []).map((t) => {
-      const d = DEFS[t] as UnitDef;
-      const action = d.weapons ? () => (this.weaponMenu = t) : () => cmd({ kind: 'train', ids: order, type: t });
-      return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action };
-    });
-    if (b.def.bunker) {
-      const ids = same.map((o) => o.id);
-      const inside = [...this.world.entities.values()].filter((u) => ids.includes(u.inside)).length;
-      list.push({ label: `Débarquer (${inside}/${b.def.bunker * same.length})`, cmd: 'debarquer', key: 'D', reason: inside ? undefined : 'Personne à l\'intérieur', action: () => cmd({ kind: 'unload', ids }) });
-    }
-    // A building's abilities, once researched if they must be.
-    for (const name of abilitiesOf(b.def as BuildingDef)) {
-      const a = ABILITIES[name];
-      if (a.research && !this.world.level(this.player, a.research)) continue;
-      const ready = same.some((o) => (name === 'canoniem' ? o.iemCd : o.abilityCd) === 0);
-      const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => this.setTargeting(true, true, name);
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
-    }
-    // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
-    if ((b.def as BuildingDef).weapons) {
-      const bare = same.filter((o) => !o.kit && o.buildLeft === 0);
-      for (const k of (b.def as BuildingDef).weapons!) {
-        const kit = WEAPONS[k];
-        const reason = this.world.needs(this.player, kit.research) ?? (bare.length ? undefined : 'Déjà armé');
-        list.push({ label: kit.name, key: kit.hotkey, weapon: k, cost: kit.cost, reason, action: () => cmd({ kind: 'arm', ids: bare.map((o) => o.id), weapon: k }) });
-      }
-    }
-    // Z Pods: one add-on each, raised beside it (Plate-forme, Tourelle).
-    for (const t of (b.def as BuildingDef).addons ?? []) {
-      const d = DEFS[t] as BuildingDef;
-      const free = same.find((o) => ![...this.world.entities.values()].some((a) => a.host === o.id));
-      const reason = this.world.lacks(this.player, t) || (free ? undefined : 'Déjà un add-on');
-      list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
-    }
-    // Isdaris: turning into a stronger building, in place.
-    for (const t of b.def.morphs ?? []) {
-      const d = DEFS[t] as BuildingDef;
-      const idle = same.find((o) => o.queue.length === 0);
-      if (!idle) continue;
-      list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
-    }
-    // Marché: trade one resource for the other.
-    if (b.type === 'marche') {
-      const { give, get } = BALANCE.rules.trade;
-      list.push({ label: `Minerai → ${get} énergie`, cmd: 'echange', key: 'M', cost: { minerals: give, energy: 0 }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'minerals' }) });
-      list.push({ label: `Énergie → ${get} minerai`, cmd: 'echange', key: 'N', cost: { minerals: 0, energy: give }, action: () => cmd({ kind: 'trade', ids: [b.id], sell: 'energy' }) });
-    }
-    // Research: the next level of each upgrade line not yet researched nor queued.
-    for (const t of b.def.researches ?? []) {
-      if (!this.world.researchable(this.player, t)) continue;
-      // Research behind an extension or another research not done yet stays out of the card.
-      if (Object.keys((DEFS[t] as UpgradeDef).requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !this.world.level(this.player, (DEFS[r] as UpgradeDef).line))) continue;
-      const d = DEFS[t] as UpgradeDef;
-      const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
-      // A Z weapon's research (and its tiers) shows that weapon's pictogram.
-      const weapon = Object.keys(WEAPONS).find((k) => WEAPONS[k].research === d.line || WEAPONS[k].research === t);
-      list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: this.world.lacks(this.player, t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
-    }
-    // Last, so the other buttons keep their places (and grid keys).
-    if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => this.setTargeting(true, true, 'rally') });
-    if (same.some((o) => o.queue.length)) {
-      list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
-    }
-    return list;
-  }
-
   /** What the card's buttons depend on, cheap to read: they are worked out again only when it changes (at most once a
    * tick: resources, queues, sites, research and cooldowns move with the tick; the rest is the selection and this card's
    * own state). */
-  private buttonsKey = '';
-  private updateCard(): void {
-    const bk = `${this.world.tick}|${[...this.input.selected].join()}|${this.activeType}|${this.placing}|${this.targeting}|${this.scanning}|${this.aimed}|${this.buildMenu}|${this.weaponMenu}|${this.gridKeys}`;
-    if (bk === this.buttonsKey) return this.placeMenu();
-    this.buttonsKey = bk;
-    this.buttons = this.buttonsFor();
-    const p = this.world.players[this.player];
-    const key = [...this.buttons, ...this.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + this.gridKeys + this.weaponMenu;
-    if (key === this.cardKey) return this.placeMenu();
-    this.cardKey = key;
-    this.menu.innerHTML = this.menuItems
-      .map((b) => {
-        const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-        const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-        return `<button class="cmd-menu-item${off}" data-wkey="${b.key}" title="${b.reason ?? b.label}"><kbd>${b.key}</kbd>${weaponIcon(b.weapon)}<span>${b.label}</span>${cost}</button>`;
-      })
-      .join('');
-    this.tip.hidden = true; // its button may be gone
-    this.card.innerHTML = this.buttons
-      .map((b) => {
-        const cost = b.cost ? `<small>${b.cost.minerals ? `◆${b.cost.minerals}` : ''}${b.cost.energy ? ` ⚡${b.cost.energy}` : ''}</small>` : '';
-        const off = b.reason || (b.cost && !afford(p, b.cost)) ? ' off' : '';
-        const glyph = p.faction === 'z' ? Z_GLYPHS[(b.ability ?? b.type ?? '').replace(/\d+$/, '')] : undefined;
-        const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
-        const anim = b.key === this.pressed.key && performance.now() - this.pressed.at < 150 ? ` ${this.pressed.anim}` : '';
-        const open = this.weaponMenu && b.icon === this.weaponMenu ? ' open' : '';
-        return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}><kbd>${this.keyLabel(b)}</kbd>${pic}<span>${b.label}</span>${cost}</button>`;
-      })
-      .join('');
-    this.placeMenu();
-  }
-
-  /**
-   * The weapon panel: an extra LCD screen as wide as the command card, standing on top of it, a grid like it; it
-   * unfolds upwards from the socle's button (the first frame it shows), with a flicker. Hidden when no socle is open.
-   */
-  private placeMenu(): void {
-    const at = this.menuItems.length ? this.card.querySelector<HTMLElement>('.cmd.open') : null;
-    const opening = !!at && this.menu.hidden;
-    if (this.menu.hidden !== !at) this.menu.hidden = !at;
-    if (!at) {
-      this.weaponMenu = null; // its socle no longer on the card (another selection)
-      return;
-    }
-    const card = this.card.getBoundingClientRect();
-    const r = at.getBoundingClientRect();
-    this.menu.style.left = `${card.left}px`;
-    this.menu.style.width = `${card.width}px`;
-    this.menu.style.top = `${Math.max(4, card.top - this.menu.offsetHeight - 4)}px`;
-    if (!opening) return;
-    this.menu.style.transformOrigin = `${r.left + r.width / 2 - card.left}px 100%`;
-    this.menu.classList.remove('unfold');
-    void this.menu.offsetWidth; // restarts the animation
-    this.menu.classList.add('unfold');
-  }
-
-  /** A weapon picked in the menu (a click, a tap or its key). */
-  private pressMenu(b: Button): void {
-    if (b.reason || (b.cost && !afford(this.world.players[this.player], b.cost))) return this.audio.play('error', 0.4);
-    this.audio.play('click');
-    b.action();
-  }
-
-  /** Fills and places the tooltip above a command button. */
-  private showTip(button: HTMLElement): void {
-    const b = this.buttons.find((x) => x.key === button.dataset.key);
-    if (!b) return;
-    const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
-    const p = this.world.players[this.player];
-    const lines: string[] = [`${b.weapon ? weaponIcon(b.weapon) : ''}<b>${b.label}</b> <kbd>${this.keyLabel(b)}</kbd>`];
-    if (b.cost) {
-      const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
-      if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
-      if (d && 'buildTime' in d) parts.push(`⏱ ${b.seconds ?? d.buildTime} s`);
-      lines.push(parts.filter(Boolean).join(' · '));
-    }
-    if (d?.kind === 'unit' || d?.kind === 'building') {
-      const stats = [`${d.hp} PV`];
-      if (d.shield) stats.push(`${d.shield} bouclier`);
-      if (d.attack) stats.push(`${d.attack.damage} dégâts${d.attack.range > 1 ? `, portée ${d.attack.range}` : ', mêlée'}`);
-      if ((d as UnitDef).heal) stats.push('soigne');
-      if ((d as BuildingDef).bunker) stats.push(`abrite ${(d as BuildingDef).bunker} soldats`);
-      if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
-      lines.push(stats.join(' · '));
-      // Z socles: a second step follows the click (the weapon), easy to miss.
-      if (d.kind === 'unit' && (d as UnitDef).weapons) lines.push('Socle : reçoit une arme, choisie ensuite (mitrailleuse gratuite).');
-    }
-    if (d?.kind === 'upgrade' && d.effect) lines.push(d.effect);
-    if (b.ability && ABILITIES[b.ability].effect) lines.push(ABILITIES[b.ability].effect!);
-    if (b.reason) lines.push(`<span class="need">${b.reason}</span>`);
-    else if (b.cost && !afford(p, b.cost)) lines.push('<span class="need">Ressources insuffisantes</span>');
-    this.tip.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
-    this.tip.hidden = false;
-    const r = button.getBoundingClientRect();
-    const w = this.tip.offsetWidth;
-    this.tip.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
-    this.tip.style.top = `${r.top - this.tip.offsetHeight - 8}px`;
-  }
+  buttonsKey = '';
 
   // ---------------------------------------------------------------- placement
 
@@ -1009,8 +664,4 @@ export class Hud {
     }
     this.grid.cellsAt(cx, cy, reach, fits);
   }
-}
-
-function afford(p: { minerals: number; energy: number }, c: Cost): boolean {
-  return p.minerals >= c.minerals && p.energy >= c.energy;
 }
