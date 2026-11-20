@@ -288,7 +288,9 @@ export class AI {
     const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
     const councils = buildings.filter((b) => b.type === f.hq || b.type === f.outpost).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
     const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : 7;
-    const due = (rich && minute >= 4) || councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
+    // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
+    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.

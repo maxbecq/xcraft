@@ -12,7 +12,7 @@ describe('three and four players', () => {
     const d = hqs.map((h) => Math.round(Math.hypot(h.x - centre, h.y - centre) / FP));
     expect(new Set(d).size).toBe(1);
     expect(new Set(hqs.map((h) => `${h.x > centre},${h.y > centre}`)).size).toBe(4);
-    expect([...w.entities.values()].filter((e) => e.type === 'minerai')).toHaveLength(60);
+    expect([...w.entities.values()].filter((e) => e.type === 'minerai')).toHaveLength(80);
   });
 
   it('allies share their sight and never fight; the last team standing wins', () => {
