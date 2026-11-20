@@ -99,6 +99,12 @@ export class Post {
     this.ink?.uniforms.resolution.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
   }
 
+  /** The ambient occlusion's depth-and-normal material, drawn over the whole scene: the warm-up draws with it too
+   * (render/prewarm.ts), or its skinned variant compiled when the first animated character came into view. */
+  get normalMaterial(): Material | null {
+    return this.ao?.normalMaterial ?? null;
+  }
+
   /** Where the scene itself is drawn: the composer's buffer, else the screen. Its programs differ (tone mapping,
    * colour space), so the scene is compiled there. */
   get sceneTarget(): WebGLRenderTarget | null {

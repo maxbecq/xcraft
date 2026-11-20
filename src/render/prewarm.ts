@@ -103,6 +103,13 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
       });
     renderer.render(scene, rig.camera);
     for (const [o, mat] of lit) o.material = mat;
+    // Once more through the ambient occlusion's normal pass (post.ts): its skinned variant compiled in play when the
+    // first animated character (a Human soldier, under a Z player's first Lance-flammes jet) came into view.
+    if (post.normalMaterial) {
+      scene.overrideMaterial = post.normalMaterial;
+      renderer.render(scene, rig.camera);
+      scene.overrideMaterial = null;
+    }
   } finally {
     scissor(false);
     renderer.setScissorTest(false);
