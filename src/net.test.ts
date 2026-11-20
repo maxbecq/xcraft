@@ -209,6 +209,27 @@ describe('lockstep between two browsers', () => {
     for (const cmds of stores.theirs.values()) for (const c of cmds) expect(commandOk(c) && c.player === 1).toBe(true);
   });
 
+  it('keeps what it stores within reach of its own play, and lets only a valid message count', () => {
+    let now = 0;
+    const lock = new Lockstep(0, () => {}, () => now);
+    for (let t = 0; t < 20; t++) lock.step(t, []); // something owed
+    const inside = lock as unknown as { theirs: Map<number, Command[]>; unacked: Map<number, unknown>; next: number };
+    // A side still loading (or slower) does not step: every tick in a row, sent at once, stops at a bound.
+    for (let t = START; t < 10_000; t++) lock.receive({ t, c: [], a: 0 });
+    expect(inside.theirs.size).toBeLessThanOrEqual(inside.next + 8 * 15 - START + 1);
+    const owed = inside.unacked.size;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    now = 5000;
+    // Malformed: neither a sign of life nor an acknowledgement.
+    for (const m of [{ t: 'x', c: [], a: inside.next }, { t: START + 500, c: [{ kind: 'nope' }], a: inside.next }, { h: 0.5, v: 1, a: inside.next }, { zzz: 1, a: inside.next }]) lock.receive(m);
+    expect(lock.heard).toBe(0);
+    expect(inside.unacked.size).toBe(owed);
+    lock.receive({ p: 1, a: inside.next });
+    expect(lock.heard).toBe(5000);
+    expect(inside.unacked.size).toBe(0);
+    warn.mockRestore();
+  });
+
   it('logs a refused message, a few times only, and not a resend', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const lock = new Lockstep(0, () => {}, () => 0);

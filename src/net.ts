@@ -73,17 +73,17 @@ export class Lockstep {
   receive(raw: unknown): void {
     if (!isRecord(raw)) return this.reject('not an object', raw);
     const m = raw;
-    this.heard = this.now();
-    // Acknowledged: never past what we have sent, so a wild value cannot empty what is still owed.
-    if (int(m.a) && m.a <= this.next) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
     if ('t' in m) {
       const t = m.t;
-      if (int(t) && (t < this.missing || this.theirs.has(t))) return; // sent again: a resend crossing an ack
-      if (!int(t) || t > this.missing + WINDOW) return this.reject('tick out of reach', m);
-      if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return this.reject('malformed orders', m);
-      // The other side only ever orders its own units.
-      this.theirs.set(t, (m.c as Command[]).map((cmd) => ({ ...cmd, player: 1 - this.player })));
-      while (this.theirs.has(this.missing)) this.missing++;
+      // Never past what our own orders allow: the other side cannot run a tick before ours for it arrived, so an honest
+      // one stays within its delay of `next`; the store is bounded by how far this side has played, not by what came.
+      if (!int(t) || t > this.next + WINDOW) return this.reject('tick out of reach', m);
+      if (t >= this.missing && !this.theirs.has(t)) {
+        if (!Array.isArray(m.c) || m.c.length > MAX_ORDERS || !m.c.every(commandOk)) return this.reject('malformed orders', m);
+        // The other side only ever orders its own units.
+        this.theirs.set(t, (m.c as Command[]).map((cmd) => ({ ...cmd, player: 1 - this.player })));
+        while (this.theirs.has(this.missing)) this.missing++;
+      } // else sent again: a resend crossing an ack, still a sign of life
     } else if ('h' in m) {
       // Only recent fingerprints (one every 100 ticks), a few at a time.
       if (!int(m.h) || !int(m.v) || Math.abs(m.h - this.missing) > 1000) return this.reject('malformed fingerprint', m);
@@ -91,15 +91,24 @@ export class Lockstep {
       if (this.their.size > 16) this.their.delete(this.their.keys().next().value!);
       this.compare(m.h);
     } else if ('p' in m) {
-      if (typeof m.p === 'number' && Number.isFinite(m.p)) this.send({ q: m.p });
+      if (typeof m.p !== 'number' || !Number.isFinite(m.p)) return this.reject('malformed ping', m);
+      this.send({ q: m.p });
     } else if ('q' in m) {
-      const trip = typeof m.q === 'number' ? this.now() - m.q : NaN;
-      if (!(trip >= 0 && trip < 60_000)) return; // only our own pings come back
-      this.trips.push(trip);
-      if (this.trips.length > 8) this.trips.shift();
-      // The orders must arrive before their tick comes, a full round trip later at worst: the slowest recent one, plus a tick.
-      this.delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, Math.ceil(Math.max(...this.trips) / 50) + 1));
+      if (typeof m.q !== 'number') return this.reject('malformed echo', m);
+      const trip = this.now() - m.q;
+      if (trip >= 0 && trip < 60_000) {
+        // Only our own pings come back; a stale one still says the other side is there.
+        this.trips.push(trip);
+        if (this.trips.length > 8) this.trips.shift();
+        // The orders must arrive before their tick comes, a full round trip later at worst: the slowest recent one, plus a tick.
+        this.delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, Math.ceil(Math.max(...this.trips) / 50) + 1));
+      }
     } else if ('bye' in m) this.left = true;
+    else return this.reject('unknown kind', m);
+    // Only a message that checked out counts as a sign of life, and frees what it acknowledges: never past what we
+    // have sent, so a wild value cannot empty what is still owed.
+    this.heard = this.now();
+    if (int(m.a) && m.a <= this.next) for (const t of this.unacked.keys()) if (t < m.a) this.unacked.delete(t);
   }
 
   /** Messages refused so far; only the first few are logged, so a flood cannot fill the console. */
