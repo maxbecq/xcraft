@@ -409,6 +409,13 @@ export function mineTrigger(this: World, m: Entity): void {
   m.hp = 0;
 }
 
+/** A Canon orbital shot lands: it spares nothing under it. */
+export function orbitalHit(this: World, s: World['strikes'][number]): void {
+  const ab = ABILITIES.canonorbital;
+  for (const t of [...this.entities.values()]) if (t.def.kind !== 'resource' && t.hp > 0 && !t.inside && dist(t.x, t.y, s.x, s.y) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+  this.casts.push({ kind: 'canonorbital', x: s.x, y: s.y });
+}
+
 /** A change of pace for `left` ticks: walking speed and time between blows in percent of the usual. */
 export function setPace(this: World, t: Entity, left: number, move: number, atk: number): void {
   t.pace = left;

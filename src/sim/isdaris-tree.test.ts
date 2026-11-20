@@ -75,7 +75,9 @@ describe('Isdaris tree (notice 1.2-1)', () => {
     expect(target.hp).toBe(target.maxHp);
     w.spawn('espion', 0, ...at(58, 60));
     w.step([{ player: 0, kind: 'ability', ids: [t.id], name: 'canonorbital', x: target.x, y: target.y }]);
-    run(w, 0.1);
+    run(w, 5.5);
+    expect(target.hp).toBe(target.maxHp); // the beam strikes 6 s after the order, time to flee
+    run(w, 1);
     expect(w.entities.has(target.id)).toBe(false);
   });
 });

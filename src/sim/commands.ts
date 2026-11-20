@@ -294,11 +294,13 @@ export function apply(this: World, c: Command): void {
         // The beam needs an Espion watching the spot; it spares nothing under it.
         const [cx, cy] = [c.x, c.y];
         if (![...this.entities.values()].some((s) => s.owner === c.player && s.type === 'espion' && dist(s.x, s.y, cx, cy) <= toFp((s.def as UnitDef).sight))) return void this.say(c.player, 'Un Espion doit viser la cible.');
-        for (const t of [...this.entities.values()]) if (t.def.kind !== 'resource' && t.hp > 0 && !t.inside && dist(t.x, t.y, cx, cy) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+        // It strikes a few seconds later (mod: 6 s of cast; sheet: 5 s, the players warned), time to get away.
+        this.strikes.push({ owner: c.player, x: cx, y: cy, left: ticks(BALANCE.rules.canonDelay) });
+        for (const p of this.players) if (p.id !== c.player) this.say(p.id, 'Frappe orbitale imminente !', 'alert');
       }
       if (kind === 'murenergie') this.wall(c.player, b, c.x, c.y, ab.radius!, ticks(ab.duration));
       if (kind === 'portedephasage') for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) u.phased = ticks(ab.duration);
-      this.casts.push({ kind, x: c.x, y: c.y });
+      this.casts.push({ kind: kind === 'canonorbital' ? 'canonorbitalvise' : kind, x: c.x, y: c.y });
       this.players[c.player].energy -= ab.energy!;
       b.abilityCd = ticks(ab.cooldown);
       return;

@@ -183,6 +183,9 @@ export class Effects {
         this.cloud(p, 0x6ab8ff, 30, 4, 0.6, 2.5, 0.5);
         this.ring(p, 0x9ad0ff, 4, 1.2);
         break;
+      case 'canonorbitalvise': // the target marked, the beam a few seconds away
+        this.ring(p, 0xbfe6ff, 2.5, 6);
+        break;
       case 'canonorbital': // a beam from orbit, then the blast
         this.column(p, true);
         this.column(p, false);

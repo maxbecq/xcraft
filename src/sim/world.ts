@@ -310,6 +310,8 @@ export class World {
   casts: Cast[] = [];
   /** Rappels channelling, with ticks left. */
   recalls: { owner: number; from: number; x: number; y: number; ids: number[]; left: number }[] = [];
+  /** Canon orbital shots on their way: they strike when `left` runs out. */
+  strikes: { owner: number; x: number; y: number; left: number }[] = [];
   readonly vision: Vision[];
   /** For each player, the ids of its team (itself included); set with setTeams. */
   private team: number[][];
@@ -399,6 +401,8 @@ export class World {
     this.walls = this.walls.filter((m) => m.left > 0);
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
+    for (const s of this.strikes) if (--s.left === 0) this.orbitalHit(s);
+    this.strikes = this.strikes.filter((s) => s.left > 0);
     if (this.tick % 4 === 0) this.see();
     for (const c of commands) {
       // Shift: orders go after what the units are already doing; otherwise they replace it all (setOrder).
