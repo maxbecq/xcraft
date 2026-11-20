@@ -225,4 +225,16 @@ describe('audit gaps', () => {
     expect(tank.paceAtk).toBe(1000);
     expect(tank.speed).toBeLessThan(speed / 5);
   });
+
+  it('Seth hits a wounded soldier harder', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
+    const fresh = w.spawn('legionnaire', 1, 31 * FP, 30 * FP);
+    const hurt = w.spawn('legionnaire', 1, 31 * FP, 31 * FP);
+    hurt.hp = Math.floor(hurt.maxHp / 3);
+    const [a, b] = [fresh.hp, hurt.hp];
+    w.hit(seth, fresh, w.weapon(seth)!);
+    w.hit(seth, hurt, w.weapon(seth)!);
+    expect(b - hurt.hp).toBeGreaterThan(a - fresh.hp);
+  });
 });

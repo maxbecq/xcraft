@@ -412,6 +412,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (e.war > 0) damage += idiv(damage * e.warPct, 100);
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
   if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
+  // Seth (notice: he hits the weakest soldiers hard, to finish them cruelly): more against a unit under half its health.
+  if (e.type === 'seth' && t.def.kind === 'unit' && t.hp * 2 < t.maxHp) damage += idiv(damage * U.sethCruel, 100);
   const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * U.artefacts.force : 0;
   if (force) damage += idiv(damage * force, 100);
   if (e.charged > 0 && a.range < 1) {
