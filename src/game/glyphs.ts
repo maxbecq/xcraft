@@ -59,6 +59,8 @@ export const Z_GLYPHS: Record<string, string> = {
   roctopode: 'M12 7.5c1.8 0 2.8 2 2.8 4.5S13.8 16.5 12 16.5 9.2 14.5 9.2 12 10.2 7.5 12 7.5zM13.3 9.1L15.7 7.1L13.2 1.6M14.2 10.8L18.1 9.9L20.2 6.8M14.2 13.2L18.1 14.1L20.2 17.2M13.3 14.9L15.7 16.9L13.2 22.4M10.7 9.1L8.3 7.1L10.8 1.6M9.8 10.8L5.9 9.9L3.8 6.8M9.8 13.2L5.9 14.1L3.8 17.2M10.7 14.9L8.3 16.9L10.8 22.4',
   rmastodonte: 'M2 8h20v7H2zM6 8V4h12v4M4 15v5M9 15v5M15 15v5M20 15v5',
   rbarge: 'M2 13h20l-4 6H6zM6 13V9h12v4M12 9V4M9 4h6',
+  // Refuge: the drones go down into the Intelligence's dome.
+  refuge: 'M3 21h18M5 21v-6a7 7 0 0 1 4-6.3M19 21v-6a7 7 0 0 0-4-6.3M12 2v13M8.5 11.5L12 15l3.5-3.5M9 21v-3h6v3',
 };
 
 /** The same strokes for every camp's commands that have no picture of their own: the Isdaris extensions (an icon only,
