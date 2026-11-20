@@ -1,14 +1,18 @@
 /** Trial touch controls (option « Commandes tactiles »): a marking menu. A long press on one's own unit or building
- * opens its commands in a ring round the finger; sliding over one shows its details, letting go on it gives it. A
- * command that opens a list (Construire, a socle's weapons) shows that list in the ring, then a tap chooses. */
+ * opens its commands in a fan above the finger, clear of the hand (beside it near the top of the screen); sliding over
+ * one shows its details, letting go on it gives it. A command that opens a list (Construire, a socle's weapons) shows
+ * that list in the fan, then a tap chooses. */
 import type { Entity } from '../sim/world';
+import { fan } from './fan';
 import { el } from './glyphs';
 import type { Hud } from './hud';
 import { type Button, buttonHtml, buttonsFor, pressButton, pressMenu, showTip } from './hud-card';
 
-/** Distance from the ring's centre to its buttons' centres (px), and how close the finger must come to pick one. */
-const RING_MIN = 78;
+/** How close the finger must come to a button to pick it (px). */
 const PICK_PX = 34;
+/** Room kept clear at the screen's edges (px): the top bar above, the sides and bottom. */
+const TOP = 60;
+const EDGE = 30;
 
 export class Marking {
   private readonly root = el('div', 'marking');
@@ -110,17 +114,24 @@ export class Marking {
     const h = this.h;
     if (!weapons) h.buttons = list; // the tooltip reads its button there
     this.weapons = weapons;
-    const r = Math.max(RING_MIN, (list.length * 58) / (2 * Math.PI));
+    // Above the finger, where the hand does not cover it; wider than a half circle if a half is too wide for the screen.
+    let f = fan(list.length, -Math.PI / 2, Math.PI);
+    if (2 * f.r + 2 * EDGE > innerWidth) f = fan(list.length, -Math.PI / 2, 1.5 * Math.PI);
+    const up = y - f.r - 27 >= TOP;
+    // Too near the top: beside the finger, on the side with more room.
+    if (!up) f = fan(list.length, x > innerWidth / 2 ? Math.PI : 0, Math.PI);
+    const xs = f.at.map(([dx]) => dx);
+    const ys = f.at.map(([, dy]) => dy);
     // Kept on screen whole: the centre pulled in from the edges.
-    this.cx = Math.min(innerWidth - r - 30, Math.max(r + 30, x));
-    this.cy = Math.min(innerHeight - r - 30, Math.max(r + 60, y));
+    const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+    this.cx = clamp(x, EDGE + 27 - Math.min(...xs), innerWidth - EDGE - 27 - Math.max(...xs));
+    this.cy = clamp(y, TOP + 27 - Math.min(...ys), innerHeight - EDGE - 27 - Math.max(...ys));
     this.root.style.left = `${this.cx}px`;
     this.root.style.top = `${this.cy}px`;
     this.root.innerHTML = list.map((b) => buttonHtml(h, b)).join('');
     const nodes = [...this.root.querySelectorAll<HTMLElement>('.cmd')];
     this.items = list.map((b, i) => {
-      const a = -Math.PI / 2 + (i / list.length) * Math.PI * 2;
-      const [dx, dy] = [Math.cos(a) * r, Math.sin(a) * r];
+      const [dx, dy] = f.at[i];
       const node = nodes[i];
       if (weapons) {
         node.dataset.wkey = b.key;
