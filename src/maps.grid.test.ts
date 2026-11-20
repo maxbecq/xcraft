@@ -41,6 +41,8 @@ const FROZEN: Record<string, number> = {
   'le-col//2': 1720841269,
   'les-ponts//1': 647576153,
   'les-ponts//2': 647576153,
+  'asteroides//1': 2431351461,
+  'asteroides//2': 2431351461,
 };
 
 describe('map grids', () => {

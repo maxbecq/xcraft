@@ -5,14 +5,17 @@ import { MAPS } from '../maps';
 import { createMatch } from '../sim/setup';
 
 describe('planets per map', () => {
-  it('Astéroïdes is special and no current map takes it', () => {
+  it('Astéroïdes is special: only its own map takes it, and that map takes nothing else', () => {
     expect(BIOMES.asteroides.special).toBe(true);
-    for (const m of Object.values(MAPS)) expect(biomesFor(m).map((b) => b.id)).not.toContain('asteroides');
+    for (const m of Object.values(MAPS)) if (m.id !== 'asteroides') expect(biomesFor(m).map((b) => b.id)).not.toContain('asteroides');
+    expect(biomesFor(MAPS.asteroides).map((b) => b.id)).toEqual(['asteroides']);
+    expect(fitBiome('desert', MAPS.asteroides).id).toBe('asteroides');
+    expect(fitBiome(null, MAPS.asteroides).id).toBe('asteroides');
   });
 
   it('every map offers every common planet; a map drawn for a special one offers it too', () => {
     const common = Object.values(BIOMES).filter((b) => !b.special).map((b) => b.id);
-    for (const m of Object.values(MAPS)) expect(biomesFor(m).map((b) => b.id)).toEqual(common);
+    for (const m of Object.values(MAPS)) if (!m.biomesOnly) expect(biomesFor(m).map((b) => b.id)).toEqual(common);
     expect(biomesFor({ biomes: ['asteroides'] }).map((b) => b.id)).toContain('asteroides');
     expect(fitBiome('asteroides', { biomes: ['asteroides'] }).id).toBe('asteroides');
   });

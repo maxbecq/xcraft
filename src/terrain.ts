@@ -1,5 +1,5 @@
 import {
-  BufferGeometry, Color, DataTexture, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
+  BufferGeometry, Color, DataTexture, DoubleSide, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
@@ -70,6 +70,7 @@ function drawnEdge(map: GameMap, x: number, y: number, edge: number): [number, n
 export function buildTerrain(map: GameMap, roads?: Texture): Group {
   leanMap = map;
   rimCache.clear();
+  under = B.space ? undersides(map) : null;
   const ground = new Builder();
   const cliffs = new Builder();
   const up = new Vector3(0, 1, 0);
@@ -146,14 +147,18 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   const skirt = B.space ? B.chasm.depth * LEVEL_HEIGHT : 2.5;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      if (chasm(x, y) && !pit) continue;
+      if (chasm(x, y) && (!pit || under)) continue;
       for (let e = 0; e < 4; e++) {
         const { dx, dy, c } = EDGES[e];
         const [ta, tb] = chasm(x, y) ? [floorY, floorY] : drawnEdge(map, x, y, e);
         let ba: number;
         let bb: number;
         // A chasm: down to its floor, or (city) only the deck's slab edge; the parking levels below are drawn by cityUnderdeck.
-        if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = pit ? [floorY, floorY] : [-DECK_SLAB, -DECK_SLAB];
+        const v0 = [x + CORNER_POS[c[0]][0], y + CORNER_POS[c[0]][1]];
+        const v1 = [x + CORNER_POS[c[1]][0], y + CORNER_POS[c[1]][1]];
+        // Over space: down to the rock's own underside (an island's broken bottom, an arch's vault).
+        if (under && !chasm(x, y) && (!tileAt(map, x + dx, y + dy) || chasm(x + dx, y + dy))) [ba, bb] = [ta - underAt(v0[0], v0[1]), tb - underAt(v1[0], v1[1])];
+        else if (tileAt(map, x + dx, y + dy) && chasm(x + dx, y + dy)) [ba, bb] = pit ? [floorY, floorY] : [-DECK_SLAB, -DECK_SLAB];
         else if (tileAt(map, x + dx, y + dy)) [bb, ba] = drawnEdge(map, x + dx, y + dy, (e + 2) % 4);
         else [ba, bb] = [Math.min(ta, tb) - skirt, Math.min(ta, tb) - skirt]; // skirt around the map (an asteroid's thick edge)
         if (ta <= ba + 0.01 && tb <= bb + 0.01) continue;
@@ -177,6 +182,8 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   const groundMesh = ground.mesh(groundMat);
   const cliffMat = new MeshStandardMaterial({ vertexColors: true, map: rMap, normalMap: rNormal, normalScale: new Vector2(1.4, 1.4), roughness: 0.9, flatShading: true });
   weather(cliffMat, 0.45); // mineral stains and damp streaks down the rock
+  // Over space a one-tile notch in the coast has its two walls crossing: both sides drawn, so no slit shows the void through.
+  if (under) cliffMat.side = DoubleSide;
   const cliffMesh = cliffs.mesh(cliffMat);
   groundMesh.receiveShadow = true;
   cliffMesh.receiveShadow = true;
@@ -231,6 +238,77 @@ function moltenLava(m: MeshBasicMaterial): MeshBasicMaterial {
 
 let leanMap: GameMap;
 
+/** Space (Astéroïdes): rock thickness under each grid vertex, set by buildTerrain; null elsewhere. */
+let under: Float32Array | null = null;
+/** Thinnest an arch gets, at the top of its vault (world units). */
+const ARCH_SLAB = 0.9;
+
+/**
+ * How thick the rock is under each grid vertex, on a map floating over space: an island's full depth (ragged, so its
+ * underside is broken rock, not a ruled line); along an arch, thinner the farther from the islands it springs from, so
+ * its underside curves up into a vault over the void.
+ */
+function undersides(map: GameMap): Float32Array {
+  const { width: W, height: H } = map;
+  const full = B.chasm.depth * LEVEL_HEIGHT;
+  const land = (i: number) => !map.chasm?.[i];
+  // Steps from the nearest island tile, across arch tiles only.
+  const d = new Int32Array(W * H).fill(-1);
+  const q: number[] = [];
+  for (let i = 0; i < W * H; i++) if (land(i) && !map.arch?.[i]) (d[i] = 0), q.push(i);
+  for (let k = 0; k < q.length; k++) {
+    const i = q[k];
+    const x = i % W;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const j = i + dy * W + dx;
+      if (nx < 0 || nx >= W || j < 0 || j >= W * H || d[j] >= 0 || !map.arch?.[j]) continue;
+      d[j] = d[i] + 1;
+      q.push(j);
+    }
+  }
+  // Each arch's crown: the farthest its tiles get from an island (flood over the arch's own tiles).
+  const crown = new Int32Array(W * H);
+  const seen = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (!map.arch?.[i] || seen[i]) continue;
+    const part = [i];
+    seen[i] = 1;
+    for (let k = 0; k < part.length; k++) {
+      const a = part[k];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = (a % W) + dx;
+        const j = a + dy * W + dx;
+        if (nx < 0 || nx >= W || j < 0 || j >= W * H || seen[j] || !map.arch?.[j]) continue;
+        seen[j] = 1;
+        part.push(j);
+      }
+    }
+    const top = Math.max(...part.map((a) => d[a]));
+    for (const a of part) crown[a] = top;
+  }
+  const thick = (i: number) => (map.arch?.[i] && d[i] > 0 ? ARCH_SLAB + (full - ARCH_SLAB) * Math.pow(1 - d[i] / (crown[i] + 0.5), 2.2) : full);
+  const out = new Float32Array((W + 1) * (H + 1));
+  for (let vz = 0; vz <= H; vz++) {
+    for (let vx = 0; vx <= W; vx++) {
+      let sum = 0;
+      let n = 0;
+      let arch = false;
+      for (const [x, y] of [[vx - 1, vz - 1], [vx, vz - 1], [vx, vz], [vx - 1, vz]]) {
+        if (x < 0 || y < 0 || x >= W || y >= H || !land(y * W + x)) continue;
+        sum += thick(y * W + x);
+        n++;
+        arch ||= !!map.arch?.[y * W + x];
+      }
+      const t = n ? sum / n : full;
+      // Broken rock under the islands: deeper and shallower by turns; an arch's vault stays a clean curve.
+      out[vz * (W + 1) + vx] = arch ? t : t * (0.55 + noise(vx, vz, 2.5, 53) * 0.9);
+    }
+  }
+  return out;
+}
+const underAt = (vx: number, vz: number) => under![vz * (leanMap.width + 1) + vx];
+
 /** A tile's level as drawn: a natural chasm counts as its floor, far below, so its rim and walls lean like a cliff's. */
 function drawnLevel(map: GameMap, x: number, y: number): number {
   return B.style !== 'city' && map.chasm?.[y * map.width + x] ? -B.chasm.depth : tileAt(map, x, y)!.level;
@@ -244,7 +322,9 @@ function rimShift(vx: number, vz: number): Vector2 {
   if (B.style === 'city' || !Number.isInteger(vx) || !Number.isInteger(vz) || vx <= 0 || vz <= 0 || vx >= leanMap.width || vz >= leanMap.height) return new Vector2();
   const key = vz * (leanMap.width + 1) + vx;
   let s = rimCache.get(key);
-  if (!s) rimCache.set(key, (s = smoothRim(vx, vz).add(downhill(vx, vz, new Vector2()).multiplyScalar((noise(vx * 1.9, vz * 1.9, 1, 47) - 0.5) * 0.3))));
+  // Over space the coast is broken rock: bays bitten in and spurs pushed out, at two scales.
+  const jag = B.space ? (noise(vx * 1.9, vz * 1.9, 1, 47) - 0.5) * 1.1 + (noise(vx * 0.7, vz * 0.7, 1, 59) - 0.5) * 0.9 : (noise(vx * 1.9, vz * 1.9, 1, 47) - 0.5) * 0.3;
+  if (!s) rimCache.set(key, (s = smoothRim(vx, vz).add(downhill(vx, vz, new Vector2()).multiplyScalar(jag))));
   return s;
 }
 const rimCache = new Map<number, Vector2>();
@@ -353,7 +433,9 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
       // Broad bulges and hollows along the cliff, so its foot meanders instead of following the tile edge.
       const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4) * built;
-      const lean = j === 0 ? 0 : (built ? SLANT * Math.pow(s, 0.8) : 0.04 * s) + n * 0.6 + bulge * Math.pow(s, 0.6);
+      // Over space the rock narrows downwards (an asteroid's underside, an arch's vault), in proportion to its thickness.
+      const flare = under ? -0.1 * (top - bottom) * Math.pow(s, 1.6) : built ? SLANT * Math.pow(s, 0.8) : 0.04 * s;
+      const lean = j === 0 ? 0 : flare + n * 0.6 + bulge * Math.pow(s, 0.6);
       const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
       // A rim pulled in (rounded corner) slopes back out to the foot, so the foot still meets the lower ground.
       const back = lean + Math.max(0, -sh.dot(dir)) * s;

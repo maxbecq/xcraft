@@ -1,5 +1,6 @@
 #!/bin/sh
-# Ground textures of the Volcan and Astéroïdes planets, from the chosen pictures in recherches-visuelles (out of git):
+# Ground textures of the Volcan and Astéroïdes planets, from the chosen pictures in recherches-visuelles (out of git);
+# Astéroïdes' basalt comes ready-made seamless, the volcano's picture is made so here:
 # seamless (blended with itself shifted by half, as tools/hud/gen.py does), and a normal map from the luminance.
 # Run from the repository: sh tools/biomes/textures.sh   (needs ImageMagick)
 set -e
@@ -18,8 +19,8 @@ seamless "$SRC/sol-basalte-openai.png" /tmp/basalte.png
 # Lifted so the slabs read under the dim red light (the patches of black basalt come from the planet's patch colour).
 magick /tmp/basalte.png -modulate 105,110 -level 0%,62%,1.05 -quality 88 "$OUT/volcan-sol.jpg"
 normal /tmp/basalte.png "$OUT/volcan-sol-n.jpg" 2.5
-seamless "$SRC/sol-asteroide-openai.png" /tmp/asteroide.png
-# Near-black regolith, colour drained to a faint warm grey: the planet's levels set how dark it lands.
-magick /tmp/asteroide.png -modulate 85,30 -quality 88 "$OUT/asteroides-sol.jpg"
-normal /tmp/asteroide.png "$OUT/asteroides-sol-n.jpg" 3
+# Fractured basalt (FLUX.2 klein, local), already seamless: cut along its cracks (asteroides-carte/quilt.py), no blend.
+AST="$SRC/../asteroides-carte/sols/sol-b-basalte-1-raccord-v2.png"
+magick "$AST" -resize 1024x1024! -modulate 100,40 -quality 88 "$OUT/asteroides-sol.jpg"
+normal "$AST" "$OUT/asteroides-sol-n.jpg" 3
 ls -l "$OUT"

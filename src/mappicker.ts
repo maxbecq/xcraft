@@ -2,6 +2,7 @@ import { CORNERS, MAPS, type MapFile, buildMap, turnsOf } from './maps';
 import { rotateFootprint } from './map';
 import { TEAM_COLORS } from './render/models';
 import { tileColor } from './terrain';
+import { fitBiome } from './render/biome';
 import './mappicker.css';
 
 /** Most players a map takes. */
@@ -73,7 +74,7 @@ export function mapCards(chosen: string, biome: string): string {
       const bases = m.bases.length;
       const players = m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)} joueurs` : `${m.players[0]} joueurs`;
       return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${m.description ?? ''}">
-        <img src="${mapThumb(m, biome)}" alt="">
+        <img src="${mapThumb(m, fitBiome(biome, m).id)}" alt="">
         <span class="map-name">${m.name}</span>
         <span class="map-meta">${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>
       </button>`;

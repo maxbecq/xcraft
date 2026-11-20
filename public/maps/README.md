@@ -32,6 +32,8 @@ L'id `origine` est la carte d'origine : la carte par défaut, et celle des repla
 | `players` | Nombres de joueurs possibles, par exemple `[2]` ou `[2, 3, 4]`. Le menu n'ouvre pas plus de places que le plus grand. |
 | `symmetry` | On ne décrit que la part du joueur 1, en haut à gauche ; le jeu la recopie par rotation pour les autres. `rot180` : deux parts (le joueur 2 en bas à droite). `rot90` : quatre parts, une par coin (à deux joueurs, ils sont dans les coins opposés et les deux autres coins restent des bases libres). `auto` : deux parts à deux joueurs, quatre au-delà. |
 | `calm` | Facultatif : les points près desquels les bords irréguliers (`ragged`) restent droits. Par défaut, les deux bouts de chaque rampe. |
+| `biomes` | Facultatif : les planètes spéciales (Astéroïdes) que la carte accepte en plus des planètes communes. |
+| `biomesOnly` | Facultatif : `true` pour n'accepter que les planètes de `biomes`. Le menu ne propose alors qu'elles, et toute autre planète retombe sur la première de la liste. |
 
 Coordonnées : `[x, y]` en tuiles, x vers l'est (la droite), y vers le sud (le bas), `[0, 0]` en haut à gauche.
 
@@ -45,13 +47,14 @@ Une liste de formes, peintes dans l'ordre : chaque forme recouvre les précéden
 | `rect` | `from`, `to` : les coins, inclus. |
 | `circle` | `at`, `r`. |
 | `band` | Bande diagonale : les tuiles où `|x + y × diag − offset| ≤ half`. Avec `diag: 1`, la bande va du bas à gauche vers le haut à droite ; avec `diag: -1`, du haut à gauche vers le bas à droite. |
+| `polygon` | `points` : un contour quelconque, `[[x, y], …]` ; il prend les tuiles dont le centre est à l'intérieur. Pour des côtes irrégulières (îlots, arches). |
 | `ramp` | `at` : la tuile de la rampe qui touche le haut. `up` (`N`, `E`, `S` ou `W`) : de quel côté est le haut. `width` : la largeur. `level` : le niveau du bas. Une rampe fait toujours 4 tuiles de long. |
 
 Chaque forme, sauf `ramp`, prend aussi l'un de ces champs :
 
 - `level` : elle élève le sol à ce niveau ;
 - `chasm: true` : elle creuse un gouffre, infranchissable à pied mais survolé par les unités volantes ;
-- `fill: true` : elle rebouche un gouffre (ponts, îles).
+- `fill: true` : elle rebouche un gouffre (ponts, îles). Avec `arch: true` en plus, ce sol est dessiné comme une arche naturelle : mince au milieu, avec sa voûte au-dessus du vide (sur Astéroïdes). Pour le jeu, c'est un sol comme un autre.
 
 `biome` (facultatif, l'id d'une planète, par exemple `ville`) : la forme n'existe que sur cette planète.
 

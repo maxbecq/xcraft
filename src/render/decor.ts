@@ -44,7 +44,8 @@ export class Decor {
   readonly root = new Object3D();
   private readonly city: boolean;
 
-  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false, streets?: [number, number][][]) {
+  /** `clearOfVoid`: floating rocks over space (Astéroïdes): nothing within 2 tiles of the void, nor on an arch. */
+  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false, streets?: [number, number][][], clearOfVoid = false) {
     this.city = !!streets;
     const keepClear = new Set<number>();
     const clear = (cx: number, cy: number, r: number) => {
@@ -56,6 +57,7 @@ export class Decor {
     }
     for (const { hq: [tx, ty] } of map.sites ?? []) clear(tx + 2, ty + 2, 5);
     for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) if (map.ramp[y * map.width + x]) clear(x, y, 2);
+    if (clearOfVoid) for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) if (map.chasm?.[y * map.width + x] || map.arch?.[y * map.width + x]) clear(x, y, 2);
 
     if (streets) {
       this.lineStreets(streets, keepClear);
@@ -92,7 +94,7 @@ export class Decor {
         }
       }
     }
-    this.outskirts();
+    if (!clearOfVoid) this.outskirts(); // beyond the edges is space: they would float
   }
 
   /** A few rocks and dead trees on the land beyond the map's edges, near it (further out it is dark). */

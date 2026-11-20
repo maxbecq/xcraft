@@ -124,7 +124,7 @@ const terrain = buildTerrain(map, roads?.texture);
 scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets);
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets, !!biome.space);
 // The asteroids float over space, seen through the chasms and past the edges.
 const space = biome.space ? new Space(map.width, map.height) : null;
 if (space) scene.add(space.root);

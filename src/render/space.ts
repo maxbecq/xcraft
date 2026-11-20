@@ -1,13 +1,13 @@
 import {
-  AdditiveBlending, type Blending, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, NormalBlending, PlaneGeometry, Quaternion, Sprite, SpriteMaterial, Vector3,
+  AdditiveBlending, type Blending, Group, Mesh, MeshBasicMaterial,
+  NormalBlending, PlaneGeometry, Sprite, SpriteMaterial, Vector3,
 } from 'three';
 import { isoOffset } from '../camera';
 import { picture } from './textures';
 
 /**
  * Space under the Astéroïdes planet, seen through the chasms and past the map's edges: painted stars and nebulae, a painted gas giant and
- * smaller asteroids drifting at several depths. The camera is orthographic, so depth gives no parallax by itself: each
+ * nothing else floating in it. The camera is orthographic, so depth gives no parallax by itself: each
  * layer follows the camera by part of its moves (`update`), the deepest the most, and so seems to slide by slower.
  * Rendering only.
  */
@@ -44,36 +44,11 @@ export class Space {
     giant.renderOrder = -1;
     this.layer([giant], 0.97);
 
-    // Smaller asteroids, three depths: the nearer, the bigger (the camera is orthographic: size is all the distance
-    // there is) and the faster they slide by.
-    const rock = new MeshStandardMaterial({ color: 0x2a2724, roughness: 1, flatShading: true });
-    let seed = 4242;
-    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (const [depth, count, size, follow] of [[14, 30, 1.6, 0.35], [40, 40, 0.9, 0.6], [110, 60, 0.5, 0.82]] as const) {
-      const geo = new IcosahedronGeometry(1, 1);
-      // Lumpy: each corner pushed in or out by its direction (corners shared by faces move together, no cracks).
-      const pos = geo.getAttribute('position');
-      for (let i = 0; i < pos.count; i++) {
-        const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
-        const h = Math.sin(x * 12.9 + y * 78.2 + z * 37.7 + depth) * 43758.5;
-        const k = 0.75 + (h - Math.floor(h)) * 0.45;
-        pos.setXYZ(i, x * k, y * k * 0.8, z * k);
-      }
-      geo.computeVertexNormals();
-      const mesh = new InstancedMesh(geo, rock, count);
-      const m = new Matrix4();
-      const q = new Quaternion();
-      for (let i = 0; i < count; i++) {
-        const s = size * (0.5 + rand());
-        q.setFromAxisAngle(new Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(), rand() * Math.PI * 2);
-        m.compose(under(-40 + rand() * (width + 80), -40 + rand() * (height + 80), depth + (rand() - 0.5) * depth * 0.3), q, new Vector3(s, s * (0.6 + rand() * 0.4), s));
-        mesh.setMatrixAt(i, m);
-      }
-      this.layer([mesh], follow);
-    }
+    // No drifting rocks: the camera is orthographic, so a rock far below keeps its size and reads as one floating
+    // beside the islands. The painted sky's layers give the depth.
   }
 
-  private layer(objects: (Mesh | InstancedMesh | Sprite)[], follow: number): void {
+  private layer(objects: (Mesh | Sprite)[], follow: number): void {
     const group = new Group();
     group.add(...objects);
     this.root.add(group);

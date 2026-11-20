@@ -149,20 +149,21 @@ export const BIOMES: Record<string, Biome> = {
     // Lava a short way down, bright and glossy.
     chasm: { depth: 1.0, floor: new Color(0xd84a10), glow: new Color(0xff3a00), glossy: true, lava: true },
   },
-  // Big flat asteroids over space, a banded gas giant beyond: near-black regolith, craters, chasms into the void.
+  // Flat basalt asteroids over space, joined by natural arches, a banded gas giant beyond (its own map: asteroides.json).
   asteroides: {
     id: 'asteroides',
     name: 'Astéroïdes',
     special: true,
-    levels: [new Color(0x5a5c62), new Color(0x525459), new Color(0x66686e)],
-    patch: new Color(0x303236),
-    sand: new Color(0x56585e),
-    ramp: new Color(0x46484d),
-    rock: new Color(0x2c2d31),
-    rockDark: new Color(0x0a0908),
+    levels: [new Color(0xb4b2ae), new Color(0xaaa8a4), new Color(0xbcbab6)],
+    patch: new Color(0x7a7874),
+    sand: new Color(0xa8a49c),
+    ramp: new Color(0x8e8a84),
+    rock: new Color(0xc4beb4),
+    rockDark: new Color(0x5a5650),
     veins: null,
     sun: { color: 0xfff0dc, intensity: 3.4 },
-    sky: { color: 0x9aa8d0, ground: 0x2a2018, intensity: 0.8 },
+    // Light from below too (the nebula's glow), so the islands' undersides and the arches' vaults read against space.
+    sky: { color: 0x9aa8d0, ground: 0x5a5470, intensity: 1.1 },
     background: 0x020207,
     exposure: 1.0,
     warmShadows: 0,
@@ -194,19 +195,20 @@ export const BIOMES: Record<string, Biome> = {
   },
 };
 
-/** The planets offered on this map: every common one, plus the special ones it was drawn for. */
-export function biomesFor(map: Pick<MapFile, 'biomes'>): Biome[] {
-  return Object.values(BIOMES).filter((b) => !b.special || !!map.biomes?.includes(b.id));
+/** The planets offered on this map: every common one, plus the special ones it was drawn for (only those, with `biomesOnly`). */
+export function biomesFor(map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome[] {
+  return Object.values(BIOMES).filter((b) => (b.special || map.biomesOnly ? !!map.biomes?.includes(b.id) : true));
 }
 
-/** This planet if the map takes it, else the desert (an unknown id, or a special planet from an old link, setting or replay). */
-export function fitBiome(id: string | null | undefined, map: Pick<MapFile, 'biomes'>): Biome {
+/** This planet if the map takes it, else the map's first one (the desert on a common map): an unknown id, or a planet from an old link, setting or replay. */
+export function fitBiome(id: string | null | undefined, map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome {
   const b = id && Object.hasOwn(BIOMES, id) ? BIOMES[id] : null; // own ids only: `constructor` is not a planet
-  return b && (!b.special || !!map.biomes?.includes(b.id)) ? b : BIOMES.desert;
+  const offered = biomesFor(map);
+  return b && offered.includes(b) ? b : offered.includes(BIOMES.desert) ? BIOMES.desert : offered[0] ?? BIOMES.desert;
 }
 
 /** Biome from `?biome=`, else the last one chosen in the menu, else the desert; one the map does not take falls back too. */
-export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biomes'>): Biome {
+export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome {
   let stored: string | null = null;
   try {
     stored = localStorage.getItem('xcraft.biome');

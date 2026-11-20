@@ -14,6 +14,8 @@ export interface GameMap {
   rampStep: Uint8Array;
   /** Chasms (city map): tiles open on the void, impassable on foot, flown over. */
   chasm?: Uint8Array;
+  /** Natural arches (map file `arch`): ground like any other, drawn as a thin span over the void. Rendering only. */
+  arch?: Uint8Array;
   /** Base spots (from the map file), turned for each quarter of the map. */
   sites?: Site[];
 }

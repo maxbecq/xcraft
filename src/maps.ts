@@ -19,6 +19,8 @@ export interface MapFile {
   calm?: [number, number][];
   /** Special planets this map was drawn for (render/biome.ts `special`), offered beside the common ones. */
   biomes?: string[];
+  /** Only the planets in `biomes` (none of the common ones): a map whose ground makes no sense elsewhere. */
+  biomesOnly?: boolean;
   terrain: Shape[];
   bases: BaseSpot[];
 }
@@ -28,13 +30,16 @@ type Area =
   | { shape: 'rect'; from: [number, number]; to: [number, number] }
   | { shape: 'circle'; at: [number, number]; r: number }
   /** A diagonal band: tiles where |x + y·diag − offset| ≤ half (diag 1 or −1). */
-  | { shape: 'band'; diag: 1 | -1; offset: number; half: number };
+  | { shape: 'band'; diag: 1 | -1; offset: number; half: number }
+  /** Tiles whose centre lies inside this outline (any shape: an island's broken coast, a natural arch). */
+  | { shape: 'polygon'; points: [number, number][] };
 
 /** `biome`: the shape only exists on that planet. */
 export type Shape = (
   | (Area & { level: number; chasm?: undefined; fill?: undefined })
   | (Area & { chasm: true; level?: undefined; fill?: undefined })
-  | (Area & { fill: true; level?: undefined; chasm?: undefined })
+  /** `arch`: the filled tiles are a natural arch (drawn thin over the void, its vault below); for the eye only. */
+  | (Area & { fill: true; arch?: boolean; level?: undefined; chasm?: undefined })
   | { shape: 'ramp'; at: [number, number]; up: Dir; width: number; level: number }
 ) & { biome?: string };
 
@@ -158,6 +163,19 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
         return (x - a.at[0]) * (x - a.at[0]) + (y - a.at[1]) * (y - a.at[1]) <= a.r * a.r;
       case 'band':
         return Math.abs(x + y * a.diag - a.offset) <= a.half;
+      case 'polygon': {
+        // Even-odd rule on the tile's centre: + − × ÷ and comparisons only, the same in every browser.
+        const px = x + 0.5;
+        const py = y + 0.5;
+        let inPoly = false;
+        const p = a.points;
+        for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+          const [xi, yi] = p[i];
+          const [xj, yj] = p[j];
+          if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inPoly = !inPoly;
+        }
+        return inPoly;
+      }
     }
   };
 
@@ -180,6 +198,7 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
       continue;
     }
     if (s.chasm) map.chasm ??= new Uint8Array(width * height);
+    if (s.fill && s.arch) map.arch ??= new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!inside(s, x, y)) continue;
@@ -187,6 +206,8 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
           if (s.chasm) map.chasm![i] = 1;
           else if (s.fill) {
             if (map.chasm) map.chasm[i] = 0;
+            if (s.arch) map.arch![i] = 1;
+            else if (map.arch) map.arch[i] = 0; // an island painted over an arch's root is island
           } else {
             map.level[i] = s.level;
             map.ramp[i] = null;
