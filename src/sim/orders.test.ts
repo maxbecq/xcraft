@@ -168,21 +168,23 @@ describe('rally point', () => {
   describe('a Dieux god that summons troops', () => {
     const gods = Object.entries(DEFS).filter(([, d]) => d.kind === 'unit' && (d as UnitDef).trains?.length).map(([t]) => t);
 
-    it('every one of them takes a rally point from the button, its troops coming out in front then going there', () => {
+    it('every one of them takes a rally point from the button, its troops coming out on the map middle side then going there', () => {
       expect(gods).toEqual(expect.arrayContaining(['gaia', 'thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris']));
       for (const t of gods) {
         const w = new World(createMap());
         const god = w.spawn(t, 0, 20 * FP, 20 * FP);
-        w.step([{ player: 0, kind: 'rally', ids: [god.id], x: 30 * FP, y: 26 * FP }]);
-        expect(god.rally, t).toEqual({ x: 30 * FP, y: 26 * FP });
+        w.step([{ player: 0, kind: 'rally', ids: [god.id], x: 30 * FP, y: 14 * FP }]);
+        expect(god.rally, t).toEqual({ x: 30 * FP, y: 14 * FP });
         const troop = (DEFS[t] as UnitDef).trains![0];
         god.queue = [troop];
         god.trainLeft = 1;
         w.step([]);
         const u = [...w.entities.values()].find((e) => e.type === troop && e.owner === 0);
         expect(u, t).toBeDefined();
-        expect(u!.y, t).toBeLessThan(god.y); // in front of the god (north), not on the rally side
-        expect(u!.order, t).toMatchObject({ kind: 'move', x: 30 * FP, y: 26 * FP });
+        // On the side of the map's middle, not on the rally side: from every corner alike.
+        const [mx, my] = [(w.map.width * FP) / 2, (w.map.height * FP) / 2];
+        expect(Math.sign(u!.x - god.x) === Math.sign(mx - god.x) && Math.sign(u!.y - god.y) === Math.sign(my - god.y), t).toBe(true);
+        expect(u!.order, t).toMatchObject({ kind: 'move', x: 30 * FP, y: 14 * FP });
       }
     });
 

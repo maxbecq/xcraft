@@ -96,8 +96,11 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
     e.path = [Math.max(0, Math.min(g.width * FP - 1, x)), Math.max(0, Math.min(g.height * FP - 1, y))];
     return;
   }
-  let gx = Math.min(g.width - 1, Math.max(0, tileOf(x)));
-  let gy = Math.min(g.height - 1, Math.max(0, tileOf(y)));
+  // A goal right on a tile's edge (an even-sized building's middle) is in the tile on the unit's side of it: always the
+  // one after it (floor) gave a scene and its mirror goal tiles a tile apart.
+  const goalTile = (v: number, from: number) => (v % FP === 0 && from < v ? v / FP - 1 : tileOf(v));
+  let gx = Math.min(g.width - 1, Math.max(0, goalTile(x, e.x)));
+  let gy = Math.min(g.height - 1, Math.max(0, goalTile(y, e.y)));
   const exact = g.open(gx, gy);
   if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy), [tileOf(e.x), tileOf(e.y)]);
   const tiles = this.pathFor(e, gx, gy);
@@ -268,13 +271,15 @@ export function separate(this: World): void {
     const u = units[i];
     drift[home[i]] = Math.max(drift[home[i]], Math.abs(u.x - x0[i]), Math.abs(u.y - y0[i]));
   };
+  /** Margin for e's own moves while its pairs are pushed: past it, the buckets are looked at again. */
+  const SLACK = FP / 4;
   // Buckets two tiles wide: look far enough that the two widest bodies (gods, 1.3 tiles) still meet.
-  const reach = idiv(2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + 2 * FP - 1, 2 * FP);
+  const reach = idiv(2 * units.reduce((m, e) => Math.max(m, e.radius), 0) + SLACK + 2 * FP - 1, 2 * FP);
   // Pairs (i, j) in id order whatever the buckets they lie in: bucket by bucket, the order turned with the map, and a
   // scene and its mirror pushed their units apart in different orders, so not to mirror positions.
   const near: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const e = units[i];
+  // The bodies after `after` (indices) that may touch e, in id order.
+  const gather = (e: Entity, i: number, after: number) => {
     const bx = tileOf(e.x) >> 1;
     const by = tileOf(e.y) >> 1;
     near.length = 0;
@@ -286,23 +291,36 @@ export function separate(this: World): void {
         // so skipping it changes nothing (the same pushes, in the same order).
         const gx = dx > 0 ? 2 * (bx + dx) * FP - e.x : dx < 0 ? e.x - 2 * (bx + dx + 1) * FP : 0;
         const gy = dy > 0 ? 2 * (by + dy) * FP - e.y : dy < 0 ? e.y - 2 * (by + dy + 1) * FP : 0;
-        if (Math.max(gx, gy) - drift[b] >= e.radius + widest[b]) continue;
-        // Units come in id order (entities are kept in spawn order): start past e.
+        if (Math.max(gx, gy) - drift[b] - SLACK >= e.radius + widest[b]) continue;
+        // Units come in id order (entities are kept in spawn order): start past `after`.
         const m = members[b];
         let q = 0;
         for (let hi = m.length; q < hi; ) {
           const mid = (q + hi) >> 1;
-          if (m[mid] <= i) q = mid + 1;
+          if (m[mid] <= after) q = mid + 1;
           else hi = mid;
         }
         for (; q < m.length; q++) if (air[m[q]] === air[i]) near.push(m[q]);
       }
     }
     if (near.length > 1) near.sort((p, q) => p - q);
-    for (const j of near) {
+  };
+  for (let i = 0; i < n; i++) {
+    const e = units[i];
+    gather(e, i, i);
+    // e itself is pushed by its pairs: once it has moved past the margin, a bucket skipped from where it stood may
+    // now be in reach (a scene and its mirror, their buckets cut differently, then pushed different pairs).
+    let [ex, ey] = [e.x, e.y];
+    for (let k = 0; k < near.length; k++) {
+      const j = near[k];
       this.pushApart(e, units[j]);
       moved(i);
       moved(j);
+      if (Math.max(Math.abs(e.x - ex), Math.abs(e.y - ey)) > SLACK && k < near.length - 1) {
+        gather(e, i, j);
+        [ex, ey] = [e.x, e.y];
+        k = -1;
+      }
     }
   }
 }
@@ -314,9 +332,14 @@ export function pushApart(this: World, a: Entity, b: Entity): void {
   const overlap = a.radius + b.radius - d;
   if (overlap <= 0) return;
   if (d === 0) {
-    // Same spot: split along a direction derived from the ids.
-    dx = ((a.id * 7 + b.id * 13) % 17) - 8 || 1;
-    dy = ((a.id * 11 + b.id * 5) % 17) - 8;
+    // Same spot: split along the line from the map's middle, b outward, which turns with the map (a direction from the
+    // ids pushed the same way whatever the corner); right in the middle, along one from the ids.
+    dx = a.x - idiv(this.map.width * FP, 2);
+    dy = a.y - idiv(this.map.height * FP, 2);
+    if (!dx && !dy) {
+      dx = ((a.id * 7 + b.id * 13) % 17) - 8 || 1;
+      dy = ((a.id * 11 + b.id * 5) % 17) - 8;
+    }
     d = isqrt(dx * dx + dy * dy);
   }
   const pa = a.order && !b.order ? 0 : !a.order && b.order ? overlap : idiv(overlap, 2);

@@ -39,13 +39,29 @@ export class Vision {
     }
   }
 
-  /** reveal() tile by tile, for any radius and centre. */
-  private revealAny(cx: number, cy: number, radius: number, high: boolean): void {
+  /**
+   * reveal() from a point in fixed point (FP to a tile). Off the tiles' edges, from the tile it stands on. On an edge
+   * (an even-sized building's middle, a unit right on a line), from the edge itself, a disc between the tiles, seen
+   * from the highest of them: from the tile right of or below the line, the map turned round saw a tile less on the
+   * far side than the same scene unturned.
+   */
+  revealAt(x: number, y: number, fp: number, radius: number, high = false): void {
+    const [ex, ey] = [x % fp === 0, y % fp === 0];
+    const [tx, ty] = [Math.floor(x / fp), Math.floor(y / fp)];
+    if (!ex && !ey) return this.reveal(tx, ty, radius, high);
     const g = this.grid;
-    const eye = high ? Infinity : g.inside(cx, cy) ? g.level(cx, cy) : 0;
+    let eye = 0;
+    for (const sx of ex ? [tx - 1, tx] : [tx]) for (const sy of ey ? [ty - 1, ty] : [ty]) if (g.inside(sx, sy)) eye = Math.max(eye, g.level(sx, sy));
+    this.revealAny(ex ? tx - 0.5 : tx, ey ? ty - 0.5 : ty, radius, high, eye);
+  }
+
+  /** reveal() tile by tile, for any radius and centre. */
+  private revealAny(cx: number, cy: number, radius: number, high: boolean, eyeLevel?: number): void {
+    const g = this.grid;
+    const eye = high ? Infinity : (eyeLevel ?? (g.inside(cx, cy) ? g.level(cx, cy) : 0));
     const r2 = radius * radius;
-    for (let y = Math.max(0, cy - radius); y <= Math.min(g.height - 1, cy + radius); y++) {
-      for (let x = Math.max(0, cx - radius); x <= Math.min(g.width - 1, cx + radius); x++) {
+    for (let y = Math.max(0, Math.ceil(cy - radius)); y <= Math.min(g.height - 1, cy + radius); y++) {
+      for (let x = Math.max(0, Math.ceil(cx - radius)); x <= Math.min(g.width - 1, cx + radius); x++) {
         if ((x - cx) ** 2 + (y - cy) ** 2 > r2) continue;
         if (g.level(x, y) > eye) continue;
         this.tiles[y * g.width + x] = VISIBLE;

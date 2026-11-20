@@ -498,16 +498,18 @@ export class World {
       const tx = tileOf(e.x);
       const ty = tileOf(e.y);
       const high = soars(e);
-      const k = Number.isInteger(r) && r >= 0 && r < 1024 && tx >= 0 && tx < W && ty >= 0 ? ((ty * W + tx) * 1024 + r) * 2 + (high ? 1 : 0) : -1;
+      const edge = (e.x % FP === 0 ? 1 : 0) + (e.y % FP === 0 ? 2 : 0);
+      const k = Number.isInteger(r) && r >= 0 && r < 1024 && tx >= 0 && tx < W && ty >= 0 ? (((ty * W + tx) * 1024 + r) * 2 + (high ? 1 : 0)) * 4 + edge : -1;
       for (const a of this.team[e.owner]) {
         if (k >= 0) {
           if (done[a].has(k)) continue;
           done[a].add(k);
         }
-        this.vision[a].reveal(tx, ty, r, high);
+        if (edge) this.vision[a].revealAt(e.x, e.y, FP, r, high);
+        else this.vision[a].reveal(tx, ty, r, high);
       }
     }
-    for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].reveal(tileOf(s.x), tileOf(s.y), s.radius ?? OBSERVATION.radius);
+    for (const s of this.scans) for (const a of this.team[s.owner]) this.vision[a].revealAt(s.x, s.y, FP, s.radius ?? OBSERVATION.radius);
     for (const d of this.detected) d.clear();
     // Déflecteurs hide the allied ground units round them.
     this.shrouded.clear();
@@ -539,7 +541,12 @@ export class World {
   sees(player: number, e: Entity): boolean {
     if (e.owner === player || (e.owner >= 0 && !this.hostile(e.owner, player))) return true;
     if (e.inside) return false;
-    if (e.def.kind === 'unit') return this.vision[player].visible(tileOf(e.x), tileOf(e.y)) && (!this.hidden(e) || this.detected[player].has(e.id));
+    if (e.def.kind === 'unit') {
+      // Right on a tile's edge, on either side of it: the same from every corner of the map.
+      const [tx, ty, v] = [tileOf(e.x), tileOf(e.y), this.vision[player]];
+      const seen = v.visible(tx, ty) || (e.x % FP === 0 && (v.visible(tx - 1, ty) || (e.y % FP === 0 && v.visible(tx - 1, ty - 1)))) || (e.y % FP === 0 && v.visible(tx, ty - 1));
+      return seen && (!this.hidden(e) || this.detected[player].has(e.id));
+    }
     const size = (e.def as BuildingDef).size ?? 1;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) if (this.vision[player].visible(x, y)) return true;
     return false;

@@ -20,7 +20,12 @@ export function expansions(world: World, owner: number): [number, number][] {
   const d = (s: { hq: [number, number] }, from = home) => Math.abs(s.hq[0] - from[0]) + Math.abs(s.hq[1] - from[1]);
   const others = sites.filter((s) => s.start && s.turn !== turn && seated.has(s.turn)).map((s) => s.hq);
   const far = sites.filter((s) => s.turn !== turn && !(s.start && seated.has(s.turn)) && others.every((o) => d(s, o) >= d(s)));
-  return [...own, ...far.sort((a, b) => d(a) - d(b))].map((s) => s.hq);
+  // Equally far: the one left of the line from home to the map's middle (the map file's order is the same from every
+  // corner, so the two sides of a four-player map came in one order for one corner and the other for its opposite).
+  const half = ((DEFS[FACTIONS[world.players[owner].faction]?.hq] as BuildingDef | undefined)?.size ?? 0) / 2;
+  const [mx, my] = [world.map.width / 2 - home[0] - half, world.map.height / 2 - home[1] - half];
+  const left = (s: { hq: [number, number] }) => (mx * (s.hq[1] - home[1]) - my * (s.hq[0] - home[0]) < 0 ? 0 : 1);
+  return [...own, ...far.sort((a, b) => d(a) - d(b) || left(a) - left(b))].map((s) => s.hq);
 }
 
 /** The natural expansion's headquarters spot (top-left tile) for a player. */

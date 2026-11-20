@@ -64,7 +64,7 @@ export function addonsOf(this: World, pod: Entity): number {
   return n;
 }
 
-/** Where a Pod's add-on goes: against one of its sides, the first free one (east, west, south, north). */
+/** Where a Pod's add-on goes: against one of its sides, the free one nearest the map's middle. */
 export function addonSpot(this: World, pod: Entity, type: string): [number, number] | undefined {
   return this.addonSpotAt(type, pod.tx, pod.ty, (pod.def as BuildingDef).size, pod.owner);
 }
@@ -72,9 +72,18 @@ export function addonSpot(this: World, pod: Entity, type: string): [number, numb
 /** The same for a Pod of size `own` at (tx, ty), placed or not (the placement preview checks its add-on has room). */
 export function addonSpotAt(this: World, type: string, tx: number, ty: number, own: number, player: number): [number, number] | undefined {
   const size = (DEFS[type] as BuildingDef).size;
-  const mid = idiv(own - size, 2);
-  const spots: [number, number][] = [[tx + own, ty + mid], [tx - size, ty + mid], [tx + mid, ty + own], [tx + mid, ty - size]];
-  return spots.find(([x, y]) => this.canPlace(type, x, y, player));
+  // Centred on the side; an odd difference of size leaves half a tile, taken either way.
+  const spots: [number, number][] = [];
+  for (const mid of new Set([Math.floor((own - size) / 2), Math.ceil((own - size) / 2)]))
+    spots.push([tx + own, ty + mid], [tx - size, ty + mid], [tx + mid, ty + own], [tx + mid, ty - size]);
+  // Seen from every corner alike (a fixed east-first order put a bottom-right base's add-on at its back): spots by
+  // distance to the middle, a tie to the one left of the line from the Pod. Doubled tile units, all whole.
+  const [mx, my, px, py] = [this.map.width, this.map.height, 2 * tx + own, 2 * ty + own];
+  const key = ([x, y]: [number, number]) => {
+    const [cx, cy] = [2 * x + size, 2 * y + size];
+    return (cx - mx) ** 2 + (cy - my) ** 2 + ((mx - px) * (cy - py) - (my - py) * (cx - px) < 0 ? 0 : 0.5);
+  };
+  return spots.sort((a, b) => key(a) - key(b)).find(([x, y]) => this.canPlace(type, x, y, player));
 }
 
 /**
@@ -287,11 +296,20 @@ export function shelter(this: World, e: Entity): void {
   this.hit({ ...e, x: b.x, y: b.y } as Entity, t, a);
 }
 
-/** Out of a bunker, on the nearest open tile beside it. */
+/** The tile of a point; right on an edge (an even-sized building's middle), the one on the map's middle side. */
+const midward = (x: number, y: number, w: number, h: number): [number, number] => {
+  const t = (v: number, n: number) => (v % FP === 0 && v >= idiv(n * FP, 2) ? v / FP - 1 : tileOf(v));
+  return [t(x, w), t(y, h)];
+};
+
+/** Out of a bunker, on the open tile beside it nearest the map's middle (from every corner alike). */
 export function leave(this: World, e: Entity): void {
   const b = this.entities.get(e.inside);
   e.inside = 0;
-  const [x, y] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y), b?.def.kind === 'building' ? this.grid.level(b.tx, b.ty) : -1);
+  const [x, y] =
+    b?.def.kind === 'building'
+      ? this.besideTile(b, { x: idiv(this.map.width * FP, 2), y: idiv(this.map.height * FP, 2) }, this.grid.level(b.tx, b.ty))
+      : this.grid.nearestOpen(...midward(e.x, e.y, this.map.width, this.map.height), -1, [(this.map.width - 1) / 2, (this.map.height - 1) / 2]);
   e.x = e.px = x * FP + FP / 2;
   e.y = e.py = y * FP + FP / 2;
 }
@@ -367,26 +385,41 @@ export function beside(this: World, t: Entity, from: Entity): { kind: 'move'; x:
 
 /** Spawns a unit on the open tile next to a building, on the side of its rally point. */
 export function spawnBeside(this: World, type: string, b: Entity): Entity {
+  // Seen from every corner alike: with no rally point, toward the map's middle (it was always down and right, the back
+  // of a base in the bottom-right corner); ties go to the tile left of the line from the building, not the scan order.
+  const mid = { x: idiv(this.map.width * FP, 2), y: idiv(this.map.height * FP, 2) };
   if (b.def.kind === 'unit') {
-    // At a god's feet, in front of it: the rally point, if any, is then walked to (rallyOn).
-    const toward = { x: b.x, y: b.y - FP };
+    // At a god's feet, on the side of the map's middle (north, before: behind it from one corner, before it from the
+    // other): the rally point, if any, is then walked to (rallyOn).
+    const toward = b.x === mid.x && b.y === mid.y ? { x: b.x, y: b.y - FP } : mid;
     const d = dist(b.x, b.y, toward.x, toward.y) || 1;
     const reach = b.radius + FP;
-    const [tx, ty] = this.grid.nearestOpen(tileOf(b.x + idiv((toward.x - b.x) * reach, d)), tileOf(b.y + idiv((toward.y - b.y) * reach, d)), -1);
+    const at = midward(b.x + idiv((toward.x - b.x) * reach, d), b.y + idiv((toward.y - b.y) * reach, d), this.map.width, this.map.height);
+    const [tx, ty] = this.grid.nearestOpen(...at, -1, [(this.map.width - 1) / 2, (this.map.height - 1) / 2]);
     return this.spawn(type, b.owner, tx * FP + FP / 2, ty * FP + FP / 2);
   }
+  const [tx, ty] = this.besideTile(b, b.rally ?? mid);
+  return this.spawn(type, b.owner, tx * FP + FP / 2, ty * FP + FP / 2);
+}
+
+/**
+ * The open tile round a building nearest a point (`level`: only on that level); a tie to the one left of the line
+ * from the building to it.
+ */
+export function besideTile(this: World, b: Entity, toward: { x: number; y: number }, level = -1): [number, number] {
   const size = (b.def as BuildingDef).size;
-  const toward = b.rally ?? { x: b.x + FP, y: b.y + FP };
+  const [lx, ly] = [toward.x - b.x, toward.y - b.y];
   let best = this.grid.nearestOpen(b.tx + size, b.ty + size, this.grid.level(b.tx, b.ty)); // walled in: closest open tile
   let bestD = Infinity;
   for (let y = b.ty - 1; y <= b.ty + size; y++) {
     for (let x = b.tx - 1; x <= b.tx + size; x++) {
-      if (!this.grid.open(x, y)) continue;
-      const d = dist(x * FP + FP / 2, y * FP + FP / 2, toward.x, toward.y);
-      if (d < bestD) [best, bestD] = [[x, y], d];
+      if (!this.grid.open(x, y) || (level >= 0 && this.grid.level(x, y) !== level)) continue;
+      const [cx, cy] = [x * FP + FP / 2, y * FP + FP / 2];
+      const d = dist(cx, cy, toward.x, toward.y);
+      if (d < bestD || (d === bestD && lx * (cy - b.y) - ly * (cx - b.x) < 0)) [best, bestD] = [[x, y], d];
     }
   }
-  return this.spawn(type, b.owner, best[0] * FP + FP / 2, best[1] * FP + FP / 2);
+  return best;
 }
 
 /** What a carrier holds: units, or for a Z Barge, their supply. */

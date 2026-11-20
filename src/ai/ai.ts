@@ -192,7 +192,7 @@ export class AI {
     // Abandoned construction sites (builder killed) get a new serf. Warped buildings build themselves.
     for (const site of buildings.filter((b) => b.buildLeft > 0 && !(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs)) {
       if (serfs.some((s) => s.order?.kind === 'construct' && s.order.target === site.id)) continue;
-      const s = this.builder(serfs, [site.tx, site.ty]);
+      const s = this.builder(serfs, [site.tx, site.ty], (site.def as BuildingDef).size);
       if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: site.x, y: site.y, target: site.id });
     }
 
@@ -200,7 +200,7 @@ export class AI {
     if (REPAIR[f.worker] && p.minerals > 200) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
         if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
-        const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty]);
+        const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty], (b.def as BuildingDef).size);
         if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
       }
     }
@@ -351,8 +351,8 @@ export class AI {
       if (ctx.energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
       // Gaïa, the Dieux's only builder, chains her buildings (a few at most) instead of placing one at a time.
-      const chained = f.builder && !this.builder(builders, spot) ? builders.find((b) => b.next.length < 3) : undefined;
-      const builder = this.builder(builders, spot) ?? chained;
+      const chained = f.builder && !this.builder(builders, spot, def.size) ? builders.find((b) => b.next.length < 3) : undefined;
+      const builder = this.builder(builders, spot, def.size) ?? chained;
       if (!spot || !builder) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
@@ -761,7 +761,9 @@ export class AI {
       const cx = front.reduce((s, u) => s + u.x, 0) / front.length;
       const cy = front.reduce((s, u) => s + u.y, 0) / front.length;
       const d = dist(cx, cy, target.x, target.y) || 1;
-      const back = { x: Math.trunc(cx - ((target.x - cx) * 3 * FP) / d), y: Math.trunc(cy - ((target.y - cy) * 3 * FP) / d) };
+      // Rounded toward the map's middle (trunc of a float mean rounded each corner's point another way).
+      const [hx, hy] = [(w.map.width * FP) / 2, (w.map.height * FP) / 2];
+      const back = { x: Math.trunc(cx - ((target.x - cx) * 3 * FP) / d - hx) + hx, y: Math.trunc(cy - ((target.y - cy) * 3 * FP) / d - hy) + hy };
       const leading = waveUnits.filter((u) => support(u) && !kiters.has(u.id) && u.order?.kind !== 'heal' && dist(u.x, u.y, target.x, target.y) < d - 1.5 * FP);
       if (leading.length) ctx.out.push({ player: this.player, kind: 'attack', ids: leading.map((u) => u.id), x: back.x, y: back.y });
       for (const u of leading) kiters.add(u.id);
@@ -936,8 +938,8 @@ export class AI {
             const d = dist(u.x, u.y, cx, cy) || 1;
             const jump = ((ab.range ?? 0) - 1) * FP;
             const clamp = (v: number, max: number) => Math.min(Math.max(v, FP), max * FP - FP);
-            const x = clamp(Math.trunc(u.x + ((u.x - cx) * jump) / d), w.map.width);
-            const y = clamp(Math.trunc(u.y + ((u.y - cy) * jump) / d), w.map.height);
+            const x = clamp(u.x + Math.trunc(((u.x - cx) * jump) / d), w.map.width);
+            const y = clamp(u.y + Math.trunc(((u.y - cy) * jump) / d), w.map.height);
             cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x, y };
           }
         } else if (name === 'dissipation') {
@@ -1088,10 +1090,11 @@ export class AI {
   }
 
   /** A serf that is not carrying minerals nor already building, closest to the site. */
-  private builder(serfs: Entity[], spot: [number, number] | null): Entity | undefined {
+  private builder(serfs: Entity[], spot: [number, number] | null, size: number): Entity | undefined {
     if (!spot) return undefined;
-    const x = spot[0] * FP;
-    const y = spot[1] * FP;
+    // From the site's middle, not its top-left tile: the same worker from every corner.
+    const x = spot[0] * FP + (size * FP) / 2;
+    const y = spot[1] * FP + (size * FP) / 2;
     return serfs
       .filter((s) => s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.carry === 0)
       .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
@@ -1145,8 +1148,11 @@ export class AI {
     const cx = Math.floor((near ?? home).x / FP);
     const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.
-    const sx = cx < w.map.width / 2 ? 1 : -1;
-    const sy = cy < w.map.height / 2 ? 1 : -1;
+    // A site right on a middle line (on an odd-sized map's axis) takes its side from the other line: the same both
+    // ways, its mirror's spot was not the mirror of its own.
+    const [ox, oy] = [2 * (near ?? home).x - w.map.width * FP, 2 * (near ?? home).y - w.map.height * FP];
+    const sx = ox === 0 ? (oy < 0 ? -1 : 1) : ox < 0 ? 1 : -1;
+    const sy = oy === 0 ? (ox < 0 ? 1 : -1) : oy < 0 ? 1 : -1;
     let first: [number, number] | undefined; // fallback when no spread-out spot is left
     for (let r = near ? 1 : 4; r < 14; r++) {
       for (let i = -r; i <= r; i++) {
@@ -1312,8 +1318,10 @@ export class AI {
     if (!enemy) return null;
     const [a, b] = this.player < enemy.owner ? [home, enemy] : [enemy, home];
     const g = w.grid;
-    const [ax, ay] = g.nearestOpen(Math.floor(a.x / FP), Math.floor(a.y / FP));
-    const [bx, by] = g.nearestOpen(Math.floor(b.x / FP), Math.floor(b.y / FP));
+    // Ties toward the map's middle, not the scan order: the same road from every corner.
+    const mid0: [number, number] = [(g.width - 1) / 2, (g.height - 1) / 2];
+    const [ax, ay] = g.nearestOpen(Math.floor(a.x / FP), Math.floor(a.y / FP), -1, mid0);
+    const [bx, by] = g.nearestOpen(Math.floor(b.x / FP), Math.floor(b.y / FP), -1, mid0);
     const path = g.findPath(ax, ay, bx, by);
     if (path.length < 2 || path[path.length - 1] !== by * g.width + bx) return null;
     const mid = path[path.length >> 1];

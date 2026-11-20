@@ -39,8 +39,20 @@ export function land(this: World, r: World['recalls'][number]): void {
     }
   }
   if (!ring.length) ring.push(...this.grid.nearestOpen(b.tx + size, b.ty + size, this.grid.level(b.tx, b.ty)));
+  // Nearest the map's middle first, a tie to the side left of the line from the Obélisque to it: the scan's order
+  // gave the first unit the top-left tile from every corner. Doubled tile units, all whole.
+  const [mx, my, ox, oy] = [this.map.width, this.map.height, 2 * b.tx + size, 2 * b.ty + size];
+  const key = (i: number) => {
+    const [cx, cy] = [2 * ring[i] + 1, 2 * ring[i + 1] + 1];
+    const cross = (mx - ox) * (cy - oy) - (my - oy) * (cx - ox);
+    return [(cx - mx) ** 2 + (cy - my) ** 2, cross < 0 ? 0 : 1, Math.abs(cross)];
+  };
+  const order = ring.map((_, i) => i).filter((i) => i % 2 === 0).sort((i, j) => {
+    const [a, c] = [key(i), key(j)];
+    return a[0] - c[0] || a[1] - c[1] || a[2] - c[2];
+  });
   units.forEach((e, i) => {
-    const k = (i * 2) % ring.length;
+    const k = order[i % order.length];
     e.x = e.px = ring[k] * FP + FP / 2;
     e.y = e.py = ring[k + 1] * FP + FP / 2;
     e.held = ticks(RAPPEL.daze);
@@ -135,7 +147,9 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       .filter((t) => t !== e && t.owner === e.owner && t.hp > 0 && Object.values(FORMS).includes(t.type) && this.gap(e, t) <= toFp(ab.radius!))
       .sort((a, b) => this.gap(e, a) - this.gap(e, b) || a.id - b.id)[0];
     if (!other) return void this.say(e.owner, 'Il faut un second Élémentaire tout près.');
-    const [mx, my] = [(e.x + other.x) >> 1, (e.y + other.y) >> 1];
+    // Halved toward the map's middle (>> 1 rounded down, a unit off in a corner's mirror).
+    const [hx, hy] = [idiv(this.map.width * FP, 2), idiv(this.map.height * FP, 2)];
+    const [mx, my] = [idiv(e.x + other.x - 2 * hx, 2) + hx, idiv(e.y + other.y - 2 * hy, 2) + hy];
     this.remove(other);
     this.remove(e);
     const g = this.spawn('golem', e.owner, mx, my);
@@ -258,7 +272,8 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'double') {
     const t = near((t) => t.owner === e.owner && t.type !== 'cadavre')[0];
     if (!t) return false;
-    const copy = this.spawn(t.type, e.owner, t.x + FP, t.y);
+    // A tile off on the side of the map's middle (always east, before: west of it from the other corners).
+    const copy = this.spawn(t.type, e.owner, t.x + (t.x < idiv(this.map.width * FP, 2) ? FP : -FP), t.y);
     copy.ttl = ticks(ab.duration);
   } else if (name === 'deflagration') {
     const t = [...this.entities.values()]
@@ -454,7 +469,7 @@ export function paceOf(this: World, e: Entity): [number, number] {
 /** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
 export function place(this: World, t: Entity, x: number, y: number): void {
   if (!soars(t)) {
-    const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1);
+    const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1, [(this.map.width - 1) / 2, (this.map.height - 1) / 2]);
     [x, y] = [ox * FP + FP / 2, oy * FP + FP / 2];
   }
   t.x = t.px = x;
