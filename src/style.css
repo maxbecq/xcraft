@@ -860,7 +860,7 @@ body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, n
 
 /* Command tooltip: name and hotkey, cost, what it is, what it still needs. */
 .cmd-tip {
-  position: fixed; z-index: 8; max-width: 300px; padding: 7px 10px; pointer-events: none;
+  position: fixed; z-index: 13; max-width: 300px; padding: 7px 10px; pointer-events: none; /* over the weapon menu (12) */
   font: 600 13px/1.35 var(--ui); color: #e8f6ff; background: rgba(6, 12, 21, 0.94); border: 1px solid #c9a94a; border-radius: 4px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
 }
