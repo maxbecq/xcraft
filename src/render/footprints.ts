@@ -5,7 +5,7 @@ import { FP } from '../sim/fixed';
 import { soars, type Entity, type World } from '../sim/world';
 
 /** Grounds that keep a print, and its colour (darker than the ground, drawn see-through). */
-const GROUNDS: Record<string, number> = { glace: 0x2e3f52, desert: 0x4a2e16, lune: 0x161618 };
+const GROUNDS: Record<string, number> = { glace: 0x2e3f52, desert: 0x4a2e16, lune: 0x161618, asteroides: 0x2e2620 };
 /** Prints at most on the ground at once: the oldest is reused when a new one is needed. */
 const MAX = 512;
 /** Seconds a print takes to fade out. */

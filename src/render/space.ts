@@ -34,11 +34,12 @@ export class Space {
     giant.rotation.set(0.35, 0.8, 0.25);
     this.layer([giant], 0.97);
 
-    // Smaller asteroids, three depths: the nearer, the bigger on screen and the faster they slide by.
+    // Smaller asteroids, three depths: the nearer, the bigger (the camera is orthographic: size is all the distance
+    // there is) and the faster they slide by.
     const rock = new MeshStandardMaterial({ color: 0x6a5e52, roughness: 1, flatShading: true });
     let seed = 4242;
     const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (const [depth, count, size, follow] of [[14, 40, 1.2, 0.35], [40, 34, 2.6, 0.6], [110, 26, 6, 0.82]] as const) {
+    for (const [depth, count, size, follow] of [[14, 30, 1.6, 0.35], [40, 40, 0.9, 0.6], [110, 60, 0.5, 0.82]] as const) {
       const geo = new IcosahedronGeometry(1, 1);
       // Lumpy: each corner pushed in or out by its direction (corners shared by faces move together, no cracks).
       const pos = geo.getAttribute('position');

@@ -22,6 +22,7 @@ import { PerfHud } from './perf';
 import { Footprints } from './render/footprints';
 import { compileScene } from './render/prewarm';
 import { ambientEffects } from './render/ambient';
+import { Space } from './render/space';
 import { PerfRecorder } from './perfrec';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
@@ -118,6 +119,9 @@ scene.add(terrain);
 const fog = createFog(map);
 addFog(terrain, fog, map);
 const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets);
+// The asteroids float over space, seen through the chasms and past the edges.
+const space = biome.space ? new Space(map.width, map.height) : null;
+if (space) scene.add(space.root);
 if (biome.style === 'city') scene.add(cityAbyss(map.width, map.height), cityScape(map.width, map.height, 0), cityUnderdeck(map, UNDER_DECK), cityStreets(map, (x, z) => heightAt(map, x, z)));
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
@@ -518,6 +522,7 @@ function start(): void {
     // A computer can zoom out to the whole map (phones keep the near view, lighter to draw).
     if (!TOUCH) rig.maxView = rig.overview(window.innerWidth / window.innerHeight);
     rig.update(window.innerWidth / window.innerHeight);
+    space?.update(rig.target);
     input.prune();
     // Our units answer when picked: once per selection that gains one of them (not when one dies out of it).
     const picked = input.own().filter((u) => u.def.kind === 'unit').map((u) => u.id);
