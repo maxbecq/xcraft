@@ -939,7 +939,7 @@ body:has(.prod-panel:not([hidden])) .perf { display: none; }
   body.humains .cmd:not(.has-icon):has(small.two) { justify-content: flex-start; padding-top: 5px; }
   body.humains .cmd:not(.has-icon) small.two { width: min-content; white-space: normal; text-align: right; line-height: 1; }
   body[class] .cmd.has-icon:has(small.two) { justify-content: flex-start; padding-top: 3px; }
-  body[class] .cmd.has-icon:has(small.two) img { width: 22px; height: 22px; }
+  body[class] .cmd.has-icon:has(small.two) :is(img, .ico-weapon) { width: 22px; height: 22px; }
   body[class] .cmd small.two { line-height: 1; }
 }
 /* Phones: a command with both a picture and a cost keeps the picture at the top, so the cost below never covers it. */
