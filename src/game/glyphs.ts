@@ -1,6 +1,6 @@
 /** The HUD's pictures: things' icons and the Z commands' pictograms; and its element maker. */
 import { LOOKS } from '../data';
-import { HUMAINS_GLYPHS, ISDARIS_GLYPHS } from './glyphs-camps';
+import { DIEUX_GLYPHS, HUMAINS_GLYPHS, ISDARIS_GLYPHS } from './glyphs-camps';
 
 const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${LOOKS[type] ?? type}.png`;
 export const noIcon = new Set<string>();
@@ -67,6 +67,7 @@ export const GLYPHS: Record<string, string> = {
   ...Z_GLYPHS,
   ...HUMAINS_GLYPHS,
   ...ISDARIS_GLYPHS,
+  ...DIEUX_GLYPHS,
   // Isdaris extensions
   miniportail: 'M7 20V11a5 5 0 0 1 10 0v9M5 20h14M2 9h3M2 13h3M2 17h3',
   cuvegenetique: 'M7 4h10M8 4v13a4 3 0 0 0 8 0V4M10 10.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 1 0 0-2.6M14 13.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 1 0 0-2.6',
