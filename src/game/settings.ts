@@ -5,7 +5,8 @@ import type { Faction } from '../data';
  * designed), speed-up while held (0 = none) and coasting on letting go (s); the held cursor's speed (one to one with the system cursor at 1)
  * (game/pointerlock.ts); the pointer held in the window; grid hotkeys; the game's speed against the AI. */
 export const SCROLL_KEY = 'xcraft.scroll';
-export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, game: 1 };
+/** `lcd`: the Machines' console as three floating LCD screens, with the build list drawn as a tech tree (Z only). */
+export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, lcd: false, game: 1 };
 export type Controls = typeof SCROLL_BASE;
 export const SCROLL: Controls = (() => {
   const base = { ...SCROLL_BASE };
@@ -13,7 +14,7 @@ export const SCROLL: Controls = (() => {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
     for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
-    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false };
+    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false, lcd: stored.lcd === true };
   } catch {
     return base;
   }

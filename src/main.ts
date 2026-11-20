@@ -40,7 +40,7 @@ import { SANDBOX_TOOLS, type Controls, fmt, saveControls, SCROLL, SCROLL_BASE, t
 import { initMenus, showHome, showLobby } from './game/menus';
 import { cameraControls } from './game/scroll';
 import { NetGame } from './game/netui';
-import { controlFields, PAUSE_HTML, sandboxFields, TOOLS_HTML } from './game/pausemenu';
+import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
 import { downloadReplay, type Replay, saveReplay } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
@@ -87,6 +87,7 @@ document.body.classList.toggle('z', factions[PLAYER] === 'z');
 document.body.classList.toggle('dieux', factions[PLAYER] === 'dieux');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
+document.body.classList.toggle('lcd', SCROLL.lcd);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 /** No fog: spectating, or the Bac à sable's « Carte révélée ». */
 const revealed = () => SPECTATE || !!world.players[PLAYER].reveal;
@@ -324,7 +325,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'help') helpText.hidden = !helpText.hidden;
   else if (p === 'options') {
     // Built on opening, so the fields show the values in force.
-    if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields(world) + controlFields(true) + perf.field(rec.field());
+    if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields(world) + skinField(factions[PLAYER]) + controlFields(true) + perf.field(rec.field());
     pauseOptions.hidden = !pauseOptions.hidden;
   }
   else if (p === 'fullscreen') toggleFullscreen();
@@ -440,8 +441,10 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid' || k === 'halo') {
+  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd') {
     SCROLL[k] = (field as HTMLInputElement).checked;
+    document.body.classList.toggle('lcd', SCROLL.lcd);
+    hud.buttonsKey = ''; // the card redrawn in its new form
     hud.gridKeys = SCROLL.grid && !TOUCH;
     if (!SCROLL.lock) pointer.release();
   } else {

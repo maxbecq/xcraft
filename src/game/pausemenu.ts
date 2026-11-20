@@ -37,6 +37,14 @@ Appui long puis glisser : rectangle de sélection</div></div>`;
 
 /** The control settings' fields (mouse and keyboard; none on a touch screen), in the title's options and the pause
  * menu; the game's speed only in a match alone against the AI. Sliders show their value. */
+/** The Machines' own console skin, offered while playing them (on phones too, unlike the mouse and key settings). */
+export function skinField(faction: string): string {
+  if (faction !== 'z') return '';
+  return `<fieldset class="options"><legend>Console</legend>
+      <label><input type="checkbox" data-k="lcd"${SCROLL.lcd ? ' checked' : ''}> Console LCD : trois écrans flottants, construction en arbre</label>
+    </fieldset>`;
+}
+
 export function controlFields(inMatch: boolean): string {
   if (TOUCH) return '';
   const range = (k: keyof Controls, label: string, min: number, max: number, step: number, unit = '') =>
