@@ -1105,7 +1105,15 @@ export class AI {
       }
       return best ? [best.tx, best.ty] : null;
     }
-    if (type === this.faction.hq || type === this.faction.outpost) return expansions(w, this.player).find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx, ty)) ?? null;
+    // The road measured to the footprint's middle tile: to its top-left one, the base in the opposite corner measured
+    // to the mirror's bottom-right instead.
+    if (type === this.faction.hq || type === this.faction.outpost) {
+      // Centred on the site, laid out for a headquarters: a smaller outpost (the Dieux' Antre) at its top-left corner
+      // stood two tiles off the mirror of the one in the opposite corner.
+      const inset = Math.floor(((DEFS[this.faction.hq] as BuildingDef).size - def.size) / 2);
+      const site = expansions(w, this.player).map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
+      return site.find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
+    }
     const cx = Math.floor((near ?? home).x / FP);
     const cy = Math.floor((near ?? home).y / FP);
     // Prefer the side facing the map centre, where the minerals are not.
@@ -1115,20 +1123,57 @@ export class AI {
     for (let r = near ? 1 : 4; r < 14; r++) {
       for (let i = -r; i <= r; i++) {
         for (const [dx, dy] of [[i, r], [r, i], [i, -r], [-r, i]]) {
-          const tx = cx + dx * sx - Math.floor(def.size / 2);
-          const ty = cy + dy * sy - Math.floor(def.size / 2);
+          // Centred on the spiral's tile; an even size one tile further toward the corner the base faces from, so
+          // the base in the opposite corner gets the mirror of the spot (floor(size / 2) both ways was one tile off).
+          const tx = cx + dx * sx - (sx > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
+          const ty = cy + dy * sy - (sy > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
           // Leave a one-tile corridor around every building.
           if (!this.clear(tx - 1, ty - 1, def.size + 2) || !w.canPlace(type, tx, ty, this.player) || !this.fresh(tx, ty)) continue;
+          // Round the base, only on its own plateau: once it was full, a spot on the low ground outside passed.
+          if (!near && !this.onPlateau(home, tx, ty, def.size)) continue;
           if (this.closeToResources(tx, ty, def.size) || this.closeToRamp(tx, ty, def.size)) continue;
           // Power-field buildings spread out to cover more ground: none closer to another field than most of its radius.
-          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, tx, ty)) first = [tx, ty];
+          // The road is measured to the spiral's tile, the one the footprint is centred on (the same in the mirror).
+          const [ax, ay] = [cx + dx * sx, cy + dy * sy];
+          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay)) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
-          if (!this.walkable(home, tx, ty)) continue;
+          if (!this.walkable(home, ax, ay)) continue;
           return [tx, ty];
         }
       }
     }
     return first ?? null;
+  }
+
+  /** Per base, the tiles of its plateau: those at its level that its tile reaches without leaving that level. */
+  private readonly plateaus = new Map<number, Uint8Array>();
+
+  /** Is a footprint all on `home`'s plateau? */
+  private onPlateau(home: Entity, tx: number, ty: number, size: number): boolean {
+    const g = this.world.grid;
+    let mask = this.plateaus.get(home.id);
+    if (!mask) {
+      // Terrain only (buildings ignored): the plateau does not change in a game.
+      mask = new Uint8Array(g.width * g.height);
+      const [hx, hy] = [Math.floor(home.x / FP), Math.floor(home.y / FP)];
+      const level = g.level(hx, hy);
+      const todo = [hy * g.width + hx];
+      mask[todo[0]] = 1;
+      while (todo.length) {
+        const i = todo.pop()!;
+        const [x, y] = [i % g.width, Math.floor(i / g.width)];
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const [nx, ny] = [x + dx, y + dy];
+          const j = ny * g.width + nx;
+          if (!g.inside(nx, ny) || mask[j] || g.level(nx, ny) !== level || !g.canStep(x, y, nx, ny, true)) continue;
+          mask[j] = 1;
+          todo.push(j);
+        }
+      }
+      this.plateaus.set(home.id, mask);
+    }
+    for (let y = ty; y < ty + size; y++) for (let x = tx; x < tx + size; x++) if (!g.inside(x, y) || !mask[y * g.width + x]) return false;
+    return true;
   }
 
   /** Not a spot given up after MAX_TRIES build orders. */
@@ -1143,7 +1188,9 @@ export class AI {
    */
   private walkable(home: Entity, tx: number, ty: number): boolean {
     const g = this.world.grid;
-    const [sx, sy] = g.nearestOpen(Math.floor(home.x / FP), Math.floor(home.y / FP));
+    // From the open tile nearest the base toward the map's centre: the scan's fixed order picked a different one for
+    // the base in the opposite corner, and so a different length of road.
+    const [sx, sy] = g.nearestOpen(Math.floor(home.x / FP), Math.floor(home.y / FP), -1, [(g.width - 1) / 2, (g.height - 1) / 2]);
     const path = g.findPath(sx, sy, tx, ty);
     if ((path.length ? path[path.length - 1] : sy * g.width + sx) !== ty * g.width + tx) return false;
     return path.length <= Math.hypot(tx - sx, ty - sy) * 3 + 20;
