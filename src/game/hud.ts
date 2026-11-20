@@ -14,6 +14,8 @@ import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdle
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
+const TUCK_MS = 2800;
+
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
   readonly bar = el('div', 'hud-bar');
@@ -82,6 +84,13 @@ export class Hud {
   /** A match against a friend online: the end offers a rematch instead of a new game. */
   online = false;
   readonly tip = el('div', 'cmd-tip');
+  /** Option « Replier les panneaux » (touch screens): the sheet and the commands slide down this long after the last
+   * touch on them, a new selection or a command; the tab left at the bottom brings them back. */
+  readonly tab = el('button', 'console-tab');
+  touchedAt = 0;
+  /** The marking menu (game/radial.ts) is open: a finger still choosing. */
+  ringOpen = false;
+  private tuckSel = '';
   readonly ghost: Mesh;
   readonly grid: PlaceGrid;
   /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
@@ -102,7 +111,13 @@ export class Hud {
     this.panel.append(this.portrait.canvas, this.details);
     this.card.classList.add('slot');
     this.console.append(this.mapSlot, this.panel, this.card);
-    document.body.append(this.bar, this.console, this.toasts, this.banner);
+    document.body.append(this.bar, this.console, this.toasts, this.banner, this.tab);
+    this.tab.hidden = true;
+    this.tab.title = 'Afficher les panneaux';
+    this.tab.addEventListener('click', () => (this.touchedAt = performance.now()));
+    const touched = () => (this.touchedAt = performance.now());
+    this.console.addEventListener('pointerdown', touched, true);
+    this.console.addEventListener('scroll', touched, true);
     this.banner.hidden = true;
     this.idle.hidden = true;
     this.idle.title = 'Ouvriers inactifs : les sélectionner';
@@ -381,6 +396,21 @@ export class Hud {
     updateCard(this);
     updateGhost(this);
     showEnd(this);
+    this.tuck();
+  }
+
+  /** Slides the sheet and the commands away once idle (never while a list, a placement, an aim or a tooltip is open). */
+  private tuck(): void {
+    const now = performance.now();
+    const sel = [...this.input.selected].join();
+    if (sel !== this.tuckSel || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
+    this.tuckSel = sel;
+    const tucked = document.body.classList.contains('tuck') && now - this.touchedAt > TUCK_MS;
+    if (tucked === this.console.classList.contains('tucked')) return;
+    // The minimap drops to the bottom too, where the commands were (upright phones: they sit below it).
+    if (tucked) this.console.style.setProperty('--drop', `${Math.max(0, this.card.getBoundingClientRect().bottom - this.mapSlot.getBoundingClientRect().bottom)}px`);
+    this.console.classList.toggle('tucked', tucked);
+    this.tab.hidden = !tucked;
   }
 
   // ---------------------------------------------------------------- command card

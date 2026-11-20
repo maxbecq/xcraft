@@ -163,7 +163,7 @@ body .hud-toasts .hud-toast.bump { animation: toast-bump 0.25s ease-out; }
 .help kbd { display: inline-block; min-width: 18px; padding: 0 4px; background: #2a241c; border: 1px solid #6d5e40; border-radius: 3px; text-align: center; font: 700 12px var(--ui); color: var(--amber); }
 
 /* Title screen: hide the game interface over the background match. */
-body.attract .console, body.attract .pause, body.attract .hud-bar, body.attract .tools, body.attract .hud-toasts, body.attract .overlay, body.attract .hud-banner { display: none !important; }
+body.attract .console, body.attract .pause, body.attract .hud-bar, body.attract .tools, body.attract .hud-toasts, body.attract .overlay, body.attract .hud-banner, body.attract .console-tab { display: none !important; }
 
 .menu button.biome { min-width: 0; margin-top: 10px; font-size: 18px; padding: 6px 18px; opacity: 0.9; }
 
@@ -1230,3 +1230,18 @@ body.tactile .hud-panel .hp + .info { display: none; }
   body.z.lcd .console:has(.hud-card.tree) > .hud-panel { display: none; }
   body.z.lcd .hud-card.tree { max-width: calc(100vw - 150px); }
 }
+
+/* Option « Replier les panneaux » (touch screens): idle, the selection sheet and the commands slide down out of sight,
+   the minimap drops to the bottom and the console's plate goes; a tab at the bottom brings them back. */
+.console > :is(.hud-panel, .hud-card, .map-slot) { transition: translate 0.3s ease, opacity 0.3s ease; }
+body[class] .console.tucked { background: none; border-color: transparent; box-shadow: none; pointer-events: none; }
+body[class] .console.tucked::before, body[class] .console.tucked::after { display: none; }
+.console.tucked > :is(.hud-panel, .hud-card) { translate: 0 60vh; opacity: 0; pointer-events: none; }
+.console.tucked > .map-slot { translate: 0 var(--drop, 0px); pointer-events: auto; }
+.console-tab {
+  position: fixed; z-index: 3; left: 50%; bottom: calc(4px + env(safe-area-inset-bottom)); translate: -50% 0;
+  width: 72px; height: 30px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 15px 15px 6px 6px;
+  background: rgba(10, 12, 16, 0.8); color: #fff; font-size: 16px; line-height: 1; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.console-tab::before { content: '▲'; }
+body.z .console-tab { border-color: var(--phos, #6ff4ff); color: var(--phos, #6ff4ff); }

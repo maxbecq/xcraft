@@ -56,6 +56,7 @@ function keyLabel(h: Hud, b: Button): string {
 
 /** A command button pressed, by click or hotkey: it sinks with a tick, or shakes and says why it is locked. */
 export function pressButton(h: Hud, b: Button): void {
+  h.touchedAt = performance.now();
   const el = h.card.querySelector<HTMLElement>(`[data-key="${CSS.escape(b.key)}"]`);
   const anim = (name: string) => {
     h.pressed = { key: b.key, anim: name, at: performance.now() };

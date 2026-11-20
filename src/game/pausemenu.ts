@@ -49,6 +49,7 @@ export function controlFields(inMatch: boolean): string {
   // A touch screen: only the trial touch controls (off by default, the usual ones untouched then).
   if (TOUCH) return `<fieldset class="options"><legend>Commandes tactiles</legend>
       <label><input type="checkbox" data-k="tactile"${SCROLL.tactile ? ' checked' : ''}> Essai : menu en étoile à l'appui long sur une unité ou un bâtiment, actions rapides en bas</label>
+      <label><input type="checkbox" data-k="tuck"${SCROLL.tuck ? ' checked' : ''}> Replier les panneaux : la fiche et les commandes glissent vers le bas après quelques secondes, la languette ▲ les rappelle</label>
     </fieldset>`;
   const range = (k: keyof Controls, label: string, min: number, max: number, step: number, unit = '') =>
     `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${min}" max="${max}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;

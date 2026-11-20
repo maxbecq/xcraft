@@ -86,6 +86,7 @@ export class Marking {
     this.over = null;
     this.sticky = false;
     this.h.tip.hidden = true;
+    this.h.ringOpen = false;
   }
 
   private give(b: Button): void {
@@ -129,6 +130,7 @@ export class Marking {
       return { b, node, x: this.cx + dx, y: this.cy + dy };
     });
     this.root.hidden = false;
+    h.ringOpen = true;
     return true;
   }
 
