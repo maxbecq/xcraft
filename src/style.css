@@ -1235,7 +1235,6 @@ body.tactile .hud-panel .hp + .info { display: none; }
   body.z.lcd .console:has(.hud-card.tree) > .hud-panel { display: none; }
   body.z.lcd .hud-card.tree { max-width: calc(100vw - 150px); }
 }
-<<<<<<< HEAD
 
 /* Option « Replier les panneaux » (touch screens): idle, the selection sheet and the commands slide down out of sight,
    the minimap drops to the bottom and the console's plate goes; a tab at the bottom brings them back. */
@@ -1251,7 +1250,6 @@ body[class] .console.tucked::before, body[class] .console.tucked::after { displa
 }
 .console-tab::before { content: '▲'; }
 body.z .console-tab { border-color: var(--phos, #6ff4ff); color: var(--phos, #6ff4ff); }
-=======
 /* Phones on their side, the build tree compact: small nodes in small print, and all the height above the minimap, so
    the whole tree (Assimilateur, the Centres, Retour) shows in the 390 px instead of its first two rows. */
 @media (max-height: 560px) and (orientation: landscape) {
@@ -1262,4 +1260,3 @@ body.z .console-tab { border-color: var(--phos, #6ff4ff); color: var(--phos, #6f
   body.z.lcd .hud-card.tree > :is(.node, .ghost) :is(img, svg) { width: 14px; height: 14px; }
   body.z.lcd .hud-card.tree > .back { width: auto; }
 }
->>>>>>> 3715d12 (fix(hud): on a phone on its side the LCD build tree shows whole: compact nodes (124 px, small print, small pictures) and all the height above the minimap, so the Assimilateur, the Centres and Retour no longer hide under the frame; a tree node pointed at turns phosphor like every command (its own dark ground had left its dark text unreadable) (QA 0.9.101, B4))
