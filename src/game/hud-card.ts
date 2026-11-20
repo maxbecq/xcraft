@@ -319,7 +319,8 @@ export function pressMenu(h: Hud, b: Button): void {
 
 /** Fills and places the tooltip above a command button. */
 export function showTip(h: Hud, button: HTMLElement): void {
-  const b = h.buttons.find((x) => x.key === button.dataset.key);
+  // A command, or a weapon in the socle's menu.
+  const b = button.dataset.wkey ? h.menuItems.find((x) => x.key === button.dataset.wkey) : h.buttons.find((x) => x.key === button.dataset.key);
   if (!b) return;
   const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
   const p = h.world.players[h.player];

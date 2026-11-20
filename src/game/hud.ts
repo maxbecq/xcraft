@@ -174,11 +174,23 @@ export class Hud {
     });
     this.menu.hidden = true;
     document.body.append(this.menu);
+    // A finger has no hover: a long press shows the tooltip (and presses nothing); a short one presses on release.
+    let held: { press: () => void; long: boolean; timer: number } | null = null;
+    const hold = (el: HTMLElement, press: () => void) => {
+      if (held) clearTimeout(held.timer);
+      const h: { press: () => void; long: boolean; timer: number } = (held = { press, long: false, timer: 0 });
+      h.timer = window.setTimeout(() => {
+        h.long = true;
+        showTip(this, el);
+      }, 450);
+    };
     this.menu.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-wkey]')?.dataset.wkey;
-      const item = this.menuItems.find((x) => x.key === k);
-      if (item) pressMenu(this, item);
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-wkey]');
+      const item = this.menuItems.find((x) => x.key === el?.dataset.wkey);
+      if (!item || !el) return;
+      if (e.pointerType !== 'touch') return pressMenu(this, item);
+      hold(el, () => pressMenu(this, item));
     });
     // A click or tap anywhere but the menu or its socle's button closes it.
     window.addEventListener(
@@ -189,25 +201,18 @@ export class Hud {
       },
       true,
     );
-    // A finger has no hover: a long press shows the tooltip (and presses nothing); a short one presses on release.
-    let held: { b: Button; long: boolean; timer: number } | null = null;
     this.card.addEventListener('pointerdown', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
       const b = this.buttons.find((x) => x.key === el?.dataset.key);
       if (!b || !el) return;
       if (e.pointerType !== 'touch') return pressButton(this, b);
-      if (held) clearTimeout(held.timer);
-      const h: { b: Button; long: boolean; timer: number } = (held = { b, long: false, timer: 0 });
-      h.timer = window.setTimeout(() => {
-        h.long = true;
-        showTip(this, el);
-      }, 450);
+      hold(el, () => pressButton(this, b));
     });
     const release = (press: boolean) => {
       if (!held) return;
       clearTimeout(held.timer);
       if (held.long) this.tip.hidden = true;
-      else if (press) pressButton(this, held.b);
+      else if (press) held.press();
       held = null;
     };
     // On the window: the card may be rebuilt between the press and the release, its button gone from the page.
