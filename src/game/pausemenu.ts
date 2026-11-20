@@ -46,7 +46,10 @@ export function skinField(faction: string): string {
 }
 
 export function controlFields(inMatch: boolean): string {
-  if (TOUCH) return '';
+  // A touch screen: only the trial touch controls (off by default, the usual ones untouched then).
+  if (TOUCH) return `<fieldset class="options"><legend>Commandes tactiles</legend>
+      <label><input type="checkbox" data-k="tactile"${SCROLL.tactile ? ' checked' : ''}> Essai : menu en étoile à l'appui long sur une unité ou un bâtiment, actions rapides en bas</label>
+    </fieldset>`;
   const range = (k: keyof Controls, label: string, min: number, max: number, step: number, unit = '') =>
     `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${min}" max="${max}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
   const check = (k: 'lock' | 'grid' | 'halo', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;

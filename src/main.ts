@@ -88,6 +88,7 @@ document.body.classList.toggle('dieux', factions[PLAYER] === 'dieux');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
 document.body.classList.toggle('lcd', SCROLL.lcd);
+document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
 /** What the local player can see (everything when spectating). Rendering only: the simulation never uses it. */
 /** No fog: spectating, or the Bac à sable's « Carte révélée ». */
 const revealed = () => SPECTATE || !!world.players[PLAYER].reveal;
@@ -441,9 +442,10 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd') {
+  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd' || k === 'tactile') {
     SCROLL[k] = (field as HTMLInputElement).checked;
     document.body.classList.toggle('lcd', SCROLL.lcd);
+    document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
     hud.buttonsKey = ''; // the card redrawn in its new form
     hud.gridKeys = SCROLL.grid && !TOUCH;
     if (!SCROLL.lock) pointer.release();
