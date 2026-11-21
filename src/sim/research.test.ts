@@ -85,3 +85,15 @@ describe('Scarabée amélioré (fiche 2010)', () => {
     expect(w.weapon(s)!.vs).toEqual([15, 11, 11, 8, 4, 8]);
   });
 });
+
+describe('Scarabée (fiche 2010)', () => {
+  it('takes 3 soldiers, the fourth is told it is full', () => {
+    const w = new World(createMap());
+    const s = w.spawn('scarabee', 0, ...at(40, 60));
+    expect(w.room(s)).toBe(3);
+    const men = [0, 1, 2, 3].map((i) => w.spawn('auxiliaire', 0, ...at(42, 58 + i)));
+    w.step([{ player: 0, kind: 'smart', ids: men.map((m) => m.id), x: s.x, y: s.y, target: s.id }]);
+    for (let i = 0; i < ticks(8); i++) w.step([]);
+    expect(men.filter((m) => m.inside === s.id)).toHaveLength(3);
+  });
+});

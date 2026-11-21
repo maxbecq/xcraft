@@ -61,7 +61,7 @@
     "regenerant": { "cost": { "minerals": 250, "energy": 250 }, "buildTime": 70 },
     "acide": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 60 },
     "chargenapalm": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 60 },
-    "scarabee": { "cls": "MM", "hp": 500, "armor": 1, "speed": 2.6, "sight": 9, "supply": 2, "cost": {"minerals": 500, "energy": 100}, "buildTime": 40, "bunker": 4},
+    "scarabee": { "cls": "MM", "hp": 500, "armor": 1, "speed": 2.6, "sight": 9, "supply": 2, "cost": {"minerals": 500, "energy": 100}, "buildTime": 40, "bunker": 3},
     "decollage": {"cost": {"minerals": 300, "energy": 300}, "buildTime": 60},
     "chargement": {"cost": {"minerals": 200, "energy": 200}, "buildTime": 60},
     "scarabeassaut": {"cost": {"minerals": 300, "energy": 300}, "buildTime": 60},
