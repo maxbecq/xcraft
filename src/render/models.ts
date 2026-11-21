@@ -215,7 +215,7 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // and with Meshy (smart topology t2.5 for units, t2 for buildings, 3000 faces, n1 texture)
   'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation',
   // and with Rodin (fal) or Tripo: the last Blender sketches
-  'intelligence', 'assimilateur', 'plateforme', 'armement', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere'];
+  'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere'];
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
