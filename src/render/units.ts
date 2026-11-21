@@ -340,6 +340,7 @@ export class EntityRenderer {
     const arm = o.getObjectByName('zw_arm');
     const saw = o.getObjectByName('zw_saw');
     let reach: number | undefined;
+    let sawW: number | undefined;
     if (melee && arm && saw) {
       // From the box on the head, the arm dives forwards and down so a saw twice its modelled size comes in front of the
       // head at the height of the front knees, where it can reach what it fights: the arm's length fitted to it, the saw
@@ -355,8 +356,9 @@ export class EntityRenderer {
       for (const c of arm.children) if (c !== saw) [c.position.z, c.scale.z] = [c.position.z * k, c.scale.z * k];
       saw.position.z *= k;
       reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
+      sawW = sawR * bodyScale;
     }
-    v.weapon = { name, o, arm, saw, reach, mod, tip };
+    v.weapon = { name, o, arm, saw, reach, mod, tip, sawR: sawW };
   }
 
   private release(v: View): void {
@@ -653,6 +655,7 @@ export class EntityRenderer {
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
         this.animate(v, e, dt);
+        this.standOff(v, e, e.order?.kind === 'attack' ? this.views.get(e.order.target) : undefined, world.entities.get(e.order?.kind === 'attack' ? e.order.target : -1), dt);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
@@ -935,6 +938,29 @@ export class EntityRenderer {
     const kick = fighting && (!melee || v.weapon) && fired > 0.8 ? (fired - 0.8) * (melee ? 0.6 : 0.3) : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
+  }
+
+  /**
+   * A long socle's saw stops at its foe's edge: the simulation brings it within reach of its centre, and the
+   * Hexapode's and Octopode's heads and saws then went into a building. Render only: the model is drawn that much back.
+   */
+  private standOff(v: View, e: Entity, foeView: View | undefined, foe: Entity | undefined, dt: number): void {
+    let back = 0;
+    const u = new Vector3();
+    if (v.weapon?.saw && v.weapon.sawR && foe && foeView && e.cooldown > 0) {
+      u.subVectors(foeView.root.position, v.root.position).setY(0);
+      const d = u.length();
+      if (d > 1e-3) {
+        u.divideScalar(d);
+        // The foe's near edge: a building's square footprint, a unit's radius.
+        const edge = foe.def.kind === 'building' ? (foe.def as BuildingDef).size / 2 / Math.max(Math.abs(u.x), Math.abs(u.z)) : (foe.def as UnitDef).radius;
+        const front = v.weapon.saw.getWorldPosition(new Vector3()).sub(v.model.getWorldPosition(new Vector3())).setY(0).dot(u) + v.weapon.sawR;
+        back = Math.min(1.5, Math.max(0, front - (d - edge)));
+      } else u.set(0, 0, 0);
+    }
+    const k = Math.min(1, dt * 8);
+    v.model.position.x += (-u.x * back - v.model.position.x) * k;
+    v.model.position.z += (-u.z * back - v.model.position.z) * k;
   }
 
   /** Lays a selection ring's meshes on the ground around (x, z), over dunes and slopes; only when it moved. */
