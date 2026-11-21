@@ -216,6 +216,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation',
   // and with Rodin (fal) or Tripo: the last Blender sketches
   'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere'];
+/** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
+ * wide band only (a coloured outline round it read as a border). */
+const NO_TEAM_RIM = new Set(['mastodonte']);
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
@@ -311,7 +314,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
           gltf.scene.traverse((o) => {
             // From the model's own textured material, not whichever part comes first (a plain added part, the
             // Drone's bin floor, made it the whole model's skin).
-            if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit', DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
+            if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, c, DEFS[type]?.kind === 'building' || NO_TEAM_RIM.has(type) ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit' && !NO_TEAM_RIM.has(type), DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
