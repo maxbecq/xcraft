@@ -110,9 +110,10 @@ export class AI {
   private trained = 0;
   /** The tech building has fielded a unit of its own once (the first one comes before anything else it holds up). */
   private fielded = false;
-  /** Our workers at the last think, to see which died since. */
+  /** Our workers at the last think, to see which died since (and the set reused for the next). */
   private workers = new Set<number>();
-  /** Workers killed and not yet replaced (an order for a new one replaces one). */
+  private workersNow = new Set<number>();
+  /** Workers killed and not yet replaced by a new one out (one in a queue only counts while it is there). */
   private unreplaced = 0;
   /** Its workers (alive or queued) have reached their target once. */
   private staffed = false;
@@ -190,18 +191,29 @@ export class AI {
     const target = this.serfTarget(ctx);
     // Workers queued, one count for the reserve and the orders: in the queues of what trains them.
     for (const e of f.workerFrom ? ctx.mine : ctx.buildings) if (f.workerFrom ? e.type === f.workerFrom : kin(e, f.hq)) for (const t of e.queue) if (t === f.worker) ctx.queued++;
-    // Died since the last think: gone from the world, not absorbed into a building (a Z drone).
-    const absorbed = new Set(ctx.buildings.map((b) => b.absorbed));
-    for (const id of this.workers) if (!w.entities.has(id) && !absorbed.has(id)) this.unreplaced++;
-    this.workers = new Set(ctx.mine.filter((e) => e.type === f.worker).map((e) => e.id));
-    this.unreplaced = Math.min(this.unreplaced, Math.max(0, target - ctx.serfs.length - ctx.queued));
+    // Died since the last think: gone from the world, not absorbed into a building (a Z drone). A new one out pays one
+    // back; one queued only while it is queued (its producer killed, the loss is owed again).
+    const now = this.workersNow;
+    now.clear();
+    let born = 0;
+    for (const e of ctx.mine) if (e.type === f.worker) {
+      now.add(e.id);
+      if (!this.workers.has(e.id)) born++;
+    }
+    let died = 0;
+    for (const id of this.workers) if (!now.has(id)) died++;
+    for (const b of ctx.buildings) if (b.absorbed && this.workers.has(b.absorbed) && !now.has(b.absorbed)) died--;
+    [this.workersNow, this.workers] = [this.workers, now];
+    // Never more than a full complement (a base lost, or none finished for a while, keeps what was lost).
+    this.unreplaced = Math.min(Math.max(0, this.unreplaced + died - born), Math.max(target, this.plan.serfs));
+    const owed = Math.max(0, this.unreplaced - ctx.queued);
     const held = ctx.wantSupreme && ctx.p.energy >= 300;
     // The price is there before the loss too, once the workers have reached their target, from minute 10: a raid kills
     // them all at once (Isdaris with 16 robots and 94 minerals lost them in 20 s, then had no robot at 100 for 23
     // minutes; Dieux the same with esprits). Not sooner: in the opening those 100 cost the Isdaris their defence against
     // the first Human wave. Kept in the bank only: the worker comes ahead of supply only to replace one killed.
     this.staffed ||= ctx.serfs.length + ctx.queued >= target;
-    ctx.urgent = (this.unreplaced > 0 && ctx.free > 0 && !held) || (ctx.serfs.length + ctx.queued < target / 2 && !!this.workerHome(ctx));
+    ctx.urgent = (owed > 0 && ctx.free > 0 && !held) || (ctx.serfs.length + ctx.queued < target / 2 && !!this.workerHome(ctx));
     ctx.low = ctx.urgent || (this.staffed && ctx.minute >= 10 && ctx.free > 0 && !held) ? (DEFS[f.worker] as UnitDef).cost.minerals : 0;
     // Repairs under way take from the bank as they go: what they will still cost is not this turn's to spend.
     for (const s of ctx.serfs) {
@@ -271,8 +283,8 @@ export class AI {
   }
 
   /** Idle workers, abandoned construction sites, Z repairs. */
-  private tend(ctx: Survey & { low: number; mending: number }): void {
-    const { f, p, serfs, buildings } = ctx;
+  private tend(ctx: Survey & { low: number }): void {
+    const { f, serfs, buildings } = ctx;
     // Idle serfs go mining.
     for (const s of serfs) {
       if (s.order) continue;
@@ -328,11 +340,17 @@ export class AI {
     }
 
     // A worker that can repair (drone, serf, esprit) repairs a building that has lost 40 % of its hit points, one each, with minerals to spare.
-    if (REPAIR[f.worker] && p.minerals - ctx.low - ctx.mending > 200) {
+    // From the turn's budget (less what sites are promised and repairs under way will cost), above the worker's price
+    // kept; what it will cost is taken from that budget at once.
+    if (REPAIR[f.worker]) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
+        const cost = Math.ceil(((b.def as BuildingDef).cost.minerals * REPAIR[f.worker].percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
+        if (ctx.minerals - ctx.low - cost < 200) continue;
         if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty], (b.def as BuildingDef).size);
-        if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
+        if (!s) continue;
+        ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
+        ctx.minerals -= cost;
       }
     }
 
@@ -529,7 +547,6 @@ export class AI {
     // Low on workers, one comes even while supply is wanted (it costs one).
     if (workerHome && serfs.length + ctx.queued < serfTarget && ctx.minerals + ctx.low >= workerCost && (ctx.urgent || !wants.includes(f.supply))) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
-      this.unreplaced = Math.max(0, this.unreplaced - 1);
       ctx.minerals += ctx.low - workerCost;
       ctx.low = 0;
     } else if (f === FACTIONS.z && minute > 8 && workerHome && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
