@@ -110,7 +110,7 @@ export class AI {
   private trained = 0;
   /** The tech building has fielded a unit of its own once (the first one comes before anything else it holds up). */
   private fielded = false;
-  /** Its workers have reached their target once: a worker lost after that is a worker to replace. */
+  /** Its workers (alive or queued) have reached their target once: the opening is over. */
   private staffed = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
   private enemyAir = 0;
@@ -172,22 +172,25 @@ export class AI {
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
     const ctx: Turn = { ...n, ...this.budget(n), keep: 0, low: 0 };
-    this.tend(ctx);
     // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
     // until one is ordered (Dieux down to a few esprits spent their last minerals elsewhere, and with no income never
     // had the 75 for one again; raided Isdaris put every 70 minerals into a Créature, their last robots unreplaced).
     // Only for a worker that can be trained now: with no room in supply, it kept a Branche's 200 from the 75 (the
     // Branche the esprit waited for); with the Z Intelligence held for its turn into the suprême, the 300 of it.
-    // Once its workers have reached their target, any one short keeps a worker's price in the bank, even while the
-    // worker's home is busy or gone: Dieux raided down from 16 esprits spent to 40 minerals while Gaïa was dead or
-    // training, lost the rest, and never had the 100 for an esprit again (0 esprits, 59 minerals, 9000 energy at 35 min).
-    // Not in the opening (it held back the first buildings), with supply full (the Branche), nor while the Z
-    // Intelligence is held for its turn into the suprême.
+    // From minute 10, once its workers have reached their target, a worker's price always stays in the bank, even
+    // while the worker's home is busy or gone (sooner, the 100 kept back cost the Isdaris their defence against the first
+    // Human wave). A reserve kept only after a loss came too late: raids kill every worker
+    // at once (Dieux down from 16 esprits to 40 minerals, then no esprit; Isdaris with 16 robots and 94 minerals, all
+    // robots killed in 20 s, then no robot at 100 for 23 minutes), and never had a worker's price again. One price only,
+    // whatever is queued; not with supply full (the Branche), nor while the Z Intelligence is held for the suprême.
     const target = this.serfTarget(ctx);
-    this.staffed ||= ctx.serfs.length >= target;
+    const queued = ctx.mine.reduce((n, e) => n + e.queue.filter((t) => t === this.faction.worker).length, 0);
+    const have = ctx.serfs.length + queued;
+    this.staffed ||= have >= target;
     const held = ctx.wantSupreme && ctx.p.energy >= 300;
-    const short = (this.staffed && ctx.serfs.length < target && ctx.free > 0 && !held) || (ctx.serfs.length < target / 2 && !!this.workerHome(ctx));
-    ctx.low = short ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    ctx.low = (this.staffed && ctx.minute >= 10 && ctx.free > 0 && !held) || (have < target / 2 && this.workerHome(ctx)) ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    // Repairs come out of the bank as they go: none from the worker's price kept.
+    this.tend(ctx);
     ctx.minerals -= ctx.low;
     this.place(ctx);
     this.research(ctx);
@@ -229,8 +232,10 @@ export class AI {
     for (const s of builders) {
       for (const o of [s.order, ...s.next]) {
         if (o?.kind !== 'build') continue;
-        minerals -= (DEFS[o.type] as BuildingDef).cost.minerals;
-        promisedEnergy += (DEFS[o.type] as BuildingDef).cost.energy;
+        // An Isdaris robot pays a third more than the building (fiche 2010) when it beams it down.
+        const cost = s.def.kind === 'unit' && (DEFS[o.type] as BuildingDef).faction === 'isdaris' ? w.beaconCost(DEFS[o.type] as BuildingDef) : (DEFS[o.type] as BuildingDef).cost;
+        minerals -= cost.minerals;
+        promisedEnergy += cost.energy;
       }
     }
     const supply = w.supply(this.player);
@@ -246,7 +251,7 @@ export class AI {
   }
 
   /** Idle workers, abandoned construction sites, Z repairs. */
-  private tend(ctx: Survey): void {
+  private tend(ctx: Survey & { low: number }): void {
     const { f, p, serfs, buildings } = ctx;
     // Idle serfs go mining.
     for (const s of serfs) {
@@ -303,7 +308,12 @@ export class AI {
     }
 
     // A worker that can repair (drone, serf, esprit) repairs a building that has lost 40 % of its hit points, one each, with minerals to spare.
-    if (REPAIR[f.worker] && p.minerals > 200) {
+    // Short of a worker's price kept back, the repairs stop (each step takes from the bank, the reserve included).
+    if (ctx.low && p.minerals < ctx.low + 50) {
+      const menders = serfs.filter((s) => s.order?.kind === 'repair').map((s) => s.id);
+      if (menders.length) ctx.out.push({ player: this.player, kind: 'stop', ids: menders });
+    }
+    if (REPAIR[f.worker] && p.minerals - ctx.low > 200) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
         if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty], (b.def as BuildingDef).size);
@@ -478,11 +488,14 @@ export class AI {
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       if (taken) continue;
+      // An Isdaris robot pays a third more than the building (fiche 2010).
+      const cost = builder.def.kind === 'unit' && def.faction === 'isdaris' ? w.beaconCost(def) : def.cost;
+      if (ctx.minerals < cost.minerals || ctx.energy < cost.energy) continue;
       ctx.out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1], queue: !!chained });
       const k = spotKey(spot[0], spot[1], def.size);
       this.tried.set(k, (this.tried.get(k) ?? 0) + 1);
-      ctx.minerals -= def.cost.minerals;
-      ctx.energy -= def.cost.energy;
+      ctx.minerals -= cost.minerals;
+      ctx.energy -= cost.energy;
     }
   }
 
