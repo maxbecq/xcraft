@@ -596,7 +596,7 @@ export class AI {
     for (const c of buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0)) {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || free - ctx.out.filter((o) => o.kind === 'train').length <= 0) continue;
-      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), army, ctx.minerals);
+      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), army, ctx.minerals, c);
       const def = DEFS[type] as UnitDef;
       // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
       // the energy-hungry socles only, never holds back one that costs none.
@@ -1368,14 +1368,15 @@ export class AI {
     return weighted.find(([, wgt]) => (k -= wgt) < 0)?.[0];
   }
 
-  private nextUnit(energy: number, own: Entity[], minerals: number): string {
+  /** `at`: the building that will train it, whose own Isdaris extensions count (a Druide needs the Laboratoire there). */
+  private nextUnit(energy: number, own: Entity[], minerals: number, at?: Entity): string {
     if (this.faction !== FACTIONS.humains) {
       // Weighted rotation through the faction's army; energy-hungry units only when affordable, a few invisible ones at most.
       const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
-      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals && !this.world.lacks(this.player, t));
+      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals && !this.world.lacks(this.player, t, undefined, at));
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
       // Against flying enemies, only what can shoot them.
-      const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t));
+      const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
       // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.
@@ -1393,9 +1394,9 @@ export class AI {
     // Phalangistes (grenades, long range) once a Forge stands, one in five.
     // (One in five trained, they never came: the energy was seldom there on that turn. Now a sixth of the army each.)
     const share = (t: string) => own.filter((u) => u.type === t).length * 6 < own.length;
-    if (energy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
+    if (energy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste', undefined, at)) return 'phalangiste';
     // Belluaires (halberd riders, against infantry) once a Créaturium stands.
-    if (energy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire')) return 'belluaire';
+    if (energy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire', undefined, at)) return 'belluaire';
     // Healers on schedule, or to burn spare energy, but never more than a third of the army.
     const healers = own.filter((u) => (u.def as UnitDef).heal).length;
     if (energy >= 100 && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
