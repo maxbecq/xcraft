@@ -12,9 +12,11 @@ export function owned(this: World, c: Command): Entity[] {
   return [...new Set(c.ids)].map((id) => this.entities.get(id)).filter((e): e is Entity => !!e && e.owner === c.player);
 }
 
-/** « Requiert : … » while the research is not done, for a message or a greyed button; nothing once it is. */
-export function needs(this: World, player: number, research?: string): string | undefined {
-  return research && !this.level(player, research) ? `Requiert : ${DEFS[research].name}` : undefined;
+/** « Requiert : … » while the research is not done, for a message or a greyed button; nothing once it is. An extension: on `at` (hasExt). */
+export function needs(this: World, player: number, research?: string, at?: Entity): string | undefined {
+  if (!research) return undefined;
+  const done = (DEFS[research] as UpgradeDef).host ? this.hasExt(player, research, at) : this.level(player, research) > 0;
+  return done ? undefined : `Requiert : ${DEFS[research].name}`;
 }
 
 /** A god's improvements from the Artefacterie, those bought and those queued. */
@@ -150,12 +152,20 @@ export function apply(this: World, c: Command): void {
       // ends first, then the lowest id (deterministic); full ones are skipped.
       const producers = [...buildings, ...units.filter((u) => (u.def as UnitDef).trains)].sort((a, b) => a.queue.length - b.queue.length || a.trainLeft - b.trainLeft || a.id - b.id);
       let full = false;
+      // What the producers lacked (an extension on another building of the same type may still have it).
+      let lacking = '';
       for (const b of producers) {
         const def = b.def as BuildingDef;
         if (def.researches?.includes(c.type)) {
-          if (!this.researchable(c.player, c.type)) return;
-          const lack = this.lacks(c.player, c.type);
-          if (lack) return void this.say(c.player, lack);
+          // An extension goes onto this very building (notice): skip those that carry it or have it queued.
+          if ((DEFS[c.type] as UpgradeDef).host) {
+            if (!this.researchable(c.player, c.type, b)) continue;
+          } else if (!this.researchable(c.player, c.type)) return;
+          const lack = this.lacks(c.player, c.type, undefined, b);
+          if (lack) {
+            lacking = lack;
+            continue;
+          }
           if (b.queue.length >= 5) {
             full = true;
             continue;
@@ -191,8 +201,11 @@ export function apply(this: World, c: Command): void {
           return;
         }
         if (!def.trains?.includes(c.type)) continue;
-        const missing = this.lacks(c.player, c.type);
-        if (missing) return void this.say(c.player, missing);
+        const missing = this.lacks(c.player, c.type, undefined, b);
+        if (missing) {
+          lacking = missing;
+          continue;
+        }
         if (b.queue.length >= 5) {
           full = true;
           continue;
@@ -210,6 +223,7 @@ export function apply(this: World, c: Command): void {
         return; // one building per command, like SC
       }
       if (full) this.say(c.player, "File d'attente pleine.");
+      else if (lacking) this.say(c.player, lacking);
       return;
     }
     case 'cancel':
@@ -281,7 +295,10 @@ export function apply(this: World, c: Command): void {
         if (rest.length) this.apply({ ...c, ids: rest });
         return;
       }
-      const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && cdOf(b, c.name!) === 0);
+      // A building's power behind an extension (notice: the Orbe's Observatoire, the Trône's): one that carries it first.
+      const unlocked = (b: Entity, name: string) => !this.needs(c.player, ABILITIES[name]?.research, b);
+      const ready = (b: Entity, name: string) => abilitiesOf(b.def as BuildingDef).includes(name) && cdOf(b, name) === 0;
+      const named = c.name && (buildings.find((b) => ready(b, c.name!) && unlocked(b, c.name!)) ?? buildings.find((b) => ready(b, c.name!)));
       if (c.name && !named) {
         // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.
         const ab = ABILITIES[c.name];
@@ -309,7 +326,8 @@ export function apply(this: World, c: Command): void {
         return void this.setOrder(e, { kind: 'cast', ability: c.name, x, y });
       }
       for (const e of units) this.cast(e);
-      const b = named || buildings.find((b) => (b.def as BuildingDef).ability && b.abilityCd === 0);
+      const own = (b: Entity) => (b.def as BuildingDef).ability && b.abilityCd === 0;
+      const b = named || buildings.find((b) => own(b) && unlocked(b, (b.def as BuildingDef).ability!)) || buildings.find(own);
       if (b && c.name === 'envol') return void this.takeOff(b);
       if (b && (c.name === 'deraciner' || c.name === 'redeploiement')) return void this.uproot(b, c.name);
       if (b && c.name === 'refuge') {
@@ -335,7 +353,7 @@ export function apply(this: World, c: Command): void {
       }
       if (kind === 'transfertgroupe') {
         // Second step of the Porte de déphasage: the latest group still phased goes to the point, out of phase.
-        const need = this.needs(c.player, ab.research);
+        const need = this.needs(c.player, ab.research, b);
         if (need) return void this.say(c.player, need);
         const g = this.phaseGroups.filter((g) => g.owner === c.player).pop();
         const units = g ? g.ids.map((id) => this.entities.get(id)).filter((u): u is Entity => !!u && u.owner === g.owner && u.hp > 0 && u.phased > 0 && !u.inside) : [];
@@ -351,7 +369,7 @@ export function apply(this: World, c: Command): void {
         return;
       }
       if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
-      const need = this.needs(c.player, ab.research);
+      const need = this.needs(c.player, ab.research, b);
       if (need) return void this.say(c.player, need);
       if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
       if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');

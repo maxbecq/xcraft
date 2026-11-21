@@ -241,7 +241,7 @@ export function produce(this: World, b: Entity): void {
     }
   }
   // Miniportail (notice: a second production building): the unit second in the queue is made alongside the first.
-  if (!b.trainLeft2 && b.type === 'portail' && b.queue.length > 1 && DEFS[b.queue[1]].kind === 'unit' && this.level(b.owner, 'miniportail'))
+  if (!b.trainLeft2 && b.type === 'portail' && b.queue.length > 1 && DEFS[b.queue[1]].kind === 'unit' && b.exts.includes('miniportail'))
     b.trainLeft2 = this.trainTime(b, b.queue[1]);
   if (b.trainLeft2 && --b.trainLeft2 === 0) {
     const [type] = b.queue.splice(1, 1);
@@ -266,6 +266,13 @@ export function produce(this: World, b: Entity): void {
     const up = DEFS[type];
     if (up.kind === 'building') {
       this.morph(b, type);
+      this.next(b);
+      return;
+    }
+    if (up.kind === 'upgrade' && up.host) {
+      // An Isdaris extension: onto this building, its own.
+      b.exts.push(type);
+      this.say(b.owner, `${b.def.name} : ${up.name}.`, 'done');
       this.next(b);
       return;
     }
@@ -299,7 +306,7 @@ export function deliver(this: World, b: Entity, type: string, kit: string): void
   const mana = this.manaOf(u);
   if (mana) u.mana = toFp(mana[1]);
   // Cuve génétique: Créatures come in pairs.
-  if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
+  if (type === 'creature' && b.exts.includes('cuvegenetique')) {
     const twin = this.spawnBeside(type, b);
     this.rallyOn(twin, b);
   }

@@ -280,9 +280,9 @@ describe('audit gaps', () => {
 
   it('the Porte de déphasage\'s second step sends the group still phased anywhere, out of phase', () => {
     const w = createMatch(['isdaris', 'humains']);
-    w.players[0].upgrades.porte = 1;
     w.players[0].energy = 1000;
     const trone = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    trone.exts.push('porte');
     const a = w.spawn('archer', 0, 40 * FP, 40 * FP);
     const b = w.spawn('archer', 0, 41 * FP, 40 * FP);
     const x0 = a.x;
@@ -419,9 +419,9 @@ describe('audit gaps', () => {
 
   it('the group transfer leaves behind a unit that has changed sides since it was phased', () => {
     const w = createMatch(['isdaris', 'humains']);
-    w.players[0].upgrades.porte = 1;
     w.players[0].energy = 1000;
     const trone = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    trone.exts.push('porte');
     const a = w.spawn('archer', 0, 40 * FP, 40 * FP);
     const b = w.spawn('archer', 0, 41 * FP, 40 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [trone.id], name: 'portedephasage', x: a.x, y: a.y }]);

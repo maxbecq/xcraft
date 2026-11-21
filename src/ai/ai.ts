@@ -360,7 +360,7 @@ export class AI {
     this.fielded ||= !!techDef && mine.some((u) => techDef.trains!.includes(u.type));
     // Its first unit unlocked: the tech building trains it before researching anything else (the Balise held it a minute).
     const firstTech = f === FACTIONS.isdaris && unlocked.length > 0 && !this.fielded;
-    const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0) && w.researchable(this.player, x) && !w.lacks(this.player, x) && !(firstTech && techDef!.researches?.includes(x)));
+    const nextExtension = EXTENSIONS.find((x) => buildings.some((b) => (b.def as BuildingDef).researches?.includes(x) && b.buildLeft === 0 && w.researchable(this.player, x, b)) && !w.hasExt(this.player, x) && !buildings.some((b) => b.queue.includes(x)) && !(firstTech && techDef!.researches?.includes(x)));
     // Z: a Tourelle needs a Pod too, so only with minerals to spare.
     if (f.defense && count(f.defense) < defenses && !building(f.defense) && !(f === FACTIONS.z && ctx.minerals < 500)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
@@ -498,11 +498,12 @@ export class AI {
     const researching = new Set<number>();
     const listed = RESEARCH[p.faction] ?? [];
     for (const t of this.easy ? [] : [...listed, ...(minute >= 10 ? LATE[p.faction] : [])]) {
-      if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
+      if (saving || !w.researchable(this.player, t)) continue;
       // Z: Attaque de proximité only serves the flame thrower; the socles' tiers wait for the first weapon.
       if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
       if ((DEFS[t] as UpgradeDef).level > 1 && /^r(quadripode|hexapode|coleoptere)$/.test((DEFS[t] as UpgradeDef).line) && !w.level(this.player, 'lanceroquettes')) continue;
-      const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
+      // The building itself must allow it: an extension it lacks, the extension a research needs there (Laboratoire, Totem…).
+      const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t) && w.researchable(this.player, t, b) && !w.lacks(this.player, t, undefined, b));
       const cost = (DEFS[t] as UpgradeDef).cost;
       // The researches off the list only with resources to spare, after the units' energy.
       const spare = listed.includes(t) ? 0 : 200;
@@ -515,7 +516,7 @@ export class AI {
     // Isdaris extensions (notice), in order, on the building that hosts each.
     // The extension that unlocks the first tech unit does not wait for the expansion's savings (they held it three minutes).
     if (nextExtension && (!saving || (techUp && !unlocked.length)) && !this.easy) {
-      const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0);
+      const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0 && w.researchable(this.player, nextExtension, b));
       const cost = (DEFS[nextExtension] as UpgradeDef).cost;
       if (host && ctx.minerals >= cost.minerals && ctx.energy >= cost.energy) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: nextExtension });
@@ -580,7 +581,7 @@ export class AI {
       // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One of each unarmed unit
       // (Scarabée, Isdaris Espion and Voyageur).
       const own = (u: string) => mine.filter((o) => o.type === u).length;
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && ((DEFS[u] as UnitDef).attack || own(u) === 0) && (t.type === f.tech || own(u) < 3));
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) === 0) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains)
         .slice()
@@ -895,15 +896,15 @@ export class AI {
   private altar(ctx: Turn): Command[] {
     const { w, p, home, buildings, army } = ctx;
     const out: Command[] = [];
-    const ready = (b: Entity | undefined, name: string) => !!b && b.buildLeft === 0 && b.abilityCd === 0 && w.level(this.player, ABILITIES[name].research ?? '') > 0 && p.energy >= (ABILITIES[name].energy ?? 0);
+    const ready = (b: Entity | undefined, name: string) => !!b && b.buildLeft === 0 && b.abilityCd === 0 && !w.needs(this.player, ABILITIES[name].research, b) && p.energy >= (ABILITIES[name].energy ?? 0);
     const use = (b: Entity, name: string, at: { x: number; y: number }) => out.push({ player: this.player, kind: 'ability', ids: [b.id], name, x: at.x, y: at.y });
-    const orbe = buildings.find((b) => b.type === 'orbecommandement');
+    const orbe = buildings.find((b) => b.type === 'orbecommandement' && b.exts.includes('observatoire')) ?? buildings.find((b) => b.type === 'orbecommandement');
     const target = this.wave.size ? this.enemyTarget(home) : undefined;
     if (orbe && target && ready(orbe, 'observatoire')) use(orbe, 'observatoire', target);
     const trone = buildings.find((b) => b.type === 'trone');
     if (!trone) return out;
     // The second step of the Porte: the group still phased goes home.
-    if (w.phaseGroups.some((g) => g.owner === this.player) && w.level(this.player, 'porte')) use(trone, 'transfertgroupe', home);
+    if (w.phaseGroups.some((g) => g.owner === this.player) && w.hasExt(this.player, 'porte', trone)) use(trone, 'transfertgroupe', home);
     if (ready(trone, 'canonorbital')) {
       const foes = [...w.entities.values()].filter((e) => e.def.kind === 'unit' && e.hp > 0 && w.hostile(e.owner, this.player) && w.sees(this.player, e));
       const spies = army.filter((u) => u.type === 'espion');

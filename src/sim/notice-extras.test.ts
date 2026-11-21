@@ -27,7 +27,7 @@ describe('Concentrateur énergétique', () => {
   it("raises a Mur d'énergie that blocks tiles and shots, then fades", () => {
     const w = createMatch(['isdaris', 'humains']);
     const trone = w.spawn('trone', 0, 20 * FP, 30 * FP);
-    w.players[0].upgrades.concentrateur = 1;
+    trone.exts.push('concentrateur');
     w.players[0].energy = 1000;
     const shooter = w.spawn('auxiliaire', 1, 31 * FP, 32 * FP);
     const target = w.spawn('archer', 0, 27 * FP, 32 * FP);

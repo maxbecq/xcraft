@@ -118,9 +118,8 @@ describe('AI spells, each in a scene made for it', () => {
 
   it('Canon orbital on a crowd an Espion of ours watches', () => {
     const { w, ai, at } = arena(['isdaris', 'humains']);
-    w.players[0].upgrades.relais = 1;
     w.players[0].energy = 1000;
-    at('trone', 0, -20, -20);
+    at('trone', 0, -20, -20).exts.push('relais');
     at('espion', 0, 0, 0);
     crowd(at, 'auxiliaire', 6, 3, 0);
     expect(cast(orders(w, ai), 'canonorbital')).toBe(true);
@@ -128,9 +127,8 @@ describe('AI spells, each in a scene made for it', () => {
 
   it('Porte de déphasage on a group losing far from home, then the group home', () => {
     const { w, ai, at } = arena(['isdaris', 'humains']);
-    w.players[0].upgrades.porte = 1;
     w.players[0].energy = 1000;
-    at('trone', 0, -20, -20);
+    at('trone', 0, -20, -20).exts.push('porte');
     const group = [0, 1, 2, 3].map((i) => at('archer', 0, i * 0.7, 0));
     group.forEach((u) => ([u.hp, u.shield] = [20, 0]));
     crowd(at, 'legionnaire', 9, 2, 2);

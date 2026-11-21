@@ -17,19 +17,20 @@ const isdaris = () => {
 describe('Isdaris tree (notice 1.2-1)', () => {
   it('extensions unlock units: Druides need the Laboratoire, Dragons the Balise and the Pyramide', () => {
     const w = isdaris();
-    w.spawn('portail', 0, 20 * FP, 20 * FP);
+    const gate = w.spawn('portail', 0, 20 * FP, 20 * FP);
     expect(w.lacks(0, 'druide')).toContain('Laboratoire');
-    w.players[0].upgrades.laboratoire = 1;
-    expect(w.lacks(0, 'druide')).toBe('');
-    w.players[0].upgrades.balise = 1;
-    expect(w.lacks(0, 'dragon')).toContain('Pyramide');
+    gate.exts.push('laboratoire');
+    expect(w.lacks(0, 'druide', undefined, gate)).toBe('');
+    const works = w.spawn('nanoassembleur', 0, 30 * FP, 20 * FP);
+    works.exts.push('balise');
+    expect(w.lacks(0, 'dragon', undefined, works)).toContain('Pyramide');
   });
 
   it('a Cuve génétique makes Créatures come in pairs', () => {
     const w = isdaris();
     const p = w.spawn('portail', 0, 20 * FP, 20 * FP);
     w.spawn('obelisque', 0, 30 * FP, 20 * FP);
-    w.players[0].upgrades.cuvegenetique = 1;
+    p.exts.push('cuvegenetique');
     w.players[0].minerals = 500;
     w.step([{ player: 0, kind: 'train', ids: [p.id], type: 'creature' }]);
     run(w, (DEFS.creature as UnitDef).buildTime + 1);
@@ -53,7 +54,7 @@ describe('Isdaris tree (notice 1.2-1)', () => {
 
   it('a Porte-disques teleports; a Déflecteur hides the walkers round it', () => {
     const w = isdaris();
-    w.players[0].upgrades.assembleur = 1;
+    w.spawn('nanoassembleur', 0, 20 * FP, 20 * FP).exts.push('assembleur');
     const d = w.spawn('discobole', 0, ...at(40, 60));
     w.step([{ player: 0, kind: 'ability', ids: [d.id], name: 'teleport', x: 46 * FP + FP / 2, y: 60 * FP + FP / 2 }]);
     run(w, 0.2);
@@ -67,9 +68,9 @@ describe('Isdaris tree (notice 1.2-1)', () => {
 
   it("the Trône's orbital cannon needs an Espion watching the spot", () => {
     const w = isdaris();
-    w.players[0].upgrades.relais = 1;
     w.players[0].energy = 1000;
     const t = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    t.exts.push('relais');
     const target = w.spawn('legionnaire', 1, ...at(60, 60));
     w.step([{ player: 0, kind: 'ability', ids: [t.id], name: 'canonorbital', x: target.x, y: target.y }]);
     expect(target.hp).toBe(target.maxHp);
@@ -83,9 +84,9 @@ describe('Isdaris tree (notice 1.2-1)', () => {
 
   it('the orbital cannon strikes what stands under it when it lands, not what stood there at the order', () => {
     const w = isdaris();
-    w.players[0].upgrades.relais = 1;
     w.players[0].energy = 1000;
     const t = w.spawn('trone', 0, 20 * FP, 20 * FP);
+    t.exts.push('relais');
     w.spawn('espion', 0, ...at(58, 60));
     const leaver = w.spawn('legionnaire', 1, ...at(60, 60));
     const comer = w.spawn('legionnaire', 1, ...at(60, 80));

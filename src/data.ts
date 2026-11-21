@@ -233,6 +233,11 @@ export interface UpgradeDef {
   effect?: string;
   faction: Faction;
   hotkey: string;
+  /**
+   * Isdaris extension (notice): the major building type it is built onto. It belongs to that one building (Entity.exts),
+   * lost with it; what it unlocks there (units, research, a power) is that building's only.
+   */
+  host?: string;
 }
 
 /**
@@ -630,27 +635,27 @@ const BASE: Record<string, object> = {
 
   // Mod: « Chimère » (green Nano-assembleur), a flying hunter: ion blaster, 21 a second, air and ground.
   chimere: { kind: 'unit', name: 'Chimère', radius: 0.45, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'C' },
-  // Isdaris research (notice); extensions are researched on their host building.
-  miniportail: extension('Miniportail', 'M', 'Le Portail forme deux unités à la fois.'),
-  cuvegenetique: extension('Cuve génétique', 'U', 'Les Créatures arrivent par deux.'),
-  laboratoire: extension('Laboratoire', 'L', 'Druides, et recherches de combat de l\'infanterie.'),
+  // Isdaris research (notice). Extensions: built onto one host building each (notice: three per major building).
+  miniportail: extension('Miniportail', 'M', 'Le Portail forme deux unités à la fois.', 'portail'),
+  cuvegenetique: extension('Cuve génétique', 'U', 'Les Créatures arrivent par deux.', 'portail'),
+  laboratoire: extension('Laboratoire', 'L', 'Druides, et recherches de combat de l\'infanterie.', 'portail'),
   ...upgrades('portailatk', 'Attaque portail', 'K', { laboratoire: 1 }, 'isdaris'),
   ...upgrades('portailarmor', 'Blindage portail', 'J', { laboratoire: 1 }, 'isdaris'),
   enfouissement: isd('Enfouissement', 'F', "Les Créatures s'enfouissent, invisibles, et jaillissent quand un ennemi approche.", { laboratoire: 1 }),
   deflagration: isd('Déflagration', 'G', 'Les Druides lancent un éclair de plasma dévastateur.', { laboratoire: 1 }),
   silence: isd('Silence des ions', 'I', "Les Druides empêchent l'usage des capacités dans une zone.", { laboratoire: 1 }),
-  assembleur: extension('Assembleur inférieur', 'A', 'Véhicules terrestres : Porte-disques, Baliste plasma.'),
-  balise: extension('Balise', 'L', 'Unités aériennes : Espion, Chimère, Dragon, Béhémoth.'),
-  totem: extension('Totem', 'T', 'Voyageurs, et recherches de combat des véhicules.'),
+  assembleur: extension('Assembleur inférieur', 'A', 'Véhicules terrestres : Porte-disques, Baliste plasma.', 'nanoassembleur'),
+  balise: extension('Balise', 'L', 'Unités aériennes : Espion, Chimère, Dragon, Béhémoth.', 'nanoassembleur'),
+  totem: extension('Totem', 'T', 'Voyageurs, et recherches de combat des véhicules.', 'nanoassembleur'),
   ...upgrades('assembleuratk', 'Attaque assembleur', 'K', { totem: 1 }, 'isdaris'),
   ...upgrades('assembleurarmor', 'Blindage assembleur', 'J', { totem: 1 }, 'isdaris'),
   teleportation: isd('Téléportation', 'P', 'Le Voyageur téléporte un groupe auprès d\'un bâtiment ami.', { totem: 1 }),
   manteau: isd('Manteau', 'O', "Le Voyageur rend invisibles les unités qui l'entourent.", { totem: 1 }),
   feucirculaire: isd('Feu circulaire', 'F', 'La Baliste plasma tire sur tous les ennemis autour d\'elle.', { totem: 1 }),
   couloir: isd('Couloir temporel', 'C', "Deux Espions font passer des unités de l'un à l'autre.", { totem: 1 }),
-  autel: extension('Autel', 'A', 'Assassins au Portail, et recherches avancées.'),
-  pyramide: extension('Pyramide', 'Y', 'Dragons au Psycho-assembleur, et recherches avancées.'),
-  observatoire: extension('Observatoire', 'O', "L'Orbe révèle une très large zone."),
+  autel: extension('Autel', 'A', 'Assassins au Portail, et recherches avancées.', 'orbecommandement'),
+  pyramide: extension('Pyramide', 'Y', 'Dragons au Psycho-assembleur, et recherches avancées.', 'orbecommandement'),
+  observatoire: extension('Observatoire', 'O', "L'Orbe révèle une très large zone.", 'orbecommandement'),
   ...upgrades('bouclier', 'Bouclier psychique', 'B', undefined, 'isdaris'),
   robots: isd('Robots améliorés', 'R', 'Robots moissonneurs : +2 attaque, +2 armure.'),
   ...upgrades('cercle', "Cercle d'énergie", 'E', undefined, 'isdaris', 2),
@@ -661,9 +666,9 @@ const BASE: Record<string, object> = {
   dephasage: isd('Module déphasant', 'D', 'Le Béhémoth se déphase : invulnérable, sans attaquer.', { autel: 1 }),
   renvoi: isd('Sphère de renvoi', 'S', 'Le Voyageur protège un allié qui renvoie une part des dégâts.', { autel: 1 }),
   omniscience: isd('Omniscience', 'N', 'Espions : vision très étendue.', { autel: 1 }),
-  relais: extension('Relais de canon orbital', 'R', "Le Trône frappe depuis l'espace un point visé par un Espion."),
-  porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris."),
-  concentrateur: extension('Concentrateur énergétique', 'C', "Le Trône dresse un mur d'énergie que rien ne traverse."),
+  relais: extension('Relais de canon orbital', 'R', "Le Trône frappe depuis l'espace un point visé par un Espion.", 'trone'),
+  porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris.", 'trone'),
+  concentrateur: extension('Concentrateur énergétique', 'C', "Le Trône dresse un mur d'énergie que rien ne traverse.", 'trone'),
 
   // ---------------------------------------------------------------- Z (Z.doc, 2010): a nest of metal insects
   // Drones merge into the buildings they raise. The Intelligence centrale (and Suprême) and the Pod supérieur spread a
@@ -865,9 +870,9 @@ function tier(line: string, socle: string, level: number, hotkey: string): objec
   return { kind: 'upgrade', name: `Socle ${of}${socle} T${level}`, effect: `Les ${socle}s peuvent évoluer en T${level} sur le terrain.`, line, level, faction: 'z', hotkey };
 }
 
-/** An Isdaris extension (notice): built onto a major building, here researched there; unlocks units and research. */
-function extension(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {
-  return research(`Extension : ${name}`, hotkey, effect, requires, 'isdaris');
+/** An Isdaris extension (notice): built onto one major building of `host`'s type, its own; unlocks units, research or a power there. */
+function extension(name: string, hotkey: string, effect: string, host: string): object {
+  return { ...research(`Extension : ${name}`, hotkey, effect, undefined, 'isdaris'), host };
 }
 /** An Isdaris research (notice). */
 function isd(name: string, hotkey: string, effect: string, requires?: Record<string, number>): object {

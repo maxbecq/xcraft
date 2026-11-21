@@ -197,6 +197,8 @@ export interface Entity {
   charges: number;
   /** Dieux: the Artefacterie's improvements this god bought (ARTEFACTS), in order. */
   arts: string[];
+  /** Isdaris major building: the extensions built onto it (notice), its own, gone with it. */
+  exts: string[];
   /** Z building: id of the drone that merged into it (a hint for the renderer, not game state). */
   absorbed?: number;
 }
@@ -386,7 +388,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -762,10 +764,17 @@ export class World {
 
   // ---------------------------------------------------------------- commands
 
-  /** Is this upgrade the next level of its line, counting the levels already queued? */
-  researchable(player: number, type: string): boolean {
+  /**
+   * Is this upgrade the next level of its line, counting the levels already queued? An extension: one of `host`'s type
+   * (`at`, or any if none is given) does not carry it yet nor has it queued.
+   */
+  researchable(player: number, type: string, at?: Entity): boolean {
     const up = DEFS[type];
     if (up?.kind !== 'upgrade' || up.faction !== this.players[player].faction) return false;
+    if (up.host) {
+      const free = (b: Entity) => b.type === up.host && !b.exts.includes(type) && !b.queue.includes(type);
+      return at ? at.owner === player && free(at) : [...this.entities.values()].some((b) => b.owner === player && free(b));
+    }
     let level = this.level(player, up.line);
     for (const b of this.entities.values()) {
       if (b.owner === player) for (const t of b.queue) if ((DEFS[t] as UpgradeDef).line === up.line) level++;
@@ -779,6 +788,18 @@ export class World {
     return this.players[player].upgrades[line] ?? 0;
   }
 
+  /**
+   * An Isdaris extension standing: on `at` when that building is of the extension's host type (what it unlocks there is
+   * that building's own: its units, its research, its power), else on any finished building of the player's (the Autel
+   * lets every Portail train Assassins, the Pyramide every Psycho-assembleur Dragons: notice).
+   */
+  hasExt(player: number, ext: string, at?: Entity): boolean {
+    const host = (DEFS[ext] as UpgradeDef).host;
+    if (at && at.type === host) return at.exts.includes(ext);
+    for (const b of this.entities.values()) if (b.owner === player && b.type === host && b.buildLeft === 0 && b.hp > 0 && b.exts.includes(ext)) return true;
+    return false;
+  }
+
   /** How many finished buildings (and units) of each type a player has: one pass, for many requirement checks. */
   builtCounts(player: number): Map<string, number> {
     const n = new Map<string, number>();
@@ -786,8 +807,11 @@ export class World {
     return n;
   }
 
-  /** What `type` still requires, or ''. `built`: builtCounts(player), when the caller checks many types at once. */
-  lacks(player: number, type: string, built?: Map<string, number>): string {
+  /**
+   * What `type` still requires, or ''. `built`: builtCounts(player), when the caller checks many types at once. `at`: the
+   * building that would make it, whose own extensions count (hasExt).
+   */
+  lacks(player: number, type: string, built?: Map<string, number>, at?: Entity): string {
     if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
     const count = (t: string) => (built ??= this.builtCounts(player)).get(t) ?? 0;
     const any = (DEFS[type] as BuildingDef).requiresAny;
@@ -798,7 +822,9 @@ export class World {
     const missing = Object.entries(req)
       .filter(([t, n]) =>
         DEFS[t].kind === 'upgrade'
-          ? this.level(player, (DEFS[t] as UpgradeDef).line) < (DEFS[t] as UpgradeDef).level
+          ? (DEFS[t] as UpgradeDef).host
+            ? !this.hasExt(player, t, at)
+            : this.level(player, (DEFS[t] as UpgradeDef).line) < (DEFS[t] as UpgradeDef).level
           : count(t) < n,
       )
       .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].name));
@@ -1052,6 +1078,7 @@ export class World {
       mix(e.shield);
       if (e.lvl > 1) mix(e.lvl); // only then: replays recorded before the levels keep their hashes
       if (e.arts.length) mix(e.arts.length * 31);
+      for (const x of e.exts) mix(x.length * 53 + x.charCodeAt(0) * 59); // Isdaris extensions, only when built
       // Mixed only when set, like the level: hashes of games without them stay as they were.
       if (e.illusion) mix(7919);
       if (e.trainLeft2) mix(e.trainLeft2 * 37);

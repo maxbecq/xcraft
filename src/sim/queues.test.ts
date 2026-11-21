@@ -88,7 +88,7 @@ describe('Miniportail', () => {
     run(w, 70);
     const b = of(w, 0, 'portail')[0];
     expect(b.buildLeft).toBe(0);
-    if (mini) p.upgrades.miniportail = 1;
+    if (mini) b.exts.push('miniportail');
     return { w, b };
   };
 
