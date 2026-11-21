@@ -885,7 +885,8 @@ export class EntityRenderer {
       v.rotors.spin += ((moving ? 28 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
       for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
     }
-    const a = (e.def as UnitDef).attack;
+    // A Z socle fights with the weapon module mounted on it, not its default machine gun: its reach and pace.
+    const a = (e.kit && WEAPONS[e.kit]?.attack) || (e.def as UnitDef).attack;
     // A Z drone mining leans into the crystal with a drill's judder (the sparks come from main.ts).
     const mining = e.type === 'drone' && !moving && e.order?.kind === 'gather' && e.order.phase === 'mine';
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
@@ -929,8 +930,9 @@ export class EntityRenderer {
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
     ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
-    ease(body, 'y', melee && fighting ? (fired - 0.5) * 0.8 : 0, 0.3);
-    const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
+    ease(body, 'y', melee && fighting && !v.weapon ? (fired - 0.5) * 0.8 : 0, 0.3);
+    // Recoil on each shot; a socle's shredder throws its body back as the saw bites.
+    const kick = fighting && (!melee || v.weapon) && fired > 0.8 ? (fired - 0.8) * (melee ? 0.6 : 0.3) : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
   }
