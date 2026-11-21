@@ -67,4 +67,25 @@ describe('construction', () => {
       expect(b!.hp).toBe(b!.maxHp);
     }
   });
+
+  it('each Serf on a site cuts the time left by 10 % (fiche 2010)', () => {
+    const took = (n: number) => {
+      const w = createMatch(['humains', 'humains']);
+      w.players[0].minerals = 1000;
+      const serfs = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'serf').slice(0, n);
+      w.step([{ player: 0, kind: 'build', ids: serfs.map((s) => s.id), type: 'grenier', tx: 18, ty: 18 }]);
+      const site = () => [...w.entities.values()].find((e) => e.type === 'grenier' && e.owner === 0);
+      for (let i = 0; i < ticks(30) && !site(); i++) w.step([]);
+      const b = site()!;
+      if (n > 1) w.step([{ player: 0, kind: 'smart', ids: serfs.slice(1).map((s) => s.id), x: b.x, y: b.y, target: b.id }]);
+      let t = 0;
+      while (b.buildLeft > 0 && t < ticks(120)) { w.step([]); t++; }
+      return b.buildLeft === 0 ? t : Infinity;
+    };
+    const one = took(1);
+    const three = took(3);
+    // (9/10)^2 of the time once all three are there; a little more, as the helpers walk up first.
+    expect(three).toBeLessThan(one * 0.88);
+    expect(three).toBeGreaterThan(one * 0.78);
+  });
 });

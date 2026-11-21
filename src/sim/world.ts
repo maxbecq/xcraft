@@ -106,6 +106,8 @@ export interface Entity {
   /** Z Plate-forme: the weapon chosen for each socle of the queue (key of WEAPONS, '' for the machine gun). */
   kits: string[];
   trainLeft: number;
+  /** A Humans site: progress in thousandths of a tick, carried over from one tick to the next. */
+  buildFrac: number;
   /** Druide's Double énergétique: an illusion, which neither attacks nor casts. */
   illusion: boolean;
   /** Portail with the Miniportail: ticks left on the unit second in the queue, made alongside the first (0 = idle). */
@@ -374,7 +376,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, buildFrac: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -956,10 +958,17 @@ export class World {
           this.goNear(e, b.tx, b.ty, (b.def as BuildingDef).size);
           return;
         }
-        // Each worker on site adds one tick of progress: groups build faster.
+        // Fiche 2010 (Serf): each worker on site cuts the time left by 10 %, so n of them build (10/9)^(n-1) times as
+        // fast. The one with the lowest id works for the whole crew, once a tick.
+        const crew = [...this.entities.values()].filter((w) => w.order?.kind === 'construct' && w.order.target === b.id && this.reachRect(w, b.tx, b.ty, (b.def as BuildingDef).size));
+        if (crew.some((w) => w.id < e.id)) return;
+        const n = Math.min(crew.length, 10);
+        b.buildFrac += idiv(1000 * 10 ** (n - 1), 9 ** (n - 1));
         const total = ticks((b.def as BuildingDef).buildTime);
-        b.buildLeft--;
-        this.grow(b, total);
+        for (; b.buildFrac >= 1000 && b.buildLeft > 0; b.buildFrac -= 1000) {
+          b.buildLeft--;
+          this.grow(b, total);
+        }
         if (b.buildLeft === 0) {
           this.say(b.owner, `Construction terminée : ${b.def.name}.`, 'done');
           // Those that built it from behind (out of the camera's sight: it looks from +x +y) come out round the front

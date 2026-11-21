@@ -52,7 +52,7 @@ describe('economy', () => {
     }
   });
 
-  it('builds a granary with one serf, faster with three', () => {
+  it('builds a granary with one serf, a little faster with three', () => {
     const time = (n: number) => {
       const w = createMatch();
       w.players[0].minerals = 1000;
@@ -72,7 +72,8 @@ describe('economy', () => {
       expect(w.players[0].minerals).toBe(800);
       return t;
     };
-    expect(time(3)).toBeLessThan(time(1) / 2);
+    // Fiche 2010: each serf cuts the time left by 10 %, three take about 81 % of one's time.
+    expect(time(3)).toBeLessThan(time(1) * 0.9);
   });
 
   it('refuses to build on a cliff edge or a ramp', () => {
