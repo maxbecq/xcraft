@@ -79,6 +79,8 @@ const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as Bui
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
+/** Powers tried before a unit's others (they share one cooldown), in this order. */
+const FIRST = ['cone', 'gravite', 'gel'];
 const CROWD: Record<string, number> = { explosiftoxique: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
 const GODS = BALANCE.ai.gods as [string, number][];
@@ -990,8 +992,8 @@ export class AI {
    */
   private tactics(army: Entity[]): Command[] {
     const w = this.world;
+    // No early way out without enemy soldiers in sight: the Cuve's acid and the Gel go for buildings.
     const foes = [...w.entities.values()].filter((e) => e.def.kind === 'unit' && e.hp > 0 && !e.inside && w.hostile(e.owner, this.player) && w.sees(this.player, e));
-    if (!foes.length) return [];
     const out: Command[] = [];
     const around = (group: Entity[], x: number, y: number, r: number) => group.filter((e) => dist(e.x, e.y, x, y) <= r);
     const at = (u: Entity, name: string, t: Entity): Command => ({ player: this.player, kind: 'ability', ids: [u.id], name, x: t.x, y: t.y });
@@ -1001,7 +1003,9 @@ export class AI {
       const near = around(foes, u.x, u.y, 9 * FP);
       // The Cuve's acid and the Accumulateur's Gel are for buildings, enemy soldiers around or not.
       if (!near.length && !w.abilitiesFor(u).some((n) => n === 'acidedissolvant' || n === 'gel')) continue;
-      for (const name of w.abilitiesFor(u)) {
+      // One cooldown for all of a unit's powers: the Accumulateur's rarer ones first, or the Vacarme, ready on any
+      // crowd, took every turn and the Cône and the Gravité never came.
+      for (const name of w.abilitiesFor(u).slice().sort((a, b) => Number(FIRST.includes(b)) - Number(FIRST.includes(a)) || FIRST.indexOf(a) - FIRST.indexOf(b))) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
         const reach = ((ab.range ?? 0) + 1) * FP;
@@ -1110,7 +1114,8 @@ export class AI {
           // Five of ours around under fire: none of them hurt a while.
           if (around(army, u.x, u.y, radius).filter((a) => w.tick - a.lastHit < ticks(2)).length >= 5) cmd = self(u, name);
         } else if (name === 'gravite') {
-          if (near.length >= 6 && this.engaged(u) !== undefined) cmd = self(u, name);
+          // Six enemies close by (the Accumulateur has no weapon: never 'engaged' in a fight of its own).
+          if (around(near, u.x, u.y, 7 * FP).length >= 6) cmd = self(u, name);
         } else if (name === 'acidedissolvant') {
           // The enemy building in reach with the most hit points left.
           const pick = [...w.entities.values()]
