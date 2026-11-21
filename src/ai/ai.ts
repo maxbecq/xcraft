@@ -333,8 +333,7 @@ export class AI {
     const nextResearch = army.length < this.plan.wave ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
     // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
-    // Humans: also once the Créaturium stands, its units after the Forge's research (plesiosaures ate it all).
-    const researchReserve = (techWanted || (techUp && f === FACTIONS.humains)) && f !== FACTIONS.isdaris ? 0 : reserve;
+    const researchReserve = techWanted && f !== FACTIONS.isdaris ? 0 : reserve;
     const unitReserve = reserve + (nextResearch ? (DEFS[nextResearch] as UpgradeDef).cost.energy : 0);
     // Isdaris: the gateways and the morphs keep the minerals of the advanced units whenever the Psycho-assembleur is
     // idle, and, once a wave is out, of the second Récepteur and of the Psycho-assembleur itself (the gateways' cheap
