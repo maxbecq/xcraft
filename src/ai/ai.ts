@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -61,11 +61,23 @@ const GANG_UP = (30 * FP) / 20;
  * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
  */
 const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
+/**
+ * Every other research of each faction, after its list (ai.research), from minute 10 and with resources to spare: the
+ * AI plays all of its camp, so that the AI-against-AI measures weigh every research. The artefacts and god levels
+ * are bought by the gods (summon).
+ */
+const LATE: Record<string, string[]> = Object.fromEntries(
+  Object.keys(FACTIONS).map((f) => [f, Object.entries(DEFS).filter(([k, d]) => d.kind === 'upgrade' && d.faction === f && !(RESEARCH[f] ?? []).includes(k) && !EXTENSIONS.includes(k) && !ARTEFACTS.includes(k) && k !== 'niveau').map(([k]) => k)]),
+);
+/** Late buildings besides ai.extra, by faction: [type, from minute], one of each (Métallurgie: the Humans' vehicles). */
+const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie', 12]] };
+/** `e` is a `type`, or a building turned from one (Grand Conseil, Intelligence suprême, Caserne volante). */
+const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
-const CROWD: Record<string, number> = { explosiftoxique: 3, napalm: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
+const CROWD: Record<string, number> = { explosiftoxique: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
 const GODS = BALANCE.ai.gods as [string, number][];
 
@@ -132,7 +144,7 @@ export class AI {
     if (w.tick % THINK_EVERY !== 0 || w.winner !== null || w.players[this.player].resigned) return [];
     const mine = [...w.entities.values()].filter((e) => e.owner === this.player);
     if (this.lost(mine)) return [{ player: this.player, kind: 'resign', ids: [] }];
-    const home = mine.find((e) => e.type === this.faction.hq);
+    const home = mine.find((e) => kin(e, this.faction.hq));
     if (!home) return this.lastStand(mine);
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
@@ -233,7 +245,7 @@ export class AI {
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
     // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
-    const bases = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length;
+    const bases = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).length;
     const firstExtractor = count(f.extractor) === 0;
     if (producers >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
     // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
@@ -279,7 +291,7 @@ export class AI {
     if (f.defense && count(f.defense) < defenses && !building(f.defense) && !(f === FACTIONS.z && ctx.minerals < 500)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
     // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
-    for (const [type, from] of EXTRA[p.faction] ?? []) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
+    for (const [type, from] of [...(EXTRA[p.faction] ?? []), ...(MORE_EXTRA[p.faction] ?? [])]) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
     const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker && !(DEFS[t] as BuildingDef).dropoff);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
@@ -381,8 +393,8 @@ export class AI {
   private research(ctx: Turn): void {
     const { w, f, p, mine, home, serfs, buildings, minute, free, wants, techUp, unlocked, nextExtension, saving, reserve, researchReserve, wantSupreme } = ctx;
     // Serfs, then soldiers.
-    const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).length);
-    const councilHome = buildings.filter((b) => b.type === f.hq && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
+    const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).length);
+    const councilHome = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
     // At its own price (a Dieux esprit costs 75: with 85 minerals left and no esprit, they never made one again).
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
@@ -398,14 +410,17 @@ export class AI {
     }
     // Research in priority order on idle buildings; production buildings only with minerals to spare.
     const researching = new Set<number>();
-    for (const t of this.easy ? [] : (RESEARCH[p.faction] ?? [])) {
+    const listed = RESEARCH[p.faction] ?? [];
+    for (const t of this.easy ? [] : [...listed, ...(minute >= 10 ? LATE[p.faction] : [])]) {
       if (saving || !w.researchable(this.player, t) || w.lacks(this.player, t)) continue;
       // Z: Attaque de proximité only serves the flame thrower; the socles' tiers wait for the first weapon.
       if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
       if ((DEFS[t] as UpgradeDef).level > 1 && /^r(quadripode|hexapode|coleoptere)$/.test((DEFS[t] as UpgradeDef).line) && !w.level(this.player, 'lanceroquettes')) continue;
       const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t));
       const cost = (DEFS[t] as UpgradeDef).cost;
-      if (!host || ctx.minerals < cost.minerals + ((host.def as BuildingDef).trains?.length ? 300 : 0) || ctx.energy - researchReserve < cost.energy) continue;
+      // The researches off the list only with resources to spare, after the units' energy.
+      const spare = listed.includes(t) ? 0 : 200;
+      if (!host || ctx.minerals < cost.minerals + spare + ((host.def as BuildingDef).trains?.length ? 300 : 0) || ctx.energy - (spare ? ctx.unitReserve + 100 : researchReserve) < cost.energy) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: t });
       researching.add(host.id);
       ctx.minerals -= cost.minerals;
@@ -433,11 +448,14 @@ export class AI {
         const d = DEFS[m] as BuildingDef;
         // The Caserne volante is a raiding tool the AI does not play: its casernes stay on the ground.
         // The Intelligence suprême comes before the energy kept for units: the Z tech waits on it.
-        if (m === 'casernevolante' || b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || ctx.minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && ctx.energy - (m === 'supreme' ? 0 : unitReserve) < d.cost.energy)) return false;
+        if (b.buildLeft > 0 || b.queue.length || w.lacks(this.player, m) || ctx.minerals - gatewaysKeep < d.cost.minerals || (d.cost.energy > 0 && ctx.energy - (m === 'supreme' ? 0 : unitReserve) < d.cost.energy)) return false;
         const have = buildings.filter((o) => o.type === m || o.queue.includes(m)).length;
         // Z: the Intelligence suprême and the Pods supérieurs are where its spare energy goes (Z.doc).
         if (m === 'supreme') return have === 0 && minute > 6;
         if (m === 'podsup') return minute > 8 && have < 3;
+        // Humans: one Caserne volante late, the Grand Conseil and the Grande Alchimisterie (its Cuves) mid-game.
+        if (m === 'casernevolante') return minute > 15 && have === 0;
+        if (m === 'grandconseil' || m === 'grandealchimisterie') return minute > 12 && have === 0;
         return d.energyRate ? minute > 6 && have === 0 : f.gods ? minute > 6 && have < 4 : minute > 9 && have < 2;
       });
       if (!into || saving) continue;
@@ -471,19 +489,23 @@ export class AI {
     const researchCost = nextResearch && (DEFS[nextResearch] as UpgradeDef).cost;
     ctx.keep = researchCost && ctx.energy - researchReserve >= researchCost.energy ? researchCost.minerals : 0;
     // Heavier units from the other production buildings, one at a time, when affordable; a few of each support kind.
-    for (const t of buildings.filter((b) => b.type !== f.barracks && b.type !== f.hq && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
-      // The kind it has fewest of (Discobole and Chimère take turns); against flyers, only what can shoot them.
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && (DEFS[u] as UnitDef).attack && (t.type === f.tech || mine.filter((o) => o.type === u).length < 3));
-      const antiAirTrains = trains.filter((u) => reaches((DEFS[u] as UnitDef).attack!, true));
-      const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains).slice().sort((a, b) => mine.filter((u) => u.type === a).length - mine.filter((u) => u.type === b).length)[0];
+    for (const t of buildings.filter((b) => !kin(b, f.barracks) && !kin(b, f.hq) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
+      // The kind it has fewest of that it can pay for (Discobole and Chimère take turns; an Ankylosaure it could not pay
+      // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One unarmed carrier (Scarabée).
+      const own = (u: string) => mine.filter((o) => o.type === u).length;
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && ((DEFS[u] as UnitDef).attack || ((DEFS[u] as UnitDef).bunker && own(u) === 0)) && (t.type === f.tech || own(u) < 3));
+      const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
+      const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains)
+        .slice()
+        .sort((a, b) => own(a) - own(b))
+        .find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || free - ctx.out.filter((o) => o.kind === 'train').length < def.supply) continue;
-      if (ctx.minerals - ctx.keep < def.cost.minerals || ctx.energy < def.cost.energy) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
       ctx.minerals -= def.cost.minerals;
       ctx.energy -= def.cost.energy;
     }
-    for (const c of buildings.filter((b) => !f.gods && b.type === f.barracks && b.buildLeft === 0)) {
+    for (const c of buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0)) {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || free - ctx.out.filter((o) => o.kind === 'train').length <= 0) continue;
       const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), army, ctx.minerals);
@@ -721,7 +743,7 @@ export class AI {
     if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods]));
     const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
     const ability = caster && (caster.def as BuildingDef).ability!;
-    if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy!) {
+    if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy! && w.level(this.player, 'observation')) {
       // Observation céleste only where an undetected invisible unit just hit us from close by, not on far shooters.
       const ambushed = mine.find((u) => {
         const a = w.entities.get(u.lastAttacker);
@@ -917,7 +939,8 @@ export class AI {
     for (const u of army) {
       if (u.abilityCd > 0 || u.held) continue;
       const near = around(foes, u.x, u.y, 9 * FP);
-      if (!near.length) continue;
+      // The Cuve's acid is for buildings, enemy soldiers around or not.
+      if (!near.length && u.type !== 'cuve') continue;
       for (const name of w.abilitiesFor(u)) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
@@ -1001,6 +1024,36 @@ export class AI {
         } else if (name === 'courroux') {
           const d = this.engaged(u);
           if (d !== undefined && d < 3 * FP) cmd = self(u, name);
+        } else if (name === 'napalm') {
+          // The toughest enemy vehicle in reach, else a badly hurt one of ours (repaired).
+          const pick = inReach.filter((f) => (f.def as UnitDef).mechanical).sort((a, b) => b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0] ?? allies.find((a) => (a.def as UnitDef).mechanical && a.hp * 2 < a.maxHp);
+          if (pick) cmd = at(u, name, pick);
+        } else if (name === 'acidedissolvant') {
+          // The enemy building in reach with the most hit points left.
+          const pick = [...w.entities.values()]
+            .filter((b) => b.def.kind === 'building' && b.hp > 0 && w.hostile(b.owner, this.player) && w.sees(this.player, b) && dist(b.x, b.y, u.x, u.y) <= reach + ((b.def as BuildingDef).size * FP) / 2)
+            .sort((a, b) => b.hp - a.hp || a.id - b.id)[0];
+          if (pick) cmd = at(u, name, pick);
+        } else if (name === 'explosioncuve') {
+          // Blown up in the thick of the enemy, few of ours around; or dying with enemies at hand.
+          const r = radius + u.radius;
+          const hit = around(near, u.x, u.y, r).filter((f) => !flies(f)).length;
+          const ours = around(army, u.x, u.y, r).filter((a) => a !== u && !flies(a)).length;
+          if ((hit >= 5 && ours * 2 <= hit) || (u.hp * 4 < u.maxHp && hit >= 2 && ours < hit)) cmd = self(u, name);
+        } else if (name === 'gazeuphorisants') {
+          // On the thickest group of our living soldiers in a fight.
+          const fighting = allies.filter((a) => !(a.def as UnitDef).mechanical && this.engaged(a) !== undefined);
+          const best = fighting.map((a) => [a, around(fighting, a.x, a.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          if (best && best[1] >= 4) cmd = at(u, name, best[0]);
+        } else if (name === 'reanimation') {
+          // A fresh corpse in reach rises to fight for us.
+          const c = w.corpses.filter((c) => dist(c.x, c.y, u.x, u.y) <= reach).sort((a, b) => b.tick - a.tick)[0];
+          if (c) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: c.x, y: c.y };
+        } else if (name === 'festin') {
+          if (u.hp * 10 < u.maxHp * 7 && w.corpses.some((c) => dist(c.x, c.y, u.x, u.y) <= radius)) cmd = self(u, name);
+        } else if (name === 'posermine') {
+          // Pégase on the ground: a mine under it when enemy walkers come close.
+          if (!u.airborne && u.charges > 0 && around(near, u.x, u.y, 6 * FP).filter((f) => !flies(f)).length >= 2) cmd = self(u, name);
         } else if (name === 'decollage') {
           // Pégase: up against flyers only, down again once none is left.
           const air = near.some((f) => flies(f));
@@ -1121,9 +1174,11 @@ export class AI {
       return army[0][0];
     }
     // Phalangistes (grenades, long range) once a Forge stands, one in five.
-    if (energy >= 150 && minerals >= 225 && this.trained % 5 === 2 && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
-    // Belluaires (halberd riders, against infantry) once a Créaturium stands, one in five.
-    if (energy >= 175 && minerals >= 200 && this.trained % 5 === 4 && !this.enemyAir && !this.world.lacks(this.player, 'belluaire')) return 'belluaire';
+    // (One in five trained, they never came: the energy was seldom there on that turn. Now a sixth of the army each.)
+    const share = (t: string) => own.filter((u) => u.type === t).length * 6 < own.length;
+    if (energy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste')) return 'phalangiste';
+    // Belluaires (halberd riders, against infantry) once a Créaturium stands.
+    if (energy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire')) return 'belluaire';
     // Healers on schedule, or to burn spare energy, but never more than a third of the army.
     const healers = own.filter((u) => (u.def as UnitDef).heal).length;
     if (energy >= 100 && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
@@ -1177,7 +1232,7 @@ export class AI {
     const def = DEFS[type] as BuildingDef;
     if (def.energyRate) {
       // The free well nearest one of our bases.
-      const bases = [...w.entities.values()].filter((b) => b.owner === this.player && b.type === this.faction.hq && b.buildLeft === 0);
+      const bases = [...w.entities.values()].filter((b) => b.owner === this.player && kin(b, this.faction.hq) && b.buildLeft === 0);
       let best: Entity | undefined;
       let bestD = 14 * FP;
       for (const e of w.entities.values()) {
@@ -1337,7 +1392,7 @@ export class AI {
 
   /** Mineral fields left within reach of any of our finished headquarters. */
   private fieldsNear(buildings: Entity[]): number {
-    const hqs = buildings.filter((b) => b.type === this.faction.hq && b.buildLeft === 0);
+    const hqs = buildings.filter((b) => kin(b, this.faction.hq) && b.buildLeft === 0);
     return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP)).length;
   }
 
@@ -1367,7 +1422,7 @@ export class AI {
     const w = this.world;
     let enemy: Entity | undefined;
     for (const e of w.entities.values()) {
-      if (!w.hostile(e.owner, this.player) || e.type !== FACTIONS[w.players[e.owner].faction].hq) continue;
+      if (!w.hostile(e.owner, this.player) || !kin(e, FACTIONS[w.players[e.owner].faction].hq)) continue;
       if (!enemy || dist(e.x, e.y, home.x, home.y) < dist(enemy.x, enemy.y, home.x, home.y)) enemy = e;
     }
     if (!enemy) return null;
@@ -1429,7 +1484,7 @@ export class AI {
       if (b.def.kind !== 'building') continue;
       let defence = 0;
       for (const g of guard) if (dist(g.x, g.y, b.x, b.y) < 9 * FP) defence += g.hp + g.shield;
-      if (b.type === FACTIONS[w.players[b.owner].faction].hq) defence /= 2;
+      if (kin(b, FACTIONS[w.players[b.owner].faction].hq)) defence /= 2;
       let targeted = 0;
       for (const [t, id] of focus) if (t !== team && w.entities.get(id)?.owner === b.owner) targeted++;
       const cost = defence + dist(b.x, b.y, home.x, home.y) / 20 + targeted * GANG_UP;

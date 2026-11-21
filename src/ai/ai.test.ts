@@ -57,6 +57,7 @@ describe('AI', () => {
     const ai = new AI(w, 0);
     w.spawn('forge', 0, 20 * FP, 22 * FP);
     w.players[0].energy = 200;
+    w.players[0].upgrades.observation = 1; // the telescope is a research: without it the order is refused
     const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
     const scansAfter = (attacker: Entity) => {
       while (w.tick % 10 !== 0 || w.tick < 4) w.step([]);
