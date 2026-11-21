@@ -72,6 +72,8 @@ const LATE: Record<string, string[]> = Object.fromEntries(
 /** Late buildings besides ai.extra, by faction: [type, from minute], one of each (Métallurgie: the Humans' vehicles). */
 const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie', 12]], isdaris: [['trone', 18]] };
 /** `e` is a `type`, or a building turned from one (Grand Conseil, Intelligence suprême, Caserne volante). */
+/** Z socle weapons, by weight (ai.kits), the Accumulateur too: its four powers are part of the camp. */
+const KITS: Record<string, number> = { ...BALANCE.ai.kits, accumulateur: 1 };
 const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
@@ -771,6 +773,12 @@ export class AI {
       }
     }
     ctx.out.push(...this.altar(ctx));
+    // Scouts light up the wave's target: the Z Espion's Balise once close to it, Athéna's Chouette from afar.
+    const goal = this.wave.size ? this.enemyTarget(home) : undefined;
+    for (const [type, name] of [['zespion', 'balisez'], ['athena', 'chouette']]) {
+      const u = goal && [...army, ...gods].find((e) => e.type === type && e.abilityCd === 0 && dist(e.x, e.y, goal.x, goal.y) <= ((ABILITIES[name].range ?? 0) + 4) * FP);
+      if (u && goal) ctx.out.push({ player: this.player, kind: 'ability', ids: [u.id], name, x: goal.x, y: goal.y });
+    }
   }
 
   /**
@@ -977,8 +985,8 @@ export class AI {
     for (const u of army) {
       if (u.abilityCd > 0 || u.held) continue;
       const near = around(foes, u.x, u.y, 9 * FP);
-      // The Cuve's acid is for buildings, enemy soldiers around or not.
-      if (!near.length && u.type !== 'cuve') continue;
+      // The Cuve's acid and the Accumulateur's Gel are for buildings, enemy soldiers around or not.
+      if (!near.length && !w.abilitiesFor(u).some((n) => n === 'acidedissolvant' || n === 'gel')) continue;
       for (const name of w.abilitiesFor(u)) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
@@ -1016,7 +1024,7 @@ export class AI {
           if (pick) cmd = at(u, name, pick);
         } else if (name === 'coupcirculaire' || name === 'feucirculaire') {
           if (around(near, u.x, u.y, radius + u.radius).filter((f) => !flies(f)).length >= (name === 'feucirculaire' ? 3 : 2)) cmd = self(u, name);
-        } else if (name === 'camouflage' || name === 'dephasage') {
+        } else if (name === 'camouflage' || name === 'dephasage' || name === 'invistemp') {
           if (u.hp * 100 < u.maxHp * (name === 'dephasage' ? 35 : 50)) cmd = self(u, name);
         } else if (name === 'manteau') {
           if (around(army, u.x, u.y, radius).length >= 6 && around(near, u.x, u.y, 7 * FP).length >= 4) cmd = self(u, name);
@@ -1073,6 +1081,17 @@ export class AI {
           // The toughest enemy vehicle in reach, else a badly hurt one of ours (repaired).
           const pick = inReach.filter((f) => (f.def as UnitDef).mechanical).sort((a, b) => b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0] ?? allies.find((a) => (a.def as UnitDef).mechanical && a.hp * 2 < a.maxHp);
           if (pick) cmd = at(u, name, pick);
+        } else if (name === 'gel') {
+          // Accumulateur: the enemy building in reach that shoots, or else that trains.
+          const pick = [...w.entities.values()]
+            .filter((b) => b.def.kind === 'building' && b.hp > 0 && !b.frozen && w.hostile(b.owner, this.player) && w.sees(this.player, b) && ((b.def as BuildingDef).attack || b.queue.length) && dist(b.x, b.y, u.x, u.y) <= reach + ((b.def as BuildingDef).size * FP) / 2)
+            .sort((a, b) => Number(!!(b.def as BuildingDef).attack) - Number(!!(a.def as BuildingDef).attack) || a.id - b.id)[0];
+          if (pick) cmd = at(u, name, pick);
+        } else if (name === 'cone') {
+          // Five of ours around under fire: none of them hurt a while.
+          if (around(army, u.x, u.y, radius).filter((a) => w.tick - a.lastHit < ticks(2)).length >= 5) cmd = self(u, name);
+        } else if (name === 'gravite') {
+          if (near.length >= 6 && this.engaged(u) !== undefined) cmd = self(u, name);
         } else if (name === 'acidedissolvant') {
           // The enemy building in reach with the most hit points left.
           const pick = [...w.entities.values()]
@@ -1193,7 +1212,7 @@ export class AI {
    */
   private weaponFor(def: UnitDef, energy: number): string | undefined {
     if (!def.weapons) return undefined;
-    const kits = Object.entries(BALANCE.ai.kits).filter(([k]) => {
+    const kits = Object.entries(KITS).filter(([k]) => {
       const kit = WEAPONS[k];
       return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(kit.attack, true));
     });
