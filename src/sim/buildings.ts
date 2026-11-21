@@ -323,7 +323,8 @@ export function shelter(this: World, e: Entity): void {
   const t = this.enemyNear(b, range, false, a);
   if (!t) return;
   e.cooldown = ticks(a.cooldown);
-  this.hit({ ...e, x: b.x, y: b.y } as Entity, t, a);
+  // The passenger itself (it stands on its shelter): what comes back at it (Sphère de renvoi) hurts it, not a copy.
+  this.hit(e, t, a);
 }
 
 /** The tile of a point; right on an edge (an even-sized building's middle), the one on the map's middle side. */

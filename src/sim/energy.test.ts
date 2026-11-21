@@ -167,3 +167,19 @@ describe('mana of the gods (XC.doc 2008)', () => {
     expect(ABILITIES.tempetezeus.mana).toBeUndefined();
   });
 });
+
+describe('Sphère de renvoi against a shooter in a Fortin', () => {
+  it('sends its half back to the real passenger', () => {
+    const w = new World(createMap());
+    const fort = w.spawn('fortin', 1, 40 * FP, 60 * FP);
+    const shooter = w.spawn('auxiliaire', 1, ...at(40, 60));
+    shooter.inside = fort.id;
+    const ally = w.spawn('legionnaire', 0, ...at(44, 60));
+    ally.reflect = ticks(40);
+    ally.reflectLeft = 300;
+    ally.hp = ally.maxHp = 5000;
+    for (let i = 0; i < ticks(5) && shooter.hp === shooter.maxHp; i++) w.step([]);
+    expect(shooter.hp).toBeLessThan(shooter.maxHp);
+    expect(ally.reflectLeft).toBeLessThan(300);
+  });
+});
