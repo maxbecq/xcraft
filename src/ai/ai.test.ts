@@ -216,6 +216,20 @@ describe('AI Z Refuge', () => {
     expect(out).toBe(true);
   });
 
+  it('Z: the drones in an Assimilateur no longer count as miners, and are replaced', () => {
+    const w = createMatch(['z', 'humains']);
+    const ai = new AI(w, 0);
+    const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
+    const drones = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'drone');
+    for (let i = drones.length; i < 16; i++) drones.push(w.spawn('drone', 0, ic.x, ic.y + 4 * FP));
+    const assim = w.spawn('assimilateur', 0, ic.x + 8 * FP, ic.y);
+    for (let i = 0; i < 3; i++) w.spawn('pod', 0, ic.x - 8 * FP, ic.y + (i * 4 - 4) * FP);
+    for (const d of drones.slice(0, 3)) d.inside = assim.id;
+    w.players[0].minerals = 1000;
+    const cmds = ai.think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'drone' }));
+  });
+
   it('never sends soldiers to man the Intelligence as a Fortin', () => {
     const w = createMatch(['z', 'humains']);
     const ai = new AI(w, 0);

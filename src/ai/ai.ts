@@ -179,7 +179,12 @@ export class AI {
   private survey(mine: Entity[], home: Entity) {
     const w = this.world;
     const f = this.faction;
-    const serfs = mine.filter((e) => e.type === f.worker);
+    // Z drones working an Assimilateur (in it or on their way) no longer mine: counted apart, and replaced.
+    const works = (e: Entity) => {
+      const b = w.entities.get(e.inside || (e.order?.kind === 'enter' ? e.order.target : 0));
+      return !!b && !!(b.def as BuildingDef).energyRate;
+    };
+    const serfs = mine.filter((e) => e.type === f.worker && !works(e));
     // Dieux: Gaïa places the buildings, Thor, Osiris and Frigg one each (notice); the gods stay home, out of the army.
     const builders = f.builder ? mine.filter((e) => e.type === f.builder || (e.def as UnitDef).builds) : serfs;
     const gods = mine.filter((e) => f.gods?.includes(e.type));
@@ -224,7 +229,7 @@ export class AI {
 
     // Z: three drones work each Assimilateur (notice), taken from the mineral line.
     for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker)) {
-      const coming = serfs.filter((s) => s.order?.kind === 'enter' && s.order.target === b.id).length;
+      const coming = ctx.mine.filter((s) => s.order?.kind === 'enter' && s.order.target === b.id).length;
       for (let n = this.world.room(b) - this.world.load(b) - coming; n > 0; n--) {
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather' && !ctx.out.some((c) => c.ids.includes(s.id))), [b.tx, b.ty], (b.def as BuildingDef).size);
         if (!s) break;
