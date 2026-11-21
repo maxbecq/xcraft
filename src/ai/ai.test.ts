@@ -249,6 +249,23 @@ describe('AI Z Refuge', () => {
     expect((sent as Extract<Command, { kind: 'smart' }>).target).not.toBe(field.id);
   });
 
+  it('with the enemy army gone, a few soldiers at home go and raze its last buildings', () => {
+    const w = createMatch(['humains', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    while (w.tick < ticks(10 * 60)) w.tick++;
+    const ai = new AI(w, 0);
+    (ai as unknown as { waves: number }).waves = 3;
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const few = [0, 1, 2].map((i) => w.spawn('legionnaire', 0, hq.x + (i - 1) * FP, hq.y + 5 * FP));
+    let sent = false;
+    for (let i = 0; i < ticks(2) && !sent; i++) {
+      const cmds = ai.think();
+      sent = cmds.some((c) => c.kind === 'attack' && few.some((u) => c.ids.includes(u.id)));
+      w.step(cmds);
+    }
+    expect(sent).toBe(true);
+  });
+
   it('never sends soldiers to man the Intelligence as a Fortin', () => {
     const w = createMatch(['z', 'humains']);
     const ai = new AI(w, 0);

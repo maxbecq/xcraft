@@ -779,7 +779,7 @@ export class AI {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && atHome.length >= this.plan.wave && this.dominates(atHome)))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
@@ -980,6 +980,11 @@ export class AI {
    * Wave units in a fight they cannot win: around each one, our soldiers against the visible enemy soldiers and
    * defences, each side weighed by hp and shields times damage per second (a group's strength grows with both).
    */
+  /** Armed enemy units, seen or not. */
+  private enemySoldiers(): Entity[] {
+    return [...this.world.entities.values()].filter((e) => this.world.hostile(e.owner, this.player) && e.def.kind === 'unit' && (e.def as UnitDef).attack && !(e.def as UnitDef).worker);
+  }
+
   private visibleFoes(): Entity[] {
     const w = this.world;
     return [...w.entities.values()].filter((e) => {
@@ -1010,7 +1015,14 @@ export class AI {
     for (const e of this.visibleFoes()) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
     for (const id of this.foes.keys()) if (!this.world.entities.has(id)) this.foes.delete(id);
     const known = this.power([...this.foes.values()]);
-    return known > 0 && this.power(atHome.filter((u) => (u.def as UnitDef).attack).map((u) => [u.hp + u.shield, this.dps(u)])) >= 3 * known;
+    // No enemy fighter or armed building left that we know of, after a wave: whatever is armed at home goes and
+    // razes what stands (a side down to its last buildings sat there to the time limit, the winner's few soldiers
+    // waiting at home for a full wave).
+    // Like the wave's targets, which are every enemy building, seen or not, the enemy's soldiers are then counted
+    // whether seen or not: an army out of sight never sets it off.
+    const ours = this.power(atHome.filter((u) => (u.def as UnitDef).attack).map((u) => [u.hp + u.shield, this.dps(u)]));
+    if (known === 0) return this.waves > 0 && ours > 0 && ours >= 3 * this.power(this.enemySoldiers().map((e) => [e.hp + e.shield, this.dps(e)]));
+    return ours >= 3 * known;
   }
 
   private outmatched(wave: Entity[]): Entity[] {
