@@ -103,6 +103,17 @@ export function apply(this: World, c: Command): void {
     case 'build': {
       const worker = units.find((e) => raises(e.def as UnitDef, c.type));
       const bdef = DEFS[c.type];
+      // Isdaris (fiche 2010, mod): the Obélisque materialises it at once, wherever its side sees in the transfer zone,
+      // then waits half the building's time (the mod's figure) before the next.
+      const obelisk = worker ? undefined : buildings.find((b) => raises(b.def as BuildingDef, c.type) && b.buildLeft === 0);
+      if (obelisk && bdef?.kind === 'building') {
+        if ((obelisk.spellCd.materialisation ?? 0) > this.tick) {
+          const ready = buildings.find((b) => b.type === obelisk.type && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= this.tick);
+          if (!ready) return void this.say(c.player, 'Matérialisation en recharge.');
+          return this.materialise(ready, c.type, c.tx, c.ty);
+        }
+        return this.materialise(obelisk, c.type, c.tx, c.ty);
+      }
       // Morphs come out of a building's queue, Z add-ons out of a Pod: no worker raises them.
       if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction || bdef.morphOnly || bdef.addon) return;
       const lack = this.lacks(c.player, c.type);
@@ -468,4 +479,17 @@ export function setOrder(this: World, e: Entity, order: Order | null): void {
   e.path = [];
   e.blockedTicks = 0;
   e.stuck = 0;
+}
+
+/** The Obélisque beams a building down (fiche 2010, mod): seen by its side, placed as usual, paid, then it rests. */
+export function materialise(this: World, o: Entity, type: string, tx: number, ty: number): void {
+  const def = DEFS[type] as BuildingDef;
+  const lack = this.lacks(o.owner, type);
+  if (lack) return void this.say(o.owner, lack);
+  if (!this.canPlace(type, tx, ty, o.owner)) return void this.say(o.owner, this.misplaced(def, tx, ty, o.owner));
+  const mid = Math.floor(def.size / 2);
+  if (!this.vision[o.owner].visible(tx + mid, ty + mid)) return void this.say(o.owner, 'Il faut voir l’emplacement.');
+  if (!this.pay(o.owner, def)) return;
+  this.site(type, o.owner, tx, ty);
+  o.spellCd.materialisation = this.tick + ticks((BALANCE.rules.materialisation.cooldown as Record<string, number>)[type]);
 }

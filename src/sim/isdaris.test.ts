@@ -21,20 +21,44 @@ describe('Isdaris', () => {
     expect(of(w, 1, 'conseil')).toHaveLength(1);
   });
 
-  it('beam buildings down without a builder, but only inside a power field', () => {
+  it('the Obélisque materialises buildings in its field, then rests half their time (fiche 2010, mod)', () => {
     const w = createMatch(['isdaris', 'humains']);
     w.players[0].minerals = 2000;
     const robot = of(w, 0, 'moissonneur')[0];
+    const [ob] = of(w, 0, 'obelisque');
     // Too far from the obelisk's field.
     expect(w.canPlace('portail', 30, 30, 0)).toBe(false);
+    // A robot no longer raises a Portail: only the Obélisque does, at once.
     w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'portail', tx: 18, ty: 18 }]);
-    run(w, 6);
+    expect(robot.order?.kind).not.toBe('build');
+    w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'portail', tx: 18, ty: 18 }]);
     const gate = of(w, 0, 'portail')[0];
     expect(gate).toBeDefined();
-    expect(robot.order?.kind).not.toBe('construct'); // the robot is free at once
+    expect(w.players[0].minerals).toBe(2000 - (DEFS.portail as BuildingDef).cost.minerals);
+    // Resting 30 s (the mod): no second one before.
+    let rp: [number, number] | undefined;
+    for (let r = 3; r < 15 && !rp; r++) for (let dx = -r; dx <= r && !rp; dx++) for (const dy of [-r, r]) if (!rp && w.canPlace('reservepsy', 14 + dx, 14 + dy, 0)) rp = [14 + dx, 14 + dy];
+    w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'reservepsy', tx: rp![0], ty: rp![1] }]);
+    expect(of(w, 0, 'reservepsy')).toHaveLength(0);
     run(w, 55);
     expect(gate.buildLeft).toBe(0);
     expect(gate.shield).toBe(gate.maxShield);
+    w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'reservepsy', tx: rp![0], ty: rp![1] }]);
+    expect(of(w, 0, 'reservepsy')).toHaveLength(1);
+  });
+
+  it('a robot beams down an Obélisque within its sight, for a third more (fiche 2010)', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    const robot = of(w, 0, 'moissonneur')[0];
+    let spot: [number, number] | undefined;
+    for (let r = 14; r < 40 && !spot; r++) for (let dx = -r; dx <= r && !spot; dx++) for (const dy of [-r, r]) if (!spot && w.canPlace('obelisque', 12 + dx, 12 + dy, 0)) spot = [12 + dx, 12 + dy];
+    w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'obelisque', tx: spot![0], ty: spot![1] }]);
+    for (let i = 0; i < ticks(60) && of(w, 0, 'obelisque').length < 2; i++) w.step([]);
+    expect(of(w, 0, 'obelisque')).toHaveLength(2);
+    expect(p.minerals).toBe(5000 - w.beaconCost(DEFS.obelisque as BuildingDef).minerals);
+    expect(w.beaconCost(DEFS.obelisque as BuildingDef).minerals).toBe(1330);
   });
 
   it('power only through emitters linked to the obelisk', () => {

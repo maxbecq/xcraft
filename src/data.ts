@@ -141,6 +141,8 @@ export interface GodLevels {
 
 export interface BuildingDef {
   mana?: Mana;
+  /** Isdaris Obélisque (fiche 2010, mod): the buildings it materialises in its side's transfer zone. */
+  builds?: string[];
   cls?: DamageClass;
   kind: 'building';
   name: string;
@@ -294,8 +296,8 @@ export function spell(name: string, lvl: number): AbilityDef {
 }
 
 /** Every active ability of a unit or building def. */
-/** Can a unit of this kind raise this building: its own list (Dieux), else a builder or a worker raises any. */
-export function raises(def: UnitDef, type: string): boolean {
+/** Can a unit (or an Obélisque) of this kind raise this building: its own list, else a builder or a worker raises any. */
+export function raises(def: { builds?: string[]; builder?: boolean; worker?: boolean }, type: string): boolean {
   return def.builds ? def.builds.includes(type) : !!(def.builder ?? def.worker);
 }
 
@@ -567,13 +569,13 @@ const BASE: Record<string, object> = {
   trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),
 
   // ---------------------------------------------------------------- Isdaris
-  moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },
+  moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, builds: ['obelisque', 'recepteur'], worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },
   archer: { kind: 'unit', name: 'Archer', radius: 0.375, faction: 'isdaris', hotkey: 'A' },
   creature: { kind: 'unit', name: 'Créature', radius: 0.3, ability: 'enfouissement', faction: 'isdaris', hotkey: 'C' },
   druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'deflagration', 'silence'], faction: 'isdaris', hotkey: 'D' },
   // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
   assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', faction: 'isdaris', hotkey: 'X' },
-  obelisque: { kind: 'building', name: 'Obélisque', size: 5, trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
+  obelisque: { kind: 'building', name: 'Obélisque', size: 5, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
   emetteur: { kind: 'building', name: 'Émetteur', size: 2, warp: true, morphs: ['pylonesanglant', 'deflecteur'], faction: 'isdaris', hotkey: 'E' },
   // Notice: an Émetteur turned « Déflecteur »: an aura of invisibility over the allied infantry and vehicles round it.
   deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'D' },

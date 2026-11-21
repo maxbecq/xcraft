@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { raises, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 
@@ -54,7 +55,8 @@ describe('construction', () => {
   it('finishes a building at full health (Humans built by a worker, Isdaris materialised)', () => {
     for (const [faction, type] of [['humains', 'grenier'], ['isdaris', 'reservepsy']] as const) {
       const w = createMatch([faction, 'humains']);
-      const worker = [...w.entities.values()].find((e) => e.owner === 0 && (e.def as { worker?: boolean }).worker)!;
+      // The Humans' serf; the Isdaris Obélisque, which materialises their buildings.
+      const worker = [...w.entities.values()].find((e) => e.owner === 0 && raises(e.def as UnitDef, type))!;
       w.players[0].minerals = 1000;
       const [tx, ty] = faction === 'isdaris' ? [17, 18] : [18, 18];
       w.step([{ player: 0, kind: 'build', ids: [worker.id], type, tx, ty }]);

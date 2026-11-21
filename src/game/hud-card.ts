@@ -86,17 +86,20 @@ export function buttonsFor(h: Hud): Button[] {
   if (h.placing) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => (h.placing = null) }];
   if (h.targeting) return [{ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => h.setTargeting(false) }];
   let units = own.filter((e) => e.def.kind === 'unit');
+  // The build list: a worker's, Gaïa's or a god's, or the Isdaris Obélisque's (it materialises them).
+  if (h.buildMenu && h.workers().length) {
+    const f = FACTIONS[h.world.players[h.player].faction];
+    return [
+      ...f.buildable.filter((t) => h.workers().some((w) => raises(w.def as UnitDef, t)) && (lcdTree(h) || onlyOwn(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced'))).map((t) => {
+        const d = DEFS[t] as BuildingDef;
+        // An Isdaris robot beams it down on itself for a third more (fiche 2010); the Obélisque at its price.
+        const beacon = d.faction === 'isdaris' && !h.workers().some((w) => w.def.kind === 'building');
+        return { label: d.name, icon: t, key: d.hotkey, cost: beacon ? h.world.beaconCost(d) : d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => (h.placing = t) };
+      }),
+      { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (h.buildMenu = false) },
+    ];
+  }
   if (units.length) {
-    if (h.buildMenu && h.workers().length) {
-      const f = FACTIONS[h.world.players[h.player].faction];
-      return [
-        ...f.buildable.filter((t) => h.workers().some((w) => raises(w.def as UnitDef, t)) && (lcdTree(h) || onlyOwn(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced'))).map((t) => {
-          const d = DEFS[t] as BuildingDef;
-          return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => (h.placing = t) };
-        }),
-        { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (h.buildMenu = false) },
-      ];
-    }
     const list: Button[] = [{ label: 'Stop', cmd: 'stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
     // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
     const all = units;
@@ -199,6 +202,11 @@ export function buttonsFor(h: Hud): Button[] {
     const action = d.weapons ? () => (h.weaponMenu = t) : () => cmd({ kind: 'train', ids: order, type: t });
     return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action };
   });
+  // Isdaris Obélisque (fiche 2010, mod): its buildings, materialised from it.
+  if ((b.def as BuildingDef).builds && b.owner === h.player) {
+    const rest = Math.max(...same.map((o) => o.spellCd.materialisation ?? 0)) > h.world.tick && same.every((o) => (o.spellCd.materialisation ?? 0) > h.world.tick);
+    list.push({ label: `Matérialiser${rest ? ' (recharge)' : ''}`, cmd: 'construire', key: 'B', action: () => (h.buildMenu = 'basic') });
+  }
   if (b.def.bunker) {
     const ids = same.map((o) => o.id);
     const inside = [...h.world.entities.values()].filter((u) => ids.includes(u.inside)).length;

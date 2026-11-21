@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FACTIONS, type BuildingDef, type UnitDef, DEFS } from '../data';
+import { FACTIONS, type BuildingDef, DEFS, raises } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 
@@ -13,8 +13,9 @@ describe('an abandoned building site', () => {
       const w = createMatch([faction, 'humains']);
       w.players[0].minerals = w.players[0].energy = 99999;
       const f = FACTIONS[faction];
-      const builder = [...w.entities.values()].find((e) => e.owner === 0 && e.def.kind === 'unit' && ((e.def as UnitDef).builder ?? (e.def as UnitDef).worker))!;
       const type = f.supply;
+      // What raises it: a worker, Gaïa, or the Isdaris Obélisque (it materialises their buildings).
+      const builder = [...w.entities.values()].find((e) => e.owner === 0 && raises(e.def as BuildingDef, type))!;
       const def = DEFS[type] as BuildingDef;
       const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === f.hq)!;
       // A free spot near the base.

@@ -83,8 +83,8 @@ describe('Miniportail', () => {
   const gate = (mini: boolean) => {
     const w = createMatch(['isdaris', 'humains']);
     const p = w.players[0]; p.minerals = 99999; p.energy = 99999;
-    const robot = of(w, 0, 'moissonneur')[0];
-    w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'portail', tx: 18, ty: 18 }]);
+    const [ob] = of(w, 0, 'obelisque');
+    w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'portail', tx: 18, ty: 18 }]);
     run(w, 70);
     const b = of(w, 0, 'portail')[0];
     expect(b.buildLeft).toBe(0);

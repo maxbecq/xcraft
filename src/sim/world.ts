@@ -709,6 +709,22 @@ export class World {
     return { used, max: Math.min(200, max) };
   }
 
+  /** A building site, just paid for: a tenth of its hit points, no shield, building itself if it warps in. */
+  site(type: string, owner: number, tx: number, ty: number, lvl = 1): Entity {
+    const b = this.spawn(type, owner, tx * FP, ty * FP);
+    b.buildLeft = this.buildTicks(b);
+    b.lvl = lvl;
+    b.hp = Math.max(1, idiv(b.maxHp, 10));
+    b.shield = 0;
+    return b;
+  }
+
+  /** What an Isdaris robot pays to beam a building down on itself: a third more (fiche 2010; the mod's 333 for 250). */
+  beaconCost(def: { cost: Cost }): Cost {
+    const up = (n: number) => idiv(n * (100 + BALANCE.rules.materialisation.beaconSurcharge), 100);
+    return { minerals: up(def.cost.minerals), energy: up(def.cost.energy) };
+  }
+
   pay(player: number, def: { cost: Cost }): boolean {
     const p = this.players[player];
     if (p.minerals < def.cost.minerals) return this.say(player, 'Pas assez de minerai.');
@@ -894,7 +910,9 @@ export class World {
         // Isdaris workers only need to see the site: the building is beamed down from orbit.
         const cx = o.tx * FP + (def.size * FP) / 2;
         const cy = o.ty * FP + (def.size * FP) / 2;
-        const there = def.warp ? dist(e.x, e.y, cx, cy) <= WARP_RANGE * FP : this.reachRect(e, o.tx, o.ty, def.size);
+        // An Isdaris robot is the beacon: the site within its sight (notice, fiche 2010).
+        const beam = def.faction === 'isdaris' ? (e.def as UnitDef).sight : WARP_RANGE;
+        const there = def.warp ? dist(e.x, e.y, cx, cy) <= beam * FP : this.reachRect(e, o.tx, o.ty, def.size);
         if (!there) {
           if (def.warp) {
             if (this.goTo(e, cx, cy)) this.setOrder(e, null);
@@ -911,12 +929,9 @@ export class World {
           this.say(e.owner, lack);
           return this.setOrder(e, null);
         }
-        if (!this.pay(e.owner, def)) return this.setOrder(e, null);
-        const b = this.spawn(o.type, e.owner, o.tx * FP, o.ty * FP);
-        b.buildLeft = this.buildTicks(b);
-        b.lvl = e.lvl;
-        b.hp = Math.max(1, idiv(b.maxHp, 10));
-        b.shield = 0;
+        // Fiche 2010: an Obélisque or a Récepteur beamed down on a robot costs a third more.
+        if (!this.pay(e.owner, def.faction === 'isdaris' ? { cost: this.beaconCost(def) } : def)) return this.setOrder(e, null);
+        const b = this.site(o.type, e.owner, o.tx, o.ty, e.lvl);
         if (def.absorbs) {
           // The drone becomes part of the structure, which then assembles itself.
           b.absorbed = e.id;

@@ -24,7 +24,7 @@ export function place(h: Hud, ground: Vector3 | null, shift: boolean): void {
       h.buildMenu = false;
       // Off to build: out of the selection, so a stray tap or click no longer pulls it off the site (Shift keeps it
       // selected to queue more).
-      h.input.selected.delete(worker.id);
+      if (worker.def.kind === 'unit') h.input.selected.delete(worker.id);
     }
   }
 }

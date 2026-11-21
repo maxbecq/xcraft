@@ -387,6 +387,7 @@ export class AI {
         ctx.energy -= def.cost.energy;
       } else if (!host && !building(f.supply) && !wants.includes(f.supply)) wants.splice(i + 1, 0, f.supply);
     }
+    const beamed = new Set<number>();
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (def.addon) continue;
@@ -396,6 +397,16 @@ export class AI {
       }
       if (ctx.energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
+      // Isdaris (fiche 2010, mod): an Obélisque at rest materialises it, on a spot its side sees; the robots only beam
+      // down Obélisques and Récepteurs, for a third more, where no Obélisque can.
+      const obelisk = buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id));
+      if (obelisk && spot && w.vision[this.player].visible(spot[0] + (def.size >> 1), spot[1] + (def.size >> 1))) {
+        ctx.out.push({ player: this.player, kind: 'build', ids: [obelisk.id], type, tx: spot[0], ty: spot[1] });
+        beamed.add(obelisk.id); // one per Obélisque and think
+        ctx.minerals -= def.cost.minerals;
+        ctx.energy -= def.cost.energy;
+        continue;
+      }
       const crew = builders.filter((b) => raises(b.def as UnitDef, type));
       // Gaïa, the Dieux's main builder, chains her buildings (a few at most) instead of placing one at a time.
       const chained = f.builder && !this.builder(crew, spot, def.size) ? crew.find((b) => b.next.length < 3) : undefined;
