@@ -934,8 +934,8 @@ export class EntityRenderer {
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
     ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting && !v.weapon ? (fired - 0.5) * 0.8 : 0, 0.3);
-    // Recoil on each shot; a socle's shredder throws its body back as the saw bites.
-    const kick = fighting && (!melee || v.weapon) && fired > 0.8 ? (fired - 0.8) * (melee ? 0.6 : 0.3) : 0;
+    // Recoil on each shot; none for a blade (a socle's Déchiqueteur keeps its body still as it cuts).
+    const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
   }
