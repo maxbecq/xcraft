@@ -270,7 +270,7 @@ export interface AbilityDef {
   /** Dieux: an ultimate spell, cast free once the Temple primordial has charged it for this mythology. */
   ultimate?: Mythology;
   /** Dieux: values at the caster god's levels 1 to 5, in place of the plain ones (the spells grow with the god). */
-  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max' | 'mana', number[]>>;
+  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max' | 'mana' | 'range', number[]>>;
 }
 
 /** Dieux: the three mythologies, each three gods (notice 1.2-1); all three standing charge its ultimate spell. */
