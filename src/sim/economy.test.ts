@@ -104,7 +104,7 @@ describe('economy', () => {
     run(w, 40);
     const mine = of(w, 0, 'mine')[0];
     expect(mine.buildLeft).toBe(0);
-    expect(w.supply(0).used).toBe(START.serfs + 4);
+    expect(w.supply(0).used).toBe(START.serfs); // the 2010 sheet: no supply
     const before = w.players[0].energy;
     run(w, 10);
     expect(w.players[0].energy - before).toBeGreaterThanOrEqual(20);

@@ -354,6 +354,8 @@ export class World {
   silences: { x: number; y: number; r: number; until: number }[] = [];
   /** Tempêtes de sable (Seth): zones where the owner's enemies cannot shoot, until a tick. */
   storms: { owner: number; x: number; y: number; r: number; until: number }[] = [];
+  /** Explosifs toxiques: clouds that hurt every enemy unit in them, once a second, `hits` more times from tick `next`. */
+  clouds: { owner: number; x: number; y: number; r: number; damage: number; hits: number; next: number }[] = [];
   /** Units coming back by themselves at their side's headquarters (Gaïa), at a tick. */
   private respawns: { owner: number; type: string; at: number }[] = [];
   /** Units hidden this tick by a Déflecteur's aura. */
@@ -472,7 +474,15 @@ export class World {
       // Once a second, staggered: Osiris's putrid aura and swarm, the Fontaine du Nil.
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.type === 'minechimique') this.mineTrigger(e);
-      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) e.charges++;
+      // Minage (mod): every 12 s the crew makes a mine, for 35 minerals and 20 energy, while the stock is not full and the side can pay.
+      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) {
+        const [p, price] = [this.players[e.owner], BALANCE.rules.upgrades.minePrice];
+        if (p && p.minerals >= price.minerals && p.energy >= price.energy) {
+          p.minerals -= price.minerals;
+          p.energy -= price.energy;
+          e.charges++;
+        }
+      }
       if (e.boost > 0 && --e.boost === 0) e.speed = this.baseSpeed(e);
       if (e.evolving > 0 && --e.evolving === 0) this.evolved(e);
       if (e.iemCd > 0) e.iemCd--;
@@ -489,6 +499,7 @@ export class World {
     this.revive();
     this.chargeUltimates();
     this.storms = this.storms.filter((z) => z.until > this.tick);
+    this.poisonClouds();
     this.index();
     // Those there when the tick began, without copying them: what spawns meanwhile comes after them (ids only grow)
     // and waits for the next tick, and none but the one thinking can leave the map during the loop.

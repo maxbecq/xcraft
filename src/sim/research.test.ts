@@ -16,7 +16,7 @@ const finished = (w: World, type: string, owner: number, tx: number, ty: number)
 };
 
 describe('Human research (notice 1.2-1)', () => {
-  it('Croissance économique gives serfs and Caserne soldiers 10 % more hp, old and new', () => {
+  it('Croissance économique gives serfs and Caserne soldiers 5 more hp, old and new', () => {
     const w = new World(createMap());
     const old = w.spawn('auxiliaire', 0, ...at(40, 60));
     old.hp -= 20;
@@ -24,9 +24,9 @@ describe('Human research (notice 1.2-1)', () => {
     w.players[0].minerals = 1000;
     w.step([{ player: 0, kind: 'train', ids: [marche.id], type: 'croissance' }]);
     run(w, (DEFS.croissance as UnitDef).buildTime + 1);
-    expect(old.maxHp).toBe(88);
-    expect(old.hp).toBe(68);
-    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(110);
+    expect(old.maxHp).toBe(85);
+    expect(old.hp).toBe(65);
+    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(105);
     expect(w.spawn('archer', 1, ...at(42, 60)).maxHp).toBe((DEFS.archer as UnitDef).hp);
   });
 

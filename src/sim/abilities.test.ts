@@ -83,13 +83,14 @@ describe('Human abilities (notice 1.2-1)', () => {
     p.abilityCd = 0;
     w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'napalm', x: mine.x, y: mine.y }]);
     run(w, 0.5);
-    expect(mine.hp).toBe(100 + 2 * ABILITIES.napalm.damage!);
+    expect(mine.hp).toBe(100 + ABILITIES.napalm.damage!);
   });
 
   it('the Grand Conseil is unique and speeds production up', () => {
     const w = new World(createMap());
     const c = w.spawn('conseil', 0, 20 * FP, 20 * FP);
-    w.spawn('forge', 0, 30 * FP, 20 * FP);
+    expect(w.lacks(0, 'grandconseil')).toBe('Requiert : Créaturium, Métallurgie, Alchimisterie');
+    for (const [k, type] of ['creaturium', 'metallurgie', 'alchimisterie'].entries()) w.spawn(type, 0, (30 + 5 * k) * FP, 20 * FP);
     w.players[0].minerals = w.players[0].energy = 2000;
     w.step([{ player: 0, kind: 'train', ids: [c.id], type: 'grandconseil' }]);
     expect(w.lacks(0, 'grandconseil')).toBe('Un seul par joueur.');
@@ -201,10 +202,10 @@ describe('powers from inside a Fortin (notice)', () => {
     const near = w.spawn('serf', 1, fort.x + 6 * FP, fort.y);
     const far = w.spawn('serf', 1, fort.x + 20 * FP, fort.y);
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: far.x, y: far.y }]);
-    expect(far.poison).toBe(0);
+    expect(w.clouds.length).toBe(0);
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: near.x, y: near.y }]);
     run(w, 0.2);
-    expect(near.poison).toBeGreaterThan(0);
+    expect(near.hp).toBeLessThan(near.maxHp);
     expect(a.inside).toBe(fort.id);
   });
 });

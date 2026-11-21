@@ -483,8 +483,9 @@ describe('Dieux', () => {
     const record: [number, Command[]][] = [];
     let levelled = false;
     const live = createMatch(['dieux', 'humains']);
-    // Humans slowed a little, so the Dieux last long enough for a god to level.
+    // Humans slowed and the Dieux sped up a little, so the Dieux last long enough for a god to level.
     live.players[1].handicap = 60;
+    live.players[0].handicap = 150;
     const ais = [new AI(live, 0), new AI(live, 1)];
     while (live.tick < ticks(21 * 60)) {
       const cmds = ais.flatMap((ai) => ai.think());
@@ -496,6 +497,7 @@ describe('Dieux', () => {
     const played = new Map<number, Command[]>(JSON.parse(JSON.stringify(record)));
     const again = createMatch(['dieux', 'humains']);
     again.players[1].handicap = 60;
+    again.players[0].handicap = 150;
     while (again.tick < live.tick) again.step(played.get(again.tick) ?? []);
     expect(again.hash()).toBe(live.hash());
     expect([...again.entities.values()].map((e) => e.lvl)).toEqual([...live.entities.values()].map((e) => e.lvl));

@@ -114,8 +114,15 @@ describe('audit gaps', () => {
     expect(tank.charges).toBe(4);
     expect(tank.abilityCd).toBe(0); // the take-off stays ready
     expect(w.sees(1, mine)).toBe(false);
+    // Each new mine costs 35 minerals and 20 energy (mod): none without them, one with them.
+    const p = w.players[0];
+    [p.minerals, p.energy] = [0, 0];
+    run(w, 12);
+    expect(tank.charges).toBe(4);
+    [p.minerals, p.energy] = [100, 100];
     run(w, 12);
     expect(tank.charges).toBe(5);
+    expect([p.minerals, p.energy]).toEqual([65, 80]);
     const foe = w.spawn('creature', 1, mine.x + 4 * FP, mine.y);
     const hp = foe.hp + foe.shield;
     w.step([{ player: 1, kind: 'move', ids: [foe.id], x: mine.x - 4 * FP, y: mine.y }]);

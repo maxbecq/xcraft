@@ -48,9 +48,9 @@ describe('AI spells, each in a scene made for it', () => {
     const scar = at('scarabee', 0, 0, 0);
     const a = at('alchimiste', 0, 0, 2);
     a.inside = scar.id;
-    // From a Scarabée the Cocktail reaches 7 tiles plus its radius (0.8): three foes 7.9 off, within the old tile of
+    // From a Scarabée the Cocktail reaches 8 tiles plus its radius (0.8): three foes 8.9 off, within the old tile of
     // margin but out of the command's reach.
-    for (const dy of [-0.5, 0, 0.5]) at('auxiliaire', 1, 7.9, dy).held = ticks(60);
+    for (const dy of [-0.5, 0, 0.5]) at('auxiliaire', 1, 8.9, dy).held = ticks(60);
     expect(orders(w, ai).some((c) => c.kind === 'ability' && c.name === 'explosiftoxique')).toBe(false);
   });
 

@@ -393,7 +393,8 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     t.reflect = ticks(ab.duration);
     t.reflectLeft = ab.max!;
   } else if (name === 'explosiftoxique') {
-    for (const t of near((t) => this.hostile(t.owner, e.owner))) t.poison = Math.max(t.poison, ticks(ab.duration));
+    // A toxic cloud (2010 sheet, mod): its damage every second to every enemy unit in it, for its duration; clouds add up.
+    this.clouds.push({ owner: e.owner, x, y, r: toFp(ab.radius!), damage: ab.damage!, hits: ab.duration, next: this.tick });
   } else if (name === 'gazeuphorisants') {
     // Allies of the zone (living ones) walk and strike faster for a while.
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
@@ -422,12 +423,23 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     if (this.hostile(t.owner, e.owner)) {
       this.hit(e, t, { damage: ab.damage!, range: 6, cooldown: 0 });
       t.held = Math.max(t.held, ticks(ab.duration));
-    } else t.hp = Math.min(t.maxHp, t.hp + 2 * ab.damage!);
+    } else t.hp = Math.min(t.maxHp, t.hp + ab.damage!); // as many hp as it would burn (2010 sheet, mod)
   }
   // Téléportation rapide: the teleport comes back twice as fast.
   if (!this.spendMana(e, name)) e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
   this.casts.push({ kind: name, x, y });
   return true;
+}
+
+/** The toxic clouds hurt the enemy units in them, once a second; a spent cloud goes. */
+export function poisonClouds(this: World): void {
+  for (const c of this.clouds) {
+    if (c.next > this.tick) continue;
+    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, c.owner) && dist(t.x, t.y, c.x, c.y) <= c.r + t.radius) this.hurt(t, c.damage);
+    c.hits--;
+    c.next = this.tick + ticks(1);
+  }
+  this.clouds = this.clouds.filter((c) => c.hits > 0);
 }
 
 /** A chemical mine: when an enemy walker comes within its radius, it blows up (full damage there, a quarter a little further). */

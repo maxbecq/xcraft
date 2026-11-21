@@ -204,11 +204,11 @@ export function grows(this: World, u: Entity): boolean {
   return u.def.kind === 'unit' && (u.type === 'serf' || !!(DEFS.caserne as BuildingDef).trains?.includes(u.type));
 }
 
-/** Raises a unit's hp by the Croissance économique share, keeping its wounds. */
+/** Raises a unit's hp by the Croissance économique bonus, keeping its wounds. */
 export function fortify(this: World, u: Entity): void {
-  // Sonde robuste (Z): a flat 25 hp for drones; Mega-Espion: 60 hp and some speed; Croissance économique: a share for Humans.
+  // Sonde robuste (Z): a flat 25 hp for drones; Mega-Espion: 60 hp and some speed; Croissance économique: a flat 5 hp for Humans (2010 sheet, mod).
   if (u.type === 'zespion') u.speed = this.baseSpeed(u);
-  const extra = u.type === 'drone' || u.type === 'dronecombat' ? BALANCE.rules.z.sondeRobusteHp : u.type === 'zespion' ? BALANCE.rules.z.megaEspion.hp : idiv((u.def as UnitDef).hp * BALANCE.rules.upgrades.croissanceHp, 100);
+  const extra = u.type === 'drone' || u.type === 'dronecombat' ? BALANCE.rules.z.sondeRobusteHp : u.type === 'zespion' ? BALANCE.rules.z.megaEspion.hp : BALANCE.rules.upgrades.croissanceHp;
   u.maxHp += extra;
   u.hp += extra;
 }
@@ -421,15 +421,18 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   const U = BALANCE.rules.upgrades;
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
-  const base = a.vs ? a.vs[CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL')] : a.damage;
+  const cls = CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL');
+  // Char lourd (2010 sheet): the Pégase's attack on the ground becomes 29/29/87/58/87/29.
+  const heavy = e.type === 'pegase' && !e.airborne && this.level(e.owner, 'charlourd');
+  const base = heavy ? U.charlourd.vs[cls] : a.vs ? a.vs[cls] : a.damage;
   let bonus = a.vs ? 0 : (machine ? (a.vsMechanical ?? 0) : 0) + (t.def.kind === 'building' ? (a.vsStructure ?? 0) : 0);
-  if (machine && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
-  if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
+  // Scie d'assaut (2010 sheet): +5 against structures and heavy machines.
+  if ((CLASSES[cls] === 'S' || CLASSES[cls] === 'MM') && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
   let upgrade = 0;
   if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(a.damage / 10));
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
-  // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
-  if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((base + bonus) * U.conseilAura.percent, 100));
+  // The Échevins' presence (2010 sheet): +1 to the attack of the units within 13 of one of their Conseils.
+  if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += U.conseilAura.damage;
   // Odin's war aura: the Dieux units round him (him too) hit harder, by his level; the strongest one counts.
   if (e.def.kind === 'unit' && this.players[e.owner]?.faction === 'dieux') {
     const G = U.auraguerre;
