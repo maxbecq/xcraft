@@ -222,7 +222,7 @@
     "elemeau": { "cls": "BL", "hp": 230, "armor": 0, "speed": 2.4, "sight": 8, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 12, "range": 4.5, "cooldown": 1.5 } },
     "elemterre": { "cls": "BA", "hp": 380, "armor": 4, "speed": 1.8, "sight": 8, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 18, "range": 0.1, "cooldown": 1.5 } },
     "elemair": { "cls": "BL", "hp": 180, "armor": 0, "speed": 3.2, "sight": 10, "supply": 2, "cost": { "minerals": 175, "energy": 125 }, "buildTime": 30, "attack": { "damage": 20, "range": 3, "cooldown": 1, "air": true, "ground": false } },
-    "golem": { "cls": "MM", "hp": 600, "armor": 4, "speed": 1.6, "sight": 10, "supply": 4, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 70, "range": 11, "cooldown": 3.75, "vsMechanical": 70, "splash": 1.2 } },
+    "golem": { "cls": "MM", "hp": 600, "armor": 4, "speed": 1.6, "sight": 10, "supply": 4, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1, "attack": { "damage": 70, "range": 11, "cooldown": 3.75, "vsStructure": 70, "splash": 1.2 } },
     "branchemob": { "cls": "S", "hp": 600, "armor": 1, "speed": 1.2, "sight": 8, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1 },
     "protecteurmob": { "cls": "S", "hp": 800, "armor": 2, "speed": 1.2, "sight": 10, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1 },
     "furieuxmob": { "cls": "S", "hp": 1200, "armor": 3, "speed": 1.2, "sight": 12, "supply": 0, "cost": { "minerals": 0, "energy": 0 }, "buildTime": 1 },

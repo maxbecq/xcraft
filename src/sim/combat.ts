@@ -420,7 +420,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
   const base = a.vs ? a.vs[CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL')] : a.damage;
-  let bonus = a.vs ? 0 : machine ? (a.vsMechanical ?? 0) : 0;
+  let bonus = a.vs ? 0 : (machine ? (a.vsMechanical ?? 0) : 0) + (t.def.kind === 'building' ? (a.vsStructure ?? 0) : 0);
   if (machine && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
   if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
   let upgrade = 0;

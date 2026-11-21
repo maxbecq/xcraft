@@ -547,3 +547,19 @@ describe('Élémentaire (notice: « faible et chétive »)', () => {
     expect(base.type).toBe('elementaire');
   });
 });
+
+describe('Golem (notice: « dégâts aberrants aux bâtiments »)', () => {
+  it('its 70 more go to buildings only, not to machines', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const g = w.spawn('golem', 0, 30 * FP, 30 * FP);
+    const a = w.weapon(g)!;
+    const loss = (type: string) => {
+      const t = w.spawn(type, 1, 40 * FP, 40 * FP);
+      const before = t.hp;
+      w.hit(g, t, { ...a, splash: 0 });
+      return before - t.hp + ((t.def as UnitDef).armor ?? 0);
+    };
+    expect(loss('caserne')).toBe(140);
+    expect(loss('pegase')).toBe(70);
+  });
+});

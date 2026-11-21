@@ -32,6 +32,8 @@ export interface Attack {
   cooldown: number;
   /** Damage modifier against mechanical targets (buildings count as mechanical). */
   vsMechanical?: number;
+  /** Damage modifier against buildings only (the Golem's blocks: notice, « dégâts aberrants aux bâtiments »). */
+  vsStructure?: number;
   /** Hits flying units (default: ranged attacks do, melee ones do not). */
   air?: boolean;
   /** Hits ground units and buildings (default: true). */
