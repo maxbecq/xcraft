@@ -2,7 +2,7 @@ import { CORNERS, MAPS, type MapFile, buildMap, turnsOf } from './maps';
 import { rotateFootprint } from './map';
 import { TEAM_COLORS } from './render/models';
 import { tileColor } from './terrain';
-import { fitBiome } from './render/biome';
+import { BIOMES, fitBiome } from './render/biome';
 import './mappicker.css';
 
 /** Most players a map takes. */
@@ -11,7 +11,7 @@ export const seatsOf = (def: MapFile) => Math.max(...def.players);
 const thumbs = new Map<string, string>();
 
 /**
- * A top view of a map, drawn from its file: relief (with the current planet's colours), minerals, wells,
+ * A top view of a map, drawn from its file: relief (in the colours of `biome`, the planet it will be played on), minerals, wells,
  * the players' starts and the other base spots. Returned as an image URL, made once per map and planet.
  */
 export function mapThumb(def: MapFile, biome: string, px = 192): string {
@@ -26,7 +26,7 @@ export function mapThumb(def: MapFile, biome: string, px = 192): string {
   const g = c.getContext('2d')!;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      const col = tileColor(map, x, y);
+      const col = tileColor(map, x, y, BIOMES[biome]);
       const l = map.level[y * map.width + x];
       const edge = [[1, 0], [0, 1], [-1, 0], [0, -1]].some(([dx, dy]) => map.level[(y + dy) * map.width + x + dx] < l && !map.ramp[(y + dy) * map.width + x + dx]);
       if (edge) col.multiplyScalar(0.45);

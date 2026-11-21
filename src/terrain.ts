@@ -36,13 +36,13 @@ const WALL_ROWS = 6;
 /** Smooth noise over world positions (not tileable), 0..1. */
 const noise = (x: number, z: number, scale: number, seed: number) => fbm((x / scale) % 1024 / 1024, (z / scale) % 1024 / 1024, 3, 1024, seed);
 
-/** Colour of a tile for the minimap. */
-export function tileColor(map: GameMap, x: number, y: number): Color {
-  if (map.chasm?.[y * map.width + x]) return B.chasm.floor.clone().lerp(new Color(0), B.chasm.glossy ? 0 : 0.4);
+/** Colour of a tile for the minimap, in the loaded planet's colours or another's (a map picker's thumbnail). */
+export function tileColor(map: GameMap, x: number, y: number, b: Biome = B): Color {
+  if (map.chasm?.[y * map.width + x]) return b.chasm.floor.clone().lerp(new Color(0), b.chasm.glossy ? 0 : 0.4);
   const t = tileAt(map, x, y)!;
-  const c = B.levels[t.level].clone();
-  if (t.ramp) c.lerp(B.levels[t.level + 1], 0.5);
-  return c.lerp(B.patch, noise(x, y, 9, 3) * 0.5);
+  const c = b.levels[t.level].clone();
+  if (t.ramp) c.lerp(b.levels[t.level + 1], 0.5);
+  return c.lerp(b.patch, noise(x, y, 9, 3) * 0.5);
 }
 
 /** Corner order [nw, ne, se, sw]; each edge lists its two corners going clockwise, and its outward direction. */
