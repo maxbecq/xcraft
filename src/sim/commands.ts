@@ -1,6 +1,6 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
@@ -294,7 +294,7 @@ export function apply(this: World, c: Command): void {
           // From inside it cannot walk up: within reach of the shelter's edge, or not at all.
           const shelter = this.entities.get(e.inside)!;
           const edge = shelter.def.kind === 'building' ? ((shelter.def as BuildingDef).size * FP) / 2 : shelter.radius;
-          if (dist(e.x, e.y, x, y) > toFp(ab.range ?? 0) + edge) return void this.say(c.player, `${ab.name} : hors de portée de l'abri.`);
+          if (dist(e.x, e.y, x, y) > toFp(spell(c.name, e.lvl).range ?? 0) + edge) return void this.say(c.player, `${ab.name} : hors de portée de l'abri.`);
           if (!this.castAt(e, c.name, x, y)) this.say(c.player, `${ab.name} : rien à viser ici.`);
           return;
         }
