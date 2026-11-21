@@ -496,4 +496,18 @@ describe('Z Lance-flammes (fiche « Double attaque »)', () => {
     expect(beside.hp).toBe(beside.maxHp);
     expect(far.hp).toBe(far.maxHp);
   });
+
+  it('each one behind takes the value against its own class', () => {
+    const w = createMatch(['z', 'humains']);
+    const burner = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    burner.kit = 'flammes';
+    const a = w.weapon(burner)!;
+    const target = w.spawn('legionnaire', 1, 31.5 * FP, 30 * FP); // BL
+    const tank = w.spawn('pegase', 1, 33 * FP, 30 * FP); // MM
+    const [t0, k0] = [target.hp, tank.hp];
+    w.hit(burner, target, a);
+    const armor = (e: Entity) => (e.def as UnitDef).armor ?? 0;
+    expect(t0 - target.hp + armor(target)).toBe(a.vs![0]);
+    expect(k0 - tank.hp + armor(tank)).toBe(a.vs![3]);
+  });
 });

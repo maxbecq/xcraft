@@ -496,7 +496,9 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       const k = (o.x - t.x) * lx + (o.y - t.y) * ly;
       if (k <= 0 || k * k > reach * reach * len2) continue;
       const cross = Math.abs((o.x - t.x) * ly - (o.y - t.y) * lx);
-      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, damage);
+      // Each one its own class's value (fiche 2010), the blow's bonuses kept in proportion.
+      const own = a.vs ? a.vs[CLASSES.indexOf((o.def as UnitDef).cls ?? 'BL')] : base;
+      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, base > 0 ? idiv(damage * own, base) : damage);
     }
   }
   // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).
