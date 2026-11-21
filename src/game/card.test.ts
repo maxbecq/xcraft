@@ -66,3 +66,14 @@ describe('a passenger picked in its shelter', () => {
     expect(out().reason).toBe('Abri immobilisé');
   });
 });
+
+describe("a god's spell button", () => {
+  it('shows the mana it costs at the god\'s level', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = w.spawn('apollon', 0, 40 * FP, 40 * FP);
+    const label = () => card(w, [apollon]).find((b) => b.label.startsWith('Pluie'))!.label;
+    expect(label()).toContain('125 énergie');
+    apollon.lvl = 3;
+    expect(label()).toContain('121 énergie');
+  });
+});

@@ -1,6 +1,6 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -136,7 +136,10 @@ export function buttonsFor(h: Hud): Button[] {
       // Aimed ones wait for a click on the map (gold reticle); the others go at once.
       const action = a.target === 'point' ? () => h.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
       // A spell paid from the caster's own energy (fiches 2010): its price in the label.
-      const mana = a.mana !== undefined && casters.some((u) => h.world.manaOf(u)) ? ` · ${a.mana} énergie` : '';
+      // At the caster's level (a god's spells cost less as it rises, XC.doc 2008).
+      const payer = casters.find((u) => h.world.manaOf(u));
+      const price = payer ? spell(ab, payer.lvl).mana : undefined;
+      const mana = price !== undefined ? ` · ${price} énergie` : '';
       list.push({ label: `${a.name}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
     // Z socles: evolve into the next tier, in the field.
