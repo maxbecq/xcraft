@@ -14,7 +14,7 @@ import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, t
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock } from './sites';
-import { dropTexture, spark, reserveFx, assimFx, forgeFx, wellFx, rallyFlag, animateRally } from './unitfx';
+import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
 // Kept for main.ts, which imports them from here.
 
@@ -1018,10 +1018,13 @@ export class EntityRenderer {
     const crouch = moving && v.limbs.insect?.[0]?.ik ? -v.gait!.crouch : 0;
     const bob = hover + crouch + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
+    // The heavy Mastodonte rolls and pitches a little as it hangs in the air, more slowly than the light flyers.
+    const heavy = e.type === 'mastodonte' ? 1 : 0;
     ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
+    if (heavy && flying) body.rotation.x += (Math.sin(t * 0.6 + e.id * 2) * 0.035 - (moving ? 0.06 : 0)) * 0.15; // nose down as it flies off
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
-    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
+    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting && !v.weapon ? (fired - 0.5) * 0.8 : 0, 0.3);
     // Recoil on each shot; none for a blade (a socle's Déchiqueteur keeps its body still as it cuts).
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
@@ -1345,6 +1348,7 @@ export class EntityRenderer {
     fx ??= armillaries(body, e.id) ?? undefined;
     if (e.type === 'assimilateur') fx = assimFx(body, e);
     if (e.type === 'armement') fx = forgeFx(body, e);
+    if (e.type === 'mastodonte') fx = thrusterFx(body, e);
     if (e.type === 'reservepsy') {
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);

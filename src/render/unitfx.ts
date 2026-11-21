@@ -426,3 +426,47 @@ export function forgeFx(body: Object3D, e: Entity): { group: Group; update(dt: n
     },
   };
 }
+
+/**
+ * The Mastodonte's two rear engines burning: a cyan-and-white jet out of each nozzle (two stretched additive glows,
+ * a hot core and a wider plume), flickering, long and bright while it flies somewhere, short and faint while it hovers.
+ * The nozzles are where the model has them (body frame, glTF +Z forward, so the back is -Z).
+ */
+export function thrusterFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
+  const group = new Group();
+  // Per nozzle: a white-hot core, then a trail of cyan glows shrinking and fading back along the jet.
+  const jets: Sprite[][] = [];
+  for (const x of [-0.36, 0.36]) {
+    const trail: Sprite[] = [];
+    for (let k = 0; k < 7; k++) {
+      const s = new Sprite(owned(new SpriteMaterial({ map: warm(), transparent: true, depthWrite: false, blending: AdditiveBlending, color: k ? 0x28c8ff : 0xf0ffff })));
+      s.position.set(x, 0.68, -1.15);
+      group.add(s);
+      trail.push(s);
+    }
+    jets.push(trail);
+  }
+  group.traverse((o) => (o.userData.noPick = true));
+  body.add(group);
+  let [lx, ly, power] = [e.x, e.y, 0.3];
+  const seed = e.id * 1.3;
+  return {
+    group,
+    update(dt, t) {
+      const moving = e.x !== lx || e.y !== ly;
+      [lx, ly] = [e.x, e.y];
+      power += ((moving ? 1 : 0.25) - power) * Math.min(1, dt * 3);
+      for (const [i, trail] of jets.entries()) {
+        const f = 0.85 + 0.1 * Math.sin(t * 23 + seed + i * 2) + 0.05 * Math.sin(t * 41 + i);
+        const len = (0.2 + 0.9 * power) * f;
+        for (const [k, s] of trail.entries()) {
+          const u = k / (trail.length - 1);
+          s.position.z = -1.15 - len * u;
+          const size = (k ? 0.5 - 0.25 * u : 0.4) * (0.7 + 0.4 * power) * f;
+          s.scale.set(size, size, 1);
+          (s.material as SpriteMaterial).opacity = (k ? (0.7 - 0.5 * u) : 0.9) * (0.35 + 0.65 * power);
+        }
+      }
+    },
+  };
+}
