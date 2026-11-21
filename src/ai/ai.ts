@@ -208,8 +208,10 @@ export class AI {
     [this.workersNow, this.workers] = [this.workers, now];
     // Never more than a full complement (a base lost, or none finished for a while, keeps what was lost).
     this.unreplaced = Math.min(Math.max(0, this.unreplaced + died - born), Math.max(target, this.plan.serfs));
-    // Survivors enough for the target (a base lost with them): nothing to replace, no order would come.
-    if (target > 0 && ctx.serfs.length + ctx.queued >= target) this.unreplaced = 0;
+    // Survivors enough for the target (a base lost with them): nothing to replace, no order would come. Survivors only:
+    // one queued pays the debt when it is out, not before (its producer killed, it never comes).
+    if (target > 0 && ctx.serfs.length >= target) this.unreplaced = 0;
+    // A replacement queued needs no second order ahead of supply, but its price stays kept until it is out.
     const owed = Math.max(0, this.unreplaced - ctx.queued);
     const held = ctx.wantSupreme && ctx.p.energy >= 300;
     // The price is there before the loss too, once the workers have reached their target, from minute 10: a raid kills
@@ -218,7 +220,7 @@ export class AI {
     // the first Human wave. Kept in the bank only: the worker comes ahead of supply only to replace one killed.
     this.staffed ||= ctx.serfs.length + ctx.queued >= target;
     ctx.urgent = (owed > 0 && ctx.free > 0 && !held) || (ctx.serfs.length + ctx.queued < target / 2 && !!this.workerHome(ctx));
-    ctx.low = ctx.urgent || (this.staffed && ctx.minute >= 10 && ctx.free > 0 && !held) ? (DEFS[f.worker] as UnitDef).cost.minerals : 0;
+    ctx.low = ctx.urgent || (this.unreplaced > 0 && ctx.free > 0 && !held) || (this.staffed && ctx.minute >= 10 && ctx.free > 0 && !held) ? (DEFS[f.worker] as UnitDef).cost.minerals : 0;
     // Repairs under way take from the bank as they go: what they will still cost is not this turn's to spend.
     for (const s of ctx.serfs) {
       const b = s.order?.kind === 'repair' ? w.entities.get(s.order.target) : undefined;
