@@ -814,7 +814,9 @@ export class AI {
       // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
       const dry = this.starved(buildings, ctx.p.minerals);
       for (const g of gods) if (dry || ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) this.wave.add(g.id);
-      this.waves++;
+      // A wave, not a reinforcement: the next wave's size grows with each wave sent (a soldier joining the one out, as
+      // after f8c4786, took the next threshold from 12 to 18).
+      if (fresh || atHome.length >= this.plan.wave) this.waves++;
       if (fresh) this.via = this.sharedRoad(home);
     }
   }

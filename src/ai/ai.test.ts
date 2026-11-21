@@ -338,7 +338,7 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'supreme' }));
   });
 
-  it("a reinforcement joining a wave out does not send the front back to the shared road's middle", () => {
+  it("a reinforcement joins the wave out: no new wave, the front not sent back to the shared road's middle", () => {
     // L'Anneau: two roads round the chasm, a new wave goes by the middle of one.
     const w = createMatch(['humains', 'humains'], undefined, 'l-anneau');
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
@@ -354,6 +354,8 @@ describe('AI Z Refuge', () => {
     ai.think();
     expect(state.wave.has(late.id)).toBe(true);
     expect(state.via).toBe(null);
+    // A reinforcement, not a new wave: the next wave is no bigger for it.
+    expect(state.waves).toBe(1);
   });
 
   it('easy: reinforcements never take the wave out past its cap', () => {
