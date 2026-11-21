@@ -356,6 +356,21 @@ describe('AI Z Refuge', () => {
     expect(state.via).toBe(null);
   });
 
+  it('easy: reinforcements never take the wave out past its cap', () => {
+    const w = createMatch(['humains', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    while (w.tick < ticks(12 * 60) || w.tick % 10) w.tick++;
+    const ai = new AI(w, 0, undefined, 'easy');
+    const state = ai as unknown as { waves: number; wave: Set<number> };
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const theirs = [...w.entities.values()].find((e) => e.owner === 1 && e.type === 'conseil')!;
+    for (let i = 0; i < 5; i++) state.wave.add(w.spawn('legionnaire', 0, theirs.x + (i - 2) * FP, theirs.y + 8 * FP).id);
+    state.waves = 1;
+    for (let i = 0; i < 6; i++) w.spawn('legionnaire', 0, hq.x + (i - 3) * FP, hq.y + 5 * FP);
+    ai.think();
+    expect(state.wave.size).toBeLessThanOrEqual(6);
+  });
+
   it('with the enemy army gone and no wave out, one soldier alone stays home', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);

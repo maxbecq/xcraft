@@ -807,8 +807,8 @@ export class AI {
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
       // one soldier joining, it turned the front back to it).
       const fresh = this.wave.size === 0;
-      // Easy: never more than its wave cap at once, the rest stays home.
-      atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
+      // Easy: never more than its wave cap out at once, those already out counted, the rest stays home.
+      atHome.slice(0, this.easy ? Math.max(0, LEVELS.easy.maxWave - this.wave.size) : atHome.length).forEach((u) => this.wave.add(u.id));
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
       // the first rank stays home and summons.
       // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
