@@ -170,6 +170,8 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
   // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
+  // Notice (Chargement): the Bourdon may instead lift one vehicle, which takes all its room.
+  if (b.type === 'bourdon' && BALANCE.rules.upgrades.chargementVehicles.includes(e.type)) return true;
   if (d.worker || d.mechanical || d.beast) return false;
   return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
@@ -451,7 +453,8 @@ export function besideTile(this: World, b: Entity, toward: { x: number; y: numbe
 /** What a carrier holds: units, or for a Z Barge, their supply. */
 export function load(this: World, b: Entity, extra?: Entity): number {
   const barge = !!(b.def as UnitDef).transport;
-  const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : 1);
+  const lifted = b.type === 'bourdon' ? this.room(b) : 1;
+  const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : BALANCE.rules.upgrades.chargementVehicles.includes(u.type) ? lifted : 1);
   let n = extra ? weigh(extra) : 0;
   for (const u of this.entities.values()) if (u.inside === b.id) n += weigh(u);
   return n;

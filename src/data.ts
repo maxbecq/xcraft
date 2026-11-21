@@ -568,7 +568,7 @@ const BASE: Record<string, object> = {
   acide: research('Acide anti-structure', 'Q', 'Les Réservoirs de substances peuvent dissoudre un bâtiment ennemi sous l\'acide.'),
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
   decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.'),
-  chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins."),
+  chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins, ou un véhicule (Scarabée, Char Pégase)."),
   scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon et vont un peu plus vite.'),
   trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),
 

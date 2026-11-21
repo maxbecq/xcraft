@@ -97,3 +97,24 @@ describe('Scarabée (fiche 2010)', () => {
     expect(men.filter((m) => m.inside === s.id)).toHaveLength(3);
   });
 });
+
+describe('Bourdon with Chargement (notice)', () => {
+  it('lifts one vehicle instead of soldiers, and only into an empty hold', () => {
+    const w = new World(createMap());
+    w.players[0].upgrades.chargement = 1;
+    const b = w.spawn('bourdon', 0, ...at(40, 60));
+    const tank = w.spawn('pegase', 0, ...at(42, 60));
+    const man = w.spawn('auxiliaire', 0, ...at(40, 62));
+    w.step([{ player: 0, kind: 'smart', ids: [tank.id], x: b.x, y: b.y, target: b.id }]);
+    for (let i = 0; i < ticks(8) && !tank.inside; i++) w.step([]);
+    expect(tank.inside).toBe(b.id);
+    w.step([{ player: 0, kind: 'smart', ids: [man.id], x: b.x, y: b.y, target: b.id }]);
+    for (let i = 0; i < ticks(8); i++) w.step([]);
+    expect(man.inside).toBe(0); // full
+    w.step([{ player: 0, kind: 'unload', ids: [b.id] }]);
+    expect(tank.inside).toBe(0);
+    // Without Chargement, no room at all.
+    w.players[0].upgrades.chargement = 0;
+    expect(w.room(b)).toBe(0);
+  });
+});
