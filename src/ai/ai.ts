@@ -1330,7 +1330,7 @@ export class AI {
     let best: Entity | undefined;
     let bestD = Infinity;
     for (const b of buildings) {
-      const r = (b.def as BuildingDef).shieldAura;
+      const r = (b.def as BuildingDef).shieldCharge ? ABILITIES.rechargebouclier.range! : 0;
       if (!r || b.buildLeft > 0) continue;
       const d = dist(b.x, b.y, near.x, near.y);
       if (close && d > r * FP) continue;

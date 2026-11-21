@@ -239,26 +239,32 @@ export function regenerate(this: World, e: Entity): void {
   const regen = 'regen' in e.def ? e.def.regen : undefined;
   const shielding = e.shield < e.maxShield && (e.def.kind !== 'building' || e.buildLeft === 0);
   if (!shielding && !(regen && e.hp < e.maxHp)) return;
-  const aura = shielding && this.nearShieldAura(e);
-  if (shielding && !aura && this.tick - e.lastHit < ticks(7)) return;
-  const rate = regen && e.hp < e.maxHp ? regen : (aura ? 8 : 2) + (e.owner >= 0 ? this.level(e.owner, 'bouclier') * BALANCE.rules.upgrades.boucliersRegen : 0);
+  if (shielding && this.tick - e.lastHit < ticks(7)) return;
+  const rate = regen && e.hp < e.maxHp ? regen : 2 + (e.owner >= 0 ? this.level(e.owner, 'bouclier') * BALANCE.rules.upgrades.boucliersRegen : 0);
   if (++e.regenTimer < ticks(1 / rate)) return;
   e.regenTimer = 0;
   if (shielding) e.shield++;
   else e.hp++;
 }
 
-export function nearShieldAura(this: World, e: Entity): boolean {
-  // The aura sources, listed once a tick (again after a spawn or a change of type); the dead ones skipped.
-  if (this.aurasAt !== this.tick) {
-    this.aurasAt = this.tick;
-    this.auras = [...this.entities.values()].filter((b) => (b.def as BuildingDef).shieldAura);
+/**
+ * Recharge des boucliers (fiche 2010, mod): a Voyageur or a finished Réserve psy, once a second while it has the
+ * energy, gives 20 shield to the most drained ally within 3 tiles (itself excepted).
+ */
+export function rechargeShields(this: World, e: Entity): void {
+  const ab = ABILITIES.rechargebouclier;
+  if (!(e.def as BuildingDef).shieldCharge || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
+  let best: Entity | undefined;
+  for (const t of this.around(e.x, e.y, toFp(ab.range! + 3))) {
+    if (t === e || t.owner !== e.owner || t.hp <= 0 || t.inside || t.shield >= t.maxShield || this.gap(e, t) > toFp(ab.range!)) continue;
+    if (t.def.kind === 'building' && t.buildLeft > 0) continue;
+    if (!best || t.maxShield - t.shield > best.maxShield - best.shield || (t.maxShield - t.shield === best.maxShield - best.shield && t.id < best.id)) best = t;
   }
-  for (const b of this.auras) {
-    const r = (b.def as BuildingDef).shieldAura;
-    if (this.entities.get(b.id) === b && b.owner === e.owner && r && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r * FP) return true;
-  }
-  return false;
+  if (!best) return;
+  best.shield = Math.min(best.maxShield, best.shield + ab.damage!);
+  e.mana -= toFp(ab.mana!);
+  e.spellCd.rechargebouclier = this.tick + ticks(ab.cooldown);
+  this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
 }
 
 /** Hit points a second a unit gives back: a healer's, or a Z socle's Réparateur (machines only). */

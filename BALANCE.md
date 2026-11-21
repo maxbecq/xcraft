@@ -105,7 +105,7 @@ Champs ajoutés :
 | `levels` | Dieux : les 5 niveaux d'un dieu, achetés au dieu lui-même (règle de XC.doc 2008). `hp`, `armor`, `speed`, `damage` : valeur à chaque niveau, du 1 au 5. `cost`, `time` : prix et secondes des niveaux 2 à 5. Au niveau N, le dieu invoque ses unités, et Gaïa ses bâtiments, en `buildTime` / N. Un dieu tué revient au niveau 1 |
 | `energyRate` | énergie produite par seconde |
 | `power` | rayon du champ d'énergie Isdaris, en cases |
-| `shieldAura` | rayon de recharge rapide des boucliers alliés |
+| `shieldCharge` | lance seul la Recharge des boucliers (`abilities.rechargebouclier` : bouclier rendu en `damage`, à `range` cases, `mana` d'énergie propre, toutes les `cooldown` s) |
 | `bunker` | places dans le bunker |
 | `amount` | minerai par champ |
 

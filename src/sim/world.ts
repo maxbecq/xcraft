@@ -479,6 +479,7 @@ export class World {
       // Canon IEM: the machine goes back when its time is up or when the Centre K holding it falls.
       if (e.seizedLeft > 0 && (--e.seizedLeft === 0 || this.entities.get(e.seizedBy)?.owner !== e.owner)) this.unseize(e);
       this.regenerate(e);
+      this.rechargeShields(e);
     }
     this.revive();
     this.chargeUltimates();

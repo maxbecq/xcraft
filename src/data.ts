@@ -160,7 +160,8 @@ export interface BuildingDef {
   /** Z: the drone that builds it merges into it (it is gone), and the building then grows by itself. */
   absorbs?: boolean;
   /** Recharges the shields of friendly units within this radius (tiles), fast. */
-  shieldAura?: number;
+  /** Voyageur, Réserve psy: cast the Recharge des boucliers on their own (fiche 2010, mod), from their own energy. */
+  shieldCharge?: boolean;
   /** Further abilities, after `ability`. */
   abilities?: string[];
   /** Hides allied ground units and vehicles within this radius (tiles) from enemies without detection (Déflecteur). */
@@ -370,6 +371,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Voyageur (notice): itself and the allies round it appear by the friendly building nearest the point. */
   teleportgroupe: { name: 'Téléportation de groupe', effect: 'Le Voyageur et les alliés autour apparaissent près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', research: 'teleportation', ...BALANCE.abilities.teleportgroupe },
   /** Voyageur (notice): the ally nearest the point sends back part of the damage it takes. */
+  /** Voyageur, Réserve psy (fiche 2010, mod): cast on their own, on an ally nearby whose shield is down. */
+  rechargebouclier: { name: 'Recharge des boucliers', effect: 'Rend du bouclier à une unité alliée proche, automatiquement.', hotkey: '', ...BALANCE.abilities.rechargebouclier },
   renvoi: { name: 'Sphère de renvoi', effect: 'L\'allié visé renvoie une partie des dégâts qu\'il reçoit.', hotkey: 'R', target: 'point', research: 'renvoi', ...BALANCE.abilities.renvoi },
   /** Béhémoth (notice): phases out, unhurt and unable to fight, for a while. */
   dephasage: { name: 'Déphasage', effect: 'Se déphase : ne peut plus être blessé ni combattre, un moment.', hotkey: 'D', research: 'dephasage', ...BALANCE.abilities.dephasage },

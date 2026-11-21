@@ -86,3 +86,35 @@ describe('Soins (fiche 2010)', () => {
     expect(hurt.hp).toBe(70);
   });
 });
+
+describe('Recharge des boucliers (fiche 2010, mod)', () => {
+  it('a Voyageur gives 20 shield to a drained ally within 3 tiles, once a second, 10 energy each time', () => {
+    const w = new World(createMap());
+    const v = w.spawn('voyageur', 0, ...at(40, 60));
+    const archer = w.spawn('archer', 0, ...at(42, 60));
+    archer.shield = 0;
+    archer.lastHit = w.tick; // no natural recharge for a while
+    const m0 = v.mana;
+    w.step([]);
+    expect(archer.shield).toBe(20);
+    expect(v.mana).toBeLessThan(m0 - 9 * FP);
+    run(w, 1.05);
+    expect(archer.shield).toBe(40);
+    // Dry: nothing more.
+    v.mana = 0;
+    const s = archer.shield;
+    run(w, 2);
+    expect(archer.shield).toBe(s);
+    // A Réserve psy does the same; out of 3 tiles, nobody.
+    const far = w.spawn('archer', 0, ...at(63, 60));
+    far.shield = 0;
+    far.lastHit = w.tick;
+    const r = w.spawn('reservepsy', 0, ...at(56, 60));
+    r.buildLeft = 0;
+    run(w, 1);
+    expect(far.shield).toBe(0);
+    far.x = far.px = r.x + 2 * FP;
+    run(w, 1);
+    expect(far.shield).toBeGreaterThanOrEqual(20);
+  });
+});
