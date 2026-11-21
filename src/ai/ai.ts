@@ -70,6 +70,8 @@ const GANG_UP = (30 * FP) / 20;
  * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
  */
 const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
+/** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
+const SPARE_EXTENSION = 400;
 /**
  * Every other research of each faction, after its list (ai.research), from minute 10 and with resources to spare: the
  * AI plays all of its camp, so that the AI-against-AI measures weigh every research. The artefacts and god levels
@@ -591,6 +593,20 @@ export class AI {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: nextExtension });
         ctx.minerals -= cost.minerals;
         ctx.energy -= cost.energy;
+      }
+    }
+    // An extension is its building's own (notice): once the first stands, another building of its type gets one too,
+    // so it trains those units as well; only with resources well to spare, one a turn, never on a busy building.
+    if (!nextExtension && !saving && !this.easy) {
+      for (const x of EXTENSIONS) {
+        const cost = (DEFS[x] as UpgradeDef).cost;
+        if (!w.hasExt(this.player, x) || buildings.some((b) => b.queue.includes(x)) || ctx.minerals < cost.minerals + SPARE_EXTENSION || ctx.energy < cost.energy + SPARE_EXTENSION) continue;
+        const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(x) && b.queue.length === 0 && w.researchable(this.player, x, b));
+        if (!host) continue;
+        ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: x });
+        ctx.minerals -= cost.minerals;
+        ctx.energy -= cost.energy;
+        break;
       }
     }
   }

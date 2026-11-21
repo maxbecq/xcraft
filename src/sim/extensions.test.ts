@@ -113,4 +113,13 @@ describe('Isdaris extensions, one building each', () => {
     expect(of(w, 'creature').length - before).toBe(1);
     expect(w.supply(0).used).toBeLessThanOrEqual(w.supply(0).max);
   });
+
+  it('the AI, rich, puts a Laboratoire on its second Portail too (the Druide is the Portail\'s own)', () => {
+    const { w, a, b } = setup();
+    a.exts.push('laboratoire');
+    const ai = new AI(w, 0);
+    for (let i = 0; i < 200 && !b.queue.includes('laboratoire') && !b.exts.includes('laboratoire'); i++) w.step(ai.think());
+    expect(b.queue.includes('laboratoire') || b.exts.includes('laboratoire')).toBe(true);
+    expect(a.exts.filter((x) => x === 'laboratoire')).toHaveLength(1);
+  });
 });
