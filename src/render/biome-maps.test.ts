@@ -13,6 +13,13 @@ describe('planets per map', () => {
     expect(fitBiome(null, MAPS.asteroides).id).toBe('asteroides');
   });
 
+  it('the night city is special too: only its own map takes it, and that map takes nothing else', () => {
+    expect(BIOMES.villenuit.special).toBe(true);
+    for (const m of Object.values(MAPS)) if (m.id !== 'ville-nuit') expect(biomesFor(m).map((b) => b.id)).not.toContain('villenuit');
+    expect(biomesFor(MAPS['ville-nuit']).map((b) => b.id)).toEqual(['villenuit']);
+    expect(fitBiome('ville', MAPS['ville-nuit']).id).toBe('villenuit');
+  });
+
   it('every map offers every common planet; a map drawn for a special one offers it too', () => {
     const common = Object.values(BIOMES).filter((b) => !b.special).map((b) => b.id);
     for (const m of Object.values(MAPS)) if (!m.biomesOnly) expect(biomesFor(m).map((b) => b.id)).toEqual(common);

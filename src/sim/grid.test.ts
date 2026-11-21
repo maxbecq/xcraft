@@ -128,8 +128,10 @@ it('lineWalkable answers as when it asked canStep at each step', () => {
       const ax = rand((g.width + 4) * 1024) - 2048;
       const ay = rand((g.height + 4) * 1024) - 2048;
       const [bx, by] = [ax + rand(24 * 1024) - 12 * 1024, ay + rand(24 * 1024) - 12 * 1024];
-      // A start right on a tile edge lies in the tile ahead (lineWalkable's mirror-safe rule), not where floor puts it.
-      if (ax % 1024 === 0 || ay % 1024 === 0) continue;
+      // A start right on a tile edge lies in the tile ahead (lineWalkable's mirror-safe rule), not where floor puts it;
+      // and a point of the line right on an edge stays in the tile it comes from (the end too: on the night city's map
+      // an end on the edge of a chasm only touches it).
+      if (ax % 1024 === 0 || ay % 1024 === 0 || bx % 1024 === 0 || by % 1024 === 0) continue;
       expect(g.lineWalkable(ax, ay, bx, by)).toBe(reference(ax, ay, bx, by));
     }
   }

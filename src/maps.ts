@@ -1,4 +1,4 @@
-import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from './map';
+import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
  * Maps are files: one JSON per map in public/maps/ (see public/maps/README.md). They are bundled at build time
@@ -22,6 +22,8 @@ export interface MapFile {
   /** Only the planets in `biomes` (none of the common ones): a map whose ground makes no sense elsewhere. */
   biomesOnly?: boolean;
   terrain: Shape[];
+  /** Streets painted on the ground (player 1's part, turned like the terrain). For the eye only. */
+  streets?: Street[];
   bases: BaseSpot[];
 }
 
@@ -37,7 +39,8 @@ type Area =
 /** `biome`: the shape only exists on that planet. */
 export type Shape = (
   | (Area & { level: number; chasm?: undefined; fill?: undefined })
-  | (Area & { chasm: true; level?: undefined; fill?: undefined })
+  /** `block`: the chasm is a block of buildings (drawn standing on it); for the eye only. */
+  | (Area & { chasm: true; block?: boolean; level?: undefined; fill?: undefined })
   /** `arch`: the filled tiles are a natural arch (drawn thin over the void, its vault below); for the eye only. */
   | (Area & { fill: true; arch?: boolean; level?: undefined; chasm?: undefined })
   | { shape: 'ramp'; at: [number, number]; up: Dir; width: number; level: number }
@@ -88,6 +91,12 @@ export function turnsOf(def: MapFile, players: number): number[] {
 }
 
 const TURN: Record<Dir, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' };
+
+/** A point (not a tile: a position in tile units) turned by q quarter turns, as rotateTile turns a tile's centre. */
+function turnPoint(size: number, x: number, y: number, q: number): [number, number] {
+  const [rx, ry] = rotateTile(size, x - 0.5, y - 0.5, q);
+  return [rx + 0.5, ry + 0.5];
+}
 
 function octagon(dx: number, dy: number, half: number, cut: number): boolean {
   return Math.abs(dx) <= half && Math.abs(dy) <= half && Math.abs(dx) + Math.abs(dy) <= 2 * half - cut;
@@ -199,13 +208,17 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
     }
     if (s.chasm) map.chasm ??= new Uint8Array(width * height);
     if (s.fill && s.arch) map.arch ??= new Uint8Array(width * height);
+    if (s.chasm && s.block) map.block ??= new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!inside(s, x, y)) continue;
         each(x, y, (i) => {
-          if (s.chasm) map.chasm![i] = 1;
-          else if (s.fill) {
+          if (s.chasm) {
+            map.chasm![i] = 1;
+            if (map.block) map.block[i] = s.block ? 1 : 0;
+          } else if (s.fill) {
             if (map.chasm) map.chasm[i] = 0;
+            if (map.block) map.block[i] = 0;
             if (s.arch) map.arch![i] = 1;
             else if (map.arch) map.arch[i] = 0; // an island painted over an arch's root is island
           } else {
@@ -216,6 +229,10 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
         });
       }
     }
+  }
+  // Streets: player 1's, and each turned copy.
+  if (def.streets) {
+    map.streets = turns.flatMap((q) => def.streets!.map((s) => ({ width: s.width, points: s.points.map(([x, y]) => turnPoint(width, x, y, q)) })));
   }
   // A base in the very middle turns onto itself: one spot, shared by everyone (turn -1).
   map.sites = [];

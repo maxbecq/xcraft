@@ -54,7 +54,10 @@ Chaque forme, sauf `ramp`, prend aussi l'un de ces champs :
 
 - `level` : elle élève le sol à ce niveau ;
 - `chasm: true` : elle creuse un gouffre, infranchissable à pied mais survolé par les unités volantes ;
+- `chasm: true, block: true` : un gouffre dessiné comme un pâté d'immeubles (Ville de nuit). Pour le jeu, c'est un gouffre comme un autre ;
 - `fill: true` : elle rebouche un gouffre (ponts, îles). Avec `arch: true` en plus, ce sol est dessiné comme une arche naturelle : mince au milieu, avec sa voûte au-dessus du vide (sur Astéroïdes). Pour le jeu, c'est un sol comme un autre.
+
+`streets` (facultatif, au niveau de `terrain`) : les rues peintes au sol, `[{ "points": [[x, y], …], "width": 10 }]`, la ligne du milieu en tuiles (positions, pas des tuiles : `[0, 39]` est le bord gauche de la carte, au milieu de la tuile 38-39). Seulement pour l'œil ; recopiées par rotation comme le terrain. La carte Ville de nuit est écrite par `tools/maps/ville-nuit.py`.
 
 `biome` (facultatif, l'id d'une planète, par exemple `ville`) : la forme n'existe que sur cette planète.
 

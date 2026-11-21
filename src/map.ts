@@ -2,6 +2,12 @@ import { DEFAULT_MAP, buildMap, mapFile } from './maps';
 
 export type Dir = 'N' | 'E' | 'S' | 'W';
 
+/** A street drawn on the ground: its centre line (tile units, corners) and its width in tiles. */
+export interface Street {
+  points: [number, number][];
+  width: number;
+}
+
 /** Tile grid. x grows east (+X), y grows south (+Z). One tile = one world unit. */
 export interface GameMap {
   width: number;
@@ -16,6 +22,10 @@ export interface GameMap {
   chasm?: Uint8Array;
   /** Natural arches (map file `arch`): ground like any other, drawn as a thin span over the void. Rendering only. */
   arch?: Uint8Array;
+  /** Blocks of buildings (map file `block`): chasm tiles drawn as buildings standing on them. Rendering only. */
+  block?: Uint8Array;
+  /** Streets painted on the ground (map file `streets`), turned for each part of the map. Rendering only. */
+  streets?: Street[];
   /** Base spots (from the map file), turned for each quarter of the map. */
   sites?: Site[];
 }

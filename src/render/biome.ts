@@ -175,6 +175,28 @@ export const BIOMES: Record<string, Biome> = {
     chasm: { depth: 4, floor: new Color(0x000000) },
   },
   // An abandoned megacity: decks of riveted plates over a void, neon in the seams, rain-dark steel.
+  villenuit: {
+    id: 'villenuit',
+    name: 'Ville de nuit',
+    special: true,
+    // Its own map (ville-nuit): a whole city in the rain at night, shown as one painting (render/painted.ts). The
+    // colours below only light the units and buildings: dim cold moonlight.
+    levels: [new Color(0xa4acc0), new Color(0xb0b8ca), new Color(0xbcc4d4)],
+    patch: new Color(0x5a6070),
+    sand: new Color(0x747a88),
+    ramp: new Color(0x6a7080),
+    rock: new Color(0x3e4250),
+    rockDark: new Color(0x0c0d12),
+    veins: null,
+    sun: { color: 0x8a9ad8, intensity: 1.3 },
+    sky: { color: 0x5a3a9a, ground: 0x0c0c16, intensity: 0.85 },
+    background: 0x04030a,
+    exposure: 1.0,
+    warmShadows: 0,
+    decorTint: new Color(0.55, 0.57, 0.66),
+    style: 'city',
+    chasm: { depth: 6, floor: new Color(0x050409) }, // unused: the lower city is part of the painting
+  },
   ville: {
     id: 'ville',
     name: 'Ville futuriste',

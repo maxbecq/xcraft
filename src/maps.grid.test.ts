@@ -43,6 +43,8 @@ const FROZEN: Record<string, number> = {
   'les-ponts//2': 647576153,
   'asteroides//1': 2431351461,
   'asteroides//2': 2431351461,
+  'ville-nuit//1': 628767441,
+  'ville-nuit//2': 628767441,
 };
 
 describe('map grids', () => {

@@ -1,0 +1,670 @@
+{
+ "format": 1,
+ "id": "ville-nuit",
+ "name": "Ville de nuit",
+ "description": "Une ville entière sous la pluie : des avenues entre les immeubles, un marché au centre, un viaduc au-dessus de la ville basse.",
+ "size": 120,
+ "players": [
+  2
+ ],
+ "symmetry": "rot180",
+ "biomes": [
+  "villenuit"
+ ],
+ "biomesOnly": true,
+ "terrain": [
+  {
+   "shape": "rect",
+   "from": [
+    0,
+    0
+   ],
+   "to": [
+    119,
+    119
+   ],
+   "chasm": true,
+   "block": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    0,
+    34
+   ],
+   "to": [
+    119,
+    43
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    0,
+    34
+   ],
+   "to": [
+    119,
+    43
+   ],
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    34,
+    34
+   ],
+   "to": [
+    43,
+    85
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    34,
+    34
+   ],
+   "to": [
+    43,
+    85
+   ],
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    34,
+    55
+   ],
+   "to": [
+    85,
+    64
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    34,
+    55
+   ],
+   "to": [
+    85,
+    64
+   ],
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    55,
+    34
+   ],
+   "to": [
+    64,
+    85
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    55,
+    34
+   ],
+   "to": [
+    64,
+    85
+   ],
+   "level": 0
+  },
+  {
+   "shape": "octagon",
+   "at": [
+    59,
+    59
+   ],
+   "half": 13,
+   "cut": 7,
+   "fill": true
+  },
+  {
+   "shape": "octagon",
+   "at": [
+    59,
+    59
+   ],
+   "half": 13,
+   "cut": 7,
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    2
+   ],
+   "to": [
+    31,
+    31
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    2
+   ],
+   "to": [
+    31,
+    31
+   ],
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    2
+   ],
+   "to": [
+    24,
+    24
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    2
+   ],
+   "to": [
+    24,
+    24
+   ],
+   "level": 2
+  },
+  {
+   "shape": "rect",
+   "from": [
+    25,
+    9
+   ],
+   "to": [
+    28,
+    13
+   ],
+   "fill": true
+  },
+  {
+   "shape": "ramp",
+   "at": [
+    25,
+    9
+   ],
+   "up": "W",
+   "width": 5,
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    9,
+    25
+   ],
+   "to": [
+    13,
+    28
+   ],
+   "fill": true
+  },
+  {
+   "shape": "ramp",
+   "at": [
+    9,
+    25
+   ],
+   "up": "N",
+   "width": 5,
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    15,
+    32
+   ],
+   "to": [
+    20,
+    35
+   ],
+   "fill": true
+  },
+  {
+   "shape": "ramp",
+   "at": [
+    15,
+    32
+   ],
+   "up": "N",
+   "width": 6,
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    44
+   ],
+   "to": [
+    33,
+    72
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    2,
+    44
+   ],
+   "to": [
+    33,
+    72
+   ],
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    47,
+    2
+   ],
+   "to": [
+    72,
+    31
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    47,
+    2
+   ],
+   "to": [
+    72,
+    31
+   ],
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    57,
+    32
+   ],
+   "to": [
+    62,
+    35
+   ],
+   "fill": true
+  },
+  {
+   "shape": "ramp",
+   "at": [
+    57,
+    32
+   ],
+   "up": "N",
+   "width": 6,
+   "level": 0
+  },
+  {
+   "shape": "rect",
+   "from": [
+    73,
+    0
+   ],
+   "to": [
+    90,
+    33
+   ],
+   "chasm": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    73,
+    13
+   ],
+   "to": [
+    90,
+    20
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    73,
+    13
+   ],
+   "to": [
+    90,
+    20
+   ],
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    91,
+    2
+   ],
+   "to": [
+    117,
+    31
+   ],
+   "fill": true
+  },
+  {
+   "shape": "rect",
+   "from": [
+    91,
+    2
+   ],
+   "to": [
+    117,
+    31
+   ],
+   "level": 1
+  },
+  {
+   "shape": "rect",
+   "from": [
+    101,
+    32
+   ],
+   "to": [
+    106,
+    35
+   ],
+   "fill": true
+  },
+  {
+   "shape": "ramp",
+   "at": [
+    101,
+    32
+   ],
+   "up": "N",
+   "width": 6,
+   "level": 0
+  }
+ ],
+ "streets": [
+  {
+   "points": [
+    [
+     0,
+     39
+    ],
+    [
+     120,
+     39
+    ]
+   ],
+   "width": 10
+  },
+  {
+   "points": [
+    [
+     39,
+     34
+    ],
+    [
+     39,
+     86
+    ]
+   ],
+   "width": 10
+  },
+  {
+   "points": [
+    [
+     34,
+     60
+    ],
+    [
+     86,
+     60
+    ]
+   ],
+   "width": 10
+  },
+  {
+   "points": [
+    [
+     60,
+     34
+    ],
+    [
+     60,
+     86
+    ]
+   ],
+   "width": 10
+  },
+  {
+   "points": [
+    [
+     47,
+     16.5
+    ],
+    [
+     117,
+     16.5
+    ]
+   ],
+   "width": 6
+  }
+ ],
+ "bases": [
+  {
+   "name": "départ",
+   "start": true,
+   "hq": [
+    12,
+    12
+   ],
+   "minerals": [
+    [
+     7,
+     9
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     7,
+     11
+    ],
+    [
+     7,
+     12
+    ],
+    [
+     8,
+     8
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     10,
+     7
+    ],
+    [
+     11,
+     7
+    ]
+   ],
+   "wells": [
+    [
+     17,
+     6
+    ]
+   ]
+  },
+  {
+   "name": "naturelle",
+   "hq": [
+    12,
+    56
+   ],
+   "minerals": [
+    [
+     6,
+     53
+    ],
+    [
+     6,
+     54
+    ],
+    [
+     6,
+     55
+    ],
+    [
+     6,
+     56
+    ],
+    [
+     6,
+     57
+    ],
+    [
+     6,
+     58
+    ],
+    [
+     6,
+     59
+    ],
+    [
+     6,
+     60
+    ]
+   ],
+   "wells": [
+    [
+     19,
+     64
+    ]
+   ]
+  },
+  {
+   "name": "troisième",
+   "hq": [
+    58,
+    14
+   ],
+   "minerals": [
+    [
+     56,
+     8
+    ],
+    [
+     57,
+     8
+    ],
+    [
+     58,
+     8
+    ],
+    [
+     59,
+     8
+    ],
+    [
+     60,
+     8
+    ],
+    [
+     61,
+     8
+    ],
+    [
+     62,
+     8
+    ],
+    [
+     63,
+     8
+    ]
+   ],
+   "wells": [
+    [
+     66,
+     20
+    ]
+   ]
+  },
+  {
+   "name": "avancée",
+   "hq": [
+    102,
+    14
+   ],
+   "minerals": [
+    [
+     100,
+     8
+    ],
+    [
+     101,
+     8
+    ],
+    [
+     102,
+     8
+    ],
+    [
+     103,
+     8
+    ],
+    [
+     104,
+     8
+    ],
+    [
+     105,
+     8
+    ],
+    [
+     106,
+     8
+    ],
+    [
+     107,
+     8
+    ]
+   ],
+   "wells": [
+    [
+     95,
+     21
+    ]
+   ]
+  }
+ ]
+}

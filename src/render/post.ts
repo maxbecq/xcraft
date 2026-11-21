@@ -54,7 +54,8 @@ export class Post {
       hideLines();
       scene.traverse((o) => {
         const m = (o as Mesh).material as Material | undefined;
-        if (o.visible && ((o as Mesh).isMesh || (o as Sprite).isSprite) && m && !Array.isArray(m) && m.transparent && !m.depthWrite) {
+        // So does a painted scenery (render/painted.ts): its shading and its lines are in the picture already.
+        if (o.visible && ((o as Mesh).isMesh || (o as Sprite).isSprite) && m && !Array.isArray(m) && ((m.transparent && !m.depthWrite) || o.userData.painted)) {
           o.visible = false;
           ao._visibilityCache.push(o);
         }

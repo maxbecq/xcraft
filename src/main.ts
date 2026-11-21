@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight, Mesh, PCFShadowMap, Scene, ShadowMaterial, Vector3, WebGLRenderer } from 'three';
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
@@ -25,6 +25,7 @@ import { setFxLite } from './render/unitfx';
 import { ambientEffects } from './render/ambient';
 import { Space } from './render/space';
 import { Embers } from './render/embers';
+import { PaintedCity, Rain } from './render/painted';
 import { PerfRecorder } from './perfrec';
 import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
@@ -121,19 +122,31 @@ const map = world.map;
 const scene = new Scene();
 scene.background = new Color(biome.background);
 setBiome(biome);
-const roads = biome.style === 'city' ? cityRoads(world) : undefined;
+const fog = createFog(map);
+// The night city is one painting (render/painted.ts): none of the other city's scenery, and the ground mesh stays only
+// to be clicked on.
+const painted = biome.id === 'villenuit' ? new PaintedCity(map, fog, QUALITY_LEVEL === 'haute' ? 24 : 16) : null;
+const roads = biome.style === 'city' && !painted ? cityRoads(world) : undefined;
 const terrain = buildTerrain(map, roads?.texture);
 scene.add(terrain);
-const fog = createFog(map);
 addFog(terrain, fog, map);
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, roads?.streets, !!biome.space);
+if (painted) {
+  // What is left of the ground mesh: the shadows the units and buildings cast on it (none at the basse level).
+  const shade = new ShadowMaterial({ opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  terrain.traverse((o) => {
+    if (o instanceof Mesh) Object.assign(o, { material: shade, castShadow: false, receiveShadow: true });
+  });
+  terrain.visible = GFX.shadows > 0;
+  scene.add(painted.root);
+}
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, painted ? [] : roads?.streets, !!biome.space);
 // The asteroids float over space, seen through the chasms and past the edges.
 const space = biome.space ? new Space(map.width, map.height) : null;
 if (space) scene.add(space.root);
 // Over the volcano's lava, embers and smoke (fewer at the basse level).
 const embers = biome.chasm.lava ? new Embers(map, fog, biome.chasm.depth, QUALITY_LEVEL === 'basse' ? 120 : 320, QUALITY_LEVEL !== 'basse') : null;
 if (embers) scene.add(embers.root);
-if (biome.style === 'city') scene.add(cityAbyss(map.width, map.height), cityScape(map.width, map.height, 0), cityUnderdeck(map, UNDER_DECK), cityStreets(map, (x, z) => heightAt(map, x, z)));
+if (biome.style === 'city' && !painted) scene.add(cityAbyss(map.width, map.height), cityScape(map.width, map.height, 0), cityUnderdeck(map, UNDER_DECK), cityStreets(map, (x, z) => heightAt(map, x, z)));
 addDeposits(scene, map, world, (m) => fogMaterial(m, fog, map));
 
 // Warm low sun from the north-west, cool sky fill: long readable shadows like SC2.
@@ -165,7 +178,7 @@ if (window.innerHeight > window.innerWidth) rig.viewHeight = 26;
 const home = [...world.entities.values()].find((e) => e.owner === PLAYER && e.type === FACTIONS[factions[PLAYER]].hq)!;
 rig.lookAt(home.x / FP + 2, home.y / FP + 2);
 
-if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, issue: (c: Command) => pending.push(c) } });
+if (import.meta.env.DEV) Object.assign(window, { xcraft: { world, rig, painted, issue: (c: Command) => pending.push(c) } });
 
 // The Z porthole's frame is thin (style.css): its map is drawn larger, as large as the console allows.
 const minimap = new Minimap(map, rig, factions[PLAYER] === 'z' ? 210 : 164);
@@ -315,6 +328,8 @@ const keys = camera.keys;
 const viewW = () => Math.max(1, window.innerWidth);
 const viewH = () => Math.max(1, window.innerHeight);
 renderer.setSize(viewW(), viewH());
+const rain = painted ? new Rain() : null;
+if (rain) fxScene.add(rain.mesh);
 const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light', biome.warmShadows);
 window.addEventListener('resize', () => {
   renderer.setSize(viewW(), viewH());
@@ -426,6 +441,7 @@ const ready = Promise.all([
   loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
   decor.load(scene, (m) => fogMaterial(m, fog, map)),
   loadSprites(shown),
+  painted?.load(renderer),
 ]);
 ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {
@@ -600,6 +616,8 @@ function start(): void {
     rig.update(window.innerWidth / window.innerHeight);
     space?.update(rig.target);
     embers?.update(dt, renderer.domElement.height / (rig.camera.top - rig.camera.bottom));
+    rain?.update(renderer.domElement.width, renderer.domElement.height);
+    painted?.update(rig, window.innerWidth / window.innerHeight, renderer.domElement.height / rig.viewHeight, renderer);
     lavaTime.value += dt;
     input.prune();
     // Our units answer when picked: once per selection that gains one of them (not when one dies out of it).
