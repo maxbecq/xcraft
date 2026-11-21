@@ -95,12 +95,12 @@ WEAPON_MODELS.push(...Object.values(ZSUPPORTS).map((s) => s.model));
 /** Per socle: how wide its module is against the body's own width, and how far forward of the back's centre it sits. */
 const WEAPON_MOUNTS: Record<
   string,
-  { size?: number; forward?: number; apex?: boolean; meleeSize?: number; saw?: number; grow?: Record<string, number>; sink?: Record<string, number> }
+  { size?: number; forward?: number; apex?: boolean; meleeSize?: number; saw?: number; tools?: number; grow?: Record<string, number>; sink?: Record<string, number> }
 > = {
   // Its modules sank onto its back where they stood on its ridge (module units), the Jet sonique a little smaller.
   mastodonte: { size: 0.5, grow: { zw_jetsonique: 0.85 }, sink: { zw_laser: 0.08, zw_arc: 0.12 } },
   // Its modules at the Quadripode's proportion to its body (the Déchiqueteur aside: its rule is still open).
-  coleoptere: { grow: { '*': 0.7 }, sink: { zw_arc: 0.07 } },
+  coleoptere: { grow: { '*': 0.7 }, sink: { zw_arc: 0.07 }, tools: 1.1 },
   // The Déchiqueteur in the same proportion to its body as the Quadripode's; the other modules larger (the rocket pod
   // most), towards the front of its long back.
   octopode: { size: 0.5, meleeSize: 0.7, forward: 0.08, grow: { '*': 1.3, zw_roquettes: 1.5 } },
@@ -434,7 +434,7 @@ export class EntityRenderer {
         tool.position.sub(c);
         tool.parent!.add(holder);
         holder.add(tool);
-        holder.scale.setScalar(2);
+        holder.scale.setScalar(tune.tools ?? 2); // twice their size; less on the small Coléoptère, as its other modules
         const at = new Vector3(centre.x + side * 0.3 * size.x, box.min.y + 0.5 * size.y, box.max.z + 0.22 * size.z).sub(o.position).divideScalar(unitScale);
         holder.position.copy(at);
         const shoulder = new Vector3(side * 0.17, 0.3, 0.05);
