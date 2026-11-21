@@ -30,8 +30,20 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
     }
   }
   if (o.phase === 'go') {
-    if (!this.reachRect(e, field.tx, field.ty, 1)) return void this.goNear(e, field.tx, field.ty, 1);
+    if (!this.reachRect(e, field.tx, field.ty, 1)) {
+      // No way into it (cut off, or no path up its cliff): goNear counts each time it got nowhere; then another field.
+      const other = e.stuck > 2 && this.nearestField(e, field, true);
+      if (other) {
+        this.release(e, field.id);
+        field = other;
+        o.target = other.id;
+        e.goal = null;
+        e.stuck = 0;
+      }
+      return void this.goNear(e, field.tx, field.ty, 1);
+    }
     if (field.miner && field.miner !== e.id) return; // wait for the field
+    e.stuck = 0;
     field.miner = e.id;
     o.phase = 'mine';
     o.timer = ticks(HARVEST.seconds);
