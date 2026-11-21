@@ -410,6 +410,40 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'asgaard', tx: sx, ty: sy }));
   });
 
+  it('Dieux: their Porte lost and no field left by their bases, they spend what is left instead of saving', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const thor = w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    w.spawn('antre', 0, asgaard.x + 12 * FP, asgaard.y);
+    w.spawn('branche', 0, asgaard.x + 12 * FP, asgaard.y + 6 * FP);
+    w.spawn('branche', 0, asgaard.x + 16 * FP, asgaard.y + 6 * FP);
+    w.remove(asgaard);
+    for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
+    w.players[0].minerals = 500;
+    w.tick = ticks(6 * 60) - (ticks(6 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [thor.id], type: 'nain' }));
+  });
+
+  it('Dieux: a god left without room by this turn\'s own orders keeps no minerals back (Thor levels up)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const thor = w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    const well = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => Math.hypot(a.x - asgaard.x, a.y - asgaard.y) - Math.hypot(b.x - asgaard.x, b.y - asgaard.y))[0];
+    w.spawn('puitsdivin', 0, well.x, well.y);
+    w.spawn('temple', 0, asgaard.x - 8 * FP, asgaard.y);
+    // Few esprits: one is trained ahead of all; it takes one of the 4 free places Seth (due) would need.
+    const esprits = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'esprit');
+    for (const e of esprits.slice(4)) w.remove(e);
+    w.spawn('branche', 0, asgaard.x - 4 * FP, asgaard.y + 8 * FP);
+    while (w.supply(0).max - w.supply(0).used > 4) w.spawn('nain', 0, asgaard.x + 6 * FP, asgaard.y + 4 * FP);
+    // After the buildings, the esprit, Offrandes and a Nain, enough for Thor's level only without Seth's 350 kept.
+    w.players[0].minerals = 2700;
+    w.tick = ticks(4 * 60) - (ticks(4 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [thor.id], type: 'niveau' }));
+  });
+
   it('Dieux: their Porte destroyed, they raise it again on its spot and summon gods again', () => {
     const w = createMatch(['dieux', 'humains']);
     const ai = new AI(w, 0);

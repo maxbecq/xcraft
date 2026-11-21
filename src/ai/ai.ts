@@ -388,7 +388,8 @@ export class AI {
     const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
     // Its headquarters lost, another base standing: a headquarters first (the Dieux' Porte, which summons the gods),
-    // its price saved from everything else (the gods spent the rest on troops).
+    // its price saved from everything else (the gods spent the rest on troops), while minerals still come in: with no
+    // esprit at work or no field left by a base, what is left is spent instead of saved for ever.
     const noHq = !kin(home, f.hq) && !building(f.hq);
     if (noHq) wants.push(f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
@@ -460,7 +461,7 @@ export class AI {
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals);
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && serfs.some((s) => s.order?.kind === 'gather') && this.fieldsNear(buildings) > 0);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -829,8 +830,8 @@ export class AI {
         // Saving up for it, once the first god is out: its energy too, or the troops ate every point of it (Seth's
         // Sphinx took the Puits' whole output: Apollon, due at minute 5, never came, nor Odin, and with two gods
         // summoning one unit at a time 1000 to 5000 minerals lay unspent from minute 6 to 12).
-        // Only for a god with room in supply: one that cannot come keeps nothing back.
-        else if (gods.length && free >= def.supply) {
+        // Only for a god with room in supply, after what this turn already ordered: one that cannot come keeps nothing.
+        else if (gods.length && free - ctx.out.filter((o) => o.kind === 'train').length >= def.supply) {
           ctx.minerals -= def.cost.minerals;
           ctx.energy -= def.cost.energy;
         }
