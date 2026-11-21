@@ -300,7 +300,8 @@ export class EntityRenderer {
     const across = Math.min(size.x, size.z) * bodyScale;
     const fit = WEAPON_TUNE[name] ?? {};
     // A walker's melee module sits on its head, its arm reaching down in front of it (see below).
-    const melee = MELEE.has(name) && e.def.kind === 'unit' && !ZSUPPORTS[e.type];
+    // The Réparateur too: its tools reach out in front of the head, where what it mends stands.
+    const melee = (MELEE.has(name) || name === 'zw_reparateur') && e.def.kind === 'unit' && !ZSUPPORTS[e.type];
     // `grow`: how much larger than `size` a socle draws each module (the melee one keeps its own size).
     const grow = melee ? 1 : (tune.grow?.[name] ?? tune.grow?.['*'] ?? 1);
     const scale = ((((melee ? tune.meleeSize : undefined) ?? tune.size ?? 0.7) * grow * across) / 0.64 / bodyScale) * (fit.scale ?? 1);
@@ -417,6 +418,32 @@ export class EntityRenderer {
       saw.position.z *= k;
       reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
       sawW = sawR * bodyScale;
+    }
+    if (melee && name === 'zw_reparateur') {
+      // Its lance and claw twice their modelled size, each on a long steel arm from its shoulder out in front of the
+      // head, either side, at mid-height: where a machine it mends stands.
+      const unitScale = o.scale.x;
+      o.updateWorldMatrix(true, true);
+      for (const [side, part] of [[-1, 'zw_tool_l'], [1, 'zw_tool_r']] as const) {
+        const tool = o.getObjectByName(part);
+        if (!tool) continue;
+        const c = new Box3().setFromObject(tool, true).getCenter(new Vector3());
+        o.worldToLocal(c);
+        const holder = new Group();
+        holder.position.copy(c);
+        tool.position.sub(c);
+        tool.parent!.add(holder);
+        holder.add(tool);
+        holder.scale.setScalar(2);
+        const at = new Vector3(centre.x + side * 0.3 * size.x, box.min.y + 0.5 * size.y, box.max.z + 0.22 * size.z).sub(o.position).divideScalar(unitScale);
+        holder.position.copy(at);
+        const shoulder = new Vector3(side * 0.17, 0.3, 0.05);
+        const span = at.clone().sub(shoulder);
+        const strut = new Mesh(new CylinderGeometry(0.035, 0.035, span.length(), 6), RING_STEEL);
+        strut.position.copy(shoulder).addScaledVector(span, 0.5);
+        strut.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), span.normalize());
+        o.add(strut);
+      }
     }
     v.weapon = { name, o, arm, saw, reach, mod, tip, sawR: sawW };
   }
