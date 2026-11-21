@@ -103,7 +103,7 @@ export class PerfRecorder {
 
   /** The Options box. */
   field(): string {
-    return `<label><input type="checkbox" data-k="perfrec"${this.on ? ' checked' : ''}> Enregistrer les performances de la partie (à envoyer à la fin)</label>`;
+    return `<label><input type="checkbox" data-k="perfrec"${this.on ? ' checked' : ''}> Enregistrer les performances de chaque partie (un fichier à envoyer à la fin ; réglage gardé pour les suivantes)</label>`;
   }
 
   toggle(on: boolean): void {

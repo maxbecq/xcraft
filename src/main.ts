@@ -441,7 +441,7 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   // Shaders compiled in the background (parallel compile where the browser has it) rather than in one long first frame.
   ready.then(() => renderer.compileAsync(scene, rig.camera)).catch(() => {}).then(start);
-  initMenus({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange });
+  initMenus({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange, recField: () => rec.field() });
   const friend = readRoom(params.get('ami') ?? '');
   if (friend) showLobby(document.body.appendChild(Object.assign(document.createElement('div'), { className: 'menu' })), friend, params.has('hote'));
   else showHome();

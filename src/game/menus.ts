@@ -16,6 +16,8 @@ import { asFaction, FULLSCREEN_KEY, rememberSandbox, SANDBOX_TOOLS, sandboxRemem
 let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality;
 let controlFields: (inMatch: boolean) => string;
 let controlChange: (field: HTMLInputElement | HTMLSelectElement) => boolean;
+/** The measures' setting (« Enregistrer les performances »), kept for this browser like the other options. */
+let recField: () => string;
 export function initMenus(page: {
   myFaction: Faction;
   foeFaction: Faction;
@@ -25,8 +27,9 @@ export function initMenus(page: {
   DETECTED: Quality;
   controlFields: typeof controlFields;
   controlChange: typeof controlChange;
+  recField: typeof recField;
 }): void {
-  ({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange } = page);
+  ({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange, recField } = page);
 }
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */
@@ -115,7 +118,7 @@ function showOptions(menu: HTMLElement): void {
       ${document.fullscreenEnabled ? `<label><input type="checkbox" data-k="fullscreen"${wantsFullscreen() ? ' checked' : ''}> Jouer en plein écran</label>` : ''}
     </fieldset>
     ${controlFields(false)}
-    ${perf.field()}
+    ${perf.field(recField())}
     <p class="stats-note" style="margin:0;font:12px var(--ui);letter-spacing:0;text-transform:none;opacity:.55">Statistiques anonymes de fréquentation (GoatCounter, sans cookie)</p>
     <div class="row"><button data-m="back">Retour</button></div>`;
   menu.oninput = (e) => controlChange(e.target as HTMLInputElement);
