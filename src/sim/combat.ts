@@ -426,9 +426,7 @@ export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
   const cls = CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL');
-  // Char lourd (2010 sheet): the Pégase's attack on the ground becomes 29/29/87/58/87/29.
-  const heavy = e.type === 'pegase' && !e.airborne && this.level(e.owner, 'charlourd');
-  const base = heavy ? U.charlourd.vs[cls] : a.vs ? a.vs[cls] : a.damage;
+  const base = this.classValue(e, a, cls);
   let bonus = a.vs ? 0 : (machine ? (a.vsMechanical ?? 0) : 0) + (t.def.kind === 'building' ? (a.vsStructure ?? 0) : 0);
   // Scie d'assaut (2010 sheet): +5 against structures and heavy machines.
   if ((CLASSES[cls] === 'S' || CLASSES[cls] === 'MM') && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
@@ -451,16 +449,23 @@ export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   return base + bonus + upgrade;
 }
 
+/** An attack's base value against a class (index in CLASSES); Char lourd (2010 sheet): the Pégase on the ground 29/29/87/58/87/29. */
+export function classValue(this: World, e: Entity, a: Attack, cls: number): number {
+  if (e.type === 'pegase' && !e.airborne && e.owner >= 0 && this.level(e.owner, 'charlourd')) return BALANCE.rules.upgrades.charlourd.vs[cls];
+  return a.vs ? a.vs[cls] : a.damage;
+}
+
 /** The attack research's share of a blow worth `value` (+10 % a level), for an attacker that gets it. */
 export function researched(this: World, e: Entity, a: Attack, value: number): number {
   const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
   return armed ? this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(value / 10)) : 0;
 }
 
-/** Cri de guerre (much harder for a while) and the Artefacterie's Force (for good), on a blow's value. */
-export function boost(this: World, e: Entity, value: number): number {
+/** Cri de guerre (much harder for a while) and the Artefacterie's Force (for good), on a blow's value; `force` alone if `late`, the Cri alone if `late` is false. */
+export function boost(this: World, e: Entity, value: number, late?: boolean): number {
   let damage = value;
-  if (e.war > 0) damage += idiv(damage * e.warPct, 100);
+  if (late !== true && e.war > 0) damage += idiv(damage * e.warPct, 100);
+  if (late === false) return damage;
   const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * BALANCE.rules.upgrades.artefacts.force : 0;
   if (force) damage += idiv(damage * force, 100);
   return damage;
@@ -480,12 +485,14 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   const U = BALANCE.rules.upgrades;
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
   const value = this.blow(e, t, a);
-  // Courroux du marteau: the charged blow.
-  let damage = this.boost(e, value);
+  // Cri de guerre first, then Coup puissant and Seth, the Artefacterie's Force last (their rounding in this order).
+  let damage = this.boost(e, value, false);
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
   if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
   // Seth (notice: he hits the weakest soldiers hard, to finish them cruelly): more against a unit under half its health.
   if (e.type === 'seth' && t.def.kind === 'unit' && t.hp * 2 < t.maxHp) damage += idiv(damage * U.sethCruel, 100);
+  damage = this.boost(e, damage, true);
+  // Courroux du marteau: the charged blow.
   if (e.charged > 0 && a.range < 1) {
     damage *= U.courroux;
     e.charged = 0;

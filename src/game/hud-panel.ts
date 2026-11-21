@@ -113,8 +113,9 @@ function stats(h: Hud, e: Entity): string {
   const a = h.world.weapon(e);
   if (a) {
     // shortcut: the value against light biologicals (BL) with the attack research on it; the other bonuses (Conseil, auras…) are left out.
-    const up = e.owner >= 0 ? h.world.researched(e, a, a.damage) : 0;
-    parts.push(`<span title="Dégâts par coup contre l'infanterie légère ; selon la cible, la valeur et le bonus de recherche changent">Attaque ${a.damage}${plus(up)}</span>`);
+    const light = h.world.classValue(e, a, 0);
+    const up = e.owner >= 0 ? h.world.researched(e, a, light) : 0;
+    parts.push(`<span title="Dégâts par coup contre l'infanterie légère ; selon la cible, la valeur et le bonus de recherche changent">Attaque ${light}${plus(up)}</span>`);
     parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
     parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
   }
