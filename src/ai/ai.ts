@@ -89,6 +89,8 @@ const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
 const CROWD: Record<string, number> = { explosiftoxique: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
+/** Spells that take a caster out of a lost fight: the mana for them is never spent on another. */
+const ESCAPE = ['voyage'];
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
 const GODS = BALANCE.ai.gods as [string, number][];
 
@@ -1087,6 +1089,11 @@ export class AI {
       for (const name of w.abilitiesFor(u).slice().sort((a, b) => Number(FIRST.includes(b)) - Number(FIRST.includes(a)) || FIRST.indexOf(a) - FIRST.indexOf(b))) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research)) || !w.ready(u, name)) continue;
+        // A caster keeps the mana of its way out (Hadès' Voyage, 40): spent on the Rayon de la mort, he could not flee.
+        // Not where both never fit (Hadès at level 1 holds 150, the Rayon costs 140).
+        const flight = w.abilitiesFor(u).find((n) => ESCAPE.includes(n) && n !== name);
+        const keep = flight ? (spell(flight, u.lvl).mana ?? 0) : 0;
+        if (keep && ab.mana && ab.mana + keep <= (w.manaOf(u)?.[0] ?? 0) && u.mana - toFp(ab.mana) < toFp(keep)) continue;
         // A caster in a shelter cannot walk up: exactly the reach the command allows (the shelter's edge), no tile more,
         // or the order is refused and asked again every think.
         const shelter = u.inside ? w.entities.get(u.inside) : undefined;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Faction } from '../data';
-import { FP, ticks } from '../sim/fixed';
+import { FP, ticks, toFp } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
 import { AI } from './ai';
@@ -174,6 +174,20 @@ describe('AI spells, each in a scene made for it', () => {
     accumulateur(at);
     crowd(at, 'auxiliaire', 6, 3, 0);
     expect(cast(orders(w, ai), 'gravite')).toBe(true);
+  });
+
+  it('Hadès keeps the mana of his Voyage: no Rayon de la mort that would leave him without it', () => {
+    const scene = (mana: number) => {
+      const { w, ai, at } = arena(['dieux', 'humains']);
+      const hades = at('hades', 0, 0, 0);
+      hades.lvl = 3; // 200 mana at most: room for the Rayon (140) and the Voyage (40)
+      hades.mana = toFp(mana);
+      crowd(at, 'auxiliaire', 6, 3, 0);
+      // Two seconds: 2 mana more at most.
+      return cast(orders(w, ai, 2), 'rayonmort');
+    };
+    expect(scene(150)).toBe(false);
+    expect(scene(190)).toBe(true);
   });
 
   it('Fusion of two Élémentaires waiting at home, late on', () => {
