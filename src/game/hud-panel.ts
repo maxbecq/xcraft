@@ -78,7 +78,11 @@ export function updatePanel(h: Hud): void {
   if (aboard.length) {
     const out = e.owner === h.player && !h.spectator ? ' (clic : débarquer)' : '';
     html += `<div class="prod cargo"><div class="info">À bord : ${aboard.length}</div><div class="grid">${aboard
-      .map((u) => `<div class="tile" data-unload="${u.id}" data-of="${e.id}" style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${out}">${img(u.type, u.def.name)}</div>`)
+      .map((u) => {
+        // In a Fortin or a Scarabée, a passenger with powers is picked by a click, to use them from inside (notice).
+        const pick = (e.def.kind === 'building' || e.type === 'scarabee') && h.world.abilitiesFor(u).length > 0;
+        return `<div class="tile" data-unload="${u.id}" data-of="${e.id}"${pick ? ' data-pick="1"' : ''} style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${pick && out ? ' (clic : ses pouvoirs)' : out}">${img(u.type, u.def.name)}</div>`;
+      })
       .join('')}</div></div>`;
   }
   if ((e.def as UnitDef).weapons) {

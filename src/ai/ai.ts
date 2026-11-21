@@ -781,7 +781,9 @@ export class AI {
     if (weak.length) ctx.out.push({ player: this.player, kind: 'ability', ids: weak.map((u) => u.id), name: 'formefeu' });
     // Gaïa too, when she is not building: her arrow.
     const gaia = this.faction.builder ? ctx.builders.filter((b) => b.type === this.faction.builder && b.order?.kind !== 'build' && b.order?.kind !== 'construct') : [];
-    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia]));
+    // Passengers of a Fortin or a Scarabée use their powers from inside too (notice).
+    const aboard = mine.filter((e) => e.inside && e.def.kind === 'unit' && w.abilitiesFor(e).length && (w.entities.get(e.inside)?.def.kind === 'building' || w.entities.get(e.inside)?.type === 'scarabee'));
+    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia, ...aboard]));
     // Dieux: two Élémentaires waiting at home fuse into a Golem, late on; apart, one walks to the other.
     const elems = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('fusion') && !this.wave.has(u.id) && !u.order && u.abilityCd === 0);
     if (ctx.minute >= 15 && elems.length >= 2 && !this.easy) {

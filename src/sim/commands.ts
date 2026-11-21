@@ -281,7 +281,8 @@ export function apply(this: World, c: Command): void {
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
         // An ability without cooldown (Explosion suicidaire) is ready whatever the caster used before.
-        const able = units.filter((e) => this.abilitiesFor(e).includes(c.name!));
+        // Notice: soldiers in a Fortin or a Scarabée use their powers from inside, as they shoot.
+        const able = mine.filter((e) => e.def.kind === 'unit' && e.held === 0 && (!e.inside || this.entities.get(e.inside)?.def.kind === 'building' || this.entities.get(e.inside)?.type === 'scarabee') && this.abilitiesFor(e).includes(c.name!));
         const casters = able.filter((e) => this.ready(e, c.name!));
         // Casters with energy of their own (fiches 2010): none with enough of it.
         if (!casters.length && able.some((e) => this.manaOf(e) && e.abilityCd === 0 && (e.spellCd[c.name!] ?? 0) <= this.tick)) return void this.say(c.player, "Pas assez d'énergie.");
@@ -289,6 +290,14 @@ export function apply(this: World, c: Command): void {
         if (c.x === undefined || c.y === undefined || !casters.length) return;
         const [x, y] = [c.x, c.y];
         const e = casters.sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+        if (e.inside) {
+          // From inside it cannot walk up: within reach of the shelter's edge, or not at all.
+          const shelter = this.entities.get(e.inside)!;
+          const edge = shelter.def.kind === 'building' ? ((shelter.def as BuildingDef).size * FP) / 2 : shelter.radius;
+          if (dist(e.x, e.y, x, y) > toFp(ab.range ?? 0) + edge) return void this.say(c.player, `${ab.name} : hors de portée de l'abri.`);
+          if (!this.castAt(e, c.name, x, y)) this.say(c.player, `${ab.name} : rien à viser ici.`);
+          return;
+        }
         return void this.setOrder(e, { kind: 'cast', ability: c.name, x, y });
       }
       for (const e of units) this.cast(e);

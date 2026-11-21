@@ -42,6 +42,17 @@ const crowd = (at: (type: string, owner: number, dx: number, dy: number) => Enti
   });
 
 describe('AI spells, each in a scene made for it', () => {
+  it('Cocktail from an Alchimiste inside a Fortin (notice)', () => {
+    const { w, ai, at } = arena(['humains', 'humains']);
+    w.players[0].upgrades.cocktail = 1;
+    const fort = at('fortin', 0, 0, 0);
+    const a = at('alchimiste', 0, 0, 2);
+    a.inside = fort.id;
+    crowd(at, 'auxiliaire', 4, 5, 0);
+    const cmds = orders(w, ai);
+    expect(cmds.some((c) => c.kind === 'ability' && c.name === 'explosiftoxique' && c.ids.includes(a.id))).toBe(true);
+  });
+
   it('Charge de napalm on an enemy vehicle', () => {
     const { w, ai, at } = arena(['humains', 'humains']);
     w.players[0].upgrades.chargenapalm = 1;

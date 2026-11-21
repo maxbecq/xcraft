@@ -188,3 +188,23 @@ describe('Double énergétique (fiche « Hallucination », mod)', () => {
     expect(copy()).toBeUndefined();
   });
 });
+
+describe('powers from inside a Fortin (notice)', () => {
+  it('an Alchimiste in a Fortin throws its Cocktail from there, within reach of the Fortin', () => {
+    const w = new World(createMap());
+    w.players[0].upgrades.cocktail = 1;
+    const fort = w.spawn('fortin', 0, 40 * FP, 60 * FP);
+    const a = Object.assign(w.spawn('alchimiste', 0, ...at(43, 60)), { mana: 1 << 30 });
+    w.step([{ player: 0, kind: 'smart', ids: [a.id], x: fort.x, y: fort.y, target: fort.id }]);
+    for (let i = 0; i < ticks(5) && !a.inside; i++) w.step([]);
+    expect(a.inside).toBe(fort.id);
+    const near = w.spawn('serf', 1, fort.x + 6 * FP, fort.y);
+    const far = w.spawn('serf', 1, fort.x + 20 * FP, fort.y);
+    w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: far.x, y: far.y }]);
+    expect(far.poison).toBe(0);
+    w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: near.x, y: near.y }]);
+    run(w, 0.2);
+    expect(near.poison).toBeGreaterThan(0);
+    expect(a.inside).toBe(fort.id);
+  });
+});

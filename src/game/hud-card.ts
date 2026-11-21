@@ -102,6 +102,9 @@ export function buttonsFor(h: Hud): Button[] {
   if (units.length) {
     const list: Button[] = [{ label: 'Stop', cmd: 'stop', key: 'S', action: () => cmd({ kind: 'stop', ids }) }];
     // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
+    // A passenger picked in its shelter's panel (notice: it uses its powers from inside): out on X.
+    const aboard = units.filter((u) => u.inside);
+    if (aboard.length) list.push({ label: 'Sortir', cmd: 'debarquer', key: 'X', action: () => aboard.forEach((u) => cmd({ kind: 'unload', ids: [u.inside], unit: u.id })) });
     const all = units;
     const sub = units.filter((u) => u.type === h.activeType);
     if (sub.length) units = sub;

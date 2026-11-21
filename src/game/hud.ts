@@ -241,6 +241,14 @@ export class Hud {
         const of = Number(out.dataset.of);
         if (this.world.entities.get(of)?.owner !== this.player || this.spectator) return;
         this.audio.play('click');
+        // A passenger with powers (notice: they use them from a Fortin or a Scarabée) is picked: its card shows them,
+        // and a Sortir button; the others step out at once.
+        const u = this.world.entities.get(Number(out.dataset.unload));
+        if (u && this.world.abilitiesFor(u).length && out.dataset.pick) {
+          this.input.selected.clear();
+          this.input.selected.add(u.id);
+          return;
+        }
         return this.issue({ player: this.player, kind: 'unload', ids: [of], unit: Number(out.dataset.unload) });
       }
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
