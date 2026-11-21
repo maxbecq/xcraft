@@ -40,7 +40,7 @@ describe('Isdaris', () => {
     for (let r = 3; r < 15 && !rp; r++) for (let dx = -r; dx <= r && !rp; dx++) for (const dy of [-r, r]) if (!rp && w.canPlace('reservepsy', 14 + dx, 14 + dy, 0)) rp = [14 + dx, 14 + dy];
     w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'reservepsy', tx: rp![0], ty: rp![1] }]);
     expect(of(w, 0, 'reservepsy')).toHaveLength(0);
-    run(w, 55);
+    run(w, 65);
     expect(gate.buildLeft).toBe(0);
     expect(gate.shield).toBe(gate.maxShield);
     w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'reservepsy', tx: rp![0], ty: rp![1] }]);
@@ -99,7 +99,7 @@ describe('Isdaris', () => {
     const hp = archer.hp;
     run(w, 20);
     expect(archer.hp).toBe(hp); // no hp regeneration for archers
-    expect(archer.shield).toBeGreaterThan(20);
+    expect(archer.shield).toBeGreaterThan(10); // 1 a second, 7 s after the last hit (2010 sheet)
   });
 
   it('creatures regenerate their health', () => {
@@ -107,7 +107,7 @@ describe('Isdaris', () => {
     const c = w.spawn('creature', 0, ...at(40, 60));
     c.hp = 20;
     run(w, 10);
-    expect(c.hp).toBeGreaterThan(40);
+    expect(c.hp).toBeGreaterThan(25); // 0.75 a second (2010 sheet)
   });
 
   it('Rappel brings the army units near the target back beside the Obélisque after a channel', () => {

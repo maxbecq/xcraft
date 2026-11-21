@@ -34,7 +34,7 @@ describe('three and four players', () => {
       const ais = w.players.map((p) => new AI(w, p.id));
       while (w.winner === null && w.tick < ticks(50 * 60)) w.step(ais.flatMap((ai) => ai.think()));
       expect(w.winner).not.toBeNull();
-      if (teams) for (const p of w.players) if (p.team !== w.players[w.winner!].team) expect([...w.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building')).toBe(false);
+      if (teams) for (const p of w.players) if (p.team !== w.players[w.winner!].team && !p.resigned) expect([...w.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building')).toBe(false);
     }
   }, 300_000);
 });

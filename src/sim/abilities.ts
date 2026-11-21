@@ -91,7 +91,14 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     // Through the corridor to the nearest other Espion of ours.
     const other = [...this.entities.values()].filter((o) => o !== e && o.owner === e.owner && o.type === 'espion').sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.id - b.id)[0];
     if (!other) return void this.say(e.owner, 'Il faut un second Espion.');
-    for (const t of around(ab.radius!, (t) => t.owner === e.owner && t !== e && !flies(t)).slice(0, ab.max)) this.place(t, other.x, other.y);
+    // As many as 8 supply (2010 sheet).
+    let room = ab.max!;
+    for (const t of around(ab.radius!, (t) => t.owner === e.owner && t !== e && !flies(t))) {
+      const supply = (t.def as UnitDef).supply;
+      if (supply > room) continue;
+      room -= supply;
+      this.place(t, other.x, other.y);
+    }
   } else if (name === 'decollage') {
     // Take off, or land where the ground is open; either takes a moment.
     if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');

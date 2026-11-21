@@ -650,7 +650,7 @@ const BASE: Record<string, object> = {
   pyramide: extension('Pyramide', 'Y', 'Dragons au Psycho-assembleur, et recherches avancées.'),
   observatoire: extension('Observatoire', 'O', "L'Orbe révèle une très large zone."),
   ...upgrades('bouclier', 'Bouclier psychique', 'B', undefined, 'isdaris'),
-  robots: isd('Robots améliorés', 'R', 'Robots moissonneurs : +1 attaque, +1 armure.'),
+  robots: isd('Robots améliorés', 'R', 'Robots moissonneurs : +2 attaque, +2 armure.'),
   ...upgrades('cercle', "Cercle d'énergie", 'E', undefined, 'isdaris', 2),
   chocmental: isd('Choc mental', 'M', "L'Assassin tétanise un ennemi.", { pyramide: 1 }),
   boostgenetique: isd('Boost génétique', 'G', 'Créatures : plus de PV, de cadence et de vitesse.', { pyramide: 1 }),

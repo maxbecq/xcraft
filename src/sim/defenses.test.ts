@@ -7,7 +7,7 @@ describe('Isdaris defences', () => {
   it('a Récepteur turns into a Récepteur armé that shoots, keeping its energy', () => {
     const w = createMatch(['isdaris', 'humains']);
     const rec = w.spawn('recepteur', 0, 20 * FP, 30 * FP);
-    w.players[0].minerals = 600;
+    w.players[0].minerals = 200; // its price (2010 sheet, mod)
     w.step([{ player: 0, kind: 'train', ids: [rec.id], type: 'recepteurarme' }]);
     expect(w.players[0].minerals).toBe(0);
     for (let i = 0; i < ticks(31); i++) w.step([]);

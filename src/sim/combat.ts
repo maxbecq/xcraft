@@ -22,11 +22,11 @@ export function attackLine(this: World, e: Entity, a: Attack): UpgradeLine {
   return a.range < 1 ? 'melee' : 'ranged';
 }
 
-/** Cercle d'énergie: major Isdaris buildings get a stronger shield; Boost génétique: Créatures get hp and speed. */
+/** Cercle d'énergie: the Obélisques get a stronger shield; Boost génétique: Créatures get hp and speed (2010 sheet). */
 export function empower(this: World, u: Entity, type: string): void {
   const U = BALANCE.rules.upgrades;
-  if (type.startsWith('cercle') && u.def.kind === 'building' && ['obelisque', 'portail', 'nanoassembleur', 'orbecommandement', 'trone'].includes(u.type)) {
-    const extra = idiv((u.def.shield ?? 0) * U.cerclePercent, 100);
+  if (type.startsWith('cercle') && u.type === 'obelisque') {
+    const extra = U.cercleShield;
     u.maxShield += extra;
     u.shield += extra;
   } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'armurezodiacale' && u.type === 'titan')) {
@@ -35,10 +35,9 @@ export function empower(this: World, u: Entity, type: string): void {
     u.maxHp += extra;
     u.hp += extra;
   } else if (type === 'boostgenetique' && u.type === 'creature') {
-    const extra = idiv((u.def as UnitDef).hp * U.boost.hp, 100);
-    u.maxHp += extra;
-    u.hp += extra;
-    u.speed = speedPerTick(((u.def as UnitDef).speed * (100 + U.boost.speed)) / 100);
+    u.maxHp += U.boost.hp;
+    u.hp += U.boost.hp;
+    u.speed = speedPerTick((u.def as UnitDef).speed + U.boost.speed);
   }
 }
 
@@ -222,6 +221,8 @@ export function hurt(this: World, t: Entity, damage: number): number {
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
   if (t.def.kind === 'unit' && this.coned(t)) return 0;
   if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
+  // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.
+  if (damage > 0 && t.shield > 0 && t.owner >= 0 && this.players[t.owner]?.faction === 'isdaris') damage = Math.max(1, damage - this.level(t.owner, 'bouclier') * BALANCE.rules.upgrades.bouclierArmor);
   const absorbed = Math.min(t.shield, damage);
   t.shield -= absorbed;
   if (damage > absorbed) {
@@ -242,7 +243,8 @@ export function regenerate(this: World, e: Entity): void {
   const shielding = e.shield < e.maxShield && (e.def.kind !== 'building' || e.buildLeft === 0);
   if (!shielding && !(regen && e.hp < e.maxHp)) return;
   if (shielding && this.tick - e.lastHit < ticks(7)) return;
-  const rate = regen && e.hp < e.maxHp ? regen : 2 + (e.owner >= 0 ? this.level(e.owner, 'bouclier') * BALANCE.rules.upgrades.boucliersRegen : 0);
+  // Shields come back 1 a second (2010 sheet).
+  const rate = regen && e.hp < e.maxHp ? regen : 1;
   if (++e.regenTimer < ticks(1 / rate)) return;
   e.regenTimer = 0;
   if (shielding) e.shield++;
