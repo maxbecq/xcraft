@@ -32,3 +32,16 @@ describe('end banner', () => {
     expect(h.banner.innerHTML).toContain("L'adversaire abandonne.");
   });
 });
+
+describe('end banner timing', () => {
+  it('stamps when it comes up, so a press begun before it is told apart', () => {
+    const h = hud(0, [false, true]) as Hud & { endShownAt: number };
+    h.endShownAt = 0;
+    const before = performance.now();
+    showEnd(h);
+    expect(h.endShownAt).toBeGreaterThanOrEqual(before);
+    const shown = h.endShownAt;
+    showEnd(h); // already up: not stamped again
+    expect(h.endShownAt).toBe(shown);
+  });
+});

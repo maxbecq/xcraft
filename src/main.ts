@@ -357,8 +357,13 @@ tools.addEventListener('click', (e) => {
   }
 });
 // The pause menu and the end-of-game banner share these actions.
+let pressedAt = 0;
+window.addEventListener('pointerdown', () => (pressedAt = performance.now()), true);
 document.addEventListener('click', (e) => {
   const button = (e.target as HTMLElement).closest<HTMLElement>('.pause [data-p], .hud-banner [data-p], .net-banner [data-p]');
+  // A finger already down as the match ended, lifted where « Rejouer » came up: not a press (it relaunched the match,
+  // over and over when watching the AI on a phone).
+  if (button?.closest('.hud-banner') && pressedAt < hud.endShownAt) return;
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;

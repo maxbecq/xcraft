@@ -79,6 +79,8 @@ export class Hud {
   /** Unit ability being aimed (none: a building's). */
   aimed?: string;
   readonly banner = el('div', 'hud-banner');
+  /** When the end banner last came up (ms): a press begun before it (a finger already down) does not press its buttons. */
+  endShownAt = 0;
   /** More buttons for the end-of-game banner (the telemetry's). */
   endButtons = '';
   /** A match against a friend online: the end offers a rematch instead of a new game. */
