@@ -112,10 +112,9 @@ function stats(h: Hud, e: Entity): string {
   const parts: string[] = [];
   const a = h.world.weapon(e);
   if (a) {
-    // shortcut: only the faction's attack research is counted, not the rarer unit-specific bonuses (Acide, Conseil's aura…).
-    const line = e.owner >= 0 ? h.world.attackLine(e, a) : '';
-    const up = e.owner >= 0 && e.def.kind === 'unit' && !(e.def as UnitDef).worker ? h.world.level(e.owner, line) * Math.max(1, Math.round(a.damage / 10)) : 0;
-    parts.push(`<span title="Dégâts par coup">Attaque ${a.damage}${plus(up)}</span>`);
+    // shortcut: the value against light biologicals (BL) with the attack research on it; the other bonuses (Conseil, auras…) are left out.
+    const up = e.owner >= 0 ? h.world.researched(e, a, a.damage) : 0;
+    parts.push(`<span title="Dégâts par coup contre l'infanterie légère ; selon la cible, la valeur et le bonus de recherche changent">Attaque ${a.damage}${plus(up)}</span>`);
     parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
     parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
   }

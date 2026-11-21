@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
 import { createMap } from '../map';
-import { FP } from './fixed';
+import { FP, speedPerTick } from './fixed';
 import { World } from './world';
 import { createMatch } from './setup';
 
@@ -29,11 +29,19 @@ describe('Isdaris, by the 2010 sheet', () => {
     expect(a.maxShield - a.shield).toBe(7);
   });
 
-  it('the Boost génétique gives the Créature 8 hp and 0.25 speed', () => {
+  it('the Boost génétique gives the Créature 8 hp and 0.25 speed, kept after a slow', () => {
     const w = createMatch(['isdaris', 'humains']);
+    const plain = w.spawn('creature', 0, ...at(34, 30)).speed;
     w.players[0].upgrades.boostgenetique = 1;
     const c = w.spawn('creature', 0, ...at(30, 30));
     expect(c.maxHp).toBe((DEFS.creature as UnitDef).hp + 8);
+    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    expect(c.speed).toBeGreaterThan(plain);
+    // A slow (the Élémentaire d'eau's ice) wears off: back to the boosted speed.
+    c.chill = 1;
+    c.speed = w.baseSpeed(c);
+    c.chill = 0;
+    expect(w.baseSpeed(c)).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
   });
 
   it('the Robots améliorés give the Robot moissonneur +2 armour', () => {

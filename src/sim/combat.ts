@@ -37,7 +37,7 @@ export function empower(this: World, u: Entity, type: string): void {
   } else if (type === 'boostgenetique' && u.type === 'creature') {
     u.maxHp += U.boost.hp;
     u.hp += U.boost.hp;
-    u.speed = speedPerTick((u.def as UnitDef).speed + U.boost.speed);
+    if (u.boost === 0) u.speed = this.baseSpeed(u);
   }
 }
 
@@ -133,9 +133,11 @@ export function baseSpeed(this: World, e: Entity): number {
   const mega = e.type === 'zespion' && this.level(e.owner, 'megaespion');
   // Scarabée amélioré (fiche 2010): +0.1 of speed.
   const assault = e.type === 'scarabee' && e.owner >= 0 && this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeSpeed : 0;
+  // Boost génétique (fiche 2010): +0.25 of speed for the Créature.
+  const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
-  return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault) * (100 + fast) * stone) / 10000);
+  return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault + genetic) * (100 + fast) * stone) / 10000);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */
@@ -415,11 +417,11 @@ export function strike(this: World, e: Entity, t: Entity): void {
   }
 }
 
-/** Deals one attack's damage (with the attacker's Forge upgrades), alerts the victim and lets it fight back. */
-export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
-  // A Mur d'énergie stops shots: they flare on it.
-  const stop = a.range >= 1 && this.walled(e.x, e.y, t.x, t.y);
-  if (stop) return void this.shots.push({ x1: e.x, y1: e.y, x2: stop.x, y2: stop.y, kind: 'ranged', type: e.type, air1: flies(e), air2: false });
+/**
+ * An attack's value against one target, by its class (fiches 2010): the class value, the bonuses against it, and the
+ * upgrades and auras of the attacker (Forge, Présence des Échevins, Odin, Balise offensive).
+ */
+export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   const U = BALANCE.rules.upgrades;
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
@@ -433,8 +435,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   let upgrade = 0;
   // +10 % a level of the value against the target's class (2010 sheets). Z: the upgrade follows the weapon, so the armed
   // Tourelle and Assimilateur and the Sonde get it too (Z.doc); the Serf too (the Humans' sheet). Not the Robot moissonneur.
-  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
-  if (armed) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round((base + bonus) / 10));
+  upgrade = this.researched(e, a, base + bonus);
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
   // The Échevins' presence (2010 sheet): +1 to the attack of the units within 13 of one of their Conseils.
   if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += U.conseilAura.damage;
@@ -447,16 +448,44 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   // Z Balise offensive (Z.doc): +5 % to every attack of its owner's while a carrier stands; not cumulative.
   if (e.owner >= 0 && this.players[e.owner].faction === 'z' && this.beacon(e.owner)) upgrade += idiv((base + bonus) * BALANCE.rules.z.beaconPercent, 100);
-  // Courroux du marteau: the charged blow.
-  let damage = base + bonus + upgrade;
-  // Cri de guerre: much harder for a while; the Artefacterie's Force, for good.
+  return base + bonus + upgrade;
+}
+
+/** The attack research's share of a blow worth `value` (+10 % a level), for an attacker that gets it. */
+export function researched(this: World, e: Entity, a: Attack, value: number): number {
+  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
+  return armed ? this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(value / 10)) : 0;
+}
+
+/** Cri de guerre (much harder for a while) and the Artefacterie's Force (for good), on a blow's value. */
+export function boost(this: World, e: Entity, value: number): number {
+  let damage = value;
   if (e.war > 0) damage += idiv(damage * e.warPct, 100);
+  const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * BALANCE.rules.upgrades.artefacts.force : 0;
+  if (force) damage += idiv(damage * force, 100);
+  return damage;
+}
+
+/** What a blow does to another one it reaches (a line, behind, a splash): the value against its own class, boosted; the Assassin dances. */
+export function aside(this: World, e: Entity, o: Entity, a: Attack): number {
+  const damage = this.boost(e, this.blow(e, o, a));
+  return o.type === 'assassin' ? idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100) : damage;
+}
+
+/** Deals one attack's damage (with the attacker's Forge upgrades), alerts the victim and lets it fight back. */
+export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
+  // A Mur d'énergie stops shots: they flare on it.
+  const stop = a.range >= 1 && this.walled(e.x, e.y, t.x, t.y);
+  if (stop) return void this.shots.push({ x1: e.x, y1: e.y, x2: stop.x, y2: stop.y, kind: 'ranged', type: e.type, air1: flies(e), air2: false });
+  const U = BALANCE.rules.upgrades;
+  const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
+  const value = this.blow(e, t, a);
+  // Courroux du marteau: the charged blow.
+  let damage = this.boost(e, value);
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
   if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
   // Seth (notice: he hits the weakest soldiers hard, to finish them cruelly): more against a unit under half its health.
   if (e.type === 'seth' && t.def.kind === 'unit' && t.hp * 2 < t.maxHp) damage += idiv(damage * U.sethCruel, 100);
-  const force = e.arts.length ? e.arts.filter((x) => x === 'artforce').length * U.artefacts.force : 0;
-  if (force) damage += idiv(damage * force, 100);
   if (e.charged > 0 && a.range < 1) {
     damage *= U.courroux;
     e.charged = 0;
@@ -491,7 +520,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       const k = (o.x - e.x) * lx + (o.y - e.y) * ly;
       if (k <= 0 || k >= len2) continue;
       const cross = Math.abs((o.x - e.x) * ly - (o.y - e.y) * lx);
-      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, damage);
+      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, this.aside(e, o, a));
     }
   }
   // Z Lance-flammes (fiche « Double attaque »): the enemies on the ground just behind the target, in the jet's line.
@@ -504,9 +533,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       const k = (o.x - t.x) * lx + (o.y - t.y) * ly;
       if (k <= 0 || k * k > reach * reach * len2) continue;
       const cross = Math.abs((o.x - t.x) * ly - (o.y - t.y) * lx);
-      // Each one its own class's value (fiche 2010), the blow's bonuses kept in proportion.
-      const own = a.vs ? a.vs[CLASSES.indexOf((o.def as UnitDef).cls ?? 'BL')] : base;
-      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, base > 0 ? idiv(damage * own, base) : damage);
+      // Each one the blow against its own class (fiche 2010).
+      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, this.aside(e, o, a));
     }
   }
   // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).
@@ -525,7 +553,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (splash) {
     for (const o of [...this.entities.values()]) {
       if (o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
-      if (dist(o.x, o.y, t.x, t.y) <= toFp(splash)) this.hurt(o, idiv(a.damage + upgrade, 2));
+      if (dist(o.x, o.y, t.x, t.y) <= toFp(splash)) this.hurt(o, idiv(this.aside(e, o, a), 2));
     }
   }
   // Struck by its own side (an explicit attack order): no alarm, and nobody strikes back.
