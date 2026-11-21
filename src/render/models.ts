@@ -370,8 +370,9 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         // Isdaris technology stays almost pristine.
         const d = DEFS[type];
         if (type.startsWith('zw_')) {
-          // A Z weapon module: the light wear and rim of the Z machines it sits on.
-          gltf.scene.traverse((o) => o instanceof Mesh && (weather(o.material as Material, 0.05), rimLight(o.material as Material, 0.45)));
+          // A Z weapon module: the light wear of the Z machines it sits on, and only a faint rim (a strong warm one read as a
+          // pale yellow outline round every module).
+          gltf.scene.traverse((o) => o instanceof Mesh && (weather(o.material as Material, 0.05), rimLight(o.material as Material, 0.1)));
           if (WEAPON_DISCS[type]) trimDisc(gltf.scene, WEAPON_DISCS[type]);
           templates.set(type, share(gltf.scene));
           return;
