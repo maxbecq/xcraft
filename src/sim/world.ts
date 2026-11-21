@@ -13,8 +13,8 @@ import { Vision } from './vision';
 
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
-  /** `skip`: fields this trip gave up on, no way into them (economy.ts gather). */
-  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number; skip?: number[] }
+  /** `skip`: fields this trip gave up on, no way into them, since tick `skipped` (economy.ts gather). */
+  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number; skip?: number[]; skipped?: number }
   | { kind: 'build'; type: string; tx: number; ty: number }
   | { kind: 'construct'; target: number }
   /** Z drone (Z.doc): repairs an own machine or building, paying as it goes; `owed` in thousandths of a resource. */
@@ -1044,6 +1044,10 @@ export class World {
       // Mixed only when set, like the level: hashes of games without them stay as they were.
       if (e.illusion) mix(7919);
       if (e.trainLeft2) mix(e.trainLeft2 * 37);
+      if (e.order?.kind === 'gather' && e.order.skip?.length) {
+        mix(e.order.skipped! * 41);
+        for (const id of e.order.skip) mix(id * 43);
+      }
     }
     for (const p of this.players) {
       mix(p.minerals);

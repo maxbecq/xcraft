@@ -3,7 +3,15 @@ import { type BuildingDef, HARVEST } from '../data';
 import { FP, dist, idiv, ticks } from './fixed';
 import { type Order, type Entity, type World } from './world';
 
+/** Seconds the fields a worker gave up on stay out of its choice: the way may have opened since (a building gone). */
+const SKIP_SECONDS = 20;
+
 export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather' }>): void {
+  if (o.skip && this.tick - o.skipped! >= ticks(SKIP_SECONDS)) {
+    delete o.skip;
+    delete o.skipped;
+    delete o.skipped;
+  }
   if (o.phase === 'return' || e.carry > 0) {
     o.phase = 'return';
     const home = this.nearestDropoff(e);
@@ -36,7 +44,10 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
       // the count starts again: the next look, through every entity, comes as late.
       if (e.stuck > 2) {
         e.stuck = 0;
-        if (!o.skip?.includes(field.id)) (o.skip ??= []).push(field.id);
+        if (!o.skip?.includes(field.id)) {
+          o.skipped ??= this.tick;
+          (o.skip ??= []).push(field.id);
+        }
         const other = this.nearestField(e, field, true, o.skip);
         if (other) {
           this.release(e, field.id);

@@ -128,3 +128,36 @@ describe('fields given up on', () => {
     expect(looks).toBeLessThanOrEqual(60 / 3 + 1);
   });
 });
+
+describe('fields given up on, later', () => {
+  it('come back into the choice after a while: the way may have opened', () => {
+    const w = createMatch();
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const fields = [...w.entities.values()].filter((e) => e.type === 'minerai').sort((a, b) => Math.hypot(a.x - serf.x, a.y - serf.y) - Math.hypot(b.x - serf.x, b.y - serf.y)).slice(0, 2);
+    for (const f of [...w.entities.values()]) if (f.type === 'minerai' && !fields.includes(f)) w.remove(f);
+    let open: Entity | undefined;
+    w.reachRect = (_e, tx, ty, size) => size === 1 && !!open && tx === open.tx && ty === open.ty;
+    w.goNear = (e) => void e.stuck++;
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: fields[0].x, y: fields[0].y, target: fields[0].id }]);
+    for (let i = 0; i < 30; i++) w.step([]);
+    // Both given up on; then the first one's way opens (a building in it destroyed).
+    expect(serf.order?.kind === 'gather' && serf.order.skip?.length).toBe(2);
+    open = fields[0];
+    while (w.tick < ticks(40) && !(serf.order?.kind === 'gather' && serf.order.phase !== 'go')) w.step([]);
+    expect(serf.order?.kind === 'gather' && serf.order.target).toBe(fields[0].id);
+    expect(serf.order?.kind === 'gather' && serf.order.phase).not.toBe('go');
+  });
+});
+
+describe('World.hash and the fields given up on', () => {
+  it('sees them', () => {
+    const base = createMatch();
+    const serf = (w: ReturnType<typeof createMatch>) => [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const a = createMatch();
+    const b = createMatch();
+    for (const w of [base, a, b]) serf(w).order = { kind: 'gather', target: 1, phase: 'go', timer: 0 };
+    Object.assign(serf(a).order!, { skip: [5], skipped: 0 });
+    Object.assign(serf(b).order!, { skip: [6], skipped: 0 });
+    expect(new Set([base.hash(), a.hash(), b.hash()]).size).toBe(3);
+  });
+});
