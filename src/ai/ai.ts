@@ -174,7 +174,9 @@ export class AI {
     if (w.tick % THINK_EVERY !== 0 || w.winner !== null || w.players[this.player].resigned) return [];
     const mine = [...w.entities.values()].filter((e) => e.owner === this.player);
     if (this.lost(mine)) return [{ player: this.player, kind: 'resign', ids: [] }];
-    const home = mine.find((e) => kin(e, this.faction.hq));
+    // The headquarters, else another base still standing (the Dieux' Antre, its Porte lost): from there it raises a
+    // headquarters again instead of a last stand.
+    const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0);
     if (!home) return this.lastStand(mine);
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
@@ -235,8 +237,9 @@ export class AI {
     // Dieux: the next god due keeps its energy from everything before its summons (research spent it first: Apollon,
     // due at minute 5, came at 9 to 12 or never, and Seth's Sphinx took the rest).
     const nextGod = this.nextGod(ctx);
-    // Never below nothing: a cost of nothing (a Puits divin, a Nain, Thor's levels) is still paid.
-    if (nextGod && ctx.gods.length) ctx.godEnergy = Math.min((DEFS[nextGod] as UnitDef).cost.energy, Math.max(0, ctx.energy));
+    // Never below nothing: a cost of nothing (a Puits divin, a Nain, Thor's levels) is still paid. Only for a god with
+    // room in supply: one that cannot be summoned kept its energy from research for nothing.
+    if (nextGod && ctx.gods.length && ctx.free >= (DEFS[nextGod] as UnitDef).supply) ctx.godEnergy = Math.min((DEFS[nextGod] as UnitDef).cost.energy, Math.max(0, ctx.energy));
     ctx.energy -= ctx.godEnergy;
     this.place(ctx);
     this.research(ctx);
@@ -384,6 +387,8 @@ export class AI {
     // Supply first, then production buildings, then the mine.
     const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
+    // Its headquarters lost, another base standing: a headquarters first (the Dieux' Porte, which summons the gods).
+    if (!kin(home, f.hq) && !building(f.hq)) wants.push(f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
     const producers = f.gods ? 1 + gods.length : count(f.barracks);
     if (supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply)) wants.push(f.supply);
@@ -800,7 +805,7 @@ export class AI {
   /** Dieux: the god the Porte summons next, its time come (and none summoning). */
   private nextGod(ctx: Turn): string | undefined {
     const { w, f, mine, home, buildings, minute, saving } = ctx;
-    if (!f.gods || saving || home.queue.length) return undefined;
+    if (!f.gods || saving || !kin(home, f.hq) || home.queue.length) return undefined;
     const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
     return next && !w.lacks(this.player, next[0]) ? next[0] : undefined;
   }

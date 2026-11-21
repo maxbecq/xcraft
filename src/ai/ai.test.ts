@@ -353,6 +353,33 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'puitsdivin', tx: far.tx, ty: far.ty }));
   });
 
+  it('Dieux: their Porte lost, an Antre standing, they raise a Porte again', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    w.spawn('antre', 0, asgaard.x + 14 * FP, asgaard.y);
+    w.entities.delete(asgaard.id);
+    w.players[0].minerals = 2000;
+    w.tick = ticks(6 * 60) - (ticks(6 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'asgaard' }));
+  });
+
+  it('Dieux: no energy kept for a god that has no room in supply (research gets it)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    const temple = w.spawn('temple', 0, asgaard.x - 8 * FP, asgaard.y);
+    // Offrandes (no energy) done: next comes Attaque divine 1, 250 energy.
+    w.players[0].upgrades.offrandes = 1;
+    // Seth due (minute 3), 200 energy, but supply full: he cannot come, the Temple researches.
+    while (w.supply(0).used < w.supply(0).max) w.spawn('nain', 0, asgaard.x + 6 * FP, asgaard.y + 4 * FP);
+    w.players[0].minerals = 4000;
+    w.players[0].energy = 300;
+    w.tick = ticks(4 * 60) - (ticks(4 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [temple.id], type: 'dmelee1' }));
+  });
+
   it('Z: keeps no drone price while its Intelligence waits to turn into the suprême', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
