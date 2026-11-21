@@ -429,7 +429,7 @@ export function forgeFx(body: Object3D, e: Entity): { group: Group; update(dt: n
 
 /**
  * The Mastodonte's two rear engines burning: a cyan-and-white jet out of each nozzle (two stretched additive glows,
- * a hot core and a wider plume), flickering, long and bright while it flies somewhere, short and faint while it hovers.
+ * a hot core and a trail of glows), flickering, while it flies somewhere; none while it hovers.
  * The nozzles are where the model has them (body frame, glTF +Z forward, so the back is -Z).
  */
 export function thrusterFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
@@ -448,14 +448,15 @@ export function thrusterFx(body: Object3D, e: Entity): { group: Group; update(dt
   }
   group.traverse((o) => (o.userData.noPick = true));
   body.add(group);
-  let [lx, ly, power] = [e.x, e.y, 0.3];
+  let [lx, ly, power] = [e.x, e.y, 0];
   const seed = e.id * 1.3;
   return {
     group,
     update(dt, t) {
       const moving = e.x !== lx || e.y !== ly;
       [lx, ly] = [e.x, e.y];
-      power += ((moving ? 1 : 0.25) - power) * Math.min(1, dt * 3);
+      power += ((moving ? 1 : 0) - power) * Math.min(1, dt * 3);
+      group.visible = power > 0.02; // none at rest: they grow in as it sets off and die down as it stops
       for (const [i, trail] of jets.entries()) {
         const f = 0.85 + 0.1 * Math.sin(t * 23 + seed + i * 2) + 0.05 * Math.sin(t * 41 + i);
         const len = (0.2 + 0.9 * power) * f;
