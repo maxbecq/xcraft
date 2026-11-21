@@ -401,6 +401,7 @@ export function forgeFx(body: Object3D, e: Entity): { group: Group; update(dt: n
   embers.visible = n > 0;
   group.add(embers);
   group.traverse((o) => (o.userData.noPick = true));
+  group.userData.ownMaterials = true; // each forge's own: freed with a warm-up view too (EntityRenderer.clear)
   body.add(group);
   const seed = e.id * 1.7;
   return {

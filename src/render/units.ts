@@ -233,11 +233,15 @@ export class EntityRenderer {
 
   /**
    * Takes every view off the scene, freeing geometry and skeletons but not materials: a throwaway renderer's, made only
-   * to compile each type's programs (main.ts compileScene), which must outlive it for the real views to come.
+   * to compile each type's programs (main.ts compileScene), which must outlive it for the real views to come. Effects
+   * that make materials of their own per view (the forge) are freed whole: no real view will ever use those.
    */
   clear(): void {
     for (const v of this.views.values()) {
       this.scene.remove(v.root);
+      const own: Object3D[] = [];
+      v.root.traverse((o) => void (o.userData.ownMaterials && own.push(o)));
+      own.forEach((o) => free(o));
       v.root.traverse((o) => {
         const m = o as Mesh;
         if (m.geometry && !SHARED.has(m.geometry)) m.geometry.dispose();
