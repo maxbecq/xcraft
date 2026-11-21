@@ -42,6 +42,18 @@ const crowd = (at: (type: string, owner: number, dx: number, dy: number) => Enti
   });
 
 describe('AI spells, each in a scene made for it', () => {
+  it('no Cocktail from a Scarabée at a crowd just out of its reach (no order refused over and over)', () => {
+    const { w, ai, at } = arena(['humains', 'humains']);
+    w.players[0].upgrades.cocktail = 1;
+    const scar = at('scarabee', 0, 0, 0);
+    const a = at('alchimiste', 0, 0, 2);
+    a.inside = scar.id;
+    // From a Scarabée the Cocktail reaches 7 tiles plus its radius (0.8): three foes 7.9 off, within the old tile of
+    // margin but out of the command's reach.
+    for (const dy of [-0.5, 0, 0.5]) at('auxiliaire', 1, 7.9, dy).held = ticks(60);
+    expect(orders(w, ai).some((c) => c.kind === 'ability' && c.name === 'explosiftoxique')).toBe(false);
+  });
+
   it('Cocktail from an Alchimiste inside a Fortin (notice)', () => {
     const { w, ai, at } = arena(['humains', 'humains']);
     w.players[0].upgrades.cocktail = 1;

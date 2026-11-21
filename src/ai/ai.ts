@@ -1,6 +1,6 @@
 import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, raises, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
-import { FP, dist, ticks } from '../sim/fixed';
+import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions } from '../sim/setup';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
@@ -1040,7 +1040,10 @@ export class AI {
       for (const name of w.abilitiesFor(u).slice().sort((a, b) => Number(FIRST.includes(b)) - Number(FIRST.includes(a)) || FIRST.indexOf(a) - FIRST.indexOf(b))) {
         const ab = spell(name, u.lvl);
         if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research)) || !w.ready(u, name)) continue;
-        const reach = ((ab.range ?? 0) + 1) * FP;
+        // A caster in a shelter cannot walk up: exactly the reach the command allows (the shelter's edge), no tile more,
+        // or the order is refused and asked again every think.
+        const shelter = u.inside ? w.entities.get(u.inside) : undefined;
+        const reach = shelter ? toFp(ab.range ?? 0) + (shelter.def.kind === 'building' ? ((shelter.def as BuildingDef).size * FP) / 2 : shelter.radius) : ((ab.range ?? 0) + 1) * FP;
         const radius = (ab.radius ?? 0) * FP;
         const inReach = around(near, u.x, u.y, reach);
         const allies = around(army, u.x, u.y, reach);
