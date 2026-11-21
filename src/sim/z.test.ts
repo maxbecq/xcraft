@@ -456,3 +456,25 @@ describe('Z Réparateur (notice: « véhicules et bâtiments »)', () => {
     expect(w.patient(medic)).toBe(ic);
   });
 });
+
+describe('Z Assimilateur (notice)', () => {
+  it('runs at 25 % once built, and fully with 3 drones inside', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    const puits = [...w.entities.values()].find((e) => e.type === 'puits')!;
+    const a = w.spawn('assimilateur', 0, puits.x - FP, puits.y - FP);
+    const gain = (s: number) => {
+      const e0 = p.energy;
+      run(w, s);
+      return p.energy - e0;
+    };
+    const alone = gain(20);
+    const drones = of(w, 0, 'drone').slice(0, 4);
+    w.step([{ player: 0, kind: 'smart', ids: drones.map((d) => d.id), x: a.x, y: a.y, target: a.id }]);
+    run(w, 15);
+    expect(drones.filter((d) => d.inside === a.id)).toHaveLength(3);
+    const full = gain(20);
+    expect(full).toBeGreaterThan(alone * 3.5);
+    expect(full).toBeLessThan(alone * 4.5);
+  });
+});

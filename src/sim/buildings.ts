@@ -168,8 +168,8 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
-  // Z Refuge (notice): the Intelligence shelters its drones, and only them.
-  if ((b.def as BuildingDef).dropoff) return !!d.worker;
+  // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
+  if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
   if (d.worker || d.mechanical || d.beast) return false;
   return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
@@ -218,7 +218,8 @@ export function operate(this: World, b: Entity): void {
       this.hit(b, t, attack);
     }
   }
-  if (def.energyRate && ++b.timer >= ticks(1 / def.energyRate)) {
+  // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
+  if (def.energyRate && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
     b.timer = 0;
     this.players[b.owner].energy++;
   }

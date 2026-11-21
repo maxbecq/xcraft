@@ -222,6 +222,16 @@ export class AI {
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
 
+    // Z: three drones work each Assimilateur (notice), taken from the mineral line.
+    for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker)) {
+      const coming = serfs.filter((s) => s.order?.kind === 'enter' && s.order.target === b.id).length;
+      for (let n = this.world.room(b) - this.world.load(b) - coming; n > 0; n--) {
+        const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather' && !ctx.out.some((c) => c.ids.includes(s.id))), [b.tx, b.ty], (b.def as BuildingDef).size);
+        if (!s) break;
+        ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
+      }
+    }
+
     // Abandoned construction sites (builder killed) get a new serf. Warped buildings build themselves.
     for (const site of buildings.filter((b) => b.buildLeft > 0 && !(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs)) {
       if (serfs.some((s) => s.order?.kind === 'construct' && s.order.target === site.id)) continue;
@@ -305,7 +315,7 @@ export class AI {
     // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
     for (const [type, from] of [...(EXTRA[p.faction] ?? []), ...(MORE_EXTRA[p.faction] ?? [])]) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
-    const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker && !(DEFS[t] as BuildingDef).dropoff);
+    const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker && !(DEFS[t] as BuildingDef).dropoff && !(DEFS[t] as BuildingDef).energyRate);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
@@ -483,7 +493,7 @@ export class AI {
     // Man the Fortins with soldiers waiting at home (the Z Intelligence shelters drones only). With no income left
     // they come out and join the last waves: a crew sat in its Fortin to the time limit while one new soldier at a
     // time walked out to die.
-    const bunkers = buildings.filter((o) => (o.def as BuildingDef).bunker && !(o.def as BuildingDef).dropoff && o.buildLeft === 0);
+    const bunkers = buildings.filter((o) => (o.def as BuildingDef).bunker && !(o.def as BuildingDef).dropoff && !(o.def as BuildingDef).energyRate && o.buildLeft === 0);
     if (bunkers.length && this.starved(buildings, ctx.p.minerals)) {
       const manned = bunkers.filter((b) => mine.some((u) => u.inside === b.id));
       if (manned.length) ctx.out.push({ player: this.player, kind: 'unload', ids: manned.map((b) => b.id) });

@@ -370,6 +370,9 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
       this.setOrder(e, { kind: 'construct', target: t.id });
     } else if (!worker && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
       this.setOrder(e, { kind: 'enter', target: t.id });
+    } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).energyRate && this.room(t) && t.buildLeft === 0 && this.boards(e, t)) {
+      // Z Assimilateur: a drone goes in to work it.
+      this.setOrder(e, { kind: 'enter', target: t.id });
     } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).dropoff && e.carry > 0) {
       this.setOrder(e, { kind: 'gather', target: this.nearestField(e)?.id ?? 0, phase: 'return', timer: 0 });
     } else {
