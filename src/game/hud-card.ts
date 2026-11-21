@@ -207,6 +207,10 @@ export function buttonsFor(h: Hud): Button[] {
   }
   // What one of the selected buildings may make: its own Isdaris extensions count (a Druide needs a Laboratoire on that Portail).
   const lackAt = (t: string) => {
+    // Once for the side; building by building only when it needs an extension of this building type's own.
+    const all = h.world.lacks(h.player, t, built(h));
+    const local = Object.keys((DEFS[t] as UnitDef | UpgradeDef).requires ?? {}).some((r) => (DEFS[r] as UpgradeDef).host === b.type);
+    if (all || !local) return all;
     const why = same.map((o) => h.world.lacks(h.player, t, built(h), o));
     return why.includes('') ? '' : why[0];
   };
@@ -269,10 +273,11 @@ export function buttonsFor(h: Hud): Button[] {
   for (const t of b.def.researches ?? []) {
     const d = DEFS[t] as UpgradeDef;
     // An extension: on the selected buildings that do not carry it yet (it is theirs alone).
-    const free = d.host ? same.filter((o) => h.world.researchable(h.player, t, o)) : same;
+    const free = d.host ? same.filter((o) => o.buildLeft === 0 && h.world.researchable(h.player, t, o)) : same;
     if (!free.length || !h.world.researchable(h.player, t, d.host ? free[0] : undefined)) continue;
     // Research behind an extension (on one of these buildings) or another research not done yet stays out of the card.
-    const done = (r: string) => ((DEFS[r] as UpgradeDef).host ? same.some((o) => h.world.hasExt(h.player, r, o)) : h.world.level(h.player, (DEFS[r] as UpgradeDef).line) > 0);
+    const host = (r: string) => (DEFS[r] as UpgradeDef).host;
+    const done = (r: string) => (host(r) === b.type ? same.some((o) => h.world.hasExt(h.player, r, o)) : host(r) ? h.world.hasExt(h.player, r) : h.world.level(h.player, (DEFS[r] as UpgradeDef).line) > 0);
     if (Object.keys(d.requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !done(r))) continue;
     const order = [...free].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
     // A Z weapon's research (and its tiers) shows that weapon's pictogram.

@@ -772,7 +772,7 @@ export class World {
     const up = DEFS[type];
     if (up?.kind !== 'upgrade' || up.faction !== this.players[player].faction) return false;
     if (up.host) {
-      const free = (b: Entity) => b.type === up.host && !b.exts.includes(type) && !b.queue.includes(type);
+      const free = (b: Entity) => b.type === up.host && b.buildLeft === 0 && !b.exts.includes(type) && !b.queue.includes(type);
       return at ? at.owner === player && free(at) : [...this.entities.values()].some((b) => b.owner === player && free(b));
     }
     let level = this.level(player, up.line);
