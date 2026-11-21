@@ -25,3 +25,17 @@ describe('a side that gave up', () => {
     expect([...w.entities.values()].some((e) => e.owner === 1)).toBe(true);
   });
 });
+
+describe('World.hash', () => {
+  it('sees a decoy, a Portail second line and a resignation', () => {
+    const base = createMatch().hash();
+    const unit = (w: ReturnType<typeof createMatch>) => [...w.entities.values()].find((e) => e.owner === 0 && e.def.kind === 'unit')!;
+    const a = createMatch();
+    unit(a).illusion = true;
+    const b = createMatch();
+    unit(b).trainLeft2 = 5;
+    const c = createMatch();
+    c.players[1].resigned = true;
+    for (const w of [a, b, c]) expect(w.hash()).not.toBe(base);
+  });
+});

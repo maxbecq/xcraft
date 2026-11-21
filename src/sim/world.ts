@@ -1002,12 +1002,16 @@ export class World {
       mix(e.shield);
       if (e.lvl > 1) mix(e.lvl); // only then: replays recorded before the levels keep their hashes
       if (e.arts.length) mix(e.arts.length * 31);
+      // Mixed only when set, like the level: hashes of games without them stay as they were.
+      if (e.illusion) mix(7919);
+      if (e.trainLeft2) mix(e.trainLeft2 * 37);
     }
     for (const p of this.players) {
       mix(p.minerals);
       mix(p.energy);
       for (const line of Object.keys(p.upgrades).sort()) mix(p.upgrades[line] * (line.length + 1));
       for (const m of Object.keys(p.ultimates ?? {}).sort()) mix(p.ultimates![m as Mythology]! * (m.length + 7));
+      if (p.resigned) mix(104729);
     }
     return h >>> 0;
   }
