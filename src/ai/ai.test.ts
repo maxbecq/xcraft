@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
-import { createMatch } from '../sim/setup';
+import { createMatch, expansions } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
 import { AI, DIFFICULTY, teamFocus } from './ai';
 
@@ -357,7 +357,7 @@ describe('AI Z Refuge', () => {
     const w = createMatch(['dieux', 'humains']);
     const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
     w.spawn('antre', 0, asgaard.x + 14 * FP, asgaard.y);
-    w.entities.delete(asgaard.id);
+    w.remove(asgaard);
     w.players[0].minerals = 2000;
     w.tick = ticks(6 * 60) - (ticks(6 * 60) % 10); // a thinking tick
     const cmds = new AI(w, 0).think();
@@ -379,6 +379,60 @@ describe('AI Z Refuge', () => {
     const cmds = new AI(w, 0).think();
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [temple.id], type: 'dmelee1' }));
   });
+
+  it('Dieux: a god with no room in supply keeps no minerals back (Thor levels up)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const thor = w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    const well = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => Math.hypot(a.x - asgaard.x, a.y - asgaard.y) - Math.hypot(b.x - asgaard.x, b.y - asgaard.y))[0];
+    w.spawn('puitsdivin', 0, well.x, well.y);
+    w.spawn('temple', 0, asgaard.x - 8 * FP, asgaard.y);
+    // Seth due (350 minerals), supply full: after the buildings and Offrandes, 600 left for Thor's level 2 (240, with a
+    // margin of 300); the 350 kept for Seth would leave none for it.
+    while (w.supply(0).used < w.supply(0).max) w.spawn('nain', 0, asgaard.x + 6 * FP, asgaard.y + 4 * FP);
+    w.players[0].minerals = 1150;
+    w.tick = ticks(4 * 60) - (ticks(4 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [thor.id], type: 'niveau' }));
+  });
+
+  it('Dieux: their Porte lost and every other site taken, they raise it again on their start', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const [sx, sy] = [asgaard.tx, asgaard.ty];
+    // Every expansion site held by the enemy; an Antre by the start, the Porte gone.
+    for (const [tx, ty] of expansions(w, 0)) w.site('conseil', 1, tx, ty).buildLeft = 0;
+    w.spawn('antre', 0, asgaard.x + 12 * FP, asgaard.y);
+    w.remove(asgaard);
+    w.players[0].minerals = 2000;
+    w.tick = ticks(6 * 60) - (ticks(6 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'asgaard', tx: sx, ty: sy }));
+  });
+
+  it('Dieux: their Porte destroyed, they raise it again on its spot and summon gods again', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ai = new AI(w, 0);
+    play(w, [ai], 3);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    // An Antre stands by the natural; the Porte and every god but Gaïa are gone.
+    w.spawn('antre', 0, asgaard.x + 16 * FP, asgaard.y);
+    w.remove(asgaard);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && (e.def as { unique?: boolean }).unique && e.type !== 'gaia') w.entities.delete(e.id);
+    w.players[0].minerals += 3000;
+    w.players[0].energy += 1000;
+    const start = w.tick;
+    let raised = false;
+    let summoned = false;
+    while (w.tick < start + ticks(5 * 60) && !summoned) {
+      w.step(ai.think());
+      const porte = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard' && e.buildLeft === 0);
+      raised ||= !!porte;
+      summoned = !!porte && (porte.queue.length > 0 || [...w.entities.values()].some((e) => e.owner === 0 && e.type === 'thor'));
+    }
+    expect(raised).toBe(true);
+    expect(summoned).toBe(true);
+  }, 60_000);
 
   it('Z: keeps no drone price while its Intelligence waits to turn into the suprême', () => {
     const w = createMatch(['z', 'humains']);

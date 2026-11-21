@@ -1,7 +1,7 @@
 import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSES, DEFS, FACTIONS, RAPPEL, raises, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
-import { expansions } from '../sim/setup';
+import { expansions, startSite } from '../sim/setup';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -387,8 +387,10 @@ export class AI {
     // Supply first, then production buildings, then the mine.
     const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
-    // Its headquarters lost, another base standing: a headquarters first (the Dieux' Porte, which summons the gods).
-    if (!kin(home, f.hq) && !building(f.hq)) wants.push(f.hq);
+    // Its headquarters lost, another base standing: a headquarters first (the Dieux' Porte, which summons the gods),
+    // its price saved from everything else (the gods spent the rest on troops).
+    const noHq = !kin(home, f.hq) && !building(f.hq);
+    if (noHq) wants.push(f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
     const producers = f.gods ? 1 + gods.length : count(f.barracks);
     if (supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply)) wants.push(f.supply);
@@ -458,7 +460,7 @@ export class AI {
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
-    const saving = expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000;
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -827,7 +829,8 @@ export class AI {
         // Saving up for it, once the first god is out: its energy too, or the troops ate every point of it (Seth's
         // Sphinx took the Puits' whole output: Apollon, due at minute 5, never came, nor Odin, and with two gods
         // summoning one unit at a time 1000 to 5000 minerals lay unspent from minute 6 to 12).
-        else if (gods.length) {
+        // Only for a god with room in supply: one that cannot come keeps nothing back.
+        else if (gods.length && free >= def.supply) {
           ctx.minerals -= def.cost.minerals;
           ctx.energy -= def.cost.energy;
         }
@@ -1640,7 +1643,11 @@ export class AI {
       // Centred on the site, laid out for a headquarters: a smaller outpost (the Dieux' Antre) at its top-left corner
       // stood two tiles off the mirror of the one in the opposite corner.
       const inset = Math.floor(((DEFS[this.faction.hq] as BuildingDef).size - def.size) / 2);
-      const site = expansions(w, this.player).map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
+      // Its headquarters lost, its start's spot comes first (left out of the expansions, it could not be raised again
+      // there once the other sites were taken).
+      const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
+      const start = lost ? startSite(w, this.player) : undefined;
+      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
       return site.find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.

@@ -28,6 +28,11 @@ export function expansions(world: World, owner: number): [number, number][] {
   return [...own, ...far.sort((a, b) => d(a) - d(b) || left(a) - left(b))].map((s) => s.hq);
 }
 
+/** A player's start headquarters spot (top-left tile), from the map file. */
+export function startSite(world: World, owner: number): [number, number] | undefined {
+  return (world.map.sites ?? []).find((s) => s.start && s.turn === CORNERS[owner])?.hq;
+}
+
 /** The natural expansion's headquarters spot (top-left tile) for a player. */
 export function expansion(world: World, owner: number): [number, number] {
   return expansions(world, owner)[0];
