@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, raises, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSES, DEFS, FACTIONS, RAPPEL, raises, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -1341,7 +1341,9 @@ export class AI {
       // Against flying enemies, only what can shoot them.
       const affordable = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
-      const army = this.enemyAir && antiAir.length ? antiAir : affordable;
+      // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
+      // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.
+      const army = (this.enemyAir && antiAir.length ? antiAir : affordable).map(([t, wgt]) => [t, Math.max(1, Math.round(wgt * 4 * this.fit(t)))] as [string, number]);
       // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones.
       if (energy >= 300) return army.reduce((a, b) => ((DEFS[b[0]] as UnitDef).cost.energy > (DEFS[a[0]] as UnitDef).cost.energy ? b : a))[0];
       const total = army.reduce((n, [, wgt]) => n + wgt, 0);
@@ -1363,6 +1365,25 @@ export class AI {
     if (energy >= 100 && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
     return !this.enemyAir && (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
+  }
+
+  /**
+   * How well a unit's weapon fits the enemy: its mean damage against the classes of the enemy factions' armies (as
+   * the AI builds them, ai.army), over its best damage; 1 for a weapon without classes.
+   */
+  private fit(type: string): number {
+    const vs = (DEFS[type] as UnitDef).attack?.vs;
+    if (!vs) return 1;
+    let sum = 0;
+    let n = 0;
+    for (const o of this.world.players) {
+      if (!this.world.hostile(o.id, this.player)) continue;
+      for (const [t, wgt] of Object.entries((BALANCE.ai.army as Record<string, Record<string, number>>)[o.faction] ?? {})) {
+        sum += wgt * vs[CLASSES.indexOf((DEFS[t] as UnitDef).cls ?? 'BL')];
+        n += wgt;
+      }
+    }
+    return n ? sum / n / Math.max(...vs) : 1;
   }
 
   /** Workers wanted: the plan's number per headquarters, up to three. */
