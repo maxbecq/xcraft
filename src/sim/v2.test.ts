@@ -72,7 +72,7 @@ describe('Forge upgrades', () => {
     expect(hit('legionnaire', 'serf', () => {})).toBe(20);
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.melee = 2))).toBe(24); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.ranged = 3))).toBe(20); // wrong line
-    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(11); // +10 % per level
+    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(17); // fiche 2010: 15 against BL, +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[1].upgrades.armor = 3))).toBe(17);
   });
 });
@@ -234,16 +234,17 @@ describe('Orbe plasma', () => {
     expect(orbe.hp).toBeGreaterThan(0);
   });
 
-  // Before the Danse du soldat (20 Nov 2026) the Orbe won; its shots now deal two thirds to the Assassin. For the balance owner.
-  it('falls to a lone assassin that attacks it, dodging its shots', () => {
+  // Before the Danse du soldat (20 Nov 2026) the Orbe won; with it, the Assassin did. With the fiches' classes (21 Nov),
+  // the Orbe hits the Assassin (BA) for 29 instead of 21 and wins again. For the balance owner.
+  it('holds against a lone assassin that attacks it, even dodging two shots in three', () => {
     const w = new World(createMap());
     w.players[0].faction = w.players[1].faction = 'isdaris';
     const orbe = w.spawn('orbe', 0, 40 * FP, 60 * FP);
     const sin = w.spawn('assassin', 1, ...at(52, 61));
     w.step([{ player: 1, kind: 'attack', ids: [sin.id], x: orbe.x, y: orbe.y, target: orbe.id }]);
     run(w, 40);
-    expect(w.entities.has(orbe.id)).toBe(false);
-    expect(w.entities.has(sin.id)).toBe(true);
+    expect(w.entities.has(orbe.id)).toBe(true);
+    expect(w.entities.has(sin.id)).toBe(false);
   });
 
   it('must be beamed down inside a power field', () => {

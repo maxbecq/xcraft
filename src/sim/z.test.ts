@@ -124,7 +124,7 @@ describe('Z', () => {
     p.minerals = 1000;
     const turret = w.spawn('tourelle', 0, 30 * FP, 30 * FP);
     const assim = w.spawn('assimilateur', 0, 34 * FP, 30 * FP);
-    expect(w.weapon(turret)).toEqual({ damage: 15, range: 4, cooldown: 1, vsMechanical: -4 }); // machine gun N2: 17 / 13
+    expect(w.weapon(turret)).toEqual({ damage: 15, vs: [15, 11, 11, 8, 3, 8], range: 4, cooldown: 1 }); // machine gun N2, ×86 %
     expect(w.weapon(assim)).toBeUndefined();
     w.step([{ player: 0, kind: 'arm', ids: [assim.id], weapon: 'laser' }]);
     expect(assim.kit).toBe(''); // not researched
@@ -376,10 +376,10 @@ describe('Z', () => {
     const w = createMatch(['z', 'humains']);
     const quad = w.spawn('quadripode', 0, 20 * FP, 20 * FP);
     const hexa = w.spawn('hexapode', 0, 22 * FP, 20 * FP);
-    expect(w.weapon(quad)).toEqual({ damage: 12, range: 4, cooldown: 1, vsMechanical: -3 }); // machine gun N1: 14 / 11
+    expect(w.weapon(quad)).toEqual({ damage: 12, vs: [12, 9, 9, 6, 3, 6], range: 4, cooldown: 1 }); // machine gun N1 (14 / 11 / 11 / 7 / 4 / 7), ×86 %
     expect(w.weapon(hexa)!.damage).toBe(15); // N2: 17
     hexa.kit = 'roquettes';
-    expect(w.weapon(hexa)).toEqual({ damage: 9, range: 5, cooldown: 2, vsMechanical: 28 }); // N2: 11 / 43, range 5
+    expect(w.weapon(hexa)).toEqual({ damage: 9, vs: [9, 19, 37, 56, 56, 19], range: 5, cooldown: 2 }); // N2: 11 / 22 / 43 / 65 / 65 / 22, range 5
     quad.kit = 'laser';
     expect(w.weapon(quad)!.damage).toBe(17); // N1: 20
   });

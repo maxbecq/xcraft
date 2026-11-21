@@ -140,7 +140,9 @@ describe('audit gaps', () => {
     const [h3, h4] = [before(assassin), before(archer)];
     w.hit(brute, assassin, m);
     w.hit(brute, archer, m);
-    expect(h3 - before(assassin)).toBe(h4 - before(archer));
+    // Blows land in full: the Légionnaire's value against each one's class (fiche 2010: BA 15, BL 20).
+    expect(h3 - before(assassin)).toBe(m.vs![1]);
+    expect(h4 - before(archer)).toBe(m.vs![0]); // its shield takes it, armour aside
   });
 
   it('an Isdaris major building raises its plasma shield: unhurt, no shooting or production, for a while', () => {

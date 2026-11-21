@@ -49,17 +49,18 @@ describe('Human research (notice 1.2-1)', () => {
     expect(w.lacks(0, 'allosaure')).toContain("Dressage d'allosaures");
     w.players[0].upgrades.dressageallosaures = 1;
     expect(w.lacks(0, 'allosaure')).toBe('');
-    w.players[1].upgrades.vehicles = 3;
-    const tank = w.spawn('pegase', 1, ...at(44, 60));
-    const aux = w.spawn('auxiliaire', 1, ...at(44, 62));
-    const shooter = w.spawn('archer', 0, ...at(40, 61));
-    shooter.order = { kind: 'attack', target: tank.id, auto: false, lx: shooter.x, ly: shooter.y };
-    // One shot each, so the comparison does not depend on the archer's cooldown.
-    while (tank.hp === tank.maxHp) w.step([]);
-    const tankLoss = tank.maxHp - tank.hp;
-    shooter.order = { kind: 'attack', target: aux.id, auto: false, lx: shooter.x, ly: shooter.y };
-    while (aux.hp === aux.maxHp) w.step([]);
-    expect(tankLoss).toBeLessThan(aux.maxHp - aux.hp);
+    // One shot of an Archer at a Pégase, with and without Blindage véhicules 3, and at an Auxiliaire with it.
+    const shot = (target: string, vehicles: number) => {
+      const v = new World(createMap());
+      v.players[1].upgrades.vehicles = vehicles;
+      const t = v.spawn(target, 1, ...at(44, 60));
+      const shooter = v.spawn('archer', 0, ...at(40, 60));
+      shooter.order = { kind: 'attack', target: t.id, auto: false, lx: shooter.x, ly: shooter.y };
+      while (t.hp === t.maxHp) v.step([]);
+      return t.maxHp - t.hp;
+    };
+    expect(shot('pegase', 3)).toBeLessThan(shot('pegase', 0));
+    expect(shot('auxiliaire', 3)).toBe(shot('auxiliaire', 0));
   });
 
   it('Pillage pays a share of a building brought down', () => {

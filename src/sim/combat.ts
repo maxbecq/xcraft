@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
+import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -418,14 +418,16 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   if (stop) return void this.shots.push({ x1: e.x, y1: e.y, x2: stop.x, y2: stop.y, kind: 'ranged', type: e.type, air1: flies(e), air2: false });
   const U = BALANCE.rules.upgrades;
   const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
-  let bonus = machine ? (a.vsMechanical ?? 0) : 0;
+  // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
+  const base = a.vs ? a.vs[CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL')] : a.damage;
+  let bonus = a.vs ? 0 : machine ? (a.vsMechanical ?? 0) : 0;
   if (machine && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
   if (e.type === 'pegase' && this.level(e.owner, 'charlourd')) bonus += U.charlourd.damage;
   let upgrade = 0;
   if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(a.damage / 10));
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
   // The Échevins' presence: units fighting near one of their Conseils hit a little harder.
-  if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((a.damage + bonus) * U.conseilAura.percent, 100));
+  if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += Math.max(1, idiv((base + bonus) * U.conseilAura.percent, 100));
   // Odin's war aura: the Dieux units round him (him too) hit harder, by his level; the strongest one counts.
   if (e.def.kind === 'unit' && this.players[e.owner]?.faction === 'dieux') {
     const G = U.auraguerre;
@@ -434,9 +436,9 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     upgrade += aura;
   }
   // Z Balise offensive (Z.doc): +5 % to every attack of its owner's while a carrier stands; not cumulative.
-  if (e.owner >= 0 && this.players[e.owner].faction === 'z' && this.beacon(e.owner)) upgrade += idiv((a.damage + bonus) * BALANCE.rules.z.beaconPercent, 100);
+  if (e.owner >= 0 && this.players[e.owner].faction === 'z' && this.beacon(e.owner)) upgrade += idiv((base + bonus) * BALANCE.rules.z.beaconPercent, 100);
   // Courroux du marteau: the charged blow.
-  let damage = a.damage + bonus + upgrade;
+  let damage = base + bonus + upgrade;
   // Cri de guerre: much harder for a while; the Artefacterie's Force, for good.
   if (e.war > 0) damage += idiv(damage * e.warPct, 100);
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).

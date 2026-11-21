@@ -18,8 +18,15 @@ const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsoni
 const FLYER_WEAPONS = SOCLE_WEAPONS.filter((k) => k !== 'canonx04' && k !== 'flammes');
 const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04'];
 
+/** The six target classes of the 2010 sheets: light and armoured biological, mechanical, massive mechanical, structure, heroic. */
+export const CLASSES = ['BL', 'BA', 'M', 'MM', 'S', 'H'] as const;
+export type DamageClass = (typeof CLASSES)[number];
+
 export interface Attack {
+  /** Against light biological targets (BL): what the cards show and the upgrades go by. */
   damage: number;
+  /** Fiches 2010: the damage against each class, in the order of CLASSES; without it, `damage` (and `vsMechanical`). */
+  vs?: number[];
   /** Extra range beyond touching, in tiles (melee: ~0.1). */
   range: number;
   cooldown: number;
@@ -49,6 +56,8 @@ export type Mana = readonly [number, number, number];
 
 export interface UnitDef {
   mana?: Mana;
+  /** Its class as a target (fiches 2010; provisional for the Dieux). */
+  cls?: DamageClass;
   kind: 'unit';
   name: string;
   /** Buildings needed (finished, by count) before it can be trained. */
@@ -132,6 +141,7 @@ export interface GodLevels {
 
 export interface BuildingDef {
   mana?: Mana;
+  cls?: DamageClass;
   kind: 'building';
   name: string;
   /** Buildings needed (finished, by count) before it can be built. */
@@ -884,8 +894,8 @@ export interface WeaponDef {
   research?: string;
 }
 interface WeaponStats {
-  /** Z.doc, levels 1 to 4: damage against light biological targets (the game's plain damage), then against machines. */
-  levels: [number, number][];
+  /** Z.doc, levels 1 to 4: the damage against each class (BL, BA, M, MM, S, H). */
+  levels: number[][];
   range?: number;
   /** Range by level, when it grows with it (Lance-roquettes). */
   ranges?: number[];
@@ -910,10 +920,9 @@ const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
 export function weaponAt(key: string, level: number, flying = false): Attack | undefined {
   const w = WEAPON_STATS[key];
   if (!w.levels.length) return undefined;
-  const [light, machine] = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1];
   const scale = (n: number) => Math.round((n * BALANCE.rules.z.weaponDamage) / 100);
-  const a: Attack = { damage: scale(light), range: w.ranges ? w.ranges[Math.min(w.ranges.length, Math.max(1, level)) - 1] : w.range!, cooldown: w.cooldown };
-  if (scale(machine) !== a.damage) a.vsMechanical = scale(machine) - a.damage;
+  const vs = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1].map(scale);
+  const a: Attack = { damage: vs[0], vs, range: w.ranges ? w.ranges[Math.min(w.ranges.length, Math.max(1, level)) - 1] : w.range!, cooldown: w.cooldown };
   if (w.air !== undefined) a.air = w.air;
   if (w.airIfFlying && flying) {
     a.air = true;
