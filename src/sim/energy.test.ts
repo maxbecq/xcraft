@@ -144,3 +144,26 @@ describe('Sphère de renvoi (fiche 2010, mod)', () => {
     expect(ally.reflectLeft).toBe(0);
   });
 });
+
+describe('mana of the gods (XC.doc 2008)', () => {
+  it('every god holds 150 to 250 by its level, regains 1 a second, and pays its spells by level; ultimates are free', () => {
+    const w = new World(createMap());
+    const apollon = w.spawn('apollon', 0, ...at(40, 60));
+    expect(w.manaOf(apollon)![0]).toBe(150);
+    expect(points(apollon)).toBe(75);
+    apollon.lvl = 3;
+    expect(w.manaOf(apollon)![0]).toBe(200);
+    apollon.lvl = 1;
+    // Pluie de feu: 125 at level 1, more than it holds at its summoning.
+    expect(w.ready(apollon, 'pluiedefeu')).toBe(false);
+    run(w, 51);
+    expect(w.ready(apollon, 'pluiedefeu')).toBe(true);
+    const foe = w.spawn('serf', 1, ...at(44, 60));
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    run(w, 3);
+    expect(points(apollon)).toBeLessThan(20);
+    // Its own cooldown (20 s) on top.
+    expect(apollon.spellCd.pluiedefeu).toBeGreaterThan(w.tick);
+    expect(ABILITIES.tempetezeus.mana).toBeUndefined();
+  });
+});

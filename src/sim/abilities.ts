@@ -622,6 +622,13 @@ export function turn(this: World, e: Entity, owner: number): void {
 export function manaOf(this: World, e: Entity): Mana | undefined {
   const own = (e.def as UnitDef | BuildingDef).mana;
   if (own) return own;
+  // Dieux (XC.doc 2008): every god the same mana by its level, regained at 1 a second (half full at its summoning:
+  // shortcut, no source gives a start; the mod's casters start at half).
+  if ((e.def as UnitDef).levels && (e.def as UnitDef).faction === 'dieux') {
+    const g = BALANCE.rules.godMana;
+    const max = g.max[Math.min(g.max.length, e.lvl) - 1];
+    return [max, g.max[0] / 2, g.regen];
+  }
   const w = e.kit ? WEAPONS[e.kit]?.mana : undefined;
   if (!w) return undefined;
   const max = w.max[Math.min(w.max.length, Math.max(1, ((e.def as UnitDef).weaponLevel ?? 1) + e.tier - 1)) - 1];

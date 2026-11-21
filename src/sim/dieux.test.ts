@@ -11,6 +11,7 @@ const run = (w: World, seconds: number) => {
   for (let i = 0; i < ticks(seconds); i++) w.step([]);
 };
 
+// The gods spawned here are full of mana (XC.doc 2008): the tests are about the spells, not the mana.
 describe('Dieux', () => {
   it('start with a Porte d’Asgaard, Esprits and Gaïa', () => {
     const w = createMatch(['dieux', 'humains']);
@@ -69,7 +70,7 @@ describe('Dieux', () => {
     const p = w.players[0];
     p.minerals = 5000;
     p.energy = 5000;
-    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     thor.lvl = 3;
     thor.hp = 0;
     const [gaia] = of(w, 0, 'gaia');
@@ -89,7 +90,7 @@ describe('Dieux', () => {
     const p = w.players[0];
     p.minerals = 5000;
     w.spawn('branche', 0, 36 * FP, 14 * FP);
-    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const lv = (DEFS.thor as UnitDef).levels!;
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
@@ -112,14 +113,14 @@ describe('Dieux', () => {
 
   it('the spells grow with the god: Pluie de feu harder, Courroux sends a shock wave once Thor evolved', () => {
     const w = createMatch(['dieux', 'humains']);
-    const apollon = w.spawn('apollon', 0, 30 * FP, 30 * FP);
+    const apollon = Object.assign(w.spawn('apollon', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     apollon.lvl = 3;
     const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
     const before = foe.hp;
     w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
     run(w, 1);
     expect(before - foe.hp).toBeGreaterThanOrEqual(ABILITIES.pluiedefeu.levels!.damage![2] - 10);
-    const thor = w.spawn('thor', 0, 50 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 50 * FP, 30 * FP), { mana: 1 << 30 });
     thor.lvl = 2;
     const target = w.spawn('grenier', 1, 51 * FP, 27 * FP);
     const near = w.spawn('legionnaire', 1, 54 * FP, 28 * FP);
@@ -134,15 +135,15 @@ describe('Dieux', () => {
   it('the second rank opens with two first-rank gods; Odin, Athéna and Isis summon their own troops', () => {
     const w = createMatch(['dieux', 'humains']);
     expect(w.lacks(0, 'odin')).toMatch(/2 parmi/);
-    w.spawn('thor', 0, 30 * FP, 30 * FP);
-    w.spawn('seth', 0, 34 * FP, 30 * FP);
+    Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('seth', 0, 34 * FP, 30 * FP), { mana: 1 << 30 });
     expect(w.lacks(0, 'odin')).toBe('');
     w.players[0].minerals = 5000;
     w.players[0].energy = 5000;
     w.spawn('branche', 0, 36 * FP, 14 * FP);
     w.spawn('branche', 0, 39 * FP, 14 * FP);
-    const odin = w.spawn('odin', 0, 30 * FP, 40 * FP);
-    const isis = w.spawn('isis', 0, 40 * FP, 40 * FP);
+    const odin = Object.assign(w.spawn('odin', 0, 30 * FP, 40 * FP), { mana: 1 << 30 });
+    const isis = Object.assign(w.spawn('isis', 0, 40 * FP, 40 * FP), { mana: 1 << 30 });
     w.step([{ player: 0, kind: 'train', ids: [odin.id], type: 'drake' }, { player: 0, kind: 'train', ids: [isis.id], type: 'pretresse' }]);
     run(w, (DEFS.drake as UnitDef).buildTime + 1);
     expect(of(w, 0, 'drake')).toHaveLength(1);
@@ -153,7 +154,7 @@ describe('Dieux', () => {
     const w = createMatch(['dieux', 'humains']);
     const nain = w.spawn('nain', 0, 30 * FP, 30 * FP);
     const bare = w.armorBonus(nain);
-    w.spawn('athena', 0, 32 * FP, 30 * FP);
+    Object.assign(w.spawn('athena', 0, 32 * FP, 30 * FP), { mana: 1 << 30 });
     expect(w.armorBonus(nain)).toBe(bare + BALANCE.rules.upgrades.auraprotection.armor[0]);
     const dummy = w.spawn('grenier', 1, 30 * FP, 32 * FP);
     const hit = () => {
@@ -162,22 +163,22 @@ describe('Dieux', () => {
       return before - dummy.hp;
     };
     const plain = hit();
-    w.spawn('odin', 0, 34 * FP, 34 * FP);
+    Object.assign(w.spawn('odin', 0, 34 * FP, 34 * FP), { mana: 1 << 30 });
     expect(hit()).toBe(plain + BALANCE.rules.upgrades.auraguerre.damage[0]);
   });
 
   it('Foudre stuns, Cri de guerre strengthens, Soins divins heals, Résurrection raises the fallen', () => {
     const w = createMatch(['dieux', 'humains']);
-    const odin = w.spawn('odin', 0, 30 * FP, 30 * FP);
+    const odin = Object.assign(w.spawn('odin', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [odin.id], name: 'foudre', x: foe.x, y: foe.y }]);
     run(w, 0.5);
     expect(foe.held).toBeGreaterThan(0);
-    const athena = w.spawn('athena', 0, 50 * FP, 50 * FP);
+    const athena = Object.assign(w.spawn('athena', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
     const nain = w.spawn('nain', 0, 51 * FP, 50 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [athena.id], name: 'cridegueurre' }]);
     expect(nain.war).toBeGreaterThan(0);
-    const isis = w.spawn('isis', 0, 70 * FP, 50 * FP);
+    const isis = Object.assign(w.spawn('isis', 0, 70 * FP, 50 * FP), { mana: 1 << 30 });
     const hurt = w.spawn('nain', 0, 71 * FP, 50 * FP);
     hurt.hp = 50;
     w.step([{ player: 0, kind: 'ability', ids: [isis.id], name: 'soinsdivins' }]);
@@ -193,11 +194,11 @@ describe('Dieux', () => {
   it('the third rank: Soumission, Voile, Rayon de mort, Voyage, Armée des enfers, Nuée, putrid aura, Fontaine, Yggdrasill furieux', () => {
     const w = createMatch(['dieux', 'humains']);
     expect(w.lacks(0, 'frigg')).toMatch(/2 parmi/);
-    w.spawn('odin', 0, 20 * FP, 20 * FP);
-    w.spawn('isis', 0, 24 * FP, 20 * FP);
+    Object.assign(w.spawn('odin', 0, 20 * FP, 20 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('isis', 0, 24 * FP, 20 * FP), { mana: 1 << 30 });
     expect(w.lacks(0, 'hades')).toBe('');
     // Soumission: the foe changes side, then comes back to its own.
-    const frigg = w.spawn('frigg', 0, 30 * FP, 30 * FP);
+    const frigg = Object.assign(w.spawn('frigg', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'soumission', x: foe.x, y: foe.y }]);
     run(w, 0.5);
@@ -210,7 +211,7 @@ describe('Dieux', () => {
     expect(nain.camo).toBeGreaterThan(0);
     // Rayon de mort on every enemy Hadès sees; the ghosts of his army cannot be hurt.
     const w2 = createMatch(['dieux', 'humains']);
-    const hades = w2.spawn('hades', 0, 30 * FP, 30 * FP);
+    const hades = Object.assign(w2.spawn('hades', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const a = w2.spawn('legionnaire', 1, 34 * FP, 30 * FP);
     const b = w2.spawn('legionnaire', 1, 31 * FP, 33 * FP);
     run(w2, 0.5);
@@ -229,7 +230,7 @@ describe('Dieux', () => {
     run(w2, 6);
     expect(Math.abs(hades.x - 45 * FP)).toBeLessThan(3 * FP);
     // Osiris's aura and swarm.
-    const osiris = w.spawn('osiris', 0, 40 * FP, 80 * FP);
+    const osiris = Object.assign(w.spawn('osiris', 0, 40 * FP, 80 * FP), { mana: 1 << 30 });
     const c = w.spawn('legionnaire', 1, 41.5 * FP, 80 * FP);
     const hc = c.hp;
     run(w, 1.1);
@@ -246,7 +247,7 @@ describe('Dieux', () => {
     expect(wounded.hp).toBeGreaterThan(20);
     void fontaine;
     expect(w.lacks(0, 'furieux')).toMatch(/Hadès/);
-    w.spawn('hades', 0, 70 * FP, 20 * FP);
+    Object.assign(w.spawn('hades', 0, 70 * FP, 20 * FP), { mana: 1 << 30 });
     expect(w.lacks(0, 'furieux')).toBe('');
   });
 
@@ -254,11 +255,11 @@ describe('Dieux', () => {
     const w = createMatch(['dieux', 'humains']);
     const full = ticks(BALANCE.units.primordial.charge);
     w.spawn('primordial', 0, 20 * FP, 20 * FP);
-    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
-    w.spawn('isis', 0, 32 * FP, 34 * FP);
+    const seth = Object.assign(w.spawn('seth', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('isis', 0, 32 * FP, 34 * FP), { mana: 1 << 30 });
     run(w, 2);
     expect(w.players[0].ultimates?.egyptien ?? 0).toBe(0); // Osiris missing
-    const osiris = w.spawn('osiris', 0, 36 * FP, 34 * FP);
+    const osiris = Object.assign(w.spawn('osiris', 0, 36 * FP, 34 * FP), { mana: 1 << 30 });
     run(w, 10);
     const charged = w.players[0].ultimates!.egyptien!;
     expect(charged).toBeGreaterThan(0);
@@ -274,7 +275,7 @@ describe('Dieux', () => {
     // Tempête de Zeus: a share of each one's full health, allies too; Jörmungand comes.
     w.players[0].ultimates!.grec = full;
     w.players[0].ultimates!.scandinave = full;
-    const apollon = w.spawn('apollon', 0, 50 * FP, 50 * FP);
+    const apollon = Object.assign(w.spawn('apollon', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
     const mine = w.spawn('nain', 0, 54 * FP, 50 * FP);
     const theirs = w.spawn('legionnaire', 1, 55 * FP, 51 * FP);
     const [hm, ht] = [mine.hp, theirs.hp];
@@ -282,7 +283,7 @@ describe('Dieux', () => {
     run(w, 1);
     expect(mine.hp).toBeLessThan(hm);
     expect(theirs.hp).toBeLessThan(ht);
-    const thor = w.spawn('thor', 0, 30 * FP, 50 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 50 * FP), { mana: 1 << 30 });
     w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: 33 * FP, y: 50 * FP }]);
     run(w, 1);
     expect(of(w, 0, 'jormungandr')).toHaveLength(1);
@@ -292,7 +293,7 @@ describe('Dieux', () => {
     const w = createMatch(['dieux', 'humains']);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
-    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'artforce' }]);
     expect(thor.queue).toEqual([]); // no Artefacterie yet
     w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
@@ -310,17 +311,18 @@ describe('Dieux', () => {
 
   it('Chouette shows a zone; Dissipation frees an ally and hurts a summoned enemy; Élémentaires change form and merge', () => {
     const w = createMatch(['dieux', 'humains']);
-    const athena = w.spawn('athena', 0, 30 * FP, 30 * FP);
+    const athena = Object.assign(w.spawn('athena', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     w.step([{ player: 0, kind: 'ability', ids: [athena.id], name: 'chouette', x: 40 * FP, y: 30 * FP }]);
     run(w, 3);
     expect(w.scans.some((z) => z.owner === 0 && z.radius === ABILITIES.chouette.radius)).toBe(true);
-    const pretresse = w.spawn('pretresse', 0, 30 * FP, 34 * FP);
+    const pretresse = Object.assign(w.spawn('pretresse', 0, 30 * FP, 34 * FP), { mana: 1 << 30 });
     const nain = w.spawn('nain', 0, 32 * FP, 34 * FP);
     nain.held = ticks(10);
     w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'dissipation', x: nain.x, y: nain.y }]);
     run(w, 0.5);
     expect(nain.held).toBe(0);
     pretresse.abilityCd = 0;
+    pretresse.spellCd = {}; // its 4 s (XC.doc 2008) waived for the test
     const ghost = w.spawn('fantome', 1, 33 * FP, 36 * FP);
     ghost.invuln = ghost.ttl;
     w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'dissipation', x: ghost.x, y: ghost.y }]);
@@ -404,7 +406,7 @@ describe('Dieux', () => {
 
   it('Offrandes: the gods stop counting in the supply (a queued level never counts)', () => {
     const w = createMatch(['dieux', 'humains']);
-    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     w.players[0].minerals = 5000;
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'niveau' }]);
     const before = w.supply(0).used;
@@ -429,14 +431,14 @@ describe('Dieux', () => {
   it('the Yggdrasill protecteur needs two first-rank gods', () => {
     const w = createMatch(['dieux', 'humains']);
     expect(w.lacks(0, 'protecteur')).toMatch(/2 parmi/);
-    w.spawn('thor', 0, 30 * FP, 30 * FP);
-    w.spawn('seth', 0, 32 * FP, 30 * FP);
+    Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('seth', 0, 32 * FP, 30 * FP), { mana: 1 << 30 });
     expect(w.lacks(0, 'protecteur')).toBe('');
   });
 
   it('Courroux du marteau triples the next blow; the Tempête de sable silences enemy shooters', () => {
     const w = createMatch(['dieux', 'humains']);
-    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const dummy = w.spawn('conseil', 1, 31 * FP, 28 * FP);
     const before = dummy.hp;
     w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'courroux' }]);
@@ -446,7 +448,7 @@ describe('Dieux', () => {
     expect(before - dummy.hp).toBeGreaterThanOrEqual(3 * (DEFS.thor as UnitDef).attack!.damage - 10);
     expect(thor.charged).toBe(0);
 
-    const seth = w.spawn('seth', 0, 50 * FP, 50 * FP);
+    const seth = Object.assign(w.spawn('seth', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
     const archer = w.spawn('auxiliaire', 1, 54 * FP, 50 * FP);
     run(w, 4); // both settle on open ground first
     w.step([{ player: 0, kind: 'ability', ids: [seth.id], name: 'tempete', x: archer.x, y: archer.y }]);
@@ -461,8 +463,8 @@ describe('Dieux', () => {
   it('two gods standing close do not overlap, even a few tiles apart', () => {
     const w = new World(createMatch(['dieux', 'humains']).map);
     // 2.2 tiles apart, closer than their radii add up (2.5), in separation buckets two apart.
-    const thor = w.spawn('thor', 0, Math.round(31.9 * FP), 40 * FP);
-    const gaia = w.spawn('gaia', 0, Math.round(34.1 * FP), 40 * FP);
+    const thor = Object.assign(w.spawn('thor', 0, Math.round(31.9 * FP), 40 * FP), { mana: 1 << 30 });
+    const gaia = Object.assign(w.spawn('gaia', 0, Math.round(34.1 * FP), 40 * FP), { mana: 1 << 30 });
     run(w, 3);
     expect(Math.hypot(thor.x - gaia.x, thor.y - gaia.y)).toBeGreaterThanOrEqual(thor.radius + gaia.radius - FP / 16);
   });

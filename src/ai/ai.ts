@@ -866,7 +866,7 @@ export class AI {
     if (hurtGods.length) {
       hurtGods.forEach((g) => this.wave.delete(g.id));
       // Hadès goes home under ground.
-      const deep = hurtGods.filter((g) => abilitiesOf(g.def as UnitDef).includes('voyage') && g.abilityCd === 0);
+      const deep = hurtGods.filter((g) => abilitiesOf(g.def as UnitDef).includes('voyage') && this.world.ready(g, 'voyage'));
       for (const g of deep) ctx.out.push({ player: this.player, kind: 'ability', ids: [g.id], name: 'voyage', x: rally.x, y: rally.y });
       const walk = hurtGods.filter((g) => !deep.includes(g));
       if (walk.length) ctx.out.push({ player: this.player, kind: 'move', ids: walk.map((g) => g.id), x: rally.x, y: rally.y });
