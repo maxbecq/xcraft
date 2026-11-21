@@ -373,6 +373,20 @@ describe('AI Z Refuge', () => {
     expect(state.wave.size).toBeLessThanOrEqual(6);
   });
 
+  it('easy: the wave cap counts the gods', () => {
+    const w = createMatch(['dieux', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    while (w.tick < ticks(12 * 60) || w.tick % 10) w.tick++;
+    const ai = new AI(w, 0, undefined, 'easy');
+    const state = ai as unknown as { waves: number; wave: Set<number> };
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    // Second-rank gods, whole: they go with a wave.
+    for (const [i, g] of ['odin', 'athena'].entries()) w.spawn(g, 0, asgaard.x + (i * 2 - 1) * 3 * FP, asgaard.y + 6 * FP);
+    for (let i = 0; i < 6; i++) w.spawn('nain', 0, asgaard.x + (i - 3) * FP, asgaard.y + 5 * FP);
+    ai.think();
+    expect(state.wave.size).toBe(6);
+  });
+
   it('with the enemy army gone and no wave out, one soldier alone stays home', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
