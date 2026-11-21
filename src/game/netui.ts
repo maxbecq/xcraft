@@ -17,6 +17,8 @@ const GONE_AFTER_END_MS = 10_000;
 export class NetGame {
   // Network game: a banner while waiting for the other player, or once the link is lost.
   readonly banner = document.createElement('div');
+  /** The measures' buttons for the end banner (« Enregistrer à nouveau »), kept up to date by main. */
+  endButtons = '';
   readonly link: ReturnType<typeof connect> | null;
   readonly net: ReturnType<typeof connect>['lock'] | null;
   /** The other side has been here: the match runs (before, nobody's clock starts). */
@@ -107,7 +109,7 @@ export class NetGame {
     this.link?.leave();
     this.keepGame();
     this.banner.hidden = false;
-    this.banner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>`;
+    this.banner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>${this.endButtons}`;
   }
 
   /**

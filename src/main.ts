@@ -221,6 +221,7 @@ function answer(kind: 'ack' | 'go'): void {
 function showRecButtons(): void {
   pause.querySelector<HTMLElement>('[data-p="perfrec"]')!.hidden = !rec.on;
   hud.endButtons = !rec.on ? '' : measured ? `<p class="measures">Les mesures de la partie sont dans le dossier Téléchargements : <b>${measured}</b>.<br>Envoyez ce fichier à l'équipe du jeu. Rien ne s'est téléchargé ? « Enregistrer à nouveau ».</p><button data-p="perfrec">Enregistrer à nouveau</button>` : '<button data-p="perfrec">Enregistrer les mesures</button>';
+  netGame.endButtons = hud.endButtons; // the network's own end banner shows them too
 }
 /** The measures file's name once saved (« Enregistrer les performances »): saved by itself at the end of the game,
  * or on leaving it, once; the banner then says where it went. */
@@ -355,7 +356,7 @@ tools.addEventListener('click', (e) => {
 });
 // The pause menu and the end-of-game banner share these actions.
 document.addEventListener('click', (e) => {
-  const button = (e.target as HTMLElement).closest<HTMLElement>('.pause [data-p], .hud-banner [data-p]');
+  const button = (e.target as HTMLElement).closest<HTMLElement>('.pause [data-p], .hud-banner [data-p], .net-banner [data-p]');
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
   else if (p === 'help') helpText.hidden = !helpText.hidden;
