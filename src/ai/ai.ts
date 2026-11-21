@@ -746,7 +746,16 @@ export class AI {
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
-    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods]));
+    // Gaïa too, when she is not building: her arrow.
+    const gaia = this.faction.builder ? ctx.builders.filter((b) => b.type === this.faction.builder && b.order?.kind !== 'build' && b.order?.kind !== 'construct') : [];
+    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia]));
+    // Dieux: two Élémentaires waiting at home fuse into a Golem, late on; apart, one walks to the other.
+    const elems = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('fusion') && !this.wave.has(u.id) && !u.order && u.abilityCd === 0);
+    if (ctx.minute >= 15 && elems.length >= 2 && !this.easy) {
+      const [a, b] = elems;
+      if (dist(a.x, a.y, b.x, b.y) <= (ABILITIES.fusion.radius! + 1) * FP) ctx.out.push({ player: this.player, kind: 'ability', ids: [a.id], name: 'fusion' });
+      else ctx.out.push({ player: this.player, kind: 'move', ids: [a.id], x: b.x, y: b.y });
+    }
     const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
     const ability = caster && (caster.def as BuildingDef).ability!;
     if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy! && w.level(this.player, 'observation')) {
@@ -821,7 +830,11 @@ export class AI {
     const hurtGods = gods.filter((g) => this.wave.has(g.id) && g.hp * 10 < g.maxHp * 4);
     if (hurtGods.length) {
       hurtGods.forEach((g) => this.wave.delete(g.id));
-      ctx.out.push({ player: this.player, kind: 'move', ids: hurtGods.map((g) => g.id), x: rally.x, y: rally.y });
+      // Hadès goes home under ground.
+      const deep = hurtGods.filter((g) => abilitiesOf(g.def as UnitDef).includes('voyage') && g.abilityCd === 0);
+      for (const g of deep) ctx.out.push({ player: this.player, kind: 'ability', ids: [g.id], name: 'voyage', x: rally.x, y: rally.y });
+      const walk = hurtGods.filter((g) => !deep.includes(g));
+      if (walk.length) ctx.out.push({ player: this.player, kind: 'move', ids: walk.map((g) => g.id), x: rally.x, y: rally.y });
     }
     // A wave group that would be massacred falls back to the rally point, to join the next, bigger wave.
     const fleeing = this.easy ? [] : this.outmatched([...this.wave].map((id) => w.entities.get(id)!));
@@ -1010,7 +1023,12 @@ export class AI {
           // The toughest enemy machine in reach.
           const pick = inReach.filter((f) => (f.def as UnitDef).mechanical && f.pace === 0).sort((a, b) => b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
           if (pick) cmd = at(u, name, pick);
-        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre') {
+        } else if (name === 'formeair' || name === 'formefeu') {
+          // Élémentaire: to air against flyers alone, back to fire once ground enemies come.
+          const air = near.some((f) => flies(f));
+          const ground = near.some((f) => !flies(f));
+          if (name === 'formeair' ? air && !ground : ground && u.type === 'elemair') cmd = self(u, name);
+        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre' || name === 'flechegaia') {
           // The toughest enemy in reach (for the stun, a caster first).
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
           if (pick && pick.maxHp + pick.maxShield >= 100) cmd = at(u, name, pick);
