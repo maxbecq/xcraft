@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFS, type UpgradeDef } from '../data';
+import { AI } from '../ai/ai';
+import { DEFS, type UnitDef, type UpgradeDef } from '../data';
 import { FP } from './fixed';
 import { createMatch } from './setup';
 import type { World } from './world';
@@ -89,5 +90,27 @@ describe('Isdaris extensions, one building each', () => {
       const host = (d as UpgradeDef).host;
       if (host) expect((DEFS[host] as { researches?: string[] }).researches).toContain(k);
     }
+  });
+
+  it("the AI picks a Portail's unit by that Portail's own extensions: no Druide where there is no Laboratoire", () => {
+    const { w, a, b } = setup();
+    b.exts.push('laboratoire');
+    const ai = new AI(w, 0) as unknown as { trained: number; nextUnit(e: number, own: unknown[], m: number, at?: unknown): string };
+    const at = (gate: typeof a) => Array.from({ length: 40 }, (_, i) => ((ai.trained = i), ai.nextUnit(500, [], 500, gate)));
+    expect(at(a)).not.toContain('druide');
+    expect(at(b)).toContain('druide');
+  });
+
+  it('a Cuve génétique gives the second Créature only if the supply has room for it', () => {
+    const { w, a } = setup();
+    a.exts.push('cuvegenetique');
+    const s = w.supply(0);
+    // Fill the supply but for one Créature.
+    for (let i = 0; i < s.max - s.used - (DEFS.creature as UnitDef).supply; i++) w.spawn('creature', 0, 40 * FP, 40 * FP);
+    const before = of(w, 'creature').length;
+    w.step([{ player: 0, kind: 'train', ids: [a.id], type: 'creature' }]);
+    step(w, w.trainTime(a, 'creature') + 1);
+    expect(of(w, 'creature').length - before).toBe(1);
+    expect(w.supply(0).used).toBeLessThanOrEqual(w.supply(0).max);
   });
 });
