@@ -569,7 +569,7 @@ const BASE: Record<string, object> = {
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
   decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.'),
   chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins."),
-  scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon.'),
+  scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon et vont un peu plus vite.'),
   trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),
 
   // ---------------------------------------------------------------- Isdaris

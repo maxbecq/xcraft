@@ -74,3 +74,14 @@ describe('Human research (notice 1.2-1)', () => {
     expect(w.players[0].minerals).toBe(Math.floor(((DEFS.grenier as UnitDef).cost.minerals * BALANCE.rules.upgrades.pillageShare) / 100));
   });
 });
+
+describe('Scarabée amélioré (fiche 2010)', () => {
+  it('gives the Scarabée 0.1 more speed and a turret with the six values of the sheet', () => {
+    const w = new World(createMap());
+    const s = w.spawn('scarabee', 0, ...at(40, 60));
+    const before = s.speed;
+    w.players[0].upgrades.scarabeassaut = 1;
+    expect(w.baseSpeed(s)).toBeGreaterThan(before);
+    expect(w.weapon(s)!.vs).toEqual([15, 11, 11, 8, 4, 8]);
+  });
+});
