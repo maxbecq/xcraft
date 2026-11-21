@@ -110,6 +110,8 @@ export class AI {
   private trained = 0;
   /** The tech building has fielded a unit of its own once (the first one comes before anything else it holds up). */
   private fielded = false;
+  /** Its workers have reached their target once: a worker lost after that is a worker to replace. */
+  private staffed = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
   private enemyAir = 0;
   /** Soldiers sent in the current attack wave. */
@@ -176,7 +178,16 @@ export class AI {
     // had the 75 for one again; raided Isdaris put every 70 minerals into a Créature, their last robots unreplaced).
     // Only for a worker that can be trained now: with no room in supply, it kept a Branche's 200 from the 75 (the
     // Branche the esprit waited for); with the Z Intelligence held for its turn into the suprême, the 300 of it.
-    ctx.low = ctx.serfs.length < this.serfTarget(ctx) / 2 && this.workerHome(ctx) ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    // Once its workers have reached their target, any one short keeps a worker's price in the bank, even while the
+    // worker's home is busy or gone: Dieux raided down from 16 esprits spent to 40 minerals while Gaïa was dead or
+    // training, lost the rest, and never had the 100 for an esprit again (0 esprits, 59 minerals, 9000 energy at 35 min).
+    // Not in the opening (it held back the first buildings), with supply full (the Branche), nor while the Z
+    // Intelligence is held for its turn into the suprême.
+    const target = this.serfTarget(ctx);
+    this.staffed ||= ctx.serfs.length >= target;
+    const held = ctx.wantSupreme && ctx.p.energy >= 300;
+    const short = (this.staffed && ctx.serfs.length < target && ctx.free > 0 && !held) || (ctx.serfs.length < target / 2 && !!this.workerHome(ctx));
+    ctx.low = short ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
     ctx.minerals -= ctx.low;
     this.place(ctx);
     this.research(ctx);
