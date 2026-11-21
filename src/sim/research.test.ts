@@ -83,6 +83,10 @@ describe('Scarabée amélioré (fiche 2010)', () => {
     w.players[0].upgrades.scarabeassaut = 1;
     expect(w.baseSpeed(s)).toBeGreaterThan(before);
     expect(w.weapon(s)!.vs).toEqual([15, 11, 11, 8, 4, 8]);
+    // One born after the research has it too.
+    const late = w.spawn('scarabee', 0, ...at(44, 60));
+    expect(late.speed).toBe(w.baseSpeed(late));
+    expect(late.speed).toBeGreaterThan(before);
   });
 });
 
