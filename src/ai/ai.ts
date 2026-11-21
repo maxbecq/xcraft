@@ -36,7 +36,12 @@ const VIA_TIMEOUT = 60;
 const VIA_SAME_ROAD = 8;
 const MAX_WAVE = BALANCE.ai.maxWave;
 /** Researches in priority order, by faction; any building that hosts one researches it when idle. */
-const RESEARCH = BALANCE.ai.research as Record<string, string[]>;
+const LISTED = BALANCE.ai.research as Record<string, string[]>;
+/**
+ * ai.research, with the Z Accumulateur first: it waits for the Intelligence suprême and the Centre d'optimisation,
+ * then comes before everything else (in the late list, it came at minute 30, once the army was full: no socle got it).
+ */
+const RESEARCH: Record<string, string[]> = { ...LISTED, z: ['raccumulateur', ...(LISTED.z ?? []).filter((t) => t !== 'raccumulateur')] };
 /** Late buildings, by faction: [type, from minute], one of each. */
 const EXTRA = BALANCE.ai.extra as unknown as Record<string, [string, number][]>;
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
@@ -1236,6 +1241,9 @@ export class AI {
    */
   private weaponFor(def: UnitDef, energy: number): string | undefined {
     if (!def.weapons) return undefined;
+    // The first socle once the Accumulateur is researched gets it: one at least, whatever the rotation says.
+    const acc = WEAPONS.accumulateur;
+    if (def.weapons.includes('accumulateur') && this.world.level(this.player, acc.research!) && ![...this.world.entities.values()].some((e) => e.owner === this.player && e.kit === 'accumulateur')) return 'accumulateur';
     const kits = Object.entries(KITS).filter(([k]) => {
       const kit = WEAPONS[k];
       return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(kit.attack, true));
