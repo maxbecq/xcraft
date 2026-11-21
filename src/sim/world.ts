@@ -810,7 +810,7 @@ export class World {
   searched: { sx: number; sy: number; gx: number; gy: number; tiles: number[] }[] = [];
   searchedAt = -1;
   /** Per rectangle (movement.ts doorstep), the regions this tick's searches found no way into it from. */
-  shut = new Map<number, Set<number>>();
+  shut = new Map<number, Set<number>>(); // every region found shut off, merged
   shutAt = -1;
   /**
    * The command being applied without Shift: a unit it gives an order to (or stops) drops its queued ones then. Not

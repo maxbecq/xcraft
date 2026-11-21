@@ -75,15 +75,20 @@ export function doorstep(this: World, e: Entity, tx: number, ty: number, size: n
   if (this.shutAt !== this.tick) [this.shut, this.shutAt] = [new Map(), this.tick];
   const key = (ty * w + tx) * 8 + size;
   let doors: number[] = [];
-  if (!this.shut.get(key)?.has(start)) {
-    const isDoor = (i: number) => {
-      const [x, y] = [i % w, Math.floor(i / w)];
-      if (x < tx - 1 || x > tx + size || y < ty - 1 || y > ty + size || (x >= tx && x < tx + size && y >= ty && y < ty + size)) return false;
-      return g.open(x, y) && g.canStep(x, y, ...rectTile(tx, ty, size, x * FP + FP / 2, y * FP + FP / 2), true);
-    };
+  const opens = (x: number, y: number) => g.open(x, y) && g.canStep(x, y, ...rectTile(tx, ty, size, x * FP + FP / 2, y * FP + FP / 2), true);
+  const ring = (x: number, y: number) => x >= tx - 1 && x <= tx + size && y >= ty - 1 && y <= ty + size && !(x >= tx && x < tx + size && y >= ty && y < ty + size);
+  // No door at all (every tile round it blocked, or across a cliff): nothing to search for, the region left unflooded.
+  let any = false;
+  for (let y = ty - 1; y <= ty + size && !any; y++) for (let x = tx - 1; x <= tx + size && !any; x++) any = ring(x, y) && opens(x, y);
+  if (any && !this.shut.get(key)?.has(start)) {
     const flood: number[] = [];
-    doors = g.nearestDoors(tileOf(e.x), tileOf(e.y), isDoor, flood);
-    if (!doors.length) this.shut.set(key, new Set(flood));
+    doors = g.nearestDoors(tileOf(e.x), tileOf(e.y), (i) => ring(i % w, Math.floor(i / w)) && opens(i % w, Math.floor(i / w)), flood);
+    // Regions never meet: each one found shut off is added, so units of two regions sent there in turn are all spared.
+    if (!doors.length) {
+      const shut = this.shut.get(key) ?? new Set<number>();
+      for (const t of flood) shut.add(t);
+      this.shut.set(key, shut);
+    }
   }
   if (!doors.length) {
     e.goal = { x: nx, y: ny };

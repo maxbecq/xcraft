@@ -149,6 +149,49 @@ describe('fields given up on, later', () => {
   });
 });
 
+describe('the way into a rectangle, searched', () => {
+  const ringOf = (w: ReturnType<typeof createMatch>, tx: number, ty: number, r: number) => {
+    const g = w.grid as unknown as { blocked: Uint8Array; width: number };
+    for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) === r) g.blocked[y * g.width + x] = 1;
+  };
+  const counting = (w: ReturnType<typeof createMatch>) => {
+    const n = { searches: 0 };
+    const nearestDoors = w.grid.nearestDoors;
+    w.grid.nearestDoors = (...a) => (n.searches++, nearestDoors.apply(w.grid, a));
+    return n;
+  };
+  const nearestField = (w: ReturnType<typeof createMatch>, e: Entity) => [...w.entities.values()].filter((f) => f.type === 'minerai').sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y))[0];
+
+  it('is not searched at all when no tile round it steps into it', () => {
+    const w = createMatch();
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const field = nearestField(w, serf);
+    ringOf(w, field.tx, field.ty, 1);
+    const n = counting(w);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: field.x, y: field.y, target: field.id }]);
+    w.step([]);
+    expect(n.searches).toBe(0);
+  });
+
+  it('from two regions shut off from it, once per region in a tick, however their units come in turn', () => {
+    const w = createMatch();
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const field = nearestField(w, serf);
+    ringOf(w, field.tx, field.ty, 2);
+    // A pen of open ground, walled, a few tiles off: a second region.
+    const [px, py] = [Math.floor(serf.x / FP) + (field.tx < serf.x / FP ? 6 : -6), Math.floor(serf.y / FP)];
+    ringOf(w, px, py, 2);
+    const ids: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      ids.push(w.spawn('serf', 0, serf.x, serf.y).id);
+      ids.push(w.spawn('serf', 0, px * FP + FP / 2, py * FP + FP / 2).id);
+    }
+    const n = counting(w);
+    w.step([{ player: 0, kind: 'smart', ids, x: field.x, y: field.y, target: field.id }]);
+    expect(n.searches).toBeLessThanOrEqual(2);
+  });
+});
+
 describe('World.hash and the fields given up on', () => {
   it('sees them', () => {
     const base = createMatch();
