@@ -670,6 +670,15 @@ export class World {
     const alive = this.players.filter((p) => !p.resigned && [...this.entities.values()].some((e) => e.owner === p.id && e.def.kind === 'building'));
     if (alive.length === 0) this.winner = -1;
     else if (alive.every((p) => p.team === alive[0].team)) this.winner = alive[0].id;
+    // The match goes on (an ally still stands): a side that gave up leaves the field, as a player who quits, so its
+    // workers stop mining, its towers stop shooting and its buildings stop producing. A 1 v 1 has ended above.
+    if (this.winner !== null || !this.players.some((p) => p.resigned)) return;
+    for (const e of this.entities.values()) {
+      if (e.def.kind === 'resource' || !this.players[e.owner]?.resigned) continue;
+      if (e.order?.kind === 'gather') this.release(e, e.order.target);
+      this.remove(e);
+    }
+    this.respawns = this.respawns.filter((r) => !this.players[r.owner]?.resigned);
   }
 
   // ---------------------------------------------------------------- players
