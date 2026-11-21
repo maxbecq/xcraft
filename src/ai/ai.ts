@@ -29,6 +29,8 @@ export const DIFFICULTY: Record<string, number> = BALANCE.ai.difficulty;
 const THINK_EVERY = 10; // ticks
 /** Seconds a worker on its way to a field may stand still before it is sent to another field. */
 const STUCK_SECONDS = 5;
+/** Tiles within which a stuck worker looks for another field. */
+const STUCK_REACH = 12;
 const DEFEND_RADIUS = 14 * FP;
 /** A wave on its way to the shared road's middle goes on to its target once its front is this close to it. */
 const VIA_REACHED = 6 * FP;
@@ -255,9 +257,13 @@ export class AI {
         continue;
       }
       if (this.world.tick - last.since < ticks(STUCK_SECONDS)) continue;
+      // Waiting by a field another worker mines is not being stuck.
+      const field = this.world.entities.get(o.target);
+      if (field && this.world.reachRect(s, field.tx, field.ty, 1)) continue;
       const failed = this.failed.get(s.id) ?? new Set<number>();
       this.failed.set(s.id, failed.add(o.target));
-      const f = this.nearest(s, (e) => e.type === 'minerai' && !failed.has(e.id) && !e.miner);
+      // Only a field nearby (as the sim's own search, 12 tiles): never off to the other end of the map.
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !failed.has(e.id) && !e.miner && dist(e.x, e.y, s.x, s.y) < STUCK_REACH * FP);
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
       this.walking.delete(s.id);
     }

@@ -249,6 +249,36 @@ describe('AI Z Refuge', () => {
     expect((sent as Extract<Command, { kind: 'smart' }>).target).not.toBe(field.id);
   });
 
+  it('a worker waiting by a busy field stays, and a stuck one never looks far for another', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ai = new AI(w, 0);
+    const esprit = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'esprit')!;
+    const fields = [...w.entities.values()].filter((e) => e.type === 'minerai');
+    const field = fields.sort((a, b) => Math.hypot(a.x - esprit.x, a.y - esprit.y) - Math.hypot(b.x - esprit.x, b.y - esprit.y))[0];
+    // Next to the field, waiting: it is someone else's.
+    w.goNear = () => {};
+    [esprit.x, esprit.y] = [field.tx * FP - FP / 2, field.y];
+    esprit.order = { kind: 'gather', target: field.id, phase: 'go', timer: 0 };
+    field.miner = -1;
+    for (let i = 0; i < ticks(8); i++) {
+      esprit.order = { kind: 'gather', target: field.id, phase: 'go', timer: 0 };
+      const cmds = ai.think();
+      expect(cmds.some((c) => c.kind === 'smart' && c.ids.includes(esprit.id))).toBe(false);
+      w.tick++;
+    }
+    // Far from any field, stuck: nothing within 12 tiles, it is not sent across the map.
+    [esprit.x, esprit.y] = [(w.map.width * FP) / 2, (w.map.height * FP) / 2];
+    for (let i = 0; i < ticks(8); i++) {
+      esprit.order = { kind: 'gather', target: field.id, phase: 'go', timer: 0 };
+      const cmds = ai.think();
+      for (const c of cmds) if (c.kind === 'smart' && c.ids.includes(esprit.id)) {
+        const t = w.entities.get(c.target!)!;
+        expect(Math.hypot(t.x - esprit.x, t.y - esprit.y)).toBeLessThan(12 * FP);
+      }
+      w.tick++;
+    }
+  });
+
   it('a worker stuck again never goes back to a field it got stuck on', () => {
     const w = createMatch(['dieux', 'humains']);
     const ai = new AI(w, 0);
