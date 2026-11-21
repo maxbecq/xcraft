@@ -113,7 +113,7 @@ Champs ajoutés :
 
 ## Armes du camp Z (`weapons`)
 
-Les socles Z (Quadripode, Hexapode, Coléoptère) se commandent à la Plate-forme avec leur arme, choisie une fois pour toutes (`Z.doc`) : la Mitrailleuse de leur fiche `units` (`attack`), gratuite, ou une arme de `weapons` qui la remplace : `attack` (mêmes champs que pour les unités) et `cost`, payé en plus du socle et rendu avec lui si on annule. Le Laser, le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; tous les socles les prennent, et le Drone de combat garde sa mitrailleuse.
+Les socles Z (Quadripode, Hexapode, Coléoptère) se commandent à la Plate-forme avec leur arme, choisie une fois pour toutes (`Z.doc`) : la Mitrailleuse de leur fiche `units` (`attack`), gratuite, ou une arme de `weapons` qui la remplace : `attack` (mêmes champs que pour les unités) et `cost`, payé en plus du socle et rendu avec lui si on annule. Le Laser, le Lance-flammes et le Lance-roquettes se recherchent d'abord au Centre d'armement ; tous les socles les prennent, sauf le Lance-flammes, réservé aux socles terrestres (notice : « uniquement terrestre »), et le Drone de combat garde sa mitrailleuse.
 
 Les socles évoluent sur le terrain (`tiers` dans `units`, `Z.doc`) : T2 puis T3, chacun avec `cost`, `buildTime` (secondes d'évolution, le socle reste immobile), `hp`, `armor` et `speed` ; l'arme monte d'un niveau à chaque évolution. Chaque niveau se débloque par le niveau suivant de la recherche du socle au Centre de socles (`rquadripode2`, `rquadripode3`, `rhexapode2`, `rcoleoptere2`, `rcoleoptere3`) ; Optimisation perfectionnée (`optimisationp`) accélère les évolutions de `rules.z.optimisationSpeedup` %.
 

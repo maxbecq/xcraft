@@ -360,14 +360,15 @@ describe('Z', () => {
     w.step([{ player: 0, kind: 'cancel', ids: [pf.id] }]);
     expect(p.minerals).toBe(2000);
     expect(p.energy).toBe(2000);
-    // Z.doc: every socle takes any weapon, the Coléoptère a flame thrower too.
+    // The notice: the Lance-flammes is « uniquement terrestre », refused on a flying socle.
     train('coleoptere', 'flammes');
+    expect(pf.queue).toHaveLength(0);
+    train('quadripode', 'flammes');
     train('quadripode');
     expect(pf.kits).toEqual(['flammes', '']);
-    run(w, (DEFS.coleoptere as { buildTime: number }).buildTime + 1);
-    const [beetle] = of(w, 0, 'coleoptere');
-    expect(beetle.kit).toBe('flammes');
-    expect(w.weapon(beetle)).toEqual(WEAPONS.flammes.attack);
+    run(w, (DEFS.quadripode as { buildTime: number }).buildTime + 1);
+    const burner = of(w, 0, 'quadripode').find((q) => q.kit === 'flammes')!;
+    expect(w.weapon(burner)).toEqual(WEAPONS.flammes.attack);
   });
 
   it("a weapon is as strong as its socle's level (Z.doc), damage scaled as the socles' was", () => {

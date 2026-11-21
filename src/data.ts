@@ -14,6 +14,8 @@ export interface Cost {
 
 /** Every Z weapon a socle can be built with; the ones that fight, for the Tourelle and the Assimilateur. */
 const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04', 'reparateur', 'accumulateur'];
+// Flying socles: no Canon X-04, nor the Lance-flammes (notice: « uniquement terrestre »).
+const FLYER_WEAPONS = SOCLE_WEAPONS.filter((k) => k !== 'canonx04' && k !== 'flammes');
 const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04'];
 
 export interface Attack {
@@ -634,11 +636,11 @@ const BASE: Record<string, object> = {
   dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
   quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'Q' },
   hexapode: { kind: 'unit', name: 'Hexapode', radius: 0.6, mechanical: true, requires: { rhexapode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'H' },
-  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: SOCLE_WEAPONS.filter((k) => k !== 'canonx04'), faction: 'z', hotkey: 'L' },
+  coleoptere: { kind: 'unit', name: 'Coléoptère', radius: 0.5, flying: true, mechanical: true, requires: { rcoleoptere: 1 }, weapons: FLYER_WEAPONS, faction: 'z', hotkey: 'L' },
   // Z.doc: the large socles, ground (Octopode) and flying (Mastodonte), after the Centre d'optimisation; the Barge,
   // a flying transport for 8 then 12 of supply.
   octopode: { kind: 'unit', name: 'Octopode', radius: 0.9, mechanical: true, requires: { roctopode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'O' },
-  mastodonte: { kind: 'unit', name: 'Mastodonte', radius: 0.9, flying: true, mechanical: true, requires: { rmastodonte: 1 }, weapons: SOCLE_WEAPONS.filter((k) => k !== 'canonx04'), faction: 'z', hotkey: 'M' },
+  mastodonte: { kind: 'unit', name: 'Mastodonte', radius: 0.9, flying: true, mechanical: true, requires: { rmastodonte: 1 }, weapons: FLYER_WEAPONS, faction: 'z', hotkey: 'M' },
   barge: { kind: 'unit', name: 'Barge', radius: 0.7, flying: true, mechanical: true, requires: { rbarge: 1 }, faction: 'z', hotkey: 'B' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
   zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
