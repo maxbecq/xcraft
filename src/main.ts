@@ -236,6 +236,8 @@ function saveMeasures(): void {
 }
 /** Saved once by itself: at the end, or on leaving before it (a save by hand mid-game does not count). */
 let autoSaved = false;
+/** The game has just ended: the measures are saved at the end of this frame. */
+let measuresDue = false;
 function measuresOnce(): void {
   if (autoSaved || !rec.on) return;
   autoSaved = true;
@@ -552,7 +554,7 @@ function start(): void {
       }
       if (world.winner !== null) {
         keepGame();
-        measuresOnce();
+        measuresDue = true; // saved once this frame is measured (rec.end), so the file holds the winning frame
       }
       pending = [];
       hud.notify(world.events);
@@ -636,6 +638,10 @@ function start(): void {
     post.render();
     lap('render');
     if (rec.on) rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, { tick: world.tick, ticks: stepped, events: { ...happened } }, unitsOnScreen);
+    if (measuresDue) {
+      measuresDue = false;
+      measuresOnce();
+    }
     stepped = 0;
     for (const k in happened) delete happened[k];
   };
