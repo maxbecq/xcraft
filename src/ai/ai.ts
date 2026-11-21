@@ -765,6 +765,9 @@ export class AI {
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    // Dieux: an Élémentaire comes « faible et chétive » (notice): it takes its fire form at once (it hits flyers too).
+    const weak = army.filter((u) => u.type === 'elembase' && w.ready(u, 'formefeu'));
+    if (weak.length) ctx.out.push({ player: this.player, kind: 'ability', ids: weak.map((u) => u.id), name: 'formefeu' });
     // Gaïa too, when she is not building: her arrow.
     const gaia = this.faction.builder ? ctx.builders.filter((b) => b.type === this.faction.builder && b.order?.kind !== 'build' && b.order?.kind !== 'construct') : [];
     if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia]));

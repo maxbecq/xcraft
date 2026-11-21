@@ -142,9 +142,9 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     if (soars(e) && !(DEFS[into] as UnitDef).flying && !(DEFS[into] as UnitDef).hover && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible de se poser ici.');
     this.transmute(e, into);
   } else if (name === 'fusion') {
-    // Two Élémentaires, any forms, merge into a Golem, which takes a while to set.
+    // Two Élémentaires, any forms (the base one too), merge into a Golem, which takes a while to set.
     const other = [...this.entities.values()]
-      .filter((t) => t !== e && t.owner === e.owner && t.hp > 0 && Object.values(FORMS).includes(t.type) && this.gap(e, t) <= toFp(ab.radius!))
+      .filter((t) => t !== e && t.owner === e.owner && t.hp > 0 && (t.type === 'elembase' || Object.values(FORMS).includes(t.type)) && this.gap(e, t) <= toFp(ab.radius!))
       .sort((a, b) => this.gap(e, a) - this.gap(e, b) || a.id - b.id)[0];
     if (!other) return void this.say(e.owner, 'Il faut un second Élémentaire tout près.');
     // Halved toward the map's middle (>> 1 rounded down, a unit off in a corner's mirror).

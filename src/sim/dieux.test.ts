@@ -521,3 +521,29 @@ describe('Dieux builders (notice)', () => {
     }
   });
 });
+
+describe('Élémentaire (notice: « faible et chétive »)', () => {
+  it('Athéna summons it in its base form, which turns into any of the four forms or fuses', () => {
+    expect((DEFS.athena as UnitDef).trains).toContain('elembase');
+    expect((DEFS.athena as UnitDef).trains).not.toContain('elementaire');
+    const w = createMatch(['dieux', 'humains']);
+    const base = w.spawn('elembase', 0, 50 * FP, 30 * FP);
+    // XC.doc 2008: 200 PV, 12 in melee, weaker than any of its forms.
+    expect(base.maxHp).toBe(200);
+    for (const f of ['elementaire', 'elemeau', 'elemterre']) expect((DEFS[f] as UnitDef).attack!.damage).toBeGreaterThanOrEqual(12);
+    w.step([{ player: 0, kind: 'ability', ids: [base.id], name: 'formeair' }]);
+    expect(base.type).toBe('elemair');
+    const a = w.spawn('elembase', 0, 60 * FP, 30 * FP);
+    w.spawn('elembase', 0, 61 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'fusion' }]);
+    expect([...w.entities.values()].filter((e) => e.type === 'golem')).toHaveLength(1);
+  });
+
+  it('the AI turns its base Élémentaires into fire at once', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ai = new AI(w, 0);
+    const base = w.spawn('elembase', 0, 30 * FP, 30 * FP);
+    for (let i = 0; i < ticks(3) && base.type === 'elembase'; i++) w.step(ai.think());
+    expect(base.type).toBe('elementaire');
+  });
+});

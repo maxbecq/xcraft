@@ -80,7 +80,7 @@ La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris
 | **Sphinx** | Seth, Isis, Osiris | statue rapide et blindée, boules de feu à moyenne portée | Peau de roc (statue : lent mais blindé et régénère) |
 | **Corbeau** | Odin | éclaireur volant rapide, détecteur | invisible en permanence |
 | **Drake** | Odin | volant très lent, très endurant, feu en zone | Drake géant : plus de vie et transport d'unités dans sa gueule |
-| **Élémentaire** | Athéna (texte seulement) | petite créature polyvalente, change de forme à volonté | formes Eau (tir de glace qui ralentit, lévite), Feu (souffle de zone, tire en l'air), Terre (très lent, très résistant, lames anti-infanterie), Air (vole, très rapide, n'attaque que l'air) ; deux élémentaires fusionnent en Golem |
+| **Élémentaire** | Athéna (texte seulement) | petite créature polyvalente, invoquée dans sa forme de base « faible et chétive » (chiffres de XC.doc 2008 : 200 PV, 12 au corps à corps, 250 / 250, 40 s), qui prend l'une des quatre formes | formes Eau (tir de glace qui ralentit, lévite), Feu (souffle de zone, tire en l'air), Terre (très lent, très résistant, lames anti-infanterie), Air (vole, très rapide, n'attaque que l'air) ; deux élémentaires fusionnent en Golem |
 | **Golem** | fusion de 2 élémentaires | artillerie de siège à portée énorme, imprécise contre les cibles mobiles | — |
 | **Prêtresse** | Isis | soin de zone, sans attaque | Dissipation : retire les effets négatifs d'un allié, les effets positifs d'un ennemi, gros dégâts aux unités invoquées et aux sphères de protection |
 | **Walkyrie** | Frigg | guerrière volante, double-épée projetée | disparition brève (invisibilité) |
