@@ -14,7 +14,7 @@ import { isoOffset } from '../camera';
  */
 export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
-export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche', 'centresocles', 'optimisation'];
+export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche', 'centresocles', 'optimisation', 'vacarme'];
 /**
  * A picture's size against the model it stands on. The Intelligence suprême's model is drawn 10 % larger
  * (LOOK_SCALE); its picture is painted over the Intelligence centrale's with the same base, and keeps it.
@@ -77,8 +77,8 @@ const pixels = (i: HTMLImageElement) => {
   return g.getImageData(0, 0, i.width, i.height).data;
 };
 
-/** Grid step (image pixels) of the relief. */
-const STEP = 6;
+/** Grid step (image pixels) of the relief: fine, or the ambient occlusion shaded its edge cells over the ground in steps. */
+const STEP = 3;
 
 /**
  * The relief: a grid over the image, cells fully transparent dropped, each vertex at its pixel's place on screen and

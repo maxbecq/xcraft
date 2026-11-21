@@ -56,7 +56,7 @@ while q:
     for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
         if 0 <= nx < w and 0 <= ny < h and not bg[ny * w + nx]:
             q.append((nx, ny))
-# Holes: closed patches of background colour (between an arm and the body), when large enough not to be a highlight.
+# Holes: closed patches of background colour (between an arm and the body, between legs), when large enough not to be a highlight.
 seen = bytearray(w * h)
 for y0 in range(h if sum(key) > 700 else 0):  # white backgrounds only: a beige one matches the lights inside
     for x0 in range(w):
@@ -73,7 +73,7 @@ for y0 in range(h if sum(key) > 700 else 0):  # white backgrounds only: a beige 
                 if 0 <= nx < w and 0 <= ny < h and not seen[j] and not bg[j] and near(nx, ny):
                     seen[j] = 1
                     q.append((nx, ny))
-        if len(patch) > w * h // 2000:
+        if len(patch) > w * h // 8000:
             for j in patch:
                 bg[j] = 1
 alpha = Image.frombytes("L", (w, h), bytes(0 if v else 255 for v in bg)).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
