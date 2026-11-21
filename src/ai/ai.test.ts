@@ -306,6 +306,21 @@ describe('AI Z Refuge', () => {
     expect(state.via).toBe(null);
   });
 
+  it('with the enemy army gone and no wave out, one soldier alone stays home', () => {
+    const w = createMatch(['humains', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    while (w.tick < ticks(10 * 60) || w.tick % 10) w.tick++;
+    const ai = new AI(w, 0);
+    (ai as unknown as { waves: number }).waves = 3;
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const lone = w.spawn('legionnaire', 0, hq.x, hq.y + 5 * FP);
+    for (let i = 0; i < ticks(2); i++) {
+      const cmds = ai.think();
+      expect(cmds.some((c) => c.kind === 'attack' && c.ids.includes(lone.id))).toBe(false);
+      w.step(cmds);
+    }
+  });
+
   it('with the enemy army gone, a few soldiers at home go and raze its last buildings', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
@@ -313,7 +328,7 @@ describe('AI Z Refuge', () => {
     const ai = new AI(w, 0);
     (ai as unknown as { waves: number }).waves = 3;
     const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
-    const few = [0, 1, 2].map((i) => w.spawn('legionnaire', 0, hq.x + (i - 1) * FP, hq.y + 5 * FP));
+    const few = [0, 1, 2, 3].map((i) => w.spawn('legionnaire', 0, hq.x + (i - 2) * FP, hq.y + 5 * FP));
     let sent = false;
     for (let i = 0; i < ticks(2) && !sent; i++) {
       const cmds = ai.think();

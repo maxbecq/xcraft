@@ -1032,9 +1032,12 @@ export class AI {
     // waiting at home for a full wave).
     // Like the wave's targets, which are every enemy building, seen or not, the enemy's soldiers are then counted
     // whether seen or not: an army out of sight never sets it off.
-    const ours = this.power(atHome.filter((u) => (u.def as UnitDef).attack).map((u) => [u.hp + u.shield, this.dps(u)]));
-    if (known === 0) return this.waves > 0 && ours > 0 && ours >= 3 * this.power(this.enemySoldiers().map((e) => [e.hp + e.shield, this.dps(e)]));
-    return ours >= 3 * known;
+    // Not one at a time, though: with no wave out to join, half a wave at least (a tower never seen killed lone soldiers).
+    // Fewer than a wave against enemies we know of: never.
+    const armed = atHome.filter((u) => (u.def as UnitDef).attack);
+    const ours = this.power(armed.map((u) => [u.hp + u.shield, this.dps(u)]));
+    if (known === 0) return this.waves > 0 && (this.wave.size > 0 || armed.length * 2 >= this.plan.wave) && ours > 0 && ours >= 3 * this.power(this.enemySoldiers().map((e) => [e.hp + e.shield, this.dps(e)]));
+    return atHome.length >= this.plan.wave && ours >= 3 * known;
   }
 
   private outmatched(wave: Entity[]): Entity[] {
