@@ -300,11 +300,13 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
     if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
-    if (this.gap(e, t) > 2 * FP) return this.chase(e, t);
+    if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.chase(e, t);
     e.goal = null;
     if (e.cooldown === 0 && this.mends(e)) {
-      t.hp = Math.min(t.maxHp, t.hp + 1);
-      e.cooldown = ticks(1 / this.healRate(e));
+      const pulse = def.healPulse ?? 1;
+      t.hp = Math.min(t.maxHp, t.hp + pulse);
+      e.cooldown = ticks(pulse / this.healRate(e));
+      if (pulse > 1) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
       if ((this.tick + e.id) % 8 === 0) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
     }
     return;
@@ -314,10 +316,11 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     if (this.healRate(e) && (this.tick + e.id) % 4 === 0) {
       const p = this.patient(e);
       if (p) {
-        if (this.gap(e, p) > 2 * FP) return this.chase(e, p);
+        if (this.gap(e, p) > (def.healRange ?? 2) * FP) return this.chase(e, p);
         if (e.cooldown === 0 && this.mends(e)) {
-          p.hp = Math.min(p.maxHp, p.hp + 1);
-          e.cooldown = ticks(1 / this.healRate(e));
+          const pulse = def.healPulse ?? 1;
+          p.hp = Math.min(p.maxHp, p.hp + pulse);
+          e.cooldown = ticks(pulse / this.healRate(e));
         }
         return;
       }

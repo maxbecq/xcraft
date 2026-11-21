@@ -66,3 +66,23 @@ describe('energy of the casters', () => {
     expect(points(medic)).toBeLessThan(2);
   });
 });
+
+describe('Soins (fiche 2010)', () => {
+  it('the Soigneur gives 25 PV at a time, every 2.5 s, from 5 tiles', () => {
+    const w = new World(createMap());
+    const s = w.spawn('soigneur', 0, ...at(40, 60));
+    const hurt = w.spawn('legionnaire', 0, ...at(44, 60));
+    hurt.hp = 20;
+    let first = -1;
+    for (let i = 0; i < ticks(4) && first < 0; i++) {
+      w.step([]);
+      if (hurt.hp > 20) first = w.tick;
+    }
+    expect(hurt.hp).toBe(45);
+    expect(Math.hypot(s.x - hurt.x, s.y - hurt.y)).toBeGreaterThan(3 * FP); // healed from where it stood
+    run(w, 2.4);
+    expect(hurt.hp).toBe(45);
+    run(w, 0.2);
+    expect(hurt.hp).toBe(70);
+  });
+});

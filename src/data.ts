@@ -64,6 +64,9 @@ export interface UnitDef {
   attack?: Attack;
   /** HP restored per second to a nearby wounded ally. */
   heal?: number;
+  /** Soigneur (fiche 2010, Soins): its hp come back `healPulse` at a time (every healPulse / heal s), `healRange` tiles off. */
+  healPulse?: number;
+  healRange?: number;
   worker?: boolean;
   /** Psychic shield points, absorbed before hp and recharging out of combat. */
   shield?: number;
