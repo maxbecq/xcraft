@@ -444,6 +444,31 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [thor.id], type: 'niveau' }));
   });
 
+  it('Dieux: their Porte lost, no minerals brought in for a minute (an esprit stuck, still « gathering »), they stop saving', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const thor = w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    w.spawn('antre', 0, asgaard.x + 12 * FP, asgaard.y);
+    w.spawn('branche', 0, asgaard.x + 12 * FP, asgaard.y + 6 * FP);
+    w.spawn('branche', 0, asgaard.x + 16 * FP, asgaard.y + 6 * FP);
+    w.remove(asgaard);
+    const field = [...w.entities.values()].find((e) => e.type === 'minerai')!;
+    for (const e of w.entities.values()) if (e.owner === 0 && e.type === 'esprit') e.order = { kind: 'gather', target: field.id, phase: 'go', timer: 0 };
+    w.players[0].minerals = 500;
+    w.tick = ticks(6 * 60) - (ticks(6 * 60) % 10); // a thinking tick
+    const ai = new AI(w, 0);
+    const nain = (cmds: Command[]) => cmds.some((c) => c.kind === 'train' && c.ids.includes(thor.id) && c.type === 'nain');
+    // Just lost: it saves for the Porte.
+    expect(nain(ai.think())).toBe(false);
+    // A minute with the bank unchanged (nothing stepped: no deposit): it spends what is left.
+    let spent = false;
+    for (const end = w.tick + ticks(61); w.tick < end && !spent; ) {
+      w.tick += 10;
+      spent = nain(ai.think());
+    }
+    expect(spent).toBe(true);
+  });
+
   it('Dieux: their Porte destroyed, they raise it again on its spot and summon gods again', () => {
     const w = createMatch(['dieux', 'humains']);
     const ai = new AI(w, 0);

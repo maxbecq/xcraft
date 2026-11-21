@@ -117,6 +117,9 @@ export class AI {
   private workersNow = new Set<number>();
   /** Workers killed and not yet replaced by a new one out (one in a queue only counts while it is there). */
   private unreplaced = 0;
+  /** The bank at the last think, and the last tick it grew (minerals brought in), to tell an income from a promise. */
+  private lastBank = 0;
+  private lastIncome = 0;
   /** Its workers (alive or queued) have reached their target once. */
   private staffed = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
@@ -178,6 +181,9 @@ export class AI {
     // headquarters again instead of a last stand.
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0);
     if (!home) return this.lastStand(mine);
+    const bank = w.players[this.player].minerals;
+    if (bank > this.lastBank || !this.lastIncome) this.lastIncome = w.tick;
+    this.lastBank = bank;
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
     const ctx: Turn = { ...n, ...this.budget(n), keep: 0, godEnergy: 0, low: 0, queued: 0, mending: 0, urgent: false };
@@ -388,8 +394,9 @@ export class AI {
     const building = (type: string) => builders.some((s) => [s.order, ...s.next].some((o) => o?.kind === 'build' && o.type === type)) || builders.some((s) => s.order?.kind === 'build' && s.order.type === type) || buildings.some((b) => b.type === type && b.buildLeft > 0);
     const wants: string[] = [];
     // Its headquarters lost, another base standing: a headquarters first (the Dieux' Porte, which summons the gods),
-    // its price saved from everything else (the gods spent the rest on troops), while minerals still come in: with no
-    // esprit at work or no field left by a base, what is left is spent instead of saved for ever.
+    // its price saved from everything else (the gods spent the rest on troops), while minerals still come in: the bank
+    // grew within the last minute. Otherwise (no field left, or an esprit stuck on its way back, its order still
+    // « gather ») what is left is spent instead of saved for ever.
     const noHq = !kin(home, f.hq) && !building(f.hq);
     if (noHq) wants.push(f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
@@ -461,7 +468,7 @@ export class AI {
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && serfs.some((s) => s.order?.kind === 'gather') && this.fieldsNear(buildings) > 0);
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
