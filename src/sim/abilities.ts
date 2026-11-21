@@ -391,6 +391,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const t = near((t) => t.owner === e.owner)[0];
     if (!t) return false;
     t.reflect = ticks(ab.duration);
+    t.reflectLeft = ab.max!;
   } else if (name === 'explosiftoxique') {
     for (const t of near((t) => this.hostile(t.owner, e.owner))) t.poison = Math.max(t.poison, ticks(ab.duration));
   } else if (name === 'gazeuphorisants') {

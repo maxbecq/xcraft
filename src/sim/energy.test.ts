@@ -118,3 +118,29 @@ describe('Recharge des boucliers (fiche 2010, mod)', () => {
     expect(far.shield).toBeGreaterThanOrEqual(20);
   });
 });
+
+describe('Sphère de renvoi (fiche 2010, mod)', () => {
+  it('half of each blow goes back, half is taken, until 300 points have gone back', () => {
+    const w = new World(createMap());
+    const v = w.spawn('voyageur', 0, ...at(40, 60));
+    v.mana = 1 << 30;
+    w.players[0].upgrades.renvoi = 1;
+    const ally = w.spawn('archer', 0, ...at(41, 60));
+    w.step([{ player: 0, kind: 'ability', ids: [v.id], name: 'renvoi', x: ally.x, y: ally.y }]);
+    run(w, 0.3);
+    expect(ally.reflect).toBeGreaterThan(ticks(39));
+    const foe = w.spawn('allosaure', 1, ...at(43, 60));
+    foe.hp = foe.maxHp = 10000;
+    const [h0, s0] = [ally.hp + ally.shield, foe.hp];
+    w.hit(foe, ally, { damage: 60, range: 0.1, cooldown: 1 });
+    expect(h0 - (ally.hp + ally.shield)).toBe(30);
+    expect(s0 - foe.hp).toBe(30 - (foe.def as { armor: number }).armor);
+    // The cap: once 300 have gone back, the Sphère is spent.
+    for (let i = 0; i < 10 && ally.reflect > 0; i++) {
+      ally.hp = ally.maxHp;
+      w.hit(foe, ally, { damage: 60, range: 0.1, cooldown: 1 });
+    }
+    expect(ally.reflect).toBe(0);
+    expect(ally.reflectLeft).toBe(0);
+  });
+});

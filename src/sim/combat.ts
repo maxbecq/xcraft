@@ -461,6 +461,14 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   // Danse du soldat (notice; mod: two thirds of the shots from afar, not blows, spells or splash): the Assassin dodges.
   if (t.type === 'assassin' && a.range >= 1) damage = idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100);
+  // Sphère de renvoi (fiche 2010, mod): half the blow goes back to the attacker, whoever it is (own side too: kept on
+  // purpose, rule 47), the other half is taken; it ends after its time or once `max` points have gone back.
+  if (t.reflect > 0 && e.def.kind === 'unit' && e.hp > 0) {
+    const back = Math.min(t.reflectLeft, idiv(damage * U.renvoiPercent, 100));
+    damage -= back;
+    this.hurt(e, back);
+    if ((t.reflectLeft -= back) <= 0) t.reflect = 0;
+  }
   const dealt = this.hurt(t, damage);
   // Armée des enfers (notice): a ghost vanishes once it has dealt its share of damage (or when its time is up).
   if (e.type === 'fantome' && (e.dealt += dealt) >= U.fantomeDamage) e.hp = 0;
@@ -485,8 +493,6 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   }
   t.lastAttacker = e.id;
   t.lastHitBy = e.owner;
-  // Sphère de renvoi: part of the blow goes back to the attacker, whoever it is (own side too: kept on purpose, rule 47).
-  if (t.reflect > 0 && e.def.kind === 'unit' && e.hp > 0) this.hurt(e, Math.max(1, idiv((a.damage + bonus) * U.renvoiPercent, 100)));
   // Lames empoisonnées: a Belluaire's blade poisons living units.
   if (e.type === 'belluaire' && t.def.kind === 'unit' && !machine && this.level(e.owner, 'lamesempoisonnees')) t.poison = ticks(U.poison.seconds);
   // Area weapons splash, half damage, on the ground units round the target (Armes chimiques: the Alchimiste's cocktails too).

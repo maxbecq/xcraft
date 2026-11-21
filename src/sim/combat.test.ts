@@ -141,6 +141,7 @@ describe('attacking one\'s own side (explicit order only)', () => {
     const [a] = army(w, 0, 'auxiliaire', 40, 60, 1);
     const [mine] = army(w, 0, 'auxiliaire', 41, 60, 1);
     mine.reflect = ticks(30);
+    mine.reflectLeft = 300;
     w.step([{ player: 0, kind: 'attack', ids: [a.id], x: mine.x, y: mine.y, target: mine.id }]);
     run(w, 4);
     expect(mine.hp).toBeLessThan(mine.maxHp);
