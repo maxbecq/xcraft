@@ -65,6 +65,8 @@ export interface View {
   print?: { plane: Plane; frame: Plane; frameMaterial: LineBasicMaterial; lines: LineSegments[]; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;
+  /** Isdaris: one small light per extension the building carries (no model of their own yet). */
+  extMarks?: Mesh[];
   /** Energy well: its living pool (see wellFx). */
   fx?: { group: Object3D; update(dt: number, t: number): void };
   heading: number;

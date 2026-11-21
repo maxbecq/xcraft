@@ -837,10 +837,33 @@ export class EntityRenderer {
         }
         if (v.scaffold) v.scaffold.visible = e.buildLeft > 0;
         if (v.pools) v.pools.visible = e.buildLeft === 0;
+        if (e.exts.length || v.extMarks) this.extensionMarks(v, e);
         // The Plate-forme builds on its deck, with its robot arms when its model has them (the Blender one did).
         if (v.arms || e.type === 'plateforme') this.assemble(v, e, now / 1000);
       }
     }
+  }
+
+  /**
+   * Isdaris extensions (notice): a small cyan light along the top of the building for each one it carries, so the
+   * building that bears them reads apart from its twins. Render only; no model of their own yet (Isdaris art paused).
+   */
+  private extensionMarks(v: View, e: Entity): void {
+    if ((v.extMarks?.length ?? 0) === e.exts.length) return;
+    for (const m of v.extMarks ?? []) {
+      m.removeFromParent();
+      m.geometry.dispose();
+      (m.material as Material).dispose();
+    }
+    const box = new Box3().setFromObject(v.model);
+    const [lo, hi] = [v.model.worldToLocal(box.min.clone()), v.model.worldToLocal(box.max.clone())];
+    v.extMarks = e.exts.map((_, i) => {
+      const m = new Mesh(new SphereGeometry(0.09, 10, 8), new MeshBasicMaterial({ color: 0x5ae0ff, blending: AdditiveBlending, transparent: true, opacity: 0.9, depthWrite: false }));
+      m.position.set(lo.x + ((hi.x - lo.x) * (i + 1)) / (e.exts.length + 1), hi.y + 0.12, (lo.z + hi.z) / 2);
+      m.userData.noPick = true;
+      v.model.add(m);
+      return m;
+    });
   }
 
   /**

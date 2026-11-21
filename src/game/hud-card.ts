@@ -205,10 +205,15 @@ export function buttonsFor(h: Hud): Button[] {
       }),
     ];
   }
+  // What one of the selected buildings may make: its own Isdaris extensions count (a Druide needs a Laboratoire on that Portail).
+  const lackAt = (t: string) => {
+    const why = same.map((o) => h.world.lacks(h.player, t, built(h), o));
+    return why.includes('') ? '' : why[0];
+  };
   const list: Button[] = (b.def.trains ?? []).map((t) => {
     const d = DEFS[t] as UnitDef;
     const action = d.weapons ? () => (h.weaponMenu = t) : () => cmd({ kind: 'train', ids: order, type: t });
-    return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action };
+    return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: lackAt(t) || undefined, action };
   });
   // Isdaris Obélisque (fiche 2010, mod): its buildings, materialised from it.
   if ((b.def as BuildingDef).builds && b.owner === h.player) {
@@ -224,9 +229,11 @@ export function buttonsFor(h: Hud): Button[] {
   // A building's abilities, once researched if they must be.
   for (const name of abilitiesOf(b.def as BuildingDef)) {
     const a = ABILITIES[name];
-    if (a.research && !h.world.level(h.player, a.research)) continue;
-    const ready = same.some((o) => cdOf(o, name) === 0);
-    const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: same.map((o) => o.id), name }) : () => h.setTargeting(true, true, name);
+    // Behind an extension, the buildings that carry it (the Orbe's Observatoire, the Trône's).
+    const able = same.filter((o) => !h.world.needs(h.player, a.research, o));
+    if (!able.length) continue;
+    const ready = able.some((o) => cdOf(o, name) === 0);
+    const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: able.map((o) => o.id), name }) : () => h.setTargeting(true, true, name);
     list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
   }
   // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
@@ -260,14 +267,17 @@ export function buttonsFor(h: Hud): Button[] {
   }
   // Research: the next level of each upgrade line not yet researched nor queued.
   for (const t of b.def.researches ?? []) {
-    if (!h.world.researchable(h.player, t)) continue;
-    // Research behind an extension or another research not done yet stays out of the card.
-    if (Object.keys((DEFS[t] as UpgradeDef).requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !h.world.level(h.player, (DEFS[r] as UpgradeDef).line))) continue;
     const d = DEFS[t] as UpgradeDef;
-    const order = [...same].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
+    // An extension: on the selected buildings that do not carry it yet (it is theirs alone).
+    const free = d.host ? same.filter((o) => h.world.researchable(h.player, t, o)) : same;
+    if (!free.length || !h.world.researchable(h.player, t, d.host ? free[0] : undefined)) continue;
+    // Research behind an extension (on one of these buildings) or another research not done yet stays out of the card.
+    const done = (r: string) => ((DEFS[r] as UpgradeDef).host ? same.some((o) => h.world.hasExt(h.player, r, o)) : h.world.level(h.player, (DEFS[r] as UpgradeDef).line) > 0);
+    if (Object.keys(d.requires ?? {}).some((r) => DEFS[r].kind === 'upgrade' && !done(r))) continue;
+    const order = [...free].sort((x, y) => x.queue.length - y.queue.length).map((x) => x.id);
     // A Z weapon's research (and its tiers) shows that weapon's pictogram.
     const weapon = Object.keys(WEAPONS).find((k) => WEAPONS[k].research === d.line || WEAPONS[k].research === t);
-    list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
+    list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: lackAt(t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
   }
   // Last, so the other buttons keep their places (and grid keys).
   if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => h.setTargeting(true, true, 'rally') });

@@ -127,6 +127,8 @@ function stats(h: Hud, e: Entity): string {
   }
   if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed)}</span>`);
   if ('sight' in e.def) parts.push(`<span>Vue ${e.def.sight}</span>`);
+  // Isdaris: the extensions built onto this building, its own.
+  if (e.exts.length) parts.push(`<span title="Extensions de ce bâtiment">${e.exts.map((x) => DEFS[x].name.replace('Extension : ', '')).join(', ')}</span>`);
   return parts.length ? `<div class="stats">${parts.join('')}</div>` : '';
 }
 
