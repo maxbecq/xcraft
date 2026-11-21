@@ -230,6 +230,25 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'drone' }));
   });
 
+  it('sends a worker stuck on its way to a field to another one', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ai = new AI(w, 0);
+    // Nobody gets anywhere: a worker on its way to a field stays where it is.
+    w.goNear = () => {};
+    const esprit = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'esprit')!;
+    const field = [...w.entities.values()].find((e) => e.type === 'minerai')!;
+    w.step([{ player: 0, kind: 'smart', ids: [esprit.id], x: field.x, y: field.y, target: field.id }]);
+    let sent: Command | undefined;
+    for (let i = 0; i < ticks(8) && !sent; i++) {
+      const cmds = ai.think();
+      sent = cmds.find((c) => c.kind === 'smart' && c.ids.includes(esprit.id));
+      w.step(cmds);
+    }
+    expect(sent).toBeDefined();
+    expect(w.tick).toBeGreaterThanOrEqual(ticks(5));
+    expect((sent as Extract<Command, { kind: 'smart' }>).target).not.toBe(field.id);
+  });
+
   it('never sends soldiers to man the Intelligence as a Fortin', () => {
     const w = createMatch(['z', 'humains']);
     const ai = new AI(w, 0);

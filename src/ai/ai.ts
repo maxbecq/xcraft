@@ -27,6 +27,8 @@ export const BIOBALL = BALANCE.ai.plan as Plan;
 export const DIFFICULTY: Record<string, number> = BALANCE.ai.difficulty;
 
 const THINK_EVERY = 10; // ticks
+/** Seconds a worker on its way to a field may stand still before it is sent to another field. */
+const STUCK_SECONDS = 5;
 const DEFEND_RADIUS = 14 * FP;
 /** A wave on its way to the shared road's middle goes on to its target once its front is this close to it. */
 const VIA_REACHED = 6 * FP;
@@ -124,6 +126,8 @@ export class AI {
   private tried = new Map<string, number>();
   /** Since when the game has looked lost (see `lost`), with the bank then: minerals, and energy if a Marché could sell it. */
   private hopeless: { since: number; minerals: number; energy: number } | null = null;
+  /** Workers on their way to a field: where they stood, and since when (see `tend`). */
+  private walking = new Map<number, { x: number; y: number; since: number }>();
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
   private danger: { x: number; y: number } | undefined;
 
@@ -226,6 +230,25 @@ export class AI {
       const f = this.nearest(s, (e) => e.type === 'minerai');
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
+
+    // A worker that has not moved for STUCK_SECONDS on its way to a field (it can stand on the field's corner, out of
+    // reach of it, for good: twenty Dieux esprits on one field on L'Anneau mined nothing for 20 minutes) goes to another.
+    const seen = new Set<number>();
+    for (const s of serfs) {
+      const o = s.order;
+      if (o?.kind !== 'gather' || o.phase !== 'go' || s.carry > 0) continue;
+      seen.add(s.id);
+      const last = this.walking.get(s.id);
+      if (!last || last.x !== s.x || last.y !== s.y) {
+        this.walking.set(s.id, { x: s.x, y: s.y, since: this.world.tick });
+        continue;
+      }
+      if (this.world.tick - last.since < ticks(STUCK_SECONDS)) continue;
+      const f = this.nearest(s, (e) => e.type === 'minerai' && e.id !== o.target && !e.miner);
+      if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
+      this.walking.delete(s.id);
+    }
+    for (const id of this.walking.keys()) if (!seen.has(id)) this.walking.delete(id);
 
     // Z: three drones work each Assimilateur (notice), taken from the mineral line.
     for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker)) {
