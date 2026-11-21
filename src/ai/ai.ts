@@ -206,6 +206,8 @@ export class AI {
     [this.workersNow, this.workers] = [this.workers, now];
     // Never more than a full complement (a base lost, or none finished for a while, keeps what was lost).
     this.unreplaced = Math.min(Math.max(0, this.unreplaced + died - born), Math.max(target, this.plan.serfs));
+    // Survivors enough for the target (a base lost with them): nothing to replace, no order would come.
+    if (target > 0 && ctx.serfs.length + ctx.queued >= target) this.unreplaced = 0;
     const owed = Math.max(0, this.unreplaced - ctx.queued);
     const held = ctx.wantSupreme && ctx.p.energy >= 300;
     // The price is there before the loss too, once the workers have reached their target, from minute 10: a raid kills
@@ -219,7 +221,9 @@ export class AI {
     for (const s of ctx.serfs) {
       const b = s.order?.kind === 'repair' ? w.entities.get(s.order.target) : undefined;
       const R = b && REPAIR[s.type];
-      if (b && R) ctx.mending += Math.ceil(((b.def as BuildingDef).cost.minerals * R.percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
+      if (!b || !R) continue;
+      ctx.mending += Math.ceil(((b.def as BuildingDef).cost.minerals * R.percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
+      ctx.energy -= Math.ceil(((b.def as BuildingDef).cost.energy * R.percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
     }
     ctx.minerals -= ctx.mending;
     this.tend(ctx);
@@ -344,13 +348,17 @@ export class AI {
     // kept; what it will cost is taken from that budget at once.
     if (REPAIR[f.worker]) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
-        const cost = Math.ceil(((b.def as BuildingDef).cost.minerals * REPAIR[f.worker].percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
-        if (ctx.minerals - ctx.low - cost < 200) continue;
+        const part = (n: number) => Math.ceil((n * REPAIR[f.worker].percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
+        const cost = part((b.def as BuildingDef).cost.minerals);
+        const energy = part((b.def as BuildingDef).cost.energy);
+        // Its energy too, from what the sites are not promised.
+        if (ctx.minerals - ctx.low - cost < 200 || ctx.energy < energy) continue;
         if (serfs.some((s) => s.order?.kind === 'repair' && s.order.target === b.id)) continue;
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather'), [b.tx, b.ty], (b.def as BuildingDef).size);
         if (!s) continue;
         ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: b.x, y: b.y, target: b.id });
         ctx.minerals -= cost;
+        ctx.energy -= energy;
       }
     }
 
@@ -614,8 +622,14 @@ export class AI {
     // A Marché evens out a lopsided bank: lots of one resource, almost none of the other.
     const market = buildings.find((b) => b.type === 'marche' && b.buildLeft === 0);
     // Minerals piling up while energy holds back the tech (the reserve and the next research): buy energy.
-    if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
-    else if (market && ctx.energy > 250 && ctx.minerals < 150) ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
+    // What is sold leaves this turn's budget at once (what comes back only arrives with the trade).
+    if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
+      ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
+      ctx.minerals -= BALANCE.rules.trade.give;
+    } else if (market && ctx.energy > 250 && ctx.minerals < 150) {
+      ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
+      ctx.energy -= BALANCE.rules.trade.give;
+    }
     // Man the Fortins with soldiers waiting at home (the Z Intelligence shelters drones only). With no income left
     // they come out and join the last waves: a crew sat in its Fortin to the time limit while one new soldier at a
     // time walked out to die.
