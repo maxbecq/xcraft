@@ -1,6 +1,6 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
-  AdditiveBlending, Box3, Matrix4, Plane, BufferAttribute, DoubleSide, CanvasTexture, BoxGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
+  AdditiveBlending, Box3, Matrix4, TorusGeometry, MeshStandardMaterial, Plane, BufferAttribute, DoubleSide, CanvasTexture, BoxGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   Object3D, Raycaster, AnimationMixer, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, Points, PointsMaterial,
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
@@ -110,11 +110,15 @@ const WEAPON_MOUNTS: Record<
   assimilateur: { size: 0.4, apex: true },
   tourelle: { size: 0.6 },
 };
+/** The steel of the ring a building's Déchiqueteur turns on. */
+const RING_STEEL = new MeshStandardMaterial({ color: 0x55504a, metalness: 0.7, roughness: 0.45 });
 /** Melee modules: on a walker's head, their arm reaching down in front of it (see mount). */
 const MELEE = new Set(['zw_dechiqueteur']);
 /** The Déchiqueteur's saw on a walker: its radius as modelled (module units), and how much larger it is drawn. */
 const SAW_RADIUS = 0.14;
 const SAW_GROWTH = 2;
+/** On a building's ring: larger still. */
+const RING_SAW_GROWTH = 3.4;
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
@@ -311,6 +315,61 @@ export class EntityRenderer {
       if (hit) top = Math.max(top, body.worldToLocal(hit.point.clone()).y);
     }
     const at = body.localToWorld(spot.setY(top > -Infinity ? top : box.max.y));
+    // A building's Déchiqueteur: not on its roof, where a blade reaches nothing, but on a ring round its body at
+    // mid-height, which turns to bring its arm and saw onto its foe (see ringFight).
+    if (MELEE.has(name) && ZSUPPORTS[e.type]) {
+      const midY = box.min.y + 0.45 * size.y;
+      const band = points.filter((p) => Math.abs(p.y - midY) < 0.06 * size.y);
+      const R = Math.max(0.1 * size.x, ...band.map((p) => Math.hypot(p.x - centre.x, p.z - centre.z))) * 1.04;
+      const pivot = new Group();
+      pivot.position.set(centre.x, midY, centre.z);
+      const ring = new Mesh(new TorusGeometry(R, R * 0.07, 8, 40), RING_STEEL);
+      ring.rotation.x = Math.PI / 2;
+      const mod = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
+      const own = new Box3().setFromObject(mod, true);
+      const s = (R * 0.9) / Math.max(own.max.x - own.min.x, own.max.z - own.min.z);
+      mod.scale.setScalar(s);
+      mod.position.set(0, R * 0.07, R);
+      pivot.add(ring, mod);
+      const kit = new Group();
+      kit.add(pivot);
+      // Its empty mount stays on the roof, over the gun modelled there.
+      const support = ZSUPPORTS[e.type];
+      if (templates.has(support.model)) {
+        const cap = model(support.model, teamMaterials[e.owner] ?? teamMaterials[0]);
+        cap.position.copy(body.worldToLocal(at.clone()));
+        cap.scale.setScalar(across / bodyScale);
+        kit.add(cap);
+      }
+      kit.traverse((m) => (m.userData.noPick = true));
+      body.add(kit);
+      delete v.model.userData.top;
+      const arm = mod.getObjectByName('zw_arm');
+      const saw = mod.getObjectByName('zw_saw');
+      let reach: number | undefined;
+      let sawR = 0;
+      if (arm && saw) {
+        // The ring is already at the height of what it fights: a plain straight arm, level, out to a saw larger than
+        // a walker's.
+        saw.scale.multiplyScalar(RING_SAW_GROWTH);
+        sawR = SAW_RADIUS * RING_SAW_GROWTH * s;
+        // Level with the ring, raised only if the blade would touch the ground (the Assimilateur's ring is low for
+        // its saw): the blade's own size, measured, in the body's frame.
+        const g = (saw as Mesh).geometry;
+        g.computeBoundingBox();
+        const blade = ((g.boundingBox!.max.y - g.boundingBox!.min.y) / 2) * saw.scale.y * s;
+        // Above the ground (y 0 in the body's frame; some models are sunk below it), with a margin.
+        const lift = Math.max(0, blade + 0.04 * size.y - midY);
+        const target = new Vector3(0, lift, R + sawR * 1.05).sub(mod.position).divideScalar(s).sub(arm.position);
+        const tip = saw.position.clone();
+        const k = Math.max(0.5, Math.sqrt(Math.max(1e-4, target.y * target.y + target.z * target.z - tip.y * tip.y)) / tip.z);
+        for (const c of arm.children) if (c !== saw) [c.position.z, c.scale.z] = [c.position.z * k, c.scale.z * k];
+        saw.position.z *= k;
+        reach = Math.atan2(tip.y, tip.z * k) - Math.atan2(target.y, target.z);
+      }
+      v.weapon = { name, o: kit, arm, saw, reach, mod, sawR: sawR * bodyScale, pivot };
+      return;
+    }
     let o: Object3D = model(name, teamMaterials[e.owner] ?? teamMaterials[0]);
     // Its muzzle, in its own frame: the middle of its front, halfway up (the Lance-flammes' jet starts there).
     const mod = o;
@@ -656,6 +715,8 @@ export class EntityRenderer {
         v.model.rotation.y = v.heading;
         this.animate(v, e, dt);
         this.standOff(v, e, e.order?.kind === 'attack' ? this.views.get(e.order.target) : undefined, world.entities.get(e.order?.kind === 'attack' ? e.order.target : -1), dt);
+      } else if (v.weapon?.pivot) {
+        this.ringFight(v, e, world, dt);
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
@@ -938,6 +999,28 @@ export class EntityRenderer {
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
+  }
+
+  /** A building's Déchiqueteur: its ring turns to its last foe, the saw spins and comes down as it strikes. */
+  private ringFight(v: View, e: Entity, world: World, dt: number): void {
+    const w = v.weapon!;
+    for (const s of world.shots) if (s.id === e.id) w.aim = [s.x2 / FP, s.y2 / FP];
+    const fighting = e.cooldown > 0;
+    if (w.aim) {
+      const p = w.pivot!.parent!.worldToLocal(new Vector3(w.aim[0], 0, w.aim[1]));
+      const want = Math.atan2(p.x - w.pivot!.position.x, p.z - w.pivot!.position.z);
+      const d = Math.atan2(Math.sin(want - w.pivot!.rotation.y), Math.cos(want - w.pivot!.rotation.y));
+      w.pivot!.rotation.y += d * Math.min(1, dt * 4);
+    }
+    if (w.arm) w.arm.rotation.x = w.reach ?? 0;
+    // No joint to swing: the whole blade thrusts out at the foe on each bite.
+    const a = WEAPONS.dechiqueteur.attack;
+    const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
+    if (w.mod) {
+      w.mod.userData.z ??= w.mod.position.z;
+      w.mod.position.z = w.mod.userData.z * (1 + 0.18 * Math.sin(Math.PI * fired));
+    }
+    if (w.saw) w.saw.rotation.x += dt * (fighting ? 18 : 3);
   }
 
   /**
