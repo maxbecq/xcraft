@@ -273,6 +273,14 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'ability': {
+      // Replays recorded before the Walkyrie had her own Camouflage: hers under the old name.
+      if (c.name === 'camouflage' && mine.some((e) => e.type === 'walkyrie')) {
+        const ids = mine.filter((e) => e.type === 'walkyrie').map((e) => e.id);
+        this.apply({ ...c, name: 'camouflagewalkyrie', ids });
+        const rest = c.ids.filter((id) => !ids.includes(id));
+        if (rest.length) this.apply({ ...c, ids: rest });
+        return;
+      }
       const named = c.name && buildings.find((b) => abilitiesOf(b.def as BuildingDef).includes(c.name!) && cdOf(b, c.name!) === 0);
       if (c.name && !named) {
         // A named unit ability: aimed ones by the ready caster nearest the point, the others by every ready caster.

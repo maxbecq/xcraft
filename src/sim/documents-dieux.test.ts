@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, spell, type UnitDef } from '../data';
+import { FP } from './fixed';
+import { createMatch } from './setup';
 
 // The Dieux numbers XC.doc (2008) gives, distances and speeds divided by 100.
 describe('Dieux, by XC.doc 2008', () => {
@@ -22,5 +24,27 @@ describe('Dieux, by XC.doc 2008', () => {
     expect((DEFS.drake as UnitDef).cost).toEqual({ minerals: 850, energy: 50 });
     expect((DEFS.walkyrie as UnitDef).armor).toBe(4);
     expect((DEFS.titan as UnitDef).buildTime).toBe(66);
+  });
+
+  it("Seth's blow on a wounded unit: the cruel bonus before the Artefacterie's Force, as before", () => {
+    const w = createMatch(['dieux', 'humains']);
+    const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
+    seth.arts = ['artforce'];
+    const serf = w.spawn('serf', 1, 31 * FP, 30 * FP);
+    const a = (DEFS.seth as UnitDef).attack!;
+    let d = w.blow(seth, serf, a);
+    d += Math.floor((d * 50) / 100); // Seth's cruelty
+    d += Math.floor((d * 20) / 100); // Force
+    serf.hp = 1000;
+    serf.maxHp = 3000; // still under half
+    w.hit(seth, serf, a);
+    expect(1000 - serf.hp).toBe(d);
+  });
+
+  it("an old replay's « camouflage » for a Walkyrie still hides her", () => {
+    const w = createMatch(['dieux', 'humains']);
+    const v = w.spawn('walkyrie', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [v.id], name: 'camouflage' }]);
+    expect(v.camo).toBeGreaterThan(0);
   });
 });
