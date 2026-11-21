@@ -70,7 +70,7 @@ const LATE: Record<string, string[]> = Object.fromEntries(
   Object.keys(FACTIONS).map((f) => [f, Object.entries(DEFS).filter(([k, d]) => d.kind === 'upgrade' && d.faction === f && !(RESEARCH[f] ?? []).includes(k) && !EXTENSIONS.includes(k) && !ARTEFACTS.includes(k) && k !== 'niveau').map(([k]) => k)]),
 );
 /** Late buildings besides ai.extra, by faction: [type, from minute], one of each (Métallurgie: the Humans' vehicles). */
-const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie', 12]] };
+const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie', 12]], isdaris: [['trone', 18]] };
 /** `e` is a `type`, or a building turned from one (Grand Conseil, Intelligence suprême, Caserne volante). */
 const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
@@ -115,6 +115,8 @@ export class AI {
   private tried = new Map<string, number>();
   /** Since when the game has looked lost (see `lost`), with the bank then: minerals, and energy if a Marché could sell it. */
   private hopeless: { since: number; minerals: number; energy: number } | null = null;
+  /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
+  private danger: { x: number; y: number } | undefined;
 
   private readonly faction: FactionDef;
 
@@ -491,9 +493,10 @@ export class AI {
     // Heavier units from the other production buildings, one at a time, when affordable; a few of each support kind.
     for (const t of buildings.filter((b) => !kin(b, f.barracks) && !kin(b, f.hq) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
       // The kind it has fewest of that it can pay for (Discobole and Chimère take turns; an Ankylosaure it could not pay
-      // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One unarmed carrier (Scarabée).
+      // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One of each unarmed unit
+      // (Scarabée, Isdaris Espion and Voyageur).
       const own = (u: string) => mine.filter((o) => o.type === u).length;
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && ((DEFS[u] as UnitDef).attack || ((DEFS[u] as UnitDef).bunker && own(u) === 0)) && (t.type === f.tech || own(u) < 3));
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u) && ((DEFS[u] as UnitDef).attack || own(u) === 0) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains)
         .slice()
@@ -676,6 +679,7 @@ export class AI {
     // Our base first; else a teammate's base under attack, which the army at home goes to help.
     const allied = [...w.entities.values()].filter((b) => b.def.kind === 'building' && b.owner !== this.player && b.owner >= 0 && !w.hostile(b.owner, this.player));
     const threat = this.threat(buildings) ?? (allied.length ? this.threat(allied) : undefined);
+    this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
     // The danger gone, the sheltered drones come out (back to work as idle workers).
     if (!threat) for (const b of shelters) if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
@@ -766,6 +770,40 @@ export class AI {
         for (const id of this.wave) if (dist(w.entities.get(id)!.x, w.entities.get(id)!.y, losing.x, losing.y) <= RAPPEL.radius * FP) this.wave.delete(id);
       }
     }
+    ctx.out.push(...this.altar(ctx));
+  }
+
+  /**
+   * Isdaris: the Orbe de commandement's Observatoire over the wave's target; the Trône's canon orbital on an enemy
+   * crowd an Espion of ours watches, its Porte de déphasage on a group losing far from home (then the group home), its
+   * Mur d'énergie across a raid our army at home cannot hold.
+   */
+  private altar(ctx: Turn): Command[] {
+    const { w, p, home, buildings, army } = ctx;
+    const out: Command[] = [];
+    const ready = (b: Entity | undefined, name: string) => !!b && b.buildLeft === 0 && b.abilityCd === 0 && w.level(this.player, ABILITIES[name].research ?? '') > 0 && p.energy >= (ABILITIES[name].energy ?? 0);
+    const use = (b: Entity, name: string, at: { x: number; y: number }) => out.push({ player: this.player, kind: 'ability', ids: [b.id], name, x: at.x, y: at.y });
+    const orbe = buildings.find((b) => b.type === 'orbecommandement');
+    const target = this.wave.size ? this.enemyTarget(home) : undefined;
+    if (orbe && target && ready(orbe, 'observatoire')) use(orbe, 'observatoire', target);
+    const trone = buildings.find((b) => b.type === 'trone');
+    if (!trone) return out;
+    // The second step of the Porte: the group still phased goes home.
+    if (w.phaseGroups.some((g) => g.owner === this.player) && w.level(this.player, 'porte')) use(trone, 'transfertgroupe', home);
+    if (ready(trone, 'canonorbital')) {
+      const foes = [...w.entities.values()].filter((e) => e.def.kind === 'unit' && e.hp > 0 && w.hostile(e.owner, this.player) && w.sees(this.player, e));
+      const spies = army.filter((u) => u.type === 'espion');
+      const r = (ABILITIES.canonorbital.radius ?? 2) * FP;
+      const best = foes
+        .filter((e) => spies.some((s) => dist(s.x, s.y, e.x, e.y) <= (s.def as UnitDef).sight * FP))
+        .map((e) => [e, foes.filter((o) => dist(o.x, o.y, e.x, e.y) <= r).length] as const)
+        .sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+      if (best && best[1] >= 4) return use(trone, 'canonorbital', best[0]), out;
+    }
+    const losing = this.losing([...this.wave].map((id) => w.entities.get(id)!), home);
+    if (losing && ready(trone, 'portedephasage')) return use(trone, 'portedephasage', losing), out;
+    if (this.danger && ready(trone, 'murenergie')) use(trone, 'murenergie', this.danger);
+    return out;
   }
 
   /** Hurt gods and outmatched groups fall back; raids and focus fire. */
@@ -1024,6 +1062,13 @@ export class AI {
         } else if (name === 'courroux') {
           const d = this.engaged(u);
           if (d !== undefined && d < 3 * FP) cmd = self(u, name);
+        } else if (name === 'enfouissement') {
+          // Créature: badly hurt in a fight, it burrows (unseen, it bursts out when an enemy comes by).
+          if (!u.burrowed && u.hp * 10 < u.maxHp * 4) cmd = self(u, name);
+        } else if (name === 'teleportgroupe') {
+          // Voyageur: three of ours around badly hurt, the group goes home.
+          const home = this.homeOf();
+          if (home && allies.filter((a) => a.hp + a.shield < (a.maxHp + a.maxShield) / 2).length >= 3) cmd = at(u, name, home);
         } else if (name === 'napalm') {
           // The toughest enemy vehicle in reach, else a badly hurt one of ours (repaired).
           const pick = inReach.filter((f) => (f.def as UnitDef).mechanical).sort((a, b) => b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0] ?? allies.find((a) => (a.def as UnitDef).mechanical && a.hp * 2 < a.maxHp);
@@ -1127,6 +1172,12 @@ export class AI {
     else if (!h || p.minerals > h.minerals || (market && p.energy > h.energy)) this.hopeless = { since: w.tick, minerals: p.minerals, energy: p.energy };
     else if (w.tick - h.since >= ticks(60)) return true;
     return false;
+  }
+
+  /** Our headquarters, any. */
+  private homeOf(): Entity | undefined {
+    for (const e of this.world.entities.values()) if (e.owner === this.player && kin(e, this.faction.hq)) return e;
+    return undefined;
   }
 
   private lastStand(mine: Entity[]): Command[] {
