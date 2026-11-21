@@ -789,6 +789,9 @@ export class AI {
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
     } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
+      // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
+      // one soldier joining, it turned the front back to it).
+      const fresh = this.wave.size === 0;
       // Easy: never more than its wave cap at once, the rest stays home.
       atHome.slice(0, this.easy ? LEVELS.easy.maxWave : atHome.length).forEach((u) => this.wave.add(u.id));
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
@@ -797,7 +800,7 @@ export class AI {
       const dry = this.starved(buildings, ctx.p.minerals);
       for (const g of gods) if (dry || ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) this.wave.add(g.id);
       this.waves++;
-      this.via = this.sharedRoad(home);
+      if (fresh) this.via = this.sharedRoad(home);
     }
   }
 

@@ -288,6 +288,24 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'supreme' }));
   });
 
+  it("a reinforcement joining a wave out does not send the front back to the shared road's middle", () => {
+    // L'Anneau: two roads round the chasm, a new wave goes by the middle of one.
+    const w = createMatch(['humains', 'humains'], undefined, 'l-anneau');
+    for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
+    while (w.tick < ticks(10 * 60) || w.tick % 10) w.tick++; // the AI thinks every 10 ticks
+    const ai = new AI(w, 0);
+    const state = ai as unknown as { waves: number; wave: Set<number>; via: unknown };
+    const theirs = [...w.entities.values()].find((e) => e.owner === 1 && e.type === 'conseil')!;
+    const front = [0, 1, 2, 3].map((i) => w.spawn('legionnaire', 0, theirs.x + (i - 2) * FP, theirs.y + 8 * FP));
+    front.forEach((u) => state.wave.add(u.id));
+    state.waves = 1;
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const late = w.spawn('legionnaire', 0, hq.x, hq.y + 5 * FP);
+    ai.think();
+    expect(state.wave.has(late.id)).toBe(true);
+    expect(state.via).toBe(null);
+  });
+
   it('with the enemy army gone, a few soldiers at home go and raze its last buildings', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
