@@ -480,3 +480,20 @@ describe('Z Assimilateur (notice)', () => {
     expect(full).toBeLessThan(alone * 4.5);
   });
 });
+
+describe('Z Lance-flammes (fiche « Double attaque »)', () => {
+  it('hits the enemy right behind its target in the line, not one beside nor one far behind', () => {
+    const w = createMatch(['z', 'humains']);
+    const burner = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    burner.kit = 'flammes';
+    const target = w.spawn('legionnaire', 1, 31.5 * FP, 30 * FP);
+    const behind = w.spawn('legionnaire', 1, 32.7 * FP, 30 * FP);
+    const beside = w.spawn('legionnaire', 1, 31.5 * FP, 31.5 * FP);
+    const far = w.spawn('legionnaire', 1, 35 * FP, 30 * FP);
+    w.hit(burner, target, w.weapon(burner)!);
+    expect(target.hp).toBeLessThan(target.maxHp);
+    expect(behind.hp).toBeLessThan(behind.maxHp);
+    expect(beside.hp).toBe(beside.maxHp);
+    expect(far.hp).toBe(far.maxHp);
+  });
+});

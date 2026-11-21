@@ -266,7 +266,7 @@
   "weapons": {
     "mitrailleuse": { "levels": [[14, 11, 11, 7, 4, 7], [17, 13, 13, 9, 4, 9], [19, 15, 15, 10, 5, 10], [22, 16, 16, 11, 6, 11]], "range": 4, "cooldown": 1, "cost": { "minerals": 0, "energy": 0 } },
     "laser": { "levels": [[20, 15, 15, 10, 10, 10], [23, 17, 17, 12, 12, 12], [25, 19, 19, 13, 13, 13], [29, 22, 22, 15, 15, 15]], "range": 5, "cooldown": 1, "cost": { "minerals": 70, "energy": 0 } },
-    "flammes": { "levels": [[24, 24, 31, 16, 16, 16], [27, 27, 36, 18, 18, 18], [30, 30, 39, 20, 20, 20], [34, 34, 45, 23, 23, 23]], "range": 1.2, "cooldown": 1.5, "air": false, "splash": 1.2, "cost": { "minerals": 50, "energy": 60 } },
+    "flammes": { "levels": [[24, 24, 31, 16, 16, 16], [27, 27, 36, 18, 18, 18], [30, 30, 39, 20, 20, 20], [34, 34, 45, 23, 23, 23]], "range": 1.2, "cooldown": 1.5, "air": false, "behind": 1.5, "cost": { "minerals": 50, "energy": 60 } },
     "roquettes": { "levels": [[9, 18, 37, 56, 56, 18], [11, 22, 43, 65, 65, 22], [12, 24, 48, 72, 72, 24], [14, 28, 55, 83, 83, 28]], "ranges": [4, 5, 6, 7], "cooldown": 2, "cost": { "minerals": 70, "energy": 20 } },
     "dechiqueteur": { "levels": [[48, 36, 24, 12, 6, 24], [56, 42, 28, 14, 7, 28], [61, 45, 31, 15, 8, 31], [70, 53, 35, 18, 9, 35]], "range": 0.1, "cooldown": 1.1, "air": false, "airIfFlying": true, "cost": { "minerals": 80, "energy": 0 } },
     "jetsonique": { "levels": [[60, 60, 60, 60, 15, 30], [69, 69, 69, 69, 18, 35], [77, 77, 77, 77, 20, 39], [88, 88, 88, 88, 22, 44]], "ranges": [3, 3, 4, 4], "cooldown": 2.5, "air": false, "line": true, "cost": { "minerals": 125, "energy": 60 } },

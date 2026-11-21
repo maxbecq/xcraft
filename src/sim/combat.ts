@@ -484,6 +484,19 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, damage);
     }
   }
+  // Z Lance-flammes (fiche « Double attaque »): the enemies on the ground just behind the target, in the jet's line.
+  if (a.behind) {
+    const [lx, ly] = [t.x - e.x, t.y - e.y];
+    const len2 = lx * lx + ly * ly || 1;
+    const reach = toFp(a.behind);
+    for (const o of [...this.entities.values()]) {
+      if (o === e || o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
+      const k = (o.x - t.x) * lx + (o.y - t.y) * ly;
+      if (k <= 0 || k * k > reach * reach * len2) continue;
+      const cross = Math.abs((o.x - t.x) * ly - (o.y - t.y) * lx);
+      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, damage);
+    }
+  }
   // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).
   if (a.selfHit && this.gap(e, t) <= FP / 2) this.hurt(e, damage);
   // The Élémentaire d'eau's icy shot slows what it hits.

@@ -40,6 +40,8 @@ export interface Attack {
   splash?: number;
   /** Z Jet sonique: also hurts every unit, friend or foe, between the shooter and its target. */
   line?: boolean;
+  /** Z Lance-flammes (fiche « Double attaque »): enemies on the ground up to this many tiles right behind the target are hit too. */
+  behind?: number;
   /** Z Arc électrique: strikes up to this many enemies at once, in front of the shooter. */
   targets?: number;
   /** Z Canon X-04: fired at a target in contact, the shooter takes the blast too. */
@@ -909,6 +911,7 @@ interface WeaponStats {
   airIfFlying?: boolean;
   splash?: number;
   line?: boolean;
+  behind?: number;
   targets?: number;
   selfHit?: boolean;
   heal?: number;
@@ -934,6 +937,7 @@ export function weaponAt(key: string, level: number, flying = false): Attack | u
   }
   if (w.splash) a.splash = w.splash;
   if (w.line) a.line = true;
+  if (w.behind) a.behind = w.behind;
   if (w.targets) a.targets = w.targets;
   if (w.selfHit) a.selfHit = true;
   return a;
