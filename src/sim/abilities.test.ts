@@ -209,4 +209,20 @@ describe('powers from inside a Fortin (notice)', () => {
     expect([w.clouds[0].x, w.clouds[0].y]).toEqual([near.x, near.y]);
     expect(a.inside).toBe(fort.id);
   });
+
+  it("from a shelter, a spell reaches as far as the caster's level allows, from the shelter's edge", () => {
+    // No god goes into a shelter in a game; put Apollon in one to check the reach the command takes.
+    const w = new World(createMap());
+    const fort = w.spawn('fortin', 0, 40 * FP, 60 * FP);
+    const god = Object.assign(w.spawn('apollon', 0, fort.x, fort.y), { mana: 1 << 30, inside: fort.id });
+    // 8.5 from the Fortin's middle: beyond level 1's 7 + the edge 1, within level 5's 8 + 1.
+    const foe = Object.assign(w.spawn('legionnaire', 1, fort.x + 8.5 * FP, fort.y), { hp: 1000, maxHp: 1000, held: ticks(30) });
+    w.step([{ player: 0, kind: 'ability', ids: [god.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    expect(foe.hp).toBe(1000);
+    god.lvl = 5;
+    god.spellCd = {};
+    god.abilityCd = 0;
+    w.step([{ player: 0, kind: 'ability', ids: [god.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    expect(foe.hp).toBeLessThan(1000);
+  });
 });

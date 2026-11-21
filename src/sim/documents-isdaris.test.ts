@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
 import { createMap } from '../map';
-import { FP, speedPerTick } from './fixed';
+import { FP, speedPerTick, ticks } from './fixed';
 import { World } from './world';
 import { createMatch } from './setup';
 
@@ -37,11 +37,15 @@ describe('Isdaris, by the 2010 sheet', () => {
     expect(c.maxHp).toBe((DEFS.creature as UnitDef).hp + 8);
     expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
     expect(c.speed).toBeGreaterThan(plain);
-    // A slow (the Élémentaire d'eau's ice) wears off: back to the boosted speed.
-    c.chill = 1;
-    c.speed = w.baseSpeed(c);
-    c.chill = 0;
-    expect(w.baseSpeed(c)).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    // An Élémentaire d'eau's icy shot slows it; once the ice wears off, the boosted speed is back.
+    const ice = w.spawn('elemeau', 1, ...at(33, 30));
+    w.hit(ice, c, (DEFS.elemeau as UnitDef).attack!);
+    w.entities.delete(ice.id);
+    expect(c.speed).toBeLessThan(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    c.held = ticks(10); // stays put, unhurried
+    for (let i = 0; i < ticks(3); i++) w.step([]);
+    expect(c.chill).toBe(0);
+    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
   });
 
   it('the Robots améliorés give the Robot moissonneur +2 armour', () => {
