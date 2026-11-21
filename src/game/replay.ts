@@ -57,8 +57,8 @@ export function parseReplay(text: string): Replay | string {
     last = tick;
     for (const c of cmds) {
       if (!c || typeof c !== 'object' || !Number.isInteger(c.player) || c.player < 0 || c.player >= n) return `${bad} (joueur inconnu).`;
-      // The same check as an order from the network; a Bac à sable (one player) has its switches too, an AI its resignation.
-      if (!commandOk(c, n === 1, true)) return `${bad} (commande invalide).`;
+      // The same check as an order from the network; a Bac à sable (one player) has its switches too, an AI its resignation (never alone: the simulation ignores it there).
+      if (!commandOk(c, n === 1, n > 1)) return `${bad} (commande invalide).`;
     }
   }
   if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {

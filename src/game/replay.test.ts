@@ -71,6 +71,8 @@ describe('replays read from storage or a file', () => {
     // An AI giving up: in a replay, never from the network.
     expect(refused(one({ kind: 'resign', ids: [] }))).toBe(false);
     expect(commandOk({ player: 0, kind: 'resign', ids: [] })).toBe(false);
+    // Nor alone, in a Bac à sable's replay: the simulation would ignore it.
+    expect(refused({ ...one({ kind: 'resign', ids: [] }), factions: ['humains'], teams: [0], handicap: [100] })).toBe(true);
     for (const h of [-1, 1e9, 50.5, NaN]) expect(refused({ ...good, handicap: [100, h] })).toBe(true);
   });
 
