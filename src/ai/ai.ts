@@ -255,7 +255,8 @@ export class AI {
     // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
     // Isdaris, whose research and advanced units starve without it.
     const moreEnergy = !firstExtractor && count(f.extractor) < bases && !building(f.extractor) && !!this.spot(f.extractor, home);
-    if (moreEnergy && (f === FACTIONS.isdaris || f.gods)) wants.push(f.extractor);
+    // Humans too: with one Mine, the Créaturium's units took every point of energy and no research came in 35 min.
+    if (moreEnergy && (f === FACTIONS.isdaris || f.gods || f === FACTIONS.humains)) wants.push(f.extractor);
     let casernesWanted = this.plan.casernes.filter(([at]) => serfs.length >= at).reduce((m, [, n]) => Math.max(m, n), 0);
     // Z: a Plate-forme takes a Pod of its own (and the drone each building absorbs): two by plan, a third only with
     // minerals to spare (below), or the bank went into Pods instead of socles.
@@ -332,7 +333,8 @@ export class AI {
     const nextResearch = army.length < this.plan.wave ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
     // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
-    const researchReserve = techWanted && f !== FACTIONS.isdaris ? 0 : reserve;
+    // Humans: also once the Créaturium stands, its units after the Forge's research (plesiosaures ate it all).
+    const researchReserve = (techWanted || (techUp && f === FACTIONS.humains)) && f !== FACTIONS.isdaris ? 0 : reserve;
     const unitReserve = reserve + (nextResearch ? (DEFS[nextResearch] as UpgradeDef).cost.energy : 0);
     // Isdaris: the gateways and the morphs keep the minerals of the advanced units whenever the Psycho-assembleur is
     // idle, and, once a wave is out, of the second Récepteur and of the Psycho-assembleur itself (the gateways' cheap
