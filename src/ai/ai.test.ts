@@ -262,6 +262,32 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', type: 'esprit' }));
   });
 
+  it('keeps no worker price when no worker can come: a full supply raises its Branche', () => {
+    const w = createMatch(['dieux', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'esprit') w.entities.delete(e.id);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    w.spawn('esprit', 0, asgaard.x, asgaard.y + 5 * FP);
+    // Nains up to the supply cap: no esprit can be trained before a Branche.
+    while (w.supply(0).used < w.supply(0).max) w.spawn('nain', 0, asgaard.x + 6 * FP, asgaard.y);
+    w.players[0].minerals = 220;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'branche' }));
+  });
+
+  it('Z: keeps no drone price while its Intelligence waits to turn into the suprême', () => {
+    const w = createMatch(['z', 'humains']);
+    const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'drone') w.entities.delete(e.id);
+    w.spawn('drone', 0, ic.x, ic.y + 4 * FP);
+    // Both busy researching: the minerals go to nothing else.
+    for (const [t, dx, up] of [['armement', -9, 'laser'], ['centrerecherche', 9, 'rquadripode']] as const) w.spawn(t, 0, ic.x + dx * FP, ic.y + 6 * FP).queue.push(up);
+    while (w.tick < ticks(7 * 60)) w.tick++;
+    w.players[0].minerals = 310;
+    w.players[0].energy = 500;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'supreme' }));
+  });
+
   it('with the enemy army gone, a few soldiers at home go and raze its last buildings', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);

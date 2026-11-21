@@ -170,7 +170,9 @@ export class AI {
     // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
     // until one is ordered (Dieux down to a few esprits spent their last minerals elsewhere, and with no income never
     // had the 75 for one again; raided Isdaris put every 70 minerals into a Créature, their last robots unreplaced).
-    ctx.low = ctx.serfs.length < this.serfTarget(ctx) / 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    // Only for a worker that can be trained now: with no room in supply, it kept a Branche's 200 from the 75 (the
+    // Branche the esprit waited for); with the Z Intelligence held for its turn into the suprême, the 300 of it.
+    ctx.low = ctx.serfs.length < this.serfTarget(ctx) / 2 && this.workerHome(ctx) ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
     ctx.minerals -= ctx.low;
     this.place(ctx);
     this.research(ctx);
@@ -460,20 +462,18 @@ export class AI {
 
   /** Workers, research and Isdaris extensions. */
   private research(ctx: Turn): void {
-    const { w, f, p, mine, home, serfs, buildings, minute, free, wants, techUp, unlocked, nextExtension, saving, reserve, researchReserve, wantSupreme } = ctx;
+    const { w, f, p, mine, serfs, buildings, minute, wants, techUp, unlocked, nextExtension, saving, reserve, researchReserve, wantSupreme } = ctx;
     // Serfs, then soldiers.
     const serfTarget = this.serfTarget(ctx);
-    const councilHome = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
-    const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
+    const workerHome = this.workerHome(ctx);
     // At its own price (a Dieux esprit costs 75: with 85 minerals left and no esprit, they never made one again).
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
-    // Z: the Intelligence centrale turns into the Intelligence suprême only with an empty queue: no drone then.
     // Low on workers, one comes even while supply is wanted (it costs one).
-    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && ctx.minerals + ctx.low >= workerCost && free > 0 && (ctx.low || !wants.includes(f.supply)) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
+    if (workerHome && serfs.length < serfTarget && ctx.minerals + ctx.low >= workerCost && (ctx.low || !wants.includes(f.supply))) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       ctx.minerals += ctx.low - workerCost;
       ctx.low = 0;
-    } else if (f === FACTIONS.z && minute > 8 && workerHome && workerHome.queue.length === 0 && free > 0 && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
+    } else if (f === FACTIONS.z && minute > 8 && workerHome && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
       // One Espion (Z.doc): it detects, and goes along with the waves.
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: 'zespion' });
       ctx.minerals -= 150;
@@ -1391,6 +1391,19 @@ export class AI {
       }
     }
     return n ? sum / n / Math.max(...vs) : 1;
+  }
+
+  /**
+   * Where a worker can be trained this turn, if anywhere: the least busy headquarters (or the Dieux's Gaïa) with an
+   * empty queue, room in supply, the base standing. Z: the Intelligence centrale turns into the Intelligence suprême
+   * only with an empty queue, so no drone then.
+   */
+  private workerHome(ctx: Turn): Entity | undefined {
+    const { f, p, mine, home, buildings, free, wantSupreme } = ctx;
+    const council = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
+    const at = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : council;
+    if (!at || at.queue.length || home.buildLeft || free <= 0 || (wantSupreme && p.energy >= 300 && at.type === f.hq)) return undefined;
+    return at;
   }
 
   /** Workers wanted: the plan's number per headquarters, up to three. */
