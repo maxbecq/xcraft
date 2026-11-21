@@ -13,7 +13,8 @@ import { Vision } from './vision';
 
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
-  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number }
+  /** `skip`: fields this trip gave up on, no way into them (economy.ts gather). */
+  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number; skip?: number[] }
   | { kind: 'build'; type: string; tx: number; ty: number }
   | { kind: 'construct'; target: number }
   /** Z drone (Z.doc): repairs an own machine or building, paying as it goes; `owed` in thousandths of a resource. */

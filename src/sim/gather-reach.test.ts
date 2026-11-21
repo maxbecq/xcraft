@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
+import type { Entity } from './world';
 
 /**
  * On L'Anneau the AI's workers stood for good on a field's corner, out of its reach (twenty Dieux esprits from minute
@@ -95,3 +96,35 @@ describe('a field shut off, workers sent there together', () => {
   });
 });
 
+describe('fields given up on', () => {
+  /** A serf whose way to every field but `open` gets nowhere: goNear counts it stuck each tick. */
+  function stage(open: (fields: Entity[]) => Entity | undefined) {
+    const w = createMatch();
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const fields = [...w.entities.values()].filter((e) => e.type === 'minerai').sort((a, b) => Math.hypot(a.x - serf.x, a.y - serf.y) - Math.hypot(b.x - serf.x, b.y - serf.y)).slice(0, 3);
+    const reach = open(fields);
+    w.reachRect = (_e, tx, ty, size) => size === 1 && !!reach && tx === reach.tx && ty === reach.ty;
+    w.goNear = (e) => void e.stuck++;
+    return { w, serf, fields };
+  }
+
+  it('tries a third field when two are out of reach, never going back and forth between them', () => {
+    const { w, serf, fields } = stage((f) => f[2]);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: fields[0].x, y: fields[0].y, target: fields[0].id }]);
+    while (w.tick < ticks(5) && !(serf.order?.kind === 'gather' && serf.order.phase !== 'go')) w.step([]);
+    expect(serf.order?.kind === 'gather' && serf.order.target).toBe(fields[2].id);
+    expect(serf.order?.kind === 'gather' && serf.order.phase).not.toBe('go');
+  });
+
+  it('with no field left to try, looks again only now and then', () => {
+    const { w, serf, fields } = stage(() => undefined);
+    for (const f of [...w.entities.values()]) if (f.type === 'minerai' && f !== fields[0]) w.remove(f);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: fields[0].x, y: fields[0].y, target: fields[0].id }]);
+    let looks = 0;
+    const nearestField = w.nearestField;
+    w.nearestField = (...a) => (looks++, nearestField.apply(w, a));
+    for (let i = 0; i < 60; i++) w.step([]);
+    expect(serf.order?.kind).toBe('gather');
+    expect(looks).toBeLessThanOrEqual(60 / 3 + 1);
+  });
+});

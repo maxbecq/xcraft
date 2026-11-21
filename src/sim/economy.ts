@@ -19,7 +19,7 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
   let field = this.entities.get(o.target);
   if (!field || field.amount <= 0 || (field.miner && field.miner !== e.id && this.near(e, field, 3))) {
     // Depleted or busy: switch to the closest free field.
-    const other = this.nearestField(e, field, !!field && field.amount > 0);
+    const other = this.nearestField(e, field, !!field && field.amount > 0, o.skip);
     if (other) {
       if (field) this.release(e, field.id);
       field = other;
@@ -31,19 +31,25 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
   }
   if (o.phase === 'go') {
     if (!this.reachRect(e, field.tx, field.ty, 1)) {
-      // No way into it (cut off, or no path up its cliff): goNear counts each time it got nowhere; then another field.
-      const other = e.stuck > 2 && this.nearestField(e, field, true);
-      if (other) {
-        this.release(e, field.id);
-        field = other;
-        o.target = other.id;
-        e.goal = null;
+      // No way into it (cut off, or no path up its cliff): goNear counts each time it got nowhere; then another field,
+      // none it gave up on before (two fields out of reach sent it back and forth, a third never tried). Found or not,
+      // the count starts again: the next look, through every entity, comes as late.
+      if (e.stuck > 2) {
         e.stuck = 0;
+        if (!o.skip?.includes(field.id)) (o.skip ??= []).push(field.id);
+        const other = this.nearestField(e, field, true, o.skip);
+        if (other) {
+          this.release(e, field.id);
+          field = other;
+          o.target = other.id;
+          e.goal = null;
+        }
       }
       return void this.goNear(e, field.tx, field.ty, 1);
     }
     if (field.miner && field.miner !== e.id) return; // wait for the field
     e.stuck = 0;
+    delete o.skip;
     field.miner = e.id;
     o.phase = 'mine';
     o.timer = ticks(HARVEST.seconds);
@@ -67,12 +73,12 @@ export function near(this: World, e: Entity, f: Entity, tiles: number): boolean 
   return dist(e.x, e.y, f.x, f.y) <= tiles * FP;
 }
 
-/** Closest mineral field; with `freeOnly`, only fields nobody is mining. */
-export function nearestField(this: World, e: Entity, except?: Entity, freeOnly = false): Entity | undefined {
+/** Closest mineral field; with `freeOnly`, only fields nobody is mining; never one in `skip`. */
+export function nearestField(this: World, e: Entity, except?: Entity, freeOnly = false, skip?: number[]): Entity | undefined {
   let best: Entity | undefined;
   let bestD = 12 * FP;
   for (const f of this.entities.values()) {
-    if (f.type !== 'minerai' || f === except || f.amount <= 0 || (freeOnly && f.miner)) continue;
+    if (f.type !== 'minerai' || f === except || f.amount <= 0 || (freeOnly && f.miner) || skip?.includes(f.id)) continue;
     const d = dist(e.x, e.y, f.x, f.y) + (f.miner ? 3 * FP : 0);
     if (d < bestD) [best, bestD] = [f, d];
   }
