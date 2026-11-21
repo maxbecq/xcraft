@@ -324,6 +324,18 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'branche' }));
   });
 
+  it('Dieux: with the next god energy kept, a Puits divin lost is raised again (it costs no energy)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    // Thor out and Seth due (minute 3): his 200 energy are kept, with none in the bank; no Puits divin stands.
+    w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    w.tick = ticks(4 * 60) - (ticks(4 * 60) % 10); // a thinking tick
+    w.players[0].minerals = 1000;
+    w.players[0].energy = 0;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'puitsdivin' }));
+  });
+
   it('Z: keeps no drone price while its Intelligence waits to turn into the suprême', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');

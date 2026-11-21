@@ -235,7 +235,8 @@ export class AI {
     // Dieux: the next god due keeps its energy from everything before its summons (research spent it first: Apollon,
     // due at minute 5, came at 9 to 12 or never, and Seth's Sphinx took the rest).
     const nextGod = this.nextGod(ctx);
-    if (nextGod && ctx.gods.length) ctx.godEnergy = (DEFS[nextGod] as UnitDef).cost.energy;
+    // Never below nothing: a cost of nothing (a Puits divin, a Nain, Thor's levels) is still paid.
+    if (nextGod && ctx.gods.length) ctx.godEnergy = Math.min((DEFS[nextGod] as UnitDef).cost.energy, Math.max(0, ctx.energy));
     ctx.energy -= ctx.godEnergy;
     this.place(ctx);
     this.research(ctx);
@@ -389,7 +390,8 @@ export class AI {
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
     // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
-    const bases = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).length;
+    // The Dieux' Antre is a base too: its well gets a Puits (an early natural taken as an Antre got none).
+    const bases = buildings.filter((b) => (kin(b, f.hq) || b.type === f.outpost) && b.buildLeft === 0).length;
     const firstExtractor = count(f.extractor) === 0;
     if (producers >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
     // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
@@ -853,7 +855,7 @@ export class AI {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
         if (!cost || !(allGods || cost.energy === 0)) continue;
-        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || ctx.energy - reserve < cost.energy) continue;
+        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || (cost.energy > 0 && ctx.energy - reserve < cost.energy)) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
         ctx.minerals -= cost.minerals;
         ctx.energy -= cost.energy;
