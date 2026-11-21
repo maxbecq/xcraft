@@ -241,6 +241,13 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
     shader.fragmentShader = `uniform vec3 teamColor;\n${shader.fragmentShader}`
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 paint = diffuseColor.rgb;
+        ${matte && unit ? `// Z units darker and more saturated, like the painted Z buildings (gamma 1.4, saturation 1.5); their team
+        // paint and cyan glows untouched. The Mastodonte has it in its texture (and no team rim, so unit is false here).
+        float zKeep = max(smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g)), step(0.5, paint.g) * step(0.5, paint.b) * step(paint.r, 0.6 * paint.g));
+        vec3 zGraded = pow(paint, vec3(1.4));
+        float zLum = dot(zGraded, vec3(0.3, 0.59, 0.11));
+        paint = mix(clamp(zLum + (zGraded - zLum) * 1.5, 0.0, 1.0), paint, zKeep);
+        diffuseColor.rgb = paint;` : ''}
         float teamMask = smoothstep(0.03, 0.12, paint.b - max(paint.r * 1.5, paint.g));
         ${shiny ? `// Human soldiers: livelier colours, and polished steel that catches the light.
         float lum0 = dot(paint, vec3(0.3, 0.59, 0.11));
@@ -282,7 +289,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
         metalnessFactor = mix(metalnessFactor, 0.6, steel);`);
     };
   }
-  m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}`;
+  m.customProgramCacheKey = () => `team-${color}-${vivid}-${unit}-${ivory}-${matte}`;
   // Units glow in their team colour along the silhouette, so sides read at a glance in a melee. Human soldiers
   // are at 0.3: at 1.0 a bright blue outline ran round every figure and vehicle, which read as dirty from afar.
   // The Dieux keep 1.0: on their white marble (the Minotaure) it is most of their team colour.
