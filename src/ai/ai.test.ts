@@ -336,6 +336,23 @@ describe('AI Z Refuge', () => {
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'puitsdivin' }));
   });
 
+  it('Dieux: an Antre is a base: its well gets a Puits divin', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const d = (e: Entity) => Math.hypot(e.x - asgaard.x, e.y - asgaard.y);
+    const wells = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => d(a) - d(b));
+    // The main's well taken; an Antre by the next well, more than 14 tiles from the Porte.
+    w.spawn('puitsdivin', 0, wells[0].x, wells[0].y);
+    const far = wells.find((e) => d(e) > 16 * FP)!;
+    w.spawn('antre', 0, far.x + 5 * FP, far.y);
+    w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    w.players[0].minerals = 2000;
+    w.players[0].energy = 500;
+    w.tick = ticks(4 * 60) - (ticks(4 * 60) % 10); // a thinking tick
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'puitsdivin', tx: far.tx, ty: far.ty }));
+  });
+
   it('Z: keeps no drone price while its Intelligence waits to turn into the suprême', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');

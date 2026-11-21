@@ -390,8 +390,7 @@ export class AI {
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
     // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
-    // The Dieux' Antre is a base too: its well gets a Puits (an early natural taken as an Antre got none).
-    const bases = buildings.filter((b) => (kin(b, f.hq) || b.type === f.outpost) && b.buildLeft === 0).length;
+    const bases = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0).length;
     const firstExtractor = count(f.extractor) === 0;
     if (producers >= this.plan.mineAfter && firstExtractor && !building(f.extractor)) wants.push(f.extractor);
     // The second one, later and only with a free well by a base: never ahead of supply or production, except for the
@@ -1558,9 +1557,18 @@ export class AI {
     return at;
   }
 
-  /** Workers wanted: the plan's number per headquarters, up to three. */
+  /**
+   * A base: a headquarters, or the Dieux' Antre (an outpost: a drop-off with its fields and its well). One definition
+   * for the workers wanted, the wells, the extractors due and the fields left (an early natural taken as an Antre got
+   * no Puits, no esprits of its own, and its fields counted for nothing).
+   */
+  private isBase(e: Entity): boolean {
+    return kin(e, this.faction.hq) || (!!this.faction.outpost && e.type === this.faction.outpost);
+  }
+
+  /** Workers wanted: the plan's number per base, up to three. */
   private serfTarget(ctx: Survey): number {
-    return this.plan.serfs * Math.min(3, ctx.buildings.filter((b) => kin(b, this.faction.hq) && b.buildLeft === 0).length);
+    return this.plan.serfs * Math.min(3, ctx.buildings.filter((b) => this.isBase(b) && b.buildLeft === 0).length);
   }
 
   private nearest(from: Entity, test: (e: Entity) => boolean): Entity | undefined {
@@ -1609,7 +1617,7 @@ export class AI {
     const def = DEFS[type] as BuildingDef;
     if (def.energyRate) {
       // The free well nearest one of our bases.
-      const bases = [...w.entities.values()].filter((b) => b.owner === this.player && kin(b, this.faction.hq) && b.buildLeft === 0);
+      const bases = [...w.entities.values()].filter((b) => b.owner === this.player && this.isBase(b) && b.buildLeft === 0);
       let best: Entity | undefined;
       let bestD = 14 * FP;
       for (const e of w.entities.values()) {
@@ -1767,9 +1775,9 @@ export class AI {
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
-  /** Mineral fields left within reach of any of our finished headquarters. */
+  /** Mineral fields left within reach of any of our finished bases. */
   private fieldsNear(buildings: Entity[]): number {
-    const hqs = buildings.filter((b) => kin(b, this.faction.hq) && b.buildLeft === 0);
+    const hqs = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
     return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP)).length;
   }
 
