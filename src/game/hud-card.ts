@@ -104,7 +104,9 @@ export function buttonsFor(h: Hud): Button[] {
     // Stop and Attack go to everyone; abilities to the active kind only, once Tab picked one.
     // A passenger picked in its shelter's panel (notice: it uses its powers from inside): out on X.
     const aboard = units.filter((u) => u.inside);
-    if (aboard.length) list.push({ label: 'Sortir', cmd: 'debarquer', key: 'X', action: () => aboard.forEach((u) => cmd({ kind: 'unload', ids: [u.inside], unit: u.id })) });
+    // Greyed while the shelter is held (stunned, recalled): it lets nobody out then.
+    const stuck = aboard.every((u) => (h.world.entities.get(u.inside)?.held ?? 0) > 0);
+    if (aboard.length) list.push({ label: 'Sortir', cmd: 'debarquer', key: 'X', reason: stuck ? 'Abri immobilisé' : undefined, action: () => aboard.forEach((u) => cmd({ kind: 'unload', ids: [u.inside], unit: u.id })) });
     const all = units;
     const sub = units.filter((u) => u.type === h.activeType);
     if (sub.length) units = sub;

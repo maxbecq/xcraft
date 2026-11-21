@@ -53,3 +53,16 @@ describe('command cards', () => {
     expect(clashes).toEqual([]);
   });
 });
+
+describe('a passenger picked in its shelter', () => {
+  it('has a Sortir button, greyed while its shelter is held', () => {
+    const w = createMatch(['humains', 'humains']);
+    const s = w.spawn('scarabee', 0, 40 * FP, 40 * FP);
+    const a = w.spawn('alchimiste', 0, 40 * FP, 40 * FP);
+    a.inside = s.id;
+    const out = () => (card(w, [a]) as unknown as { label: string; reason?: string }[]).find((b) => b.label === 'Sortir')!;
+    expect(out().reason).toBeUndefined();
+    s.held = 100;
+    expect(out().reason).toBe('Abri immobilisé');
+  });
+});
