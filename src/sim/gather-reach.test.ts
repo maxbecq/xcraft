@@ -53,3 +53,45 @@ describe('a worker sent to a field no path reaches', () => {
     expect(w.tick).toBeLessThan(ticks(8));
   });
 });
+
+describe('a door on the far side', () => {
+  it('a serf repairs a building whose near side is walled off, from its far side', () => {
+    const w = createMatch();
+    let site: [number, number] | undefined;
+    for (let ty = 30; ty < 70 && !site; ty++) for (let tx = 30; tx < 70 && !site; tx++) if (w.canPlace('caserne', tx - 6, ty - 2, 0) && w.canPlace('caserne', tx, ty, 0)) site = [tx, ty];
+    const b = w.spawn('caserne', 0, site![0] * FP + (3 * FP) / 2, site![1] * FP + (3 * FP) / 2);
+    const [tx, ty] = [b.tx, b.ty];
+    b.hp = b.maxHp >> 1;
+    // The west side's tiles shut in: its three doors (the nearest to the serf) are out of reach.
+    const g = w.grid as unknown as { blocked: Uint8Array; width: number };
+    const wall = (x: number, y: number) => (g.blocked[y * g.width + x] = 1);
+    wall(tx - 1, ty - 1);
+    wall(tx - 1, ty + 3);
+    for (let y = ty - 1; y <= ty + 3; y++) wall(tx - 2, y);
+    const serf = w.spawn('serf', 0, (tx - 5) * FP + FP / 2, ty * FP + (3 * FP) / 2);
+    w.players[0].minerals = 1000;
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: b.x, y: b.y, target: b.id }]);
+    const hp = b.hp;
+    while (w.tick < ticks(20) && b.hp === hp) w.step([]);
+    expect(b.hp).toBeGreaterThan(hp);
+  });
+});
+
+describe('a field shut off, workers sent there together', () => {
+  it('searches the way once, not once per worker', () => {
+    const w = createMatch();
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    const field = [...w.entities.values()].filter((e) => e.type === 'minerai').sort((a, b) => Math.hypot(a.x - serf.x, a.y - serf.y) - Math.hypot(b.x - serf.x, b.y - serf.y))[0];
+    const g = w.grid as unknown as { blocked: Uint8Array; width: number };
+    for (let y = field.ty - 2; y <= field.ty + 2; y++) for (let x = field.tx - 2; x <= field.tx + 2; x++) if (Math.max(Math.abs(x - field.tx), Math.abs(y - field.ty)) === 2) g.blocked[y * g.width + x] = 1;
+    const crowd = Array.from({ length: 20 }, () => w.spawn('serf', 0, serf.x, serf.y));
+    let searches = 0;
+    const [findPath, nearestDoors] = [w.grid.findPath, w.grid.nearestDoors];
+    w.grid.findPath = (...a) => (searches++, findPath.apply(w.grid, a));
+    w.grid.nearestDoors = (...a) => (searches++, nearestDoors.apply(w.grid, a));
+    w.step([{ player: 0, kind: 'smart', ids: crowd.map((s) => s.id), x: field.x, y: field.y, target: field.id }]);
+    expect(crowd.every((s) => s.order?.kind === 'gather' && s.order.target === field.id)).toBe(true);
+    expect(searches).toBeLessThanOrEqual(2);
+  });
+});
+

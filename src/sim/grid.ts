@@ -232,6 +232,42 @@ export class Grid {
     return path.reverse();
   }
 
+  /**
+   * Breadth-first from a tile, over the steps findPath takes: the tiles `door` accepts among those the fewest steps
+   * away, or [] when it reaches none; `flood` then holds every tile it reached (the start's whole region). One search
+   * whatever the doors: aiming a path at each in turn flooded that region once per door out of reach.
+   */
+  nearestDoors(sx: number, sy: number, door: (i: number) => boolean, flood?: number[]): number[] {
+    const w = this.width;
+    const n = w * this.height;
+    if (this.seen.length !== n) [this.cost, this.from, this.seen, this.done] = [new Int32Array(n), new Int32Array(n), new Int32Array(n), new Int32Array(n)];
+    const run = ++this.search;
+    const { seen, steps, blocked } = this;
+    let layer = [sy * w + sx];
+    seen[layer[0]] = run;
+    while (layer.length) {
+      const found = layer.filter(door);
+      if (found.length) return found;
+      if (flood) for (const i of layer) flood.push(i);
+      const next: number[] = [];
+      for (const cur of layer) {
+        const cx = cur % w;
+        const cy = Math.floor(cur / w);
+        for (let d = 0; d < 8; d++) {
+          if (!(steps[cur] & (1 << d))) continue;
+          const nx = cx + DX[d];
+          const ny = cy + DY[d];
+          const ni = ny * w + nx;
+          if (seen[ni] === run || blocked[ni] !== 0 || (d >= 4 && (blocked[cy * w + nx] !== 0 || blocked[ny * w + cx] !== 0))) continue;
+          seen[ni] = run;
+          next.push(ni);
+        }
+      }
+      layer = next;
+    }
+    return [];
+  }
+
   /** Nearest open tile to (x, y), searching outward in rings; prefers tiles at `level` (so a target on a cliff is approached from the top). */
   /**
    * `from` (a tile, or between tiles): of a ring's tiles, the one nearest it, then on the left of the line from it to

@@ -33,7 +33,9 @@ export function goNear(this: World, e: Entity, tx: number, ty: number, size: num
     const out = (v: number, lo: number, hi: number) => (v === lo ? v - 1 : v === hi ? v + 1 : v);
     const [ox, oy] = [out(nx, tx * FP, (tx + size) * FP), out(ny, ty * FP, (ty + size) * FP)];
     // ...and only if that tile is at the rectangle's level: below a cliff, the rectangle is reached from the top.
-    if (!(this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
+    // A region found shut off from it this tick skips the path that would flood it again (see doorstep).
+    const shut = this.shutAt === this.tick && !!this.shut.get((ty * this.grid.width + tx) * 8 + size)?.has(tileOf(e.y) * this.grid.width + tileOf(e.x));
+    if (!(!shut && this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
   }
   if (!this.follow(e)) return;
   // Path done (it ends on the open tile beside the rectangle): step straight at the edge.
@@ -57,38 +59,53 @@ export function planned(this: World, e: Entity, x: number, y: number): boolean {
   return soars(e) || (n >= 2 && e.path[n - 2] === x && e.path[n - 1] === y);
 }
 
-/** Doors a path is searched to before giving up on reaching one (a search that fails floods all it can reach). */
-const DOORS_TRIED = 3;
-
 /**
- * Plans to the nearest tile beside a rectangle that steps into it and that a path reaches. Aiming inside the
- * rectangle, as before, let plan pick the open tile nearest to it at its level: on L'Anneau a lone plateau tile no
+ * Plans to the nearest tile beside a rectangle that steps into it and that a path reaches, on any side. Aiming inside
+ * the rectangle, as before, let plan pick the open tile nearest to it at its level: on L'Anneau a lone plateau tile no
  * path reaches, or the unit's own tile whose diagonal step the terrain forbids, and workers stood at a field's corner
- * for good. Nearest to the unit, ties broken as Grid.nearestOpen does (a scene and its mirror pick mirrored tiles).
- * None reached: the nearest one, its path falling short (goNear then counts the unit stuck there).
+ * for good. One breadth-first search finds the doors the fewest steps away; of those, the nearest to the unit, ties
+ * broken as Grid.nearestOpen does (a scene and its mirror pick mirrored tiles). A search that reaches none is kept
+ * for the tick (World.shut): every unit of that region sent there this tick is spared it. With no door reached, no
+ * path: the unit steps straight at the rectangle until held, and goNear counts it stuck.
  */
 export function doorstep(this: World, e: Entity, tx: number, ty: number, size: number, nx: number, ny: number): void {
   const g = this.grid;
-  const doors: { x: number; y: number; key: number[] }[] = [];
+  const w = g.width;
+  const start = tileOf(e.y) * w + tileOf(e.x);
+  if (this.shutAt !== this.tick) [this.shut, this.shutAt] = [new Map(), this.tick];
+  const key = (ty * w + tx) * 8 + size;
+  let doors: number[] = [];
+  if (!this.shut.get(key)?.has(start)) {
+    const isDoor = (i: number) => {
+      const [x, y] = [i % w, Math.floor(i / w)];
+      if (x < tx - 1 || x > tx + size || y < ty - 1 || y > ty + size || (x >= tx && x < tx + size && y >= ty && y < ty + size)) return false;
+      return g.open(x, y) && g.canStep(x, y, ...rectTile(tx, ty, size, x * FP + FP / 2, y * FP + FP / 2), true);
+    };
+    const flood: number[] = [];
+    doors = g.nearestDoors(tileOf(e.x), tileOf(e.y), isDoor, flood);
+    if (!doors.length) this.shut.set(key, new Set(flood));
+  }
+  if (!doors.length) {
+    e.goal = { x: nx, y: ny };
+    e.path = [];
+    e.blockedTicks = 0;
+    return;
+  }
   const lx = (tx * 2 + size) * (FP / 2) - e.x;
   const ly = (ty * 2 + size) * (FP / 2) - e.y;
-  for (let y = ty - 1; y <= ty + size; y++) {
-    for (let x = tx - 1; x <= tx + size; x++) {
-      if (x >= tx && x < tx + size && y >= ty && y < ty + size) continue;
-      const [cx, cy] = [x * FP + FP / 2, y * FP + FP / 2];
-      if (!g.open(x, y) || !g.canStep(x, y, ...rectTile(tx, ty, size, cx, cy), true)) continue;
-      const [rx, ry] = [cx - e.x, cy - e.y];
-      const cross = lx * ry - ly * rx;
-      doors.push({ x: cx, y: cy, key: [rx * rx + ry * ry, cross < 0 ? 1 : 0, -(lx * rx + ly * ry), Math.abs(cross)] });
-    }
+  const keyOf = (i: number) => {
+    const [rx, ry] = [(i % w) * FP + FP / 2 - e.x, Math.floor(i / w) * FP + FP / 2 - e.y];
+    const cross = lx * ry - ly * rx;
+    return [rx * rx + ry * ry, cross < 0 ? 1 : 0, -(lx * rx + ly * ry), Math.abs(cross)];
+  };
+  let best = doors[0];
+  let bestKey = keyOf(best);
+  for (const d of doors.slice(1)) {
+    const k = keyOf(d);
+    const i = k.findIndex((v, n) => v !== bestKey[n]);
+    if (i >= 0 && k[i] < bestKey[i]) [best, bestKey] = [d, k];
   }
-  doors.sort((a, b) => {
-    for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i];
-    return 0;
-  });
-  for (const d of doors.slice(0, DOORS_TRIED)) if (this.planned(e, d.x, d.y)) return;
-  if (doors.length) this.plan(e, doors[0].x, doors[0].y);
-  else this.plan(e, Math.max(tx * FP + 1, Math.min(nx, (tx + size) * FP - 1)), Math.max(ty * FP + 1, Math.min(ny, (ty + size) * FP - 1)));
+  this.plan(e, (best % w) * FP + FP / 2, Math.floor(best / w) * FP + FP / 2);
 }
 
 /** Walks to a point; true once arrived. */

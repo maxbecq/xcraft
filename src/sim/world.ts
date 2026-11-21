@@ -808,6 +808,9 @@ export class World {
   /** Long paths searched this tick (movement.ts pathFor). */
   searched: { sx: number; sy: number; gx: number; gy: number; tiles: number[] }[] = [];
   searchedAt = -1;
+  /** Per rectangle (movement.ts doorstep), the regions this tick's searches found no way into it from. */
+  shut = new Map<number, Set<number>>();
+  shutAt = -1;
   /**
    * The command being applied without Shift: a unit it gives an order to (or stops) drops its queued ones then. Not
    * before: a command refused, a production or an upgrade bought left the Shift-queued moves of the units selected
