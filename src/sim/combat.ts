@@ -469,8 +469,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       }
     }
   }
-  // Danse du soldat (notice; mod: two thirds of the shots from afar, not blows, spells or splash): the Assassin dodges.
-  if (t.type === 'assassin' && a.range >= 1) damage = idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100);
+  // Danse du soldat (2010 sheet: dodges a third of the attacks, near or far; without chance, it takes two thirds of each).
+  if (t.type === 'assassin') damage = idiv(damage * BALANCE.rules.upgrades.danseDuSoldat, 100);
   // Sphère de renvoi (fiche 2010, mod): half the blow goes back to the attacker, whoever it is (own side too: kept on
   // purpose, rule 47), the other half is taken; it ends after its time or once `max` points have gone back.
   if (t.reflect > 0 && e.def.kind === 'unit' && e.hp > 0) {

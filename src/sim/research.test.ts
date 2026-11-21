@@ -26,7 +26,7 @@ describe('Human research (notice 1.2-1)', () => {
     run(w, (DEFS.croissance as UnitDef).buildTime + 1);
     expect(old.maxHp).toBe(85);
     expect(old.hp).toBe(65);
-    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(105);
+    expect(w.spawn('serf', 0, ...at(41, 60)).maxHp).toBe(80);
     expect(w.spawn('archer', 1, ...at(42, 60)).maxHp).toBe((DEFS.archer as UnitDef).hp);
   });
 

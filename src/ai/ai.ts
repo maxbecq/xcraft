@@ -1164,7 +1164,7 @@ export class AI {
           if (pick) cmd = at(u, name, pick);
         } else if (name === 'coupcirculaire' || name === 'feucirculaire') {
           if (around(near, u.x, u.y, radius + u.radius).filter((f) => !flies(f)).length >= (name === 'feucirculaire' ? 3 : 2)) cmd = self(u, name);
-        } else if (name === 'camouflage' || name === 'dephasage' || name === 'invistemp') {
+        } else if (name === 'camouflage' || name === 'camouflagewalkyrie' || name === 'dephasage' || name === 'invistemp') {
           if (u.hp * 100 < u.maxHp * (name === 'dephasage' ? 35 : 50)) cmd = self(u, name);
         } else if (name === 'manteau') {
           if (around(army, u.x, u.y, radius).length >= 6 && around(near, u.x, u.y, 7 * FP).length >= 4) cmd = self(u, name);

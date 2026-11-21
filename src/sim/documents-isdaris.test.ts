@@ -43,4 +43,12 @@ describe('Isdaris, by the 2010 sheet', () => {
     w.players[0].upgrades.robots = 1;
     expect(w.armorBonus(r)).toBe(2);
   });
+
+  it('the sheet wins over the mod: Récepteur 200 and no supply, Obélisque armour 6, Trône 400/600, Assassin 1 supply', () => {
+    const d = (k: string) => DEFS[k] as UnitDef;
+    expect([d('recepteur').cost.minerals, d('recepteur').supply]).toEqual([200, 0]);
+    expect(d('obelisque').armor).toBe(6);
+    expect(d('trone').cost).toEqual({ minerals: 400, energy: 600 });
+    expect(d('assassin').supply).toBe(1);
+  });
 });

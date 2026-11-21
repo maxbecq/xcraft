@@ -73,4 +73,16 @@ describe('Humans, by the 2010 sheet', () => {
     expect(p.held).toBe(ticks(3) - 1);
     expect(p.abilityCd).toBe(ticks(5) - 1);
   });
+
+  it('the sheet wins over the mod: building armour, Serf 75 hp, a chemical mine hits a zone of 2', () => {
+    const d = (k: string) => DEFS[k] as UnitDef;
+    expect(['conseil', 'caserne', 'fortin', 'forge', 'alchimisterie', 'creaturium', 'metallurgie'].map((k) => d(k).armor)).toEqual([6, 3, 4, 4, 2, 2, 4]);
+    expect(d('serf').hp).toBe(75);
+    const w = new World(createMap());
+    const m = w.spawn('minechimique', 0, ...at(40, 60));
+    const [near, side] = [w.spawn('legionnaire', 1, ...at(40, 60)), w.spawn('legionnaire', 1, ...at(41, 61))];
+    for (const t of [near, side]) Object.assign(t, { hp: 1000, maxHp: 1000 });
+    w.mineTrigger(m);
+    expect([1000 - near.hp, 1000 - side.hp]).toEqual([160, 160]);
+  });
 });

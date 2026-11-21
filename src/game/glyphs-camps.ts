@@ -8,6 +8,7 @@ export const HUMAINS_GLYPHS: Record<string, string> = {
   peauderoc: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6zM9 9l3 3-2 3M12 12l3-1',
   coupcirculaire: 'M19 8a8 8 0 1 1-2.5-3M19 2v6h-6M12 8v8M10 10h4',
   camouflage: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l9-9M9 14h4M11 11v-3',
+  camouflagewalkyrie: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l9-9M9 14h4M11 11v-3',
   explosiftoxique: 'M4 14a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M14 9l3-3M17 6l2 1M19 3l1-1M8 13h.01M12 15h.01',
   reanimation: 'M7 21V9a5 5 0 0 1 10 0v12M12 10v6M9.5 12.5h5M4 21h16',
   napalm: 'M12 3c1 3 4 5 4 9a4 4 0 0 1-8 0c0-2 1-3 2-5 1 1 1 2 2 2 0-2-1-4 0-6zM5 18h14M8 21h8',

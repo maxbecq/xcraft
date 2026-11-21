@@ -259,6 +259,7 @@ export class Effects {
         break;
       case 'manteau':
       case 'camouflage':
+      case 'camouflagewalkyrie':
       case 'dephasage':
       case 'portedephasage':
       case 'enfouissement':

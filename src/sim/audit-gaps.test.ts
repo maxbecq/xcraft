@@ -131,7 +131,7 @@ describe('audit gaps', () => {
     expect(w.entities.has(foe.id) ? hp - foe.hp - foe.shield : hp).toBeGreaterThanOrEqual(Math.min(hp, 100));
   });
 
-  it('the Assassin dodges a third of the shots from afar (Danse du soldat), not the blows', () => {
+  it('the Assassin dodges a third of the attacks, near or far (Danse du soldat, 2010 sheet)', () => {
     const w = createMatch(['isdaris', 'humains']);
     const assassin = w.spawn('assassin', 0, 30 * FP, 30 * FP);
     const archer = w.spawn('archer', 0, 30 * FP, 34 * FP);
@@ -147,8 +147,8 @@ describe('audit gaps', () => {
     const [h3, h4] = [before(assassin), before(archer)];
     w.hit(brute, assassin, m);
     w.hit(brute, archer, m);
-    // Blows land in full: the Légionnaire's value against each one's class (fiche 2010: BA 15, BL 20).
-    expect(h3 - before(assassin)).toBe(m.vs![1]);
+    // Blows too: two thirds of the Légionnaire's value against the Assassin's class (BA 15), in full on the Archer (BL 20).
+    expect(h3 - before(assassin)).toBe(Math.floor((m.vs![1] * 67) / 100));
     expect(h4 - before(archer)).toBe(m.vs![0]); // its shield takes it, armour aside
   });
 
@@ -167,7 +167,7 @@ describe('audit gaps', () => {
     const left = obelisque.trainLeft;
     run(w, 5);
     expect(obelisque.trainLeft).toBe(left); // production on hold
-    run(w, 6);
+    run(w, 16); // 20 s (2010 sheet)
     expect(obelisque.phased).toBe(0);
     w.hurt(obelisque, 500);
     expect(obelisque.hp + obelisque.shield).toBeLessThan(hp + shield);

@@ -347,6 +347,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   coupcirculaire: { name: 'Coup circulaire', effect: 'Un coup tournoyant qui frappe tous les ennemis au sol autour.', hotkey: 'C', ...BALANCE.abilities.coupcirculaire },
   /** Belluaire (notice): blends into the surroundings, unseen by enemies without detection, for a while. */
   camouflage: { name: 'Camouflage', effect: 'Se fond dans le décor : invisible pour l\'ennemi sans détection, un moment.', hotkey: 'F', ...BALANCE.abilities.camouflage },
+  /** Walkyrie (notice: « un court instant »): the Belluaire's power, with its own time. */
+  camouflagewalkyrie: { name: 'Camouflage', effect: 'Se fond dans le décor : invisible pour l\'ennemi sans détection, un court instant.', hotkey: 'F', ...BALANCE.abilities.camouflagewalkyrie },
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
   explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
@@ -782,7 +784,7 @@ const BASE: Record<string, object> = {
   hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
   osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, builds: ['fontaine'], trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
   /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */
-  walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflage', faction: 'dieux', hotkey: 'W' },
+  walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflagewalkyrie', faction: 'dieux', hotkey: 'W' },
   /** Hadès's demigod: lightning from afar, razes buildings. */
   titan: { kind: 'unit', name: 'Titan', radius: 0.9, faction: 'dieux', hotkey: 'T' },
   /** Osiris's giant mummy: a melee beyond match, very slow, a toxic cloud round it (rules.putride, level 1). */

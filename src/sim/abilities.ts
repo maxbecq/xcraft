@@ -112,7 +112,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       if (t.def.kind !== 'unit' || t.hp <= 0 || t.inside || flies(t) || !this.hostile(t.owner, e.owner) || this.gap(e, t) > toFp(ab.radius!)) continue;
       this.hit(e, t, { damage: ab.damage!, range: 0.1, cooldown: 0 });
     }
-  } else if (name === 'camouflage') {
+  } else if (name === 'camouflage' || name === 'camouflagewalkyrie') {
     e.camo = ticks(ab.duration);
   } else if (name === 'courroux') {
     e.charged = ticks(ab.duration);
@@ -450,13 +450,13 @@ export function poisonClouds(this: World): void {
   this.clouds = this.clouds.filter((c) => c.hits > 0);
 }
 
-/** A chemical mine: when an enemy walker comes within its radius, it blows up (full damage there, a quarter a little further). */
+/** A chemical mine (2010 sheet): when an enemy walker comes within 1, it blows up, its full damage on a zone of 2. */
 export function mineTrigger(this: World, m: Entity): void {
   const ab = ABILITIES.posermine;
   const r = toFp(ab.radius!);
-  const foes = [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= idiv(r * 5, 4) + t.radius);
-  if (!foes.some((t) => dist(t.x, t.y, m.x, m.y) <= r + t.radius)) return;
-  for (const t of foes) this.hit(m, t, { damage: dist(t.x, t.y, m.x, m.y) <= r + t.radius ? ab.damage! : idiv(ab.damage!, 4), range: 99, cooldown: 0 });
+  const foes = [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius);
+  if (!foes.some((t) => dist(t.x, t.y, m.x, m.y) <= r / 2 + t.radius)) return;
+  for (const t of foes) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
   m.hp = 0;
 }
