@@ -130,6 +130,8 @@ export class AI {
   private hopeless: { since: number; minerals: number; energy: number } | null = null;
   /** Workers on their way to a field: where they stood, and since when (see `tend`). */
   private walking = new Map<number, { x: number; y: number; since: number }>();
+  /** Fields each worker got stuck on its way to: never sent there again (two fields out of reach, it went back and forth). */
+  private failed = new Map<number, Set<number>>();
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
   private danger: { x: number; y: number } | undefined;
 
@@ -236,7 +238,7 @@ export class AI {
     // Idle serfs go mining.
     for (const s of serfs) {
       if (s.order) continue;
-      const f = this.nearest(s, (e) => e.type === 'minerai');
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
 
@@ -253,11 +255,18 @@ export class AI {
         continue;
       }
       if (this.world.tick - last.since < ticks(STUCK_SECONDS)) continue;
-      const f = this.nearest(s, (e) => e.type === 'minerai' && e.id !== o.target && !e.miner);
+      const failed = this.failed.get(s.id) ?? new Set<number>();
+      this.failed.set(s.id, failed.add(o.target));
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !failed.has(e.id) && !e.miner);
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
       this.walking.delete(s.id);
     }
     for (const id of this.walking.keys()) if (!seen.has(id)) this.walking.delete(id);
+    // Back to work (mining, carrying), or dead: its failures are forgotten.
+    for (const id of this.failed.keys()) {
+      const s = this.world.entities.get(id);
+      if (!s || s.carry > 0) this.failed.delete(id);
+    }
 
     // Z: three drones work each Assimilateur (notice), taken from the mineral line.
     for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker)) {

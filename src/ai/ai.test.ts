@@ -249,6 +249,26 @@ describe('AI Z Refuge', () => {
     expect((sent as Extract<Command, { kind: 'smart' }>).target).not.toBe(field.id);
   });
 
+  it('a worker stuck again never goes back to a field it got stuck on', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const ai = new AI(w, 0);
+    w.goNear = () => {};
+    const esprit = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'esprit')!;
+    const field = [...w.entities.values()].find((e) => e.type === 'minerai')!;
+    w.step([{ player: 0, kind: 'smart', ids: [esprit.id], x: field.x, y: field.y, target: field.id }]);
+    const tried = [field.id];
+    for (let i = 0; i < ticks(20); i++) {
+      const cmds = ai.think();
+      const sent = cmds.find((c) => c.kind === 'smart' && c.ids.includes(esprit.id));
+      if (sent?.kind === 'smart') {
+        expect(tried).not.toContain(sent.target);
+        tried.push(sent.target!);
+      }
+      w.step(cmds);
+    }
+    expect(tried.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('down to a few workers, keeps the price of the next one from its buildings', () => {
     const w = createMatch(['dieux', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'esprit') w.entities.delete(e.id);
