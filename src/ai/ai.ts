@@ -807,6 +807,7 @@ export class AI {
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
       // one soldier joining, it turned the front back to it).
       const fresh = this.wave.size === 0;
+      const before = this.wave.size;
       // Easy: never more than its wave cap out at once, gods included, those already out counted, the rest stays home.
       const cap = this.easy ? LEVELS.easy.maxWave : Infinity;
       for (const u of atHome) if (this.wave.size < cap) this.wave.add(u.id);
@@ -815,10 +816,13 @@ export class AI {
       // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
       const dry = this.starved(buildings, ctx.p.minerals);
       for (const g of gods) if ((dry || ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) && (this.wave.has(g.id) || this.wave.size < cap)) this.wave.add(g.id);
-      // A wave, not a reinforcement: the next wave's size grows with each wave sent (a soldier joining the one out, as
-      // after f8c4786, took the next threshold from 12 to 18).
-      if (fresh || atHome.length >= this.plan.wave) this.waves++;
-      if (fresh) this.via = this.sharedRoad(home);
+      // Nobody left (the easy cap full): no wave.
+      if (this.wave.size > before) {
+        // A wave, not a reinforcement: the next wave's size grows with each wave sent (a soldier joining the one out, as
+        // after f8c4786, took the next threshold from 12 to 18).
+        if (fresh || atHome.length >= this.plan.wave) this.waves++;
+        if (fresh) this.via = this.sharedRoad(home);
+      }
     }
   }
 

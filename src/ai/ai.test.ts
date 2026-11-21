@@ -373,7 +373,7 @@ describe('AI Z Refuge', () => {
     expect(state.wave.size).toBeLessThanOrEqual(6);
   });
 
-  it('easy: the wave cap counts the gods', () => {
+  it('easy: the wave cap counts the gods, and a wave that cannot leave is no wave', () => {
     const w = createMatch(['dieux', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);
     while (w.tick < ticks(12 * 60) || w.tick % 10) w.tick++;
@@ -385,6 +385,13 @@ describe('AI Z Refuge', () => {
     for (let i = 0; i < 6; i++) w.spawn('nain', 0, asgaard.x + (i - 3) * FP, asgaard.y + 5 * FP);
     ai.think();
     expect(state.wave.size).toBe(6);
+    // The cap full: soldiers at home stay, and no wave is counted.
+    const waves = state.waves;
+    for (let i = 0; i < 6; i++) w.spawn('nain', 0, asgaard.x + (i - 3) * FP, asgaard.y + 7 * FP);
+    for (let i = 0; i < 10; i++) w.tick++;
+    ai.think();
+    expect(state.wave.size).toBe(6);
+    expect(state.waves).toBe(waves);
   });
 
   it('with the enemy army gone and no wave out, one soldier alone stays home', () => {
