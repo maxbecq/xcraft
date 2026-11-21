@@ -236,7 +236,7 @@ export interface UpgradeDef {
 }
 
 /**
- * melee and ranged: +10 % of the weapon's base damage per level (at least +1); armor: +1 per level for foot
+ * melee and ranged: +10 % of the blow's value against the target's class per level (at least +1); armor: +1 per level for foot
  * soldiers, vehicles: for machines, skin: for saurians. Any other line is a one-off research named like its line.
  */
 export type UpgradeLine = string;
@@ -350,10 +350,10 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Walkyrie (notice: « un court instant »): the Belluaire's power, with its own time. */
   camouflagewalkyrie: { name: 'Camouflage', effect: 'Se fond dans le décor : invisible pour l\'ennemi sans détection, un court instant.', hotkey: 'F', ...BALANCE.abilities.camouflagewalkyrie },
   /** Alchimiste (notice): a toxin bomb, poisoning every enemy in a wide zone. */
-  explosiftoxique: { name: 'Explosif toxique', effect: 'Une bombe toxique qui empoisonne tous les ennemis d\'une large zone.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
+  explosiftoxique: { name: 'Explosif toxique', effect: 'Un nuage toxique : 37 dégâts par seconde pendant 4 s aux ennemis qui s\'y trouvent ; plusieurs nuages s\'additionnent.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
   /** Char Pégase (notice, 2010 sheet, mod): invisible chemical mines, 5 in stock, one more every 12 s, 160 damage. */
-  posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve, refaites peu à peu).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
+  posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve ; le char en refait une toutes les 12 s, pour 35 minerais et 20 énergie prélevés d\'office).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
   /** Isdaris major buildings (notice: Obélisque, Portail, Psycho-assembleur, Orbe de commandement, Trône): a plasma shield
    * that makes it unhurt for a while, unable to shoot or produce (sheet and mod « Déphasage »; the mod's 10 s, cooldown 90). */
   bouclierplasma: { name: 'Bouclier de plasma', effect: 'Le bâtiment devient invulnérable un moment, mais ne tire et ne produit plus.', hotkey: 'J', target: 'self', ...(BALANCE.abilities.bouclierplasma as object) } as AbilityDef,
@@ -555,16 +555,16 @@ const BASE: Record<string, object> = {
   // One-off research from the notice (costs and times in balance.json; the mod's where it has them).
   canonsscies: research('Canons sciés', 'N', 'Auxiliaires : +1 de portée.', { caserne: 1 }),
   cuirasse: research('Cuirasse', 'U', 'Légionnaires-scieurs : +1 d\'armure.', { caserne: 1 }),
-  scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : bonus contre les machines et les bâtiments.', { caserne: 1 }),
+  scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : +5 dégâts contre les bâtiments et les machines lourdes.', { caserne: 1 }),
   lamesempoisonnees: research('Lames empoisonnées', 'L', 'Belluaires : leurs coups empoisonnent les unités organiques.', { creaturium: 1 }),
   observation: research('Observation céleste', 'B', 'Les Forges peuvent observer une zone de la carte.'),
-  croissance: research('Croissance économique', 'C', 'Serfs et unités de la Caserne : +10 % de points de vie.'),
+  croissance: research('Croissance économique', 'C', 'Serfs et unités de la Caserne : +5 points de vie.'),
   pillage: research('Pillage', 'P', 'Chaque bâtiment ennemi détruit rapporte une part de son coût.'),
   entrainementgroupe: research('Entraînement groupé', 'E', 'Unités de la Caserne formées 25 % plus vite.'),
   armeschimiques: research('Armes chimiques', 'C', 'Les cocktails des Alchimistes touchent une zone.'),
   oeilpercant: research('Œil perçant', 'O', 'Les Plésiosaures détectent les unités invisibles.'),
   dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures."),
-  charlourd: research('Char lourd', 'L', 'Chars Pégase : +15 dégâts, +2 armure.'),
+  charlourd: research('Char lourd', 'L', 'Chars Pégase : au sol, 29 dégâts aux fantassins, 58 aux machines lourdes, 87 aux machines et bâtiments ; +1 armure.'),
   cocktail: research('Cocktail alchimistique', 'K', "Les Alchimistes lancent l'Explosif toxique."),
   regenerant: research('Régénérant chimique', 'R', 'Les Alchimistes lancent le Régénérant sur leurs alliés.'),
   acide: research('Acide anti-structure', 'Q', 'Les Réservoirs de substances peuvent dissoudre un bâtiment ennemi sous l\'acide.'),
