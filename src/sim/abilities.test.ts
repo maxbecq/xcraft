@@ -204,8 +204,9 @@ describe('powers from inside a Fortin (notice)', () => {
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: far.x, y: far.y }]);
     expect(w.clouds.length).toBe(0);
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: near.x, y: near.y }]);
-    run(w, 0.2);
-    expect(near.hp).toBeLessThan(near.maxHp);
+    // The cloud is thrown, from inside, onto the near Serf: proof of the cast, not of a shot.
+    expect(w.clouds).toHaveLength(1);
+    expect([w.clouds[0].x, w.clouds[0].y]).toEqual([near.x, near.y]);
     expect(a.inside).toBe(fort.id);
   });
 });

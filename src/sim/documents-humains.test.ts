@@ -14,8 +14,13 @@ const attack = (type: string) => (DEFS[type] as UnitDef).attack!;
 describe('Humans, by the 2010 sheet', () => {
   it('the Belluaire poison burns 5 hp a second for 11 s', () => {
     const w = new World(createMap());
-    const t = w.spawn('serf', 1, ...at(40, 60));
-    t.poison = ticks(11);
+    w.players[0].upgrades.lamesempoisonnees = 1;
+    const b = w.spawn('belluaire', 0, ...at(40, 60));
+    const t = w.spawn('serf', 1, ...at(41, 60));
+    w.hit(b, t, attack('belluaire'));
+    expect(t.poison).toBe(ticks(11));
+    w.entities.delete(b.id);
+    t.hp = t.maxHp;
     run(w, 12);
     // Once each whole second of the poison's ticks (the last one included).
     expect(t.maxHp - t.hp).toBe(5 * (Math.floor((ticks(11) - 1) / ticks(1)) + 1));
