@@ -122,12 +122,14 @@ export function buttonsFor(h: Hud): Button[] {
     // One button per active ability among the selected units; each ready unit uses it.
     for (const ab of new Set(units.flatMap((u) => h.world.abilitiesFor(u)))) {
       const casters = units.filter((u) => h.world.abilitiesFor(u).includes(ab));
-      const ready = casters.filter((u) => u.abilityCd === 0).length;
+      const ready = casters.filter((u) => h.world.ready(u, ab)).length;
       const a = ABILITIES[ab];
       const reason = h.world.needs(h.player, a.research) ?? (a.ultimate && !h.world.ultimateReady(h.player, a.ultimate) ? `Se charge au Temple primordial : ${ultimatePct(h, a.ultimate)} %` : undefined);
       // Aimed ones wait for a click on the map (gold reticle); the others go at once.
       const action = a.target === 'point' ? () => h.setTargeting(true, true, ab) : () => cmd({ kind: 'ability', ids: casters.map((u) => u.id), name: ab });
-      list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
+      // A spell paid from the caster's own energy (fiches 2010): its price in the label.
+      const mana = a.mana !== undefined && casters.some((u) => h.world.manaOf(u)) ? ` · ${a.mana} énergie` : '';
+      list.push({ label: `${a.name}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
     // Z socles: evolve into the next tier, in the field.
     const evolvers = units.filter((u) => h.world.nextTier(u) && !u.evolving);

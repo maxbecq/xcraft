@@ -290,6 +290,9 @@ export function next(this: World, b: Entity): void {
 export function deliver(this: World, b: Entity, type: string, kit: string): void {
   const u = this.spawnBeside(type, b);
   u.kit = kit;
+  // Z Réparateur, Accumulateur: their energy, half full (shortcut: no source gives a start, the mod's casters start at half).
+  const mana = this.manaOf(u);
+  if (mana) u.mana = toFp(mana[1]);
   // Cuve génétique: Créatures come in pairs.
   if (type === 'creature' && this.level(b.owner, 'cuvegenetique')) {
     const twin = this.spawnBeside(type, b);

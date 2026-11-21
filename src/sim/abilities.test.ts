@@ -28,7 +28,7 @@ describe('Human abilities (notice 1.2-1)', () => {
 
   it("the Alchimiste walks into range to poison a zone, only once researched", () => {
     const w = new World(createMap());
-    const a = w.spawn('alchimiste', 0, ...at(30, 60));
+    const a = Object.assign(w.spawn('alchimiste', 0, ...at(30, 60)), { mana: 1 << 30 });
     const foe = w.spawn('creature', 1, ...at(45, 60));
     foe.order = { kind: 'move', x: foe.x, y: foe.y, arrive: 0 };
     const cmd = { player: 0, kind: 'ability' as const, ids: [a.id], name: 'explosiftoxique', x: foe.x, y: foe.y };
@@ -44,7 +44,7 @@ describe('Human abilities (notice 1.2-1)', () => {
   it('Régénérant: the ally takes no damage, then is left at 1 hp', () => {
     const w = new World(createMap());
     w.players[0].upgrades.regenerant = 1;
-    const a = w.spawn('alchimiste', 0, ...at(40, 60));
+    const a = Object.assign(w.spawn('alchimiste', 0, ...at(40, 60)), { mana: 1 << 30 });
     const ally = w.spawn('legionnaire', 0, ...at(41, 60));
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'regenerant', x: ally.x, y: ally.y }]);
     run(w, 0.2);
@@ -58,7 +58,7 @@ describe('Human abilities (notice 1.2-1)', () => {
 
   it('Réanimation raises a fallen living unit for a while', () => {
     const w = new World(createMap());
-    const a = w.spawn('alchimiste', 0, ...at(40, 60));
+    const a = Object.assign(w.spawn('alchimiste', 0, ...at(40, 60)), { mana: 1 << 30 });
     const victim = w.spawn('archer', 1, ...at(42, 60));
     victim.hp = 0;
     run(w, 0.1);

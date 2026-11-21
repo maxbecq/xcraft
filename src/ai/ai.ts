@@ -759,7 +759,7 @@ export class AI {
     // Abilities: stimulant and charge when engaging, Peau de roc while healing in a fight.
     const casters = army.filter((u) => {
       const ab = (u.def as UnitDef).ability;
-      if (!ab || u.abilityCd > 0 || !SIMPLE.includes(ab)) return false;
+      if (!ab || !w.ready(u, ab) || !SIMPLE.includes(ab)) return false;
       if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
@@ -804,7 +804,7 @@ export class AI {
     // Scouts light up the wave's target: the Z Espion's Balise once close to it, Athéna's Chouette from afar.
     const goal = this.wave.size ? this.enemyTarget(home) : undefined;
     for (const [type, name] of [['zespion', 'balisez'], ['athena', 'chouette']]) {
-      const u = goal && [...army, ...gods].find((e) => e.type === type && e.abilityCd === 0 && dist(e.x, e.y, goal.x, goal.y) <= ((ABILITIES[name].range ?? 0) + 4) * FP);
+      const u = goal && [...army, ...gods].find((e) => e.type === type && w.ready(e, name) && dist(e.x, e.y, goal.x, goal.y) <= ((ABILITIES[name].range ?? 0) + 4) * FP);
       if (u && goal) ctx.out.push({ player: this.player, kind: 'ability', ids: [u.id], name, x: goal.x, y: goal.y });
     }
   }
@@ -1023,7 +1023,7 @@ export class AI {
       // crowd, took every turn and the Cône and the Gravité never came.
       for (const name of w.abilitiesFor(u).slice().sort((a, b) => Number(FIRST.includes(b)) - Number(FIRST.includes(a)) || FIRST.indexOf(a) - FIRST.indexOf(b))) {
         const ab = spell(name, u.lvl);
-        if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research))) continue;
+        if (SIMPLE.includes(name) || (ab.research && !w.level(this.player, ab.research)) || !w.ready(u, name)) continue;
         const reach = ((ab.range ?? 0) + 1) * FP;
         const radius = (ab.radius ?? 0) * FP;
         const inReach = around(near, u.x, u.y, reach);

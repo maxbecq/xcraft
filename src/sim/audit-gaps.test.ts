@@ -41,7 +41,7 @@ describe('audit gaps', () => {
 
   it('the Réservoir de substances: Gaz euphorisants, Acide dissolvant after its research, Explosion suicidaire', () => {
     const w = createMatch(['humains', 'isdaris']);
-    const cuve = w.spawn('cuve', 0, 30 * FP, 30 * FP);
+    const cuve = Object.assign(w.spawn('cuve', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const aux = w.spawn('auxiliaire', 0, 34 * FP, 30 * FP);
     const speed = aux.speed;
     w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'gazeuphorisants', x: aux.x, y: aux.y }]);
@@ -80,7 +80,7 @@ describe('audit gaps', () => {
   it('the Régénérant covers every living ally of its zone', () => {
     const w = createMatch(['humains', 'isdaris']);
     w.players[0].upgrades.regenerant = 1;
-    const alch = w.spawn('alchimiste', 0, 30 * FP, 30 * FP);
+    const alch = Object.assign(w.spawn('alchimiste', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const a = w.spawn('auxiliaire', 0, 33 * FP, 30 * FP);
     const b = w.spawn('auxiliaire', 0, 33 * FP, 31 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [alch.id], name: 'regenerant', x: a.x, y: (a.y + b.y) / 2 }]);
@@ -177,6 +177,7 @@ describe('audit gaps', () => {
     w.players[0].upgrades.raccumulateur = 1;
     const acc = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
     acc.kit = 'accumulateur';
+    acc.mana = 1 << 30; // plenty of its own energy (fiches 2010), the spell under test aside
     const foe = w.spawn('auxiliaire', 1, 40 * FP, 30 * FP);
     const far = w.spawn('auxiliaire', 1, 60 * FP, 30 * FP);
     const speed = foe.speed;
@@ -365,6 +366,7 @@ describe('audit gaps', () => {
     w.players[0].upgrades.raccumulateur = 1;
     const acc = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
     acc.kit = 'accumulateur';
+    acc.mana = 1 << 30; // plenty of its own energy (fiches 2010), the spell under test aside
     const tank = w.spawn('pegase', 1, 36 * FP, 30 * FP);
     tank.frozen = ticks(60);
     w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'gravite' }]);
@@ -384,7 +386,7 @@ describe('audit gaps', () => {
   it('the Méga-Espion is slowed like any other unit', () => {
     const w = createMatch(['z', 'dieux']);
     w.players[0].upgrades.megaespion = 1;
-    const spy = w.spawn('zespion', 0, 30 * FP, 30 * FP);
+    const spy = Object.assign(w.spawn('zespion', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const fast = w.baseSpeed(spy);
     w.setPace(spy, ticks(5), 50, 125);
     expect(spy.speed).toBe(w.baseSpeed(spy));

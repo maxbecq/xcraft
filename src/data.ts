@@ -44,7 +44,11 @@ export function reaches(a: Attack, flying: boolean): boolean {
   return flying ? (a.air ?? a.range >= 1) : a.ground !== false;
 }
 
+/** A caster's own energy (fiches 2010, Z.doc; start from the mod): most, at birth, regained a second. */
+export type Mana = readonly [number, number, number];
+
 export interface UnitDef {
+  mana?: Mana;
   kind: 'unit';
   name: string;
   /** Buildings needed (finished, by count) before it can be trained. */
@@ -124,6 +128,7 @@ export interface GodLevels {
 }
 
 export interface BuildingDef {
+  mana?: Mana;
   kind: 'building';
   name: string;
   /** Buildings needed (finished, by count) before it can be built. */
@@ -228,6 +233,8 @@ export interface AbilityDef {
   duration: number;
   /** Energy taken from the player's stock (building abilities). */
   energy?: number;
+  /** Taken from the caster's own energy (fiches 2010), for a unit that has some; `cooldown` is then the spell's own. */
+  mana?: number;
   /** Minerals taken too (Z Centre K kits). */
   minerals?: number;
   /** Research needed before it can be used. */
@@ -864,6 +871,8 @@ export interface WeaponDef {
   healRange?: number;
   /** Only ground socles take it (Canon X-04). */
   ground?: boolean;
+  /** Z Réparateur and Accumulateur (Z.doc): the energy the weapon gives its socle, by level, and regained a second. */
+  mana?: { max: number[]; regen: number };
   cost: Cost;
   /** Research needed first. */
   research?: string;
@@ -884,6 +893,7 @@ interface WeaponStats {
   selfHit?: boolean;
   heal?: number;
   healRange?: number;
+  mana?: { max: number[]; regen: number };
   cost: Cost;
 }
 const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
@@ -910,7 +920,7 @@ export function weaponAt(key: string, level: number, flying = false): Attack | u
   return a;
 }
 const weaponDef = (key: string, name: string, hotkey: string, research?: string, ground?: boolean): WeaponDef => ({
-  name, hotkey, research, ground, attack: weaponAt(key, 1), cost: WEAPON_STATS[key].cost, heal: WEAPON_STATS[key].heal, healRange: WEAPON_STATS[key].healRange,
+  name, hotkey, research, ground, attack: weaponAt(key, 1), cost: WEAPON_STATS[key].cost, heal: WEAPON_STATS[key].heal, healRange: WEAPON_STATS[key].healRange, mana: WEAPON_STATS[key].mana,
 });
 export const WEAPONS: Record<string, WeaponDef> = {
   laser: weaponDef('laser', 'Laser', 'L', 'laser'),

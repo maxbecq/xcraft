@@ -205,7 +205,7 @@ describe('Z', () => {
     w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
     w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'zespion' }]);
     expect(ic.queue).toEqual(['zespion']);
-    const spy = w.spawn('zespion', 0, 30 * FP, 30 * FP);
+    const spy = Object.assign(w.spawn('zespion', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     expect(spy.maxHp).toBe(140);
     const foe = w.spawn('auxiliaire', 1, 32 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'impulsion', x: foe.x, y: foe.y }]);
@@ -228,6 +228,7 @@ describe('Z', () => {
     const at = (type: string, owner: number, x: number, y: number, kit = '') => {
       const u = w.spawn(type, owner, x * FP, y * FP);
       u.kit = kit;
+      u.mana = 1 << 30; // plenty of its own energy (fiches 2010), the spell under test aside
       return u;
     };
     // Déchiqueteur: melee, against flyers when a flyer carries it.
@@ -448,6 +449,7 @@ describe('Z Réparateur (notice: « véhicules et bâtiments »)', () => {
     const [ic] = of(w, 0, 'intelligence');
     const medic = w.spawn('quadripode', 0, ic.x + 4 * FP, ic.y);
     medic.kit = 'reparateur';
+    medic.mana = 1 << 30;
     ic.hp = 1000;
     run(w, 3);
     expect(ic.hp).toBeGreaterThan(1030); // the creep alone gives back 3 in that time

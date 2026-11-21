@@ -262,6 +262,15 @@ export function nearShieldAura(this: World, e: Entity): boolean {
 }
 
 /** Hit points a second a unit gives back: a healer's, or a Z socle's Réparateur (machines only). */
+/** Z Réparateur (Z.doc): 5 energy a second of repair at 10 PV/s, so half a point a PV; false when it has run dry. */
+export function mends(this: World, e: Entity): boolean {
+  if (e.kit !== 'reparateur') return true;
+  const cost = FP / 2;
+  if (e.mana < cost) return false;
+  e.mana -= cost;
+  return true;
+}
+
 export function healRate(this: World, e: Entity): number {
   return (e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0;
 }
@@ -293,7 +302,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
     if (this.gap(e, t) > 2 * FP) return this.chase(e, t);
     e.goal = null;
-    if (e.cooldown === 0) {
+    if (e.cooldown === 0 && this.mends(e)) {
       t.hp = Math.min(t.maxHp, t.hp + 1);
       e.cooldown = ticks(1 / this.healRate(e));
       if ((this.tick + e.id) % 8 === 0) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
@@ -306,7 +315,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
       const p = this.patient(e);
       if (p) {
         if (this.gap(e, p) > 2 * FP) return this.chase(e, p);
-        if (e.cooldown === 0) {
+        if (e.cooldown === 0 && this.mends(e)) {
           p.hp = Math.min(p.maxHp, p.hp + 1);
           e.cooldown = ticks(1 / this.healRate(e));
         }

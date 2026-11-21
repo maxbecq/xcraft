@@ -14,7 +14,8 @@ function arena(factions: [Faction, Faction]): { w: World; ai: AI; at: (type: str
   for (const e of [...w.entities.values()]) if (e.owner >= 0 && e.def.kind === 'unit') w.entities.delete(e.id);
   for (const p of w.players) [p.minerals, p.energy] = [0, 0];
   const [cx, cy] = [(w.map.width * FP) / 2, (w.map.height * FP) / 2];
-  const at = (type: string, owner: number, dx: number, dy: number) => w.spawn(type, owner, cx + dx * FP, cy + dy * FP);
+  // Casters full of their own energy (fiches 2010): the scenes test the AI's choices, not the energy.
+  const at = (type: string, owner: number, dx: number, dy: number) => Object.assign(w.spawn(type, owner, cx + dx * FP, cy + dy * FP), { mana: 1 << 30 });
   return { w, ai: new AI(w, 0), at };
 }
 

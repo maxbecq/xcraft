@@ -53,6 +53,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
 .hud-panel .hp, .hud-panel .bar { height: 7px; background: #2b261c; border: 1px solid #000; overflow: hidden; margin: 5px 0; max-width: 340px; }
 .hud-panel .hp > div { height: 100%; background: linear-gradient(#8cf08c, #3fae3f); }
 .hud-panel .hp.shield > div { background: linear-gradient(#bfe8ff, #3a9ae0); }
+.hud-panel .hp.mana > div { background: linear-gradient(#e6c8ff, #8a4fe0); }
 .hud-panel .bar > div { height: 100%; background: linear-gradient(#ffd977, #c98f22); }
 .hud-panel .queue { display: flex; gap: 4px; margin-top: 6px; }
 .hud-panel .queue span, .hud-panel .tile { display: inline-grid; place-items: center; width: 38px; height: 38px; overflow: hidden; background: radial-gradient(circle at 50% 40%, #4a5a62, #161b1f 80%); border: 1px solid #6d5e40; border-radius: 3px; }
@@ -1273,3 +1274,6 @@ body:has(.hud-banner:not([hidden])) :is(.hud-toasts, .console-tab) { display: no
   .hud-banner h1 { font-size: 44px; }
   .hud-banner .row .measures { font-size: 13px; }
 }
+
+/* A caster's own energy: violet in every camp's panel (after the camps' own bar colours). */
+body.z .hud-panel .hp.mana > div, body.isdaris .hud-panel .hp.mana > div, body.humains .hud-panel .hp.mana > div, body.dieux .hud-panel .hp.mana > div { background: linear-gradient(90deg, #8a4fe0, #ecdcff); box-shadow: 0 0 8px rgba(176, 124, 255, 0.8); }

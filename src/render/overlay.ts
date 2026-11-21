@@ -82,6 +82,15 @@ export class Overlay {
         ctx.fillStyle = '#f2c14e';
         for (let i = 0; i < e.lvl; i++) ctx.fillRect(sx + bw / 2 + 3 + i * 4, sy - 1, 2, bh + 2);
       }
+      const mana = selected.has(e.id) ? world.manaOf(e) : undefined;
+      if (mana) {
+        // A selected caster's own energy (fiches 2010): a violet bar under the hp bar, as in SC2.
+        const mh = Math.max(2, bh - 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(sx - bw / 2 - 1, sy + bh + 1, bw + 2, mh + 2);
+        ctx.fillStyle = '#b07cff';
+        ctx.fillRect(sx - bw / 2, sy + bh + 2, (bw * e.mana) / (mana[0] * FP), mh);
+      }
       if (e.maxShield) {
         // Psychic shield: a blue bar above the hp bar.
         const sh = Math.max(2, bh - 1);

@@ -1,7 +1,7 @@
 /** The selection panel: the live portrait's text beside it, a group's tiles, a queue, the cargo and the fighting stats. */
 import BALANCE from '../balance.json';
 import { ABILITIES, type BuildingDef, DEFS, KIT, MYTHS, type Mythology, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
-import { TICK_RATE, ticks } from '../sim/fixed';
+import { FP, TICK_RATE, ticks } from '../sim/fixed';
 import type { Entity } from '../sim/world';
 import { img } from './glyphs';
 import type { Hud } from './hud';
@@ -42,6 +42,9 @@ export function updatePanel(h: Hud): void {
   } else {
     if (e.maxShield) html += `<div class="hp shield"><div style="width:${(100 * e.shield) / e.maxShield}%"></div></div>`;
     html += `<div class="hp"><div style="width:${(100 * e.hp) / e.maxHp}%"></div></div><div class="info">${e.hp} / ${e.maxHp}${e.maxShield ? ` · bouclier ${e.shield} / ${e.maxShield}` : ''}</div>`;
+    // A caster's own energy (fiches 2010): its bar and its points, for its owner and the enemy alike (as in SC2).
+    const mana = h.world.manaOf(e);
+    if (mana) html += `<div class="hp mana"><div style="width:${(100 * e.mana) / (mana[0] * FP)}%"></div></div><div class="info">Énergie ${Math.floor(e.mana / FP)} / ${mana[0]}</div>`;
   }
   if (e.def.kind === 'building') {
     const def = e.def as BuildingDef;

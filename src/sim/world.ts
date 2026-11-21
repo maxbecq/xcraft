@@ -106,6 +106,9 @@ export interface Entity {
   /** Z Plate-forme: the weapon chosen for each socle of the queue (key of WEAPONS, '' for the machine gun). */
   kits: string[];
   trainLeft: number;
+  /** A caster's own energy (fiches 2010), in FP; and, for a spell with a cooldown of its own, the tick it is ready again. */
+  mana: number;
+  spellCd: Record<string, number>;
   /** A Humans site: progress in thousandths of a tick, carried over from one tick to the next. */
   buildFrac: number;
   /** Druide's Double énergétique: an illusion, which neither attacks nor casts. */
@@ -376,7 +379,7 @@ export class World {
       speed: def.kind === 'unit' ? speedPerTick(def.speed) : 0, vel: 0, movedTick: -1, next: [],
       hp: 'hp' in def ? def.hp : 0, maxHp: 'hp' in def ? def.hp : 0,
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
-      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, buildFrac: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
+      tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
       shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
@@ -443,6 +446,8 @@ export class World {
       e.py = e.y;
       if (e.cooldown > 0) e.cooldown--;
       if (e.abilityCd > 0) e.abilityCd--;
+      const mana = this.manaOf(e);
+      if (mana && e.mana < toFp(mana[0])) e.mana = Math.min(toFp(mana[0]), e.mana + idiv(toFp(mana[2]), ticks(1)));
       if (e.held > 0) e.held--;
       if (e.camo > 0) e.camo--;
       if (e.phased > 0) e.phased--;
@@ -831,7 +836,7 @@ export class World {
     switch (o.kind) {
       case 'cast': {
         const ab = spell(o.ability, e.lvl);
-        if (e.abilityCd > 0) return this.setOrder(e, null);
+        if (!this.ready(e, o.ability)) return this.setOrder(e, null);
         // Aimed at a building: its edge is near enough (a big one's middle may be out of reach).
         const on = [...this.entities.values()].find((b) => b.def.kind === 'building' && Math.abs(b.x - o.x) * 2 <= (b.def as BuildingDef).size * FP && Math.abs(b.y - o.y) * 2 <= (b.def as BuildingDef).size * FP);
         if ((on ? this.gap(e, on) : dist(e.x, e.y, o.x, o.y)) > toFp(ab.range ?? 0)) {

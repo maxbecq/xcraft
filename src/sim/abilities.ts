@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, soars, type Entity, type World } from './world';
 
@@ -68,7 +68,7 @@ const FORMS: Record<string, string> = { formefeu: 'elementaire', formeeau: 'elem
 export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability): void {
   const def = e.def as UnitDef;
   const ab = name && spell(name, e.lvl);
-  if (!ab || e.illusion || ab.target === 'point' || (e.abilityCd > 0 && ab.cooldown) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
+  if (!ab || e.illusion || ab.target === 'point' || !this.ready(e, name) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
     // Allies round the caster unhurt for a while (an aura: out of it, no more).
@@ -218,7 +218,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     e.boost = ticks(ab.duration);
     e.speed = speedPerTick(def.speed * (def.ability === 'charge' ? 2 : 1.5));
   }
-  e.abilityCd = ticks(ab.cooldown);
+  if (!this.spendMana(e, name!)) e.abilityCd = ticks(ab.cooldown);
   this.casts.push({ kind: name!, x: e.x, y: e.y });
 }
 
@@ -424,7 +424,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     } else t.hp = Math.min(t.maxHp, t.hp + 2 * ab.damage!);
   }
   // Téléportation rapide: the teleport comes back twice as fast.
-  e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
+  if (!this.spendMana(e, name)) e.abilityCd = name === 'teleport' && this.level(e.owner, 'teleportrapide') ? idiv(ticks(ab.cooldown) * (100 - BALANCE.rules.upgrades.teleportrapide), 100) : ticks(ab.cooldown);
   this.casts.push({ kind: name, x, y });
   return true;
 }
@@ -614,6 +614,36 @@ export function turn(this: World, e: Entity, owner: number): void {
 }
 
 /** A unit's abilities: its own, and those its Z weapon brings (Accumulateur). */
+/**
+ * A caster's own energy (fiches 2010, Z.doc): [most, at birth, regained a second], by its kind, or by the level of
+ * the Z weapon it carries (Réparateur, Accumulateur: N1 to N4).
+ */
+export function manaOf(this: World, e: Entity): Mana | undefined {
+  const own = (e.def as UnitDef | BuildingDef).mana;
+  if (own) return own;
+  const w = e.kit ? WEAPONS[e.kit]?.mana : undefined;
+  if (!w) return undefined;
+  const max = w.max[Math.min(w.max.length, Math.max(1, ((e.def as UnitDef).weaponLevel ?? 1) + e.tier - 1)) - 1];
+  return [max, max / 2, w.regen];
+}
+
+/** Can it use this ability now: its cooldown over and, for a caster with energy of its own, enough of it. */
+export function ready(this: World, e: Entity, name: string): boolean {
+  const ab = spell(name, e.lvl);
+  if (ab.mana !== undefined && this.manaOf(e)) return e.abilityCd === 0 && (e.spellCd[name] ?? 0) <= this.tick && e.mana >= toFp(ab.mana);
+  return e.abilityCd === 0 || !ab.cooldown;
+}
+
+/** A spell cast from the caster's own energy: paid, one second before the next (fiches), and its own cooldown. */
+export function spendMana(this: World, e: Entity, name: string): boolean {
+  const ab = spell(name, e.lvl);
+  if (ab.mana === undefined || !this.manaOf(e)) return false;
+  e.mana -= toFp(ab.mana);
+  e.abilityCd = ticks(1);
+  if (ab.cooldown > 1) e.spellCd[name] = this.tick + ticks(ab.cooldown);
+  return true;
+}
+
 export function abilitiesFor(this: World, e: Entity): string[] {
   const own = abilitiesOf(e.def as UnitDef);
   return e.kit && WEAPON_ABILITIES[e.kit] ? [...own, ...WEAPON_ABILITIES[e.kit]] : own;

@@ -270,7 +270,10 @@ export function apply(this: World, c: Command): void {
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
         // An ability without cooldown (Explosion suicidaire) is ready whatever the caster used before.
-        const casters = units.filter((e) => this.abilitiesFor(e).includes(c.name!) && (e.abilityCd === 0 || !ab.cooldown));
+        const able = units.filter((e) => this.abilitiesFor(e).includes(c.name!));
+        const casters = able.filter((e) => this.ready(e, c.name!));
+        // Casters with energy of their own (fiches 2010): none with enough of it.
+        if (!casters.length && able.some((e) => this.manaOf(e) && e.abilityCd === 0 && (e.spellCd[c.name!] ?? 0) <= this.tick)) return void this.say(c.player, "Pas assez d'énergie.");
         if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
         if (c.x === undefined || c.y === undefined || !casters.length) return;
         const [x, y] = [c.x, c.y];
