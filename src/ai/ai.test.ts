@@ -249,6 +249,19 @@ describe('AI Z Refuge', () => {
     expect((sent as Extract<Command, { kind: 'smart' }>).target).not.toBe(field.id);
   });
 
+  it('down to a few workers, keeps the price of the next one from its buildings', () => {
+    const w = createMatch(['dieux', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'esprit') w.entities.delete(e.id);
+    const asgaard = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    w.spawn('esprit', 0, asgaard.x, asgaard.y + 5 * FP);
+    // Thor out: the Porte and a god, a Puits divin is due.
+    w.spawn('thor', 0, asgaard.x + 5 * FP, asgaard.y);
+    // A Branche is wanted (200): with 220, it took everything, and no esprit came.
+    w.players[0].minerals = 220;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', type: 'esprit' }));
+  });
+
   it('with the enemy army gone, a few soldiers at home go and raze its last buildings', () => {
     const w = createMatch(['humains', 'humains']);
     for (const e of [...w.entities.values()]) if (e.owner === 1 && e.def.kind === 'unit') w.entities.delete(e.id);

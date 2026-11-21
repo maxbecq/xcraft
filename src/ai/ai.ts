@@ -95,7 +95,7 @@ const GODS = BALANCE.ai.gods as [string, number][];
 // What one turn of the AI works from, step by step: what it has, what it wants, what it keeps back, what it spends.
 type Survey = ReturnType<AI['survey']>;
 type Need = ReturnType<AI['need']>;
-type Turn = Survey & Need & ReturnType<AI['budget']> & { keep: number };
+type Turn = Survey & Need & ReturnType<AI['budget']> & { keep: number; low: number };
 
 /** A computer player. It only acts through commands, like a human. */
 /** A building spot's key: its middle, in half tiles. */
@@ -163,8 +163,13 @@ export class AI {
     if (!home) return this.lastStand(mine);
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
-    const ctx: Turn = { ...n, ...this.budget(n), keep: 0 };
+    const ctx: Turn = { ...n, ...this.budget(n), keep: 0, low: 0 };
     this.tend(ctx);
+    // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
+    // until one is ordered (Dieux down to a few esprits spent their last minerals elsewhere, and with no income never
+    // had the 75 for one again; raided Isdaris put every 70 minerals into a Créature, their last robots unreplaced).
+    ctx.low = ctx.serfs.length < this.serfTarget(ctx) / 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    ctx.minerals -= ctx.low;
     this.place(ctx);
     this.research(ctx);
     this.morph(ctx);
@@ -455,15 +460,17 @@ export class AI {
   private research(ctx: Turn): void {
     const { w, f, p, mine, home, serfs, buildings, minute, free, wants, techUp, unlocked, nextExtension, saving, reserve, researchReserve, wantSupreme } = ctx;
     // Serfs, then soldiers.
-    const serfTarget = this.plan.serfs * Math.min(3, buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).length);
+    const serfTarget = this.serfTarget(ctx);
     const councilHome = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const workerHome = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : councilHome;
     // At its own price (a Dieux esprit costs 75: with 85 minerals left and no esprit, they never made one again).
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
     // Z: the Intelligence centrale turns into the Intelligence suprême only with an empty queue: no drone then.
-    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && ctx.minerals >= workerCost && free > 0 && !wants.includes(f.supply) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
+    // Low on workers, one comes even while supply is wanted (it costs one).
+    if (workerHome && serfs.length < serfTarget && workerHome.queue.length === 0 && home.buildLeft === 0 && ctx.minerals + ctx.low >= workerCost && free > 0 && (ctx.low || !wants.includes(f.supply)) && !(wantSupreme && p.energy >= 300 && workerHome.type === f.hq)) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
-      ctx.minerals -= workerCost;
+      ctx.minerals += ctx.low - workerCost;
+      ctx.low = 0;
     } else if (f === FACTIONS.z && minute > 8 && workerHome && workerHome.queue.length === 0 && free > 0 && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !(wantSupreme && p.energy >= 300)) {
       // One Espion (Z.doc): it detects, and goes along with the waves.
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: 'zespion' });
@@ -1356,6 +1363,11 @@ export class AI {
     if (energy >= 100 && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
     return !this.enemyAir && (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
+  }
+
+  /** Workers wanted: the plan's number per headquarters, up to three. */
+  private serfTarget(ctx: Survey): number {
+    return this.plan.serfs * Math.min(3, ctx.buildings.filter((b) => kin(b, this.faction.hq) && b.buildLeft === 0).length);
   }
 
   private nearest(from: Entity, test: (e: Entity) => boolean): Entity | undefined {
