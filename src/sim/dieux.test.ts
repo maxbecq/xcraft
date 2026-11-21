@@ -499,3 +499,25 @@ describe('Dieux', () => {
     expect([...again.entities.values()].map((e) => e.lvl)).toEqual([...live.entities.values()].map((e) => e.lvl));
   }, 60_000);
 });
+
+describe('Dieux builders (notice)', () => {
+  it('Thor raises the Temple de vénération, Osiris the Fontaine, Frigg the Artefacterie; Gaïa none of them', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const p = w.players[0];
+    p.minerals = 99999;
+    p.energy = 99999;
+    const [gaia] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'gaia');
+    for (const [god, type] of [['thor', 'temple'], ['osiris', 'fontaine'], ['frigg', 'artefacterie']] as const) {
+      const g = w.spawn(god, 0, gaia.x + 4 * FP, gaia.y);
+      let spot: [number, number] | undefined;
+      for (let r = 4; r < 30 && !spot; r++) for (let dx = -r; dx <= r && !spot; dx++) for (const dy of [-r, r]) if (!spot && w.canPlace(type, Math.floor(gaia.x / FP) + dx, Math.floor(gaia.y / FP) + dy, 0)) spot = [Math.floor(gaia.x / FP) + dx, Math.floor(gaia.y / FP) + dy];
+      w.step([{ player: 0, kind: 'build', ids: [gaia.id], type, tx: spot![0], ty: spot![1] }]);
+      expect(gaia.order?.kind).not.toBe('build');
+      // With both selected, the god takes the order (it may raise it at once, standing close enough).
+      w.step([{ player: 0, kind: 'build', ids: [g.id, gaia.id], type, tx: spot![0], ty: spot![1] }]);
+      expect(gaia.order?.kind).not.toBe('build');
+      for (let i = 0; i < ticks(40) && ![...w.entities.values()].some((e) => e.type === type && e.owner === 0); i++) w.step([]);
+      expect([...w.entities.values()].some((e) => e.type === type && e.owner === 0)).toBe(true);
+    }
+  });
+});

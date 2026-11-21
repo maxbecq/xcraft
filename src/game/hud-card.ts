@@ -1,6 +1,6 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -90,7 +90,7 @@ export function buttonsFor(h: Hud): Button[] {
     if (h.buildMenu && h.workers().length) {
       const f = FACTIONS[h.world.players[h.player].faction];
       return [
-        ...f.buildable.filter((t) => lcdTree(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced')).map((t) => {
+        ...f.buildable.filter((t) => h.workers().some((w) => raises(w.def as UnitDef, t)) && (lcdTree(h) || onlyOwn(h) || f.advanced.includes(t) === (h.buildMenu === 'advanced'))).map((t) => {
           const d = DEFS[t] as BuildingDef;
           return { label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => (h.placing = t) };
         }),
@@ -117,7 +117,7 @@ export function buttonsFor(h: Hud): Button[] {
     if (h.workers().length) {
       list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (h.buildMenu = 'basic') });
       // The LCD console shows every building at once, as a tree: no second, « advanced » list.
-      if (!lcdTree(h)) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
+      if (!lcdTree(h) && !onlyOwn(h)) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
     }
     // One button per active ability among the selected units; each ready unit uses it.
     for (const ab of new Set(units.flatMap((u) => h.world.abilitiesFor(u)))) {
@@ -284,6 +284,11 @@ export function updateCard(h: Hud): void {
   h.card.innerHTML = tree ? treeHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
   if (tree) drawLinks(h.card), relinkOnResize(h.card);
   placeMenu(h);
+}
+
+/** Builders of one building or so (Thor, Osiris, Frigg): theirs in a single list, no « advanced » one. */
+function onlyOwn(h: Hud): boolean {
+  return h.workers().every((w) => (w.def as UnitDef).builds && !(w.def as UnitDef).builder);
 }
 
 /** The Machines' LCD console (option) draws its build list as a tech tree. */

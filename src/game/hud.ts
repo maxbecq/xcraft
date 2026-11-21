@@ -417,7 +417,7 @@ export class Hud {
 
   workers(): Entity[] {
     // Those that place buildings: workers, or Gaïa for the Dieux (their Esprits only harvest).
-    return this.input.own().filter((e) => e.def.kind === 'unit' && ((e.def as UnitDef).builder ?? (e.def as UnitDef).worker));
+    return this.input.own().filter((e) => e.def.kind === 'unit' && ((e.def as UnitDef).builds?.length || ((e.def as UnitDef).builder ?? (e.def as UnitDef).worker)));
   }
 
   /** The active kind in a mixed selection (Tab): its abilities and production are the ones on the card. */

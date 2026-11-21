@@ -1,4 +1,4 @@
-import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, DEFS, FACTIONS, RAPPEL, raises, reaches, type FactionDef, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import BALANCE from '../balance.json';
 import { FP, dist, ticks } from '../sim/fixed';
 import { expansions } from '../sim/setup';
@@ -180,8 +180,8 @@ export class AI {
     const w = this.world;
     const f = this.faction;
     const serfs = mine.filter((e) => e.type === f.worker);
-    // Dieux: Gaïa places the buildings, and the gods (production) stay home, out of the army.
-    const builders = f.builder ? mine.filter((e) => e.type === f.builder) : serfs;
+    // Dieux: Gaïa places the buildings, Thor, Osiris and Frigg one each (notice); the gods stay home, out of the army.
+    const builders = f.builder ? mine.filter((e) => e.type === f.builder || (e.def as UnitDef).builds) : serfs;
     const gods = mine.filter((e) => f.gods?.includes(e.type));
     // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
     const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
@@ -396,9 +396,10 @@ export class AI {
       }
       if (ctx.energy < def.cost.energy) continue;
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
-      // Gaïa, the Dieux's only builder, chains her buildings (a few at most) instead of placing one at a time.
-      const chained = f.builder && !this.builder(builders, spot, def.size) ? builders.find((b) => b.next.length < 3) : undefined;
-      const builder = this.builder(builders, spot, def.size) ?? chained;
+      const crew = builders.filter((b) => raises(b.def as UnitDef, type));
+      // Gaïa, the Dieux's main builder, chains her buildings (a few at most) instead of placing one at a time.
+      const chained = f.builder && !this.builder(crew, spot, def.size) ? crew.find((b) => b.next.length < 3) : undefined;
+      const builder = this.builder(crew, spot, def.size) ?? chained;
       if (!spot || !builder) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));

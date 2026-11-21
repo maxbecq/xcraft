@@ -1,6 +1,6 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
@@ -101,7 +101,7 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'build': {
-      const worker = units.find((e) => (e.def as UnitDef).builder ?? (e.def as UnitDef).worker);
+      const worker = units.find((e) => raises(e.def as UnitDef, c.type));
       const bdef = DEFS[c.type];
       // Morphs come out of a building's queue, Z add-ons out of a Pod: no worker raises them.
       if (!worker || bdef?.kind !== 'building' || bdef.faction !== this.players[c.player].faction || bdef.morphOnly || bdef.addon) return;

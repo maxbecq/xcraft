@@ -101,6 +101,8 @@ export interface UnitDef {
   unique?: boolean;
   /** Places buildings (Gaïa); by default only workers do. */
   builder?: boolean;
+  /** Dieux (notice): the only buildings this unit raises, when not all its side's (Thor the Temple, Osiris the Fontaine). */
+  builds?: string[];
   /** Comes back by itself at its side's headquarters this many seconds after dying (Gaïa). */
   respawn?: number;
   /** Needs `count` of these units standing, any of them (second-rank gods: two of the first rank). */
@@ -271,6 +273,11 @@ export function spell(name: string, lvl: number): AbilityDef {
 }
 
 /** Every active ability of a unit or building def. */
+/** Can a unit of this kind raise this building: its own list (Dieux), else a builder or a worker raises any. */
+export function raises(def: UnitDef, type: string): boolean {
+  return def.builds ? def.builds.includes(type) : !!(def.builder ?? def.worker);
+}
+
 export function abilitiesOf(def: { ability?: string; abilities?: string[] }): string[] {
   return [...(def.ability ? [def.ability] : []), ...(def.abilities ?? [])];
 }
@@ -714,8 +721,8 @@ const BASE: Record<string, object> = {
   // its own troops at its feet. Gaïa (given at the start, back by herself when she falls) calls the buildings down:
   // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
   esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
-  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
-  thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
+  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, builds: ['asgaard', 'branche', 'antre', 'puitsdivin', 'primordial'], trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
+  thor: { kind: 'unit', name: 'Thor', radius: 1.7, builds: ['temple'], trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
   apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, abilities: ['lumiereardente', 'tempetezeus'], ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
   seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['jetdesable', 'amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
@@ -740,9 +747,9 @@ const BASE: Record<string, object> = {
   golem: { kind: 'unit', name: 'Golem', radius: 0.9, faction: 'dieux', hotkey: 'G' },
   // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
   /** Frigg ignores the ground (cliffs, water): she flies. */
-  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, hover: true, trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
+  frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, hover: true, builds: ['artefacterie'], trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
   hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
-  osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
+  osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, builds: ['fontaine'], trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
   /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */
   walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflage', faction: 'dieux', hotkey: 'W' },
   /** Hadès's demigod: lightning from afar, razes buildings. */

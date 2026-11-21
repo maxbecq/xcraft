@@ -1,6 +1,6 @@
 /** Building placement: the ghost and the grid under the cursor, and on a touch screen the pinned footprint with ✓ and ✕. */
 import { type MeshBasicMaterial, Vector3 } from 'three';
-import { type BuildingDef, DEFS } from '../data';
+import { type BuildingDef, DEFS, raises, type UnitDef } from '../data';
 import { heightAt } from '../map';
 import { FP, TICK_RATE } from '../sim/fixed';
 import { GRID_REACH } from '../render/placegrid';
@@ -11,7 +11,7 @@ import type { Hud } from './hud';
 export function place(h: Hud, ground: Vector3 | null, shift: boolean): void {
   if (!h.placing) return;
   const spot = ground && spotAt(h, h.placing, ground);
-  const worker = h.workers()[0];
+  const worker = h.workers().find((w) => raises(w.def as UnitDef, h.placing!));
   // A Z Pod with no room for its add-on beside it would never get one.
   if (spot && worker && addonRoom(h, h.placing, spot) === null) {
     h.notify([{ player: h.player, kind: 'error', text: 'Pas de place pour l’extension du Pod.' }]);

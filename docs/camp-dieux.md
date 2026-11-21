@@ -55,20 +55,20 @@ Règle de l'arbre (dessin de la notice) : Gaïa → les trois dieux de rang 1 ; 
 
 Toutes ont la **Détection**.
 
-La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris et l'Artefacterie par Frigg. Le jeu les fait bâtir par Gaïa, le dieu devant être vivant (décision du 20 novembre 2026).
+La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris et l'Artefacterie par Frigg. Le jeu suit la notice depuis le 21 novembre 2026 : Gaïa ne les bâtit plus.
 
 | Dieu | Rang | Rôle | Invoque / construit | Capacités (notice) |
 |---|---|---|---|---|
-| **Gaïa** | 0 | bâtisseuse, quasi invulnérable, pas d'attaque | Esprit ; tous les bâtiments (Porte d'Asgaard, Branche d'Yggdrasill, Antre, Puits, Temple primordial, et, avec le dieu requis, Temple de vénération, Fontaine, Artefacterie) | Téléportation de Gaïa (vers un bâtiment allié), Flèche magique (« Déflagration » dans l'arbre) |
-| **Thor** | 1 | mêlée lente, très endurante ; le dieu le moins cher | Nain ; exigé pour le Temple de vénération | Courroux du marteau (prochain coup multiplié ; onde de choc quand Thor évolue) |
+| **Gaïa** | 0 | bâtisseuse, quasi invulnérable, pas d'attaque | Esprit ; Porte d'Asgaard, Branche d'Yggdrasill, Antre, Puits, Temple primordial (Thor, Osiris et Frigg bâtissent les trois autres) | Téléportation de Gaïa (vers un bâtiment allié), Flèche magique (« Déflagration » dans l'arbre) |
+| **Thor** | 1 | mêlée lente, très endurante ; le dieu le moins cher | Nain ; bâtit le Temple de vénération | Courroux du marteau (prochain coup multiplié ; onde de choc quand Thor évolue) |
 | **Apollon** | 1 | lanceur de sorts rapide et fragile | Minotaure | Pluie de feu (météores en zone), Aveuglement (lumière : ralentit déplacement et attaque de l'infanterie en zone) |
 | **Seth** | 1 | rapide, achève les unités faibles | Sphinx | Tempête de sable (les unités à distance dedans ne tirent plus), Jet de sable (immobilise presque un véhicule) |
 | **Odin** | 2 | commandant de mêlée | Nain, Corbeau, Drake | Aura de guerre (les troupes proches frappent plus fort), Foudre puissante (dégâts + étourdissement) |
 | **Athéna** | 2 | mêlée en armure d'or, soutien | Minotaure, Esprit (arbre) — Minotaure, Élémentaire (texte) | Aura de protection (dégâts subis réduits autour d'elle), Chouette (révèle une zone), Cri de guerre (dégâts des troupes très augmentés un moment) |
 | **Isis** | 2 | soigneuse, attaque symbolique, très endurante | Sphinx, Prêtresse | Soins divins (soin de groupe), Résurrection |
-| **Frigg** | 3 | mentaliste ; ignore le terrain (falaises, eau) | Nain, Walkyrie ; exigée pour l'Artefacterie | Soumission divine (contrôle temporaire d'une unité ennemie), Voile de nuage (elle et les troupes proches invisibles longtemps) |
+| **Frigg** | 3 | mentaliste ; ignore le terrain (falaises, eau) | Nain, Walkyrie ; bâtit l’Artefacterie | Soumission divine (contrôle temporaire d'une unité ennemie), Voile de nuage (elle et les troupes proches invisibles longtemps) |
 | **Hadès** | 3 | attaque à distance très puissante | Minotaure, Titan | Rayon de mort (frappe toutes les unités ennemies en vue), Voyage souterrain (téléportation), Armée des enfers (fantômes invincibles temporaires) |
-| **Osiris** | 3 | mêlée lente, dévastatrice contre l'organique | Sphinx, Immortel ; exigé pour la Fontaine d'eau du Nil | Aura putride (dégâts aux organiques proches), Nuée nauséabonde (essaim autour de lui, rend de la vie) |
+| **Osiris** | 3 | mêlée lente, dévastatrice contre l'organique | Sphinx, Immortel ; bâtit la Fontaine d’eau du Nil | Aura putride (dégâts aux organiques proches), Nuée nauséabonde (essaim autour de lui, rend de la vie) |
 
 ### 3.2 Unités invoquées
 
@@ -96,9 +96,9 @@ La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris
 | **Antre** | Gaïa | dépôt de ressources bon marché + un peu de population ; rien d'autre |
 | **Puits** | Gaïa | extraction d'énergie sur un gisement (comme la Mine) |
 | **Branche d'Yggdrasill** | Gaïa | population + attaque de mêlée ; évolue (ci-dessous) |
-| **Temple de vénération** | Gaïa, Thor vivant exigé | toutes les recherches (la notice l'appelle aussi « Autel », voir questions) |
-| **Fontaine d'eau du Nil** | Gaïa, Osiris vivant exigé | régénération rapide des organiques alliés proches (Aura de soin) |
-| **Artefacterie** (unique) | Gaïa, Frigg vivante exigée | améliorations des dieux, où qu'ils soient : Force, Résistance, Agilité, Vitesse ; 4 au total par dieu, cumulables |
+| **Temple de vénération** | Thor | toutes les recherches (la notice l'appelle aussi « Autel », voir questions) |
+| **Fontaine d’eau du Nil** | Osiris | régénération rapide des organiques alliés proches (Aura de soin) |
+| **Artefacterie** (unique) | Frigg | améliorations des dieux, où qu'ils soient : Force, Résistance, Agilité, Vitesse ; 4 au total par dieu, cumulables |
 | **Temple primordial** (unique) | Gaïa | charge les sorts ultimes |
 
 **Branche d'Yggdrasill**, trois formes (flèches vertes de l'arbre) :
