@@ -225,3 +225,19 @@ describe('Isdaris', () => {
     expect(w.winner).toBe(1);
   }, 30_000);
 });
+
+describe('Cercle d\'énergie (fiche 2010)', () => {
+  it("brings the Obélisque's rest down to a quarter of the building's time", () => {
+    const rest = (cercle: number) => {
+      const w = createMatch(['isdaris', 'humains']);
+      w.players[0].minerals = 5000;
+      w.players[0].upgrades.cercle = cercle;
+      const [ob] = of(w, 0, 'obelisque');
+      w.step([{ player: 0, kind: 'build', ids: [ob.id], type: 'portail', tx: 18, ty: 18 }]);
+      return ob.spellCd.materialisation - w.tick;
+    };
+    expect(rest(0)).toBeGreaterThan(ticks(29));
+    expect(rest(1)).toBeLessThan(ticks(15) + 2);
+    expect(rest(1)).toBeGreaterThan(ticks(14));
+  });
+});

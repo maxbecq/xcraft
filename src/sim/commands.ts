@@ -491,5 +491,7 @@ export function materialise(this: World, o: Entity, type: string, tx: number, ty
   if (!this.vision[o.owner].visible(tx + mid, ty + mid)) return void this.say(o.owner, 'Il faut voir l’emplacement.');
   if (!this.pay(o.owner, def)) return;
   this.site(type, o.owner, tx, ty);
-  o.spellCd.materialisation = this.tick + ticks((BALANCE.rules.materialisation.cooldown as Record<string, number>)[type]);
+  // The rest is half the building's time (the mod's figure); with the Cercle d'énergie, a quarter (fiche 2010).
+  const rest = (BALANCE.rules.materialisation.cooldown as Record<string, number>)[type];
+  o.spellCd.materialisation = this.tick + ticks(this.level(o.owner, 'cercle') ? rest / 2 : rest);
 }
