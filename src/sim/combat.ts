@@ -431,7 +431,10 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   // Scie d'assaut (2010 sheet): +5 against structures and heavy machines.
   if ((CLASSES[cls] === 'S' || CLASSES[cls] === 'MM') && e.type === 'legionnaire' && this.level(e.owner, 'scieassaut')) bonus += U.scieassautBonus;
   let upgrade = 0;
-  if (e.def.kind === 'unit' && !e.def.worker) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(a.damage / 10));
+  // +10 % a level of the value against the target's class (2010 sheets). Z: the upgrade follows the weapon, so the armed
+  // Tourelle and Assimilateur and the Sonde get it too (Z.doc); the Serf too (the Humans' sheet). Not the Robot moissonneur.
+  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
+  if (armed) upgrade = this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round((base + bonus) / 10));
   if (e.type === 'moissonneur') upgrade += this.level(e.owner, 'robots') * U.robots;
   // The Échevins' presence (2010 sheet): +1 to the attack of the units within 13 of one of their Conseils.
   if (e.def.kind === 'unit' && this.nearCouncil(e)) upgrade += U.conseilAura.damage;

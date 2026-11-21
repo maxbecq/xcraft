@@ -922,15 +922,11 @@ interface WeaponStats {
   cost: Cost;
 }
 const WEAPON_STATS = BALANCE.weapons as unknown as Record<string, WeaponStats>;
-/**
- * A Z weapon at a level (1 to 4: the socle's, Z.doc). Z.doc's damage, scaled by `rules.z.weaponDamage` % as the
- * socles' was (14 → 12), the gap against machines as `vsMechanical`.
- */
+/** A Z weapon at a level (1 to 4: the socle's), with Z.doc's damage against each class. */
 export function weaponAt(key: string, level: number, flying = false): Attack | undefined {
   const w = WEAPON_STATS[key];
   if (!w.levels.length) return undefined;
-  const scale = (n: number) => Math.round((n * BALANCE.rules.z.weaponDamage) / 100);
-  const vs = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1].map(scale);
+  const vs = w.levels[Math.min(w.levels.length, Math.max(1, level)) - 1];
   const a: Attack = { damage: vs[0], vs, range: w.ranges ? w.ranges[Math.min(w.ranges.length, Math.max(1, level)) - 1] : w.range!, cooldown: w.cooldown };
   if (w.air !== undefined) a.air = w.air;
   if (w.airIfFlying && flying) {

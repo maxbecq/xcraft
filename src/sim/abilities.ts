@@ -256,7 +256,8 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     // An invulnerable beacon: sight of the zone for 50 s.
     this.scans.push({ owner: e.owner, x, y, left: ticks(ab.duration), radius: ab.radius });
   } else if (name === 'impulsion') {
-    for (const t of near((t) => !flies(t))) t.held = Math.max(t.held, ticks(ab.duration));
+    // Every unit of the zone but the Espion, flyers too (Z.doc).
+    for (const t of near((t) => t !== e)) t.held = Math.max(t.held, ticks(ab.duration));
   } else if (name === 'atterrissage') {
     // Taken for a while (Soumission, Canon IEM): it may not settle and train for its holder.
     if (e.charm || e.seizedLeft) {

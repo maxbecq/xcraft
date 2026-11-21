@@ -31,7 +31,7 @@ describe('damage classes (fiches 2010)', () => {
     const quad = w.spawn('quadripode', 0, ...at(40, 60));
     quad.kit = 'roquettes';
     const a = w.weapon(quad)!;
-    // Z.doc Lance-roquettes N1: 9 / 18 / 37 / 56 / 56 / 18, ×86 %.
-    expect(a.vs).toEqual([8, 15, 32, 48, 48, 15]);
+    // Z.doc Lance-roquettes N1.
+    expect(a.vs).toEqual([9, 18, 37, 56, 56, 18]);
   });
 });

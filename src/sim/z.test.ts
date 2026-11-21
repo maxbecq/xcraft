@@ -97,7 +97,7 @@ describe('Z', () => {
     expect(quad.tier).toBe(2);
     expect(quad.maxHp).toBe(180);
     expect(quad.hp).toBeGreaterThanOrEqual(140); // its 40 hp of wounds kept (and some repair)
-    expect(w.weapon(quad)!.damage).toBe(15); // machine gun N2
+    expect(w.weapon(quad)!.damage).toBe(17); // machine gun N2
     evolve();
     expect(quad.evolving).toBe(0); // T3 not researched
     // Optimisation perfectionnée: 50 % faster.
@@ -115,7 +115,7 @@ describe('Z', () => {
     run(w, 8);
     expect(hexa.tier).toBe(2);
     expect(w.armorBonus(hexa)).toBe(1); // armour 1 -> 2
-    expect(w.weapon(hexa)!.damage).toBe(16); // N3: 19
+    expect(w.weapon(hexa)!.damage).toBe(19); // N3
   });
 
   it('the Tourelle and the Assimilateur take a weapon bought for them, at level 2', () => {
@@ -124,14 +124,14 @@ describe('Z', () => {
     p.minerals = 1000;
     const turret = w.spawn('tourelle', 0, 30 * FP, 30 * FP);
     const assim = w.spawn('assimilateur', 0, 34 * FP, 30 * FP);
-    expect(w.weapon(turret)).toEqual({ damage: 15, vs: [15, 11, 11, 8, 3, 8], range: 4, cooldown: 1 }); // machine gun N2, ×86 %
+    expect(w.weapon(turret)).toEqual({ damage: 17, vs: [17, 13, 13, 9, 4, 9], range: 4, cooldown: 1 }); // machine gun N2
     expect(w.weapon(assim)).toBeUndefined();
     w.step([{ player: 0, kind: 'arm', ids: [assim.id], weapon: 'laser' }]);
     expect(assim.kit).toBe(''); // not researched
     p.upgrades.laser = 1;
     w.step([{ player: 0, kind: 'arm', ids: [assim.id, turret.id], weapon: 'laser' }]);
     expect(assim.kit).toBe('laser');
-    expect(w.weapon(assim)!.damage).toBe(20); // Laser N2: 23
+    expect(w.weapon(assim)!.damage).toBe(23); // Laser N2
     expect(p.minerals).toBe(1000 - 2 * 70);
     w.step([{ player: 0, kind: 'arm', ids: [turret.id], weapon: 'roquettes' }]);
     expect(turret.kit).toBe('laser'); // once
@@ -232,7 +232,7 @@ describe('Z', () => {
       return u;
     };
     // Déchiqueteur: melee, against flyers when a flyer carries it.
-    expect(w.weapon(at('quadripode', 0, 20, 20, 'dechiqueteur'))).toMatchObject({ damage: 41, range: 0.1, air: false });
+    expect(w.weapon(at('quadripode', 0, 20, 20, 'dechiqueteur'))).toMatchObject({ damage: 48, range: 0.1, air: false });
     expect(w.weapon(at('coleoptere', 0, 20, 22, 'dechiqueteur'))).toMatchObject({ air: true, ground: false });
     // Jet sonique: the auxiliaire between the shooter and its target is hit too.
     const jet = at('hexapode', 0, 30, 30, 'jetsonique');
@@ -285,12 +285,12 @@ describe('Z', () => {
     p.minerals = 5000;
     p.energy = 5000;
     const octo = w.spawn('octopode', 0, 20 * FP, 20 * FP);
-    expect(w.weapon(octo)!.damage).toBe(16); // machine gun N3: 19
+    expect(w.weapon(octo)!.damage).toBe(19); // machine gun N3
     p.upgrades.roctopode = 2;
     w.step([{ player: 0, kind: 'evolve', ids: [octo.id] }]);
     run(w, 18);
     expect(octo.tier).toBe(2);
-    expect(w.weapon(octo)!.damage).toBe(19); // N4: 22
+    expect(w.weapon(octo)!.damage).toBe(22); // N4
     expect((DEFS.mastodonte as UnitDef).weapons).not.toContain('canonx04');
     const barge = w.spawn('barge', 0, 30 * FP, 30 * FP);
     expect(w.weapon(barge)).toBeUndefined();
@@ -372,16 +372,16 @@ describe('Z', () => {
     expect(w.weapon(burner)).toEqual(WEAPONS.flammes.attack);
   });
 
-  it("a weapon is as strong as its socle's level (Z.doc), damage scaled as the socles' was", () => {
+  it("a weapon is as strong as its socle's level (Z.doc), with Z.doc's damage", () => {
     const w = createMatch(['z', 'humains']);
     const quad = w.spawn('quadripode', 0, 20 * FP, 20 * FP);
     const hexa = w.spawn('hexapode', 0, 22 * FP, 20 * FP);
-    expect(w.weapon(quad)).toEqual({ damage: 12, vs: [12, 9, 9, 6, 3, 6], range: 4, cooldown: 1 }); // machine gun N1 (14 / 11 / 11 / 7 / 4 / 7), ×86 %
-    expect(w.weapon(hexa)!.damage).toBe(15); // N2: 17
+    expect(w.weapon(quad)).toEqual({ damage: 14, vs: [14, 11, 11, 7, 4, 7], range: 4, cooldown: 1 }); // machine gun N1
+    expect(w.weapon(hexa)!.damage).toBe(17); // N2
     hexa.kit = 'roquettes';
-    expect(w.weapon(hexa)).toEqual({ damage: 9, vs: [9, 19, 37, 56, 56, 19], range: 5, cooldown: 2 }); // N2: 11 / 22 / 43 / 65 / 65 / 22, range 5
+    expect(w.weapon(hexa)).toEqual({ damage: 11, vs: [11, 22, 43, 65, 65, 22], range: 5, cooldown: 2 }); // N2, range 5
     quad.kit = 'laser';
-    expect(w.weapon(quad)!.damage).toBe(17); // N1: 20
+    expect(w.weapon(quad)!.damage).toBe(20); // N1
   });
 
   it('the creep repairs Z units standing on it', () => {
