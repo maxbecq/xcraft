@@ -305,8 +305,9 @@ export function deliver(this: World, b: Entity, type: string, kit: string): void
   // Z Réparateur, Accumulateur: their energy, half full (shortcut: no source gives a start, the mod's casters start at half).
   const mana = this.manaOf(u);
   if (mana) u.mana = toFp(mana[1]);
-  // Cuve génétique: Créatures come in pairs.
-  if (type === 'creature' && b.exts.includes('cuvegenetique')) {
+  // Cuve génétique: Créatures come in pairs, the second one only if the supply has room for it (only one was queued).
+  const room = type === 'creature' && b.exts.includes('cuvegenetique') ? this.supply(b.owner) : undefined;
+  if (room && room.used + (DEFS.creature as UnitDef).supply <= room.max) {
     const twin = this.spawnBeside(type, b);
     this.rallyOn(twin, b);
   }
