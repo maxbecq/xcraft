@@ -118,3 +118,19 @@ describe('Bourdon with Chargement (notice)', () => {
     expect(w.room(b)).toBe(0);
   });
 });
+
+describe('no shelter within a carried shelter', () => {
+  it('a Bourdon lifts only an empty Scarabée, and a lifted Scarabée takes nobody', () => {
+    const w = new World(createMap());
+    w.players[0].upgrades.chargement = 1;
+    const b = w.spawn('bourdon', 0, ...at(40, 60));
+    const s = w.spawn('scarabee', 0, ...at(42, 60));
+    const man = w.spawn('auxiliaire', 0, ...at(44, 60));
+    man.inside = s.id;
+    expect(w.boards(s, b)).toBe(false);
+    man.inside = 0;
+    expect(w.boards(s, b)).toBe(true);
+    s.inside = b.id;
+    expect(w.boards(man, s)).toBe(false);
+  });
+});

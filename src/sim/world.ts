@@ -882,7 +882,8 @@ export class World {
       case 'enter': {
         const b = this.entities.get(o.target);
         const room = b && this.room(b);
-        if (!b || !room || b.hp <= 0 || b.owner !== e.owner) return this.setOrder(e, null);
+        // Checked again on arrival: a Scarabée may have been lifted into a Bourdon meanwhile, or filled.
+        if (!b || !room || b.hp <= 0 || b.owner !== e.owner || !this.boards(e, b)) return this.setOrder(e, null);
         if (b.def.kind === 'unit') {
           // A carrier (Scarabée, Bourdon): walk up to it, wherever it goes.
           if (this.gap(e, b) > FP / 2) return this.chase(e, b);

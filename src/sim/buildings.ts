@@ -166,6 +166,8 @@ export function room(this: World, b: Entity): number {
 /** Who may get in: soldiers that shoot into a Fortin or a Scarabée, any foot soldier into a Bourdon. */
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
+  // No shelter within a carried shelter: a Scarabée in a Bourdon takes nobody, and goes in only empty.
+  if (b.inside || (b.type === 'bourdon' && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
   // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
