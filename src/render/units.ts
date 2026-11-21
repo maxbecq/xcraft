@@ -129,8 +129,9 @@ function weaponModule(e: Entity): string {
   return e.def.kind === 'unit' ? 'zw_mitrailleuse' : '';
 }
 
-/** Buildings seated into the ground (how far they sink, in tiles): the Z headquarters looked set down on the sand. */
-const SEATED: Record<string, number> = { intelligence: 0.08, supreme: 0.08 };
+/** Buildings seated into the ground (how far they sink, in tiles, and their contact shadow's width, by default their
+ * footprint): the Z headquarters looked set down on the sand, the slim Tourelle as if it hovered. */
+const SEATED: Record<string, { sink: number; shadow?: number }> = { intelligence: { sink: 0.08 }, supreme: { sink: 0.08 }, tourelle: { sink: 0.05, shadow: 1.5 } };
 /** Seconds a Z drone takes to scuttle to the centre of the site it raised. */
 const DEPLOY_WALK = 0.6;
 /** Seconds it takes to settle and spread its legs into a base. */
@@ -733,7 +734,7 @@ export class EntityRenderer {
           const dx = (addon.x - e.x) / FP, dz = (addon.y - e.y) / FP;
           const gap = Math.hypot(dx, dz);
           // A tower (Tourelle, Vacarme) is met halfway up its side, sloping; the Plate-forme's flat deck at the Pod's height.
-          const tower = (LOOKS[addon.type] ?? addon.type) === 'tourelle';
+          const tower = addon.type === 'tourelle' || addon.type === 'vacarme';
           const size = tower ? this.views.get(addon.id)?.model.userData.size as Vector3 | undefined ?? this.measure(addon.id) : undefined;
           const from = v.dock.reach, to = size ? gap - Math.min(size.x, size.z) * 0.4 : gap - (addon.def as BuildingDef).size / 2 + 0.6;
           const rise = size ? size.y * 0.5 - v.dock.y : 0;
@@ -1174,8 +1175,8 @@ export class EntityRenderer {
     pivot.add(body);
     if (SEATED[e.type] !== undefined) {
       // Set into the ground rather than standing on it: sunk a little, a soft contact shadow round its foot.
-      body.position.y -= SEATED[e.type];
-      root.add(contactShadow((e.def as BuildingDef).size));
+      body.position.y -= SEATED[e.type].sink;
+      root.add(contactShadow(SEATED[e.type].shadow ?? (e.def as BuildingDef).size));
     }
     // Units are drawn larger than their collision size, as in classic RTS, to stay readable.
     // A unit drawn with a building's model (Caserne volante in flight) keeps the building's size.
