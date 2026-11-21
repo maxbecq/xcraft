@@ -101,7 +101,7 @@ const GODS = BALANCE.ai.gods as [string, number][];
 // What one turn of the AI works from, step by step: what it has, what it wants, what it keeps back, what it spends.
 type Survey = ReturnType<AI['survey']>;
 type Need = ReturnType<AI['need']>;
-type Turn = Survey & Need & ReturnType<AI['budget']> & { keep: number; low: number; queued: number; mending: number; urgent: boolean };
+type Turn = Survey & Need & ReturnType<AI['budget']> & { keep: number; godEnergy: number; low: number; queued: number; mending: number; urgent: boolean };
 
 /** A computer player. It only acts through commands, like a human. */
 /** A building spot's key: its middle, in half tiles. */
@@ -178,7 +178,7 @@ export class AI {
     if (!home) return this.lastStand(mine);
     const s = this.survey(mine, home);
     const n = { ...s, ...this.need(s) };
-    const ctx: Turn = { ...n, ...this.budget(n), keep: 0, low: 0, queued: 0, mending: 0, urgent: false };
+    const ctx: Turn = { ...n, ...this.budget(n), keep: 0, godEnergy: 0, low: 0, queued: 0, mending: 0, urgent: false };
     // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
     // until one is ordered (Dieux down to a few esprits spent their last minerals elsewhere, and with no income never
     // had the 75 for one again; raided Isdaris put every 70 minerals into a Créature, their last robots unreplaced).
@@ -232,6 +232,11 @@ export class AI {
     ctx.minerals -= ctx.mending;
     this.tend(ctx);
     ctx.minerals -= ctx.low;
+    // Dieux: the next god due keeps its energy from everything before its summons (research spent it first: Apollon,
+    // due at minute 5, came at 9 to 12 or never, and Seth's Sphinx took the rest).
+    const nextGod = this.nextGod(ctx);
+    if (nextGod && ctx.gods.length) ctx.godEnergy = (DEFS[nextGod] as UnitDef).cost.energy;
+    ctx.energy -= ctx.godEnergy;
     this.place(ctx);
     this.research(ctx);
     this.morph(ctx);
@@ -442,7 +447,8 @@ export class AI {
     const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : 7;
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
-    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
+    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
@@ -790,21 +796,35 @@ export class AI {
     }
   }
 
+  /** Dieux: the god the Porte summons next, its time come (and none summoning). */
+  private nextGod(ctx: Turn): string | undefined {
+    const { w, f, mine, home, buildings, minute, saving } = ctx;
+    if (!f.gods || saving || home.queue.length) return undefined;
+    const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
+    return next && !w.lacks(this.player, next[0]) ? next[0] : undefined;
+  }
+
   /** Dieux: gods, their troops, levels and artefacts. */
   private summon(ctx: Turn): void {
     const { w, f, mine, home, gods, buildings, minute, free, saving, reserve, unitReserve } = ctx;
     // Dieux: the Porte summons the next god when its time has come; each god summons its troops, when affordable.
     if (f.gods && !saving) {
-      const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
-      const def = next && (DEFS[next[0]] as UnitDef);
-      if (next && def && !w.lacks(this.player, next[0]) && home.queue.length === 0) {
+      const next = this.nextGod(ctx);
+      const def = next && (DEFS[next] as UnitDef);
+      ctx.energy += ctx.godEnergy;
+      if (next && def) {
         if (ctx.minerals >= def.cost.minerals && ctx.energy >= def.cost.energy && free - ctx.out.filter((o) => o.kind === 'train').length >= def.supply) {
-          ctx.out.push({ player: this.player, kind: 'train', ids: [home.id], type: next[0] });
+          ctx.out.push({ player: this.player, kind: 'train', ids: [home.id], type: next });
           ctx.minerals -= def.cost.minerals;
           ctx.energy -= def.cost.energy;
         }
-        // Saving up for it, once the first god is out.
-        else if (gods.length) ctx.minerals -= def.cost.minerals;
+        // Saving up for it, once the first god is out: its energy too, or the troops ate every point of it (Seth's
+        // Sphinx took the Puits' whole output: Apollon, due at minute 5, never came, nor Odin, and with two gods
+        // summoning one unit at a time 1000 to 5000 minerals lay unspent from minute 6 to 12).
+        else if (gods.length) {
+          ctx.minerals -= def.cost.minerals;
+          ctx.energy -= def.cost.energy;
+        }
       }
       for (const g of gods) {
         if (g.queue.length > (this.easy ? 0 : 1)) continue;
@@ -814,7 +834,8 @@ export class AI {
         const type = (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || a.localeCompare(b))[0];
         const def = type && (DEFS[type] as UnitDef);
         if (!def || free - ctx.out.filter((o) => o.kind === 'train').length < def.supply) continue;
-        if (ctx.minerals - ctx.keep < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : reserve) < def.cost.energy) continue;
+        // A troop that costs no energy is never held back by the energy kept (for the next god).
+        if (ctx.minerals - ctx.keep < def.cost.minerals || (def.cost.energy > 0 && ctx.energy - unitReserve < def.cost.energy)) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: type! });
         ctx.minerals -= def.cost.minerals;
         ctx.energy -= def.cost.energy;
@@ -826,10 +847,13 @@ export class AI {
       // Only once the first-rank gods are out; the minerals saved for the next god due are already set aside above.
       // (or from minute 12 anyway: short of energy, Apollon may never come).
       const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) || minute >= 12;
-      for (const g of allGods ? gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau')) : []) {
+      // A level that costs no energy (Thor's) comes sooner, from minerals to spare: energy, not minerals, held the next
+      // gods back, and Thor's levels were the one place 1000 to 5000 idle minerals could go.
+      for (const g of gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau'))) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
-        if (!cost || ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || ctx.energy - reserve < cost.energy) continue;
+        if (!cost || !(allGods || cost.energy === 0)) continue;
+        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || ctx.energy - reserve < cost.energy) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
         ctx.minerals -= cost.minerals;
         ctx.energy -= cost.energy;
@@ -856,7 +880,10 @@ export class AI {
     let atHome = army.filter((u) => !this.wave.has(u.id));
     // Our base first; else a teammate's base under attack, which the army at home goes to help.
     const allied = [...w.entities.values()].filter((b) => b.def.kind === 'building' && b.owner !== this.player && b.owner >= 0 && !w.hostile(b.owner, this.player));
-    const threat = this.threat(buildings) ?? (allied.length ? this.threat(allied) : undefined);
+    // Dieux: their esprits at work count as the base too (raids killed them by waves, up to 33 in a game, while the
+    // army stayed out: the fields lie beyond the reach watched around the buildings).
+    const guarded = this.faction.gods ? [...buildings, ...serfs.filter((s) => s.order?.kind === 'gather')] : buildings;
+    const threat = this.threat(guarded) ?? (allied.length ? this.threat(allied) : undefined);
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
     // The danger gone, the sheltered drones come out (back to work as idle workers).
@@ -1796,7 +1823,7 @@ export class AI {
     for (const e of w.entities.values()) {
       if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
-      if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + ((b.def as BuildingDef).size * FP) / 2)) foes.push(e);
+      if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
     }
     if (!foes.length) return undefined;
     // Soldiers before workers: a scout alone is not worth pulling the army back for.
