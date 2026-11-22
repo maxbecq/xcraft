@@ -104,33 +104,6 @@ describe('audit gaps', () => {
     expect(allo.abilityCd).toBeGreaterThan(0);
   });
 
-  it('the Char Pégase lays invisible chemical mines from a stock of 5 that blow up under enemy walkers', () => {
-    const w = createMatch(['humains', 'isdaris']);
-    const tank = w.spawn('pegase', 0, 30 * FP, 30 * FP);
-    expect(tank.charges).toBe(5);
-    w.step([{ player: 0, kind: 'ability', ids: [tank.id], name: 'posermine' }]);
-    const [mine] = of(w, 0, 'minechimique');
-    expect(mine).toBeDefined();
-    expect(tank.charges).toBe(4);
-    expect(tank.abilityCd).toBe(0); // the take-off stays ready
-    expect(w.sees(1, mine)).toBe(false);
-    // Each new mine costs 35 minerals and 20 energy (mod): none without them, one with them.
-    const p = w.players[0];
-    [p.minerals, p.energy] = [0, 0];
-    run(w, 12);
-    expect(tank.charges).toBe(4);
-    [p.minerals, p.energy] = [100, 100];
-    run(w, 12);
-    expect(tank.charges).toBe(5);
-    expect([p.minerals, p.energy]).toEqual([65, 80]);
-    const foe = w.spawn('creature', 1, mine.x + 4 * FP, mine.y);
-    const hp = foe.hp + foe.shield;
-    w.step([{ player: 1, kind: 'move', ids: [foe.id], x: mine.x - 4 * FP, y: mine.y }]);
-    run(w, 6);
-    expect(w.entities.has(mine.id)).toBe(false);
-    expect(w.entities.has(foe.id) ? hp - foe.hp - foe.shield : hp).toBeGreaterThanOrEqual(Math.min(hp, 100));
-  });
-
   it('the Assassin dodges a third of the attacks, near or far (Danse du soldat, 2010 sheet)', () => {
     const w = createMatch(['isdaris', 'humains']);
     const assassin = w.spawn('assassin', 0, 30 * FP, 30 * FP);

@@ -498,7 +498,7 @@ export class World {
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.type === 'minechimique') this.mineTrigger(e);
       // Minage (mod): every 12 s the crew makes a mine, for 35 minerals and 20 energy, while the stock is not full and the side can pay.
-      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) {
+      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (e.def as UnitDef).abilities?.includes('posermine') && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) {
         const [p, price] = [this.players[e.owner], BALANCE.rules.upgrades.minePrice];
         if (p && p.minerals >= price.minerals && p.energy >= price.energy) {
           p.minerals -= price.minerals;

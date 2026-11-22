@@ -109,13 +109,6 @@ describe('AI spells, each in a scene made for it', () => {
     expect(cast(orders(w, ai, 2), 'festin')).toBe(true);
   });
 
-  it('Pégase mines when enemy walkers come close', () => {
-    const { w, ai, at } = arena(['humains', 'humains']);
-    at('pegase', 0, 0, 0);
-    crowd(at, 'auxiliaire', 3, 3, 0);
-    expect(cast(orders(w, ai), 'posermine')).toBe(true);
-  });
-
   it('Canon orbital on a crowd an Espion of ours watches', () => {
     const { w, ai, at } = arena(['isdaris', 'humains']);
     w.players[0].energy = 1000;

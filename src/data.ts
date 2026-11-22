@@ -492,8 +492,8 @@ const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, und
 /** What each thing is; its numbers come from balance.json (merged into DEFS below). */
 const BASE: Record<string, object> = {
   serf: { kind: 'unit', name: 'Serf', radius: 0.375, worker: true, faction: 'humains', hotkey: 'S' },
-  auxiliaire: { kind: 'unit', name: 'Auxiliaire', radius: 0.375, ability: 'stimulant', faction: 'humains', hotkey: 'A' },
-  legionnaire: { kind: 'unit', name: 'Légionnaire-scieur', radius: 0.375, ability: 'charge', faction: 'humains', hotkey: 'L' },
+  auxiliaire: { kind: 'unit', name: 'Auxiliaire', radius: 0.375, faction: 'humains', hotkey: 'A' },
+  legionnaire: { kind: 'unit', name: 'Légionnaire-scieur', radius: 0.375, faction: 'humains', hotkey: 'L' },
   soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
@@ -512,7 +512,7 @@ const BASE: Record<string, object> = {
     researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3', 'vehicles1', 'vehicles2', 'vehicles3', 'skin1', 'skin2', 'skin3', 'canonsscies', 'cuirasse', 'scieassaut', 'lamesempoisonnees', 'chargenapalm', 'observation'],
   },
   // Notice: « Marché », trade one resource for the other at a poor rate, and economic research (mod: « Guilde des dresseurs-marchands »).
-  marche: { kind: 'building', name: 'Marché', size: 3, requires: { grandconseil: 1 }, researches: ['croissance', 'pillage', 'entrainementgroupe'], faction: 'humains', hotkey: 'R' },
+  marche: { kind: 'building', name: 'Marché', size: 3, requires: { grandconseil: 1 }, researches: ['croissance', 'pillage'], faction: 'humains', hotkey: 'R' },
   // Mod: « Fortin », a bunker for four: soldiers inside are out of reach and shoot one tile farther.
   fortin: { kind: 'building', name: 'Fortin', size: 2, requires: { caserne: 1 }, faction: 'humains', hotkey: 'B' },
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
@@ -526,7 +526,7 @@ const BASE: Record<string, object> = {
   // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
   bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
-  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', abilities: ['posermine'], faction: 'humains', hotkey: 'P' },
+  pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
   alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
@@ -542,7 +542,7 @@ const BASE: Record<string, object> = {
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
-  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { alchimisterie: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures', 'trebuchet'], faction: 'humains', hotkey: 'C' },
+  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { alchimisterie: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['dressageallosaures', 'trebuchet'], faction: 'humains', hotkey: 'C' },
   // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
   plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, beast: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
@@ -551,13 +551,14 @@ const BASE: Record<string, object> = {
   allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, ability: 'festin', requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
   // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
   // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
-  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { alchimisterie: 1 }, abilities: ['coupcirculaire', 'camouflage'], faction: 'humains', hotkey: 'B' },
+  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { alchimisterie: 1 }, abilities: ['camouflage'], faction: 'humains', hotkey: 'B' },
   ...upgrades('melee', 'Attaque corps à corps', 'C'),
   ...upgrades('ranged', 'Attaque à distance', 'D'),
   ...upgrades('armor', 'Armure infanterie', 'A'),
   ...upgrades('vehicles', 'Blindage véhicules', 'V', { metallurgie: 1 }),
   ...upgrades('skin', 'Peau épaisse', 'P', { creaturium: 1 }),
-  // One-off research from the notice (costs and times in balance.json; the mod's where it has them).
+  // One-off research from the notice (costs and times in balance.json; the mod's where it has them). No longer offered
+  // (the balancer, 2026-11-22), kept for old replays: Entraînement groupé (the Marché's « production groupée »), Œil perçant.
   canonsscies: research('Canons sciés', 'N', 'Auxiliaires : +1 de portée.', { caserne: 1 }),
   cuirasse: research('Cuirasse', 'U', 'Légionnaires-scieurs : +1 d\'armure.', { caserne: 1 }),
   scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : +5 dégâts contre les bâtiments et les machines lourdes.', { caserne: 1 }),

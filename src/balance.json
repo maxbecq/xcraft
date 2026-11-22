@@ -21,7 +21,7 @@
     "alchimisterie": {"cls": "S", "hp": 3200, "armor": 2, "sight": 11, "supply": 0, "cost": {"minerals": 300, "energy": 500}, "buildTime": 60},
     "alchimiste": { "cls": "BL", "mana": [200, 100, 1.5], "hp": 90, "armor": 0, "speed": 2.5, "sight": 9, "supply": 1, "cost": { "minerals": 250, "energy": 250 }, "buildTime": 40, "attack": { "damage": 21, "vs": [21, 21, 21, 16, 16, 11], "range": 6, "cooldown": 2, "air": false }, "detector": 9 },
     "creaturium": {"cls": "S", "hp": 2500, "armor": 2, "sight": 10, "supply": 0, "cost": {"minerals": 400, "energy": 400}, "buildTime": 60},
-    "plesiosaure": {"cls": "BL", "hp": 350, "armor": 0, "speed": 2.7, "sight": 10, "supply": 1, "cost": {"minerals": 350, "energy": 225}, "buildTime": 40, "attack": {"damage": 50, "vs": [50, 33, 17, 9, 9, 17], "range": 5, "cooldown": 1.5, "air": false}, "regen": 0.25},
+    "plesiosaure": {"cls": "BL", "detector": 8, "hp": 350, "armor": 0, "speed": 2.7, "sight": 10, "supply": 1, "cost": {"minerals": 350, "energy": 225}, "buildTime": 40, "attack": {"damage": 50, "vs": [50, 33, 17, 9, 9, 17], "range": 5, "cooldown": 1.5, "air": false}, "regen": 0.25},
     "ankylosaure": {"cls": "BA", "hp": 580, "armor": 3, "speed": 2.2, "sight": 8, "supply": 2, "cost": {"minerals": 575, "energy": 390}, "buildTime": 50, "attack": {"damage": 44, "vs": [44, 33, 33, 22, 44, 22], "range": 0.1, "cooldown": 1.5}, "regen": 0.25},
     "allosaure": {"cls": "BA", "hp": 940, "armor": 2, "speed": 2.6, "sight": 9, "supply": 4, "cost": {"minerals": 800, "energy": 200}, "buildTime": 60, "attack": {"damage": 62, "vs": [62, 62, 47, 31, 31, 31], "range": 0.1, "cooldown": 1.5}, "regen": 0.25},
     "belluaire": { "cls": "BL", "hp": 175, "armor": 1, "speed": 2.7, "sight": 8, "supply": 1, "cost": { "minerals": 200, "energy": 175 }, "buildTime": 35, "attack": { "damage": 45, "vs": [45, 30, 15, 4, 4, 15], "range": 0.1, "cooldown": 1.75 }, "regen": 0.25 },
@@ -383,7 +383,7 @@
     "antiAir": { "per": 3, "max": 3 },
     "tech": { "humains": { "minute": 8, "barracks": 2 }, "isdaris": { "minute": 12, "barracks": 3 } },
     "research": {
-      "humains": ["ranged1", "armor1", "croissance", "melee1", "entrainementgroupe", "ranged2", "armor2", "oeilpercant", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
+      "humains": ["ranged1", "armor1", "croissance", "melee1", "ranged2", "armor2", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
       "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
       "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rdechiqueteur", "rarc", "rjetsonique", "rreparateur", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "rbarge", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "canoniem", "rcanonx04", "roctopode", "rmastodonte", "roctopode2", "rmastodonte2"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3", "coupuissant"]

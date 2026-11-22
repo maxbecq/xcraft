@@ -70,46 +70,6 @@ describe('Forge upgrades', () => {
 });
 
 describe('abilities', () => {
-  it('stimulant costs 10 hp, makes the auxiliaire faster, then wears off and recharges', () => {
-    const w = new World(createMap());
-    const a = w.spawn('auxiliaire', 0, ...at(40, 60));
-    const speed = a.speed;
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-    expect(a.hp).toBe(70);
-    expect(a.speed).toBeGreaterThan(speed);
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]); // on cooldown
-    expect(a.hp).toBe(70);
-    run(w, 9);
-    expect(a.speed).toBe(speed);
-    run(w, 7);
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-    expect(a.hp).toBe(60);
-  });
-
-  it('stimulated auxiliaires attack faster', () => {
-    const shots = (stim: boolean) => {
-      const w = new World(createMap());
-      const a = w.spawn('auxiliaire', 0, ...at(40, 60));
-      const t = w.spawn('conseil', 1, 43 * FP, 58 * FP);
-      if (stim) w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-      w.step([{ player: 0, kind: 'attack', ids: [a.id], x: t.x, y: t.y, target: t.id }]);
-      const hp = t.hp;
-      run(w, 5);
-      return hp - t.hp;
-    };
-    expect(shots(true)).toBeGreaterThan(shots(false) * 1.3);
-  });
-
-  it('charge doubles the légionnaire’s speed for a moment', () => {
-    const w = new World(createMap());
-    const l = w.spawn('legionnaire', 0, ...at(40, 60));
-    const speed = l.speed;
-    w.step([{ player: 0, kind: 'ability', ids: [l.id] }]);
-    expect(l.speed).toBeGreaterThanOrEqual(2 * speed - 1);
-    run(w, 4);
-    expect(l.speed).toBe(speed);
-  });
-
   it('peau de roc protects the most wounded ally in range', () => {
     const w = new World(createMap());
     const medic = w.spawn('soigneur', 0, ...at(40, 60));

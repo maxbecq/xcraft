@@ -10,14 +10,9 @@ const run = (w: World, s: number) => {
 };
 
 describe('Human abilities (notice 1.2-1)', () => {
-  it("the Belluaire's Coup circulaire hits every enemy around; Camouflage hides it from enemies", () => {
+  it("the Belluaire's Camouflage hides it from enemies (its Coup circulaire is gone: the balancer, 2026-11-22)", () => {
     const w = new World(createMap());
-    const b = w.spawn('belluaire', 0, ...at(40, 60));
-    const foes = [w.spawn('archer', 1, ...at(41, 60)), w.spawn('archer', 1, ...at(39, 60))];
-    const far = w.spawn('archer', 1, ...at(46, 60));
-    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'coupcirculaire' }]);
-    expect(foes.every((f) => f.shield < f.maxShield)).toBe(true);
-    expect(far.shield).toBe(far.maxShield);
+    for (const x of [41, 39, 46]) w.spawn('archer', 1, ...at(x, 60)); // the enemy's eyes
     const c = w.spawn('belluaire', 0, ...at(44, 66));
     run(w, 0.1);
     expect(w.sees(1, c)).toBe(true);
