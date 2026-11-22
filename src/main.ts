@@ -5,7 +5,7 @@ import { holdPointer } from './game/pointerlock';
 import { CameraRig, MAX_VIEW } from './camera';
 import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
-import { takenAsSeen } from './game/hud-place';
+import { freeAsSeen } from './game/hud-place';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
 import { Effects } from './render/effects';
@@ -681,7 +681,7 @@ function start(): void {
     lap('footprints');
     hud.update();
     lap('hud');
-    ambientEffects(world, units, effects, sees, dt, (w) => !!takenAsSeen(hud).get(w.id)); // a well's mist: as last seen
+    ambientEffects(world, units, effects, sees, dt, (w) => !freeAsSeen(hud, w)); // a well's mist: found, and free as last seen
     effects.update(dt);
     lap('fx');
     overlay.showAll = keys.has('Alt');

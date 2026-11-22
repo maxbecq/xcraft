@@ -129,7 +129,7 @@ function foundWell(h: Hud, w: Entity): boolean {
 }
 
 /** A well the player has found and last saw free: lit on the placement grid. */
-function freeAsSeen(h: Hud, w: Entity): boolean {
+export function freeAsSeen(h: Hud, w: Entity): boolean {
   return foundWell(h, w) && !takenAsSeen(h).get(w.id);
 }
 
