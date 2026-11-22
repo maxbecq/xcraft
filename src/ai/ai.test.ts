@@ -646,3 +646,146 @@ describe('AI resignation', () => {
     expect(w.players[0].resigned).toBeFalsy();
   });
 });
+
+describe('AI Z blind spots', () => {
+  const thinkTick = (min: number) => ticks(min * 60) - (ticks(min * 60) % 10);
+  const hqOf = (w: World, p = 0) => [...w.entities.values()].find((e) => e.owner === p && e.type === 'intelligence')!;
+
+  it('an unarmed enemy flyer seen once does not turn the AI to anti-air', () => {
+    const w = createMatch(['z', 'isdaris']);
+    const ic = hqOf(w);
+    const scout = w.spawn('voyageur', 1, ic.x + 3 * FP, ic.y + 3 * FP);
+    w.step([]);
+    expect(w.sees(0, scout)).toBe(true);
+    w.tick = thinkTick(5);
+    const ai = new AI(w, 0);
+    ai.think();
+    expect((ai as unknown as { enemyAir: number }).enemyAir).toBe(0);
+    w.spawn('dragon', 1, ic.x - 3 * FP, ic.y + 3 * FP);
+    w.step([]);
+    w.tick = thinkTick(6);
+    ai.think();
+    expect((ai as unknown as { enemyAir: number }).enemyAir).toBe(1);
+  });
+
+  it('never picks a drone sheltered in a building as a builder', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    const d = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'drone')!;
+    const ai = new AI(w, 0) as unknown as { builder(s: Entity[], spot: [number, number], size: number): Entity | undefined };
+    expect(ai.builder([d], [ic.tx, ic.ty + 8], 2)).toBe(d);
+    d.inside = ic.id;
+    expect(ai.builder([d], [ic.tx, ic.ty + 8], 2)).toBeUndefined();
+  });
+
+  it('gives a worker one build order a turn at most', () => {
+    for (const [factions, map] of [[['z', 'humains'], 'origine'], [['humains', 'isdaris'], 'le-col']] as const) {
+      const w = createMatch([...factions], undefined, map);
+      const ais = [new AI(w, 0), new AI(w, 1)];
+      while (w.tick < ticks(10 * 60)) {
+        const cmds = ais.flatMap((ai) => ai.think());
+        const ids = cmds.filter((c) => c.kind === 'build' && !c.queue).flatMap((c) => c.ids);
+        expect(new Set(ids).size).toBe(ids.length);
+        w.step(cmds);
+      }
+    }
+  }, 120_000);
+
+  it('Z: with few drones and its minerals short, the Intelligence trains a drone instead of waiting for the suprême', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'drone') w.entities.delete(e.id);
+    w.spawn('drone', 0, ic.x, ic.y + 4 * FP);
+    for (const [t, dx, up] of [['armement', -9, 'laser'], ['centrerecherche', 9, 'rquadripode']] as const) w.spawn(t, 0, ic.x + dx * FP, ic.y + 6 * FP).queue.push(up);
+    w.tick = thinkTick(7);
+    w.players[0].minerals = 200;
+    w.players[0].energy = 500;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'drone' }));
+  });
+
+  it('Z: an Assimilateur never takes the mineral line below half the planned drones', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    const well = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => Math.hypot(a.x - ic.x, a.y - ic.y) - Math.hypot(b.x - ic.x, b.y - ic.y))[0];
+    const acc = w.spawn('assimilateur', 0, well.x, well.y);
+    const drones = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'drone');
+    w.tick = thinkTick(3);
+    const field = [...w.entities.values()].find((e) => e.type === 'minerai')!;
+    for (const d of drones) d.order = { kind: 'gather', target: field.id, phase: 'go', timer: 0 };
+    const into = (cmds: Command[]) => cmds.filter((c) => c.kind === 'smart' && c.target === acc.id).flatMap((c) => c.ids).length;
+    // Three gathering: none goes in.
+    for (const d of drones.slice(3)) w.entities.delete(d.id);
+    expect(into(new AI(w, 0).think())).toBe(0);
+  });
+
+  it('Z: a heavy socle whose minerals are not there does not hold the Plate-forme', () => {
+    const w = createMatch(['z', 'humains']);
+    const pod = w.spawn('pod', 0, 20 * FP, 30 * FP);
+    const plat = w.spawn('plateforme', 0, 22 * FP, 30 * FP);
+    plat.host = pod.id;
+    w.spawn('centresocles', 0, 30 * FP, 30 * FP);
+    for (const up of ['rquadripode', 'rhexapode', 'roctopode']) w.players[0].upgrades[up] = 1;
+    w.tick = thinkTick(12);
+    w.players[0].minerals = 330;
+    w.players[0].energy = 900;
+    const cmds = new AI(w, 0).think();
+    const t = cmds.find((c) => c.kind === 'train' && c.ids.includes(plat.id)) as { type: string } | undefined;
+    expect(t?.type).toBeDefined();
+    expect(t?.type).not.toBe('octopode');
+  });
+
+  it('Z: a weapon it cannot pay for moves the rotation on instead of holding the Plate-formes', () => {
+    const w = createMatch(['z', 'humains']);
+    const pod = w.spawn('pod', 0, 20 * FP, 30 * FP);
+    const plat = w.spawn('plateforme', 0, 22 * FP, 30 * FP);
+    plat.host = pod.id;
+    w.spawn('centresocles', 0, 30 * FP, 30 * FP);
+    for (const up of ['rquadripode', 'raccumulateur', 'rreparateur', 'rarc']) w.players[0].upgrades[up] = 1;
+    w.tick = thinkTick(12);
+    const ai = new AI(w, 0);
+    let trained = false;
+    for (let i = 0; i < 30 && !trained; i++) {
+      w.players[0].minerals = 2000;
+      w.players[0].energy = 60;
+      const cmds = ai.think();
+      trained = cmds.some((c) => c.kind === 'train' && c.ids.includes(plat.id));
+      w.tick += 10;
+    }
+    expect(trained).toBe(true);
+  });
+
+  it('Z: an unarmed Espion in the wave follows the armed front', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    const foe = [...w.entities.values()].find((e) => e.owner === 1 && e.type === 'conseil')!;
+    const front = [0, 1, 2].map((i) => w.spawn('quadripode', 0, (foe.x + ic.x) / 2 + i * FP, (foe.y + ic.y) / 2));
+    const spy = w.spawn('zespion', 0, ic.x, ic.y + 3 * FP);
+    w.tick = thinkTick(10);
+    const ai = new AI(w, 0);
+    const state = ai as unknown as { wave: Set<number>; waves: number };
+    for (const u of [...front, spy]) state.wave.add(u.id);
+    state.waves = 1;
+    const cmds = ai.think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'move', ids: [spy.id] }));
+    expect(cmds.some((c) => c.kind === 'attack' && c.ids.includes(spy.id))).toBe(false);
+  });
+
+  it('Z: its last Intelligence lost, a drone raises one again when the bank allows', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    w.remove(ic);
+    w.tick = thinkTick(8);
+    w.players[0].minerals = 800;
+    w.players[0].energy = 200;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'build', type: 'intelligence' }));
+    // The Pod's add-ons wait: their price would leave the Intelligence short.
+    expect(cmds.some((c) => c.kind === 'train')).toBe(false);
+    // Without the price: a last stand, as before.
+    w.players[0].minerals = 50;
+    w.tick += 10;
+    expect(new AI(w, 0).think().some((c) => c.kind === 'build')).toBe(false);
+  });
+});
