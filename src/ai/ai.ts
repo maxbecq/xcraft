@@ -343,7 +343,8 @@ export class AI {
     // Not to a field under an enemy's armed building: the fields near home mined out, each idle worker in turn walked
     // to the minerals under the enemy's towers and died.
     const w0 = this.world;
-    const guarded = (e: Entity) => this.underFire(e);
+    // The field, or halfway from home to it (a field past a ramp a Fortin holds).
+    const guarded = (e: Entity) => this.underFire(e) || this.underFire({ x: (e.x + ctx.home.x) / 2, y: (e.y + ctx.home.y) / 2 });
     for (const s of serfs) {
       // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
       // safe one, if any.
@@ -1303,8 +1304,8 @@ export class AI {
   private visibleFoes(): Entity[] {
     const w = this.world;
     return [...w.entities.values()].filter((e) => {
-      // The weapon it fights with (an armed Z Assimilateur has none in its definition).
-      const a = w.weapon(e);
+      // The weapon it fights with (an armed Z Assimilateur has none in its definition), a manned Fortin's crew too.
+      const a = w.weapon(e) || (e.def.kind === 'building' && this.crew(e).length > 0);
       return w.hostile(e.owner, this.player) && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
     });
   }
@@ -1312,7 +1313,10 @@ export class AI {
   /** Damage per second of the weapon it fights with (a Z socle with the Réparateur or the Accumulateur: none). */
   private dps(e: Entity): number {
     const a = this.world.weapon(e);
-    return a ? a.damage / a.cooldown : 0;
+    let d = a ? a.damage / a.cooldown : 0;
+    // A Fortin fights with its crew.
+    if (e.def.kind === 'building') for (const u of this.crew(e)) d += this.dps(u);
+    return d;
   }
 
   /** A group's fighting power: its hp and shields times its damage per second. */
@@ -1883,6 +1887,8 @@ export class AI {
           if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay)) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
           if (!this.walkable(home, ax, ay)) continue;
+          // A headquarters raised again away from its sites: not under an enemy's guns (its last drone died on the way).
+          if (type === this.faction.hq && this.underFire({ x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP })) continue;
           return [tx, ty];
         }
       }
@@ -2041,8 +2047,16 @@ export class AI {
   /** Enemy buildings whose weapons hit the ground, with their range (a manned Fortin's crew, not its workers, a tile further), by tick. */
   private guns: { tick: number; list: [Entity, number][] } = { tick: -1, list: [] };
 
-  /** A field (or anything) an enemy building would shoot at a worker by. */
-  private underFire(e: Entity): boolean {
+  /** Armed soldiers manning a building (a Fortin's crew shoots from inside). */
+  private crew(b: Entity): Entity[] {
+    if (!(b.def as BuildingDef).bunker) return [];
+    const out: Entity[] = [];
+    for (const u of this.world.entities.values()) if (u.inside === b.id && !(u.def as UnitDef).worker && this.world.weapon(u)) out.push(u);
+    return out;
+  }
+
+  /** A point (a field, a site) an enemy building would shoot at a worker by. */
+  private underFire(e: { x: number; y: number }): boolean {
     const w = this.world;
     if (this.guns.tick !== w.tick) {
       const list: [Entity, number][] = [];
@@ -2050,7 +2064,7 @@ export class AI {
         if (b.def.kind !== 'building' || !w.hostile(b.owner, this.player) || b.buildLeft > 0) continue;
         const a = w.weapon(b);
         if (a && reaches(a, false)) list.push([b, a.range]);
-        if ((b.def as BuildingDef).bunker) for (const u of w.entities.values()) if (u.inside === b.id && !(u.def as UnitDef).worker && w.weapon(u) && reaches(w.weapon(u)!, false)) list.push([b, w.weapon(u)!.range + 1]);
+        for (const u of this.crew(b)) if (reaches(w.weapon(u)!, false)) list.push([b, w.weapon(u)!.range + 1]);
       }
       this.guns = { tick: w.tick, list };
     }
@@ -2141,7 +2155,7 @@ export class AI {
     // The enemy building that costs least to reach and take: its defences (armed buildings and soldiers we know of
     // round it), then distance; a headquarters counts as half defended, since its fall hurts most.
     const known = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && (e.def.kind === 'building' || w.sees(this.player, e)));
-    const guard = known.filter((e) => !!w.weapon(e) && !(e.def as UnitDef).worker);
+    const guard = known.filter((e) => (!!w.weapon(e) || (e.def.kind === 'building' && this.crew(e).length > 0)) && !(e.def as UnitDef).worker);
     let pick: Entity | undefined;
     let best = Infinity;
     for (const b of known) {
