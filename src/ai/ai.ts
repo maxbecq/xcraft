@@ -344,7 +344,13 @@ export class AI {
     // to the minerals under the enemy's towers and died.
     const w0 = this.world;
     // The field, or halfway from home to it (a field past a ramp a Fortin holds).
-    const guarded = (e: Entity) => this.underFire(e) || this.underFire({ x: (e.x + ctx.home.x) / 2, y: (e.y + ctx.home.y) / 2 });
+    // (the base nearest the field, where its minerals go).
+    const bases = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
+    const dropAt = (e: Entity) => bases.reduce((a, b) => (dist(b.x, b.y, e.x, e.y) < dist(a.x, a.y, e.x, e.y) ? b : a), bases[0] ?? ctx.home);
+    const guarded = (e: Entity) => {
+      const d = dropAt(e);
+      return this.underFire(e) || this.underFire({ x: (e.x + d.x) / 2, y: (e.y + d.y) / 2 });
+    };
     for (const s of serfs) {
       // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
       // safe one, if any.
@@ -1311,11 +1317,12 @@ export class AI {
   }
 
   /** Damage per second of the weapon it fights with (a Z socle with the Réparateur or the Accumulateur: none). */
-  private dps(e: Entity): number {
+  /** `air`: against flyers only (a weapon that cannot reach them counts for nothing). */
+  private dps(e: Entity, air = false): number {
     const a = this.world.weapon(e);
-    let d = a ? a.damage / a.cooldown : 0;
+    let d = a && (!air || reaches(a, true)) ? a.damage / a.cooldown : 0;
     // A Fortin fights with its crew.
-    if (e.def.kind === 'building') for (const u of this.crew(e)) d += this.dps(u);
+    if (e.def.kind === 'building') for (const u of this.crew(e)) d += this.dps(u, air);
     return d;
   }
 
@@ -1333,8 +1340,13 @@ export class AI {
    * counted in its supply) sat at home over the enemy's last buildings until the time limit.
    */
   private dominates(atHome: Entity[]): boolean {
-    for (const e of this.visibleFoes()) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
-    for (const id of this.foes.keys()) if (!this.world.entities.has(id)) this.foes.delete(id);
+    const seen = this.visibleFoes();
+    for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+    // Gone, or seen with nothing to fight with any more (a Fortin its crew left).
+    for (const id of this.foes.keys()) {
+      const e = this.world.entities.get(id);
+      if (!e || (this.world.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
+    }
     const known = this.power([...this.foes.values()]);
     // No enemy fighter or armed building left that we know of, after a wave: whatever is armed at home goes and
     // razes what stands (a side down to its last buildings sat there to the time limit, the winner's few soldiers
@@ -1351,7 +1363,7 @@ export class AI {
 
   private outmatched(wave: Entity[]): Entity[] {
     const foes = this.visibleFoes();
-    const power = (group: Entity[]) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e)]));
+    const power = (group: Entity[], air = false) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e, air)]));
     const out = new Set<Entity>();
     for (const u of wave) {
       if (out.has(u)) continue;
@@ -1359,7 +1371,8 @@ export class AI {
       if (!near.length) continue;
       const ours = wave.filter((o) => !!this.world.weapon(o) && dist(o.x, o.y, u.x, u.y) < 7 * FP);
       // Isdaris fall back sooner: their shields recharge out of combat, so a group pulled out early comes back whole.
-      if (power(ours) * 2 < power(near)) ours.forEach((o) => out.add(o));
+      // Flyers only: the enemy's power that reaches them (a Fortin of Phalangistes cannot).
+      if (power(ours) * 2 < power(near, ours.length > 0 && ours.every(flies))) ours.forEach((o) => out.add(o));
     }
     return [...out];
   }
@@ -1850,7 +1863,8 @@ export class AI {
         for (const e of w.entities.values()) if (e.type === 'minerai' && dist(e.x, e.y, cx, cy) < 12 * FP && ++n >= 1) return false;
         return true;
       };
-      const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2));
+      // Not under an enemy's guns (the builder died on the way, and with it every rebuild).
+      const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2)) && !this.underFire({ x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP });
       // The start's spot first while it has minerals; mined out, a site with some, the start's spot as a last resort.
       // Its headquarters lost, any free site at all comes last (the start's spot taken by the enemy, it raised none).
       const found = site.find((s) => !mined(...s) && ok(s)) ?? (start ? site.find(ok) : undefined);
@@ -1884,7 +1898,7 @@ export class AI {
           // The road is measured to the footprint's middle tile, taken toward the same corner (the same in the mirror).
           const mid = (t: number, s: number) => t + (s > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
           const [ax, ay] = [mid(tx, sx), mid(ty, sy)];
-          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay)) first = [tx, ty];
+          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay) && !(type === this.faction.hq && this.underFire({ x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP }))) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
           if (!this.walkable(home, ax, ay)) continue;
           // A headquarters raised again away from its sites: not under an enemy's guns (its last drone died on the way).
