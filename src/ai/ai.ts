@@ -204,7 +204,8 @@ export class AI {
     const fights = (t: string) => DEFS[t]?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && !!(DEFS[t] as UnitDef).attack;
     const fields = (t: string) => fights(t) && pays(t);
     const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some(fights))));
-    const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') : undefined);
+    // No building left at all (an ally holding on): from one of its workers.
+    const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') ?? (this.rebuildable ? mine.find((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)) : undefined) : undefined);
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
     if (!home) return this.lastStand(mine);
     const bank = w.players[this.player].minerals;
@@ -458,7 +459,8 @@ export class AI {
     // minerals to spare (below), or the bank went into Pods instead of socles.
     if (f === FACTIONS.z) casernesWanted = Math.min(casernesWanted, 2);
     // No worker or no base left: one production building at least, to fight on (a lone Pod raised no Plate-forme).
-    if ((serfs.length === 0 || !this.settled(home)) && !f.gods) casernesWanted = Math.max(casernesWanted, 1);
+    // Not while a headquarters rises again (its last drone in it, the next one's price is kept).
+    if ((serfs.length === 0 || !this.settled(home)) && !f.gods && !building(f.hq)) casernesWanted = Math.max(casernesWanted, 1);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
     if (ctx.minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
@@ -581,7 +583,7 @@ export class AI {
     // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
     // Once its site stands (paid already), with drones to spare, they come again.
     // With no headquarters' price to keep (none can be raised), a Pod raises a Plate-forme to fight on.
-    for (let i = 0; i < wants.length && (this.settled(home) || (building(f.hq) && ctx.serfs.length >= 2) || !this.rebuildable); i++) {
+    for (let i = 0; i < wants.length && (this.settled(home) || (building(f.hq) && ctx.serfs.length >= 2) || (!this.rebuildable && !building(f.hq))); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
@@ -1727,8 +1729,8 @@ export class AI {
     const council = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const at = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : council;
     if (!at || at.queue.length || at.buildLeft || free <= 0 || (holdSupreme && at.type === f.hq)) return undefined;
-    // Not a building that trains no worker (a Pod standing in for a lost headquarters).
-    if (at.def.kind === 'building' && !(at.def as BuildingDef).trains?.includes(f.worker)) return undefined;
+    // Not a building that trains no worker (a Pod standing in for a lost headquarters), nor a worker standing in for one.
+    if (at.def.kind === 'building' ? !(at.def as BuildingDef).trains?.includes(f.worker) : at.type !== f.workerFrom) return undefined;
     return at;
   }
 
