@@ -1,8 +1,14 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
+import { type Attack, type BuildingDef, CLASSES, type DamageClass, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
+
+/** A target's armour class; a Sphinx turned to stone is a heavy machine (équilibreur 2026-11-22). */
+export const clsOf = (t: Entity): DamageClass => (t.statue > 0 ? 'MM' : ((t.def as UnitDef | BuildingDef).cls ?? 'BL'));
+
+/** Can this attack strike that target: in the air or not, and of a class it may hit. */
+export const hits = (a: Attack, t: Entity): boolean => reaches(a, t.def.kind === 'unit' && flies(t)) && (!a.only || a.only.includes(clsOf(t)));
 
 /** Reach of the cell index beyond a search range, in tiles: the widest building's half plus a tick's walk. */
 const CELL_MARGIN = 4;
@@ -385,7 +391,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
 export function strike(this: World, e: Entity, t: Entity): void {
   const a = this.weapon(e);
   if (!a) return;
-  if (!reaches(a, flies(t))) return this.setOrder(e, null);
+  if (!hits(a, t)) return this.setOrder(e, null);
   if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e, t)) + FP / 8) return e.stand ? this.setOrder(e, null) : this.chase(e, t);
   e.shortTicks = 0;
   e.goal = null;
@@ -427,9 +433,9 @@ export function strike(this: World, e: Entity, t: Entity): void {
  */
 export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   const U = BALANCE.rules.upgrades;
-  const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
+  const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical || t.statue > 0;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
-  const cls = CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL');
+  const cls = CLASSES.indexOf(clsOf(t));
   const base = this.classValue(e, a, cls);
   let bonus = a.vs ? 0 : (machine ? (a.vsMechanical ?? 0) : 0) + (t.def.kind === 'building' ? (a.vsStructure ?? 0) : 0);
   // Scie d'assaut (2010 sheet): +5 against structures and heavy machines.
@@ -578,13 +584,13 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
   if (e.inside) e = this.entities.get(e.inside) ?? e;
   const td = t.def as UnitDef;
-  if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
+  if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && hits(td.attack, e)) {
     this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
   }
   // So do soldiers attack-moving that are not already fighting a soldier, even while walking on past an
   // unreachable target (calmUntil), unless the shooter is the very one they just gave up on.
   const o = t.order;
-  if (o?.kind === 'attackMove' && !t.held && td.attack && reaches(td.attack, flies(e)) && !(e.id === t.ignore && this.tick < t.ignoreUntil)) {
+  if (o?.kind === 'attackMove' && !t.held && td.attack && hits(td.attack, e) && !(e.id === t.ignore && this.tick < t.ignoreUntil)) {
     const current = this.entities.get(o.target);
     if (!current || current.hp <= 0 || this.rank(current) > this.rank(e)) {
       o.target = e.id;
@@ -659,7 +665,7 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
   let bestScore = Infinity;
   for (const t of this.around(e.x, e.y, range)) {
     if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
-    if (a && !reaches(a, flies(t))) continue;
+    if (a && !hits(a, t)) continue;
     if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
     if (t.inside) continue; // sheltering in a bunker: hit the bunker
     const d = this.gap(e, t);

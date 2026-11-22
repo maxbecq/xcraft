@@ -2085,12 +2085,15 @@ export class AI {
     if (type === this.faction.hq || type === this.faction.outpost) {
       // Centred on the site, laid out for a headquarters: a smaller outpost (the Dieux' Antre) at its top-left corner
       // stood two tiles off the mirror of the one in the opposite corner.
-      const inset = Math.floor(((DEFS[this.faction.hq] as BuildingDef).size - def.size) / 2);
+      // An odd gap (a 4-wide Antre on a 5-wide site) leaves half a tile over, which goes toward the map's middle: the
+      // base in the opposite corner gets the mirror of the spot.
+      const gap = (DEFS[this.faction.hq] as BuildingDef).size - def.size;
+      const inset = (t: number, mid: number) => (2 * t + gap < mid ? Math.ceil(gap / 2) : Math.floor(gap / 2));
       // Its headquarters lost, its start's spot comes first (left out of the expansions, it could not be raised again
       // there once the other sites were taken).
       const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
       const start = lost ? startSite(w, this.player) : undefined;
-      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
+      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset(tx, w.map.width - (DEFS[this.faction.hq] as BuildingDef).size), ty + inset(ty, w.map.height - (DEFS[this.faction.hq] as BuildingDef).size)]);
       // An expansion with a field left round it (a site mined out, its base lost, was taken again for its last 800).
       const mined = (tx: number, ty: number) => {
         const [cx, cy] = [(tx + def.size / 2) * FP, (ty + def.size / 2) * FP];

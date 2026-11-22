@@ -34,9 +34,9 @@ describe('audit gaps', () => {
     porte.hp -= 100;
     w.step([{ player: 1, kind: 'smart', ids: [esprit.id], x: porte.x, y: porte.y, target: porte.id }]);
     expect(esprit.order?.kind).toBe('repair');
-    run(w, 30);
+    run(w, 60);
     expect(porte.hp).toBe(porte.maxHp);
-    expect(BALANCE.rules.repair.esprit.hp).toBe(8); // XC.doc 2008
+    expect(BALANCE.rules.repair.esprit.hp).toBe(4); // équilibreur 2026-11-22
   });
 
   it('the Réservoir de substances: Gaz euphorisants, Acide dissolvant after its research, Explosion suicidaire', () => {
@@ -262,13 +262,13 @@ describe('audit gaps', () => {
     expect(ghost.dealt).toBeGreaterThanOrEqual(BALANCE.rules.upgrades.fantomeDamage);
   });
 
-  it('Frigg and the Élémentaire d\'eau hover over the terrain but are hit as ground units', () => {
+  it('Frigg and the Élémentaire d\'eau walk on the ground (équilibreur 2026-11-22) and are hit as ground units', () => {
     const w = createMatch(['dieux', 'humains']);
     const frigg = w.spawn('frigg', 0, 30 * FP, 30 * FP);
     const eau = w.spawn('elemeau', 0, 32 * FP, 30 * FP);
     const brute = w.spawn('legionnaire', 1, 31 * FP, 31 * FP);
     for (const u of [frigg, eau]) {
-      expect(soars(u)).toBe(true);
+      expect(soars(u)).toBe(false);
       expect(flies(u)).toBe(false);
       expect(reaches(w.weapon(brute)!, flies(u))).toBe(true);
     }
