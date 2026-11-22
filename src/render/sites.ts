@@ -3,7 +3,7 @@ import {
   MeshStandardMaterial, Object3D, RingGeometry, BufferGeometry, type Texture,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { owned } from './models';
+import { owned, SHARED } from './models';
 import type { View } from './views';
 
 export const scaffoldMaterial = new LineBasicMaterial({ color: 0xd9a420 });
@@ -50,6 +50,21 @@ function rubbleWalls(lines: [number, number, number, number][], seed: number): B
  * one group per storey (poles, ledgers, a plank deck and a few canvas sheets), so storeys can go up and come down.
  */
 export function buildingSite(footprint: number, size: Vector3): { footing: Mesh; storeys: Object3D[] } {
+  // Built once per shape (its hundreds of boards are drawn from the size alone, so two sites of a type are the same):
+  // merging them held a frame for 50 ms each time a building was begun, 190 ms on a slow machine. The copies share
+  // the geometries, which are never freed with a view.
+  const key = `${footprint}|${Math.round(size.x * 1000)}|${Math.round(size.y * 1000)}|${Math.round(size.z * 1000)}`;
+  let made = SITES.get(key);
+  if (!made) {
+    made = makeSite(footprint, size);
+    for (const o of [made.footing, ...made.storeys]) o.traverse((m) => (m as Mesh).geometry && SHARED.add((m as Mesh).geometry));
+    SITES.set(key, made);
+  }
+  return { footing: made.footing.clone(), storeys: made.storeys.map((s) => s.clone()) };
+}
+const SITES = new Map<string, { footing: Mesh; storeys: Object3D[] }>();
+
+function makeSite(footprint: number, size: Vector3): { footing: Mesh; storeys: Object3D[] } {
   // Footing: low rubble-stone walls along the outline and across the middle, as old dug foundations.
   const half = footprint * 0.46;
   const lines: [number, number, number, number][] = [[-half, -half, half, -half], [-half, half, half, half], [-half, -half, -half, half], [half, -half, half, half]];

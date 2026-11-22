@@ -33,7 +33,8 @@ export class Overlay {
   top: (id: number, built: boolean) => number | undefined = () => undefined;
 
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
-    const dpr = window.devicePixelRatio;
+    // Never over 2: a phone at 3 had six times the 3D view's pixels to clear and compose for thin bars.
+    const dpr = Math.min(2, window.devicePixelRatio);
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (this.canvas.width !== w * dpr || this.canvas.height !== h * dpr) {

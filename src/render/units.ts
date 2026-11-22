@@ -229,8 +229,10 @@ export class EntityRenderer {
     let h = v.model.userData.top as number | undefined;
     if (h === undefined) {
       v.root.updateWorldMatrix(true, true);
-      h = new Box3().setFromObject(v.model, true).max.y - v.root.position.y;
-      // Kept once built only: a building site's model is still rising (kept then, the bar stayed at its foot).
+      // Kept once built only: a building site's model is still rising (kept then, the bar stayed at its foot). Until
+      // then it is asked for every frame its bar shows: from each part's bounds, not vertex by vertex (that was most
+      // of the overlay's time, 6 ms a frame with a few sites up).
+      h = TOP.setFromObject(v.model, built).max.y - v.root.position.y;
       if (built) v.model.userData.top = h;
     }
     return v.root.position.y + h;
@@ -1317,7 +1319,7 @@ export class EntityRenderer {
           if ((o as Mesh).isMesh) meshes.push(o as Mesh);
         });
         const lines = meshes.map((mesh) => {
-          const l = new LineSegments(new EdgesGeometry(mesh.geometry, 35), frameMaterial);
+          const l = new LineSegments(edgesOf(mesh.geometry), frameMaterial);
           l.userData.noPick = true;
           mesh.add(l);
           return l;
@@ -1459,3 +1461,19 @@ export class EntityRenderer {
     return v;
   }
 }
+
+/** A model's edges for the Z armature, worked out once per geometry (the templates' are shared by every building of
+ * a type): finding them in a 12 000-triangle model held a frame for 45 ms each time a Z building was begun, 200 ms on
+ * a slow machine. Shared, so never freed with the view. */
+const EDGES = new WeakMap<BufferGeometry, EdgesGeometry>();
+function edgesOf(g: BufferGeometry): EdgesGeometry {
+  let edges = EDGES.get(g);
+  if (!edges) {
+    edges = new EdgesGeometry(g, 35);
+    SHARED.add(edges);
+    EDGES.set(g, edges);
+  }
+  return edges;
+}
+
+const TOP = new Box3();
