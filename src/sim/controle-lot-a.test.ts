@@ -14,4 +14,14 @@ describe('quality control, lot A', () => {
       expect(w.players[0].energy, type).toBe(before);
     }
   });
+
+  it('Fusion of N Élémentaires: N/2 Golems, two Élémentaires each (camp-dieux.md: « deux élémentaires fusionnent en Golem »)', () => {
+    for (const n of [2, 3, 4, 5]) {
+      const w = createMatch(['dieux', 'humains']);
+      const ids = Array.from({ length: n }, (_, i) => w.spawn('elembase', 0, (40 + (i % 2) * 0.5) * FP, (40 + Math.floor(i / 2) * 0.5) * FP).id);
+      w.step([{ player: 0, kind: 'ability', ids, name: 'fusion' }]);
+      const of = (t: string) => [...w.entities.values()].filter((e) => e.owner === 0 && e.type === t).length;
+      expect([of('golem'), of('elembase')], `${n}`).toEqual([Math.floor(n / 2), n % 2]);
+    }
+  });
 });
