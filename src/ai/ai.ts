@@ -197,7 +197,11 @@ export class AI {
     const absorbed = hqDef.absorbs && raisers < 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
     const bankNow = w.players[this.player];
     this.raisers = raisers;
-    this.rebuildable = !!raisers && bankNow.minerals >= hqCost.minerals + absorbed && bankNow.energy >= hqCost.energy;
+    // A Marché's trade counts: energy sold for the minerals short (morph sells it while rebuilding).
+    const T = BALANCE.rules.trade;
+    const market = mine.some((e) => e.type === 'marche' && e.buildLeft === 0);
+    const sellable = market ? Math.floor(Math.max(0, bankNow.energy - hqCost.energy) / T.give) * T.get : 0;
+    this.rebuildable = !!raisers && bankNow.minerals + sellable >= hqCost.minerals + absorbed && bankNow.energy >= hqCost.energy;
     // Without its price, a building that can still train a unit the bank pays keeps the AI playing (a Plate-forme
     // with 500 minerals sat out the game in a last stand).
     // A Z Pod too, which can raise a Plate-forme without a drone.
@@ -795,7 +799,8 @@ export class AI {
     if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
-    } else if (market && ctx.energy > 250 && ctx.minerals < 150) {
+    } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || (!this.settled(ctx.home) && this.rebuildable && ctx.p.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && ctx.energy >= BALANCE.rules.trade.give))) {
+      // (also energy sold for the minerals a headquarters to raise again is short of)
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
     }
@@ -1408,7 +1413,8 @@ export class AI {
       const ours = wave.filter((o) => !!this.world.weapon(o) && dist(o.x, o.y, u.x, u.y) < 7 * FP);
       // Isdaris fall back sooner: their shields recharge out of combat, so a group pulled out early comes back whole.
       // Flyers only: the enemy's power that reaches them (a Fortin of Phalangistes cannot).
-      if (power(ours) * 2 < power(near, ours.length > 0 && ours.every(flies))) ours.forEach((o) => out.add(o));
+      // And ours by what reaches the flyers when the enemies there all fly (flame throwers under Drakes stayed on).
+      if (power(ours, near.every(flies)) * 2 < power(near, ours.length > 0 && ours.every(flies))) ours.forEach((o) => out.add(o));
     }
     return [...out];
   }
