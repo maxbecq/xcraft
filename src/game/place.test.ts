@@ -16,8 +16,13 @@ describe('placing an extractor', () => {
     place(hud as never, { x: 60, y: 0, z: 60 } as never, false);
     expect(issued).toEqual([]);
     expect(said[0]).toContain('puits');
-    // On a free well, the order goes.
-    const well = [...w.entities.values()].find((e) => e.type === 'puits')!;
+    for (let i = 0; i < 4; i++) w.step([]); // the first look round
+    // A well never found: no ghost snaps to it (the minimap and the models do not show it either).
+    const unknown = [...w.entities.values()].find((e) => e.type === 'puits' && w.vision[0].tiles[e.ty * w.map.width + e.tx] === 0)!;
+    place(hud as never, { x: unknown.x / FP, y: 0, z: unknown.y / FP } as never, false);
+    expect(issued).toEqual([]);
+    // On a free well in sight, the order goes.
+    const well = [...w.entities.values()].find((e) => e.type === 'puits' && w.sees(0, e))!;
     place(hud as never, { x: well.x / FP, y: 0, z: well.y / FP } as never, false);
     expect(issued).toHaveLength(1);
   });

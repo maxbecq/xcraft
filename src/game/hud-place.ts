@@ -3,6 +3,7 @@ import { type MeshBasicMaterial, Vector3 } from 'three';
 import { type BuildingDef, DEFS, raises, type UnitDef } from '../data';
 import { heightAt } from '../map';
 import { FP, TICK_RATE } from '../sim/fixed';
+import { UNSEEN } from '../sim/vision';
 import { GRID_REACH } from '../render/placegrid';
 import type { Entity } from '../sim/world';
 import type { Hud } from './hud';
@@ -77,7 +78,7 @@ export function spotAt(h: Hud, type: string, ground: Vector3): [number, number] 
     let best: Entity | undefined;
     let bestD = 4 * FP;
     for (const w of h.world.entities.values()) {
-      if (w.type !== 'puits') continue;
+      if (w.type !== 'puits' || !foundWell(h, w)) continue; // a well never found draws no ghost
       const d = Math.hypot(w.x - ground.x * FP, w.y - ground.z * FP);
       if (d < bestD) [best, bestD] = [w, d];
     }
@@ -122,6 +123,16 @@ export function takenAsSeen(h: Hud): Map<number, boolean> {
   return m.taken;
 }
 
+/** Has the player found this well (explored its tile, as the minimap and the models have it)? */
+function foundWell(h: Hud, w: Entity): boolean {
+  return h.spectator || !!h.world.players[h.player]?.reveal || h.world.vision[h.player].tiles[w.ty * h.world.map.width + w.tx] !== UNSEEN;
+}
+
+/** A well the player has found and last saw free: lit on the placement grid. */
+function freeAsSeen(h: Hud, w: Entity): boolean {
+  return foundWell(h, w) && !takenAsSeen(h).get(w.id);
+}
+
 export function updateGhost(h: Hud): void {
   takenAsSeen(h);
   const touch = !!h.placing && h.input.touching;
@@ -153,7 +164,7 @@ export function updateGhost(h: Hud): void {
   const room = addonRoom(h, h.placing, spot);
   // An extractor's ghost: as the player last saw its well (the simulation knows an enemy one under the fog).
   const well = def.energyRate ? [...h.world.entities.values()].find((w) => w.type === 'puits' && w.tx === spot[0] && w.ty === spot[1]) : undefined;
-  const ok = (well ? !takenAsSeen(h).get(well.id) : h.world.canPlace(h.placing, spot[0], spot[1], h.player)) && room !== null;
+  const ok = (well ? freeAsSeen(h, well) : h.world.canPlace(h.placing, spot[0], spot[1], h.player)) && room !== null;
   let addon: { tx: number; ty: number; size: number; ok: boolean } | null = null;
   if (room !== undefined) {
     // The add-on's room: where it would go, or (none free) against the east side, in red.
@@ -190,7 +201,7 @@ function updateGrid(h: Hud, type: string, at: Vector3): void {
     // Extractors: the free wells light up, every other tile is red.
     const free = new Set<number>();
     for (const w of h.world.entities.values()) {
-      if (w.type !== 'puits' || takenAsSeen(h).get(w.id)) continue;
+      if (w.type !== 'puits' || !freeAsSeen(h, w)) continue;
       wells.push([w.tx, w.ty]);
       for (let y = w.ty; y < w.ty + def.size; y++) for (let x = w.tx; x < w.tx + def.size; x++) free.add(y * h.map.width + x);
     }
