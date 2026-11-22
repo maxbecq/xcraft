@@ -148,6 +148,8 @@ export class AI {
   private failed = new Map<number, Set<number>>();
   /** No base left: a worker and the price of a headquarters (and of the next worker, a Z drone absorbed) are there. */
   private rebuildable = false;
+  /** Workers able to raise a headquarters, this turn. */
+  private raisers = 0;
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
   private danger: { x: number; y: number } | undefined;
 
@@ -192,6 +194,7 @@ export class AI {
     const raisers = mine.filter((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)).length;
     const absorbed = hqDef.absorbs && raisers < 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
     const bankNow = w.players[this.player];
+    this.raisers = raisers;
     this.rebuildable = !!raisers && bankNow.minerals >= hqCost.minerals + absorbed && bankNow.energy >= hqCost.energy;
     // Without its price, a building that can still train a unit the bank pays keeps the AI playing (a Plate-forme
     // with 500 minerals sat out the game in a last stand).
@@ -507,10 +510,11 @@ export class AI {
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
-    // No base at all, a spot for it or its site begun (its last minerals, the next worker's price, went into research
+    // No base at all, a worker to raise it (a Conseil's site with its last serf killed never rose, and the savings for
+    // it held every unit for good), a spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && this.raisers > 0 && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -1978,7 +1982,8 @@ export class AI {
     const w = this.world;
     const supply = w.supply(this.player);
     // Supply under construction is supply to come.
-    const short = minerals < (DEFS[f.worker] as UnitDef).cost.minerals || (supply.used >= supply.max && !buildings.some((b) => kin(b, f.supply) && b.buildLeft > 0));
+    // A site that rises by itself, that is (no worker is left to raise a Grenier or a Branche).
+    const short = minerals < (DEFS[f.worker] as UnitDef).cost.minerals || (supply.used >= supply.max && !buildings.some((b) => kin(b, f.supply) && b.buildLeft > 0 && ((b.def as BuildingDef).warp || (b.def as BuildingDef).absorbs)));
     if (short && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }

@@ -878,5 +878,18 @@ describe('AI Z blind spots', () => {
     w.players[0].minerals = 500;
     expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'train', ids: [plat.id] }));
   });
+  it('a headquarters site with no worker left to raise it holds back no unit', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const site = w.spawn('conseil', 0, hq.x + 14 * FP, hq.y);
+    site.buildLeft = 100;
+    const cas = w.spawn('caserne', 0, hq.x, hq.y + 8 * FP);
+    w.spawn('grenier', 0, hq.x - 8 * FP, hq.y + 8 * FP);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'serf') w.remove(e);
+    w.remove(hq);
+    w.tick = thinkTick(12);
+    w.players[0].minerals = 1000;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'train', ids: [cas.id] }));
+  });
 });
 
