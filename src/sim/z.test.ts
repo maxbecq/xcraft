@@ -249,13 +249,13 @@ describe('Z', () => {
     w.strike(cannon, at('auxiliaire', 1, 50.8, 50));
     expect(cannon.hp).toBeLessThan(cannon.maxHp);
     expect(DEFS.coleoptere as UnitDef).toMatchObject({ weapons: expect.not.arrayContaining(['canonx04']) });
-    // Réparateur: no attack, mends machines.
+    // Réparateur: no attack, mends machines (2 hp a second on a level 1 socle, équilibreur 22/11).
     const medic = at('quadripode', 0, 60, 60, 'reparateur');
     expect(w.weapon(medic)).toBeUndefined();
     const hurt = at('hexapode', 0, 61, 60);
     hurt.hp = 100;
     run(w, 2);
-    expect(hurt.hp).toBeGreaterThan(110);
+    expect(hurt.hp).toBeGreaterThanOrEqual(103);
     // Accumulateur: Nuage de nanites (équilibreur 22/11): allied machines within 6 of the caster take half the damage,
     // living allies none of it off; two clouds over the same spot do not add up.
     const acc = at('quadripode', 0, 70, 70, 'accumulateur');
@@ -449,19 +449,43 @@ describe('Z Intelligence without Refuge (équilibreur 22/11)', () => {
   });
 });
 
-describe('Z Réparateur (notice: « véhicules et bâtiments »)', () => {
+describe('Z Réparateur (notice: « véhicules et bâtiments »; équilibreur 22/11)', () => {
   it('mends a damaged building of its side, not one being raised', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');
     const medic = w.spawn('quadripode', 0, ic.x + 4 * FP, ic.y);
     medic.kit = 'reparateur';
-    medic.mana = 1 << 30;
     ic.hp = 1000;
     run(w, 3);
-    expect(ic.hp).toBeGreaterThan(1030); // the creep alone gives back 3 in that time
+    expect(ic.hp).toBeGreaterThan(1006); // 2 a second, the creep's 1 a second on top
     const site = w.spawn('pod', 0, ic.x + 6 * FP, ic.y + 6 * FP);
     site.buildLeft = 100;
     expect(w.patient(medic)).toBe(ic);
+  });
+
+  it('heals by the level of its socle, 2 4 8 16 hp a second within 2 3 4 5, for no energy of its own', () => {
+    const w = createMatch(['z', 'humains']);
+    const at = (type: string, x: number, tier = 1) => Object.assign(w.spawn(type, 0, x * FP, 60 * FP), { kit: 'reparateur', tier });
+    const levels = [at('quadripode', 20), at('quadripode', 30, 2), at('hexapode', 40, 2), at('octopode', 50, 2)];
+    expect(levels.map((m) => w.healRate(m))).toEqual([2, 4, 8, 16]);
+    expect(levels.map((m) => w.healReach(m) / FP)).toEqual([2, 3, 4, 5]);
+    expect(w.manaOf(levels[0])).toBeUndefined();
+  });
+
+  it('fits on the Tourelle (not on the Assimilateur), which mends machines in its reach once a second', () => {
+    expect((DEFS.tourelle as BuildingDef).weapons).toContain('reparateur');
+    expect((DEFS.assimilateur as BuildingDef).weapons).not.toContain('reparateur');
+    const w = createMatch(['z', 'humains']);
+    const t = w.spawn('tourelle', 0, 60 * FP, 60 * FP);
+    t.kit = 'reparateur';
+    expect(w.weapon(t)).toBeUndefined();
+    const near = w.spawn('hexapode', 0, 62 * FP, 60 * FP);
+    const far = w.spawn('hexapode', 0, 70 * FP, 60 * FP);
+    near.hp = far.hp = 100;
+    run(w, 5);
+    expect(w.healRate(t)).toBe(4); // a level 2 weapon
+    expect(near.hp).toBeGreaterThanOrEqual(116);
+    expect(far.hp).toBe(100);
   });
 });
 

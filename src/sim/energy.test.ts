@@ -46,7 +46,7 @@ describe('energy of the casters', () => {
     expect(w.ready(v, 'renvoi')).toBe(true);
   });
 
-  it("a Z socle's Accumulateur holds 100 to 250 by the socle's level (Z.doc); the Réparateur spends 5 a second repairing", () => {
+  it("a Z socle's Accumulateur holds 100 to 250 by the socle's level (Z.doc); the Réparateur needs no energy (équilibreur 22/11)", () => {
     const w = new World(createMap());
     const quad = w.spawn('quadripode', 0, ...at(40, 60));
     quad.kit = 'accumulateur';
@@ -56,14 +56,13 @@ describe('energy of the casters', () => {
     expect(w.manaOf(hexa)![0]).toBe(150);
     const medic = w.spawn('quadripode', 0, ...at(50, 60));
     medic.kit = 'reparateur';
-    medic.mana = 20 * FP;
+    expect(w.manaOf(medic)).toBeUndefined();
     const hurt = w.spawn('hexapode', 0, ...at(51, 60));
     hurt.hp = 100;
     run(w, 10);
-    // 20 points (and the little regained meanwhile) mend about 40 PV, then it waits for more.
-    expect(hurt.hp).toBeGreaterThan(130);
-    expect(hurt.hp).toBeLessThan(100 + 40 + 2 * 10 * 2 + 5);
-    expect(points(medic)).toBeLessThan(2);
+    // 2 a second on a level 1 socle, all the time.
+    expect(hurt.hp).toBeGreaterThanOrEqual(100 + 18);
+    expect(hurt.hp).toBeLessThanOrEqual(100 + 22);
   });
 });
 

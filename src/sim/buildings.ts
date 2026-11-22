@@ -222,6 +222,15 @@ export function operate(this: World, b: Entity): void {
       this.hit(b, t, attack);
     }
   }
+  // Z Tourelle with a Réparateur (équilibreur 22/11): mends the most hurt machine or building in its reach, once a second.
+  if (b.kit === 'reparateur' && b.cooldown === 0) {
+    const p = this.patient(b);
+    if (p) {
+      p.hp = Math.min(p.maxHp, p.hp + this.healRate(b));
+      b.cooldown = ticks(1);
+      this.shots.push({ x1: b.x, y1: b.y, x2: p.x, y2: p.y, kind: 'heal' });
+    }
+  }
   // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
   if (def.energyRate && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
     b.timer = 0;

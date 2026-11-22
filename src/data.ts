@@ -17,6 +17,8 @@ const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsoni
 // Flying socles: no Canon X-04, nor the Lance-flammes (notice: « uniquement terrestre »).
 const FLYER_WEAPONS = SOCLE_WEAPONS.filter((k) => k !== 'canonx04' && k !== 'flammes');
 const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04'];
+/** The Tourelle takes the Réparateur too (équilibreur 22/11), the Assimilateur not. */
+const TURRET_WEAPONS = [...TOWER_WEAPONS, 'reparateur'];
 
 /** The six target classes of the 2010 sheets: light and armoured biological, mechanical, massive mechanical, structure, heroic. */
 export const CLASSES = ['BL', 'BA', 'M', 'MM', 'S', 'H'] as const;
@@ -695,7 +697,7 @@ const BASE: Record<string, object> = {
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
   assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'A' },
   plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'octopode', 'mastodonte', 'barge'], faction: 'z', hotkey: 'F' },
-  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'T' },
+  tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: TURRET_WEAPONS, faction: 'z', hotkey: 'T' },
   centresocles: {
     kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
     researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3', 'roctopode', 'roctopode2', 'rmastodonte', 'rmastodonte2', 'rbarge', 'rbarge2'],
@@ -897,12 +899,13 @@ export interface WeaponDef {
   hotkey: string;
   /** At level 1 (the weakest socle): what the AI and the cards go by; none for the Réparateur and the Accumulateur. */
   attack?: Attack;
-  /** Z Réparateur: hp a second it gives back to machines, and within what range. */
-  heal?: number;
-  healRange?: number;
+  /** Z Réparateur (équilibreur 22/11): hp a second it gives back to machines and buildings, and within what range, by the
+   * level of its socle (1 to 4), for no energy. */
+  heal?: number[];
+  healRange?: number[];
   /** Only ground socles take it (Canon X-04). */
   ground?: boolean;
-  /** Z Réparateur and Accumulateur (Z.doc): the energy the weapon gives its socle, by level, and regained a second. */
+  /** Z Accumulateur (Z.doc): the energy the weapon gives its socle, by level, and regained a second. */
   mana?: { max: number[]; regen: number };
   cost: Cost;
   /** Research needed first. */
@@ -923,8 +926,8 @@ interface WeaponStats {
   flame?: boolean;
   targets?: number;
   selfHit?: boolean;
-  heal?: number;
-  healRange?: number;
+  heal?: number[];
+  healRange?: number[];
   mana?: { max: number[]; regen: number };
   cost: Cost;
 }

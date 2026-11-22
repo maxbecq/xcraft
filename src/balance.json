@@ -271,7 +271,7 @@
     "jetsonique": { "levels": [[60, 60, 60, 60, 15, 30], [69, 69, 69, 69, 18, 35], [77, 77, 77, 77, 20, 39], [88, 88, 88, 88, 22, 44]], "ranges": [3, 3, 4, 4], "cooldown": 2.5, "air": false, "line": true, "cost": { "minerals": 125, "energy": 60 } },
     "arc": { "levels": [[16, 12, 16, 12, 8, 8], [19, 15, 19, 15, 9, 9], [21, 15, 21, 15, 10, 10], [24, 18, 24, 18, 12, 12]], "range": 5, "cooldown": 1.5, "targets": 3, "cost": { "minerals": 80, "energy": 80 } },
     "canonx04": { "levels": [[19, 9, 38, 75, 75, 38], [23, 12, 46, 92, 92, 46], [26, 13, 51, 101, 101, 51], [30, 15, 59, 117, 117, 59]], "ranges": [7, 9, 10, 12], "cooldown": 4.7, "air": false, "splash": 2, "selfHit": true, "cost": { "minerals": 200, "energy": 25 } },
-    "reparateur": { "levels": [], "mana": { "max": [100, 150, 200, 250], "regen": 2 }, "heal": 10, "healRange": 3, "cost": { "minerals": 100, "energy": 70 } },
+    "reparateur": { "levels": [], "heal": [2, 4, 8, 16], "healRange": [2, 3, 4, 5], "cost": { "minerals": 100, "energy": 70 } },
     "accumulateur": { "levels": [], "mana": { "max": [100, 150, 200, 250], "regen": 1.5 }, "cost": { "minerals": 20, "energy": 180 } }
   },
   "abilities": {

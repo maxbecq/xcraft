@@ -279,18 +279,26 @@ export function rechargeShields(this: World, e: Entity): void {
   this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
 }
 
-/** Hit points a second a unit gives back: a healer's, or a Z socle's Réparateur (machines only). */
-/** Z Réparateur (Z.doc): 5 energy a second of repair at 10 PV/s, so half a point a PV; false when it has run dry. */
-export function mends(this: World, e: Entity): boolean {
-  if (e.kit !== 'reparateur') return true;
-  const cost = FP / 2;
-  if (e.mana < cost) return false;
-  e.mana -= cost;
-  return true;
+/** The level of a Z weapon on its socle or tower (1 to 4): its base weapon level and its tier. */
+export function kitLevel(e: Entity): number {
+  return Math.min(4, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
 }
 
+/** Hit points a second a unit gives back: a healer's, or a Z Réparateur's by its level (équilibreur 22/11: 2, 4, 8, 16). */
 export function healRate(this: World, e: Entity): number {
-  return (e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0;
+  const heal = e.kit ? WEAPONS[e.kit]?.heal : undefined;
+  return (e.def as UnitDef).heal ?? (heal ? heal[kitLevel(e) - 1] : 0);
+}
+
+/** How far it heals from (its edge): a healer's own range, a Z Réparateur's by its level (2 to 5). */
+export function healReach(this: World, e: Entity): number {
+  const range = e.kit ? WEAPONS[e.kit]?.healRange : undefined;
+  return toFp(range ? range[kitLevel(e) - 1] : ((e.def as UnitDef).healRange ?? 2));
+}
+
+/** Hit points given back at once: a Soigneur's pulse, a Réparateur its rate once a second, one otherwise. */
+function pulseOf(this: World, e: Entity): number {
+  return (e.def as UnitDef).healPulse ?? (e.kit === 'reparateur' ? this.healRate(e) : 1);
 }
 
 /** Inside a Nuage de nanites (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
@@ -318,10 +326,10 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
     if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
-    if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.chase(e, t);
+    if (this.gap(e, t) > this.healReach(e)) return this.chase(e, t);
     e.goal = null;
-    if (e.cooldown === 0 && this.mends(e)) {
-      const pulse = def.healPulse ?? 1;
+    if (e.cooldown === 0) {
+      const pulse = pulseOf.call(this, e);
       t.hp = Math.min(t.maxHp, t.hp + pulse);
       e.cooldown = ticks(pulse / this.healRate(e));
       if (pulse > 1) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
@@ -334,9 +342,9 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     if (this.healRate(e) && (this.tick + e.id) % 4 === 0) {
       const p = this.patient(e);
       if (p) {
-        if (this.gap(e, p) > (def.healRange ?? 2) * FP) return this.chase(e, p);
-        if (e.cooldown === 0 && this.mends(e)) {
-          const pulse = def.healPulse ?? 1;
+        if (this.gap(e, p) > this.healReach(e)) return this.chase(e, p);
+        if (e.cooldown === 0) {
+          const pulse = pulseOf.call(this, e);
           p.hp = Math.min(p.maxHp, p.hp + pulse);
           e.cooldown = ticks(pulse / this.healRate(e));
         }
@@ -680,7 +688,8 @@ export function patient(this: World, e: Entity): Entity | undefined {
   let best: Entity | undefined;
   let worst = 1;
   const mender = !(e.def as UnitDef).heal;
-  const range = (mender ? WEAPONS[e.kit].healRange! + 2 : (e.def as UnitDef).sight) * FP;
+  // A Réparateur on a Tourelle mends only what is in its reach; on a socle, a little further (it goes there).
+  const range = mender ? this.healReach(e) + (e.def.kind === 'building' ? 0 : 2 * FP) : (e.def as UnitDef).sight * FP;
   for (const t of this.entities.values()) {
     if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
