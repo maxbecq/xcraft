@@ -28,7 +28,8 @@ export interface Prewarm {
   effects?: Effects;
   /** Hidden meshes of what only shows later (an enemy's power network, the paving): compiled with the scene, kept. */
   extras?: Object3D[];
-  /** The loading screen stopped waiting: the rest of the warm-up is dropped, never run over the match in play. */
+  /** The loading screen stopped waiting, or its time is up: asked before each pass, the rest of the warm-up is dropped
+   * (never run over the match in play, never past the time an online match gives it by more than the pass under way). */
   stop?: () => boolean;
   /** Whether the viewer has a fog of war (not a spectator): enemy buildings then turn to grey ghosts out of sight. */
   ghosts?: boolean;
@@ -98,7 +99,10 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     scissor(true);
     renderer.shadowMap.needsUpdate = true; // its programs too (the map is only drawn when asked for)
     renderer.render(scene, rig.camera);
-    drawXray(renderer, scene, rig.camera, into); // the buildings' depth and the silhouettes, one per side
+    // The buildings' depth and the silhouettes, one per side; not where they are off (the basse level): their programs
+    // and their depth buffer, the size of the picture, would be kept for nothing.
+    if (post.xray) drawXray(renderer, scene, rig.camera, into);
+    if (m.stop?.()) return;
     // Once more with every unit of the catalogue lit by a hit (views.ts hitTint): a material that loses its emissive
     // map then needs a program of its own, which the first hits of a fight compiled.
     const lit: [Mesh, Material | Material[]][] = [];
@@ -110,6 +114,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
       });
     renderer.render(scene, rig.camera);
     for (const [o, mat] of lit) o.material = mat;
+    if (m.stop?.()) return;
     // Once more with every Z unit cut by a plane, as a Plate-forme fabricates it layer by layer (units.ts): a cut,
     // two-sided material is a program of its own, which the first socle of each kind compiled in play (0.5 s of one
     // frame on an Intel HD). The copies are kept: freeing them would free their programs.
@@ -127,12 +132,14 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
       renderer.render(scene, rig.camera);
       for (const [o, mat] of whole) o.material = mat;
     }
+    if (m.stop?.()) return;
     // And with every building as the grey ghost an enemy's turns into once out of sight (views.ts): compiled when the
     // first enemy building left the view.
     if (m.ghosts) {
       shapes.ghostAll();
       renderer.render(scene, rig.camera);
     }
+    if (m.stop?.()) return;
     // Once more through the ambient occlusion's normal pass (post.ts): its skinned variant compiled in play when the
     // first animated character (a Human soldier, under a Z player's first Lance-flammes jet) came into view.
     if (post.normalMaterial) {

@@ -1473,9 +1473,11 @@ export class EntityRenderer {
 
 /** A model's edges for the Z armature, worked out once per geometry (the templates' are shared by every building of
  * a type): finding them in a 12 000-triangle model held a frame for 45 ms each time a Z building was begun, 200 ms on
- * a slow machine. Shared, so never freed with the view. */
+ * a slow machine. Those are shared, so never freed with the view; a geometry that is a view's own (a stand-in model made
+ * for one building) gets edges of its own, freed with it. */
 const EDGES = new WeakMap<BufferGeometry, EdgesGeometry>();
 function edgesOf(g: BufferGeometry): EdgesGeometry {
+  if (!SHARED.has(g)) return new EdgesGeometry(g, 35);
   let edges = EDGES.get(g);
   if (!edges) {
     edges = new EdgesGeometry(g, 35);

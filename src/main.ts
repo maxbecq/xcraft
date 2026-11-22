@@ -459,17 +459,28 @@ if (!ATTRACT) {
   // program in a tenth of a second or more) was cut off at 3 s and compiled the rest in play, a frame held half a
   // second each time something was first seen. Cut off, the warm-up stops there (`stop`): it never runs over the match.
   let waited = false;
+  /** When the loading screen stops waiting: every step of the warm-up is held to it, the ones that cannot be cut short
+   * (the paving's texture, a pass of drawing) asked before they begin. */
+  const limit = net ? 3000 : 20000;
+  let deadline = Infinity;
+  const late = () => waited || performance.now() >= deadline;
   // Then the match's first picture, drawn once behind the loading screen: the power network and the paving as they
   // stand, and the post-processing's own programs and buffers, which the first frame in play built (80 to 130 ms).
   const rehearse = () => {
-    if (waited) return;
+    if (late()) return;
     power.update(world, sees, false, (o) => !SPECTATE && world.hostile(o, PLAYER));
     paving.update(world, sees);
-    post.render();
+    if (!late()) post.render();
   };
-  const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, net ? 3000 : 20000))]).then(() => void (waited = true));
-  if (factions.includes('humains')) paving.warm();
-  ready.then(() => warmed(Promise.all([hud.portrait.prewarm(portraits), compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: () => waited, ghosts: !SPECTATE }, portraits).then(rehearse)]).then(() => {}))).then(start);
+  const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, limit))]).then(() => void (waited = true));
+  ready.then(() => {
+    deadline = performance.now() + limit;
+    return warmed((async () => {
+      await new Promise((r) => setTimeout(r)); // the timer armed first: what follows runs inside the wait
+      if (factions.includes('humains') && !late()) paving.warm();
+      await Promise.all([hud.portrait.prewarm(portraits), compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: late, ghosts: !SPECTATE }, portraits).then(rehearse)]);
+    })());
+  }).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
 } else {
   countTitle();

@@ -99,6 +99,9 @@ export class Post {
   }
 
   setSize(w: number, h: number): void {
+    // The composer keeps a pixel ratio of its own, taken when it was made: the renderer's may have changed since (the
+    // window moved to a screen of another density, or the basse level's cap), and its buffers would stay at the old one.
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(w, h);
     this.ink?.uniforms.resolution.value.set(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
   }
