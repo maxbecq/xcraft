@@ -944,6 +944,8 @@ describe('AI Isdaris blind spots', () => {
     const w = createMatch(['isdaris', 'humains']);
     const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
     w.players[0].upgrades.couloir = 1;
+    // No robot near the rally point (the corridor would take it too).
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'moissonneur') w.remove(e);
     w.tick = thinkTick(20);
     const ai = new AI(w, 0);
     const rally = (ai as unknown as { rallyPoint(h: Entity): { x: number; y: number } }).rallyPoint(ob);

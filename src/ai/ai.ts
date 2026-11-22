@@ -749,7 +749,8 @@ export class AI {
     const researching = new Set<number>();
     const listed = RESEARCH[p.faction] ?? [];
     for (const t of this.easy ? [] : [...listed, ...(minute >= 10 ? LATE[p.faction] : [])]) {
-      if (saving || !w.researchable(this.player, t)) continue;
+      // An extension goes through its own step below (the Totem, in both, was paid for twice in the turn's budget).
+      if (saving || !w.researchable(this.player, t) || EXTENSIONS.includes(t)) continue;
       // Z: Attaque de proximité only serves the flame thrower; the socles' tiers wait for the first weapon.
       if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
       if ((DEFS[t] as UpgradeDef).level > 1 && /^r(quadripode|hexapode|coleoptere)$/.test((DEFS[t] as UpgradeDef).line) && !w.level(this.player, 'lanceroquettes')) continue;
@@ -1239,11 +1240,20 @@ export class AI {
       const r = (ABILITIES.couloir.radius ?? 3) * FP;
       // Those round it, waiting or setting off with a new wave (muster has just sent them).
       const waiting = gate ? army.filter((u) => u !== gate && !flies(u) && dist(u.x, u.y, gate.x, gate.y) <= r) : [];
-      // Never while the base is under attack: it sent the defenders holding a raid off to the front.
-      if (gate && far && waiting.length >= 4 && w.ready(gate, 'couloir') && !this.homeThreat) {
+      // Never while the base is under attack: it sent the defenders holding a raid off to the front. Nor with a worker
+      // within reach: the corridor takes every unit of ours on the ground round it, robots first.
+      const robots = gate ? ctx.serfs.some((u) => dist(u.x, u.y, gate.x, gate.y) <= r) : true;
+      if (gate && far && waiting.length >= 4 && w.ready(gate, 'couloir') && !this.homeThreat && !robots) {
         ctx.out.push({ player: this.player, kind: 'ability', ids: [gate.id], name: 'couloir' });
-        // Those sent through join the wave (outside it, they had no orders at the front).
-        for (const u of waiting) this.wave.add(u.id);
+        // Those sent through join the wave (outside it, they had no orders at the front): those that fit, in the
+        // order the simulation takes them (ABILITIES.couloir.max of supply).
+        let room = ABILITIES.couloir.max ?? 8;
+        for (const u of waiting) {
+          const sup = (u.def as UnitDef).supply;
+          if (sup > room) continue;
+          room -= sup;
+          this.wave.add(u.id);
+        }
       }
     }
     // Dieux: two Élémentaires waiting at home fuse into a Golem, late on; apart, one walks to the other.
