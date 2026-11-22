@@ -47,7 +47,7 @@ import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
 import { downloadReplay, GAME_VERSION, measuresFile, type Replay, replaySource, saveFile, saveReplay, withReplayBiome } from './game/replay';
-import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
+import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, page, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
 /** The game just played has been kept as the last game. */
 let saved = false;
@@ -118,6 +118,12 @@ function keepGame(quiet = false): void {
   saved = saveReplay(record);
   if (!saved && !quiet) hud.notify([{ player: PLAYER, kind: 'alert', text: 'Replay non conservé : stockage du navigateur plein ou bloqué. « Enregistrer le replay » le télécharge.' }]);
 }
+// A match under way, left by the browser (a stray « previous page », the tab closed): asked first.
+window.addEventListener('beforeunload', (e) => {
+  if (page.leaving || SPECTATE || world.winner !== null || !world.tick) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 // A game left before its end is kept too.
 window.addEventListener('pagehide', () => keepGame(true));
 // The tab closed while measuring: the measures handed to the downloads, if the browser still takes them (no dialog).
@@ -399,6 +405,7 @@ document.addEventListener('click', (e) => {
   else if (p === 'restart' && !net) {
     const fresh = rec.on && !autoSaved;
     measuresOnce();
+    page.leaving = true;
     setTimeout(() => location.reload(), fresh ? 400 : 0);
   }
   else if (p === 'restart' && link && !netGame.rematchAsked) {
@@ -413,6 +420,7 @@ document.addEventListener('click', (e) => {
     // Left before the end, measuring: the measures saved first, the page left a moment later so the download goes through.
     const fresh = rec.on && !autoSaved;
     measuresOnce();
+    page.leaving = true;
     setTimeout(() => (location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`), fresh ? 400 : 0);
   }
 });

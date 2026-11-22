@@ -3,7 +3,7 @@ import { MAPS } from '../maps';
 import { connect, NO_DIRECT, readRoom, waitVerdict, type NetStatus } from '../net';
 import type { World } from '../sim/world';
 import { countMatch } from '../stats';
-import { factions, MAP, NET_ROLE, params, PLAYER } from './config';
+import { factions, MAP, NET_ROLE, page, params, PLAYER } from './config';
 import { downloadReplay, type Replay } from './replay';
 
 /** After the end, a link cut this long: the other side is taken as gone, and no rematch can be agreed. */
@@ -45,7 +45,8 @@ export class NetGame {
     this.banner.addEventListener('click', (e) => {
       const n = (e.target as HTMLElement).closest<HTMLElement>('[data-n]')?.dataset.n;
       if (n === 'replay') downloadReplay(this.record);
-      else if (n === 'retry') {
+      if (n === 'retry' || n === 'quit') page.leaving = true;
+      if (n === 'retry') {
         this.link?.leave();
         location.reload();
       }

@@ -7,6 +7,8 @@ import { asFaction, SCROLL, stored } from './settings';
 
 /** What this page plays, read once from its address (and the last menu choices): who, where, and how. */
 export const params = new URLSearchParams(location.search);
+/** The game itself is leaving the page (Quitter, Rejouer, a network banner): no « leave the match? » question then. */
+export const page = { leaving: false };
 /** `?spectate`: watch the AI play itself, without fog. */
 /** Title screen: an AI-versus-AI match plays behind the menu, under a drifting camera. */
 /** `?net=host|join&room=ABCD`: a two-player game over the network (the host is player 0). */

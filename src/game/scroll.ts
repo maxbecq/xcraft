@@ -32,6 +32,8 @@ export function cameraControls(canvas: HTMLCanvasElement, rig: CameraRig, hud: H
   window.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest?.('input, textarea, select')) return;
     if (e.key === 'Alt') e.preventDefault(); // held to show every health bar, not to open the browser's menu
+    // The arrows scroll the map: with Alt (or Cmd) held, not the browser's « previous page », which left the match.
+    if (e.key.startsWith('Arrow')) e.preventDefault();
     if (e.code === 'Space') {
       e.preventDefault();
       if (!e.repeat) spaceDrag = { x: mouse?.x ?? -1, y: mouse?.y ?? -1, moved: false };
