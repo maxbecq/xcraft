@@ -1169,7 +1169,8 @@ export class AI {
     const threat = raid && raid.armed.length && raid.armed.every(flies) && !army.some((u) => w.weapon(u) && reaches(w.weapon(u)!, true)) ? undefined : raid;
     this.homeThreat = !!raid;
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
-    const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
+    // The Z's Intelligence only: the Humains' Conseil has a Refuge too (the balancer, 2026-11-22), left to the player for now.
+    const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker && (b.def as BuildingDef).faction === 'z');
     // The danger gone, the sheltered drones come out (back to work as idle workers).
     // A raid of flyers the army cannot shoot still sends the drones near it into shelter, if its arms hit the ground (a
     // Drake over the mineral line, the drones left outside).

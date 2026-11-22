@@ -245,4 +245,36 @@ describe('the balancer, Humains', () => {
     for (let i = 0; i < 20; i++) w.step([]);
     expect([...w.entities.values()].some((e) => e.type === 'cadavre' && e.owner === 0)).toBe(true);
   });
+
+  it('the Mine works only with serfs inside, each of its 4 a quarter', () => {
+    const w = createMatch(['humains', 'z']);
+    const well = [...w.entities.values()].find((e) => e.type === 'puits')!;
+    const mine = w.spawn('mine', 0, well.x, well.y);
+    Object.assign(mine, { tx: well.tx, ty: well.ty });
+    const serfs = Array.from({ length: 4 }, () => w.spawn('serf', 0, mine.x, mine.y + 3 * FP));
+    const gain = (n: number) => {
+      serfs.forEach((s, i) => (s.inside = i < n ? mine.id : 0));
+      const e = w.players[0].energy;
+      for (let i = 0; i < ticks(16); i++) w.step([]);
+      return w.players[0].energy - e;
+    };
+    expect(w.room(mine)).toBe(4);
+    expect(gain(0)).toBe(0);
+    const [two, four] = [gain(2), gain(4)];
+    expect(four).toBeGreaterThan(0);
+    expect(Math.abs(four - 2 * two)).toBeLessThanOrEqual(1);
+  });
+
+  it('Refuge: six serfs, and nobody else, shelter in the Conseil', () => {
+    const w = humans();
+    const c = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    for (let i = 0; i < 4; i++) w.spawn('serf', 0, c.x + 4 * FP, c.y);
+    const soldier = w.spawn('legionnaire', 0, c.x + 4 * FP, c.y + FP);
+    expect(w.room(c)).toBe(6);
+    expect(w.boards(soldier, c)).toBe(false);
+    w.step([{ player: 0, kind: 'ability', ids: [c.id], name: 'refuge' }]);
+    for (let i = 0; i < ticks(10); i++) w.step([]);
+    expect([...w.entities.values()].filter((e) => e.inside === c.id && e.type === 'serf')).toHaveLength(6);
+    expect(soldier.inside).toBe(0);
+  });
 });

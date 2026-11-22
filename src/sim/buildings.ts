@@ -222,8 +222,10 @@ export function operate(this: World, b: Entity): void {
       this.hit(b, t, attack);
     }
   }
-  // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
-  if (def.energyRate && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
+  // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %. The Humains' Mine
+  // (the balancer, 2026-11-22): nothing without serfs, each of its 4 a quarter.
+  const crew = def.crew ? this.load(b) : 0;
+  if (def.energyRate && (!def.crew || crew > 0) && ++b.timer >= (def.crew ? idiv(ticks(1 / def.energyRate) * def.crew, crew) : def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
     b.timer = 0;
     this.players[b.owner].energy++;
   }

@@ -106,6 +106,10 @@ describe('economy', () => {
     const mine = of(w, 0, 'mine')[0];
     expect(mine.buildLeft).toBe(0);
     expect(w.supply(0).used).toBe(START.serfs); // the 2010 sheet: no supply
+    // The balancer (2026-11-22): it works with serfs inside, each of 4 a quarter.
+    for (const s of of(w, 0, 'serf').slice(0, 4)) w.step([{ player: 0, kind: 'smart', ids: [s.id], x: mine.x, y: mine.y, target: mine.id }]);
+    run(w, 10);
+    expect(w.load(mine)).toBe(4);
     const before = w.players[0].energy;
     run(w, 10);
     expect(w.players[0].energy - before).toBeGreaterThanOrEqual(20);

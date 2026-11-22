@@ -188,6 +188,8 @@ export interface BuildingDef {
   detector?: number;
   /** Bunker: how many units can shelter inside. */
   bunker?: number;
+  /** An extractor worked by workers inside (the Humains' Mine: 4), each its share; none, nothing comes out. */
+  crew?: number;
   /** Z Tourelle and Assimilateur: weapons (keys of WEAPONS) that can be bought for it, once (Z.doc: « arme adaptable »). */
   weapons?: string[];
   /** Z: the level its weapon fights at. */
@@ -450,7 +452,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   deraciner: { name: 'Déraciner', effect: 'S\'arrache du sol pour marcher ; on le replante ensuite au point voulu.', hotkey: 'E', target: 'self', research: 'deracinement', ...BALANCE.abilities.deraciner },
   /** Isdaris Orbe plasma (notice: « capable de se déplacer lentement » ; fiche: Redéploiement, 50 minerals, every 35 s). */
   /** Intelligence centrale (notice): the drones nearby shelter inside. */
-  refuge: { name: 'Refuge', effect: 'Les drones proches s\'abritent dans l\'Intelligence.', hotkey: 'R', target: 'self', ...BALANCE.abilities.refuge },
+  refuge: { name: 'Refuge', effect: 'Les ouvriers proches s\'abritent dans le bâtiment principal (drones dans l\'Intelligence, six serfs dans le Conseil).', hotkey: 'R', target: 'self', ...BALANCE.abilities.refuge },
   redeploiement: { name: 'Redéploiement', effect: 'L’Orbe se détache et se déplace lentement, sans tirer ; on la repose ensuite dans un champ d’énergie.', hotkey: 'R', target: 'self', ...BALANCE.abilities.redeploiement },
   ancrer: { name: 'Reposer', effect: 'Se repose au point visé, dans un champ d’énergie, et tire de nouveau peu après.', hotkey: 'R', target: 'point', ...BALANCE.abilities.ancrer },
   enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
@@ -503,9 +505,9 @@ const BASE: Record<string, object> = {
   soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', abilities: ['soin'], faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
-  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], faction: 'humains', hotkey: 'C' },
+  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
-  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
+  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
   caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphs: ['casernevolante'], faction: 'humains', hotkey: 'K' },
   // Notice: a Caserne turned into one that takes off and lands at will, to set up behind the enemy.
