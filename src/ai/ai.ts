@@ -69,10 +69,10 @@ const GANG_UP = (30 * FP) / 20;
  * Isdaris extensions the AI researches, in order: ground vehicles, druides, then flyers. Each waits for its host,
  * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
  */
-// Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
+// The Totem too (Voyageurs, the vehicles' research, the Couloir temporel). Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
 // each once its host stands: off this list, among the late researches, they never came, nor the units and powers
 // behind them.
-const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
+const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
 /** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
 const SPARE_EXTENSION = 400;
 /**
@@ -459,8 +459,8 @@ export class AI {
       }
     }
 
-    // Isdaris: a major building under fire, below a third of its hit points and shield, raises its Bouclier de plasma.
-    for (const b of buildings.filter((b) => abilitiesOf(b.def as BuildingDef).includes('bouclierplasma') && b.buildLeft === 0 && b.plasmaCd === 0 && b.phased === 0 && 3 * (b.hp + b.shield) < b.maxHp + b.maxShield)) {
+    // Isdaris: a major building under fire (hit within the last 3 s, not after the fight), below a third of its hit points and shield, raises its Bouclier de plasma.
+    for (const b of buildings.filter((b) => abilitiesOf(b.def as BuildingDef).includes('bouclierplasma') && b.buildLeft === 0 && b.plasmaCd === 0 && b.phased === 0 && 3 * (b.hp + b.shield) < b.maxHp + b.maxShield && this.world.tick - b.lastHit < ticks(3))) {
       ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'bouclierplasma' });
     }
   }
