@@ -43,4 +43,17 @@ describe('quality control, lot A', () => {
     expect(foe.owner).toBe(1);
     expect(foe.inside).toBe(0);
   });
+
+  it('a spell aimed off the map lands on it: a teleported flyer stays on the map, a Vacarme beacon on a tile of its own row', () => {
+    const w = createMatch(['dieux', 'z']);
+    const W = w.grid.width;
+    const dragon = w.spawn('chimere', 0, 3 * FP, 3 * FP);
+    w.castAt(dragon, 'teleport', -2 * FP, 3 * FP);
+    expect(dragon.x).toBeGreaterThanOrEqual(0);
+    const spy = w.spawn('zespion', 1, 2 * FP, 5 * FP);
+    w.castAt(spy, 'vacarme', -FP / 4, 6 * FP + FP / 2);
+    const v = [...w.entities.values()].find((e) => e.type === 'vacarme')!;
+    expect([v.tx, v.ty]).toEqual([0, 6]);
+    expect(v.tx).toBeLessThan(W);
+  });
 });

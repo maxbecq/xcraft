@@ -232,7 +232,13 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
 }
 
 /** An aimed ability, the caster in range of (x, y). False when there is nothing there to use it on. */
+/** A point aimed at, kept on the map, half a tile inside its edge (a flyer sent off it went unseen, a beacon off it blocked a tile of another row). */
+export function onMap(map: { width: number; height: number }, x: number, y: number): [number, number] {
+  return [Math.min(map.width * FP - FP / 2, Math.max(FP / 2, x)), Math.min(map.height * FP - FP / 2, Math.max(FP / 2, y))];
+}
+
 export function castAt(this: World, e: Entity, name: string, x: number, y: number): boolean {
+  [x, y] = onMap(this.map, x, y);
   const ab = spell(name, e.lvl);
   const near = (test: (t: Entity) => boolean) =>
     [...this.entities.values()]

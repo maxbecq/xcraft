@@ -1,6 +1,7 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { onMap } from './abilities';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
@@ -344,13 +345,14 @@ export function apply(this: World, c: Command): void {
         return;
       }
       if (!b || c.x === undefined || c.y === undefined) return;
+      const [ax, ay] = onMap(this.map, c.x, c.y);
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];
       if (!ab) return;
       if (b.type === 'centrek') {
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
-        return void this.centreK(b, kind, c.x, c.y);
+        return void this.centreK(b, kind, ax, ay);
       }
       if (kind === 'transfertgroupe') {
         // Second step of the Porte de déphasage: the latest group still phased goes to the point, out of phase.
@@ -360,7 +362,7 @@ export function apply(this: World, c: Command): void {
         const units = g ? g.ids.map((id) => this.entities.get(id)).filter((u): u is Entity => !!u && u.owner === g.owner && u.hp > 0 && u.phased > 0 && !u.inside) : [];
         if (!g || !units.length) return void this.say(c.player, 'Aucun groupe déphasé.');
         this.phaseGroups.splice(this.phaseGroups.indexOf(g), 1);
-        const [x, y] = [c.x, c.y];
+        const [x, y] = [ax, ay];
         this.teleports.push({ phase: 'start', owner: c.player, x1: units[0].x, y1: units[0].y, x2: x, y2: y, ids: units.map((u) => u.id) });
         for (const u of units) {
           u.phased = 0;
@@ -376,27 +378,27 @@ export function apply(this: World, c: Command): void {
       const need = this.needs(c.player, ab.research, b);
       if (need) return void this.say(c.player, need);
       if (this.players[c.player].energy < ab.energy!) return void this.say(c.player, "Pas assez d'énergie.");
-      if (kind === 'rappel' && !this.recall(b, c.x, c.y)) return void this.say(c.player, 'Aucune unité à rappeler.');
-      if (kind === 'observation') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration) });
-      if (kind === 'observatoire') this.scans.push({ owner: c.player, x: c.x, y: c.y, left: ticks(ab.duration), radius: ab.radius });
+      if (kind === 'rappel' && !this.recall(b, ax, ay)) return void this.say(c.player, 'Aucune unité à rappeler.');
+      if (kind === 'observation') this.scans.push({ owner: c.player, x: ax, y: ay, left: ticks(ab.duration) });
+      if (kind === 'observatoire') this.scans.push({ owner: c.player, x: ax, y: ay, left: ticks(ab.duration), radius: ab.radius });
       if (kind === 'canonorbital') {
         // The beam needs an Espion watching the spot; it spares nothing under it.
-        const [cx, cy] = [c.x, c.y];
+        const [cx, cy] = [ax, ay];
         if (![...this.entities.values()].some((s) => s.owner === c.player && s.type === 'espion' && dist(s.x, s.y, cx, cy) <= toFp((s.def as UnitDef).sight))) return void this.say(c.player, 'Un Espion doit viser la cible.');
         // It strikes a few seconds later (2010 sheet: 5 s; the mod: 6 s), the players warned, time to get away.
         this.strikes.push({ owner: c.player, x: cx, y: cy, left: ticks(BALANCE.rules.canonDelay) });
         for (const p of this.players) if (p.id !== c.player) this.say(p.id, 'Frappe orbitale imminente !', 'alert');
       }
-      if (kind === 'murenergie') this.wall(c.player, b, c.x, c.y, ab.radius!, ticks(ab.duration));
+      if (kind === 'murenergie') this.wall(c.player, b, ax, ay, ab.radius!, ticks(ab.duration));
       if (kind === 'portedephasage') {
         const ids: number[] = [];
-        for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, c.x, c.y) <= toFp(ab.radius!)) {
+        for (const u of this.entities.values()) if (u.owner === c.player && u.def.kind === 'unit' && dist(u.x, u.y, ax, ay) <= toFp(ab.radius!)) {
           u.phased = ticks(ab.duration);
           ids.push(u.id);
         }
         if (ids.length) this.phaseGroups.push({ owner: c.player, ids, left: ticks(ab.duration) });
       }
-      this.casts.push({ kind: kind === 'canonorbital' ? 'canonorbitalvise' : kind, x: c.x, y: c.y });
+      this.casts.push({ kind: kind === 'canonorbital' ? 'canonorbitalvise' : kind, x: ax, y: ay });
       this.players[c.player].energy -= ab.energy!;
       b.abilityCd = ticks(ab.cooldown);
       return;
