@@ -7,15 +7,31 @@ export const QUALITY_KEY = 'xcraft.quality';
 
 /**
  * What each level costs: pixel density, post-processing (none, light, full), sun shadows, and the share of
- * effect particles drawn (each one is a draw call: half of a big battle's on the basse level).
+ * effect particles drawn. The basse level (integrated chips) also caps the 3D picture's pixels whatever the window
+ * (`maxPixels`: an Intel HD drew 2.3 million at 1920 x 1200, most of its frame), drops the silhouettes of units
+ * behind buildings (`xray`: the scene drawn twice more) and reads its ground and weathering noise from a texture
+ * instead of working it out for every pixel (`lite`).
  */
-export const QUALITY: Record<Quality, { pixelRatio: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number }> = {
-  basse: { pixelRatio: 1, post: 'off', shadows: 0, particles: 0.4 },
-  moyenne: { pixelRatio: 1.25, post: 'light', shadows: 2048, particles: 1 },
+export const QUALITY: Record<Quality, { pixelRatio: number; maxPixels: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number; xray: boolean; lite: boolean }> = {
+  basse: { pixelRatio: 1, maxPixels: 1_300_000, post: 'off', shadows: 0, particles: 0.4, xray: false, lite: true },
+  // 1024, not 2048: on a phone the 3D picture is half a million pixels, the shadow map had eight times as many texels,
+  // and the whole map's cliffs and scenery are drawn into it every frame.
+  moyenne: { pixelRatio: 1.25, maxPixels: Infinity, post: 'light', shadows: 1024, particles: 1, xray: true, lite: false },
   // 1.5, not 2: on a Retina Mac under Safari the full post-processing at 2 (3456x1902) held the frame at about 19 ms
   // while our own work took 11, the graphics chip's fill; 1.5 draws 44 % fewer pixels in every full-screen pass.
-  haute: { pixelRatio: 1.5, post: 'full', shadows: 4096, particles: 1 },
+  haute: { pixelRatio: 1.5, maxPixels: Infinity, post: 'full', shadows: 4096, particles: 1, xray: true, lite: false },
 };
+
+/**
+ * The 3D picture's pixel density for a window of `w` by `h` CSS pixels on a screen of density `dpr`: the level's own,
+ * never over the screen's, and lowered (not under 0.6, where the picture turns to mush) so the picture stays within
+ * the level's `maxPixels`. The interface and the health bars are drawn apart, at the screen's own density.
+ */
+export function pixelRatioFor(level: Quality, w: number, h: number, dpr: number): number {
+  const q = QUALITY[level];
+  const capped = Math.sqrt(q.maxPixels / Math.max(1, w * h));
+  return Math.min(q.pixelRatio, dpr, Math.max(0.6, capped));
+}
 
 /**
  * The level guessed from the graphics chip: low on integrated PC chips (Intel HD, UHD, Iris), medium on

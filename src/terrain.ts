@@ -5,7 +5,7 @@ import {
 import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
-import { crackMask, fbm, groundImages, groundTextures, lavaTexture, rockTextures } from './render/textures';
+import { crackMask, fbm, groundImages, groundTextures, isLite, lavaTexture, noiseTexture, rockTextures } from './render/textures';
 
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
 /** Current planet look; set before building the terrain. */
@@ -494,7 +494,10 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
   // grid: deck plates, kept aligned (no rotated second sample, no bedrock slabs, only darker grimy plates).
   // A ground picture (B.ground) has its own rock and stones: no painted bedrock slabs over it.
   const plain = !!B.ground;
-  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile') + (roads ? '-roads' : '') + (plain ? '-plain' : '');
+  // The basse level reads the same noise from a texture (render/textures.ts): the slabs and gravel are as many and as
+  // large, laid out differently.
+  const lite = isLite();
+  m.customProgramCacheKey = () => (grid ? 'untile-grid' : 'untile') + (roads ? '-roads' : '') + (plain ? '-plain' : '') + (lite ? '-lite' : '');
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (shader, r) => {
     prev?.call(m, shader, r);
@@ -502,6 +505,7 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
     shader.uniforms.slabColor = { value: slab };
     shader.uniforms.roadMap = { value: roads ?? null };
     shader.uniforms.mapSize = { value: new Vector2(map?.width ?? 1, map?.height ?? 1) };
+    if (lite) shader.uniforms.noiseMap = { value: noiseTexture() };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGround;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGround = position.xz;');
@@ -513,13 +517,15 @@ function untile(m: MeshStandardMaterial, rock: Texture, slab: Color, grid = fals
       uniform vec3 slabColor;
       uniform sampler2D roadMap;
       uniform vec2 mapSize;
-      float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      ${lite ? `uniform sampler2D noiseMap;
+      float gNoise(vec2 p) { return texture2D(noiseMap, p / 64.0).r; }
+      float gFbm(vec2 p) { return texture2D(noiseMap, p / 16.0).g; }` : `float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float gNoise(vec2 p) {
         vec2 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
         return mix(mix(gHash(i), gHash(i + vec2(1, 0)), f.x), mix(gHash(i + vec2(0, 1)), gHash(i + vec2(1, 1)), f.x), f.y);
       }
-      float gFbm(vec2 p) { return gNoise(p) * 0.55 + gNoise(p * 2.03) * 0.3 + gNoise(p * 4.1) * 0.15; }`,
+      float gFbm(vec2 p) { return gNoise(p) * 0.55 + gNoise(p * 2.03) * 0.3 + gNoise(p * 4.1) * 0.15; }`}`,
     ).replace(
       '#include <map_fragment>',
       `#ifdef USE_MAP

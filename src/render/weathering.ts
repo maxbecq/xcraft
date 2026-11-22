@@ -1,4 +1,5 @@
 import { CanvasTexture, type Material, type MeshStandardMaterial, SRGBColorSpace, type Texture } from 'three';
+import { isLite, noiseTexture } from './textures';
 
 /**
  * Weathering for models, computed in the shader from world position (no UVs needed):
@@ -8,12 +9,19 @@ import { CanvasTexture, type Material, type MeshStandardMaterial, SRGBColorSpace
 export function weather(m: Material, amount: number): void {
   const mat = m as MeshStandardMaterial;
   if (mat.userData.weathered || !('emissive' in mat) || mat.emissive.getHex() !== 0) return;
+  // The basse level: the noise read from a texture (render/textures.ts) instead of about 72 sines a pixel, the same
+  // rust, streaks and grime laid out differently; and none at all where it would hardly show (a weapon module's 0.05).
+  // Read when the shader is built, not here: some materials are made as the modules load, before the level is known.
+  const none = () => isLite() && amount < 0.1;
   mat.userData.weathered = true;
-  mat.customProgramCacheKey = () => `weather${amount}`;
+  mat.customProgramCacheKey = () => (none() ? 'weathernone' : `weather${amount}${isLite() ? 'lite' : ''}`);
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader, r) => {
     prev?.call(mat, shader, r);
+    if (none()) return;
+    const lite = isLite();
     shader.uniforms.weatherAmount = { value: amount };
+    if (lite) shader.uniforms.noiseMap = { value: noiseTexture() };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\nvarying float vHeight;')
       .replace(
@@ -36,14 +44,17 @@ export function weather(m: Material, amount: number): void {
         varying vec3 vWNormal;
         varying float vHeight;
         uniform float weatherAmount;
-        float wHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+        ${lite ? `uniform sampler2D noiseMap;
+        vec2 wFlat(vec3 p) { return p.xy + p.z * vec2(0.37, 0.71); }
+        float wNoise(vec3 p) { return texture2D(noiseMap, wFlat(p) / 64.0).r; }
+        float wFbm(vec3 p) { return texture2D(noiseMap, wFlat(p) / 16.0).g; }` : `float wHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
         float wNoise(vec3 p) {
           vec3 i = floor(p), f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
           return mix(mix(mix(wHash(i), wHash(i + vec3(1, 0, 0)), f.x), mix(wHash(i + vec3(0, 1, 0)), wHash(i + vec3(1, 1, 0)), f.x), f.y),
                      mix(mix(wHash(i + vec3(0, 0, 1)), wHash(i + vec3(1, 0, 1)), f.x), mix(wHash(i + vec3(0, 1, 1)), wHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
         }
-        float wFbm(vec3 p) { return wNoise(p) * 0.55 + wNoise(p * 2.1) * 0.3 + wNoise(p * 4.3) * 0.15; }`,
+        float wFbm(vec3 p) { return wNoise(p) * 0.55 + wNoise(p * 2.1) * 0.3 + wNoise(p * 4.3) * 0.15; }`}`,
       )
       .replace(
         '#include <map_fragment>',

@@ -18,6 +18,9 @@ export class Post {
   private readonly composer: EffectComposer | null;
   private readonly ao: GTAOPass | null = null;
   private readonly ink: ShaderPass | null = null;
+  /** The silhouettes of units behind buildings (render/xray.ts); off at the basse level, where they cost two more
+   * draws of the scene with no early depth test. */
+  xray = true;
 
   /** `fx` holds particles: drawn after ambient occlusion, which would otherwise shade their quads. */
   /** `light` (phones and tablets): fewer occlusion samples, half-size bloom, no SMAA (the ink line already hides most jaggies). */
@@ -117,7 +120,7 @@ export class Post {
     if (this.composer) this.composer.render();
     else {
       this.renderer.render(this.scene, this.camera);
-      drawXray(this.renderer, this.scene, this.camera);
+      if (this.xray) drawXray(this.renderer, this.scene, this.camera);
       this.renderer.autoClear = false;
       this.renderer.render(this.fx, this.camera);
       this.renderer.autoClear = true;

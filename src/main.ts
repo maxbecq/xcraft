@@ -15,6 +15,7 @@ import { Overlay } from './render/overlay';
 import { EntityRenderer, WEAPON_MODELS } from './render/units';
 import { loadModels, MINERAL_VARIANTS } from './render/models';
 import { loadSprites } from './render/sprites';
+import { setLite } from './render/textures';
 import { type BuildingDef, DEFS, FACTIONS, LOOKS } from './data';
 import { FP, TICK_RATE } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -27,7 +28,7 @@ import { Space } from './render/space';
 import { Embers } from './render/embers';
 import { PaintedCity, Rain } from './render/painted';
 import { PerfRecorder } from './perfrec';
-import { detectQuality, pickQuality, QUALITY, QUALITY_KEY } from './quality';
+import { detectQuality, pickQuality, pixelRatioFor, QUALITY, QUALITY_KEY } from './quality';
 import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
 import './style.css';
@@ -64,7 +65,9 @@ const QUALITY_LEVEL = pickQuality(params, (() => {
 })(), DETECTED);
 const GFX = QUALITY[QUALITY_LEVEL];
 // `?pr=1.5`: another pixel density cap, to measure on a given machine (with ?perf=rec) what the level's costs the graphics chip.
-renderer.setPixelRatio(Math.min(Number(params.get('pr')) || GFX.pixelRatio, window.devicePixelRatio));
+const pixelRatio = () => (Number(params.get('pr')) ? Math.min(Number(params.get('pr')), window.devicePixelRatio) : pixelRatioFor(QUALITY_LEVEL, window.innerWidth, window.innerHeight, window.devicePixelRatio));
+renderer.setPixelRatio(pixelRatio());
+setLite(GFX.lite); // before any ground or model material is made
 document.body.classList.toggle('touch', TOUCH);
 renderer.toneMapping = ACESFilmicToneMapping;
 const biome = pickBiome(withReplayBiome(params, REPLAY), MAP);
@@ -331,7 +334,9 @@ renderer.setSize(viewW(), viewH());
 const rain = painted ? new Rain() : null;
 if (rain) fxScene.add(rain.mesh);
 const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light', biome.warmShadows);
+post.xray = GFX.xray;
 window.addEventListener('resize', () => {
+  renderer.setPixelRatio(pixelRatio()); // the basse level's depends on the window's size
   renderer.setSize(viewW(), viewH());
   post.setSize(viewW(), viewH());
 });

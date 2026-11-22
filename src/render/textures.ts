@@ -1,4 +1,4 @@
-import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, NoColorSpace, type Texture, TextureLoader } from 'three';
+import { CanvasTexture, DataTexture, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, RGFormat, SRGBColorSpace, NoColorSpace, type Texture, TextureLoader } from 'three';
 
 // Procedural textures, generated once at start: no image files to ship.
 
@@ -34,6 +34,40 @@ export function fbm(u: number, v: number, octaves: number, base: number, seed: n
     amp *= 0.5;
   }
   return sum / norm;
+}
+
+let lite = false;
+/** The basse level's lighter shaders (src/quality.ts): set before any material is made. */
+export function setLite(on: boolean): void {
+  lite = on;
+}
+export const isLite = (): boolean => lite;
+
+let noise: DataTexture | undefined;
+/**
+ * Noise read from a texture by the lighter shaders, instead of worked out for every pixel (the ground's slabs and
+ * gravel took 16 sines a pixel, the weathering about 72): red, one octave of value noise, 64 cells across; green,
+ * three octaves (16, 32 and 64 cells across, weighted 0.55, 0.3, 0.15 as the shaders' own). It repeats.
+ */
+export function noiseTexture(): DataTexture {
+  if (noise) return noise;
+  const size = 512;
+  const data = new Uint8Array(size * size * 2);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const [u, v] = [x / size, y / size];
+      const i = (y * size + x) * 2;
+      data[i] = valueNoise(u * 64, v * 64, 64, 301) * 255;
+      data[i + 1] = (valueNoise(u * 16, v * 16, 16, 302) * 0.55 + valueNoise(u * 32, v * 32, 32, 303) * 0.3 + valueNoise(u * 64, v * 64, 64, 304) * 0.15) * 255;
+    }
+  }
+  noise = new DataTexture(data, size, size, RGFormat);
+  noise.wrapS = noise.wrapT = RepeatWrapping;
+  noise.magFilter = LinearFilter;
+  noise.minFilter = LinearMipmapLinearFilter;
+  noise.generateMipmaps = true;
+  noise.needsUpdate = true;
+  return noise;
 }
 
 /** Albedo (greyscale, around 1) and normal map from a height function over a tileable square. */
