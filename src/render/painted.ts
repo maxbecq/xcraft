@@ -45,6 +45,10 @@ export class PaintedCity {
   private readonly held: { key: string; seen: number }[] = [];
   private readonly layerOf = new Map<string, number>();
   private readonly loading = new Set<string>();
+  /** Pictures that failed, and when they may be asked again (never, for one the server does not have). */
+  private readonly failed = new Map<string, number>();
+  /** The first frame's files not yet arrived (see `load`). */
+  readonly waiting = new Set<string>();
   private readonly ready: { key: string; bitmap: ImageBitmap }[] = [];
   private frame = 0;
   /** Pictures fetched and their bytes, for the measures (`xcraft.painted.stats`). */
@@ -140,10 +144,18 @@ export class PaintedCity {
   /** The volumes, the list of pictures and the whole-city picture: what the first frame needs. */
   async load(renderer: WebGLRenderer): Promise<void> {
     const dir = `${import.meta.env.BASE_URL}textures/villenuit/`;
+    // Each file named in its failure, and the ones still awaited readable (`waiting`) by a loading screen that gives up.
+    const file = <T>(url: string, p: Promise<T>) => {
+      this.waiting.add(url);
+      return p.then(
+        (v) => (this.waiting.delete(url), v),
+        (e) => Promise.reject(new Error(`${url} (${e instanceof Error ? e.message : String(e)})`)),
+      );
+    };
     const [gltf, manifest, base] = await Promise.all([
-      new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`${import.meta.env.BASE_URL}models/villenuit.glb`),
-      fetch(`${dir}tiles.json`).then((r) => r.json() as Promise<Manifest>),
-      new TextureLoader().loadAsync(`${dir}base.webp`),
+      file(`${import.meta.env.BASE_URL}models/villenuit.glb`, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`${import.meta.env.BASE_URL}models/villenuit.glb`)),
+      file(`${dir}tiles.json`, fetch(`${dir}tiles.json`).then((r) => (r.ok ? (r.json() as Promise<Manifest>) : Promise.reject(new Error(`HTTP ${r.status}`))))),
+      file(`${dir}base.webp`, new TextureLoader().loadAsync(`${dir}base.webp`)),
     ]);
     this.manifest = manifest;
     base.colorSpace = SRGBColorSpace;
@@ -197,7 +209,7 @@ export class PaintedCity {
         const key = `${level}/${c}_${r}`;
         const layer = this.layerOf.get(key);
         if (layer !== undefined) this.held[layer].seen = this.frame;
-        else if (!this.loading.has(key) && this.loading.size < 4) void this.fetch(key);
+        else if (!this.loading.has(key) && this.loading.size < 4 && !((this.failed.get(key) ?? 0) > performance.now())) void this.fetch(key);
       }
     }
   }
@@ -206,14 +218,19 @@ export class PaintedCity {
     this.loading.add(key);
     const t0 = performance.now();
     try {
-      const blob = await (await fetch(`${import.meta.env.BASE_URL}textures/villenuit/${key}.webp`)).blob();
+      const r = await fetch(`${import.meta.env.BASE_URL}textures/villenuit/${key}.webp`);
+      // Not on the server (a 4xx): not asked again on this page. Anything else may pass later.
+      if (!r.ok) throw r.status >= 400 && r.status < 500 ? Infinity : 10_000;
+      const blob = await r.blob();
       const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' }); // decoded off the main thread
       this.stats.pictures++;
       this.stats.bytes += blob.size;
       this.stats.ms += performance.now() - t0;
       this.ready.push({ key, bitmap });
-    } catch {
-      this.loading.delete(key); // asked again while the camera still shows it
+    } catch (e) {
+      // Asked again while the camera still shows it, though not before a pause (not at every frame).
+      this.failed.set(key, performance.now() + (typeof e === 'number' ? e : 10_000));
+      this.loading.delete(key);
     }
   }
 
@@ -224,7 +241,11 @@ export class PaintedCity {
     if (layer >= this.count) {
       layer = 0;
       for (let i = 1; i < this.count; i++) if (this.held[i].seen < this.held[layer].seen) layer = i;
-      if (this.held[layer].seen >= this.frame - 1) return bitmap.close(); // every layer is on screen: it waits
+      if (this.held[layer].seen >= this.frame - 1) {
+        // Every layer is on screen: it waits, a second at least, rather than being fetched and decoded again at once.
+        this.failed.set(key, performance.now() + 1000);
+        return bitmap.close();
+      }
       this.mark(this.held[layer].key, 0);
       this.layerOf.delete(this.held[layer].key);
     }

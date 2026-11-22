@@ -453,12 +453,59 @@ const loading = document.getElementById('loading');
 const shown = ATTRACT
   ? [...new Set([...world.entities.values()].map((e) => e.type))]
   : Object.keys(DEFS).filter((t) => DEFS[t].kind !== 'upgrade' && (!('faction' in DEFS[t]) || factions.includes(DEFS[t].faction)));
-const ready = Promise.all([
-  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => loading?.style.setProperty('--p', String(0.9 * (done / total)))),
+/** Bumped as files arrive: a loading that stops moving for STALL_MS is given up. */
+let stirred = 0;
+const loaded = Promise.all([
+  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => {
+    stirred++;
+    loading?.style.setProperty('--p', String(0.9 * (done / total)));
+  }),
   decor.load(scene, (m) => fogMaterial(m, fog, map)),
   loadSprites(shown),
-  painted?.load(renderer),
+  painted?.load(renderer).catch((e: Error) => Promise.reject(new Error(`Ville de nuit : ${e.message}`))),
 ]);
+const STALL_MS = 30_000;
+/** A match's files, given up on a failure or a stall: said with the file at fault, « Réessayer » and « Menu principal ».
+ * (The title screen does not wait: its menus work without the scene behind them.) */
+const ready = ATTRACT
+  ? loaded
+  : Promise.race([
+      loaded,
+      new Promise<never>((_, fail) => {
+        let seen = -1;
+        let since = performance.now();
+        const timer = setInterval(() => {
+          const now = performance.now();
+          const moved = stirred + (painted ? -painted.waiting.size : 0);
+          if (moved !== seen) [seen, since] = [moved, now];
+          else if (now - since > STALL_MS) {
+            clearInterval(timer);
+            const what = painted?.waiting.size ? `Ville de nuit : ${[...painted.waiting].join(', ')}` : 'les modèles et le décor';
+            fail(new Error(`Rien n'arrive depuis ${STALL_MS / 1000} s (${what}).`));
+          }
+        }, 1000);
+        loaded.finally(() => clearInterval(timer)).catch(() => {});
+      }),
+    ]).catch((e: Error) => {
+      loadFailed(e.message);
+      return new Promise<never>(() => {}); // the match never starts behind it
+    });
+function loadFailed(why: string): void {
+  document.getElementById('crash')?.remove();
+  const d = document.createElement('div');
+  d.id = 'crash';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:#05070d;color:#dceaff;font:16px system-ui;text-align:center';
+  d.innerHTML = '<b style="font-size:22px">Chargement de la partie impossible</b><div style="opacity:.7;max-width:640px;word-break:break-word"></div><div style="display:flex;gap:12px"><button data-l="retry">Réessayer</button><button data-l="menu">Menu principal</button></div>';
+  d.children[1].textContent = why;
+  for (const b of d.querySelectorAll('button')) b.style.cssText = 'padding:10px 22px;font:600 16px system-ui;cursor:pointer';
+  d.addEventListener('click', (e) => {
+    const l = (e.target as HTMLElement).closest<HTMLElement>('[data-l]')?.dataset.l;
+    page.leaving = true;
+    if (l === 'retry') location.reload();
+    else if (l === 'menu') location.search = `?biome=${biome.id}&camp=${myFaction}&adversaire=${foeFaction}&map=${MAP.id}`;
+  });
+  document.body.append(d);
+}
 ready.then(() => loading?.style.setProperty('--p', '1'));
 if (!ATTRACT) {
   // Every portrait the match can show is readied behind the loading screen (render/portrait.ts).
