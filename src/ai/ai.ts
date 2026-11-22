@@ -796,11 +796,15 @@ export class AI {
     const market = buildings.find((b) => b.type === 'marche' && b.buildLeft === 0);
     // Minerals piling up while energy holds back the tech (the reserve and the next research): buy energy.
     // What is sold leaves this turn's budget at once (what comes back only arrives with the trade).
-    if (market && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
+    // A lost headquarters to raise again, short of minerals, its site not begun: energy sold first, never minerals.
+    const raising = !this.settled(ctx.home) && this.rebuildable && !buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0);
+    if (market && raising && ctx.p.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && ctx.energy >= BALANCE.rules.trade.give) {
+      ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
+      ctx.energy -= BALANCE.rules.trade.give;
+    } else if (market && !raising && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
-    } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || (!this.settled(ctx.home) && this.rebuildable && ctx.p.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && ctx.energy >= BALANCE.rules.trade.give))) {
-      // (also energy sold for the minerals a headquarters to raise again is short of)
+    } else if (market && ctx.energy > 250 && ctx.minerals < 150) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
     }
@@ -832,10 +836,10 @@ export class AI {
       const own = (u: string) => mine.filter((o) => o.type === u).length;
       const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) === 0) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
-      const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains)
-        .slice()
-        .sort((a, b) => own(a) - own(b))
-        .find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
+      // Against flyers, what shoots them if one can be paid, else what can (the last Créaturium waited for an
+      // Ankylosaure it could not pay, its Plésiosaure left out).
+      const pick = (list: string[]) => list.slice().sort((a, b) => own(a) - own(b)).find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
+      const type = (this.enemyAir && antiAirTrains.length ? pick(antiAirTrains) : undefined) ?? pick(trains);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
@@ -1358,10 +1362,10 @@ export class AI {
     return sum / them.length / a.cooldown;
   }
 
-  /** `air`: against flyers only (a weapon that cannot reach them counts for nothing). */
-  private dps(e: Entity, air = false): number {
+  /** `air` true: against flyers only; false: against ground units only (an anti-air weapon counts for nothing). */
+  private dps(e: Entity, air?: boolean): number {
     const a = this.world.weapon(e);
-    let d = a && (!air || reaches(a, true)) ? a.damage / a.cooldown : 0;
+    let d = a && (air === undefined || reaches(a, air)) ? a.damage / a.cooldown : 0;
     // A Fortin fights with its crew.
     if (e.def.kind === 'building') for (const u of this.crew(e)) d += this.dps(u, air);
     return d;
@@ -1404,7 +1408,9 @@ export class AI {
 
   private outmatched(wave: Entity[]): Entity[] {
     const foes = this.visibleFoes();
-    const power = (group: Entity[], air = false) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e, air)]));
+    // Each side by what reaches the other: flyers, ground units, or both (undefined).
+    const side = (group: Entity[]) => (group.length && group.every(flies) ? true : group.every((u) => !flies(u)) ? false : undefined);
+    const power = (group: Entity[], air?: boolean) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e, air)]));
     const out = new Set<Entity>();
     for (const u of wave) {
       if (out.has(u)) continue;
@@ -1414,7 +1420,8 @@ export class AI {
       // Isdaris fall back sooner: their shields recharge out of combat, so a group pulled out early comes back whole.
       // Flyers only: the enemy's power that reaches them (a Fortin of Phalangistes cannot).
       // And ours by what reaches the flyers when the enemies there all fly (flame throwers under Drakes stayed on).
-      if (power(ours, near.every(flies)) * 2 < power(near, ours.length > 0 && ours.every(flies))) ours.forEach((o) => out.add(o));
+      // (a ground wave fell back before one Coléoptère whose Déchiqueteur hits flyers only).
+      if (power(ours, side(near)) * 2 < power(near, side(ours))) ours.forEach((o) => out.add(o));
     }
     return [...out];
   }
