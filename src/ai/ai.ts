@@ -657,7 +657,11 @@ export class AI {
       const builder = this.builder(unordered, spot, def.size, !this.settled(home)) ?? chained;
       if (!spot || !builder) continue;
       // A lost headquarters: not where the builder's road passes under an enemy's guns (its last drone died on the ramp).
-      if (type === f.hq && !this.settled(home) && this.exposedRoad(builder, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP })) continue;
+      // The spot is given up (as one never reached), so the next turn tries another.
+      if (type === f.hq && !this.settled(home) && this.exposedRoad(builder, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP })) {
+        this.tried.set(spotKey(spot[0], spot[1], def.size), MAX_TRIES);
+        continue;
+      }
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       // Nor where a building ordered this turn goes (two 3×3 centres got the same spot; the second was lost on arrival).
@@ -1631,7 +1635,7 @@ export class AI {
     // Finished, or a site rising by itself (a Z Intelligence its last drone went into, an Obélisque, a Porte).
     const ready = mine.filter((e) => e.buildLeft === 0 || (e.def as BuildingDef).absorbs || (e.def as BuildingDef).warp);
     // A Dieux god summons units too, and the Porte the gods.
-    const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t) && !!w.addonSpot(b, a))));
+    const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t) && w.addonsOf(b) < BALANCE.rules.z.podAddons && !!w.addonSpot(b, a))));
     // With room for it in supply (a Plate-forme alone gives none).
     const sup = w.supply(this.player);
     const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t) && sup.max - sup.used >= (DEFS[t] as UnitDef).supply));
@@ -1639,7 +1643,8 @@ export class AI {
       cannotPay &&
       // A headquarters' site rising (by itself or with a worker left to raise it) is hope too: the economy restarts once
       // it stands.
-      !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder) || (e.def.kind !== 'resource' && e.queue.length > 0) || (kin(e, f.hq) && e.buildLeft > 0 && (!!(e.def as BuildingDef).absorbs || !!(e.def as BuildingDef).warp || mine.some((u) => u.type === f.worker))));
+      // An armed unit (an Espion alone does nothing a last stand could order).
+      !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder && !!w.weapon(e)) || (e.def.kind !== 'resource' && e.queue.length > 0) || (kin(e, f.hq) && e.buildLeft > 0 && (!!(e.def as BuildingDef).absorbs || !!(e.def as BuildingDef).warp || mine.some((u) => u.type === f.worker))));
     const h = this.hopeless;
     if (!beaten) this.hopeless = null;
     else if (!h || p.minerals > h.minerals || (market && p.energy > h.energy)) this.hopeless = { since: w.tick, minerals: p.minerals, energy: p.energy };
@@ -2070,7 +2075,8 @@ export class AI {
     // Not one under an enemy's guns: the workers are never sent there (tend).
     return [...this.world.entities.values()].filter((e) => {
       if (e.type !== 'minerai') return false;
-      const h = hqs.find((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP);
+      // The base nearest it, where its minerals go (tend).
+      const h = hqs.filter((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP).sort((a, b) => dist(e.x, e.y, a.x, a.y) - dist(e.x, e.y, b.x, b.y) || a.id - b.id)[0];
       // Nor one whose road from the base is under them.
       return !!h && !this.underFire(e) && !this.exposedRoad(h, e);
     }).length;
