@@ -122,7 +122,7 @@ function sealed(end: ReplayEnd): Replay {
   return record;
 }
 function keepGame(quiet = false, end: ReplayEnd = 'left'): void {
-  if (saved || keepTried || REPLAY || ATTRACT || !record.ticks.length) return;
+  if (saved || keepTried || REPLAY || ATTRACT || !world.tick) return; // with its end tick, a game with no order is a replay too
   keepTried = true;
   saved = saveReplay(sealed(end));
   if (!saved && !quiet) hud.notify([{ player: PLAYER, kind: 'alert', text: 'Replay non conservé : stockage du navigateur plein ou bloqué. « Enregistrer le replay » le télécharge.' }]);
