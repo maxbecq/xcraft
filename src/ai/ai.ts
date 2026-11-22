@@ -155,6 +155,8 @@ export class AI {
   private rebuildable = false;
   /** Workers able to raise a headquarters, this turn. */
   private raisers = 0;
+  /** Enemies at our base this turn, whatever their strength (no Couloir temporel then). */
+  private homeThreat = false;
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
   private danger: { x: number; y: number } | undefined;
 
@@ -1096,6 +1098,7 @@ export class AI {
     // A raid of flyers none of the army can shoot holds no wave home (a flyer watching a Pod kept a full wave of
     // ground socles there).
     const threat = raid && raid.armed.length && raid.armed.every(flies) && !army.some((u) => w.weapon(u) && reaches(w.weapon(u)!, true)) ? undefined : raid;
+    this.homeThreat = !!raid;
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
     // The danger gone, the sheltered drones come out (back to work as idle workers).
@@ -1235,7 +1238,8 @@ export class AI {
       const r = (ABILITIES.couloir.radius ?? 3) * FP;
       // Those round it, waiting or setting off with a new wave (muster has just sent them).
       const waiting = gate ? army.filter((u) => u !== gate && !flies(u) && dist(u.x, u.y, gate.x, gate.y) <= r) : [];
-      if (gate && far && waiting.length >= 4 && w.ready(gate, 'couloir')) {
+      // Never while the base is under attack: it sent the defenders holding a raid off to the front.
+      if (gate && far && waiting.length >= 4 && w.ready(gate, 'couloir') && !this.homeThreat) {
         ctx.out.push({ player: this.player, kind: 'ability', ids: [gate.id], name: 'couloir' });
         // Those sent through join the wave (outside it, they had no orders at the front).
         for (const u of waiting) this.wave.add(u.id);
