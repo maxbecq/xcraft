@@ -90,6 +90,8 @@ const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie
 const KITS: Record<string, number> = { ...BALANCE.ai.kits, accumulateur: 1 };
 const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
+/** Dieux units and the forms they turn into (Forme de feu), counted together for the army's shares. */
+const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', 'elemterre', 'elemair'] };
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
@@ -228,7 +230,9 @@ export class AI {
     const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some(fights))));
     // No building left at all (an ally holding on): from one of its workers.
     const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') ?? (this.rebuildable ? mine.find((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)) : undefined) : undefined);
-    const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
+    // A finished headquarters, a finished base, then a headquarters' site (the Porte's site taken before the Antre that
+    // stood held every spending 90 s).
+    const home = mine.find((e) => kin(e, this.faction.hq) && e.buildLeft === 0) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? mine.find((e) => kin(e, this.faction.hq)) ?? rebuild();
     if (!home) return this.lastStand(mine);
     const bank = w.players[this.player].minerals;
     if (bank > this.lastBank || !this.lastIncome) this.lastIncome = w.tick;
@@ -1076,15 +1080,23 @@ export class AI {
         }
       }
       for (const g of gods) {
-        if (g.queue.length > (this.easy ? 0 : 1)) continue;
+        // Not a god out with the wave: its troop came out at the front, alone and without orders.
+        if (g.queue.length > (this.easy ? 0 : 1) || this.wave.has(g.id)) continue;
         // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
         const share = BALANCE.ai.army.dieux as Record<string, number>;
-        const have = (t: string) => mine.filter((e) => e.type === t).length + gods.reduce((n, o) => n + o.queue.filter((q) => q === t).length, 0);
-        const type = (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || a.localeCompare(b))[0];
+        // A unit counted in the forms it turns into (an Élémentaire takes its fire form at once: never counted, Athéna
+        // trained nothing else).
+        const kinds = (t: string) => [t, ...(FORMS[t] ?? [])];
+        const have = (t: string) => mine.filter((e) => kinds(t).includes(e.type)).length + gods.reduce((n, o) => n + o.queue.filter((q) => q === t).length, 0);
+        const pays = (t: string) => {
+          const d = DEFS[t] as UnitDef;
+          // A troop that costs no energy is never held back by the energy kept (for the next god).
+          return this.room(ctx) >= d.supply && ctx.minerals - ctx.keep >= d.cost.minerals && !(d.cost.energy > 0 && ctx.energy - unitReserve < d.cost.energy);
+        };
+        // The one the army lacks most that can be paid (the first one out of reach kept the god idle, minerals piling up).
+        const type = (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || a.localeCompare(b)).find(pays);
         const def = type && (DEFS[type] as UnitDef);
-        if (!def || this.room(ctx) < def.supply) continue;
-        // A troop that costs no energy is never held back by the energy kept (for the next god).
-        if (ctx.minerals - ctx.keep < def.cost.minerals || (def.cost.energy > 0 && ctx.energy - unitReserve < def.cost.energy)) continue;
+        if (!def) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: type! });
         ctx.minerals -= def.cost.minerals;
         ctx.energy -= def.cost.energy;
@@ -1126,6 +1138,12 @@ export class AI {
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
     // Dead or being recalled (Rappel): out of the wave.
     for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
+    // Dieux: first-rank gods sent with a last wave come home once income is back (they summon).
+    if (gods.length && !this.starved(buildings, ctx.p.minerals)) {
+      const home1 = gods.filter((g) => this.wave.has(g.id) && !(g.def as UnitDef).requiresAny);
+      for (const g of home1) this.wave.delete(g.id);
+      if (home1.length) ctx.out.push({ player: this.player, kind: 'move', ids: home1.map((g) => g.id), x: ctx.rally.x, y: ctx.rally.y });
+    }
     let atHome = army.filter((u) => !this.wave.has(u.id));
     // Our base first; else a teammate's base under attack, which the army at home goes to help.
     const allied = [...w.entities.values()].filter((b) => b.def.kind === 'building' && b.owner !== this.player && b.owner >= 0 && !w.hostile(b.owner, this.player));
@@ -1161,10 +1179,15 @@ export class AI {
       // Outnumbered at home: the wave comes back, unless it is already fighting next to the threat.
       const strength = (us: Entity[]) => us.reduce((s, u) => s + u.hp + u.shield, 0);
       if (strength(atHome) < threat.strength && this.wave.size) {
+        const back: number[] = [];
         for (const id of this.wave) {
           const u = w.entities.get(id)!;
-          if (!near(u)) this.wave.delete(id);
+          if (near(u)) continue;
+          this.wave.delete(id);
+          // A god (not in the army) is given no order with it: it went on alone to the enemy base and died.
+          if (gods.includes(u)) back.push(id);
         }
+        if (back.length) ctx.out.push({ player: this.player, kind: 'move', ids: back, x: ctx.rally.x, y: ctx.rally.y });
         atHome = army.filter((u) => !this.wave.has(u.id));
       }
       // Every defender not already fighting near the threat goes there.
