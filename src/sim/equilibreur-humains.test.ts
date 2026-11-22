@@ -312,4 +312,14 @@ describe('the balancer, Humains', () => {
     const aux = [...w.entities.values()].find((e) => e.type === 'auxiliaire' && e.owner === 0)!;
     expect(aux.inside).toBe(f.id);
   });
+
+  it('from inside a Scarabée, an Alchimiste still casts (its Explosif toxique)', () => {
+    const w = humans();
+    w.players[0].upgrades.cocktail = 1;
+    const sc = w.spawn('scarabee', 0, 30 * FP, 40 * FP);
+    const a = Object.assign(w.spawn('alchimiste', 0, 30 * FP, 41 * FP), { mana: 1 << 30 });
+    a.inside = sc.id;
+    w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: 34 * FP, y: 40 * FP }]);
+    expect(w.clouds.length).toBe(1);
+  });
 });
