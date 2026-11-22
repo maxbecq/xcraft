@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
+import { type Attack, AUTOCAST, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -319,8 +319,15 @@ export function coned(this: World, t: Entity): boolean {
 export function acquire(this: World, e: Entity): void {
   const def = e.def as UnitDef;
   if (def.worker) return;
-  const patient = this.healRate(e) ? this.patient(e) : undefined;
+  // Soin switched off (autocast): it heals only when told to.
+  const patient = this.healRate(e) && (!this.abilitiesFor(e).includes('soin') || this.autoOn(e, 'soin')) ? this.patient(e) : undefined;
   if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
+  // Réanimation on its own (the balancer, 2026-11-22): a fresh body in reach rises.
+  if (this.autoOn(e, 'reanimation') && this.ready(e, 'reanimation')) {
+    const reach = toFp(spell('reanimation', e.lvl).range ?? 0);
+    const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= reach).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || b.tick - a.tick)[0];
+    if (c) this.castAt(e, 'reanimation', c.x, c.y); // its own mana spent there
+  }
   if (!def.attack || !this.weapon(e)) return;
   // Holding position: only what is already within reach.
   const t = this.enemyNear(e, e.stand ? toFp(def.attack.range) + e.radius + FP : def.sight * FP);
@@ -331,10 +338,10 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   const def = e.def as UnitDef;
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e) || !this.healable(e, t)) return this.setOrder(e, null);
     if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.chase(e, t);
     e.goal = null;
-    if (e.cooldown === 0 && this.mends(e)) {
+    if (e.cooldown === 0 && this.mends(e) && this.soinPaid(e)) {
       const pulse = def.healPulse ?? 1;
       t.hp = Math.min(t.maxHp, t.hp + pulse);
       e.cooldown = ticks(pulse / this.healRate(e));
@@ -349,7 +356,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
       const p = this.patient(e);
       if (p) {
         if (this.gap(e, p) > (def.healRange ?? 2) * FP) return this.chase(e, p);
-        if (e.cooldown === 0 && this.mends(e)) {
+        if (e.cooldown === 0 && this.mends(e) && this.soinPaid(e)) {
           const pulse = def.healPulse ?? 1;
           p.hp = Math.min(p.maxHp, p.hp + pulse);
           e.cooldown = ticks(pulse / this.healRate(e));
@@ -696,13 +703,32 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
 }
 
 /** Most wounded friendly unit in sight. */
+/** Whether a healer may heal this unit: the Soigneur's Soin never mends a machine (the balancer, 2026-11-22). */
+export function healable(this: World, e: Entity, t: Entity): boolean {
+  return !(t.def as UnitDef).mechanical || !this.abilitiesFor(e).includes('soin');
+}
+
+/** Whether an ability that may go on its own (AUTOCAST) does for this unit. */
+export function autoOn(this: World, e: Entity, name: string): boolean {
+  return e.autocast[name] ?? AUTOCAST[name] ?? false;
+}
+
+/** A healer's pulse paid: the Soin 5 mana (the balancer, 2026-11-22); false when it has run dry. */
+export function soinPaid(this: World, e: Entity): boolean {
+  if (!this.abilitiesFor(e).includes('soin')) return true;
+  const cost = toFp(ABILITIES.soin.mana!);
+  if (e.mana < cost) return false;
+  e.mana -= cost;
+  return true;
+}
+
 export function patient(this: World, e: Entity): Entity | undefined {
   let best: Entity | undefined;
   let worst = 1;
   const mender = !(e.def as UnitDef).heal;
   const range = (mender ? WEAPONS[e.kit].healRange! + 2 : (e.def as UnitDef).sight) * FP;
   for (const t of this.entities.values()) {
-    if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
+    if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0 || !this.healable(e, t)) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
     if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || (mender && !(t.def as UnitDef).mechanical)) continue;
     if ((t.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;

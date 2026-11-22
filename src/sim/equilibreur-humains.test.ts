@@ -205,4 +205,44 @@ describe('the balancer, Humains', () => {
     expect(w.entities.has(c.id)).toBe(false);
     expect(foe.hp).toBeLessThan(foe.maxHp);
   });
+
+  it('Soin: 25 HP for 5 mana, never on a machine, on its own or not (autocast)', () => {
+    const w = humans();
+    const m = w.spawn('soigneur', 0, 30 * FP, 40 * FP);
+    const man = w.spawn('legionnaire', 0, 31 * FP, 40 * FP);
+    const tank = w.spawn('scarabee', 0, 30 * FP, 42 * FP);
+    man.hp = 50;
+    tank.hp = 100;
+    const mana = m.mana;
+    for (let i = 0; i < 8; i++) w.step([]);
+    expect(man.hp).toBe(75);
+    expect(mana - m.mana).toBeGreaterThanOrEqual(5 * FP - FP); // 5 paid, a little regained meanwhile
+    expect(w.patient(m)).not.toBe(tank);
+    w.step([{ player: 0, kind: 'smart', ids: [m.id], x: tank.x, y: tank.y, target: tank.id }]);
+    expect(m.order?.kind).not.toBe('heal');
+    // Switched off: it no longer heals on its own.
+    w.step([{ player: 0, kind: 'autocast', ids: [m.id], name: 'soin', on: false }]);
+    w.step([{ player: 0, kind: 'stop', ids: [m.id] }]);
+    const hp = man.hp;
+    for (let i = 0; i < ticks(5); i++) w.step([]);
+    expect(man.hp).toBe(hp);
+    // Told to, it still does.
+    w.step([{ player: 0, kind: 'smart', ids: [m.id], x: man.x, y: man.y, target: man.id }]);
+    for (let i = 0; i < 8; i++) w.step([]);
+    expect(man.hp).toBeGreaterThan(hp);
+  });
+
+  it('Réanimation on its own once switched on: a fresh body in reach rises', () => {
+    const w = humans();
+    const a = Object.assign(w.spawn('alchimiste', 0, 30 * FP, 40 * FP), { mana: 1 << 30 });
+    const prey = w.spawn('archer', 1, 33 * FP, 40 * FP);
+    prey.hp = 0;
+    w.step([]);
+    expect(w.corpses.length).toBe(1);
+    for (let i = 0; i < 20; i++) w.step([]);
+    expect([...w.entities.values()].some((e) => e.type === 'cadavre')).toBe(false); // off by default, as before
+    w.step([{ player: 0, kind: 'autocast', ids: [a.id], name: 'reanimation', on: true }]);
+    for (let i = 0; i < 20; i++) w.step([]);
+    expect([...w.entities.values()].some((e) => e.type === 'cadavre' && e.owner === 0)).toBe(true);
+  });
 });

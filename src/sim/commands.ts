@@ -1,6 +1,6 @@
 /** Players' commands into orders: what World.step applies first each tick. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, ARTEFACTS, AUTOCAST, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { onMap } from './abilities';
 import { commandOk } from './validate';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
@@ -48,6 +48,12 @@ export function apply(this: World, c: Command): void {
       const p = this.players[c.player];
       if (this.players.length !== 1 || !p || (c.tool !== 'unlimited' && c.tool !== 'instant' && c.tool !== 'reveal')) return;
       p[c.tool] = !!c.on;
+      return;
+    }
+    case 'autocast': {
+      // Soin, Réanimation (the balancer, 2026-11-22): on their own or not, for each unit named that has it.
+      if (!(c.name in AUTOCAST)) return;
+      for (const e of mine) if (this.abilitiesFor(e).includes(c.name)) e.autocast[c.name] = c.on;
       return;
     }
     case 'resign': {
@@ -414,7 +420,7 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
     const worker = (e.def as UnitDef).worker;
     if (t && this.hostile(t.owner, e.owner) && this.weapon(e) && reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) {
       this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
-    } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
+    } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp && this.healable(e, t)) {
       this.setOrder(e, { kind: 'heal', target: t.id });
     } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
       this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });

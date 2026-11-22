@@ -79,6 +79,10 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
 .cmd:is(:hover, .vhover) { background: linear-gradient(#625641, #3a3228); border-color: var(--amber); }
 .cmd:active { transform: translateY(1px); }
 .cmd.off { filter: grayscale(0.9) brightness(0.65); }
+/* An ability going on its own (autocast, the balancer 2026-11-22): a gold light running round the button, as Warcraft III does. */
+.cmd.autocast::after { content: ''; position: absolute; inset: -2px; padding: 2px; border-radius: inherit; pointer-events: none; background: conic-gradient(from var(--auto-turn, 0deg), #ffe08a 0 14%, transparent 14% 50%, #ffe08a 50% 64%, transparent 64%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: autocast-turn 2.4s linear infinite; }
+@property --auto-turn { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes autocast-turn { to { --auto-turn: 360deg; } }
 .cmd kbd { position: absolute; top: 2px; left: 4px; font: 700 11px var(--ui); color: var(--amber); }
 .cmd small { position: absolute; bottom: 1px; right: 4px; font-weight: 600; font-size: 10px; color: #9fd8ff; }
 .cmd img { width: 34px; height: 34px; }

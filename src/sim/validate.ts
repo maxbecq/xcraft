@@ -27,6 +27,7 @@ const FIELDS: Record<string, Record<string, string>> = {
   ability: { x: 'n?', y: 'n?', name: 's?' },
   trade: { sell: 's' },
   attack: { x: 'n', y: 'n', target: 'n?', queue: 'b?' },
+  autocast: { name: 's', on: 'b' },
 };
 /** The Bac à sable's switches: one-player matches (and their replays) only, never online. */
 const SANDBOX_FIELDS = { tool: 's', on: 'b' };

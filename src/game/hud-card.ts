@@ -1,6 +1,6 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { AUTOCAST, ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -25,6 +25,9 @@ export interface Button {
   ability?: string;
   /** The Z weapon it is about (fitted, bought or researched): its pictogram stands for its icon (WEAPON_GLYPHS). */
   weapon?: string;
+  /** An ability that may go on its own (AUTOCAST): whether it does, and the right click that switches it. */
+  auto?: boolean;
+  toggle?: () => void;
   action: () => void;
 }
 
@@ -140,6 +143,14 @@ export function buttonsFor(h: Hud): Button[] {
       const payer = casters.find((u) => h.world.manaOf(u));
       const price = payer ? spell(ab, payer.lvl).mana : undefined;
       const mana = price !== undefined ? ` · ${price} énergie` : '';
+      // On its own or not (the balancer, 2026-11-22: Soin, Réanimation): a right click switches it; the Soin, never cast
+      // by hand (a right click on the ally heals it), switches with a plain click too.
+      if (ab in AUTOCAST) {
+        const auto = casters.some((u) => h.world.autoOn(u, ab));
+        const toggle = () => cmd({ kind: 'autocast', ids: casters.map((u) => u.id), name: ab, on: !auto });
+        list.push({ label: `${a.name}${mana}${auto ? ' (auto)' : ''}`, key: a.hotkey, reason, action: a.target === 'self' ? toggle : action, ability: ab, auto, toggle });
+        continue;
+      }
       list.push({ label: `${a.name}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
     // Z socles: evolve into the next tier, in the field.
@@ -338,7 +349,7 @@ export function buttonHtml(h: Hud, b: Button, extra = '', cls = '', style = ''):
   const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
   const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
   const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
-  return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}${cls}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}${style}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}${extra}</button>`;
+  return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}${b.auto ? ' autocast' : ''}${cls}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}${style}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}${extra}</button>`;
 }
 
 /**

@@ -320,6 +320,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Légionnaire: runs twice as fast to close in. */
   charge: { name: 'Charge', effect: 'Court deux fois plus vite pour fondre sur l\'ennemi.', hotkey: 'C', ...BALANCE.abilities.charge },
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
+  // The Soigneur's healing (the balancer, 2026-11-22): 25 HP for 5 mana, never on machines; on its own or not (autocast).
+  soin: { name: 'Soin', effect: 'Rend 25 PV à une unité alliée organique pour 5 de mana. Clic droit : automatique ou non.', hotkey: 'O', target: 'self', ...BALANCE.abilities.soin },
   // The balancer (2026-11-22): on the ally aimed at, +5 armour, shown.
   peauderoc: { name: 'Peau de roc', effect: "L'allié visé gagne +5 d'armure un moment.", hotkey: 'R', target: 'point', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
@@ -498,7 +500,7 @@ const BASE: Record<string, object> = {
   serf: { kind: 'unit', name: 'Serf', radius: 0.375, worker: true, faction: 'humains', hotkey: 'S' },
   auxiliaire: { kind: 'unit', name: 'Auxiliaire', radius: 0.375, faction: 'humains', hotkey: 'A' },
   legionnaire: { kind: 'unit', name: 'Légionnaire-scieur', radius: 0.375, faction: 'humains', hotkey: 'L' },
-  soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', faction: 'humains', hotkey: 'O' },
+  soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', abilities: ['soin'], faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
   conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], faction: 'humains', hotkey: 'C' },
@@ -988,6 +990,10 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
+/** Abilities a unit may use on its own or not (the balancer, 2026-11-22), and whether they start on their own: the
+ * Soin as it always did, the Réanimation only when ordered, as before. */
+export const AUTOCAST: Record<string, boolean> = { soin: true, reanimation: false };
+
 export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
 export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };

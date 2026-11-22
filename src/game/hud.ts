@@ -222,10 +222,20 @@ export class Hud {
       },
       true,
     );
+    this.card.addEventListener('contextmenu', (e) => e.preventDefault());
     this.card.addEventListener('pointerdown', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
-      const b = this.buttons.find((x) => x.key === el?.dataset.key);
+      // By its label too: two abilities of a mixed selection may share a key (Peau de roc and Réanimation, R).
+      const b = this.buttons.find((x) => x.key === el?.dataset.key && x.label === el?.getAttribute('aria-label')) ?? this.buttons.find((x) => x.key === el?.dataset.key);
       if (!b || !el) return;
+      // A right click on an ability that may go on its own switches it (Soin, Réanimation).
+      if (e.button === 2) {
+        if (b.toggle) {
+          this.audio.play('click');
+          b.toggle();
+        }
+        return;
+      }
       if (e.pointerType !== 'touch') return pressButton(this, b);
       hold(el, () => pressButton(this, b));
     });

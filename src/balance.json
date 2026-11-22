@@ -293,6 +293,7 @@
     "canoniem": { "cooldown": 250, "duration": 50, "energy": 0, "target": "point", "radius": 2 },
     "stimulant": { "cooldown": 15, "duration": 8 },
     "charge": { "cooldown": 20, "duration": 3 },
+    "soin": {"mana": 5, "cooldown": 0, "duration": 0},
     "peauderoc": {"mana": 25, "cooldown": 1, "duration": 35, "range": 4},
     "observation": { "cooldown": 30, "duration": 10, "energy": 50 },
     "rappel": { "cooldown": 60, "duration": 4, "energy": 100 },
