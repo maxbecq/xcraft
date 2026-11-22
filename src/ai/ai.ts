@@ -69,7 +69,10 @@ const GANG_UP = (30 * FP) / 20;
  * Isdaris extensions the AI researches, in order: ground vehicles, druides, then flyers. Each waits for its host,
  * so the Laboratoire (Portail) comes first until the Psycho-assembleur stands, whose vehicles then go first.
  */
-const EXTENSIONS = ['assembleur', 'laboratoire', 'balise'];
+// Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
+// each once its host stands: off this list, among the late researches, they never came, nor the units and powers
+// behind them.
+const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
 /** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
 const SPARE_EXTENSION = 400;
 /**
