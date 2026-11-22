@@ -802,6 +802,8 @@ export class EntityRenderer {
             plate.rotation.y = (Math.abs(ax) >= Math.abs(az) ? (ax > 0 ? 0 : Math.PI) : (az > 0 ? -Math.PI / 2 : Math.PI / 2)) - Math.atan2(-tz, tx);
           }
           plate.visible = !tower && grown >= 1;
+          // an add-on standing on another level (a city deck, a ramp) is met there
+          rise += (this.views.get(addon.id)?.root.position.y ?? v.root.position.y) - v.root.position.y;
           const gap = Math.hypot(tx, tz);
           const from = dock.reach;
           arm.rotation.set(0, Math.atan2(-tz, tx), 0);
