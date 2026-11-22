@@ -864,7 +864,7 @@ export class AI {
       // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One of each unarmed unit
       // (Scarabée, Isdaris Espion and Voyageur).
       const own = (u: string) => mine.filter((o) => o.type === u).length;
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) === 0) && (t.type === f.tech || own(u) < 3));
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) < (abilitiesOf(DEFS[u] as UnitDef).includes('couloir') && w.level(this.player, 'couloir') ? 2 : 1)) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
       // Against flyers, what shoots them if one can be paid, else what can (the last Créaturium waited for an
       // Ankylosaure it could not pay, its Plésiosaure left out).
@@ -1178,7 +1178,16 @@ export class AI {
       // Easy: never more than its wave cap out at once, gods included, those already out counted, the rest stays home.
       const cap = this.easy ? LEVELS.easy.maxWave : Infinity;
       // Not the Barge, which ferries the waves on its own (barge).
-      for (const u of atHome) if (this.wave.size < cap && u.type !== 'barge') this.wave.add(u.id);
+      // With the Couloir temporel, one Espion stays home as its gate (cast).
+      const corridor = w.level(this.player, 'couloir') > 0 && army.filter((u) => abilitiesOf(u.def as UnitDef).includes('couloir')).length >= 2;
+      let gateKept = corridor && army.some((u) => abilitiesOf(u.def as UnitDef).includes('couloir') && !atHome.includes(u) && !this.wave.has(u.id));
+      for (const u of atHome) {
+        if (corridor && !gateKept && abilitiesOf(u.def as UnitDef).includes('couloir')) {
+          gateKept = true;
+          continue;
+        }
+        if (this.wave.size < cap && u.type !== 'barge') this.wave.add(u.id);
+      }
       // Dieux: the gods of the second and third ranks go with it (their auras, heals and spells are for the front);
       // the first rank stays home and summons.
       // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
@@ -1214,6 +1223,18 @@ export class AI {
     // Passengers of a Fortin or a Scarabée use their powers from inside too (notice).
     const aboard = mine.filter((e) => e.inside && e.def.kind === 'unit' && w.abilitiesFor(e).length && (w.entities.get(e.inside)?.def.kind === 'building' || w.entities.get(e.inside)?.type === 'scarabee'));
     if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia, ...aboard]));
+    // Isdaris Couloir temporel: one Espion stays at the rally point, the other goes with the wave; the reinforcements
+    // gathered round the first go through to the second (it was never cast: one Espion only, no rule for it).
+    const spies = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('couloir'));
+    if (spies.length >= 2 && !this.easy && w.level(this.player, 'couloir')) {
+      const gate = spies.find((u) => !this.wave.has(u.id));
+      const far = spies.find((u) => this.wave.has(u.id) && dist(u.x, u.y, home.x, home.y) > 25 * FP);
+      if (gate && dist(gate.x, gate.y, ctx.rally.x, ctx.rally.y) > 3 * FP && gate.order?.kind !== 'move') ctx.out.push({ player: this.player, kind: 'move', ids: [gate.id], x: ctx.rally.x, y: ctx.rally.y });
+      const r = (ABILITIES.couloir.radius ?? 3) * FP;
+      // Those round it, waiting or setting off with a new wave (muster has just sent them).
+      const waiting = gate ? army.filter((u) => u !== gate && !flies(u) && dist(u.x, u.y, gate.x, gate.y) <= r).length : 0;
+      if (gate && far && waiting >= 4 && w.ready(gate, 'couloir')) ctx.out.push({ player: this.player, kind: 'ability', ids: [gate.id], name: 'couloir' });
+    }
     // Dieux: two Élémentaires waiting at home fuse into a Golem, late on; apart, one walks to the other.
     const elems = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('fusion') && !this.wave.has(u.id) && !u.order && u.abilityCd === 0);
     if (ctx.minute >= 15 && elems.length >= 2 && !this.easy) {
@@ -1221,9 +1242,11 @@ export class AI {
       if (dist(a.x, a.y, b.x, b.y) <= (ABILITIES.fusion.radius! + 1) * FP) ctx.out.push({ player: this.player, kind: 'ability', ids: [a.id], name: 'fusion' });
       else ctx.out.push({ player: this.player, kind: 'move', ids: [a.id], x: b.x, y: b.y });
     }
-    const caster = buildings.find((b) => (b.def as BuildingDef).ability && b.buildLeft === 0 && b.abilityCd === 0);
-    const ability = caster && (caster.def as BuildingDef).ability!;
-    if (caster && ability === 'observation' && p.energy >= ABILITIES.observation.energy! && w.level(this.player, 'observation')) {
+    // Each power's own building (the first one with any power was an Orbe plasma once the Obélisque was rebuilt: no
+    // Rappel again).
+    const holder = (name: string) => buildings.find((b) => (b.def as BuildingDef).ability === name && b.buildLeft === 0 && b.abilityCd === 0);
+    let caster = holder('observation');
+    if (caster && w.level(this.player, 'observation') && p.energy >= ABILITIES.observation.energy!) {
       // Observation céleste only where an undetected invisible unit just hit us from close by, not on far shooters.
       const ambushed = mine.find((u) => {
         const a = w.entities.get(u.lastAttacker);
@@ -1238,7 +1261,8 @@ export class AI {
       });
       if (ambushed) ctx.out.push({ player: this.player, kind: 'ability', ids: [caster.id], x: ambushed.x, y: ambushed.y });
     }
-    if (caster && ability === 'rappel' && p.energy >= ABILITIES.rappel.energy!) {
+    caster = holder('rappel');
+    if (caster && p.energy >= ABILITIES.rappel.energy!) {
       // Rappel a wave that is losing its fight far from home.
       const losing = this.losing([...this.wave].map((id) => w.entities.get(id)!), home);
       if (losing) {

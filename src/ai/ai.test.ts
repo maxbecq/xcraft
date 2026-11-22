@@ -938,4 +938,42 @@ describe('AI Isdaris blind spots', () => {
     expect(n.wants).toContain('obelisque');
     expect(n.saving).toBe(true);
   });
+  it('the Couloir temporel sends the reinforcements gathered by the Espion at home through to the one with the wave', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    w.players[0].upgrades.couloir = 1;
+    w.tick = thinkTick(20);
+    const ai = new AI(w, 0);
+    const rally = (ai as unknown as { rallyPoint(h: Entity): { x: number; y: number } }).rallyPoint(ob);
+    const gate = w.spawn('espion', 0, rally.x, rally.y);
+    gate.mana = 1e9;
+    for (let i = 0; i < 5; i++) w.spawn('creature', 0, rally.x + ((i % 3) - 1) * FP, rally.y + Math.floor(i / 3) * FP);
+    const foe = [...w.entities.values()].find((e) => e.owner === 1 && e.type === 'conseil')!;
+    const scout = w.spawn('espion', 0, foe.x - 10 * FP, foe.y - 10 * FP);
+    const state = ai as unknown as { wave: Set<number>; waves: number };
+    state.wave.add(scout.id);
+    state.waves = 1;
+    const cmds = ai.think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [gate.id], name: 'couloir' }));
+  });
+
+  it('the Rappel comes from the Obélisque, whatever other building has a power of its own', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    w.remove(ob);
+    w.spawn('orbe', 0, ob.x + 8 * FP, ob.y);
+    const ob2 = w.spawn('obelisque', 0, ob.x, ob.y);
+    w.players[0].energy = 1000;
+    w.tick = thinkTick(15);
+    const ai = new AI(w, 0);
+    const foe = [...w.entities.values()].find((e) => e.owner === 1 && e.type === 'conseil')!;
+    const state = ai as unknown as { wave: Set<number> };
+    for (let i = 0; i < 4; i++) state.wave.add(w.spawn('creature', 0, foe.x - (8 + i) * FP, foe.y - 8 * FP).id);
+    for (let i = 0; i < 12; i++) w.spawn('legionnaire', 1, foe.x - 9 * FP, foe.y - (6 + i / 4) * FP);
+    for (let t = 0; t < 10; t++) w.step([]);
+    w.tick = thinkTick(15);
+    const cmds = ai.think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [ob2.id] }));
+  });
 });
+
