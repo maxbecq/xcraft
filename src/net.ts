@@ -31,7 +31,7 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
  * `hi`: who this page is and its build, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
  * asked for; `go`: the host's room for it, once both asked.
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 } | { againOk: 1 };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 } | { againOk: 1 } | { nogo: 1 };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -411,9 +411,16 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       } else if ('went' in m) {
         if (player === 0 && goSent.ack()) onStatus('go', rematchRoom);
       }
-      else {
+      else if ('nogo' in m) {
+        // The host gave up waiting for our answer: no rematch, we stay.
+        taken = '';
+        again.lost();
+        onStatus('left');
+      } else {
         lock.receive(m);
-        if (lock.left) set('left', "L'adversaire a quitté la partie.");
+        // The host leaving once we said we were on our way: it has gone to the rematch.
+        if (lock.left && taken && !gone) goNow();
+        else if (lock.left) set('left', "L'adversaire a quitté la partie.");
       }
     });
     c.on('close', () => drop(c));
@@ -433,7 +440,13 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   if (player === 0) peer.on('connection', attach);
   else peer.on('open', dial);
   // The watch: cut links, calls again, pings. A worker's clock, so it keeps time in a background tab.
+  const goNow = () => {
+    gone = true;
+    onStatus('go', taken);
+  };
   const stop = every(250, () => {
+    // The guest: the host has stopped sending the room for longer than its resend cycle, so it has the answer.
+    if (taken && !gone && performance.now() - lastGo > GUEST_GOES_MS) goNow();
     if (status === 'left' || status === 'error') return stop();
     if (peer.disconnected && !peer.destroyed) peer.reconnect();
     if (conn && performance.now() - lock.heard > SILENCE_MS) drop(conn);
@@ -445,13 +458,9 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     }
     if (conn) lock.poll();
     askSent.poll();
-    // The guest: the host has stopped sending the room for longer than its resend cycle, so it has the answer.
-    if (taken && !gone && performance.now() - lastGo > GUEST_GOES_MS) {
-      gone = true;
-      onStatus('go', taken);
-    }
-    // The guest never said it was on its way: no rematch (it is taken as gone).
+    // The guest never said it was on its way: no rematch (it is taken as gone), and it is told, should it come back.
     if (goSent.poll() === 'expired') {
+      sendOn(conn, { nogo: 1 } satisfies Message);
       again.lost();
       onStatus('left');
     }

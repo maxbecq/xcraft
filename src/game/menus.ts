@@ -356,6 +356,8 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
     const go = $<HTMLButtonElement>('[data-m="go"]');
     if (go) go.disabled = !here || !!launching;
+    // The guest has answered « Lancer »: the host may already be in the match, so no way back from here.
+    for (const q of ['back', 'retry']) $<HTMLButtonElement>(`[data-m="${q}"]`)!.disabled = !!going;
   };
   /** Into the match, with the setup the host sent: the host's page hosts it, the guest's joins it. */
   const play = (s: LobbySetup) => {
@@ -384,12 +386,18 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     },
     message: (m) => {
       if ('setup' in m && !host) {
+        // The host gave up a launch we answered too late (it sends the setup again then): we stay in the room.
+        if (going) {
+          clearTimeout(going);
+          going = 0;
+          status = "Le lancement n'a pas abouti : votre ami peut relancer.";
+        }
         // The guest's own pick stays as it is here: the host's copy may be older, and the start brings the final one.
         Object.assign(setup, { ...m.setup, camps: [m.setup.camps[0], setup.camps[1]] });
         if (unknown(setup)) status = UNKNOWN_TEXT;
       } else if ('camp' in m && host) {
         setup.camps[1] = asFaction(m.camp);
-        lobby.send({ setup });
+        if (!launching) lobby.send({ setup }); // during a launch, a setup would call off the guest's departure
       } else if ('go' in m && !host) {
         if (unknown(m.go)) status = UNKNOWN_TEXT;
         else {
@@ -399,7 +407,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
           const go = m.go;
           clearTimeout(going);
           going = window.setTimeout(() => play(go), GUEST_GOES_MS);
-          return;
+          return refresh();
         }
       } else if ('went' in m && host && launching?.id === m.went && launching.ack()) {
         const final = launching.setup;
@@ -411,7 +419,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   });
   refresh();
   menu.onchange = (e) => {
-    if (launching) return; // the setup sent is the match
+    if (launching || going) return; // the setup sent is the match
     const el = e.target as HTMLSelectElement;
     if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
     else if (el.dataset.k === 'biome') setup.biome = el.value;
@@ -443,10 +451,12 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       launchWatch = window.setInterval(() => {
         if (launching?.poll() !== 'expired') return;
         unlaunch();
+        lobby.send({ setup }); // a guest answering late stays in the room
         status = "Votre ami n'a pas répondu au lancement : vérifiez sa connexion, puis relancez.";
         refresh();
       }, 100);
-    } else if (m === 'retry') {
+    } else if (going && (m === 'retry' || m === 'back')) return;
+    else if (m === 'retry') {
       unlaunch();
       lobby.close();
       showLobby(menu, host ? newRoom() : room, host);
