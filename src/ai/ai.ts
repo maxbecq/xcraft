@@ -124,6 +124,8 @@ export class AI {
   private staffed = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
   private enemyAir = 0;
+  /** When an armed enemy flyer was last seen. */
+  private airSeen = 0;
   /** Soldiers sent in the current attack wave. */
   private wave = new Set<number>();
   /** Enemy fighters and armed buildings we have seen: hp and shields, damage per second, as last seen. */
@@ -326,6 +328,10 @@ export class AI {
     // Armed flyers only: one unarmed scout seen once (an Isdaris Espion, a Corbeau, a Z Espion) turned the AI to
     // anti-air units and weapons for the rest of the game.
     const flyersSeen = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && flies(e) && !!w.weapon(e) && w.sees(this.player, e)).length;
+    // Forgotten after three minutes without one (a Chimère seen once at minute 6 kept the Humans to anti-air units and
+    // no Phalangiste nor Légionnaire for the rest of the game).
+    if (flyersSeen) this.airSeen = w.tick;
+    else if (w.tick - this.airSeen > ticks(180)) this.enemyAir = 0;
     this.enemyAir = Math.max(this.enemyAir, flyersSeen);
     const antiAir = Math.min(BALANCE.ai.antiAir.max, Math.ceil(this.enemyAir / BALANCE.ai.antiAir.per));
     const minute = w.tick / ticks(60);
