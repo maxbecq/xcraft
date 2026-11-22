@@ -26,14 +26,13 @@ describe('Dieux, by XC.doc 2008', () => {
     expect((DEFS.titan as UnitDef).buildTime).toBe(66);
   });
 
-  it("Seth's blow on a wounded unit: the cruel bonus before the Artefacterie's Force, as before", () => {
+  it("Seth's blow on a wounded unit: no cruel bonus any more (équilibreur 2026-11-22), the Artefacterie's Force only", () => {
     const w = createMatch(['dieux', 'humains']);
     const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
     seth.arts = ['artforce'];
     const serf = w.spawn('serf', 1, 31 * FP, 30 * FP);
     const a = (DEFS.seth as UnitDef).attack!;
     let d = w.blow(seth, serf, a);
-    d += Math.floor((d * 50) / 100); // Seth's cruelty
     d += Math.floor((d * 20) / 100); // Force
     serf.hp = 1000;
     serf.maxHp = 3000; // still under half

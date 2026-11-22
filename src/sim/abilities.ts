@@ -140,11 +140,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       this.hit(e, t, { damage: ab.damage!, range: 99, cooldown: 0 });
       this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
     }
-  } else if (name === 'armeeenfers') {
-    for (let i = 0; i < (ab.max ?? 1); i++) {
-      const g = this.spawnBeside('fantome', e);
-      g.invuln = g.ttl; // unhurt for all their short life
-    }
   } else if (name!.startsWith('forme')) {
     // Mutation: another form, its wounds kept; a flyer only lands on open ground.
     const into = FORMS[name!];
@@ -189,9 +184,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.casts.push({ kind: name, x: e.x, y: e.y });
     e.hp = 0;
     return;
-  } else if (name === 'transe') {
-    e.war = ticks(ab.duration);
-    e.warPct = ab.damage!;
   } else if (name === 'statue') {
     // To stone, or back (each way once its cooldown is over).
     e.statue = e.statue > 0 ? 0 : ticks(ab.duration);
@@ -382,12 +374,6 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
-  } else if (name === 'flechegaia') {
-    const t = [...this.entities.values()]
-      .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
-      .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
-    if (!t) return false;
-    this.hit(e, t, { damage: ab.damage!, range: ab.range!, cooldown: 0 });
   } else if (name === 'pluiedefeu') {
     const foes = near((t) => this.hostile(t.owner, e.owner));
     if (!foes.length) return false;

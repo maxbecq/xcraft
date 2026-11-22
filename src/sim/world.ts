@@ -415,7 +415,7 @@ export class World {
     if (owner >= 0 && e.type === 'zespion' && this.level(owner, 'megaespion')) this.fortify(e);
     // Scarabée amélioré: born with its extra speed, like the ones already out.
     if (owner >= 0 && e.type === 'scarabee' && this.level(owner, 'scarabeassaut')) e.speed = this.baseSpeed(e);
-    if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique', 'drakegeant', 'armurezodiacale']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
+    if (owner >= 0) for (const line of ['cercle1', 'cercle2', 'boostgenetique', 'drakegeant', 'auraputride']) if (this.level(owner, line.replace(/\d$/, '')) >= (DEFS[line] as UpgradeDef).level) this.empower(e, line);
     return e;
   }
 

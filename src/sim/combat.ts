@@ -36,11 +36,12 @@ export function empower(this: World, u: Entity, type: string): void {
     u.maxShield += extra;
     u.shield += extra;
     this.unlist(); // the lists of what carries a shield (World.listed)
-  } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'armurezodiacale' && u.type === 'titan')) {
-    // Drake géant, Armure zodiacale: more health, the wounds kept.
-    const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.zodiacale.hp;
+  } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'auraputride' && u.type === 'immortel')) {
+    // Drake géant, Aura putride: more health, the wounds kept (the Immortel's speed is read in baseSpeed).
+    const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.auraputride.hp;
     u.maxHp += extra;
     u.hp += extra;
+    if (type === 'auraputride' && u.boost === 0) u.speed = this.baseSpeed(u);
   } else if (type === 'boostgenetique' && u.type === 'creature') {
     u.maxHp += U.boost.hp;
     u.hp += U.boost.hp;
@@ -59,7 +60,6 @@ export function armorBonus(this: World, t: Entity): number {
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
   bonus += t.arts.filter((a) => a === 'artresistance').length * BALANCE.rules.upgrades.artefacts.resistance;
   if (t.statue > 0) bonus += BALANCE.rules.upgrades.statue.armor;
-  if (t.type === 'titan' && this.level(t.owner, 'armurezodiacale')) bonus += BALANCE.rules.upgrades.zodiacale.armor;
   // Athéna's protection aura, the strongest of her side's in reach.
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
@@ -141,7 +141,7 @@ export function baseSpeed(this: World, e: Entity): number {
   // Scarabée amélioré (fiche 2010): +0.1 of speed.
   const assault = e.type === 'scarabee' && e.owner >= 0 && this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeSpeed : 0;
   // Boost génétique (fiche 2010): +0.25 of speed for the Créature.
-  const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : 0;
+  const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : e.type === 'immortel' && e.owner >= 0 && this.level(e.owner, 'auraputride') ? BALANCE.rules.upgrades.auraputride.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
   return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault + genetic) * (100 + fast) * stone) / 10000);
@@ -160,14 +160,15 @@ export function ascend(this: World, g: Entity): void {
 }
 
 /**
- * Once a second: Osiris's putrid aura (and the Immortel's, at his first level) hurts the living enemies round him;
+ * Once a second: Osiris's putrid aura (and the Immortel's once Aura putride is researched, at Osiris's first level)
+ * hurts the living enemies round him;
  * his Nuée nauséabonde hurts the enemies round him and gives him what it takes; the Fontaine du Nil heals the living
  * allies round it.
  */
 export function pulse(this: World, e: Entity): void {
   const U = BALANCE.rules.upgrades;
   const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical;
-  if (e.type === 'osiris' || e.type === 'immortel') {
+  if (e.type === 'osiris' || (e.type === 'immortel' && this.level(e.owner, 'auraputride'))) {
     const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
     for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
   }
@@ -500,7 +501,6 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
   if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
   // Seth (notice: he hits the weakest soldiers hard, to finish them cruelly): more against a unit under half its health.
-  if (e.type === 'seth' && t.def.kind === 'unit' && t.hp * 2 < t.maxHp) damage += idiv(damage * U.sethCruel, 100);
   damage = this.boost(e, damage, true);
   // Courroux du marteau: the charged blow.
   if (e.charged > 0 && a.range < 1) {

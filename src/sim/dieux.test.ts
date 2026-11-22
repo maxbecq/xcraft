@@ -209,7 +209,7 @@ describe('Dieux', () => {
     const nain = w.spawn('nain', 0, 31 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'voile' }]);
     expect(nain.camo).toBeGreaterThan(0);
-    // Rayon de mort on every enemy Hadès sees; the ghosts of his army cannot be hurt.
+    // Rayon de mort on every enemy Hadès sees (no more Armée des enfers: équilibreur 2026-11-22).
     const w2 = createMatch(['dieux', 'humains']);
     const hades = Object.assign(w2.spawn('hades', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const a = w2.spawn('legionnaire', 1, 34 * FP, 30 * FP);
@@ -219,12 +219,7 @@ describe('Dieux', () => {
     w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'rayonmort' }]);
     expect(a.hp).toBeLessThan(ha);
     expect(b.hp).toBeLessThan(hb);
-    hades.abilityCd = 0;
-    w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'armeeenfers' }]);
-    const ghosts = of(w2, 0, 'fantome');
-    expect(ghosts).toHaveLength(ABILITIES.armeeenfers.max!);
-    w2.hurt(ghosts[0], 100);
-    expect(ghosts[0].hp).toBe(ghosts[0].maxHp);
+    expect((DEFS.hades as UnitDef).abilities).not.toContain('armeeenfers');
     hades.abilityCd = 0;
     w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'voyage', x: 45 * FP, y: 30 * FP }]);
     run(w2, 6);
@@ -339,7 +334,7 @@ describe('Dieux', () => {
     expect(of(w, 0, 'elemterre').length + of(w, 0, 'elemeau').length).toBe(0);
   });
 
-  it("the Temple de vénération's other research: Coup puissant, Peau de roc, Prescience, Drake géant, Armure zodiacale; the Transe", () => {
+  it("the Temple de vénération's other research: Coup puissant, Peau de roc, Prescience, Drake géant, Aura putride; no more Transe", () => {
     const w = createMatch(['dieux', 'humains']);
     const up = w.players[0].upgrades;
     // Peau de roc: the Sphinx turns to stone, armoured and mending.
@@ -362,17 +357,19 @@ describe('Dieux', () => {
       w.step([]);
     }
     expect(blows.size).toBe(2);
-    // Drake géant and Armure zodiacale, on those standing and to come.
+    // Drake géant and Aura putride, on those standing and to come.
     const drake = w.spawn('drake', 0, 60 * FP, 50 * FP);
     up.drakegeant = 1;
     w.empower(drake, 'drakegeant');
     expect(drake.maxHp).toBeGreaterThan((DEFS.drake as UnitDef).hp);
     expect(w.room(drake)).toBe(BALANCE.rules.upgrades.drakegeant.room);
-    up.armurezodiacale = 1;
-    expect(w.spawn('titan', 0, 64 * FP, 50 * FP).maxHp).toBe((DEFS.titan as UnitDef).hp + BALANCE.rules.upgrades.zodiacale.hp);
-    // Transe enragée.
-    w.step([{ player: 0, kind: 'ability', ids: [mino.id], name: 'transe' }]);
-    expect(mino.war).toBeGreaterThan(0);
+    const slow = w.spawn('immortel', 0, 66 * FP, 50 * FP);
+    up.auraputride = 1;
+    const imm = w.spawn('immortel', 0, 64 * FP, 50 * FP);
+    expect(imm.maxHp).toBe((DEFS.immortel as UnitDef).hp + BALANCE.rules.upgrades.auraputride.hp);
+    expect(imm.speed).toBeGreaterThan(slow.speed);
+    // The Minotaure lost its Transe enragée.
+    expect((DEFS.minotaure as UnitDef).ability).toBeUndefined();
   });
 
   it('Déracinement: an Yggdrasill walks, then takes root again elsewhere', () => {

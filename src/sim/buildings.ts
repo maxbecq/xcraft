@@ -283,7 +283,7 @@ export function produce(this: World, b: Entity): void {
       if (type === 'megaespion') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'zespion') this.fortify(u);
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && (u.type === 'drone' || u.type === 'dronecombat')) this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
-      if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'armurezodiacale'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
+      if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'auraputride'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
       this.next(b);
       return;
     }

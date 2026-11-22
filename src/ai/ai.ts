@@ -95,7 +95,7 @@ const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', '
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
-const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
+const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
@@ -1289,7 +1289,7 @@ export class AI {
       if (!ab || !w.ready(u, ab) || !SIMPLE.includes(ab)) return false;
       if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
-      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
+      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
     // Dieux: an Élémentaire comes « faible et chétive » (notice): it takes its fire form at once (it hits flyers too).
@@ -1670,7 +1670,7 @@ export class AI {
           const air = near.some((f) => flies(f));
           const ground = near.some((f) => !flies(f));
           if (name === 'formeair' ? air && !ground : ground && u.type === 'elemair') cmd = self(u, name);
-        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre' || name === 'flechegaia') {
+        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre') {
           // The toughest enemy in reach (for the stun, a caster first).
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
           if (pick && pick.maxHp + pick.maxShield >= 100) cmd = at(u, name, pick);
@@ -1713,8 +1713,6 @@ export class AI {
           if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 5) cmd = self(u, name);
         } else if (name === 'rayonmort') {
           if (around(near, u.x, u.y, (u.def as UnitDef).sight * FP).length >= 4) cmd = self(u, name);
-        } else if (name === 'armeeenfers') {
-          if (this.engaged(u) !== undefined) cmd = self(u, name);
         } else if (name === 'nuee') {
           if (around(near, u.x, u.y, radius + u.radius).length >= 2) cmd = self(u, name);
         } else if (name === 'statue') {

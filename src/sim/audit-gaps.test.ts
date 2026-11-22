@@ -237,7 +237,7 @@ describe('audit gaps', () => {
     expect(tank.speed).toBeLessThan(speed / 5);
   });
 
-  it('Seth hits a wounded soldier harder', () => {
+  it('Seth hits a wounded soldier no harder (équilibreur 2026-11-22)', () => {
     const w = createMatch(['dieux', 'humains']);
     const seth = w.spawn('seth', 0, 30 * FP, 30 * FP);
     const fresh = w.spawn('legionnaire', 1, 31 * FP, 30 * FP);
@@ -246,7 +246,7 @@ describe('audit gaps', () => {
     const [a, b] = [fresh.hp, hurt.hp];
     w.hit(seth, fresh, w.weapon(seth)!);
     w.hit(seth, hurt, w.weapon(seth)!);
-    expect(b - hurt.hp).toBeGreaterThan(a - fresh.hp);
+    expect(b - hurt.hp).toBe(a - fresh.hp);
   });
 
   it('a ghost of the Armée des enfers vanishes once it has dealt its share of damage', () => {

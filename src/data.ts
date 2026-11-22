@@ -419,7 +419,6 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Gaïa (notice): appears by the friendly building nearest the point. */
   teleportgaia: { name: 'Téléportation de Gaïa', effect: 'Gaïa apparaît près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleportgaia },
   /** Gaïa (notice): a magic arrow on the enemy nearest the point. */
-  flechegaia: { name: 'Flèche de Gaïa', effect: 'Une flèche magique sur l\'ennemi visé.', hotkey: 'F', target: 'point', ...BALANCE.abilities.flechegaia },
   /** Thor (notice, « Courroux du marteau »): his next blow hits several times as hard. */
   courroux: { name: 'Courroux du marteau', effect: 'Son prochain coup frappe plusieurs fois plus fort.', hotkey: 'C', target: 'self', ...BALANCE.abilities.courroux },
   /** Odin (notice, « Foudre puissante »): a bolt on the enemy nearest the point, which it stuns. */
@@ -439,7 +438,6 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Hadès (notice): travels under ground to the point. */
   voyage: { name: 'Voyage souterrain', effect: 'Hadès voyage sous terre jusqu\'au point visé.', hotkey: 'V', target: 'point', ...BALANCE.abilities.voyage },
   /** Hadès (notice): ghosts that cannot be hurt rise round him, for a while. */
-  armeeenfers: { name: 'Armée des enfers', effect: 'Des spectres invulnérables se lèvent autour d\'Hadès, un moment.', hotkey: 'E', target: 'self', ...BALANCE.abilities.armeeenfers },
   /** Osiris (notice): a swarm round him that hurts the enemies and gives him their life. */
   nuee: { name: 'Nuée nauséabonde', effect: 'Une nuée blesse les ennemis autour d\'Osiris et lui rend leur vie.', hotkey: 'N', target: 'self', ...BALANCE.abilities.nuee },
   /** Yggdrasill (notice, Déracinement): uproots to walk, and takes root again at the point. */
@@ -451,7 +449,6 @@ export const ABILITIES: Record<string, AbilityDef> = {
   ancrer: { name: 'Reposer', effect: 'Se repose au point visé, dans un champ d’énergie, et tire de nouveau peu après.', hotkey: 'R', target: 'point', ...BALANCE.abilities.ancrer },
   enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
   /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
-  transe: { name: 'Transe enragée', effect: 'Une transe furieuse : ses coups sont bien plus forts un moment.', hotkey: 'T', target: 'self', ...BALANCE.abilities.transe },
   /** Sphinx (notice, Peau de roc): turned to stone, slower and slower to shoot, but heavily armoured, mending. */
   statue: { name: 'Forme de statue', effect: 'Se change en pierre : très blindé et se répare, mais tire de plus en plus lentement.', hotkey: 'R', target: 'self', research: 'peauroc', ...BALANCE.abilities.statue },
   /** Athéna (notice): her owl flies over a zone and shows it a while. */
@@ -759,7 +756,7 @@ const BASE: Record<string, object> = {
   // its own troops at its feet. Gaïa (given at the start, back by herself when she falls) calls the buildings down:
   // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
   esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
-  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, builds: ['asgaard', 'branche', 'antre', 'puitsdivin', 'primordial'], trains: ['esprit'], unique: true, abilities: ['teleportgaia', 'flechegaia'], faction: 'dieux', hotkey: 'G' },
+  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, builds: ['asgaard', 'branche', 'antre', 'puitsdivin', 'primordial'], trains: ['esprit'], unique: true, abilities: ['teleportgaia'], faction: 'dieux', hotkey: 'G' },
   thor: { kind: 'unit', name: 'Thor', radius: 1.7, builds: ['temple'], trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
   apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, abilities: ['lumiereardente', 'tempetezeus'], ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
   seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['jetdesable', 'amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
@@ -788,7 +785,7 @@ const BASE: Record<string, object> = {
   // Third rank (notice): two second-rank gods standing open it. Osiris's putrid aura is passive (rules.putride).
   /** Frigg ignores the ground (cliffs, water): she flies. */
   frigg: { kind: 'unit', name: 'Frigg', radius: 1.4, builds: ['artefacterie'], trains: ['nain', 'walkyrie'], unique: true, abilities: ['soumission', 'voile', 'jormungand'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'F' },
-  hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'armeeenfers', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
+  hades: { kind: 'unit', name: 'Hadès', radius: 1.6, trains: ['minotaure', 'titan'], unique: true, abilities: ['rayonmort', 'voyage', 'tempetezeus'], requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'D' },
   osiris: { kind: 'unit', name: 'Osiris', radius: 1.7, builds: ['fontaine'], trains: ['sphinx', 'immortel'], unique: true, abilities: ['amonra'], ability: 'nuee', requiresAny: { of: ['odin', 'athena', 'isis'], count: 2 }, faction: 'dieux', hotkey: 'R' },
   /** Frigg's flying warrior: a double sword thrown from the air; vanishes a while. */
   walkyrie: { kind: 'unit', name: 'Walkyrie', radius: 0.45, flying: true, ability: 'camouflagewalkyrie', faction: 'dieux', hotkey: 'W' },
@@ -801,7 +798,7 @@ const BASE: Record<string, object> = {
   /** Isis's priestess: heals, no attack; Dissipation. */
   pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'E' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
-  minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, ability: 'transe', faction: 'dieux', hotkey: 'M' },
+  minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // Biological and armoured (BA); a heavy machine while turned to stone (équilibreur 2026-11-22).
   sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, ability: 'statue', faction: 'dieux', hotkey: 'X' },
   asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
@@ -826,7 +823,7 @@ const BASE: Record<string, object> = {
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
     kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
-    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'armurezodiacale', 'deracinement'],
+    researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'auraputride', 'deracinement'],
   },
   ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
   ...upgrades('ranged', 'Attaque à distance', 'D', undefined, 'dieux', 3, 'dranged'),
@@ -838,7 +835,7 @@ const BASE: Record<string, object> = {
   prescience: research("Prescience d'Yggdrasill", 'Y', 'Les Yggdrasill détectent les unités camouflées.', undefined, 'dieux'),
   drakegeant: research('Drake géant', 'G', 'Drakes : plus de vie, et ils transportent des unités dans leur gueule.', { odin: 1 }, 'dieux'),
   deracinement: research('Déracinement', 'E', 'Les Yggdrasill peuvent se déraciner et marcher ; ils ne combattent qu’une fois enracinés.', undefined, 'dieux'),
-  armurezodiacale: research('Armure zodiacale', 'Z', 'Titans : plus de vie et de blindage.', { hades: 1 }, 'dieux'),
+  auraputride: research('Aura putride', 'I', 'Immortels : +100 PV, plus rapides, et une aura qui ronge les ennemis vivants au corps à corps.', { osiris: 1 }, 'dieux'),
   offrandes: research('Offrandes', 'O', 'Les dieux cessent de compter dans la population.', undefined, 'dieux'),
   // Artefacterie (notice, Frigg): a god buys up to 4 improvements, where it stands, the same one several times if it likes.
   artforce: research('Force', 'G', 'Le dieu frappe plus fort.', { artefacterie: 1 }, 'dieux'),
