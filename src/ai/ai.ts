@@ -1078,7 +1078,8 @@ export class AI {
     // A raid of flyers the army cannot shoot still sends the drones near it into shelter, if its arms hit the ground (a
     // Drake over the mineral line, the drones left outside).
     if (!threat) for (const b of shelters) {
-      const hide = !!raid && !this.easy && raid.armed.some((e) => !!w.weapon(e) && reaches(w.weapon(e)!, false)) && dist(b.x, b.y, raid.x, raid.y) < 12 * FP;
+      // Only from one within its reach of it (plus a few tiles): one hovering off kept them in for good.
+      const hide = !!raid && !this.easy && raid.armed.some((e) => !!w.weapon(e) && reaches(w.weapon(e)!, false) && this.toEdge(e, b) <= (w.weapon(e)!.range + 3) * FP);
       if (hide) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
       else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
     }
@@ -2208,8 +2209,16 @@ export class AI {
     return ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.some((t) => {
       const d = DEFS[t] as UnitDef;
       // (or, no worker left, the next worker)
-      return d.kind === 'unit' && (ctx.serfs.length === 0 && this.settled(ctx.home) ? t === this.faction.worker : !d.worker && !!d.attack) && ctx.minerals < d.cost.minerals && ctx.energy - T.give >= d.cost.energy && ctx.minerals + this.sale(ctx.energy, d.cost.energy) >= d.cost.minerals;
+      // The bank with the worker's price kept back put in again (research spends it on that worker).
+      const m = ctx.minerals + ctx.low;
+      return d.kind === 'unit' && (ctx.serfs.length === 0 && this.settled(ctx.home) ? t === this.faction.worker : !d.worker && !!d.attack) && m < d.cost.minerals && ctx.energy - T.give >= d.cost.energy && m + this.sale(ctx.energy, d.cost.energy) >= d.cost.minerals;
     }));
+  }
+
+  /** From a point to a building's footprint (its nearest edge or corner), as the simulation measures a shot. */
+  private toEdge(e: { x: number; y: number }, b: Entity): number {
+    const half = (((b.def as BuildingDef).size ?? 0) * FP) / 2;
+    return Math.hypot(Math.max(0, Math.abs(e.x - b.x) - half), Math.max(0, Math.abs(e.y - b.y) - half));
   }
 
   /** Minerals a Marché would add for the energy over `keepEnergy`, at the trade's real rate (give energy, get minerals). */
@@ -2305,7 +2314,7 @@ export class AI {
       // Nor a raider on foot that cannot walk to us (across a cliff from a Pod, it kept a full wave home for good).
       // Unless its weapon reaches one of them from there (a Phalangiste firing across the cliff).
       const shoots = (w.weapon(e)?.range ?? 0) * FP;
-      if (!flies(e) && anchor && !buildings.some((b) => dist(e.x, e.y, b.x, b.y) <= shoots + (((b.def as BuildingDef).size ?? 0) * FP) / 2 + (((e.def as UnitDef).radius ?? 0) + 0.125) * FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
+      if (!flies(e) && anchor && !buildings.some((b) => this.toEdge(e, b) <= shoots + (((e.def as UnitDef).radius ?? 0) + 0.125) * FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
       foes.push(e);
     }
     if (!foes.length) return undefined;
