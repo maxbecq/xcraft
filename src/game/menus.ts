@@ -422,6 +422,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       const id = ++launches;
       launching = Object.assign(new Confirm(() => lobby.send({ go: final, id })), { setup: final, id });
       launching.start();
+      refresh(); // the button greys out
       launchWatch = window.setInterval(() => {
         if (launching?.poll() !== 'expired') return;
         unlaunch();
