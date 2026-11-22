@@ -92,19 +92,20 @@ describe('audit gaps', () => {
     expect(b.ferveur).toBeGreaterThan(0);
   });
 
-  it('the Allosaure feasts on a corpse nearby to heal (notice), half its health (mod)', () => {
+  it('the Allosaure feasts on a fresh body it is aimed at (notice): +75 HP, then 1.5 s still (the balancer, 2026-11-22)', () => {
     const w = createMatch(['humains', 'isdaris']);
     const allo = w.spawn('allosaure', 0, 30 * FP, 30 * FP);
     allo.hp = 100;
-    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin', x: allo.x, y: allo.y }]);
     expect(allo.hp).toBe(100); // no corpse
     const prey = w.spawn('archer', 1, 32 * FP, 30 * FP);
     prey.hp = 0;
     w.step([]);
     expect(w.corpses.length).toBeGreaterThan(0);
-    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
-    expect(allo.hp).toBe(100 + Math.floor(allo.maxHp / 2));
-    expect(allo.abilityCd).toBeGreaterThan(0);
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin', x: prey.x, y: prey.y }]);
+    for (let i = 0; i < 20 && allo.hp === 100; i++) w.step([]);
+    expect(allo.hp).toBe(175);
+    expect(allo.held).toBeGreaterThan(0);
   });
 
   it('the Assassin dodges a third of the attacks, near or far (Danse du soldat, 2010 sheet)', () => {

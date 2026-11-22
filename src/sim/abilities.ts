@@ -181,12 +181,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.spawnBeside('minechimique', e);
     this.casts.push({ kind: name, x: e.x, y: e.y });
     return;
-  } else if (name === 'festin') {
-    // Allosaure: devours the nearest fresh organic corpse and gets back a share of its health.
-    const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)[0];
-    if (!c || e.hp >= e.maxHp) return;
-    this.corpses.splice(this.corpses.indexOf(c), 1);
-    e.hp = Math.min(e.maxHp, e.hp + idiv(e.maxHp * ab.damage!, 100));
   } else if (name === 'explosioncuve') {
     // The balancer (2026-11-22): 2 s between the order and the blast (the fuse burns in World.step, then cuveBlast).
     if (e.fuse === 0) e.fuse = ticks(BALANCE.rules.upgrades.explosionDelay);
@@ -431,6 +425,13 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
     for (const t of allies) t.ferveur = ticks(ab.duration);
+  } else if (name === 'festin') {
+    // Allosaure: devours the fresh organic body nearest the spot, ally or enemy: +75 HP, then a moment still.
+    const c = this.corpses.filter((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.tick - b.tick)[0];
+    if (!c || e.hp >= e.maxHp) return false;
+    this.corpses.splice(this.corpses.indexOf(c), 1);
+    e.hp = Math.min(e.maxHp, e.hp + ab.damage!);
+    e.held = Math.max(e.held, ticks(ab.duration));
   } else if (name === 'reanimation') {
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
     if (i < 0) return false;

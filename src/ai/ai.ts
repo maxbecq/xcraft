@@ -1775,7 +1775,9 @@ export class AI {
           const c = w.corpses.filter((c) => dist(c.x, c.y, u.x, u.y) <= reach).sort((a, b) => b.tick - a.tick)[0];
           if (c) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: c.x, y: c.y };
         } else if (name === 'festin') {
-          if (u.hp * 10 < u.maxHp * 7 && w.corpses.some((c) => dist(c.x, c.y, u.x, u.y) <= radius)) cmd = self(u, name);
+          // A fresh body in reach, when hurt: aimed at it.
+          const c = u.hp * 10 < u.maxHp * 7 ? w.corpses.filter((c) => dist(c.x, c.y, u.x, u.y) <= reach).sort((a, b) => dist(a.x, a.y, u.x, u.y) - dist(b.x, b.y, u.x, u.y) || b.tick - a.tick)[0] : undefined;
+          if (c) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: c.x, y: c.y };
         } else if (name === 'posermine') {
           // Pégase on the ground: a mine under it when enemy walkers come close.
           if (!u.airborne && u.charges > 0 && around(near, u.x, u.y, 6 * FP).filter((f) => !flies(f)).length >= 2) cmd = self(u, name);

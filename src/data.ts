@@ -365,7 +365,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
    * that makes it unhurt for a while, unable to shoot or produce (sheet and mod « Déphasage »; the mod's 10 s, cooldown 90). */
   bouclierplasma: { name: 'Bouclier de plasma', effect: 'Le bâtiment devient invulnérable un moment, mais ne tire et ne produit plus.', hotkey: 'J', target: 'self', ...(BALANCE.abilities.bouclierplasma as object) } as AbilityDef,
   /** Allosaure (notice): feasts on a corpse nearby to heal; the mod's 50 % and 60 s. */
-  festin: { name: 'Festin', effect: 'Dévore un cadavre organique tout proche et regagne une bonne part de sa vie.', hotkey: 'F', ...(BALANCE.abilities.festin as object) } as AbilityDef,
+  // The balancer (2026-11-22): aimed at where a living unit (ally or enemy) has just died; +75 HP, then 1.5 s still.
+  festin: { name: 'Festin', effect: 'Dévore la dépouille d\'une unité organique morte depuis peu, alliée ou ennemie : +75 PV, puis immobile 1,5 s.', hotkey: 'F', target: 'point', ...(BALANCE.abilities.festin as object) } as AbilityDef,
   /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
   gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment.', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
   acidedissolvant: { name: 'Acide dissolvant', effect: 'Un torrent d\'acide sur un bâtiment ennemi : de très lourds dégâts.', hotkey: 'Q', target: 'point', research: 'acide', ...(BALANCE.abilities.acidedissolvant as object) } as AbilityDef,

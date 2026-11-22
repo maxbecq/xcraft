@@ -303,7 +303,7 @@
     "bouclierplasma": {"cooldown": 90, "duration": 20},
     "posermine": {"cooldown": 12, "duration": 0, "radius": 2, "damage": 160, "max": 5},
     "minealchimique": {"cooldown": 10, "duration": 3, "radius": 1.75, "damage": 160},
-    "festin": { "cooldown": 60, "duration": 0, "radius": 3, "damage": 50 },
+    "festin": {"cooldown": 7, "duration": 1.5, "radius": 3, "damage": 75, "range": 3},
     "gazeuphorisants": {"mana": 125, "cooldown": 1, "duration": 30, "range": 9, "radius": 4, "damage": 25},
     "acidedissolvant": { "mana": 100, "cooldown": 2, "duration": 0, "range": 5, "radius": 1.5, "damage": 400 },
     "explosioncuve": {"cooldown": 0, "duration": 0, "radius": 6, "damage": 356},
