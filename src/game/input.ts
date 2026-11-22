@@ -404,6 +404,12 @@ export class Input {
     clearTimeout(this.longPress);
     const mode = this.touchMode;
     this.touches.delete(e.pointerId);
+    // A pinch with one finger lifted: the other drags the map on, from where it is (never a tap).
+    if (this.touches.size === 1 && mode === 'pinch') {
+      this.touchMode = 'pan';
+      this.panVel = { x: 0, y: 0, t: performance.now() };
+      return;
+    }
     if (this.touches.size > 0) return;
     this.touchMode = null;
     const start = this.dragStart;
