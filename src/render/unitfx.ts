@@ -148,15 +148,15 @@ export function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: n
   const tex = owned(bubbles().clone());
   tex.needsUpdate = true;
   tex.repeat.set(1, h / w / 2);
-  const rising = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, color: 0x8fd8ff })));
+  const rising = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, color: 0xa8ffc8 })));
   rising.position.set(0, y, z);
   // The liquid's own light, under the bubbles.
-  const liquid = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false, blending: AdditiveBlending, color: 0x3d6bff })));
+  const liquid = new Mesh(new PlaneGeometry(w, h), owned(new MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false, blending: AdditiveBlending, color: 0x2fe070 })));
   liquid.position.set(0, y, z - 0.005);
-  const glow = new Mesh(new PlaneGeometry(w * 1.5, h * 1.6), owned(new MeshBasicMaterial({ map: spark(), transparent: true, opacity: 0.3, depthWrite: false, blending: AdditiveBlending, color: 0x5a7dff })));
+  const glow = new Mesh(new PlaneGeometry(w * 1.5, h * 1.6), owned(new MeshBasicMaterial({ map: spark(), transparent: true, opacity: 0.3, depthWrite: false, blending: AdditiveBlending, color: 0x48ff90 })));
   glow.position.set(0, y, z + 0.01);
   // The halo: facing the camera, so it reads from the game's view whatever the side the tank is on.
-  const halo = new Sprite(owned(new SpriteMaterial({ map: spark(), transparent: true, opacity: 0.4, depthWrite: false, blending: AdditiveBlending, color: 0x4f7bff })));
+  const halo = new Sprite(owned(new SpriteMaterial({ map: spark(), transparent: true, opacity: 0.4, depthWrite: false, blending: AdditiveBlending, color: 0x40f088 })));
   halo.scale.set(w * 3.4, h * 3.6, 1);
   halo.position.set(0, y, z + 0.12);
   group.add(liquid, rising, glow, halo);
@@ -168,7 +168,7 @@ export function assimFx(body: Object3D, e: Entity): { group: Group; update(dt: n
   for (let i = 0; i < n; i++) reset(i, true);
   const geom = new BufferGeometry();
   geom.setAttribute('position', new BufferAttribute(pos, 3));
-  const loose = new Points(geom, owned(new PointsMaterial({ map: spark(), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xbfe8ff })));
+  const loose = new Points(geom, owned(new PointsMaterial({ map: spark(), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, color: 0xc8ffd8 })));
   loose.frustumCulled = false;
   group.add(loose);
   for (const o of group.children) o.userData.noPick = true;
