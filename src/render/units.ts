@@ -13,7 +13,7 @@ import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
-import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock } from './sites';
+import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
 // Kept for main.ts, which imports them from here.
@@ -777,9 +777,9 @@ export class EntityRenderer {
           const from = v.dock.reach, to = size ? gap - Math.min(size.x, size.z) * 0.4 : gap - (addon.def as BuildingDef).size / 2 + 0.6;
           const rise = size ? size.y * 0.5 - v.dock.y : 0;
           const grown = addon.buildLeft > 0 ? 1 - addon.buildLeft / world.buildTicks(addon) : 1;
-          v.dock.arm.rotation.set(0, Math.atan2(-dz, dx), Math.atan2(rise, to - from), 'YZX');
+          v.dock.arm.rotation.set(0, Math.atan2(-dz, dx), 0);
           v.dock.arm.position.set((dx / gap) * from, v.dock.y, (dz / gap) * from);
-          v.dock.arm.scale.x = Math.max(0.01, Math.hypot(to - from, rise) * grown);
+          bendDock(v.dock.arm, Math.max(0.01, (to - from) * grown), rise * grown);
         }
       }
       if (e.type === 'puits') v.model.visible = !covered.has(e.tx * 4096 + e.ty);

@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, LineBasicMaterial, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, RingGeometry, BufferGeometry, type Texture,
+  MeshStandardMaterial, Object3D, RingGeometry, BufferGeometry, SphereGeometry, type Texture,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { owned, SHARED } from './models';
@@ -287,6 +287,8 @@ export function contactShadow(size: number): Mesh {
 }
 const DOCK_STEEL = new MeshStandardMaterial({ color: 0x5a4636, metalness: 0.6, roughness: 0.55 });
 const DOCK_CYAN = new MeshBasicMaterial({ color: 0x5ff3ff });
+/** The dock arm's gunmetal, as on its sketch. */
+const ARM_STEEL = new MeshStandardMaterial({ color: 0x55565c, metalness: 0.75, roughness: 0.4 });
 
 /** A Z Pod's docking gear (see View.dock): four open ports, one a side at the model's edge (`reach`), and a gantry
  * along +x from the Pod's centre. */
@@ -312,14 +314,50 @@ export function podDock(reach: number, height: number): NonNullable<View['dock']
     side.add(collar, ...jaws, ring);
     ports.add(side);
   }
-  // Unit-long pieces from x = 0 to 1, stretched to the add-on.
+  // A short articulated arm out to the add-on (its chosen sketch): two round riveted segments bent up at an elbow,
+  // a cyan-lit collar at the Pod, at the elbow and at the add-on. Laid out along +x by bendDock to the gap's length.
   const arm = new Group();
-  const beam = new Mesh(new BoxGeometry(1, 0.18, 0.36).translate(0.5, 0, 0), DOCK_STEEL);
-  const strip = new Mesh(new BoxGeometry(1, 0.04, 0.1).translate(0.5, 0.11, 0), DOCK_CYAN);
-  const rails = [-1, 1].map((d) => new Mesh(new BoxGeometry(1, 0.14, 0.05).translate(0.5, 0.14, d * 0.17), DOCK_STEEL));
-  arm.add(beam, strip, ...rails);
+  const segment = () => {
+    const g = new Group();
+    const tube = new Mesh(new CylinderGeometry(0.1, 0.12, 1, 10).translate(0, 0.5, 0), ARM_STEEL);
+    const band = new Mesh(new CylinderGeometry(0.125, 0.125, 0.06, 10).translate(0, 0.5, 0), ARM_STEEL);
+    // a piston along its top
+    const rod = new Mesh(new CylinderGeometry(0.035, 0.035, 0.8, 6).translate(0.1, 0.5, 0), ARM_STEEL);
+    g.add(tube, band, rod);
+    return g;
+  };
+  const collar = () => {
+    const g = new Group();
+    g.add(new Mesh(new CylinderGeometry(0.17, 0.17, 0.12, 12), ARM_STEEL), new Mesh(new CylinderGeometry(0.11, 0.11, 0.14, 12), DOCK_CYAN));
+    return g;
+  };
+  const elbow = new Group();
+  elbow.add(new Mesh(new SphereGeometry(0.16, 12, 8), ARM_STEEL), new Mesh(new CylinderGeometry(0.1, 0.1, 0.36, 10).rotateX(Math.PI / 2), DOCK_CYAN));
+  const parts = { a: segment(), b: segment(), from: collar(), to: collar(), elbow };
+  arm.add(parts.a, parts.b, parts.from, parts.to, parts.elbow);
+  arm.userData.parts = parts;
   arm.position.y = y;
   arm.visible = false;
   for (const o of [ports, arm]) o.traverse((m) => (m.userData.noPick = true));
   return { ports, arm, glow, y, reach };
+}
+
+/** Lays a dock arm out along its +x to `length`, its far end `rise` higher; the elbow raised a little between. */
+export function bendDock(arm: Object3D, length: number, rise: number): void {
+  const p = arm.userData.parts as { a: Object3D; b: Object3D; from: Object3D; to: Object3D; elbow: Object3D };
+  const a = new Vector3(0, 0, 0);
+  const b = new Vector3(length, rise, 0);
+  const m = a.clone().lerp(b, 0.5).add(new Vector3(0, 0.04 + 0.05 * length, 0));
+  const up = new Vector3(0, 1, 0);
+  for (const [seg, s, e] of [[p.a, a, m], [p.b, m, b]] as const) {
+    const d = e.clone().sub(s);
+    seg.position.copy(s);
+    seg.quaternion.setFromUnitVectors(up, d.clone().normalize());
+    seg.scale.set(1, Math.max(0.01, d.length()), 1);
+  }
+  p.elbow.position.copy(m);
+  for (const [c, at, toward] of [[p.from, a, m], [p.to, b, m]] as const) {
+    c.position.copy(at);
+    c.quaternion.setFromUnitVectors(up, toward.clone().sub(at).normalize());
+  }
 }
