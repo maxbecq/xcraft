@@ -1076,10 +1076,11 @@ export class AI {
       let fought = false;
       if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4 && !(lead && flies(lead))) {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id)));
-        // Weighed by hit points times damage per second, not hit points alone (two drones at 150 hp sent at a lone
-        // Phalangiste, 30 to machines from 6 tiles, against their 3 at contact).
-        const power = (us: Entity[]) => this.power(us.map((u) => [u.hp + u.shield, this.dps(u)]));
-        fought = pulled.length > 0 && power([...pulled, ...atHome]) >= power(threat.armed);
+        // Weighed by hit points times damage per second against the other side's classes, not hit points alone (four
+        // drones sent at a lone Phalangiste, 30 to machines from 6 tiles, against their 3 to it at contact).
+        const power = (us: Entity[], them: Entity[]) => this.power(us.map((u) => [u.hp + u.shield, this.dpsVs(u, them)]));
+        const ours = [...pulled, ...atHome];
+        fought = pulled.length > 0 && power(ours, threat.armed) >= power(threat.armed, ours);
         if (fought) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
       // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat (a
@@ -1328,6 +1329,15 @@ export class AI {
   }
 
   /** Damage per second of the weapon it fights with (a Z socle with the Réparateur or the Accumulateur: none). */
+  /** Damage per second against a group, by each one's class (fiches 2010), on average. */
+  private dpsVs(e: Entity, them: Entity[]): number {
+    const a = this.world.weapon(e);
+    if (!a || !them.length) return a ? a.damage / a.cooldown : 0;
+    let sum = 0;
+    for (const t of them) sum += a.vs ? a.vs[CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL')] ?? a.damage : a.damage;
+    return sum / them.length / a.cooldown;
+  }
+
   /** `air`: against flyers only (a weapon that cannot reach them counts for nothing). */
   private dps(e: Entity, air = false): number {
     const a = this.world.weapon(e);
@@ -1923,11 +1933,11 @@ export class AI {
           // The road is measured to the footprint's middle tile, taken toward the same corner (the same in the mirror).
           const mid = (t: number, s: number) => t + (s > 0 ? Math.floor(def.size / 2) : Math.ceil(def.size / 2) - 1);
           const [ax, ay] = [mid(tx, sx), mid(ty, sy)];
-          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay) && !(type === this.faction.hq && this.underFire({ x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP }))) first = [tx, ty];
+          if (def.power && !def.morphOnly && first === undefined && this.walkable(home, ax, ay) && !(type === this.faction.hq && !this.safeSite(type, { x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP }))) first = [tx, ty];
           if (def.power && this.crowdsField(tx + def.size / 2, ty + def.size / 2, def.power)) continue;
           if (!this.walkable(home, ax, ay)) continue;
           // A headquarters raised again away from its sites: not under an enemy's guns (its last drone died on the way).
-          if (type === this.faction.hq && this.underFire({ x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP })) continue;
+          if (type === this.faction.hq && !this.safeSite(type, { x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP })) continue;
           return [tx, ty];
         }
       }
@@ -2125,6 +2135,13 @@ export class AI {
     return hit;
   }
 
+  /** A site out of an enemy's guns, one of our workers that can raise it having a road there out of them too. */
+  private safeSite(type: string, c: { x: number; y: number }): boolean {
+    if (this.underFire(c)) return false;
+    const raisers = [...this.world.entities.values()].filter((e) => e.owner === this.player && e.def.kind === 'unit' && raises(e.def as UnitDef, type));
+    return !raisers.length || raisers.some((r) => !this.exposedRoad(r, c));
+  }
+
   /** Armed soldiers manning a building (a Fortin's crew shoots from inside). */
   private crew(b: Entity): Entity[] {
     if (!(b.def as BuildingDef).bunker) return [];
@@ -2198,12 +2215,14 @@ export class AI {
   private threat(buildings: Entity[]): { x: number; y: number; target: number; count: number; strength: number; armed: Entity[] } | undefined {
     const w = this.world;
     const foes: Entity[] = [];
+    const ours = [...w.entities.values()].filter((u) => u.owner === this.player && u.def.kind === 'unit' && flies(u));
     for (const e of w.entities.values()) {
       if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
       // Not an unarmed flyer (an Espion hovering by an outlying building, out of the defenders' reach, kept the army
       // home on defence and no wave ever left; its Impulsion only holds units still a few seconds).
       // Nor a flyer whose weapon cannot hit the ground (a Char Pégase in the air kept the drones in Refuge for good).
-      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false))) continue;
+      // Unless one of our flyers is there for it to shoot.
+      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) < (w.weapon(e)!.range + 3) * FP))) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
     }
