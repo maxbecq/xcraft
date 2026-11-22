@@ -629,6 +629,9 @@ export function turn(this: World, e: Entity, owner: number): void {
   e.owner = owner;
   e.next = [];
   this.setOrder(e, null);
+  // Carried by its old side (charmed, then boarded): out, else stuck in a transport its player cannot unload.
+  const shelter = e.inside ? this.entities.get(e.inside) : undefined;
+  if (shelter && shelter.owner !== owner) this.leave(e);
   for (const u of this.entities.values()) {
     if (u.inside === e.id) this.leave(u);
     const o = u.order;

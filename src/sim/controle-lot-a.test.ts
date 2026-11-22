@@ -24,4 +24,23 @@ describe('quality control, lot A', () => {
       expect([of('golem'), of('elembase')], `${n}`).toEqual([Math.floor(n / 2), n % 2]);
     }
   });
+
+  it('a unit charmed then boarded onto a Drake gets out when the charm ends, back to its player', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].upgrades.drakegeant = 1;
+    const drake = w.spawn('drake', 0, 40 * FP, 40 * FP);
+    const frigg = w.spawn('frigg', 0, 40 * FP, 41 * FP);
+    const foe = w.spawn('legionnaire', 1, 41 * FP, 41 * FP);
+    frigg.mana = 999 * FP;
+    w.players[0].energy = 9999;
+    w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'soumission', x: foe.x, y: foe.y }]);
+    for (let i = 0; i < 40 && foe.owner !== 0; i++) w.step([]);
+    expect(foe.owner).toBe(0);
+    w.step([{ player: 0, kind: 'smart', ids: [foe.id], x: drake.x, y: drake.y, target: drake.id }]);
+    for (let i = 0; i < 200 && !foe.inside; i++) w.step([]);
+    expect(foe.inside).toBe(drake.id);
+    for (let i = 0; i < 3000 && foe.owner !== 1; i++) w.step([]);
+    expect(foe.owner).toBe(1);
+    expect(foe.inside).toBe(0);
+  });
 });
