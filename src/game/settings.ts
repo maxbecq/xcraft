@@ -10,12 +10,16 @@ export const SCROLL_KEY = 'xcraft.scroll';
  * `tuck`: touch screens, the selection sheet and the commands slide away a moment after the last touch (on unless unticked). */
 export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, lcd: false, tactile: false, tuck: true, game: 1 };
 export type Controls = typeof SCROLL_BASE;
+/** The sliders' ends (pause menu, Options): a stored value outside them (an old or edited one) is brought back in,
+ * so a game speed of 0 cannot freeze a match, nor a huge one hang the page catching up. */
+export const SCROLL_RANGE = { speed: [0.5, 2], band: [0.4, 1.6], ramp: [0, 2], coast: [0, 1], mouse: [0.5, 2], game: [0.5, 2] } as const;
 export const SCROLL: Controls = (() => {
   const base = { ...SCROLL_BASE };
   try {
     // Holding the pointer is off unless chosen again: an earlier version stored it on, hence `lock2`, which ignores the old `lock`.
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
-    for (const k of ['speed', 'band', 'ramp', 'coast', 'mouse', 'game'] as const) if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = stored[k];
+    for (const k of Object.keys(SCROLL_RANGE) as (keyof typeof SCROLL_RANGE)[])
+      if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = Math.min(SCROLL_RANGE[k][1], Math.max(SCROLL_RANGE[k][0], stored[k]));
     return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false, lcd: stored.lcd === true, tactile: stored.tactile === true, tuck: stored.tuck !== false };
   } catch {
     return base;
