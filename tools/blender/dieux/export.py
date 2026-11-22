@@ -33,7 +33,7 @@ TYPES = {
     "gaia": (gods.gaia, GOD, 24000), "thor": (gods.thor, GOD, 24000), "apollon": (gods.apollon, GOD, 24000), "seth": (gods.seth, GOD, 24000),
     "esprit": (units.esprit, 0.8, 4000), "nain": (units.nain, 0.75, 9000), "minotaure": (units.minotaure, 0.8, 10000), "sphinx": (units.sphinx, 0.85, 10000),
     "asgaard": (B.porte, 1.0, 30000), "branche": (B.branche, 1.0, 14000), "protecteur": (B.protecteur, 0.85, 18000),
-    "antre": (B.antre, 1.0, 12000), "puitsdivin": (B.puits, 1.0, 12000), "temple": (B.temple, 0.72, 24000),
+    "antre": (B.antre, 4 / 3, 12000), "puitsdivin": (B.puits, 1.0, 12000), "temple": (B.temple, 0.72, 24000),
     "odin": (rank2.odin, GOD, 20000), "athena": (rank2.athena, GOD, 20000), "isis": (rank2.isis, GOD, 20000),
     "corbeau": (rank2.corbeau, 0.8, 4000), "drake": (rank2.drake, 1.0, 9000), "elementaire": (rank2.elementaire, 0.8, 6000),
     "pretresse": (rank2.pretresse, 0.8, 6000),
