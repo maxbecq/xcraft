@@ -130,7 +130,7 @@ function stats(h: Hud, e: Entity): string {
   if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
   if ('armor' in e.def) {
     // The world's own armour research, read rather than copied (its cases are many).
-    const bonus = e.def.kind === 'unit' && e.owner >= 0 ? h.world.armorBonus(e) : 0;
+    const bonus = e.owner >= 0 && (e.def.kind === 'unit' || (e.def.kind === 'building' && h.world.players[e.owner].faction === 'z')) ? h.world.armorBonus(e) : 0;
     parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
   }
   if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed)}</span>`);

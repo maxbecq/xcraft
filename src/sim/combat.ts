@@ -229,7 +229,8 @@ export function hurt(this: World, t: Entity, damage: number): number {
   const absorbed = Math.min(t.shield, damage);
   t.shield -= absorbed;
   if (damage > absorbed) {
-    const armor = ('armor' in t.def ? t.def.armor : 0) + (t.def.kind === 'unit' && t.owner >= 0 ? this.armorBonus(t) : 0);
+    // Z buildings too: Blindage de titane (+2, équilibreur 22/11; it was neither applied nor shown before).
+    const armor = ('armor' in t.def ? t.def.armor : 0) + (t.owner >= 0 && (t.def.kind === 'unit' || (t.def.kind === 'building' && this.players[t.owner].faction === 'z')) ? this.armorBonus(t) : 0);
     const lost = Math.max(1, damage - absorbed - (absorbed > 0 ? 0 : armor));
     const had = Math.max(0, t.hp);
     t.hp -= lost;
