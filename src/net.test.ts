@@ -14,7 +14,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { commandOk, FORFEIT_MS, Lockstep, START, type Message, waitVerdict } from './net';
+import { commandOk, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -352,5 +352,13 @@ describe('lockstep between two browsers', () => {
     expect(waitVerdict(false, 1000, 0, 10_000)).toEqual({ say: 'waiting', left: 51 });
     expect(waitVerdict(false, 1000, 0, 1000 + FORFEIT_MS).say).toBe('cut-over');
     expect(waitVerdict(true, 0, 1000, 1000 + FORFEIT_MS).say).toBe('forfeit');
+  });
+
+  it('turns away a page of another version alone, once the other side is known', () => {
+    expect(greeting(null, { hi: 'a', v: '1' }, '1')).toBe('ok');
+    expect(greeting(null, { hi: 'a', v: '0' }, '1')).toBe('other-version'); // the friend: no match possible
+    expect(greeting('a', { hi: 'a', v: '1' }, '1')).toBe('ok'); // back after a cut
+    expect(greeting('a', { hi: 'b', v: '0' }, '1')).toBe('stranger'); // the match goes on
+    expect(greeting('a', { hi: 'b', v: '1' }, '1')).toBe('stranger');
   });
 });

@@ -210,6 +210,16 @@ export class Lockstep {
   }
 }
 
+/**
+ * Who says hello on a new channel: the other side (its first page, or the same page back), a page of another version
+ * while none is known yet (the match cannot be), or a stranger once the other side is known (any other page with the
+ * code, whatever its version): that channel alone is turned away, the match goes on.
+ */
+export function greeting(them: string | null, m: Record<string, unknown>, version = VERSION): 'ok' | 'other-version' | 'stranger' {
+  if (them !== null) return m.hi === them && m.v === version ? 'ok' : 'stranger';
+  return typeof m.hi === 'string' && m.v === version ? 'ok' : 'other-version';
+}
+
 /** Without a word from the other side for this long, the match ends (by forfeit, or with no winner when the link is cut). */
 export const FORFEIT_MS = 60_000;
 /** Shorter waits go unsaid: a hiccup, not a problem. */
@@ -286,17 +296,18 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       if (!isRecord(d)) return;
       const m = d;
       if ('hi' in m) {
-        if (typeof m.hi !== 'string' || m.v !== VERSION) {
+        const who = greeting(them, m);
+        if (who === 'other-version') {
           c.close();
           return set('error', OTHER_VERSION);
         }
-        if (them !== null && m.hi !== them) {
+        if (who === 'stranger') {
           c.close();
           // The host only ever takes its own guest back; to the guest, a new host page means the match is gone.
           if (player === 1) set('left', "L'hôte a quitté la partie.");
           return;
         }
-        them = m.hi;
+        them = m.hi as string;
         if (conn && conn !== c) conn.close();
         conn = c;
         lock.reconnected();
