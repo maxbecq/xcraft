@@ -227,7 +227,8 @@ export class AI {
     // Any fighting unit (a Créaturium's saurians are not in the army list).
     const fights = (t: string) => DEFS[t]?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && !!(DEFS[t] as UnitDef).attack;
     const fields = (t: string) => fights(t) && pays(t);
-    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some(fights))));
+    // A Dieux god trains too (Thor with 800 minerals and no Porte made a last stand).
+    const trainer = mine.some((b) => (b.def.kind === 'building' ? b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some(fights))) : !!(b.def as UnitDef).trains?.some(fields)));
     // No building left at all (an ally holding on): from one of its workers.
     const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') ?? (this.rebuildable ? mine.find((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)) : undefined) : undefined);
     // A finished headquarters, a finished base, then a headquarters' site (the Porte's site taken before the Antre that
@@ -488,7 +489,10 @@ export class AI {
     // grew within the last minute. Otherwise (no field left, or an esprit stuck on its way back, its order still
     // « gather ») what is left is spent instead of saved for ever.
     const noHq = !kin(home, f.hq) && !building(f.hq);
-    if (noHq) wants.push(f.hq);
+    // No base at all and the headquarters out of reach, its outpost within it (Dieux: an Antre at 600 when the Porte's
+    // 1200 are not there): the outpost first, to mine again.
+    const cheaper = noHq && !this.settled(home) && !!f.outpost && p.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && p.minerals >= (DEFS[f.outpost] as BuildingDef).cost.minerals;
+    if (noHq) wants.push(cheaper ? f.outpost! : f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
     const producers = f.gods ? 1 + gods.length : count(f.barracks);
     const supplyShort = supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply);
@@ -1143,7 +1147,8 @@ export class AI {
     for (const g of gods) {
       if (!this.wave.has(g.id) || dist(g.x, g.y, home.x, home.y) < 20 * FP) continue;
       // Fighting already or not (it is given an attack of its own at once); within the easy AI's cap.
-      for (const u of army) if (!this.wave.has(u.id) && dist(u.x, u.y, g.x, g.y) < 6 * FP && (!this.easy || this.wave.size < LEVELS.easy.maxWave)) this.wave.add(u.id);
+      // Not one falling back (withdraw's move): taken in again, it turned round to the fight it fled.
+      for (const u of army) if (!this.wave.has(u.id) && u.order?.kind !== 'move' && dist(u.x, u.y, g.x, g.y) < 6 * FP && (!this.easy || this.wave.size < LEVELS.easy.maxWave)) this.wave.add(u.id);
     }
     // First-rank gods sent with a last wave come home once income is back (they summon).
     const out1 = gods.filter((g) => this.wave.has(g.id) && !(g.def as UnitDef).requiresAny);
