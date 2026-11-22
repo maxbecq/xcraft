@@ -154,28 +154,26 @@ export function repairOnCreep(this: World): void {
   }
 }
 
-/** Room in a bunker or carrier: Fortin, Scarabée, and Bourdons with Chargement. */
+/** Room in a bunker or carrier: Fortin, Scarabée, Drake géant; the Barge and the Dirigeable by the supply they carry. */
 export function room(this: World, b: Entity): number {
   if (b.type === 'drake') return this.level(b.owner, 'drakegeant') ? BALANCE.rules.upgrades.drakegeant.room : 0;
   // Z Barge: supply carried, by tier (Z.doc).
   const transport = (b.def as UnitDef).transport;
   if (transport) return transport[b.tier - 1];
-  return (b.def as BuildingDef | UnitDef).bunker ?? (b.type === 'bourdon' && this.level(b.owner, 'chargement') ? BALANCE.rules.upgrades.chargement : 0);
+  return (b.def as BuildingDef | UnitDef).bunker ?? 0;
 }
 
-/** Who may get in: soldiers that shoot into a Fortin or a Scarabée, any foot soldier into a Bourdon. */
+/** Who may get in: soldiers that shoot into a Fortin or a Scarabée; into a Barge or a Dirigeable, any ground unit but workers. */
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
-  // No shelter within a carried shelter: a Scarabée in a Bourdon takes nobody, and goes in only empty.
-  if (b.inside || (b.type === 'bourdon' && this.load(e) > 0)) return false;
+  // No shelter within a carried shelter: a Scarabée in a Dirigeable takes nobody, and goes in only empty.
+  if (b.inside || ((b.def as UnitDef).transport && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
   // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
-  // Notice (Chargement): the Bourdon may instead lift one vehicle, which takes all its room.
-  if (b.type === 'bourdon' && BALANCE.rules.upgrades.chargementVehicles.includes(e.type)) return true;
   if (d.worker || d.mechanical || d.beast) return false;
-  return b.type === 'bourdon' || b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
+  return b.type === 'drake' || (!!this.weapon(e) && this.weapon(e)!.range > 1);
 }
 
 /** Training time in ticks, the Caserne's shortened by Entraînement groupé. */
@@ -466,8 +464,7 @@ export function besideTile(this: World, b: Entity, toward: { x: number; y: numbe
 /** What a carrier holds: units, or for a Z Barge, their supply. */
 export function load(this: World, b: Entity, extra?: Entity): number {
   const barge = !!(b.def as UnitDef).transport;
-  const lifted = b.type === 'bourdon' ? this.room(b) : 1;
-  const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : BALANCE.rules.upgrades.chargementVehicles.includes(u.type) ? lifted : 1);
+  const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : 1);
   let n = extra ? weigh(extra) : 0;
   for (const u of this.entities.values()) if (u.inside === b.id) n += weigh(u);
   return n;

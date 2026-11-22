@@ -102,11 +102,10 @@ describe('Scarabée (fiche 2010)', () => {
   });
 });
 
-describe('Bourdon with Chargement (notice)', () => {
-  it('lifts one vehicle instead of soldiers, and only into an empty hold', () => {
+describe('the Dirigeable (the balancer, 2026-11-22: its own unit, 4 of supply, no research)', () => {
+  it('lifts a Char Pégase (4 of supply) alone, then nobody more; unloaded, the hold is free', () => {
     const w = new World(createMap());
-    w.players[0].upgrades.chargement = 1;
-    const b = w.spawn('bourdon', 0, ...at(40, 60));
+    const b = w.spawn('dirigeable', 0, ...at(40, 60));
     const tank = w.spawn('pegase', 0, ...at(42, 60));
     const man = w.spawn('auxiliaire', 0, ...at(40, 62));
     w.step([{ player: 0, kind: 'smart', ids: [tank.id], x: b.x, y: b.y, target: b.id }]);
@@ -117,17 +116,13 @@ describe('Bourdon with Chargement (notice)', () => {
     expect(man.inside).toBe(0); // full
     w.step([{ player: 0, kind: 'unload', ids: [b.id] }]);
     expect(tank.inside).toBe(0);
-    // Without Chargement, no room at all.
-    w.players[0].upgrades.chargement = 0;
-    expect(w.room(b)).toBe(0);
   });
 });
 
 describe('no shelter within a carried shelter', () => {
-  it('a Bourdon lifts only an empty Scarabée, and a lifted Scarabée takes nobody', () => {
+  it('a Dirigeable lifts only an empty Scarabée, and a lifted Scarabée takes nobody', () => {
     const w = new World(createMap());
-    w.players[0].upgrades.chargement = 1;
-    const b = w.spawn('bourdon', 0, ...at(40, 60));
+    const b = w.spawn('dirigeable', 0, ...at(40, 60));
     const s = w.spawn('scarabee', 0, ...at(42, 60));
     const man = w.spawn('auxiliaire', 0, ...at(44, 60));
     man.inside = s.id;

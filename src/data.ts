@@ -518,13 +518,15 @@ const BASE: Record<string, object> = {
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
   tour: { kind: 'building', name: 'Tour alchimistique', size: 2, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'T' },
   // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
-  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'scarabee', 'pegase'], researches: ['charlourd', 'decollage', 'chargement', 'scarabeassaut'], faction: 'humains', hotkey: 'M' },
+  metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'dirigeable', 'scarabee', 'pegase'], researches: ['charlourd', 'decollage', 'scarabeassaut'], faction: 'humains', hotkey: 'M' },
   // Notice: « Scarabée », a slow amphibious armoured wagon: up to four Auxiliaires, Soigneurs, Phalangistes or Alchimistes
   // shelter and shoot from inside (mod « Transport scarabée »); with Scarabée d'assaut it has a gun of its own.
   scarabee: { kind: 'unit', name: 'Scarabée', radius: 0.8, mechanical: true, faction: 'humains', hotkey: 'S' },
-  // Notice: « Bourdon », a propeller airship: detector, short-range anti-vehicle grenades, good against buildings and flyers
-  // (mod « Dirigeable d'appui », which had no weapon: ours is provisional).
+  // The balancer (2026-11-22): the Bourdon and the Dirigeable are two units, by the 2010 sheet. The Bourdon: a small
+  // anti-air gyrocopter (air only, range 5), a detector, dropping alchemical mines.
   bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
+  // The Dirigeable: transport (4 of supply) and reconnaissance, a detector, unarmed.
+  dirigeable: { kind: 'unit', name: 'Dirigeable', radius: 0.6, flying: true, mechanical: true, faction: 'humains', hotkey: 'G' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
   pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
@@ -578,6 +580,7 @@ const BASE: Record<string, object> = {
   acide: research('Acide anti-structure', 'Q', 'Les Réservoirs de substances peuvent dissoudre un bâtiment ennemi sous l\'acide.'),
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
   decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.', { grandconseil: 1 }),
+  // No longer offered (the balancer, 2026-11-22: the Dirigeable carries on its own); kept for old replays.
   chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins, ou un véhicule (Scarabée, Char Pégase)."),
   scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon et vont un peu plus vite.'),
   trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),
@@ -979,9 +982,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
+export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;
