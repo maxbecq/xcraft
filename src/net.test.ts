@@ -107,6 +107,27 @@ describe('lockstep between two browsers', () => {
       expect(b.lock.desync).toBeNull();
     });
 
+  it('never stalls on a batch the other side would refuse: split to its limits, and bad orders dropped on both sides', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const big = (world: World, player: number): Command[] => {
+      // Clicks piled up during a wait: far more orders than one tick takes, one with more units than an order carries,
+      // and one the other side would refuse (NaN reaches it as null).
+      if (player !== 0 || world.tick !== 10) return [];
+      const moves = Array.from({ length: 200 }, (_, i) => ({ player, kind: 'move', ids: [i], x: i, y: 2 }) as Command);
+      return [...moves, { player, kind: 'move', ids: Array.from({ length: 3000 }, (_, i) => i), x: 1, y: 2 } as Command, { player, kind: 'move', ids: [1], x: NaN, y: 2 } as Command];
+    };
+    const [a, b] = play(200, { latency: () => 40, lost: () => false }, big);
+    expect(a.world.tick).toBe(200);
+    expect(b.world.tick).toBe(200);
+    expect(b.lock.rejected).toBe(0);
+    expect(a.log).toEqual(b.log); // exactly the batch sent, on both sides
+    const sent = a.log.flatMap(([, c]) => c);
+    expect(sent.length).toBe(200 + 3); // 3000 units in three orders, the NaN one dropped
+    expect(sent.reduce((n, c) => n + c.ids.length, 0)).toBe(200 + 3000);
+    expect(Math.max(...a.log.map(([, c]) => c.length))).toBeLessThanOrEqual(64);
+    warn.mockRestore();
+  });
+
   it('keeps both games identical over 1500 ticks of random orders from both sides, on a lossy jittery link', () => {
     // Each side gives, at random ticks, random orders to random units of its own, and now and then to the other
     // side's units or to nothing: any of the kinds a player can give, at random places.

@@ -136,14 +136,25 @@ export class Lockstep {
    * sides' orders for `t`, the host's first, so both browsers apply them in the same order.
    */
   step(t: number, given: Command[]): Command[] {
-    this.held.push(...given.map((c) => ({ ...c, player: this.player })));
+    // Shaped as the other side checks it, and as it reads it off the wire (JSON): an order with too many units goes in
+    // parts, one it would refuse is dropped here too, so both sides always run the very same batch.
+    for (const c of given) {
+      const wire = JSON.parse(JSON.stringify({ ...c, player: this.player }));
+      const ids: unknown[] = Array.isArray(wire.ids) ? wire.ids : [];
+      for (let i = 0; i === 0 || i < ids.length; i += MAX_IDS) {
+        const part = Array.isArray(wire.ids) ? { ...wire, ids: ids.slice(i, i + MAX_IDS) } : wire;
+        if (commandOk(part)) this.held.push(part);
+        else this.reject('own order the other side would refuse', part);
+      }
+    }
     // A shorter delay than the ticks already filled: the orders wait for the next free tick, so none runs early.
     if (t + this.delay >= this.next) {
       const at = Math.max(this.next, t + this.delay);
       // A longer delay: the ticks skipped get no orders, and say so.
       for (; this.next < at; this.next++) this.post(this.next, []);
-      this.post(this.next++, this.held);
-      this.held = [];
+      // At most what the other side takes for one tick; the rest goes on the next.
+      this.post(this.next++, this.held.slice(0, MAX_ORDERS));
+      this.held = this.held.slice(MAX_ORDERS);
     }
     const mine = this.ours.get(t) ?? [];
     const theirs = this.theirs.get(t) ?? [];
