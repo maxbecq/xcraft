@@ -140,7 +140,9 @@ export function buttonsFor(h: Hud): Button[] {
       const payer = casters.find((u) => h.world.manaOf(u));
       const price = payer ? spell(ab, payer.lvl).mana : undefined;
       const mana = price !== undefined ? ` · ${price} énergie` : '';
-      list.push({ label: `${a.name}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
+      // The automatic Soin says whether it is on (all the selected healers' state: on if any heals by itself).
+      const on = ab === 'autosoin' ? (casters.some((u) => !u.autoOff) ? ' : oui' : ' : non') : '';
+      list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
     // Z socles: evolve into the next tier, in the field.
     const evolvers = units.filter((u) => h.world.nextTier(u) && !u.evolving);

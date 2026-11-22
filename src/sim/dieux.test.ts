@@ -641,3 +641,34 @@ describe('Apollon\'s Pluie de feu (balance designer, 2026-11-22)', () => {
     expect(apollon.mana).toBeLessThan(mana);
   });
 });
+
+describe('the automatic Soin (balance designer, 2026-11-22)', () => {
+  it('the Prêtresse heals 25 for 5 mana, by itself or not, never a machine; Isis 25 a second at her first level', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 32 * FP, 30 * FP);
+    const sphinx = Object.assign(w.spawn('sphinx', 0, 30 * FP, 32 * FP), { statue: 0 });
+    const golem = w.spawn('golem', 0, 28 * FP, 30 * FP);
+    nain.hp = golem.hp = 10;
+    // Switched off: nobody healed.
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    expect(pretresse.autoOff).toBe(true);
+    run(w, 3);
+    expect(nain.hp).toBe(10);
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    const mana = pretresse.mana;
+    run(w, 3);
+    expect(nain.hp).toBeGreaterThan(10);
+    expect(golem.hp).toBe(10); // a machine
+    expect(pretresse.mana).toBeLessThan(mana);
+    expect(sphinx.hp).toBe(sphinx.maxHp);
+    const isis = Object.assign(w.spawn('isis', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
+    const hurt = w.spawn('nain', 0, 52 * FP, 50 * FP);
+    hurt.hp = 10;
+    run(w, 1.5);
+    expect(hurt.hp).toBeGreaterThanOrEqual(10 + 25);
+    expect(w.healPulse(isis)).toBe(25);
+    isis.lvl = 3;
+    expect(w.healPulse(isis)).toBe(35);
+  });
+});

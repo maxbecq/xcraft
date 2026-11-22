@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { onMap } from './abilities';
+import { machineLike } from './combat';
 import { commandOk } from './validate';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
@@ -422,7 +423,7 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
     const worker = (e.def as UnitDef).worker;
     if (t && this.hostile(t.owner, e.owner) && this.weapon(e) && reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) {
       this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
-    } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
+    } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && !machineLike(t) && t.hp < t.maxHp) {
       this.setOrder(e, { kind: 'heal', target: t.id });
     } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
       this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });

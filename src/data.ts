@@ -82,6 +82,8 @@ export interface UnitDef {
   /** Soigneur (fiche 2010, Soins): its hp come back `healPulse` at a time (every healPulse / heal s), `healRange` tiles off. */
   healPulse?: number;
   healRange?: number;
+  /** Mana each pulse of healing costs (the Soin of the balance designer, 2026-11-22: 5 for 25 hp). */
+  healMana?: number;
   worker?: boolean;
   /** Psychic shield points, absorbed before hp and recharging out of combat. */
   shield?: number;
@@ -141,6 +143,8 @@ export interface GodLevels {
   armor: number[];
   speed: number[];
   damage?: number[];
+  /** Hp healed each second, a pulse a second (Isis: balance designer 2026-11-22). */
+  heal?: number[];
   cost: Cost[];
   time: number[];
 }
@@ -345,6 +349,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
   // Balance designer 2026-11-22: the Artefacterie works like the Z Centre K, an improvement picked there and given to a
   // god clicked on, wherever it stands (no longer bought at the god); its price that of the improvement.
+  // Balance designer 2026-11-22: the Soin heals by itself, switched off and on again from this button.
+  autosoin: { name: 'Soin automatique', effect: 'Active ou coupe le soin automatique des alliés blessés (pas des machines).', hotkey: 'W', target: 'self', cooldown: 0, duration: 0 } as AbilityDef,
   artforce: { name: 'Force', effect: 'Sur un dieu, où qu\'il soit : il frappe plus fort.', hotkey: 'G', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artforce.cost } as AbilityDef,
   artresistance: { name: 'Résistance', effect: 'Sur un dieu, où qu\'il soit : il gagne de l\'armure.', hotkey: 'J', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artresistance.cost } as AbilityDef,
   artagilite: { name: 'Agilité', effect: 'Sur un dieu, où qu\'il soit : il frappe plus vite.', hotkey: 'K', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artagilite.cost } as AbilityDef,
@@ -772,7 +778,7 @@ const BASE: Record<string, object> = {
   // passive (rules.auraguerre, rules.auraprotection).
   odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
   athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elembase'], unique: true, abilities: ['chouette', 'tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
-  isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['soinsdivins', 'resurrection', 'amonra'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
+  isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['autosoin', 'soinsdivins', 'resurrection', 'amonra'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
   /** Odin's ravens: fast flying scouts, invisible, that see the invisible. */
   corbeau: { kind: 'unit', name: 'Corbeau', radius: 0.35, flying: true, beast: true, cloaked: true, faction: 'dieux', hotkey: 'C' },
   /** A slow flying beast, very hardy, breathing fire on an area. */
@@ -804,7 +810,7 @@ const BASE: Record<string, object> = {
   /** Hadès's Armée des enfers: ghosts that cannot be hurt, for a while. */
   fantome: { kind: 'unit', name: 'Fantôme', radius: 0.4, lifetime: 20, faction: 'dieux', hotkey: 'F' },
   /** Isis's priestess: heals, no attack; Dissipation. */
-  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, ability: 'dissipation', faction: 'dieux', hotkey: 'E' },
+  pretresse: { kind: 'unit', name: 'Prêtresse', radius: 0.35, abilities: ['autosoin', 'dissipation'], faction: 'dieux', hotkey: 'E' },
   nain: { kind: 'unit', name: 'Nain', radius: 0.4, faction: 'dieux', hotkey: 'N' },
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, faction: 'dieux', hotkey: 'M' },
   // Biological and armoured (BA); a heavy machine while turned to stone (équilibreur 2026-11-22).

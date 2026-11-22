@@ -70,6 +70,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   const ab = name && spell(name, e.lvl);
   // Gone since the order (a caster merged into a Golem by another's Fusion earlier in the same command): no cast.
   if (this.entities.get(e.id) !== e) return;
+  if (name === 'autosoin') return void (e.autoOff = !e.autoOff);
   if (!ab || e.illusion || ab.target === 'point' || !this.ready(e, name) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {

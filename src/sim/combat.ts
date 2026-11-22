@@ -7,6 +7,9 @@ import { type Order, flies, type Entity, type World } from './world';
 /** A target's armour class; a Sphinx turned to stone is a heavy machine (équilibreur 2026-11-22). */
 export const clsOf = (t: Entity): DamageClass => (t.statue > 0 ? 'MM' : ((t.def as UnitDef | BuildingDef).cls ?? 'BL'));
 
+/** A machine for healing: mechanical, or of a machine's class (the Golem, the Titan, a Sphinx turned to stone: MM). */
+export const machineLike = (t: Entity): boolean => !!(t.def as UnitDef).mechanical || clsOf(t) === 'M' || clsOf(t) === 'MM';
+
 /** Can this attack strike that target: in the air or not, and of a class it may hit. */
 export const hits = (a: Attack, t: Entity): boolean => reaches(a, t.def.kind === 'unit' && flies(t)) && (!a.only || a.only.includes(clsOf(t)));
 
@@ -287,6 +290,12 @@ export function rechargeShields(this: World, e: Entity): void {
 /** Hit points a second a unit gives back: a healer's, or a Z socle's Réparateur (machines only). */
 /** Z Réparateur (Z.doc): 5 energy a second of repair at 10 PV/s, so half a point a PV; false when it has run dry. */
 export function mends(this: World, e: Entity): boolean {
+  const mana = (e.def as UnitDef).healMana;
+  if (mana) {
+    if (e.mana < toFp(mana)) return false;
+    e.mana -= toFp(mana);
+    return true;
+  }
   if (e.kit !== 'reparateur') return true;
   const cost = FP / 2;
   if (e.mana < cost) return false;
@@ -295,7 +304,14 @@ export function mends(this: World, e: Entity): boolean {
 }
 
 export function healRate(this: World, e: Entity): number {
-  return (e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0;
+  const lv = (e.def as UnitDef).levels?.heal;
+  return lv ? lv[e.lvl - 1] : ((e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0);
+}
+
+/** Hp a pulse of healing gives: a god's by its level (a pulse a second), else its card's. */
+export function healPulse(this: World, e: Entity): number {
+  const lv = (e.def as UnitDef).levels?.heal;
+  return lv ? lv[e.lvl - 1] : ((e.def as UnitDef).healPulse ?? 1);
 }
 
 /** Inside a Cône de protection (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
@@ -310,7 +326,7 @@ export function coned(this: World, t: Entity): boolean {
 export function acquire(this: World, e: Entity): void {
   const def = e.def as UnitDef;
   if (def.worker) return;
-  const patient = this.healRate(e) ? this.patient(e) : undefined;
+  const patient = this.healRate(e) && !e.autoOff ? this.patient(e) : undefined;
   if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
   if (!def.attack || !this.weapon(e)) return;
   // Holding position: only what is already within reach.
@@ -326,7 +342,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.chase(e, t);
     e.goal = null;
     if (e.cooldown === 0 && this.mends(e)) {
-      const pulse = def.healPulse ?? 1;
+      const pulse = this.healPulse(e);
       t.hp = Math.min(t.maxHp, t.hp + pulse);
       e.cooldown = ticks(pulse / this.healRate(e));
       if (pulse > 1) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
@@ -336,12 +352,12 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   }
   if (o.kind === 'attackMove') {
     // Heal on the way if needed, otherwise engage what comes into sight, then carry on.
-    if (this.healRate(e) && (this.tick + e.id) % 4 === 0) {
+    if (this.healRate(e) && !e.autoOff && (this.tick + e.id) % 4 === 0) {
       const p = this.patient(e);
       if (p) {
         if (this.gap(e, p) > (def.healRange ?? 2) * FP) return this.chase(e, p);
         if (e.cooldown === 0 && this.mends(e)) {
-          const pulse = def.healPulse ?? 1;
+          const pulse = this.healPulse(e);
           p.hp = Math.min(p.maxHp, p.hp + pulse);
           e.cooldown = ticks(pulse / this.healRate(e));
         }
@@ -687,7 +703,8 @@ export function patient(this: World, e: Entity): Entity | undefined {
   for (const t of this.entities.values()) {
     if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
-    if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || (mender && !(t.def as UnitDef).mechanical)) continue;
+    // A healer's Soin mends no machine (balance designer 2026-11-22).
+    if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || mender !== machineLike(t)) continue;
     if ((t.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];
