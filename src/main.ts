@@ -600,6 +600,11 @@ function start(): void {
   const advance = (dt: number, drawn = true) => {
     if (!ATTRACT && !(paused && !net)) acc += dt * gameSpeed();
     while (acc >= TICK) {
+      // The match is won: the world stays as it was at the winning tick (the title screen's AIs play on behind the menu).
+      if (world.winner !== null && !ATTRACT) {
+        acc = 0;
+        break;
+      }
       // Network game: wait for the other side's orders for this tick (and do not race ahead after a stall).
       if (net && (netGame.netOver || !netGame.netStarted || !net.ready(world.tick))) {
         if (netGame.netStarted && net.started && !netGame.stalledSince) netGame.stalledSince = performance.now();
