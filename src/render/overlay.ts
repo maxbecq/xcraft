@@ -50,7 +50,9 @@ export class Overlay {
     this.right.setFromMatrixColumn(camera.matrixWorld, 0); // the screen's horizontal, in the world
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp || e.inside) continue;
-      if (!this.showAll && !selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
+      // A Z building stopped off its creep (équilibreur 22/11) says so above its bar, always.
+      const off = e.def.kind === 'building' && e.buildLeft === 0 && (e.def as BuildingDef).faction === 'z' && !world.onCreep(e);
+      if (!off && !this.showAll && !selected.has(e.id) && e.hp >= e.maxHp && e.shield >= e.maxShield) continue;
       if (!sees(e)) continue;
       const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
@@ -91,6 +93,15 @@ export class Overlay {
         ctx.fillRect(sx - bw / 2 - 1, sy + bh + 1, bw + 2, mh + 2);
         ctx.fillStyle = '#b07cff';
         ctx.fillRect(sx - bw / 2, sy + bh + 2, (bw * e.mana) / (mana[0] * FP), mh);
+      }
+      if (off) {
+        ctx.font = `600 ${Math.round(Math.max(11, Math.min(15, bw / 7)))}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText('HORS CREEP', sx, sy - 6);
+        ctx.fillStyle = '#ff8a5a';
+        ctx.fillText('HORS CREEP', sx, sy - 6);
       }
       if (e.maxShield) {
         // Psychic shield: a blue bar above the hp bar.

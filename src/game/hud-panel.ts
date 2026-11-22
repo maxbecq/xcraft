@@ -100,6 +100,8 @@ export function updatePanel(h: Hud): void {
     const kits = [[KIT.detection, 'Détection'], [KIT.invisibilite, 'Invisibilité'], [KIT.reparateur, 'Auto-réparateur'], [KIT.patte, 'Patte ultramécanique']].filter(([bit]) => e.support & (bit as number)).map(([, n]) => n);
     html += `<div class="info">${e.def.kind === 'unit' ? `T${e.tier}${e.evolving ? ' (évolution en cours)' : ''} · ` : ''}Arme : ${arm}${kits.length ? ` · Kits : ${kits.join(', ')}` : ''}${e.seizedLeft ? ' · Capturé (Canon IEM)' : ''}</div>`;
   }
+  // Équilibreur 22/11: a Z building off its creep stands idle, and says why.
+  if (e.def.kind === 'building' && e.buildLeft === 0 && (e.def as BuildingDef).faction === 'z' && !h.world.onCreep(e)) html += `<div class="info off-creep" title="Hors du creep, ce bâtiment ne tire pas, ne produit pas, ne recherche pas et ne fournit pas d’énergie.">Hors creep : à l'arrêt</div>`;
   if (e.def.kind !== 'resource') html += stats(h, e);
   setDetails(h, html);
   h.portrait.render();

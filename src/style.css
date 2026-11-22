@@ -50,6 +50,7 @@ body.targeting.scanning canvas { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%
 .hud-panel { padding: 10px 12px; overflow: hidden; }
 .hud-panel .name { font: 600 24px/1 var(--title); letter-spacing: 0.04em; color: var(--amber); margin: 2px 0 4px; text-transform: uppercase; }
 .hud-panel .info { opacity: 0.9; margin: 2px 0; }
+.hud-panel .info.off-creep { color: #ff8a5a; opacity: 1; }
 .hud-panel .hp, .hud-panel .bar { height: 7px; background: #2b261c; border: 1px solid #000; overflow: hidden; margin: 5px 0; max-width: 340px; }
 .hud-panel .hp > div { height: 100%; background: linear-gradient(#8cf08c, #3fae3f); }
 .hud-panel .hp.shield > div { background: linear-gradient(#bfe8ff, #3a9ae0); }
