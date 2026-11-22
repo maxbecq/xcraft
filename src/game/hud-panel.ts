@@ -124,7 +124,9 @@ function stats(h: Hud, e: Entity): string {
     const light = h.world.classValue(e, a, 0);
     const up = e.owner >= 0 ? h.world.researched(e, a, light) : 0;
     parts.push(`<span title="Dégâts par coup contre l'infanterie légère ; selon la cible, la valeur et le bonus de recherche changent">Attaque ${light}${plus(up)}</span>`);
-    parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}`}</span>`);
+    // With its research (Canons sciés: the balancer, 2026-11-22, wants it shown on the Auxiliaire).
+    const reach = e.owner >= 0 ? h.world.rangeBonus(e) : 0;
+    parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}${plus(reach)}`}</span>`);
     parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
   }
   if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
