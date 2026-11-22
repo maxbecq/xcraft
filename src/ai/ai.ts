@@ -656,6 +656,8 @@ export class AI {
       const chained = f.builder && !this.builder(unordered, spot, def.size, !this.settled(home)) ? crew.find((b) => b.next.length < 3) : undefined;
       const builder = this.builder(unordered, spot, def.size, !this.settled(home)) ?? chained;
       if (!spot || !builder) continue;
+      // A lost headquarters: not where the builder's road passes under an enemy's guns (its last drone died on the ramp).
+      if (type === f.hq && !this.settled(home) && this.exposedRoad(builder, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP })) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       // Nor where a building ordered this turn goes (two 3×3 centres got the same spot; the second was lost on arrival).
@@ -1629,7 +1631,7 @@ export class AI {
     // Finished, or a site rising by itself (a Z Intelligence its last drone went into, an Obélisque, a Porte).
     const ready = mine.filter((e) => e.buildLeft === 0 || (e.def as BuildingDef).absorbs || (e.def as BuildingDef).warp);
     // A Dieux god summons units too, and the Porte the gods.
-    const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t))));
+    const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t) && !!w.addonSpot(b, a))));
     // With room for it in supply (a Plate-forme alone gives none).
     const sup = w.supply(this.player);
     const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t) && sup.max - sup.used >= (DEFS[t] as UnitDef).supply));
@@ -2066,7 +2068,12 @@ export class AI {
   private fieldsNear(buildings: Entity[]): number {
     const hqs = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
     // Not one under an enemy's guns: the workers are never sent there (tend).
-    return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP) && !this.underFire(e)).length;
+    return [...this.world.entities.values()].filter((e) => {
+      if (e.type !== 'minerai') return false;
+      const h = hqs.find((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP);
+      // Nor one whose road from the base is under them.
+      return !!h && !this.underFire(e) && !this.exposedRoad(h, e);
+    }).length;
   }
 
   /** Enemy buildings whose weapons hit the ground, with their range (a manned Fortin's crew, not its workers, a tile further), by tick. */
@@ -2076,7 +2083,7 @@ export class AI {
   private exposed = new Map<string, boolean>();
   private exposedAt = -1;
 
-  private exposedRoad(base: { x: number; y: number }, field: Entity): boolean {
+  private exposedRoad(base: { x: number; y: number }, field: { x: number; y: number }): boolean {
     const w = this.world;
     this.underFire(base); // fills this tick's guns
     if (!this.guns.list.length) return false;
@@ -2089,8 +2096,8 @@ export class AI {
     const [x0, x1] = [Math.min(base.x, field.x) - pad, Math.max(base.x, field.x) + pad];
     const [y0, y1] = [Math.min(base.y, field.y) - pad, Math.max(base.y, field.y) + pad];
     if (!this.guns.list.some(([g]) => g.x >= x0 && g.x <= x1 && g.y >= y0 && g.y <= y1)) return false;
-    // By the 4-tile cell it starts from.
-    const key = `${Math.floor(base.x / FP / 4)},${Math.floor(base.y / FP / 4)}:${field.id}`;
+    // By the tiles it goes from and to.
+    const key = `${Math.floor(base.x / FP)},${Math.floor(base.y / FP)}:${Math.floor(field.x / FP)},${Math.floor(field.y / FP)}`;
     let hit = this.exposed.get(key);
     if (hit === undefined) {
       const g = w.grid;
