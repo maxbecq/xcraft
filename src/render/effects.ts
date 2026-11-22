@@ -95,6 +95,12 @@ interface Debris {
  */
 export class Effects {
   private readonly pool: Particle[] = [];
+  /** Particles flying now (for the telemetry). */
+  get live(): number {
+    let n = 0;
+    for (const p of this.pool) if (p.active) n++;
+    return n;
+  }
   private debris: Debris[] = [];
   private decals: Decal[] = [];
   private readonly decalGeo = new CircleGeometry(0.5, 20);

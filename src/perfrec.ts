@@ -19,10 +19,13 @@ export interface SpikeContext {
   moving: boolean;
   /** What happened in the simulation steps of this frame (deaths, buildings done…), by kind. */
   events?: Record<string, number>;
+  /** Everything alive in the match, and the effect particles flying. */
+  entities?: number;
+  particles?: number;
 }
 
 /** What a frame knows of itself when it ends (the rest is worked out only for a spike). */
-export type FrameFacts = Pick<SpikeContext, 'tick' | 'ticks' | 'events'>;
+export type FrameFacts = Pick<SpikeContext, 'tick' | 'ticks' | 'events' | 'entities' | 'particles'>;
 
 /** A frame's work, kept until the next frame shows whether it came late. */
 interface FrameDone {
@@ -36,6 +39,10 @@ interface FrameDone {
   compiled: string[];
   textures: number;
   moving: boolean;
+  calls: number;
+  triangles: number;
+  /** Our own work after the timed steps, in the same callback (the debug line, a save): part of `outside` (ms). */
+  tail: number;
 }
 
 interface Spike {
@@ -48,6 +55,15 @@ interface Spike {
   steps: Record<string, number>;
   /** Time between the end of this frame's work and the start of the next: the browser's own (GC, compositing, other tasks) and the wait for the display's next refresh. */
   outside: number;
+  /** `outside`, told apart: our own work after the timed steps (`tail`), how late the next frame's callback ran after
+   * the display called for it (`late`: other tasks before ours), and the slow input handlers the browser saw in the gap
+   * (`input`: kind and ms each, where the browser reports them). The rest is the wait for the display's refresh. */
+  tail?: number;
+  late?: number;
+  input?: string[];
+  /** Draw calls and triangles of this frame, every pass counted. */
+  calls?: number;
+  triangles?: number;
   /** Heap freed during this frame or right after it (MB, Chrome only): a garbage collection ran. */
   gc?: number;
   /** Long tasks the browser saw in this gap (ms each, Chrome only). */
@@ -82,6 +98,14 @@ export class PerfRecorder {
   private gcCount = 0;
   private gcMb = 0;
   private longTasks: { at: number; ms: number }[] = [];
+  private inputs: { at: number; ms: number; name: string }[] = [];
+  /** When the display called for the frame being timed (requestAnimationFrame's own time). */
+  private dueAt = 0;
+  private drawn = { calls: 0, triangles: 0, maxCalls: 0, maxTriangles: 0 };
+  private ticks = 0;
+  private peak = { heap: 0, textures: 0, geometries: 0, programs: 0 };
+  /** Milliseconds from the page's start to each stage of loading (`ready`: models in and shaders warmed; `playable`: first picture up). */
+  private load: Record<string, number> = {};
   private programs = 0;
   private textures = 0;
   private camera = '';
@@ -128,6 +152,33 @@ export class PerfRecorder {
     } catch {
       // only Chrome reports long tasks
     }
+    try {
+      // Slow input handlers (a click, a pointer move that took over 16 ms): Chrome and Firefox.
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) this.inputs.push({ at: e.startTime, ms: e.duration, name: e.name });
+        if (this.inputs.length > 64) this.inputs.splice(0, this.inputs.length - 64);
+      }).observe({ type: 'event', durationThreshold: 16, buffered: false } as PerformanceObserverInit);
+    } catch {
+      // not reported here
+    }
+  }
+
+  /** A stage of loading reached (kept even when not recording yet: the Options box may turn it on later). */
+  loaded(stage: string): void {
+    this.load[stage] ??= Math.round(performance.now());
+    // What loading itself compiled and sent to the graphics chip is not the first frame's doing.
+    this.programs = this.renderer.info.programs?.length ?? 0;
+    this.textures = this.renderer.info.memory.textures;
+  }
+
+  /** The display's own time for the frame about to be timed. */
+  due(at: number): void {
+    this.dueAt = at;
+  }
+
+  /** At the very end of the frame's callback: what ran after the timed steps. */
+  tail(): void {
+    if (this.on && this.prev) this.prev.tail = performance.now() - this.lastEnd;
   }
 
   /** A frame not timed (paused, or the tab hidden): the next one is no spike. */
@@ -151,8 +202,11 @@ export class PerfRecorder {
     if (gap > SPIKE && this.prev && this.unitsOnScreen) {
       // A collection between the two frames shows here, before the next frame's own.
       const heap = heapNow();
-      this.spike(gap, now - this.lastEnd, this.prev, this.unitsOnScreen(), this.heap > heap ? (this.heap - heap) / 1048576 : 0);
+      this.spike(gap, now - this.lastEnd, this.prev, this.unitsOnScreen(), this.heap > heap ? (this.heap - heap) / 1048576 : 0, this.dueAt ? now - this.dueAt : 0);
     }
+    // Draw calls and triangles add up over every pass of the frame: counted by hand, from here.
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
     this.frameStart = this.stepStart = now;
     this.steps = {};
   }
@@ -193,6 +247,13 @@ export class PerfRecorder {
     const info = this.renderer.info;
     const programs = info.programs?.length ?? 0;
     const textures = info.memory.textures;
+    const { calls, triangles } = info.render;
+    this.drawn.calls += calls;
+    this.drawn.triangles += triangles;
+    this.drawn.maxCalls = Math.max(this.drawn.maxCalls, calls);
+    this.drawn.maxTriangles = Math.max(this.drawn.maxTriangles, triangles);
+    this.ticks += facts.ticks;
+    this.peak = { heap: Math.max(this.peak.heap, heap), textures: Math.max(this.peak.textures, textures), geometries: Math.max(this.peak.geometries, info.memory.geometries), programs: Math.max(this.peak.programs, programs) };
     this.prev = {
       facts,
       start: this.frameStart,
@@ -203,6 +264,9 @@ export class PerfRecorder {
       compiled: programs > this.programs ? info.programs!.slice(this.programs).map((p) => (p as unknown as { name: string }).name) : [],
       textures: Math.max(0, textures - this.textures),
       moving: cameraAt !== this.camera,
+      calls,
+      triangles,
+      tail: 0,
     };
     this.camera = cameraAt;
     this.programs = programs;
@@ -212,7 +276,7 @@ export class PerfRecorder {
   }
 
   /** The frame before came this late: what it did, and what the browser did after it. */
-  private spike(gap: number, outside: number, f: FrameDone, units: number, freedAfter: number): void {
+  private spike(gap: number, outside: number, f: FrameDone, units: number, freedAfter: number, late: number): void {
     this.spikeCount++;
     const r = (x: number) => Math.round(x * 10) / 10;
     const long = this.longTasks.filter((l) => l.at + l.ms > f.start && l.at < f.start + gap).map((l) => Math.round(l.ms));
@@ -226,6 +290,12 @@ export class PerfRecorder {
     };
     if (f.freed + freedAfter > 0.5) spike.gc = r(f.freed + freedAfter);
     if (long.length) spike.long = long;
+    const input = this.inputs.filter((l) => l.at + l.ms > f.start && l.at < f.start + gap).map((l) => `${l.name} ${Math.round(l.ms)}`);
+    if (input.length) spike.input = input;
+    if (f.tail >= 1) spike.tail = r(f.tail);
+    if (late >= 1) spike.late = r(late);
+    spike.calls = f.calls;
+    spike.triangles = f.triangles;
     if (f.programs) spike.programs = f.compiled.join(',');
     if (f.textures) spike.textures = f.textures;
     if (this.spikes.length < MAX_SPIKES) this.spikes.push(spike);
@@ -249,6 +319,12 @@ export class PerfRecorder {
       device: device(this.renderer),
       seconds: Math.round((performance.now() - this.t0) / 1000),
       frames: this.frames,
+      /** Simulation steps timed (the `sim` step's total over them is its cost per tick). */
+      simTicks: this.ticks,
+      load: this.load,
+      draw: { calls: Math.round(this.drawn.calls / Math.max(1, this.frames)), maxCalls: this.drawn.maxCalls, triangles: Math.round(this.drawn.triangles / Math.max(1, this.frames)), maxTriangles: this.drawn.maxTriangles },
+      /** Peaks: JavaScript heap (MB, Chrome only, else 0), and what the renderer holds on the graphics chip. */
+      memory: { heapMb: Math.round(this.peak.heap / 1048576), textures: this.peak.textures, geometries: this.peak.geometries, programs: this.peak.programs },
       gap: { p50: q(0.5), p90: q(0.9), p99: q(0.99), max: q(1) },
       hist: Object.fromEntries(this.hist.map((n, i) => [i < BUCKETS.length ? `<${BUCKETS[i]}` : `>=${BUCKETS[BUCKETS.length - 1]}`, n])),
       steps: Object.fromEntries(Object.entries(this.totals).map(([k, t]) => [k, { avg: r(t.sum / Math.max(1, this.frames)), max: r(t.max) }])),

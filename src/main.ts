@@ -619,6 +619,7 @@ function start(): void {
     rain?.update(renderer.domElement.width, renderer.domElement.height);
     painted?.update(rig, window.innerWidth / window.innerHeight, renderer.domElement.height / rig.viewHeight, renderer);
     lavaTime.value += dt;
+    lap('scene');
     input.prune();
     // Our units answer when picked: once per selection that gains one of them (not when one dies out of it).
     const picked = input.own().filter((u) => u.def.kind === 'unit').map((u) => u.id);
@@ -629,24 +630,30 @@ function start(): void {
     const [x0, x1] = [Math.min(...seen.map((p) => p.x)) - 4, Math.max(...seen.map((p) => p.x)) + 4];
     const [z0, z1] = [Math.min(...seen.map((p) => p.z)) - 4, Math.max(...seen.map((p) => p.z)) + 4];
     units.inView = (x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+    lap('select');
     units.sync(world, acc / TICK, input.selected, PLAYER, sees, seenAt);
+    lap('units');
     footprints.update(world, sees, performance.now());
     // The hover halo: a building in sight under the mouse, not already selected (none on a touch screen, which has no hover).
     const hovered = input.hovered;
     units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && !input.selected.has(hovered.id) && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
-    lap('units');
+    lap('footprints');
     hud.update();
     lap('hud');
     ambientEffects(world, units, effects, sees, dt);
     effects.update(dt);
+    lap('fx');
     overlay.showAll = keys.has('Alt');
     overlay.showQueue = keys.has('Shift');
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
+    lap('overlay');
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
     power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power), (o) => !SPECTATE && world.hostile(o, PLAYER));
+    lap('power');
     paving.update(world, sees);
+    lap('paving');
     audio.frame();
-    lap('fx+overlay');
+    lap('audio');
     minimap.draw(world, sees);
     if (!bigBox.hidden) bigMap.draw(world, sees);
     lap('minimap');
@@ -660,7 +667,7 @@ function start(): void {
     }
     post.render();
     lap('render');
-    if (rec.on) rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, { tick: world.tick, ticks: stepped, events: { ...happened } }, unitsOnScreen);
+    if (rec.on) rec.end(`${rig.target.x.toFixed(2)},${rig.target.z.toFixed(2)},${rig.viewHeight.toFixed(1)}`, { tick: world.tick, ticks: stepped, events: { ...happened }, entities: world.entities.size, particles: effects.live }, unitsOnScreen);
     if (measuresDue) {
       measuresDue = false;
       measuresOnce();
@@ -682,7 +689,9 @@ function start(): void {
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
   if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer, rec });
   // Two frames on (the first compiles the shaders), the picture is ready: the loading screen fades away.
+  rec.loaded('ready');
   requestAnimationFrame(() => requestAnimationFrame(() => {
+    rec.loaded('playable');
     loading?.classList.add('done');
     setTimeout(() => loading?.remove(), 500);
   }));
@@ -691,9 +700,10 @@ function start(): void {
   // answers as fast without it (about 105 ms either way on a phone profile, CPU slowed 4 times).
   let lastDraw = 0;
   const capped = ATTRACT && (TOUCH || QUALITY_LEVEL === 'basse');
-  renderer.setAnimationLoop(() => {
+  renderer.setAnimationLoop((due: number) => {
     const now = performance.now();
     if (capped && now - lastDraw < 30) return;
+    rec.due(due);
     lastDraw = now;
     framed = now;
     const dt = clock.getDelta();
@@ -705,5 +715,6 @@ function start(): void {
     }
     else frame(dt);
     perf.frame(world.tick);
+    rec.tail();
   });
 }
