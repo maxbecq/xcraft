@@ -191,6 +191,8 @@ describe('AI spells, each in a scene made for it', () => {
   it('Fusion of two Élémentaires waiting at home, late on', () => {
     const { w, ai, at } = arena(['dieux', 'humains']);
     while (w.tick < ticks(15 * 60)) w.tick++;
+    // A side with income ahead (no worker and an empty bank: its last units leave on a last wave).
+    w.players[0].minerals = 1000;
     at('elementaire', 0, 0, 0);
     at('elementaire', 0, 1, 0);
     expect(cast(orders(w, ai), 'fusion')).toBe(true);

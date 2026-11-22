@@ -195,7 +195,10 @@ export class AI {
     this.rebuildable = !!raisers && bankNow.minerals >= hqCost.minerals + absorbed && bankNow.energy >= hqCost.energy;
     // Without its price, a building that can still train a unit the bank pays keeps the AI playing (a Plate-forme
     // with 500 minerals sat out the game in a last stand).
-    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && (b.def as BuildingDef).trains?.some((t) => this.faction.army.some(([a]) => a === t) && (DEFS[t] as UnitDef).cost.minerals <= bankNow.minerals && (DEFS[t] as UnitDef).cost.energy <= bankNow.energy));
+    // A Z Pod too, which can raise a Plate-forme without a drone.
+    const pays = (t: string) => (DEFS[t] as BuildingDef | UnitDef).cost.minerals <= bankNow.minerals && (DEFS[t] as BuildingDef | UnitDef).cost.energy <= bankNow.energy;
+    const fields = (t: string) => this.faction.army.some(([a]) => a === t) && pays(t);
+    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some((t) => this.faction.army.some(([u]) => u === t)))));
     const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') : undefined);
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
     if (!home) return this.lastStand(mine);
@@ -567,7 +570,8 @@ export class AI {
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
     const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
     // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
-    for (let i = 0; i < wants.length && this.settled(home); i++) {
+    // Once its site stands (paid already), with drones to spare, they come again.
+    for (let i = 0; i < wants.length && (this.settled(home) || (building(f.hq) && ctx.serfs.length >= 2)); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
@@ -1020,7 +1024,9 @@ export class AI {
         .map((u) => u.id);
       if (ids.length) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
       // No soldiers to speak of against a small raid: the workers next to it fight.
-      if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4) {
+      // Not against a flyer their arms cannot reach (drones gathered under a Drake's blasts).
+      const lead = w.entities.get(threat.target);
+      if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4 && !(lead && flies(lead))) {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id)));
         if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
@@ -1961,6 +1967,9 @@ export class AI {
    * fields left were the enemy's natural, which neither side could take any more: both sat to the time limit).
    */
   private starved(buildings: Entity[], minerals: number): boolean {
+    // No worker left and none to be paid for: no income will come, fields or not.
+    const f = this.faction;
+    if (minerals < (DEFS[f.worker] as UnitDef).cost.minerals && ![...this.world.entities.values()].some((e) => e.owner === this.player && e.type === f.worker)) return true;
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
