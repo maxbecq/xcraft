@@ -1659,7 +1659,8 @@ export class AI {
         } else if (CROWD[name]) {
           // Silence only where enemy casters stand.
           const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
-          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          // The Pluie de feu burns its own side too: not where as many of ours stand.
+          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length - (name === 'pluiedefeu' ? 2 * around(army, f.x, f.y, radius).length : 0)] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
           if (best && best[1] >= CROWD[name]) cmd = at(u, name, best[0]);
         } else if (name === 'jetdesable') {
           // The toughest enemy machine in reach.

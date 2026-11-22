@@ -274,10 +274,12 @@ export interface AbilityDef {
   damage?: number;
   /** Most units it moves at once. */
   max?: number;
+  /** Percent of its damage it does to buildings (Pluie de feu: balance designer 2026-11-22). */
+  building?: number;
   /** Dieux: an ultimate spell, cast free once the Temple primordial has charged it for this mythology. */
   ultimate?: Mythology;
-  /** Dieux: values at the caster god's levels 1 to 5, in place of the plain ones (the spells grow with the god). */
-  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max' | 'mana' | 'range', number[]>>;
+  /** Dieux: values at the caster god's levels 1 to 3, in place of the plain ones (the spells grow with the god). */
+  levels?: Partial<Record<'damage' | 'radius' | 'duration' | 'cooldown' | 'max' | 'mana' | 'range' | 'building', number[]>>;
 }
 
 /** Dieux: the three mythologies, each three gods (notice 1.2-1); all three standing charge its ultimate spell. */

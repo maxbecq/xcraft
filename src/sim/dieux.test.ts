@@ -615,3 +615,24 @@ describe('the Puits (balance designer, 2026-11-22)', () => {
     expect(four).toBeGreaterThan(0);
   });
 });
+
+describe('Apollon\'s Pluie de feu (balance designer, 2026-11-22)', () => {
+  it('falls on an area, burns friend and foe, and buildings at a quarter, a third, a half by level', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = Object.assign(w.spawn('apollon', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const friend = w.spawn('nain', 0, 34 * FP, 30 * FP);
+    const store = w.spawn('grenier', 1, 35 * FP, 32 * FP);
+    const [fh, sh] = [friend.hp, store.hp];
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: 34 * FP, y: 31 * FP }]);
+    expect(friend.hp).toBeLessThan(fh);
+    const toStore = sh - store.hp;
+    expect(toStore).toBeGreaterThan(0);
+    expect(toStore).toBeLessThan(ABILITIES.pluiedefeu.damage! / 2);
+    // On bare ground too.
+    apollon.spellCd = {};
+    apollon.abilityCd = 0;
+    const mana = apollon.mana;
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: 26 * FP, y: 26 * FP }]);
+    expect(apollon.mana).toBeLessThan(mana);
+  });
+});

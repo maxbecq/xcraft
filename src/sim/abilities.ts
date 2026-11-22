@@ -375,9 +375,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'pluiedefeu') {
-    const foes = near((t) => this.hostile(t.owner, e.owner));
-    if (!foes.length) return false;
-    for (const t of foes) this.hurt(t, ab.damage!);
+    // Balance designer 2026-11-22: on an area, friend and foe alike, buildings too at a share of the damage by level.
+    for (const t of near(() => true)) this.hurt(t, ab.damage!);
+    for (const b of [...this.entities.values()]) {
+      if (b.def.kind !== 'building' || b.hp <= 0 || dist(b.x, b.y, x, y) > toFp(ab.radius! + (b.def as BuildingDef).size / 2)) continue;
+      this.hurt(b, idiv(ab.damage! * ab.building!, 100));
+    }
   } else if (name === 'teleportgaia') {
     const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
     if (!b) return false;
