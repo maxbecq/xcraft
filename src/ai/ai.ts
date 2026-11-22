@@ -702,7 +702,8 @@ export class AI {
         ctx.energy -= def.cost.energy;
         continue;
       }
-      const crew = builders.filter((b) => raises(b.def as UnitDef, type));
+      // Not a god out with the wave (Frigg walked home alone to build, then back to the front alone).
+      const crew = builders.filter((b) => raises(b.def as UnitDef, type) && !this.wave.has(b.id));
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
       // Centre de socles instead), a site tried for nothing.
       // A lost headquarters: only a worker whose road to the site is out of an enemy's reach.
@@ -1080,8 +1081,7 @@ export class AI {
         }
       }
       for (const g of gods) {
-        // Not a god out with the wave: its troop came out at the front, alone and without orders.
-        if (g.queue.length > (this.easy ? 0 : 1) || this.wave.has(g.id)) continue;
+        if (g.queue.length > (this.easy ? 0 : 1)) continue;
         // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
         const share = BALANCE.ai.army.dieux as Record<string, number>;
         // A unit counted in the forms it turns into (an Élémentaire takes its fire form at once: never counted, Athéna
@@ -1138,9 +1138,15 @@ export class AI {
     // Defend the base, otherwise attack in waves; reinforcements wait at the rally point.
     // Dead or being recalled (Rappel): out of the wave.
     for (const id of this.wave) if (!w.entities.get(id) || w.entities.get(id)!.held) this.wave.delete(id);
-    // Dieux: first-rank gods sent with a last wave come home once income is back (they summon).
-    if (gods.length && !this.starved(buildings, ctx.p.minerals)) {
-      const home1 = gods.filter((g) => this.wave.has(g.id) && !(g.def as UnitDef).requiresAny);
+    // Dieux: a troop a god out with the wave summoned at the front joins the wave (alone, it had no orders).
+    for (const g of gods) {
+      if (!this.wave.has(g.id) || dist(g.x, g.y, home.x, home.y) < 20 * FP) continue;
+      for (const u of army) if (!this.wave.has(u.id) && !u.order && dist(u.x, u.y, g.x, g.y) < 6 * FP) this.wave.add(u.id);
+    }
+    // First-rank gods sent with a last wave come home once income is back (they summon).
+    const out1 = gods.filter((g) => this.wave.has(g.id) && !(g.def as UnitDef).requiresAny);
+    if (out1.length && !this.starved(buildings, ctx.p.minerals)) {
+      const home1 = out1;
       for (const g of home1) this.wave.delete(g.id);
       if (home1.length) ctx.out.push({ player: this.player, kind: 'move', ids: home1.map((g) => g.id), x: ctx.rally.x, y: ctx.rally.y });
     }
