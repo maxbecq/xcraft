@@ -128,7 +128,9 @@ export class Grid {
     // for the same lines again and again, from each waypoint to every one after it, and every unit of a group sent
     // along one path asked for them all over (15 ms of a tick for a dozen units). The same answer, only not worked out twice.
     const half = FP / 2;
-    if (ax % FP !== half || ay % FP !== half || bx % FP !== half || by % FP !== half || ax < 0 || ay < 0 || bx < 0 || by < 0) return this.line(ax, ay, bx, by);
+    // Only inside the map: a centre past its right or bottom edge would share its key with a tile of the next row.
+    const [mx, my] = [this.width * FP, this.height * FP];
+    if (ax % FP !== half || ay % FP !== half || bx % FP !== half || by % FP !== half || ax < 0 || ay < 0 || bx < 0 || by < 0 || ax >= mx || ay >= my || bx >= mx || by >= my) return this.line(ax, ay, bx, by);
     if (this.linesAt !== this.changes || this.lines.size > 400_000) {
       this.linesAt = this.changes;
       this.lines.clear();

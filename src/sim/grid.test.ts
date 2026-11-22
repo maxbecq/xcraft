@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { MAPS, buildMap } from '../maps';
+import { FP } from './fixed';
 import { Grid } from './grid';
 
 it('canStep from its per-tile sides answers as the tiles themselves do, buildings and all', () => {
@@ -135,4 +136,38 @@ it('lineWalkable answers as when it asked canStep at each step', () => {
       expect(g.lineWalkable(ax, ay, bx, by)).toBe(reference(ax, ay, bx, by));
     }
   }
+});
+
+it('lineWalkable kept between two tile centres answers as when worked out, past the map\'s edges and after the grid changes too', () => {
+  for (const def of Object.values(MAPS)) {
+    const g = new Grid(buildMap(def));
+    const direct = (g as unknown as { line: (ax: number, ay: number, bx: number, by: number) => boolean }).line.bind(g);
+    const c = (t: number) => t * FP + FP / 2;
+    let seed = 7;
+    const rand = (n: number) => Math.floor(((seed = (seed * 16807) % 2147483647) / 2147483647) * n);
+    // Centres up to two tiles past the right and bottom edges: one there has the linear index of a tile of the map
+    // (x = width is the next row's first tile), and must not be given that tile's answer.
+    const pairs: number[][] = [];
+    for (let i = 0; i < 3000; i++) {
+      const [ax, ay] = [rand(g.width), rand(g.height)];
+      pairs.push([c(ax), c(ay), c(Math.min(g.width + 1, ax + rand(7) - 3 + (i % 5 === 0 ? g.width - ax : 0))), c(Math.min(g.height + 1, Math.max(0, ay + rand(7) - 3)))]);
+    }
+    for (const round of [0, 1, 2]) {
+      // Asked twice each (the second from what was kept); then a building put, which must drop what was kept.
+      if (round === 2) {
+        for (let i = 0; i < g.blocked.length; i += 7) g.blocked[i] = 1;
+        g.changes++;
+      }
+      for (const [ax, ay, bx, by] of pairs) if (g.lineWalkable(ax, ay, bx, by) !== direct(ax, ay, bx, by)) expect([def.id, round, ax, ay, bx, by]).toBe('the same');
+    }
+  }
+});
+
+it('lineWalkable: the case of the review, a centre past the right edge after its namesake inside', () => {
+  const g = new Grid(buildMap(Object.values(MAPS)[0]));
+  const c = (t: number) => t * FP + FP / 2;
+  // (0,0) to (0,1), then (0,0) to (width,0): the same linear index, one inside the map and walkable, one outside.
+  const inside = g.lineWalkable(c(0), c(0), c(0), c(1));
+  expect(g.lineWalkable(c(0), c(0), c(g.width), c(0))).toBe((g as unknown as { line: (...a: number[]) => boolean }).line(c(0), c(0), c(g.width), c(0)));
+  expect(g.lineWalkable(c(0), c(0), c(0), c(1))).toBe(inside);
 });
