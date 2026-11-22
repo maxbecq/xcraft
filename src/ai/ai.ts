@@ -91,7 +91,7 @@ const KITS: Record<string, number> = { ...BALANCE.ai.kits, accumulateur: 1 };
 const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
 /** Dieux units and the forms they turn into (Forme de feu), counted together for the army's shares. */
-const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', 'elemterre', 'elemair'] };
+const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', 'elemterre', 'elemair', 'golem'] };
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
@@ -702,8 +702,7 @@ export class AI {
         ctx.energy -= def.cost.energy;
         continue;
       }
-      // Not a god out with the wave (Frigg walked home alone to build, then back to the front alone).
-      const crew = builders.filter((b) => raises(b.def as UnitDef, type) && !this.wave.has(b.id));
+      const crew = builders.filter((b) => raises(b.def as UnitDef, type));
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
       // Centre de socles instead), a site tried for nothing.
       // A lost headquarters: only a worker whose road to the site is out of an enemy's reach.
@@ -740,6 +739,8 @@ export class AI {
         break; // save up for it, as for the building's own price
       }
       ctx.out.push({ player: this.player, kind: 'build', ids: [builder.id], type, tx: spot[0], ty: spot[1], queue: !!chained });
+      // A god out with the wave leaves it to build (Frigg's Artefacterie): kept in it, it was sent back to the front.
+      this.wave.delete(builder.id);
       const k = spotKey(spot[0], spot[1], def.size);
       this.tried.set(k, (this.tried.get(k) ?? 0) + 1);
       ctx.minerals -= cost.minerals;
@@ -1141,7 +1142,8 @@ export class AI {
     // Dieux: a troop a god out with the wave summoned at the front joins the wave (alone, it had no orders).
     for (const g of gods) {
       if (!this.wave.has(g.id) || dist(g.x, g.y, home.x, home.y) < 20 * FP) continue;
-      for (const u of army) if (!this.wave.has(u.id) && !u.order && dist(u.x, u.y, g.x, g.y) < 6 * FP) this.wave.add(u.id);
+      // Fighting already or not (it is given an attack of its own at once); within the easy AI's cap.
+      for (const u of army) if (!this.wave.has(u.id) && dist(u.x, u.y, g.x, g.y) < 6 * FP && (!this.easy || this.wave.size < LEVELS.easy.maxWave)) this.wave.add(u.id);
     }
     // First-rank gods sent with a last wave come home once income is back (they summon).
     const out1 = gods.filter((g) => this.wave.has(g.id) && !(g.def as UnitDef).requiresAny);
