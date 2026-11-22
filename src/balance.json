@@ -356,7 +356,7 @@
     "fusion": { "cooldown": 1, "duration": 15, "radius": 2 }
   },
   "rules": {
-    "godMana": { "max": [150, 175, 200], "regen": 1, "none": ["thor"] },
+    "godMana": { "max": [150, 175, 200], "regen": 1.5, "none": ["thor"] },
     "materialisation": { "cooldown": { "obelisque": 60, "recepteur": 15, "reservepsy": 20, "emetteur": 12.5, "portail": 30, "orbe": 17.5, "nanoassembleur": 37.5, "orbecommandement": 42.5, "trone": 42.5 }, "beaconSurcharge": 33 },
     "start": { "minerals": 200, "energy": 0, "serfs": 6 },
     "harvest": { "amount": 10, "seconds": 3 },
