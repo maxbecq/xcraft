@@ -125,7 +125,7 @@ export function buttonsFor(h: Hud): Button[] {
     if (h.workers().length) {
       list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (h.buildMenu = 'basic') });
       // The LCD console shows every building at once, as a tree: no second, « advanced » list.
-      if (!lcdTree(h) && !onlyOwn(h)) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
+      if (!lcdTree(h) && !onlyOwn(h) && FACTIONS[h.world.players[h.player].faction].advanced.length) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
     }
     // One button per active ability among the selected units; each ready unit uses it.
     for (const ab of new Set(units.flatMap((u) => h.world.abilitiesFor(u)))) {

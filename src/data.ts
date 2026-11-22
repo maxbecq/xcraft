@@ -756,8 +756,8 @@ const BASE: Record<string, object> = {
   // its own troops at its feet. Gaïa (given at the start, back by herself when she falls) calls the buildings down:
   // they materialise by themselves. Esprits harvest. V1: the first rank of gods (docs/camp-dieux.md).
   esprit: { kind: 'unit', name: 'Esprit', radius: 0.35, worker: true, builder: false, faction: 'dieux', hotkey: 'E' },
-  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, builds: ['asgaard', 'branche', 'antre', 'puitsdivin', 'primordial'], trains: ['esprit'], unique: true, abilities: ['teleportgaia'], faction: 'dieux', hotkey: 'G' },
-  thor: { kind: 'unit', name: 'Thor', radius: 1.7, builds: ['temple'], trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
+  gaia: { kind: 'unit', name: 'Gaïa', radius: 2.0, builder: true, builds: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'primordial'], trains: ['esprit'], unique: true, abilities: ['teleportgaia'], faction: 'dieux', hotkey: 'G' },
+  thor: { kind: 'unit', name: 'Thor', radius: 1.7, trains: ['nain'], unique: true, abilities: ['jormungand'], ability: 'courroux', faction: 'dieux', hotkey: 'T' },
   apollon: { kind: 'unit', name: 'Apollon', radius: 1.4, trains: ['minotaure'], unique: true, abilities: ['lumiereardente', 'tempetezeus'], ability: 'pluiedefeu', faction: 'dieux', hotkey: 'A' },
   seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['jetdesable', 'amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
@@ -814,7 +814,7 @@ const BASE: Record<string, object> = {
   /** Osiris's Fontaine d'eau du Nil: the living allies round it heal fast (rules.fontaine). */
   fontaine: { kind: 'building', name: 'Fontaine du Nil', size: 2, warp: true, requires: { osiris: 1 }, faction: 'dieux', hotkey: 'F' },
   /** Gaïa's Temple primordial (unique): charges the ultimate spells (MYTHS). */
-  primordial: { kind: 'building', name: 'Temple primordial', size: 4, warp: true, unique: true, faction: 'dieux', hotkey: 'P' },
+  primordial: { kind: 'building', name: 'Temple primordial', size: 4, warp: true, unique: true, faction: 'dieux', hotkey: 'R' },
   /** Avatar of Jörmungand (ultimate): a giant serpent for a while; eats the dead to heal. */
   jormungandr: { kind: 'unit', name: 'Avatar de Jörmungand', radius: 1.2, lifetime: 60, faction: 'dieux', hotkey: 'J' },
   /** Frigg's Artefacterie (unique): the gods buy improvements wherever they are (ARTEFACTS). */
@@ -822,7 +822,7 @@ const BASE: Record<string, object> = {
   antre: { kind: 'building', name: 'Antre', size: 4, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
   temple: {
-    kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requires: { thor: 1 }, faction: 'dieux', hotkey: 'V',
+    kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requiresAny: { of: ['thor', 'seth', 'apollon'], count: 1 }, faction: 'dieux', hotkey: 'V',
     researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'auraputride', 'deracinement'],
   },
   ...upgrades('melee', 'Attaque corps à corps', 'C', undefined, 'dieux', 3, 'dmelee'),
@@ -1046,7 +1046,8 @@ export const FACTIONS: Record<Faction, FactionDef> = {
     name: 'Dieux', worker: 'esprit', hq: 'asgaard', supply: 'branche', barracks: 'asgaard', extractor: 'puitsdivin',
     forge: 'temple', defense: 'branche', builder: 'gaia', workerFrom: 'gaia', start: ['gaia'], outpost: 'antre', gods: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'],
     buildable: ['asgaard', 'branche', 'antre', 'puitsdivin', 'temple', 'fontaine', 'primordial', 'artefacterie'],
-    advanced: ['temple', 'fontaine', 'primordial', 'artefacterie'],
+    // Équilibreur 2026-11-22: no « advanced » list for the Dieux, Gaïa's buildings in one.
+    advanced: [],
     army: Object.entries(BALANCE.ai.army.dieux),
   },
 };

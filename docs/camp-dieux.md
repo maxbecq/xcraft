@@ -55,7 +55,7 @@ Règle de l'arbre (dessin de la notice) : Gaïa → les trois dieux de rang 1 ; 
 
 Toutes ont la **Détection**.
 
-La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris et l'Artefacterie par Frigg. Le jeu suit la notice depuis le 21 novembre 2026 : Gaïa ne les bâtit plus.
+La notice fait bâtir le Temple de vénération par Thor, la Fontaine par Osiris et l'Artefacterie par Frigg. Depuis la réponse de l'équilibreur du 22 novembre 2026, c'est Gaïa qui bâtit le Temple de vénération, dès que Thor, Seth ou Apollon est là ; la Fontaine et l'Artefacterie restent à Osiris et Frigg. Le Temple primordial est dans la liste de Gaïa, sans menu « Avancé ».
 
 | Dieu | Rang | Rôle | Invoque / construit | Capacités (notice) |
 |---|---|---|---|---|
