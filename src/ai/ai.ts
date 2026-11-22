@@ -159,6 +159,8 @@ export class AI {
   private raisers = 0;
   /** Minerals the Humans' advanced buildings keep from the Casernes for a unit they wait for (the Marché leaves them). */
   private advancedHeld = 0;
+  /** That unit is short of energy too: the Marché buys it above the minerals kept (not 500 above them). */
+  private advancedEnergyShort = false;
   /** Enemies at our base this turn, whatever their strength (no Couloir temporel then). */
   private homeThreat = false;
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
@@ -620,7 +622,11 @@ export class AI {
     const techIdle = techUp && (unlocked.length > 0 ? buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0) : !this.fielded);
     const techUnits = unlocked.length ? unlocked : techDef?.trains!.filter((t) => (DEFS[t] as UnitDef).attack) ?? [];
     const gatewaysKeep =
-      // Not the easy AI: it researches no extension, the units it kept minerals for never came. Nor with no minerals
+      // Humans: the Créaturium wanted keeps its minerals from the Casernes once three quarters of its energy is there,
+      // while minerals come in (their infantry took every 100 as it came, and it never stood).
+      f === FACTIONS.humains
+        ? techWanted && p.energy >= (techDef!.cost.energy * 3) / 4 && w.tick - this.lastIncome < ticks(60) ? techDef!.cost.minerals : 0
+        : // Not the easy AI: it researches no extension, the units it kept minerals for never came. Nor with no minerals
       // coming in: the Portails held them for units the Psycho-assembleur could not pay.
       f !== FACTIONS.isdaris || this.easy || w.tick - this.lastIncome >= ticks(60)
         ? 0
@@ -846,7 +852,7 @@ export class AI {
       ctx.energy -= BALANCE.rules.trade.give;
     // Not the minerals kept for an advanced building's unit (last turn's): sold as they came, the bank stayed at 500
     // and the Casernes stood idle under the keep.
-    } else if (market && !raising && ctx.minerals > 500 + this.advancedHeld && ctx.energy < unitReserve + 100) {
+    } else if (market && !raising && ctx.minerals > (this.advancedEnergyShort ? Math.max(500, this.advancedHeld + BALANCE.rules.trade.give) : 500 + this.advancedHeld) && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
     } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || ((!this.settled(ctx.home) || ctx.serfs.length === 0) && this.shortOfMinerals(ctx)))) {
@@ -875,6 +881,7 @@ export class AI {
     const researchCost = nextResearch && (DEFS[nextResearch] as UpgradeDef).cost;
     ctx.keep = researchCost && ctx.energy - researchReserve >= researchCost.energy ? researchCost.minerals : 0;
     let advancedKeep = 0;
+    this.advancedEnergyShort = false;
     // Heavier units from the other production buildings, one at a time, when affordable; a few of each support kind.
     for (const t of buildings.filter((b) => !kin(b, f.barracks) && !kin(b, f.hq) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
       // The kind it has fewest of that it can pay for (Discobole and Chimère take turns; an Ankylosaure it could not pay
@@ -892,11 +899,13 @@ export class AI {
       // The tech building waits for the energy of a unit it has none of, its minerals there, rather than train another
       // of the cheaper ones (the Ankylosaure, 390, never came: a Plésiosaure, 225, left each time the energy got there).
       const first = order.find((u) => (DEFS[u] as UnitDef).attack);
-      if (f === FACTIONS.humains && t.type === f.tech && first && own(first) === 0 && !pays(first) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
+      // (for its energy only: short of supply, another unit goes)
+      if (f === FACTIONS.humains && t.type === f.tech && first && own(first) === 0 && ctx.energy < (DEFS[first] as UnitDef).cost.energy && (DEFS[first] as UnitDef).supply <= this.room(ctx) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
       // Humans: a unit an advanced building has none of and cannot pay yet keeps its minerals from the Casernes while
       // minerals come in (the Casernes drained the bank each turn: no Scarabée at 500 nor Char Pégase at 650 came).
       if (f === FACTIONS.humains && first && own(first) === 0 && !pays(first) && w.tick - this.lastIncome < ticks(60) && !order.some((u) => own(u) === 0 && pays(u))) {
         advancedKeep = Math.max(advancedKeep, (DEFS[first] as UnitDef).cost.minerals);
+        if (ctx.energy < (DEFS[first] as UnitDef).cost.energy) this.advancedEnergyShort = true;
         continue;
       }
       const type = order.find(pays);
@@ -907,6 +916,7 @@ export class AI {
       ctx.energy -= def.cost.energy;
     }
     this.advancedHeld = advancedKeep;
+    if (!advancedKeep) this.advancedEnergyShort = false;
     for (const c of buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0)) {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || this.room(ctx) <= 0) continue;
