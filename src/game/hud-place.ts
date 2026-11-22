@@ -151,7 +151,9 @@ export function updateGhost(h: Hud): void {
   const def = DEFS[h.placing] as BuildingDef;
   const size = def.size;
   const room = addonRoom(h, h.placing, spot);
-  const ok = h.world.canPlace(h.placing, spot[0], spot[1], h.player) && room !== null;
+  // An extractor's ghost: as the player last saw its well (the simulation knows an enemy one under the fog).
+  const well = def.energyRate ? [...h.world.entities.values()].find((w) => w.type === 'puits' && w.tx === spot[0] && w.ty === spot[1]) : undefined;
+  const ok = (well ? !takenAsSeen(h).get(well.id) : h.world.canPlace(h.placing, spot[0], spot[1], h.player)) && room !== null;
   let addon: { tx: number; ty: number; size: number; ok: boolean } | null = null;
   if (room !== undefined) {
     // The add-on's room: where it would go, or (none free) against the east side, in red.
