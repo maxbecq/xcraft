@@ -135,11 +135,13 @@ export function freeAsSeen(h: Hud, w: Entity): boolean {
 
 export function updateGhost(h: Hud): void {
   takenAsSeen(h);
+  // A Caserne volante about to land: the grid and footprint of where it would settle (the balancer, 2026-11-22).
+  const placing = h.placing ?? (h.targeting && h.aimed === 'atterrissage' ? 'casernevolante' : null);
   const touch = !!h.placing && h.input.touching;
   if (!h.placing) h.pin = null;
   else if (touch && !h.pin) h.pin = h.input.aim()?.clone() ?? null;
-  const g = h.placing ? (touch ? h.pin : h.input.aim()) : h.input.hover;
-  const spot = h.placing && g ? spotAt(h, h.placing, g) : null;
+  const g = placing ? (touch ? h.pin : h.input.aim()) : h.input.hover;
+  const spot = placing && g ? spotAt(h, placing, g) : null;
   h.ghost.visible = !!spot;
   h.pinUi.hidden = !(touch && spot);
   if (touch && spot && h.placing) {
@@ -150,21 +152,21 @@ export function updateGhost(h: Hud): void {
     h.pinUi.style.left = `${Math.min(innerWidth - 60, Math.max(60, s.x))}px`;
     h.pinUi.style.top = `${Math.min(innerHeight - 60, Math.max(8, s.y + 10))}px`;
   }
-  if (!h.placing || !g) {
+  if (!placing || !g) {
     h.grid.hide();
     h.gridKey = '';
   }
   // The grid shows as soon as the order is armed: an extractor far from any well (no spot to snap to) still gets it,
   // the free wells lit, only without a footprint.
-  if (h.placing && g) updateGrid(h, h.placing, g);
+  if (placing && g) updateGrid(h, placing, g);
   if (!spot) h.grid.noFootprint();
-  if (!spot || !h.placing) return;
-  const def = DEFS[h.placing] as BuildingDef;
+  if (!spot || !placing) return;
+  const def = DEFS[placing] as BuildingDef;
   const size = def.size;
-  const room = addonRoom(h, h.placing, spot);
+  const room = addonRoom(h, placing, spot);
   // An extractor's ghost: as the player last saw its well (the simulation knows an enemy one under the fog).
   const well = def.energyRate ? [...h.world.entities.values()].find((w) => w.type === 'puits' && w.tx === spot[0] && w.ty === spot[1]) : undefined;
-  const ok = (well ? freeAsSeen(h, well) : h.world.canPlace(h.placing, spot[0], spot[1], h.player)) && room !== null;
+  const ok = (well ? freeAsSeen(h, well) : h.world.canPlace(placing, spot[0], spot[1], h.player)) && room !== null;
   let addon: { tx: number; ty: number; size: number; ok: boolean } | null = null;
   if (room !== undefined) {
     // The add-on's room: where it would go, or (none free) against the east side, in red.
