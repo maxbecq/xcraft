@@ -495,9 +495,10 @@ export class AI {
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
-    // No base at all, a spot for it: its price is kept from everything (spent while its builder came out of an Assimilateur, the
+    // No base at all, a spot for it or its site begun (its last minerals, the next worker's price, went into research
+    // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (noHq && !this.isBase(home) && !!this.spot(f.hq, home));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.isBase(home) && (building(f.hq) || !!this.spot(f.hq, home)));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -516,13 +517,15 @@ export class AI {
     // The Intelligence is kept idle for its turn into the suprême (no drone, no Espion) only with its price there and a
     // drone left, or drones enough to mine it: raided down to a few, it waited for 300 minerals no drone was left to mine.
     const supreme = (DEFS.supreme as BuildingDef).cost;
-    const holdSupreme = wantSupreme && p.energy >= 300 && ((p.minerals >= supreme.minerals && p.energy >= supreme.energy && serfs.length > 0) || serfs.length >= this.plan.serfs / 2);
+    // And only with energy coming in (an Assimilateur standing): stuck at 350, it held the drones for good.
+    const holdSupreme = wantSupreme && p.energy >= 300 && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0) && ((p.minerals >= supreme.minerals && p.energy >= supreme.energy && serfs.length > 0) || serfs.length >= this.plan.serfs / 2);
     const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
     // research on a production building (Isdaris Portail) waits for spare resources instead.
     // Not for the easy AI, which researches nothing: the minerals kept for it held back its units for good.
-    const nextResearch = this.easy || army.length < this.plan.wave ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
+    // Nor with no minerals coming in: its price, kept for good, held back the last units.
+    const nextResearch = this.easy || army.length < this.plan.wave || w.tick - this.lastIncome >= ticks(60) ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
     // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
     const researchReserve = techWanted && f !== FACTIONS.isdaris ? 0 : reserve;
@@ -847,7 +850,7 @@ export class AI {
     // by it, flies them to the target and lets them out 7 tiles short, then comes back.
     const barge = mine.find((u) => u.type === 'barge' && u.hp > 0);
     const deck = buildings.find((b) => (b.def as BuildingDef).trains?.includes('barge') && b.buildLeft === 0 && b.queue.length === 0);
-    if (!barge && deck && minute > 14 && this.room(ctx) >= (DEFS.barge as UnitDef).supply && !w.lacks(this.player, 'barge') && !buildings.some((b) => b.queue.includes('barge')) && ctx.minerals - ctx.keep >= (DEFS.barge as UnitDef).cost.minerals + 100) {
+    if (!barge && deck && minute > 14 && !ctx.saving && this.room(ctx) >= (DEFS.barge as UnitDef).supply && !w.lacks(this.player, 'barge') && !buildings.some((b) => b.queue.includes('barge')) && ctx.minerals - ctx.keep >= (DEFS.barge as UnitDef).cost.minerals + 100) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [deck.id], type: 'barge' });
       ctx.minerals -= (DEFS.barge as UnitDef).cost.minerals;
     }
@@ -1008,7 +1011,7 @@ export class AI {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx.p))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
       // No income left: half a wave at least goes, or the last units it can pay for (one at a time, each new Créature
       // joined a wave of three dying under a manned Fortin, for twenty minutes, to a draw).
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
@@ -1770,7 +1773,14 @@ export class AI {
       const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
       const start = lost ? startSite(w, this.player) : undefined;
       const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
-      return site.find(([tx, ty]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
+      // An expansion with minerals left round it (a site mined out, its base lost, was taken again for its last 800).
+      const mined = (tx: number, ty: number) => {
+        const [cx, cy] = [(tx + def.size / 2) * FP, (ty + def.size / 2) * FP];
+        let n = 0;
+        for (const e of w.entities.values()) if (e.type === 'minerai' && dist(e.x, e.y, cx, cy) < 12 * FP && ++n >= 3) return false;
+        return true;
+      };
+      return site.find(([tx, ty], i) => !(start && i === 0 ? false : mined(tx, ty)) && w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
     const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
@@ -1926,9 +1936,10 @@ export class AI {
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
-  /** Some unit of the army can still be paid from the bank (without income, the last ones are still to come). */
-  private affordable(p: { minerals: number; energy: number }): boolean {
-    return this.faction.army.some(([t]) => (DEFS[t] as UnitDef).cost.minerals <= p.minerals && (DEFS[t] as UnitDef).cost.energy <= p.energy);
+  /** Some unit of the army can still be paid from the bank and trained (without income, the last ones are still to come). */
+  private affordable(ctx: Turn): boolean {
+    // With a building to train it and room in supply: none left, no unit is still to come.
+    return ctx.free > 0 && this.faction.army.some(([t]) => (DEFS[t] as UnitDef).cost.minerals <= ctx.p.minerals && (DEFS[t] as UnitDef).cost.energy <= ctx.p.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
   }
 
   /** Mineral fields left within reach of any of our finished bases. */
@@ -1988,6 +1999,9 @@ export class AI {
     const foes: Entity[] = [];
     for (const e of w.entities.values()) {
       if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
+      // Not an unarmed flyer (an Espion hovering by an outlying building, out of the defenders' reach, kept the army
+      // home on defence and no wave ever left).
+      if (flies(e) && !w.weapon(e)) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
     }

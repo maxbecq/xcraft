@@ -498,6 +498,9 @@ describe('AI Z Refuge', () => {
     const [ic] = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'intelligence');
     for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'drone') w.entities.delete(e.id);
     w.spawn('drone', 0, ic.x, ic.y + 4 * FP);
+    // Energy coming in: an Assimilateur on the nearest well.
+    const well = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => Math.hypot(a.x - ic.x, a.y - ic.y) - Math.hypot(b.x - ic.x, b.y - ic.y))[0];
+    w.spawn('assimilateur', 0, well.x, well.y);
     // Both busy researching: the minerals go to nothing else.
     for (const [t, dx, up] of [['armement', -9, 'laser'], ['centrerecherche', 9, 'rquadripode']] as const) w.spawn(t, 0, ic.x + dx * FP, ic.y + 6 * FP).queue.push(up);
     while (w.tick < ticks(7 * 60)) w.tick++;
@@ -835,6 +838,7 @@ describe('AI Z blind spots', () => {
     for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
     const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
     const u = w.spawn('auxiliaire', 0, hq.x, hq.y + 5 * FP);
+    w.spawn('caserne', 0, hq.x + 8 * FP, hq.y + 8 * FP);
     w.tick = thinkTick(20);
     w.players[0].minerals = 1000;
     const goes = (cmds: Command[]) => cmds.some((c) => c.kind === 'attack' && c.ids.includes(u.id));
@@ -843,6 +847,24 @@ describe('AI Z blind spots', () => {
     w.players[0].energy = 0;
     w.tick += 10;
     expect(goes(new AI(w, 0).think())).toBe(true);
+  });
+  it('an unarmed enemy flyer by our buildings is no threat to stay home for', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    w.spawn('voyageur', 1, hq.x + 4 * FP, hq.y);
+    w.step([]);
+    const ai = new AI(w, 0) as unknown as { threat(b: Entity[]): unknown };
+    expect(ai.threat([hq])).toBeUndefined();
+  });
+
+  it('no income and nothing left to train them: the last soldiers go', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const u = w.spawn('auxiliaire', 0, hq.x, hq.y + 5 * FP);
+    w.tick = thinkTick(20);
+    w.players[0].minerals = 1000;
+    expect(new AI(w, 0).think().some((c) => c.kind === 'attack' && c.ids.includes(u.id))).toBe(true);
   });
 });
 
