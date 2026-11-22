@@ -603,8 +603,9 @@ export class AI {
     const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
     // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
     // Once its site stands (paid already), with drones to spare, they come again.
-    // With no headquarters' price to keep (none can be raised), a Pod raises a Plate-forme to fight on.
-    for (let i = 0; i < wants.length && (this.settled(home) || building(f.hq) || !this.rebuildable); i++) {
+    // With no headquarters' price to keep (none can be raised, or no site for it, all under fire), a Pod raises a
+    // Plate-forme to fight on.
+    for (let i = 0; i < wants.length && (this.settled(home) || building(f.hq) || !this.rebuildable || !this.spot(f.hq, home)); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
