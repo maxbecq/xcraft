@@ -642,7 +642,8 @@ export function manaOf(this: World, e: Entity): Mana | undefined {
   if (own) return own;
   // Dieux (XC.doc 2008): every god the same mana by its level, regained at 1 a second (half full at its summoning:
   // shortcut, no source gives a start; the mod's casters start at half).
-  if ((e.def as UnitDef).levels && (e.def as UnitDef).faction === 'dieux') {
+  // Thor has none (balance designer 2026-11-22): his hammer waits on its cooldown alone.
+  if ((e.def as UnitDef).levels && (e.def as UnitDef).faction === 'dieux' && !BALANCE.rules.godMana.none.includes(e.type)) {
     const g = BALANCE.rules.godMana;
     const max = g.max[Math.min(g.max.length, e.lvl) - 1];
     return [max, g.max[0] / 2, g.regen];

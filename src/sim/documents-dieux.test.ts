@@ -3,21 +3,25 @@ import { DEFS, spell, type UnitDef } from '../data';
 import { FP } from './fixed';
 import { createMatch } from './setup';
 
-// The Dieux numbers XC.doc (2008) gives, distances and speeds divided by 100.
+// The Dieux numbers XC.doc (2008) gives, distances and speeds divided by 100; three levels only (balance designer 2026-11-22).
 describe('Dieux, by XC.doc 2008', () => {
   it('the gods: prices, armour and speed by level', () => {
     const athena = DEFS.athena as UnitDef;
     expect(athena.cost).toEqual({ minerals: 450, energy: 300 });
     expect(athena.buildTime).toBe(80);
-    expect(athena.levels!.armor).toEqual([3, 4, 5, 6, 7]);
-    expect(athena.levels!.speed).toEqual([2.15, 2.2, 2.3, 2.45, 2.65]);
-    expect((DEFS.gaia as UnitDef).levels!.cost!.map((c) => c.minerals)).toEqual([690, 805, 920, 1035]);
+    expect(athena.levels!.hp).toEqual([1500, 1650, 1950]);
+    expect(athena.levels!.armor).toEqual([3, 4, 5]);
+    expect(athena.levels!.speed).toEqual([2.15, 2.2, 2.3]);
+    expect((DEFS.gaia as UnitDef).levels!.cost!.map((c) => c.minerals)).toEqual([690, 805]);
+    // The balance designer's Thor (the « Odin » row of XC.doc, swapped back).
+    expect((DEFS.thor as UnitDef).levels!.speed).toEqual([1, 1.1, 1.2]);
+    expect((DEFS.thor as UnitDef).levels!.hp).toEqual([1600, 1700, 1800]);
   });
 
   it('the spells grow with the god: Marteau de Thor reach and stun, Pluie de feu damage', () => {
-    expect([1, 3, 5].map((l) => spell('foudre', l).range)).toEqual([5, 6.5, 8]);
-    expect([1, 3, 5].map((l) => spell('foudre', l).duration)).toEqual([3, 5, 7]);
-    expect(spell('pluiedefeu', 5).damage).toBe(70 * 6);
+    expect([1, 2, 3].map((l) => spell('foudre', l).range)).toEqual([5, 5.75, 6.5]);
+    expect([1, 2, 3].map((l) => spell('foudre', l).duration)).toEqual([3, 4, 5]);
+    expect(spell('pluiedefeu', 3).damage).toBe(210);
   });
 
   it('the units: Drake, Walkyrie, Titan', () => {

@@ -40,7 +40,7 @@ describe('Z, by Z.doc', () => {
     expect(hp - store.hp).toBe(a.vs![4] + 2 - (DEFS.grenier as UnitDef).armor);
   });
 
-  it('a Jet sonique hits the one on its line by that one\'s own class (a god: H)', () => {
+  it('a Jet sonique hits the one on its line by that one\'s own class (a god: structure armour, S)', () => {
     const w = createMatch(['z', 'humains']);
     const hexa = w.spawn('hexapode', 0, 30 * FP, 30 * FP);
     hexa.kit = 'jetsonique';
@@ -49,6 +49,6 @@ describe('Z, by Z.doc', () => {
     const serf = w.spawn('serf', 1, 33 * FP, 30 * FP);
     const hp = god.hp;
     w.hit(hexa, serf, a);
-    expect(hp - god.hp).toBe(a.vs![5] - (DEFS.thor as UnitDef).armor);
+    expect(hp - god.hp).toBe(a.vs![4] - (DEFS.thor as UnitDef).armor);
   });
 });

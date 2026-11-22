@@ -127,7 +127,7 @@ describe('Dieux', () => {
     const nearHp = near.hp;
     thor.charged = 100;
     w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: target.x, y: target.y, target: target.id }]);
-    run(w, 3);
+    run(w, 6); // Thor walks at 1.1 at his second level
     expect(target.hp).toBeLessThan(target.maxHp);
     expect(near.hp).toBeLessThan(nearHp);
   });
@@ -163,7 +163,7 @@ describe('Dieux', () => {
       return before - dummy.hp;
     };
     const plain = hit();
-    Object.assign(w.spawn('odin', 0, 34 * FP, 34 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('odin', 0, 33 * FP, 31 * FP), { mana: 1 << 30 }); // within his aura's 4 at his first level
     expect(hit()).toBe(plain + BALANCE.rules.upgrades.auraguerre.damage[0]);
   });
 
@@ -433,7 +433,7 @@ describe('Dieux', () => {
     expect(w.lacks(0, 'protecteur')).toBe('');
   });
 
-  it('Courroux du marteau triples the next blow; the Tempête de sable silences enemy shooters', () => {
+  it('Courroux du marteau doubles the next blow (balance designer 2026-11-22); the Tempête de sable silences enemy shooters', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const dummy = w.spawn('conseil', 1, 31 * FP, 28 * FP);
@@ -442,7 +442,7 @@ describe('Dieux', () => {
     expect(thor.charged).toBeGreaterThan(0);
     w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: dummy.x, y: dummy.y, target: dummy.id }]);
     run(w, 3);
-    expect(before - dummy.hp).toBeGreaterThanOrEqual(3 * (DEFS.thor as UnitDef).attack!.damage - 10);
+    expect(before - dummy.hp).toBeGreaterThanOrEqual(2 * (DEFS.thor as UnitDef).attack!.damage - 10);
     expect(thor.charged).toBe(0);
 
     const seth = Object.assign(w.spawn('seth', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
