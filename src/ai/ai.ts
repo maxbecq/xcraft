@@ -342,24 +342,16 @@ export class AI {
     // Idle serfs go mining.
     // Not to a field under an enemy's armed building: the fields near home mined out, each idle worker in turn walked
     // to the minerals under the enemy's towers and died.
-    // Weapons that hit the ground (a Tour shoots flyers only), a manned Fortin's crew too (they shoot from inside, a
-    // tile further).
     const w0 = this.world;
-    const guns: [Entity, number][] = [];
-    for (const e of w0.entities.values()) {
-      if (e.def.kind !== 'building' || !w0.hostile(e.owner, this.player) || e.buildLeft > 0) continue;
-      const a = w0.weapon(e);
-      if (a && reaches(a, false)) guns.push([e, a.range]);
-      if ((e.def as BuildingDef).bunker) for (const u of w0.entities.values()) if (u.inside === e.id && w0.weapon(u) && reaches(w0.weapon(u)!, false)) guns.push([e, w0.weapon(u)!.range + 1]);
-    }
-    const guarded = (e: Entity) => guns.some(([g, r]) => dist(g.x, g.y, e.x, e.y) < (r + 3) * FP);
+    const guarded = (e: Entity) => this.underFire(e);
     for (const s of serfs) {
       // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
       // safe one, if any.
       const target = s.order?.kind === 'gather' ? w0.entities.get(s.order.target) : undefined;
       if (target && guarded(target) && s.carry === 0) {
         const safe = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
-        if (safe) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: safe.x, y: safe.y, target: safe.id });
+        // None safe left: it stops rather than walk under the guns.
+        ctx.out.push(safe ? { player: this.player, kind: 'smart', ids: [s.id], x: safe.x, y: safe.y, target: safe.id } : { player: this.player, kind: 'stop', ids: [s.id] });
         continue;
       }
       if (s.order) continue;
@@ -1857,7 +1849,10 @@ export class AI {
       const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2));
       // The start's spot first while it has minerals; mined out, a site with some, the start's spot as a last resort.
       // Its headquarters lost, any free site at all comes last (the start's spot taken by the enemy, it raised none).
-      return site.find((s) => !mined(...s) && ok(s)) ?? (start ? site.find(ok) ?? null : null);
+      const found = site.find((s) => !mined(...s) && ok(s)) ?? (start ? site.find(ok) : undefined);
+      if (found || !start) return found ?? null;
+      // Every site taken (the enemy built on the old one): any free ground round the start's spot, as other buildings.
+      near = { x: (start[0] + def.size / 2) * FP, y: (start[1] + def.size / 2) * FP };
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
     const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
@@ -2039,7 +2034,27 @@ export class AI {
   /** Mineral fields left within reach of any of our finished bases. */
   private fieldsNear(buildings: Entity[]): number {
     const hqs = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
-    return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP)).length;
+    // Not one under an enemy's guns: the workers are never sent there (tend).
+    return [...this.world.entities.values()].filter((e) => e.type === 'minerai' && hqs.some((h) => dist(e.x, e.y, h.x, h.y) < 12 * FP) && !this.underFire(e)).length;
+  }
+
+  /** Enemy buildings whose weapons hit the ground, with their range (a manned Fortin's crew, not its workers, a tile further), by tick. */
+  private guns: { tick: number; list: [Entity, number][] } = { tick: -1, list: [] };
+
+  /** A field (or anything) an enemy building would shoot at a worker by. */
+  private underFire(e: Entity): boolean {
+    const w = this.world;
+    if (this.guns.tick !== w.tick) {
+      const list: [Entity, number][] = [];
+      for (const b of w.entities.values()) {
+        if (b.def.kind !== 'building' || !w.hostile(b.owner, this.player) || b.buildLeft > 0) continue;
+        const a = w.weapon(b);
+        if (a && reaches(a, false)) list.push([b, a.range]);
+        if ((b.def as BuildingDef).bunker) for (const u of w.entities.values()) if (u.inside === b.id && !(u.def as UnitDef).worker && w.weapon(u) && reaches(w.weapon(u)!, false)) list.push([b, w.weapon(u)!.range + 1]);
+      }
+      this.guns = { tick: w.tick, list };
+    }
+    return this.guns.list.some(([g, r]) => dist(g.x, g.y, e.x, e.y) < (r + 3) * FP);
   }
 
   /** Mineral fields left within reach of the council. */
