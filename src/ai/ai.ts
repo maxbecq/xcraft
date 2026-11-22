@@ -340,9 +340,13 @@ export class AI {
   private tend(ctx: Survey & { low: number }): void {
     const { f, serfs, buildings } = ctx;
     // Idle serfs go mining.
+    // Not to a field under an enemy's armed building: the fields near home mined out, each idle worker in turn walked
+    // to the minerals under the enemy's towers and died.
+    const guns = [...this.world.entities.values()].filter((e) => e.def.kind === 'building' && this.world.hostile(e.owner, this.player) && e.buildLeft === 0 && !!this.world.weapon(e));
+    const guarded = (e: Entity) => guns.some((g) => dist(g.x, g.y, e.x, e.y) < ((this.world.weapon(g)!.range ?? 0) + 3) * FP);
     for (const s of serfs) {
       if (s.order) continue;
-      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id));
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
 
@@ -583,7 +587,7 @@ export class AI {
     // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
     // Once its site stands (paid already), with drones to spare, they come again.
     // With no headquarters' price to keep (none can be raised), a Pod raises a Plate-forme to fight on.
-    for (let i = 0; i < wants.length && (this.settled(home) || (building(f.hq) && ctx.serfs.length >= 2) || (!this.rebuildable && !building(f.hq))); i++) {
+    for (let i = 0; i < wants.length && (this.settled(home) || building(f.hq) || !this.rebuildable); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
@@ -591,7 +595,8 @@ export class AI {
       // Not with the minerals of a more urgent building before it (paid first, the add-ons took the price of the Pod
       // that would free supply, or of the Intelligence to raise again).
       // Not a headquarters no worker can raise (no drone left: the Pod kept its 800 and raised nothing).
-      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0);
+      // While a headquarters rises again with no drone to spare, the next drone's price too.
+      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0) + (!this.settled(home) && building(f.hq) && ctx.serfs.length < 2 ? (DEFS[f.worker] as UnitDef).cost.minerals : 0);
       if (host && ctx.minerals - ahead >= def.cost.minerals && ctx.energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
         ctx.minerals -= def.cost.minerals;
@@ -1833,7 +1838,8 @@ export class AI {
       };
       const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2));
       // The start's spot first while it has minerals; mined out, a site with some, the start's spot as a last resort.
-      return site.find((s) => !mined(...s) && ok(s)) ?? (start && ok(site[0]) ? site[0] : null);
+      // Its headquarters lost, any free site at all comes last (the start's spot taken by the enemy, it raised none).
+      return site.find((s) => !mined(...s) && ok(s)) ?? (start ? site.find(ok) ?? null : null);
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
     const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
