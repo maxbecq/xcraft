@@ -157,14 +157,17 @@ function updateGrid(h: Hud, type: string, at: Vector3): void {
   const def = DEFS[type] as BuildingDef;
   const net = h.world.powerNetwork(h.player);
   let fits = (x: number, y: number) => h.world.tileFits(type, x, y, h.player, net);
+  const wells: [number, number][] = [];
   if (def.energyRate) {
     // Extractors: the free wells light up, every other tile is red.
     const free = new Set<number>();
     for (const w of h.world.entities.values()) {
       if (w.type !== 'puits' || !h.world.canPlace(type, w.tx, w.ty, h.player)) continue;
+      wells.push([w.tx, w.ty]);
       for (let y = w.ty; y < w.ty + def.size; y++) for (let x = w.tx; x < w.tx + def.size; x++) free.add(y * h.map.width + x);
     }
     fits = (x, y) => free.has(y * h.map.width + x);
   }
+  h.grid.wells(wells, def.size);
   h.grid.cellsAt(cx, cy, reach, fits);
 }

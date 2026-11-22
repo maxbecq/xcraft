@@ -20,6 +20,8 @@ export class PlaceGrid {
   private readonly foot = halo(1);
   /** The add-on's room: outlined and filled, without a halo, so it does not melt into the footprint's. */
   private readonly addon = halo(0);
+  /** Free wells while an extractor is placed: drawn over the models, so a well behind a building still shows. */
+  private readonly wellMarks: Mesh<PlaneGeometry, ShaderMaterial>[] = [];
   private readonly pos = new Float32Array(N * N * 4 * 3);
   private readonly col = new Float32Array(N * N * 4 * 3);
   private readonly fade = new Float32Array(N * N * 4);
@@ -87,6 +89,19 @@ export class PlaceGrid {
     for (const a of ['position', 'color', 'fade']) g.getAttribute(a).needsUpdate = true;
     g.setDrawRange(0, n * 6);
     this.group.visible = true;
+  }
+
+  /** Marks these wells (top-left tiles, `size` wide) green over everything; none for another building. */
+  wells(spots: [number, number][], size: number): void {
+    while (this.wellMarks.length < spots.length) {
+      const m = halo(1);
+      this.wellMarks.push(m);
+      this.group.add(m);
+    }
+    this.wellMarks.forEach((m, i) => {
+      m.visible = i < spots.length;
+      if (m.visible) place(m, this.map, spots[i][0], spots[i][1], size, true, 0.8);
+    });
   }
 
   /** The footprint (tx, ty, size) under the cursor, and, for a Pod, its add-on's room (null: not shown). */
