@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
-import { DEFS, KIT, type UnitDef, WEAPONS } from '../data';
+import { type BuildingDef, DEFS, KIT, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
@@ -61,7 +61,7 @@ describe('Z', () => {
     expect(pf.queue).toEqual(['quadripode']);
   });
 
-  it('the Intelligence suprême: needs the Centre d\'armement and the Centre de recherche, drones in 75 % of the time', () => {
+  it('the Intelligence suprême: needs the Centres d\'armement, de recherche and de socles (équilibreur 22/11), drones in 75 % of the time', () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
     p.minerals = 5000;
@@ -71,6 +71,9 @@ describe('Z', () => {
     expect(ic.queue).toHaveLength(0);
     w.spawn('armement', 0, ic.x + 8 * FP, ic.y);
     w.spawn('centrerecherche', 0, ic.x - 8 * FP, ic.y);
+    w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'supreme' }]);
+    expect(ic.queue).toHaveLength(0);
+    w.spawn('centresocles', 0, ic.x, ic.y + 8 * FP);
     w.step([{ player: 0, kind: 'train', ids: [ic.id], type: 'supreme' }]);
     expect(ic.queue).toEqual(['supreme']);
     run(w, 71);
@@ -160,23 +163,9 @@ describe('Z', () => {
     ability('kitbalise', quad.x, quad.y);
     expect(w.weapon(quad)!.splash).toBe(3);
     expect(w.beacon(0)).toBe(true);
-    // Canon IEM: researched first, on an enemy machine in sight.
-    const foe = w.spawn('drone', 1, 22 * FP, 22 * FP);
-    run(w, 10);
-    ability('canoniem', foe.x, foe.y);
-    expect(foe.owner).toBe(1);
-    p.upgrades.canoniem = 1;
-    ability('canoniem', foe.x, foe.y);
-    expect(foe.owner).toBe(0);
-    run(w, 51);
-    expect(foe.owner).toBe(1);
-    // Back at once when the Centre K falls.
-    k.iemCd = 0;
-    ability('canoniem', foe.x, foe.y);
-    expect(foe.owner).toBe(0);
-    k.hp = 0;
-    run(w, 1);
-    expect(foe.owner).toBe(1);
+    // Its Canon IEM is gone (équilibreur 22/11).
+    expect((DEFS.centrek as BuildingDef).abilities).not.toContain('canoniem');
+    expect(DEFS.canoniem).toBeUndefined();
   });
 
   it('a drone repairs a Z building or machine, 4 hp a second, a quarter of its worth for a full repair', () => {
@@ -215,10 +204,14 @@ describe('Z', () => {
     w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'impulsion', x: foe.x, y: foe.y }]);
     run(w, 1);
     expect(foe.held).toBeGreaterThan(0);
+    // Invisibilité du métal (équilibreur 22/11): 300/300, every Espion invisible for good once researched.
+    expect(w.hidden(spy)).toBe(false);
+    expect((DEFS.invistemp as UpgradeDef).cost).toEqual({ minerals: 300, energy: 300 });
     p.upgrades.invistemp = 1;
-    spy.abilityCd = 0; // one cooldown for all its abilities (in place of Z.doc's energy)
-    w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'invistemp' }]);
     expect(w.hidden(spy)).toBe(true);
+    run(w, 60);
+    expect(w.hidden(spy)).toBe(true);
+    expect((DEFS.zespion as UnitDef).abilities).not.toContain('invistemp');
     p.upgrades.megaespion = 1;
     expect(w.spawn('zespion', 0, 34 * FP, 30 * FP).maxHp).toBe(200);
   });
@@ -425,21 +418,17 @@ describe('Z', () => {
   }, 60_000);
 });
 
-describe('Z Refuge (notice)', () => {
-  it('the drones round the Intelligence shelter inside, five at most, out of reach, and come out on Débarquer', () => {
+describe('Z Intelligence without Refuge (équilibreur 22/11)', () => {
+  it('neither Intelligence shelters the drones any more', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');
-    for (let i = 0; i < 2; i++) w.spawn('drone', 0, ic.x + 4 * FP, ic.y + i * FP);
+    expect((DEFS.intelligence as BuildingDef).abilities ?? []).not.toContain('refuge');
+    expect((DEFS.supreme as BuildingDef).abilities ?? []).not.toContain('refuge');
     const drones = of(w, 0, 'drone');
-    expect(drones.length).toBe(8);
     w.step([{ player: 0, kind: 'ability', ids: [ic.id], name: 'refuge' }]);
     run(w, 8);
-    const inside = drones.filter((d) => d.inside === ic.id);
-    expect(inside.length).toBe(5);
-    // Soldiers stay out.
-    expect(w.boards(w.spawn('auxiliaire', 0, ic.x, ic.y + 5 * FP), ic)).toBe(false);
-    w.step([{ player: 0, kind: 'unload', ids: [ic.id] }]);
     expect(drones.filter((d) => d.inside).length).toBe(0);
+    expect(w.room(ic)).toBe(0);
   });
 });
 
@@ -509,5 +498,32 @@ describe('Z Lance-flammes (fiche « Double attaque »)', () => {
     const armor = (e: Entity) => (e.def as UnitDef).armor ?? 0;
     expect(t0 - target.hp + armor(target)).toBe(a.vs![0]);
     expect(k0 - tank.hp + armor(tank)).toBe(a.vs![3]);
+  });
+});
+
+describe('Z, équilibreur 22/11: figures', () => {
+  it('Assimilateur at 200 minerals; Espion and Accumulateur get 1.5 mana a second', () => {
+    expect((DEFS.assimilateur as BuildingDef).cost.minerals).toBe(200);
+    expect((DEFS.zespion as UnitDef).mana![2]).toBe(1.5);
+    const w = createMatch(['z', 'humains']);
+    const spy = w.spawn('zespion', 0, 30 * FP, 30 * FP);
+    spy.mana = 0;
+    run(w, 10);
+    expect(Math.round(spy.mana / FP)).toBe(15); // 10 s at 1.5 (2 before)
+    const acc = w.spawn('quadripode', 0, 32 * FP, 30 * FP);
+    acc.kit = 'accumulateur';
+    expect(w.manaOf(acc)![2]).toBe(1.5);
+  });
+
+  it('Blindage de titane: +2 armour on Z buildings, taken off each blow', () => {
+    const w = createMatch(['z', 'humains']);
+    const pod = w.spawn('pod', 0, 30 * FP, 30 * FP);
+    pod.hp = 1000;
+    w.hurt(pod, 20);
+    const plain = 1000 - pod.hp;
+    w.players[0].upgrades.titane = 1;
+    pod.hp = 1000;
+    w.hurt(pod, 20);
+    expect(1000 - pod.hp).toBe(plain - 2);
   });
 });

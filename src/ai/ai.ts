@@ -1007,11 +1007,6 @@ export class AI {
         // Spare energy (nothing else takes it late on): Auto-réparateur on any socle, then Invisibilité.
         if (!kit('kitreparateur', socles.find((u) => (u.tier > 1 || ctx.energy > 600) && !(u.support & KIT.reparateur))) && ctx.energy > 600) kit('kitinvisibilite', socles.find((u) => !(u.support & KIT.invisibilite)));
       }
-      if (!centrek.iemCd && w.level(this.player, 'canoniem')) {
-        const prey = [...w.entities.values()].filter((t) => w.hostile(t.owner, this.player) && t.def.kind === 'unit' && (t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && !t.seizedLeft && w.sees(this.player, t))
-          .sort((a, b) => (DEFS[b.type] as UnitDef).cost.minerals + (DEFS[b.type] as UnitDef).cost.energy - (DEFS[a.type] as UnitDef).cost.minerals - (DEFS[a.type] as UnitDef).cost.energy || a.id - b.id)[0];
-        if (prey) ctx.out.push({ player: this.player, kind: 'ability', ids: [centrek.id], name: 'canoniem', x: prey.x, y: prey.y });
-      }
     }
   }
 
@@ -1684,7 +1679,7 @@ export class AI {
           if (pick) cmd = at(u, name, pick);
         } else if (name === 'coupcirculaire' || name === 'feucirculaire') {
           if (around(near, u.x, u.y, radius + u.radius).filter((f) => !flies(f)).length >= (name === 'feucirculaire' ? 3 : 2)) cmd = self(u, name);
-        } else if (name === 'camouflage' || name === 'camouflagewalkyrie' || name === 'dephasage' || name === 'invistemp') {
+        } else if (name === 'camouflage' || name === 'camouflagewalkyrie' || name === 'dephasage') {
           if (u.hp * 100 < u.maxHp * (name === 'dephasage' ? 35 : 50)) cmd = self(u, name);
         } else if (name === 'manteau') {
           if (around(army, u.x, u.y, radius).length >= 6 && around(near, u.x, u.y, 7 * FP).length >= 4) cmd = self(u, name);

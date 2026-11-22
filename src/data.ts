@@ -325,7 +325,6 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Z Espion (Z.doc): a beacon that gives sight of a zone for 50 s; units of a small zone held 5 s; invisible 20 s. */
   balisez: { name: 'Balise de révélation', effect: 'Pose une balise qui révèle une zone de la carte pendant un long moment.', hotkey: 'B', ...(BALANCE.abilities.balisez as object) } as AbilityDef,
   impulsion: { name: 'Impulsion magnétique', effect: 'Les unités d\'une petite zone sont immobilisées quelques secondes.', hotkey: 'I', research: 'impulsion', ...(BALANCE.abilities.impulsion as object) } as AbilityDef,
-  invistemp: { name: 'Invisibilité temporaire', effect: 'L\'Espion devient invisible un moment.', hotkey: 'N', research: 'invistemp', ...(BALANCE.abilities.invistemp as object) } as AbilityDef,
   /** Z Accumulateur (Z.doc): an enemy building frozen 20 s (no attack, no production, unhurt); a beacon that deafens
    * living units; allies round the caster unhurt. Energy costs (55, 130, 170) become cooldowns. */
   gel: { name: 'Gel électronique', effect: 'Gèle un bâtiment ennemi : il ne tire plus et ne produit plus pendant un moment.', hotkey: 'G', ...(BALANCE.abilities.gel as object) } as AbilityDef,
@@ -340,7 +339,6 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitreparateur: { name: 'Auto-réparateur', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le répare peu à peu.', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
   kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
-  canoniem: { name: 'Canon IEM', effect: 'Prend le contrôle d\'une machine ennemie pendant 50 s, tant que le Centre K tient.', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
   observation: { name: 'Observation céleste', effect: 'Le télescope révèle une zone et y détecte les unités invisibles.', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
   /**
    * Obélisque (mod « Rappel », a Prisme ability): after a 4 s channel, up to 8 army units within 5 tiles of
@@ -686,10 +684,10 @@ const BASE: Record<string, object> = {
   mastodonte: { kind: 'unit', name: 'Mastodonte', radius: 0.9, flying: true, mechanical: true, requires: { rmastodonte: 1 }, weapons: FLYER_WEAPONS, faction: 'z', hotkey: 'M' },
   barge: { kind: 'unit', name: 'Barge', radius: 0.7, flying: true, mechanical: true, requires: { rbarge: 1 }, faction: 'z', hotkey: 'B' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
-  zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
-  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], abilities: ['refuge'], faction: 'z', hotkey: 'I' },
+  zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion'], faction: 'z', hotkey: 'E' },
+  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], faction: 'z', hotkey: 'I' },
   // Z.doc: drones and spies in 75 % of their time (Production accélérée).
-  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, abilities: ['refuge'], requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
+  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, requires: { armement: 1, centrerecherche: 1, centresocles: 1 }, faction: 'z', hotkey: 'S' },
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
@@ -709,12 +707,11 @@ const BASE: Record<string, object> = {
     researches: ['zproxi1', 'zproxi2', 'zproxi3', 'zdist1', 'zdist2', 'zdist3', 'zblindage1', 'zblindage2', 'zblindage3', 'titane', 'deploiement', 'sonderobuste', 'podsuperieur', 'impulsion', 'invistemp', 'megaespion'],
   },
   optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, researches: ['optimisationp'], faction: 'z', hotkey: 'O' },
-  // Z.doc: sells support kits anywhere on the battlefield and fires the Canon IEM; one per player.
+  // Z.doc: sells support kits anywhere on the battlefield; one per player (its Canon IEM gone, équilibreur 22/11).
   centrek: {
     kind: 'building', name: 'Centre K', size: 3, absorbs: true, unique: true, requires: { optimisation: 1 }, faction: 'z', hotkey: 'K',
-    abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise', 'canoniem'], researches: ['canoniem'],
+    abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise'],
   },
-  canoniem: research('Canon IEM', 'C', "Le Centre K prend le contrôle d'une machine ennemie pendant 50 s.", undefined, 'z'),
   rquadripode: research('Socle du Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
   rhexapode: research("Socle de l'Hexapode", 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
   rcoleoptere: research('Socle du Coléoptère', 'L', 'Débloque le socle Coléoptère.', { supreme: 1 }, 'z'),
@@ -737,7 +734,8 @@ const BASE: Record<string, object> = {
   deploiement: research('Déploiement rapide', 'R', 'Les bâtiments se construisent 20 % plus vite.', undefined, 'z'),
   sonderobuste: research('Sonde robuste', 'S', 'Points de vie des drones et des drones de combat +25.', { supreme: 1 }, 'z'),
   impulsion: research('Impulsion magnétique', 'I', "L'Espion immobilise les unités d'une petite zone 5 s.", undefined, 'z'),
-  invistemp: research('Invisibilité temporaire', 'N', "L'Espion devient invisible 20 s.", { supreme: 1 }, 'z'),
+  // Équilibreur (22/11): once researched, every Espion is invisible for good (was a 20 s ability).
+  invistemp: research('Invisibilité du métal', 'N', "L'Espion devient invisible en permanence.", { supreme: 1 }, 'z'),
   megaespion: research('Mega-Espion', 'M', "L'Espion gagne 60 PV, 1 de vision et de la vitesse.", undefined, 'z'),
   podsuperieur: research('Pod supérieur', 'U', 'Les Pods peuvent évoluer en Pods supérieurs.', undefined, 'z'),
   laser: research('Laser', 'L', 'Arme laser pour les socles, choisie à leur construction.', undefined, 'z'),

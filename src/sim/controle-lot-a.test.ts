@@ -68,9 +68,9 @@ describe('quality control, lot A', () => {
       for (let i = 0; i < 40; i++) w.step([]);
       return fingerprint(w);
     };
-    const refuge = { kind: 'ability', name: 'refuge' };
-    expect(play({ ...refuge, x: undefined, y: undefined })).toBe(play(refuge));
-    expect(play(refuge)).not.toBe(play({ kind: 'stop' }));
+    const train = { kind: 'train', type: 'drone' };
+    expect(play({ ...train, x: undefined, y: undefined })).toBe(play(train));
+    expect(play(train)).not.toBe(play({ kind: 'stop' }));
     // A fractional position: refused by both, never half-applied.
     expect(commandOk({ kind: 'move', ids: [1], x: 1.5, y: 2 })).toBe(false);
     const w = createMatch(['humains', 'z']);

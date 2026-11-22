@@ -78,8 +78,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     e.cone = ticks(ab.duration);
   } else if (name === 'gravite') {
     e.gravity = ticks(ab.duration);
-  } else if (name === 'invistemp') {
-    e.camo = ticks(ab.duration);
   } else if (name === 'enfouissement') {
     e.burrowed = !e.burrowed;
     this.setOrder(e, null);
@@ -583,7 +581,8 @@ export function transmute(this: World, e: Entity, type: string, tx = 0, ty = 0):
 
 /** Unseen by enemies without detection: invisible units, and Belluaires under Camouflage. */
 export function hidden(this: World, e: Entity): boolean {
-  return !!(e.def as UnitDef).cloaked || e.camo > 0 || e.burrowed || this.shrouded.has(e.id) || !!(e.support & KIT.invisibilite);
+  // Z Invisibilité du métal (équilibreur 22/11): the Espion, once researched, for good.
+  return !!(e.def as UnitDef).cloaked || e.camo > 0 || e.burrowed || this.shrouded.has(e.id) || !!(e.support & KIT.invisibilite) || (e.type === 'zespion' && !!this.level(e.owner, 'invistemp'));
 }
 
 /** Inside a Silence des ions zone: no ability can be used there. */
@@ -592,25 +591,13 @@ export function silenced(this: World, x: number, y: number): boolean {
 }
 
 /**
- * Z Centre K (Z.doc): fits a support kit on the own socle nearest the point, anywhere on the map, or fires the Canon
- * IEM at the enemy machine nearest it, which fights for its player 50 s.
+ * Z Centre K (Z.doc): fits a support kit on the own socle nearest the point, anywhere on the map (its Canon IEM
+ * gone, équilibreur 22/11).
  */
 export function centreK(this: World, b: Entity, kind: string, x: number, y: number): void {
   const ab = ABILITIES[kind];
   const near = (ok: (t: Entity) => boolean) =>
     [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && ok(t) && dist(t.x, t.y, x, y) <= toFp(ab.radius!)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
-  if (kind === 'canoniem') {
-    if (b.iemCd > 0) return void this.say(b.owner, 'Canon IEM en recharge.');
-    const t = near((t) => this.hostile(t.owner, b.owner) && !!(t.def as UnitDef).mechanical && !(t.def as UnitDef).unique && this.sees(b.owner, t) && !t.seizedLeft && !t.charm);
-    if (!t) return void this.say(b.owner, 'Aucune machine ennemie visée.');
-    t.seizedFrom = t.owner;
-    t.seizedBy = b.id;
-    t.seizedLeft = ticks(ab.duration);
-    this.turn(t, b.owner);
-    b.iemCd = ticks(ab.cooldown);
-    this.casts.push({ kind, x: t.x, y: t.y });
-    return;
-  }
   const bit = { kitdetection: KIT.detection, kitinvisibilite: KIT.invisibilite, kitreparateur: KIT.reparateur, kitbalise: KIT.balise }[kind] ?? 0;
   const t = near((t) => t.owner === b.owner && !!(t.def as UnitDef).weaponLevel && !(t.support & bit));
   if (!t) return void this.say(b.owner, 'Aucun socle sans ce kit à cet endroit.');
