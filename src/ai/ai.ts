@@ -578,7 +578,8 @@ export class AI {
     const techMinute = (BALANCE.ai.tech as Record<string, { minute: number }>)[p.faction]?.minute ?? 0;
     // The tech building's next unit keeps its energy only while that building is idle: training, it needs none, and
     // the reserve held the Casernes' Phalangistes and Belluaires and every late research for good.
-    const techBusy = buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length > 0);
+    // Humans only: the Isdaris Psycho-assembleur trains on without gaps from that reserve.
+    const techBusy = f === FACTIONS.humains && buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length > 0);
     // Isdaris: the next extension (the Laboratoire on a Portail) keeps its price from minute 6, before the Psycho-
     // assembleur too: Créatures and Archers spent every mineral and point of energy as they came, and the Laboratoire,
     // with the Druides and every Portail research behind it, came late or never.
@@ -887,7 +888,7 @@ export class AI {
       // The tech building waits for the energy of a unit it has none of, its minerals there, rather than train another
       // of the cheaper ones (the Ankylosaure, 390, never came: a Plésiosaure, 225, left each time the energy got there).
       const first = order.find((u) => (DEFS[u] as UnitDef).attack);
-      if (t.type === f.tech && first && own(first) === 0 && !pays(first) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
+      if (f === FACTIONS.humains && t.type === f.tech && first && own(first) === 0 && !pays(first) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
       // Humans: a unit an advanced building has none of and cannot pay yet keeps its minerals from the Casernes while
       // minerals come in (the Casernes drained the bank each turn: no Scarabée at 500 nor Char Pégase at 650 came).
       if (f === FACTIONS.humains && first && own(first) === 0 && !pays(first) && w.tick - this.lastIncome < ticks(60) && !order.some((u) => own(u) === 0 && pays(u))) {
