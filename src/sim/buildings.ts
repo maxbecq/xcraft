@@ -412,6 +412,8 @@ export function rallyOn(this: World, u: Entity, b: Entity): void {
     return this.setOrder(u, there);
   }
   if (t.def.kind === 'unit') return this.setOrder(u, { kind: 'follow', target: t.id, lx: t.x, ly: t.y });
+  // A Fortin (the balancer, 2026-11-22): the unit goes in, if it may and there is room.
+  if (t.type === 'fortin' && t.owner === u.owner && t.buildLeft === 0 && this.boards(u, t) && this.load(t, u) <= this.room(t)) return this.setOrder(u, { kind: 'enter', target: t.id });
   this.setOrder(u, this.beside(t, b));
 }
 

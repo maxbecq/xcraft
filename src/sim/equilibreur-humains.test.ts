@@ -301,4 +301,15 @@ describe('the balancer, Humains', () => {
     w.step([{ player: 0, kind: 'train', ids: [a.id], type: 'grandealchimisterie' }]);
     expect(a.queue).toEqual(['alchimiste', 'grandealchimisterie']); // once only
   });
+
+  it('a Fortin as the rally point: the new Auxiliaire goes in', () => {
+    const w = humans();
+    const c = put(w, 'caserne');
+    const f = w.spawn('fortin', 0, c.x + 6 * FP, c.y);
+    w.step([{ player: 0, kind: 'rally', ids: [c.id], x: f.x, y: f.y, target: f.id }]);
+    w.step([{ player: 0, kind: 'train', ids: [c.id], type: 'auxiliaire' }]);
+    for (let i = 0; i < ticks(40); i++) w.step([]);
+    const aux = [...w.entities.values()].find((e) => e.type === 'auxiliaire' && e.owner === 0)!;
+    expect(aux.inside).toBe(f.id);
+  });
 });
