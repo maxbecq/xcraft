@@ -556,16 +556,11 @@ export class AI {
     // spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    // Also once it is three minutes late, the army at home or not: under pressure it never stood 8 strong, and the
-    // Isdaris kept one base and one Récepteur for the whole game, too short of energy for Druides or research.
-    // The natural only, and not with a threat at home stronger than the army there (saving for a third base, the
-    // Portails stood idle on 1300 minerals as 55 enemies came).
-    const late = councils < 2 && minute >= firstAt + 3 && !this.danger;
     // Up to its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the
     // bank never reached it).
     const outpostDef = DEFS[outpost] as BuildingDef;
     const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
-    const saving = (expand && (army.filter((u) => !this.wave.has(u.id)).length >= 8 || late) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }

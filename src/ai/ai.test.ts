@@ -925,10 +925,11 @@ describe('AI Isdaris blind spots', () => {
     expect(turn(new AI(w, 0), w).b.gatewaysKeep).toBeGreaterThanOrEqual(200);
   });
 
-  it('an expansion late by three minutes is saved for, up to what a robot pays for it', () => {
+  it('an expansion is saved for up to what a robot pays for it (1330, not 1000)', () => {
     const w = createMatch(['isdaris', 'humains']);
     const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
     for (let i = 0; i < 12; i++) w.spawn('moissonneur', 0, ob.x + (i - 6) * FP, ob.y + 4 * FP);
+    for (let i = 0; i < 8; i++) w.spawn('creature', 0, ob.x + (i - 4) * FP, ob.y - 6 * FP);
     w.tick = thinkTick(11);
     w.players[0].minerals = 1100;
     const ai = new AI(w, 0);
