@@ -1,3 +1,4 @@
+import { HQ_MINERAL_GAP } from './data';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -78,6 +79,29 @@ export const MAPS: Record<string, MapFile> = Object.fromEntries(
 export const DEFAULT_MAP = 'origine';
 
 /** The map with this id, or the original map (said in the console when an id was given: a network game checks it first). */
+/** The main buildings' size (the balancer, 2026-11-22: 4x4, in the 5x5 slots the map files keep). */
+export const HQ_SIZE = 4;
+
+/**
+ * Where a main building goes in a map file's 5x5 slot: of the corners a 4x4 may take, the one nearest the file's
+ * minerals (tile to tile) that is still HQ_MINERAL_GAP away, so the miners' trips stay as short as they were (none that far:
+ * the farthest), the slot's own corner first on a tie; chosen in the file's frame, then turned like the rest, so the
+ * same from every corner of the map.
+ */
+export function hqSlot(def: MapFile, [tx, ty]: [number, number]): [number, number] {
+  const minerals = def.bases.flatMap((b) => b.minerals);
+  const corners: { at: [number, number]; d: number }[] = [];
+  for (let oy = 0; oy <= 5 - HQ_SIZE; oy++) {
+    for (let ox = 0; ox <= 5 - HQ_SIZE; ox++) {
+      let d = Infinity;
+      for (const [mx, my] of minerals) d = Math.min(d, Math.max(Math.max(tx + ox - mx, mx - (tx + ox + HQ_SIZE - 1), 0), Math.max(ty + oy - my, my - (ty + oy + HQ_SIZE - 1), 0)));
+      corners.push({ at: [tx + ox, ty + oy], d });
+    }
+  }
+  const fit = corners.filter((c) => c.d >= HQ_MINERAL_GAP);
+  return (fit.length ? fit.reduce((a, c) => (c.d < a.d ? c : a)) : corners.reduce((a, c) => (c.d > a.d ? c : a))).at;
+}
+
 export function mapFile(id: string | null | undefined): MapFile {
   // Own ids only: a name like `constructor` is not a map.
   const known = !!id && Object.hasOwn(MAPS, id);
@@ -238,7 +262,7 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
   map.sites = [];
   for (const turn of turns) {
     for (const b of def.bases) {
-      const hq = rotateFootprint(width, b.hq[0], b.hq[1], 5, turn);
+      const hq = rotateFootprint(width, ...hqSlot(def, b.hq), HQ_SIZE, turn);
       const same = map.sites.find((s) => s.hq[0] === hq[0] && s.hq[1] === hq[1]);
       if (same) same.turn = -1;
       else map.sites.push({ hq, turn, start: !!b.start });

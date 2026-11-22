@@ -322,4 +322,15 @@ describe('the balancer, Humains', () => {
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'explosiftoxique', x: 34 * FP, y: 40 * FP }]);
     expect(w.clouds.length).toBe(1);
   });
+
+  it('general: the four main buildings 4x4, never within 3 tiles of a mineral field; every map site still takes one', () => {
+    for (const t of ['conseil', 'obelisque', 'intelligence', 'asgaard']) expect((DEFS[t] as { size: number }).size, t).toBe(4);
+    const w = humans();
+    const m = [...w.entities.values()].find((e) => e.type === 'minerai')!;
+    // A footprint two tiles from the field: refused; three: the field no longer stands in the way.
+    expect(w.nearMinerals(m.tx + 2, m.ty, 4)).toBe(true);
+    expect(w.nearMinerals(m.tx + 4 + 3, m.ty + 10, 4)).toBe(false);
+    for (const s of w.map.sites!) expect(w.nearMinerals(s.hq[0], s.hq[1], 4), `${s.hq}`).toBe(false);
+    expect(w.misplaced(DEFS.conseil as never, m.tx + 2, m.ty, 0)).toContain('gisement');
+  });
 });

@@ -1,6 +1,6 @@
 /** Buildings: placement, power network, production, research, morphs, bunkers and carriers. */
 import BALANCE from '../balance.json';
-import { ABILITIES, ARTEFACTS, type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, ARTEFACTS, type BuildingDef, DEFS, HQ_MINERAL_GAP, HQ_TYPES, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -22,6 +22,8 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
   if (def.needsPower && player >= 0 && !this.powered(player, cx, cy)) return false;
   // An emitter must join the network: its zone has to touch the zone of a linked power building.
   if (def.power && !def.dropoff && player >= 0 && !this.powerNetwork(player).some((b) => dist(b.x, b.y, cx, cy) <= (def.power! + (b.def as BuildingDef).power!) * FP)) return false;
+  // A main building (the balancer, 2026-11-22): not within 3 tiles of a mineral field.
+  if (HQ_TYPES.includes(type) && this.nearMinerals(tx, ty, def.size)) return false;
   let level = -2;
   for (let y = ty; y < ty + def.size; y++) {
     for (let x = tx; x < tx + def.size; x++) {
@@ -32,6 +34,17 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
     }
   }
   return !this.underCliff(tx, ty, def.size, level);
+}
+
+/** Whether a mineral field lies within HQ_MINERAL_GAP tiles of this footprint (counted tile to tile, 1 next to it). */
+export function nearMinerals(this: World, tx: number, ty: number, size: number): boolean {
+  for (const m of this.entities.values()) {
+    if (m.type !== 'minerai') continue;
+    const gx = Math.max(tx - m.tx, m.tx - (tx + size - 1), 0);
+    const gy = Math.max(ty - m.ty, m.ty - (ty + size - 1), 0);
+    if (Math.max(gx, gy) < HQ_MINERAL_GAP) return true;
+  }
+  return false;
 }
 
 /**
@@ -53,6 +66,7 @@ export function underCliff(this: World, tx: number, ty: number, size: number, le
 export function misplaced(this: World, def: BuildingDef, tx: number, ty: number, player: number): string {
   const level = this.grid.flatLevel(tx, ty);
   if (level >= 0 && !def.energyRate && this.underCliff(tx, ty, def.size, level)) return 'Trop près de la falaise.';
+  if (HQ_TYPES.some((t) => DEFS[t] === def) && this.nearMinerals(tx, ty, def.size)) return 'Trop près d’un gisement de minerai (3 cases au moins).';
   if (!def.needsPower || this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return 'Emplacement invalide.';
   return def.faction === 'z' ? 'Hors du creep.' : "Hors d'un champ d'énergie.";
 }

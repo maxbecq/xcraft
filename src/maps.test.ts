@@ -64,7 +64,8 @@ describe('map files', () => {
             const size = e.type === 'puits' ? 3 : 1;
             const [cx, cy] = [e.tx + (size >> 1), e.ty + (size >> 1)];
             expect(w.grid.flatLevel(cx, cy), `${e.type} at ${cx},${cy}`).toBeGreaterThanOrEqual(0);
-            const near = w.map.sites!.some((s) => Math.hypot(s.hq[0] + 2.5 - (e.tx + size / 2), s.hq[1] + 2.5 - (e.ty + size / 2)) < 12);
+            // From the middle of the 4x4 main building (the balancer, 2026-11-22).
+            const near = w.map.sites!.some((s) => Math.hypot(s.hq[0] + 2 - (e.tx + size / 2), s.hq[1] + 2 - (e.ty + size / 2)) < 12);
             expect(near, `${e.type} at ${e.tx},${e.ty}`).toBe(true);
           }
         });

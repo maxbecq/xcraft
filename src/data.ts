@@ -507,9 +507,9 @@ const BASE: Record<string, object> = {
   soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', abilities: ['soin'], faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
-  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
+  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 4, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
-  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
+  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 4, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, morphs: ['silo'], faction: 'humains', hotkey: 'G' },
   // The balancer (2026-11-22): each Grenier may become a Grenier à silo, no research needed: +200 HP, +5 supply.
   silo: { kind: 'building', name: 'Grenier à silo', size: 2, morphOnly: true, faction: 'humains', hotkey: 'S' },
@@ -606,7 +606,7 @@ const BASE: Record<string, object> = {
   druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'deflagration', 'silence'], faction: 'isdaris', hotkey: 'D' },
   // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
   assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', faction: 'isdaris', hotkey: 'X' },
-  obelisque: { kind: 'building', name: 'Obélisque', size: 5, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
+  obelisque: { kind: 'building', name: 'Obélisque', size: 4, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
   emetteur: { kind: 'building', name: 'Émetteur', size: 2, warp: true, morphs: ['pylonesanglant', 'deflecteur'], faction: 'isdaris', hotkey: 'E' },
   // Notice: an Émetteur turned « Déflecteur »: an aura of invisibility over the allied infantry and vehicles round it.
   deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'D' },
@@ -707,9 +707,9 @@ const BASE: Record<string, object> = {
   barge: { kind: 'unit', name: 'Barge', radius: 0.7, flying: true, mechanical: true, requires: { rbarge: 1 }, faction: 'z', hotkey: 'B' },
   // Z.doc: a levitating spy and support probe, which detects; its abilities wait on its energy (here, cooldowns).
   zespion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { pod: 1 }, abilities: ['balisez', 'impulsion', 'invistemp'], faction: 'z', hotkey: 'E' },
-  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], abilities: ['refuge'], faction: 'z', hotkey: 'I' },
+  intelligence: { kind: 'building', name: 'Intelligence centrale', size: 4, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphs: ['supreme'], abilities: ['refuge'], faction: 'z', hotkey: 'I' },
   // Z.doc: drones and spies in 75 % of their time (Production accélérée).
-  supreme: { kind: 'building', name: 'Intelligence suprême', size: 5, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, abilities: ['refuge'], requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
+  supreme: { kind: 'building', name: 'Intelligence suprême', size: 4, trains: ['drone', 'zespion'], dropoff: true, absorbs: true, morphOnly: true, abilities: ['refuge'], requires: { armement: 1, centrerecherche: 1 }, faction: 'z', hotkey: 'S' },
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
@@ -822,7 +822,7 @@ const BASE: Record<string, object> = {
   minotaure: { kind: 'unit', name: 'Minotaure', radius: 0.6, ability: 'transe', faction: 'dieux', hotkey: 'M' },
   // A statue set going by magic: a machine for the bonuses against machines.
   sphinx: { kind: 'unit', name: 'Sphinx', radius: 0.6, mechanical: true, ability: 'statue', faction: 'dieux', hotkey: 'X' },
-  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 5, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
+  asgaard: { kind: 'building', name: "Porte d'Asgaard", size: 4, trains: ['thor', 'apollon', 'seth', 'odin', 'athena', 'isis', 'frigg', 'hades', 'osiris'], dropoff: true, warp: true, faction: 'dieux', hotkey: 'A' },
   // Notice: supply, and a melee blow at enemies that come too close; turns into a magic arrow tower.
   branche: { kind: 'building', name: "Branche d'Yggdrasill", size: 2, warp: true, morphs: ['protecteur'], ability: 'deraciner', faction: 'dieux', hotkey: 'B' },
   protecteur: { kind: 'building', name: 'Yggdrasill protecteur', size: 2, warp: true, morphOnly: true, morphs: ['furieux'], ability: 'deraciner', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'P' },
@@ -999,6 +999,11 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 /** Abilities a unit may use on its own or not (the balancer, 2026-11-22), and whether they start on their own: the
  * Soin as it always did, the Réanimation only when ordered, as before. */
 export const AUTOCAST: Record<string, boolean> = { soin: true, reanimation: false };
+
+/** The main buildings (the balancer, 2026-11-22: 4x4, not within 3 tiles of a mineral field), their in-place growths
+ * too; on the map, each in the 5x5 slot the maps keep for it, at the corner farthest from the minerals. */
+export const HQ_TYPES = ['conseil', 'grandconseil', 'obelisque', 'intelligence', 'supreme', 'asgaard'];
+export const HQ_MINERAL_GAP = 3;
 
 export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', silo: 'grenier', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
