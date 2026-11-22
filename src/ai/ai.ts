@@ -347,10 +347,8 @@ export class AI {
     // (the base nearest the field, where its minerals go).
     const bases = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
     const dropAt = (e: Entity) => bases.reduce((a, b) => (dist(b.x, b.y, e.x, e.y) < dist(a.x, a.y, e.x, e.y) ? b : a), bases[0] ?? ctx.home);
-    const guarded = (e: Entity) => {
-      const d = dropAt(e);
-      return this.underFire(e) || this.underFire({ x: (e.x + d.x) / 2, y: (e.y + d.y) / 2 });
-    };
+    // The road the workers really take, not a straight line (a Fortin over the only ramp, off the line's middle).
+    const guarded = (e: Entity) => this.underFire(e) || this.exposedRoad(dropAt(e), e);
     for (const s of serfs) {
       // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
       // safe one, if any.
@@ -601,11 +599,13 @@ export class AI {
     for (const b of buildings) this.tried.delete(spotKey(b.tx, b.ty, (b.def as BuildingDef).size));
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
     const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
+    // A lost headquarters' site, looked for once this turn.
+    const hqSpot = !this.settled(home) && !building(f.hq) && this.rebuildable ? this.spot(f.hq, home) : null;
     // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
     // Once its site stands (paid already), with drones to spare, they come again.
     // With no headquarters' price to keep (none can be raised, or no site for it, all under fire), a Pod raises a
     // Plate-forme to fight on.
-    for (let i = 0; i < wants.length && (this.settled(home) || building(f.hq) || !this.rebuildable || !this.spot(f.hq, home)); i++) {
+    for (let i = 0; i < wants.length && (this.settled(home) || building(f.hq) || !this.rebuildable || !hqSpot); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
@@ -615,7 +615,7 @@ export class AI {
       // Not a headquarters no worker can raise (no drone left: the Pod kept its 800 and raised nothing).
       // While a headquarters rises again with no drone to spare, the next drone's price too.
       // Not a building no worker of ours can raise (no drone left: the Pod's 300 held the Plate-forme).
-      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) || !builders.some((b) => raises(b.def as UnitDef, t)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0) + (!this.settled(home) && building(f.hq) && ctx.serfs.length < 2 ? (DEFS[f.worker] as UnitDef).cost.minerals : 0);
+      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && (!this.rebuildable || !hqSpot) && !this.settled(home)) || !builders.some((b) => raises(b.def as UnitDef, t)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0) + (!this.settled(home) && building(f.hq) && ctx.serfs.length < 2 ? (DEFS[f.worker] as UnitDef).cost.minerals : 0);
       if (host && ctx.minerals - ahead >= def.cost.minerals && ctx.energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
         ctx.minerals -= def.cost.minerals;
@@ -1632,7 +1632,9 @@ export class AI {
     const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t)));
     const beaten =
       cannotPay &&
-      !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder) || (e.def.kind !== 'resource' && e.queue.length > 0));
+      // A headquarters' site rising (by itself or with a worker left to raise it) is hope too: the economy restarts once
+      // it stands.
+      !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder) || (e.def.kind !== 'resource' && e.queue.length > 0) || (kin(e, f.hq) && e.buildLeft > 0 && (!!(e.def as BuildingDef).absorbs || !!(e.def as BuildingDef).warp || mine.some((u) => u.type === f.worker))));
     const h = this.hopeless;
     if (!beaten) this.hopeless = null;
     else if (!h || p.minerals > h.minerals || (market && p.energy > h.energy)) this.hopeless = { since: w.tick, minerals: p.minerals, energy: p.energy };
@@ -2066,6 +2068,36 @@ export class AI {
 
   /** Enemy buildings whose weapons hit the ground, with their range (a manned Fortin's crew, not its workers, a tile further), by tick. */
   private guns: { tick: number; list: [Entity, number][] } = { tick: -1, list: [] };
+
+  /** Roads from a base to a field that pass under an enemy's guns, by base and field; worked out again every 30 s. */
+  private exposed = new Map<string, boolean>();
+  private exposedAt = -1;
+
+  private exposedRoad(base: Entity, field: Entity): boolean {
+    const w = this.world;
+    this.underFire(base); // fills this tick's guns
+    if (!this.guns.list.length) return false;
+    if (this.exposedAt < 0 || w.tick - this.exposedAt >= ticks(30)) {
+      this.exposed.clear();
+      this.exposedAt = w.tick;
+    }
+    // Only with a gun near the box from the base to the field: a road far from every gun is never worked out.
+    const pad = 16 * FP;
+    const [x0, x1] = [Math.min(base.x, field.x) - pad, Math.max(base.x, field.x) + pad];
+    const [y0, y1] = [Math.min(base.y, field.y) - pad, Math.max(base.y, field.y) + pad];
+    if (!this.guns.list.some(([g]) => g.x >= x0 && g.x <= x1 && g.y >= y0 && g.y <= y1)) return false;
+    const key = `${base.id}:${field.id}`;
+    let hit = this.exposed.get(key);
+    if (hit === undefined) {
+      const g = w.grid;
+      const [sx, sy] = g.nearestOpen(Math.floor(base.x / FP), Math.floor(base.y / FP), -1, [(g.width - 1) / 2, (g.height - 1) / 2]);
+      const path = g.findPath(sx, sy, Math.floor(field.x / FP), Math.floor(field.y / FP));
+      hit = false;
+      for (let i = 0; i < path.length && !hit; i += 2) hit = this.underFire({ x: ((path[i] % g.width) + 0.5) * FP, y: (Math.floor(path[i] / g.width) + 0.5) * FP });
+      this.exposed.set(key, hit);
+    }
+    return hit;
+  }
 
   /** Armed soldiers manning a building (a Fortin's crew shoots from inside). */
   private crew(b: Entity): Entity[] {
