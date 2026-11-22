@@ -809,7 +809,8 @@ export class AI {
     } else if (market && !raising && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
-    } else if (market && ctx.energy > 250 && ctx.minerals < 150) {
+    } else if (market && ctx.minerals < 150 && (ctx.energy > 250 || (!this.settled(ctx.home) && ctx.energy >= BALANCE.rules.trade.give))) {
+      // (with no base, whatever energy there is: think counted that sale for what it could still train)
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
     }
@@ -845,7 +846,9 @@ export class AI {
       // Ankylosaure it could not pay, its Plésiosaure left out).
       const pick = (list: string[]) => list.slice().sort((a, b) => own(a) - own(b)).find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
       // (while minerals come in, it waits for the anti-air unit, as before).
-      const type = this.enemyAir && antiAirTrains.length ? (pick(antiAirTrains) ?? (w.tick - this.lastIncome >= ticks(60) ? pick(trains) : undefined)) : pick(trains);
+      // Not for supply: minerals coming in free none.
+      const waitAir = w.tick - this.lastIncome < ticks(60) && antiAirTrains.some((u) => (DEFS[u] as UnitDef).supply <= this.room(ctx));
+      const type = this.enemyAir && antiAirTrains.length ? (pick(antiAirTrains) ?? (waitAir ? undefined : pick(trains))) : pick(trains);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
@@ -2261,6 +2264,7 @@ export class AI {
     const w = this.world;
     const foes: Entity[] = [];
     const ours = [...w.entities.values()].filter((u) => u.owner === this.player && u.def.kind === 'unit' && flies(u));
+    const anchor = this.homeOf() ?? buildings.find((b) => b.owner === this.player);
     for (const e of w.entities.values()) {
       if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
       // Not an unarmed flyer (an Espion hovering by an outlying building, out of the defenders' reach, kept the army
@@ -2269,7 +2273,10 @@ export class AI {
       // Unless one of our flyers is there for it to shoot.
       if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) <= (w.weapon(e)!.range + ((u.def as UnitDef).radius ?? 0) + ((e.def as UnitDef).radius ?? 0) + 0.125) * FP))) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
-      if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
+      if (!buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) continue;
+      // Nor a raider on foot that cannot walk to us (across a cliff from a Pod, it kept a full wave home for good).
+      if (!flies(e) && anchor && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
+      foes.push(e);
     }
     if (!foes.length) return undefined;
     // Soldiers before workers: a scout alone is not worth pulling the army back for.
