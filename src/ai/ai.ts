@@ -1736,6 +1736,23 @@ export class AI {
    * gets stuck there and the order fails ("Emplacement inaccessible").
    */
   private walkable(home: Entity, tx: number, ty: number): boolean {
+    // Asked again for the same tile, thought after thought (an outpost's site while the AI saves up for it, a base
+    // with no room left gone round again for every building wanted): the road is searched once and kept while the
+    // grid stays as it was (Grid.changes: no building put or gone, no wall up or down), so the answer is the one a new
+    // search would give. Each search was a quarter of a millisecond, up to a tenth of a whole game's time.
+    if (this.roadsAt !== this.world.grid.changes) {
+      this.roadsAt = this.world.grid.changes;
+      this.roads.clear();
+    }
+    const key = (home.id * 1024 + ty) * 1024 + tx;
+    let ok = this.roads.get(key);
+    if (ok === undefined) this.roads.set(key, (ok = this.road(home, tx, ty)));
+    return ok;
+  }
+  private readonly roads = new Map<number, boolean>();
+  private roadsAt = -1;
+
+  private road(home: Entity, tx: number, ty: number): boolean {
     const g = this.world.grid;
     // From the open tile nearest the base toward the map's centre: the scan's fixed order picked a different one for
     // the base in the opposite corner, and so a different length of road.

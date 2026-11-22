@@ -7,6 +7,9 @@ export class Grid {
   readonly height: number;
   /** Count of blockers per tile (buildings, resources). */
   readonly blocked: Uint8Array;
+  /** How many times `blocked` changed (a building put or gone, an energy wall up or down): what was worked out from
+   * the grid (a road found, a tile found open) holds while this stays the same. Counted where `blocked` is written. */
+  changes = 0;
   private readonly corners: Int8Array;
   /** Tiles drawn with a diagonal cliff cut: walkable, but not buildable. */
   private readonly cut: Uint8Array;

@@ -517,6 +517,7 @@ export function wall(this: World, owner: number, from: Entity, x: number, y: num
     if (this.grid.inside(tx, ty)) tiles.add(ty * this.grid.width + tx);
   }
   for (const i of tiles) this.grid.blocked[i]++;
+  this.grid.changes++;
   this.walls.push({ owner, tiles: [...tiles], left });
   for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
 }

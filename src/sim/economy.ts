@@ -88,8 +88,8 @@ export function near(this: World, e: Entity, f: Entity, tiles: number): boolean 
 export function nearestField(this: World, e: Entity, except?: Entity, freeOnly = false, skip?: number[]): Entity | undefined {
   let best: Entity | undefined;
   let bestD = 12 * FP;
-  for (const f of this.entities.values()) {
-    if (f.type !== 'minerai' || f === except || f.amount <= 0 || (freeOnly && f.miner) || skip?.includes(f.id)) continue;
+  for (const f of this.listed().fields) {
+    if (f === except || f.amount <= 0 || (freeOnly && f.miner) || skip?.includes(f.id)) continue;
     const d = dist(e.x, e.y, f.x, f.y) + (f.miner ? 3 * FP : 0);
     if (d < bestD) [best, bestD] = [f, d];
   }
@@ -99,8 +99,8 @@ export function nearestField(this: World, e: Entity, except?: Entity, freeOnly =
 export function nearestDropoff(this: World, e: Entity): Entity | undefined {
   let best: Entity | undefined;
   let bestD = Infinity;
-  for (const b of this.entities.values()) {
-    if (b.owner !== e.owner || b.buildLeft > 0 || !(b.def as BuildingDef).dropoff) continue;
+  for (const b of this.listed().dropoffs) {
+    if (b.owner !== e.owner || b.buildLeft > 0) continue;
     const d = dist(e.x, e.y, b.x, b.y);
     if (d < bestD) [best, bestD] = [b, d];
   }

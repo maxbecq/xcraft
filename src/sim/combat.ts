@@ -10,7 +10,7 @@ const CELL_MARGIN = 4;
 /** Near one of its player's finished Conseils (or the Grand Conseil). */
 export function nearCouncil(this: World, e: Entity): boolean {
   const r = toFp(BALANCE.rules.upgrades.conseilAura.radius);
-  for (const b of this.entities.values()) if (b.owner === e.owner && (b.type === 'conseil' || b.type === 'grandconseil') && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r) return true;
+  for (const b of this.listed().councils) if (b.owner === e.owner && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r) return true;
   return false;
 }
 
@@ -29,6 +29,7 @@ export function empower(this: World, u: Entity, type: string): void {
     const extra = U.cercleShield;
     u.maxShield += extra;
     u.shield += extra;
+    this.unlist(); // the lists of what carries a shield (World.listed)
   } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'armurezodiacale' && u.type === 'titan')) {
     // Drake géant, Armure zodiacale: more health, the wounds kept.
     const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.zodiacale.hp;
@@ -56,7 +57,7 @@ export function armorBonus(this: World, t: Entity): number {
   // Athéna's protection aura, the strongest of her side's in reach.
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
-  if (faction === 'dieux') for (const g of this.entities.values()) if (g.type === 'athena' && g.owner === t.owner && g.hp > 0 && dist(g.x, g.y, t.x, t.y) <= toFp(A.radius[g.lvl - 1])) aura = Math.max(aura, A.armor[g.lvl - 1]);
+  if (faction === 'dieux') for (const g of this.listed().athenas) if (g.owner === t.owner && g.hp > 0 && dist(g.x, g.y, t.x, t.y) <= toFp(A.radius[g.lvl - 1])) aura = Math.max(aura, A.armor[g.lvl - 1]);
   // Z socles: the armour their tier adds (Z.doc).
   if (t.tier > 1) bonus += d.tiers![t.tier - 2].armor - d.armor;
   return bonus + aura;
@@ -261,7 +262,10 @@ export function rechargeShields(this: World, e: Entity): void {
   const ab = ABILITIES.rechargebouclier;
   if (!(e.def as BuildingDef).shieldCharge || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
   let best: Entity | undefined;
-  for (const t of this.around(e.x, e.y, toFp(ab.range! + 3))) {
+  // Outside the units' turn there is no index of who is where (it is made after this): only what carries a shield is
+  // gone through, not every entity, once a tick for each Réserve psy and Voyageur ready to give. The pick does not
+  // depend on the order they come in (the most drained, the oldest of two as drained).
+  for (const t of this.cells ? this.around(e.x, e.y, toFp(ab.range! + 3)) : this.listed().shielded) {
     if (t === e || t.owner !== e.owner || t.hp <= 0 || t.inside || t.shield >= t.maxShield || this.gap(e, t) > toFp(ab.range!)) continue;
     if (t.def.kind === 'building' && t.buildLeft > 0) continue;
     if (!best || t.maxShield - t.shield > best.maxShield - best.shield || (t.maxShield - t.shield === best.maxShield - best.shield && t.id < best.id)) best = t;
@@ -441,7 +445,7 @@ export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   if (e.def.kind === 'unit' && this.players[e.owner]?.faction === 'dieux') {
     const G = U.auraguerre;
     let aura = 0;
-    for (const g of this.entities.values()) if (g.type === 'odin' && g.owner === e.owner && g.hp > 0 && dist(g.x, g.y, e.x, e.y) <= toFp(G.radius[g.lvl - 1])) aura = Math.max(aura, G.damage[g.lvl - 1]);
+    for (const g of this.listed().odins) if (g.owner === e.owner && g.hp > 0 && dist(g.x, g.y, e.x, e.y) <= toFp(G.radius[g.lvl - 1])) aura = Math.max(aura, G.damage[g.lvl - 1]);
     upgrade += aura;
   }
   // Z Balise offensive (Z.doc): +5 % to every attack of its owner's while a carrier stands; not cumulative.

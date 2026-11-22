@@ -324,6 +324,16 @@ const WARP_RANGE = 6;
 type Methods<M> = { [K in keyof M]: OmitThisParameter<M[K]> };
 export interface World extends Methods<typeof commands>, Methods<typeof abilities>, Methods<typeof combat>, Methods<typeof buildings>, Methods<typeof movement>, Methods<typeof economy> {}
 
+/** Entities by what a scan looks for (World.listed). */
+interface Lists {
+  dropoffs: Entity[];
+  fields: Entity[];
+  councils: Entity[];
+  odins: Entity[];
+  athenas: Entity[];
+  shielded: Entity[];
+}
+
 export class World {
   tick = 0;
   readonly entities = new Map<number, Entity>();
@@ -398,7 +408,7 @@ export class World {
       this.block(e, 1);
     }
     this.entities.set(e.id, e);
-    this.aurasAt = -1;
+    this.unlist();
     if (this.cells) this.file(e);
     if (owner >= 0 && this.grows(e) && this.level(owner, 'croissance')) this.fortify(e);
     if (owner >= 0 && (e.type === 'drone' || e.type === 'dronecombat') && this.level(owner, 'sonderobuste')) this.fortify(e);
@@ -418,11 +428,13 @@ export class World {
       this.cones--;
     }
     this.entities.delete(e.id);
+    this.unlist();
   }
 
   block(e: Entity, delta: number): void {
     const size = (e.def as BuildingDef).size;
     for (let y = e.ty; y < e.ty + size; y++) for (let x = e.tx; x < e.tx + size; x++) this.grid.blocked[y * this.grid.width + x] += delta;
+    this.grid.changes++;
   }
 
   step(commands: readonly Command[]): void {
@@ -432,7 +444,11 @@ export class World {
     this.teleports = [];
     this.casts = [];
     this.scans = this.scans.filter((s) => --s.left > 0);
-    for (const m of this.walls) if (--m.left === 0) for (const i of m.tiles) this.grid.blocked[i]--;
+    for (const m of this.walls) {
+      if (--m.left !== 0) continue;
+      for (const i of m.tiles) this.grid.blocked[i]--;
+      this.grid.changes++;
+    }
     this.walls = this.walls.filter((m) => m.left > 0);
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
@@ -838,9 +854,32 @@ export class World {
   /** Players with a Balise offensive standing, as of tick `beaconsAt` (Z). */
   beacons = new Set<number>();
   beaconsAt = -1;
-  /** Entities with a shield aura (Réserve psy, Voyageur), as of tick `aurasAt`; -1 after a spawn or a change of type. */
-  auras: Entity[] = [];
-  aurasAt = -1;
+  /**
+   * The entities a few scans look for, each list in the order of the entities themselves (by id), so a scan of a list
+   * finds what the scan of every entity found, ties included: the buildings minerals are brought back to, the mineral
+   * fields, the Conseils, Odin and Athéna (their auras), and what carries a shield. Told apart by what never changes
+   * but through spawn, remove, retype and empower, which drop the lists (`listed` makes them again when next asked);
+   * the rest (owner, finished or not, alive, in reach) is still asked of each one, as before. A worker's way home
+   * went through every entity at every tick.
+   */
+  private lists: Lists | null = null;
+  listed(): Lists {
+    if (this.lists) return this.lists;
+    const l: Lists = { dropoffs: [], fields: [], councils: [], odins: [], athenas: [], shielded: [] };
+    for (const e of this.entities.values()) {
+      if ((e.def as BuildingDef).dropoff) l.dropoffs.push(e);
+      if (e.type === 'minerai') l.fields.push(e);
+      else if (e.type === 'conseil' || e.type === 'grandconseil') l.councils.push(e);
+      else if (e.type === 'odin') l.odins.push(e);
+      else if (e.type === 'athena') l.athenas.push(e);
+      if (e.maxShield > 0) l.shielded.push(e);
+    }
+    return (this.lists = l);
+  }
+  /** The lists are out of date (an entity came, went, changed type or gained a shield). */
+  unlist(): void {
+    this.lists = null;
+  }
 
   queueing = false;
   /** Long paths searched this tick (movement.ts pathFor). */
