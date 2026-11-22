@@ -254,7 +254,13 @@ export function buttonsFor(h: Hud): Button[] {
     const d = DEFS[t] as BuildingDef;
     const free = same.find((o) => h.world.addonsOf(o) < BALANCE.rules.z.podAddons);
     const reason = h.world.lacks(h.player, t, built(h)) || (free ? undefined : 'Add-ons au complet');
-    list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
+    // Équilibreur 22/11: the player picks one of the 8 places round the Pod, as a building is placed.
+    const pick = () => {
+      if (!free) return;
+      h.placing = t;
+      h.addonPod = free.id;
+    };
+    list.push({ label: d.name, icon: t, key: d.hotkey, cost: d.cost, reason, action: pick });
   }
   // Isdaris: turning into a stronger building, in place.
   for (const t of b.def.morphs ?? []) {

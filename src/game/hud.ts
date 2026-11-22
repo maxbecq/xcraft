@@ -72,6 +72,8 @@ export class Hud {
   menuItems: Button[] = [];
   readonly menu = el('div', 'cmd-menu');
   placing: string | null = null;
+  /** Z: the Pod whose add-on (`placing`) is being put in one of its 8 places (équilibreur 22/11). */
+  addonPod: number | null = null;
   /** The building type being placed, if any. */
   get placingType(): string | null {
     return this.placing;

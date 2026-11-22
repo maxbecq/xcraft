@@ -1,7 +1,9 @@
 /** Building placement: the ghost and the grid under the cursor, and on a touch screen the pinned footprint with ✓ and ✕. */
 import { type MeshBasicMaterial, Vector3 } from 'three';
+import BALANCE from '../balance.json';
 import { type BuildingDef, DEFS, raises, type UnitDef } from '../data';
 import { heightAt } from '../map';
+import { addonSlots } from '../sim/buildings';
 import { FP, TICK_RATE } from '../sim/fixed';
 import { UNSEEN } from '../sim/vision';
 import { GRID_REACH } from '../render/placegrid';
@@ -12,6 +14,16 @@ import type { Hud } from './hud';
 export function place(h: Hud, ground: Vector3 | null, shift: boolean): void {
   if (!h.placing) return;
   const spot = ground && spotAt(h, h.placing, ground);
+  // Z: a Pod's add-on, in the place picked among its 8 (the Pod raises it, no drone).
+  const pod = addonHost(h);
+  if (pod) {
+    if (!spot) return;
+    const slot = addonSlots(pod.tx, pod.ty, (pod.def as BuildingDef).size, (DEFS[h.placing] as BuildingDef).size).findIndex(([x, y]) => x === spot[0] && y === spot[1]);
+    if (!h.world.canPlace(h.placing, spot[0], spot[1], h.player)) return void h.notify([{ player: h.player, kind: 'error', text: 'Emplacement occupé.' }]);
+    h.issue({ player: h.player, kind: 'train', ids: [pod.id], type: h.placing, slot });
+    if (!shift || h.world.addonsOf(pod) + 1 >= BALANCE.rules.z.podAddons) h.placing = null;
+    return;
+  }
   const worker = h.workers().find((w) => raises(w.def as UnitDef, h.placing!));
   // An extractor clicked away from any well: said, not silently dropped (the well may hide behind the main building).
   if (ground && !spot && worker) {
@@ -72,8 +84,27 @@ export function makePinUi(h: Hud): void {
 }
 
 /** Top-left tile for a building centred under the cursor; mines snap to the nearest well. */
+/** The Pod an add-on being placed goes round, if that is what is being placed. */
+function addonHost(h: Hud): Entity | undefined {
+  if (!h.placing || !(DEFS[h.placing] as BuildingDef).addon || h.addonPod === null) return undefined;
+  const pod = h.world.entities.get(h.addonPod);
+  return pod && pod.hp > 0 && pod.owner === h.player ? pod : undefined;
+}
+
 export function spotAt(h: Hud, type: string, ground: Vector3): [number, number] | null {
   const def = DEFS[type] as BuildingDef;
+  const pod = addonHost(h);
+  if (pod) {
+    // The place round the Pod nearest the cursor, of the 8.
+    let best: [number, number] | null = null;
+    let bestD = Infinity;
+    for (const [x, y] of addonSlots(pod.tx, pod.ty, (pod.def as BuildingDef).size, def.size)) {
+      const d = Math.hypot(x + def.size / 2 - ground.x, y + def.size / 2 - ground.z);
+      if (d < bestD) [best, bestD] = [[x, y], d];
+    }
+    return best;
+  }
+  if (def.addon) return null;
   if (def.energyRate) {
     let best: Entity | undefined;
     let bestD = 4 * FP;
