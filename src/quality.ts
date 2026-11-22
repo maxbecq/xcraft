@@ -10,16 +10,17 @@ export const QUALITY_KEY = 'xcraft.quality';
  * effect particles drawn. The basse level (integrated chips) also caps the 3D picture's pixels whatever the window
  * (`maxPixels`: an Intel HD drew 2.3 million at 1920 x 1200, most of its frame), drops the silhouettes of units
  * behind buildings (`xray`: the scene drawn twice more) and reads its ground and weathering noise from a texture
- * instead of working it out for every pixel (`lite`).
+ * instead of working it out for every pixel (`lite`). Only the haute level shades ambient occlusion (`ao`): on the
+ * moyenne one its three full-screen passes go, the ink lines stay (render/post.ts noOcclusion).
  */
-export const QUALITY: Record<Quality, { pixelRatio: number; maxPixels: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number; xray: boolean; lite: boolean }> = {
-  basse: { pixelRatio: 1, maxPixels: 1_300_000, post: 'off', shadows: 0, particles: 0.4, xray: false, lite: true },
+export const QUALITY: Record<Quality, { pixelRatio: number; maxPixels: number; post: 'off' | 'light' | 'full'; shadows: number; particles: number; xray: boolean; lite: boolean; ao: boolean }> = {
+  basse: { pixelRatio: 1, maxPixels: 1_300_000, post: 'off', shadows: 0, particles: 0.4, xray: false, lite: true, ao: false },
   // 1024, not 2048: on a phone the 3D picture is half a million pixels, the shadow map had eight times as many texels,
   // and the whole map's cliffs and scenery are drawn into it every frame.
-  moyenne: { pixelRatio: 1.25, maxPixels: Infinity, post: 'light', shadows: 1024, particles: 1, xray: true, lite: false },
+  moyenne: { pixelRatio: 1.25, maxPixels: Infinity, post: 'light', shadows: 1024, particles: 1, xray: true, lite: false, ao: false },
   // 1.5, not 2: on a Retina Mac under Safari the full post-processing at 2 (3456x1902) held the frame at about 19 ms
   // while our own work took 11, the graphics chip's fill; 1.5 draws 44 % fewer pixels in every full-screen pass.
-  haute: { pixelRatio: 1.5, maxPixels: Infinity, post: 'full', shadows: 4096, particles: 1, xray: true, lite: false },
+  haute: { pixelRatio: 1.5, maxPixels: Infinity, post: 'full', shadows: 4096, particles: 1, xray: true, lite: false, ao: true },
 };
 
 /**

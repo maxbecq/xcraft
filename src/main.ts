@@ -337,6 +337,7 @@ const rain = painted ? new Rain() : null;
 if (rain) fxScene.add(rain.mesh);
 const post = new Post(renderer, scene, fxScene, rig.camera, GFX.post !== 'off', GFX.post === 'light', biome.warmShadows);
 post.xray = GFX.xray;
+if (!GFX.ao && !params.has('ao')) post.noOcclusion(); // `?ao`: kept, to compare
 window.addEventListener('resize', () => {
   renderer.setPixelRatio(pixelRatio()); // the basse level's depends on the window's size
   renderer.setSize(viewW(), viewH());

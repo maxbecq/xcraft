@@ -98,6 +98,23 @@ export class Post {
     this.composer = composer;
   }
 
+  /**
+   * The moyenne level: no ambient occlusion shading. The pass still draws the scene's depth and normals, which the ink
+   * lines are found in, but no longer works the occlusion out, smooths it and lays it over the picture (three
+   * full-screen passes, the heaviest of the light post-processing on a phone's graphics chip). What goes: the soft
+   * darkening where things meet the ground and each other.
+   */
+  noOcclusion(): void {
+    if (!this.ao) return;
+    const ao = this.ao as unknown as { _overrideVisibility(): void; _restoreVisibility(): void; _renderOverride(r: WebGLRenderer, m: Material, t: WebGLRenderTarget, color: number, alpha: number): void; normalRenderTarget: WebGLRenderTarget };
+    this.ao.render = (renderer) => {
+      ao._overrideVisibility();
+      ao._renderOverride(renderer, this.ao!.normalMaterial, ao.normalRenderTarget, 0x7777ff, 1.0);
+      ao._restoreVisibility();
+    };
+    this.ao.needsSwap = false; // it writes nothing to the picture
+  }
+
   setSize(w: number, h: number): void {
     // The composer keeps a pixel ratio of its own, taken when it was made: the renderer's may have changed since (the
     // window moved to a screen of another density, or the basse level's cap), and its buffers would stay at the old one.
