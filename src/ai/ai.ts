@@ -342,9 +342,26 @@ export class AI {
     // Idle serfs go mining.
     // Not to a field under an enemy's armed building: the fields near home mined out, each idle worker in turn walked
     // to the minerals under the enemy's towers and died.
-    const guns = [...this.world.entities.values()].filter((e) => e.def.kind === 'building' && this.world.hostile(e.owner, this.player) && e.buildLeft === 0 && !!this.world.weapon(e));
-    const guarded = (e: Entity) => guns.some((g) => dist(g.x, g.y, e.x, e.y) < ((this.world.weapon(g)!.range ?? 0) + 3) * FP);
+    // Weapons that hit the ground (a Tour shoots flyers only), a manned Fortin's crew too (they shoot from inside, a
+    // tile further).
+    const w0 = this.world;
+    const guns: [Entity, number][] = [];
+    for (const e of w0.entities.values()) {
+      if (e.def.kind !== 'building' || !w0.hostile(e.owner, this.player) || e.buildLeft > 0) continue;
+      const a = w0.weapon(e);
+      if (a && reaches(a, false)) guns.push([e, a.range]);
+      if ((e.def as BuildingDef).bunker) for (const u of w0.entities.values()) if (u.inside === e.id && w0.weapon(u) && reaches(w0.weapon(u)!, false)) guns.push([e, w0.weapon(u)!.range + 1]);
+    }
+    const guarded = (e: Entity) => guns.some(([g, r]) => dist(g.x, g.y, e.x, e.y) < (r + 3) * FP);
     for (const s of serfs) {
+      // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
+      // safe one, if any.
+      const target = s.order?.kind === 'gather' ? w0.entities.get(s.order.target) : undefined;
+      if (target && guarded(target) && s.carry === 0) {
+        const safe = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
+        if (safe) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: safe.x, y: safe.y, target: safe.id });
+        continue;
+      }
       if (s.order) continue;
       const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
@@ -596,7 +613,8 @@ export class AI {
       // that would free supply, or of the Intelligence to raise again).
       // Not a headquarters no worker can raise (no drone left: the Pod kept its 800 and raised nothing).
       // While a headquarters rises again with no drone to spare, the next drone's price too.
-      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0) + (!this.settled(home) && building(f.hq) && ctx.serfs.length < 2 ? (DEFS[f.worker] as UnitDef).cost.minerals : 0);
+      // Not a building no worker of ours can raise (no drone left: the Pod's 300 held the Plate-forme).
+      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) || !builders.some((b) => raises(b.def as UnitDef, t)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0) + (!this.settled(home) && building(f.hq) && ctx.serfs.length < 2 ? (DEFS[f.worker] as UnitDef).cost.minerals : 0);
       if (host && ctx.minerals - ahead >= def.cost.minerals && ctx.energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
         ctx.minerals -= def.cost.minerals;
