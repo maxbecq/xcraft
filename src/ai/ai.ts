@@ -157,6 +157,8 @@ export class AI {
   private rebuildable = false;
   /** Workers able to raise a headquarters, this turn. */
   private raisers = 0;
+  /** Minerals the Humans' advanced buildings keep from the Casernes for a unit they wait for (the Marché leaves them). */
+  private advancedHeld = 0;
   /** Enemies at our base this turn, whatever their strength (no Couloir temporel then). */
   private homeThreat = false;
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
@@ -842,7 +844,9 @@ export class AI {
     if (market && raising && ctx.p.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && ctx.energy >= BALANCE.rules.trade.give) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
-    } else if (market && !raising && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
+    // Not the minerals kept for an advanced building's unit (last turn's): sold as they came, the bank stayed at 500
+    // and the Casernes stood idle under the keep.
+    } else if (market && !raising && ctx.minerals > 500 + this.advancedHeld && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
     } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || ((!this.settled(ctx.home) || ctx.serfs.length === 0) && this.shortOfMinerals(ctx)))) {
@@ -902,6 +906,7 @@ export class AI {
       ctx.minerals -= def.cost.minerals;
       ctx.energy -= def.cost.energy;
     }
+    this.advancedHeld = advancedKeep;
     for (const c of buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0)) {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || this.room(ctx) <= 0) continue;
