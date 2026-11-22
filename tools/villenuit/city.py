@@ -14,6 +14,7 @@ and run again.
    whole city at 10.
 """
 import json
+import math
 import os
 import shutil
 import statistics
@@ -22,7 +23,7 @@ import sys
 
 os.environ.setdefault("VILLENUIT_GROUND", "gris")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from PIL import Image, ImageChops, ImageFilter, ImageStat  # noqa: E402
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat  # noqa: E402
 
 from paint import BARE, PASS1, PASS2, TUNE, klein, like, ramp, tune  # noqa: E402
 
@@ -36,6 +37,15 @@ FULL_W, FULL_H = W + (NX - 1) * STEP_X, H + (NY - 1) * STEP_Y
 PART_W, PART_H, PART_X, PART_Y = 768, 512, 640, 432  # parts of the second pass, in first pass pixels
 GRID_LEFT, GRID_TOP, SIZE, COLS, ROWS = -153.6, 38.4, 1024, 24, 14  # the game's grid (tiles.py, painted.ts)
 SEED = 4
+# Flat ground that the painter gave a wall to (a slab's flank, a house front under a pavement's edge), though units
+# walk straight across: the street's own asphalt comes back there, taken a few tiles away. Each: the place's outline
+# in map tiles, and how many tiles away (x, z) its asphalt is taken.
+FLAT = [
+    ([(42.6, 56.1), (46, 56.1), (46, 58), (42.6, 58)], (-4, 0)),  # the slab's corner west of the centre's north house
+    ([(99, 77.1), (110, 77.1), (116.9, 84), (105.9, 84)], (-13, 0)),  # a house front under the south-east square's edge
+    ([(70, 77.1), (82, 77.1), (88.9, 84), (76.9, 84)], (13, 0)),  # another under the centre's south house,
+    ([(77.1, 73.5), (84, 73.5), (84, 77.5), (77.1, 77.5)], (0, -6)),  # and beside it
+]
 QUALITY = 60  # WebP: half the weight of 84, nothing lost to the eye at the closest zoom
 
 
@@ -56,6 +66,26 @@ def log(*a):
 def blender(mode, sx, sy, out, *more):
     if not os.path.exists(out):
         subprocess.check_call(["python3", "tools/meshy/local3d.py", "--gpu", "blender", "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", mode, str(sx), str(sy), str(PPU), str(W), str(H), out, *map(str, more)], stdout=subprocess.DEVNULL)
+
+
+def spot(x, z):
+    """A point of the flat ground (map tiles) in first pass pixels."""
+    return ((x - z) / math.sqrt(2) - LEFT) * PPU, (TOP + (x + z) / math.sqrt(2) * math.sin(math.radians(35))) * PPU
+
+
+def flat(first):
+    out, where = first.copy(), Image.new("L", first.size)
+    for outline, (dx, dz) in FLAT:
+        points = [spot(x, z) for x, z in outline]
+        x0, y0 = (int(min(p[k] for p in points)) - 16 for k in (0, 1))
+        x1, y1 = (int(max(p[k] for p in points)) + 16 for k in (0, 1))
+        mask = Image.new("L", (x1 - x0, y1 - y0))
+        ImageDraw.Draw(mask).polygon([(x - x0, y - y0) for x, y in points], fill=255)
+        mask = mask.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(3))  # soft, inside the outline
+        ox, oy = (round(a - b) for a, b in zip(spot(dx, dz), spot(0, 0)))
+        out.paste(first.crop((x0 + ox, y0 + oy, x1 + ox, y1 + oy)), (x0, y0), mask)
+        where.paste(255, (x0, y0), mask)
+    return out, where
 
 
 def main():
@@ -120,7 +150,7 @@ def main():
         first.save(f("first-raw"))
         mask.save(f("mask"))
         tune(first, mask, *TUNE[os.environ["VILLENUIT_GROUND"]]).save(f("first"))
-    first, mask = Image.open(f("first")).convert("RGB"), Image.open(f("mask")).convert("L")
+    (first, flattened), mask = flat(Image.open(f("first")).convert("RGB")), Image.open(f("mask")).convert("L")
     open_ground = mask.filter(ImageFilter.GaussianBlur(12)).point(lambda v: 255 if v > 250 else 0)
 
     # 2. The second pass.
@@ -150,7 +180,10 @@ def main():
         # what the second pass built on the open ground goes: the first pass's ground comes back there (paint.py)
         built = ImageChops.difference(out.filter(ImageFilter.GaussianBlur(5)), part.filter(ImageFilter.GaussianBlur(5))).convert("L")
         built = built.point(lambda v: 255 if v > (7 if bare else 12) else 0).filter(ImageFilter.MaxFilter(31)).filter(ImageFilter.GaussianBlur(10))
+        # and nothing of the second pass stays where the ground was made flat again: it builds its wall anew
+        again = flattened.crop((x, y, x + PART_W, y + PART_H)).resize((W, H), Image.BILINEAR)
         out = Image.composite(part.filter(ImageFilter.UnsharpMask(3, 80, 2)), out, ImageChops.multiply(built, ground))
+        out = Image.composite(part, out, again)  # left soft: sharpened, a patch of coarse grain shows in the smooth street
         wx = ramp(W, (PART_W - PART_X) if (a - 1, b) in here else None, None, 160)
         wy = ramp(H, (PART_H - PART_Y) if (a, b - 1) in here else None, None, 120)
         mx = Image.new("L", (W, 1)); mx.putdata(wx)
