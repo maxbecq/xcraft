@@ -652,7 +652,7 @@ export class AI {
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
       // Centre de socles instead), a site tried for nothing.
       // A lost headquarters: only a worker whose road to the site is out of an enemy's reach.
-      const safeRoad = (b: Entity) => !(type === f.hq && !this.settled(home) && spot && this.exposedRoad(b, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP }));
+      const safeRoad = (b: Entity) => !((type === outpost || (type === f.hq && !this.settled(home))) && spot && this.exposedRoad(b, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP }));
       const unordered = crew.filter((b) => !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(b.id)) && safeRoad(b));
       // Gaïa, the Dieux's main builder, chains her buildings (a few at most) instead of placing one at a time.
       const chained = f.builder && !this.builder(unordered, spot, def.size, !this.settled(home)) ? crew.find((b) => b.next.length < 3) : undefined;
@@ -660,7 +660,10 @@ export class AI {
       if (!spot || !builder) continue;
       // A lost headquarters: not where the builder's road passes under an enemy's guns (its last drone died on the ramp).
       // Its price stays kept for it (spot() looks for a site some raiser reaches safely).
-      if (type === f.hq && !this.settled(home) && this.exposedRoad(builder, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP })) break;
+      // An expansion so reached is skipped, the other buildings go on.
+      const roadHit = (type === outpost || (type === f.hq && !this.settled(home))) && this.exposedRoad(builder, { x: (spot[0] + def.size / 2) * FP, y: (spot[1] + def.size / 2) * FP });
+      if (roadHit && type === f.hq && !this.settled(home)) break;
+      if (roadHit) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       // Nor where a building ordered this turn goes (two 3×3 centres got the same spot; the second was lost on arrival).
@@ -1057,8 +1060,11 @@ export class AI {
         atHome = army.filter((u) => !this.wave.has(u.id));
       }
       // Every defender not already fighting near the threat goes there.
+      // Only those whose weapon reaches it (Légionnaires sent under a Drake they could not hit).
+      const leadFoe = w.entities.get(threat.target);
       const ids = atHome
         .filter((u) => {
+          if (leadFoe && flies(leadFoe) && !(w.weapon(u) && reaches(w.weapon(u)!, true))) return false;
           const o = u.order;
           if (!o || o.kind === 'move') return true;
           if (o.kind !== 'attack' && o.kind !== 'attackMove') return false;
@@ -1736,7 +1742,10 @@ export class AI {
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
       // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.
-      const army = (this.enemyAir && antiAir.length ? antiAir : affordable).map(([t, wgt]) => [t, Math.max(1, Math.round(wgt * 4 * this.fit(t)))] as [string, number]);
+      // Anti-air only while it can be paid, or minerals still come in to pay it (an Archer at 150 picked for ever with
+      // 100 left, and the Créature at 70 never came).
+      const airPay = antiAir.some(([t]) => (DEFS[t] as UnitDef).cost.minerals <= minerals) || this.world.tick - this.lastIncome < ticks(60);
+      const army = (this.enemyAir && antiAir.length && airPay ? antiAir : affordable).map(([t, wgt]) => [t, Math.max(1, Math.round(wgt * 4 * this.fit(t)))] as [string, number]);
       // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones; one whose minerals
       // are there (an Octopode at 675 picked with 200 in the bank held every Plate-forme while a drone de combat could come).
       // A socle with a weapon it may get, minerals and energy (the Laser put an Hexapode out of reach every turn).
@@ -1897,7 +1906,8 @@ export class AI {
       };
       // Not under an enemy's guns (the builder died on the way, and with it every rebuild), nor, for a lost
       // headquarters, where no worker of ours has a road out of their reach.
-      const raisers = lost ? [...w.entities.values()].filter((e) => e.owner === this.player && e.def.kind === 'unit' && raises(e.def as UnitDef, type)) : [];
+      // (an expansion's too: a drone sent over a ramp a Fortin held, again and again).
+      const raisers = lost || type === this.faction.outpost || type === this.faction.hq ? [...w.entities.values()].filter((e) => e.owner === this.player && e.def.kind === 'unit' && raises(e.def as UnitDef, type)) : [];
       const ok = ([tx, ty]: [number, number]) => {
         const c = { x: (tx + def.size / 2) * FP, y: (ty + def.size / 2) * FP };
         return w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2)) && !this.underFire(c) && (!raisers.length || raisers.some((r) => !this.exposedRoad(r, c)));
@@ -2225,7 +2235,7 @@ export class AI {
       // home on defence and no wave ever left; its Impulsion only holds units still a few seconds).
       // Nor a flyer whose weapon cannot hit the ground (a Char Pégase in the air kept the drones in Refuge for good).
       // Unless one of our flyers is there for it to shoot.
-      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) <= w.weapon(e)!.range * FP))) continue;
+      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) <= (w.weapon(e)!.range + ((u.def as UnitDef).radius ?? 0) + ((e.def as UnitDef).radius ?? 0) + 0.125) * FP))) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
     }
