@@ -581,8 +581,9 @@ export class AI {
     const techIdle = techUp && (unlocked.length > 0 ? buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length === 0) : !this.fielded);
     const techUnits = unlocked.length ? unlocked : techDef?.trains!.filter((t) => (DEFS[t] as UnitDef).attack) ?? [];
     const gatewaysKeep =
-      // Not the easy AI: it researches no extension, the units it kept minerals for never came.
-      f !== FACTIONS.isdaris || this.easy
+      // Not the easy AI: it researches no extension, the units it kept minerals for never came. Nor with no minerals
+      // coming in: the Portails held them for units the Psycho-assembleur could not pay.
+      f !== FACTIONS.isdaris || this.easy || w.tick - this.lastIncome >= ticks(60)
         ? 0
         : (techIdle ? Math.min(...techUnits.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
           (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
@@ -1060,11 +1061,12 @@ export class AI {
         atHome = army.filter((u) => !this.wave.has(u.id));
       }
       // Every defender not already fighting near the threat goes there.
-      // Only those whose weapon reaches it (Légionnaires sent under a Drake they could not hit).
-      const leadFoe = w.entities.get(threat.target);
+      // Only those whose weapon reaches it (Légionnaires sent under a Drake they could not hit), when the raid is all
+      // flyers: one flyer leading a raid on foot kept the infantry home.
+      const airRaid = threat.armed.length > 0 && threat.armed.every(flies);
       const ids = atHome
         .filter((u) => {
-          if (leadFoe && flies(leadFoe) && !(w.weapon(u) && reaches(w.weapon(u)!, true))) return false;
+          if (airRaid && !(w.weapon(u) && reaches(w.weapon(u)!, true))) return false;
           const o = u.order;
           if (!o || o.kind === 'move') return true;
           if (o.kind !== 'attack' && o.kind !== 'attackMove') return false;
@@ -1076,11 +1078,10 @@ export class AI {
         .map((u) => u.id);
       if (ids.length) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
       // No soldiers to speak of against a small raid: the workers next to it fight.
-      // Not against a flyer their arms cannot reach (drones gathered under a Drake's blasts).
-      const lead = w.entities.get(threat.target);
+      // Not against flyers their arms cannot reach (drones gathered under a Drake's blasts).
       // Only with workers and defenders together as strong as the raid: three drones sent at four heavy units died.
       let fought = false;
-      if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4 && !(lead && flies(lead))) {
+      if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4 && !airRaid) {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id)));
         // Weighed by hit points times damage per second against the other side's classes, not hit points alone (four
         // drones sent at a lone Phalangiste, 30 to machines from 6 tiles, against their 3 to it at contact).
@@ -2096,7 +2097,10 @@ export class AI {
     // (the worker's price kept is not for them).
     const army = this.faction.army.map(([t]) => t);
     if (ctx.buildings.some((b) => b.queue.some((t) => army.includes(t))) || ctx.out.some((c) => c.kind === 'train' && army.includes(c.type))) return true;
-    return ctx.free > 0 && army.some((t) => (DEFS[t] as UnitDef).cost.minerals <= ctx.minerals && (DEFS[t] as UnitDef).cost.energy <= ctx.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
+    // The same budget the production buildings spend from (the minerals kept for the Psycho-assembleur's units held
+    // every Portail, and the last units waited for ever).
+    const budget = ctx.minerals - ctx.keep - ctx.gatewaysKeep - ctx.zKeep;
+    return ctx.free > 0 && army.some((t) => (DEFS[t] as UnitDef).cost.minerals <= budget && (DEFS[t] as UnitDef).cost.energy <= ctx.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
   }
 
   /** Mineral fields left within reach of any of our finished bases. */
