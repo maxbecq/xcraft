@@ -550,7 +550,7 @@ export class World {
     const done = this.vision.map(() => new Set<number>());
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
-      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.blind > 0 ? 1 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
+      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.blind > 0 ? 1 : e.airborne && e.type === 'pegase' ? BALANCE.rules.upgrades.pegaseAir.sight : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
       const tx = tileOf(e.x);
       const ty = tileOf(e.y);
       const high = soars(e);

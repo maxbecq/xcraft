@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
-import { FP } from './fixed';
+import { FP, speedPerTick } from './fixed';
 import { createMatch } from './setup';
 import type { World } from './world';
 
@@ -135,5 +135,17 @@ describe('the balancer, Humains', () => {
     const b = (DEFS.bourdon as UnitDef).attack!;
     expect([b.range, b.ground]).toEqual([5, false]);
     expect((DEFS.bourdon as UnitDef).detector).toBeGreaterThan(0);
+  });
+
+  it('the Char Pégase in the air: sight 10, speed 2.4, a shot every 2.3 s (flyers only); no more mines', () => {
+    const w = humans();
+    w.players[0].upgrades.decollage = 1;
+    const p = put(w, 'pegase');
+    expect((DEFS.pegase as UnitDef).abilities ?? []).not.toContain('posermine');
+    w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'decollage' }]);
+    expect(p.airborne).toBe(true);
+    expect(w.weapon(p)).toMatchObject({ cooldown: 2.3, air: true, ground: false });
+    expect(w.baseSpeed(p)).toBe(speedPerTick(2.4));
+    expect(p.speed).toBe(speedPerTick(2.4));
   });
 });

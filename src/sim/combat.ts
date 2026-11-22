@@ -8,6 +8,14 @@ import { type Order, flies, type Entity, type World } from './world';
 const CELL_MARGIN = 4;
 
 /** Near one of its player's finished Conseils (or the Grand Conseil). */
+/** A Char Pégase's attack in the air: flyers only, at the balancer's rate (2026-11-22: 2.3 s), one object per attack. */
+const ALOFT = new WeakMap<Attack, Attack>();
+function aloft(a: Attack): Attack {
+  let up = ALOFT.get(a);
+  if (!up) ALOFT.set(a, (up = { ...a, air: true, ground: false, cooldown: BALANCE.rules.upgrades.pegaseAir.cooldown }));
+  return up;
+}
+
 /** The shooters Armes chimiques gives a zone to. */
 const CHEMICAL = ['alchimiste', 'cuve', 'tour'];
 
@@ -120,7 +128,7 @@ export function ownWeapon(this: World, e: Entity): Attack | undefined {
   const a = (e.def as UnitDef | BuildingDef).attack;
   const lv = (e.def as UnitDef).levels;
   if (a && lv?.damage && e.lvl > 1) return levelled(a, lv.damage[e.lvl - 1]);
-  return a && e.airborne ? { ...a, air: true, ground: false } : a;
+  return a && e.airborne ? aloft(a) : a;
 }
 
 /** A god's attack at a higher level: the same, harder (one object per attack and damage, not one per call). */
@@ -141,7 +149,9 @@ export function baseSpeed(this: World, e: Entity): number {
   const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
-  return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault + genetic) * (100 + fast) * stone) / 10000);
+  // The Char Pégase in the air (the balancer, 2026-11-22): 2.4.
+  const air = e.airborne && e.type === 'pegase' ? BALANCE.rules.upgrades.pegaseAir.speed : 0;
+  return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : air ? air : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault + genetic) * (100 + fast) * stone) / 10000);
 }
 
 /** A god goes up a level: more hp (its wounds kept), armour, damage and speed (armour and damage are read at their use). */
