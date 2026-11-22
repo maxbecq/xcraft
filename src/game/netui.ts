@@ -31,7 +31,7 @@ export class NetGame {
   stopNetClock: (() => void) | undefined;
   private warned = '';
 
-  constructor(private readonly world: World, private readonly record: Replay, private readonly biome: Biome, private readonly keepGame: () => void) {
+  constructor(private readonly world: World, private readonly record: Replay, private readonly biome: Biome, private readonly keepGame: () => boolean) {
     this.banner.className = 'net-banner';
     this.banner.hidden = true;
     document.body.append(this.banner);
@@ -104,9 +104,10 @@ export class NetGame {
     this.netOver = true;
     this.stopNetClock?.();
     this.link?.leave();
-    this.keepGame();
+    // Said only as it is: kept, or not (storage full or blocked, nothing to keep), the download still offered.
+    const kept = this.keepGame() ? ' Le replay est enregistré.' : ' Replay non conservé par le navigateur : « Enregistrer le replay » le télécharge.';
     this.banner.hidden = false;
-    this.banner.innerHTML = `<h2>${title}</h2><p>${detail}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>${this.endButtons}`;
+    this.banner.innerHTML = `<h2>${title}</h2><p>${detail}${kept}</p><button data-n="quit">Menu principal</button><button data-n="replay">Enregistrer le replay</button>${this.endButtons}`;
   }
 
   /**
@@ -139,7 +140,7 @@ export class NetGame {
       return;
     }
     const left = v.left;
-    if (v.say === 'cut-over') return this.endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur ; le replay est enregistré.');
+    if (v.say === 'cut-over') return this.endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur.');
     if (v.say === 'forfeit') return this.endNet('Victoire par abandon', "L'adversaire ne répond plus.");
     say(`<h2>L'adversaire ne répond plus</h2><p>${this.cutSince ? 'Connexion coupée, reconnexion…' : 'En attente de ses ordres…'}</p><p>${this.cutSince ? 'Partie interrompue' : 'Victoire par abandon'} dans ${left} s.</p><button data-n="quit">Quitter la partie</button>`);
   }

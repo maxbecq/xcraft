@@ -187,6 +187,7 @@ if (SANDBOX) for (const tool of params.get('outils')?.split(',') ?? []) if (tool
 const netGame = new NetGame(world, record, biome, () => {
   keepGame(false, 'network');
   measuresOnce();
+  return saved;
 });
 const { link, net } = netGame;
 
@@ -381,8 +382,10 @@ const setPaused = (on: boolean) => {
   if (!on) helpText.hidden = pauseOptions.hidden = true;
 };
 const pauseOptions = pause.querySelector<HTMLElement>('.pause-options')!;
-pauseOptions.addEventListener('input', (e) => controlChange(e.target as HTMLInputElement));
-pauseOptions.addEventListener('change', (e) => controlChange(e.target as HTMLInputElement));
+// Sliders follow the hand (input); boxes and lists take their change once (both events fire for them: a Bac à
+// sable box sent its order twice).
+pauseOptions.addEventListener('input', (e) => (e.target as HTMLInputElement).type === 'range' && controlChange(e.target as HTMLInputElement));
+pauseOptions.addEventListener('change', (e) => (e.target as HTMLInputElement).type !== 'range' && controlChange(e.target as HTMLInputElement));
 tools.addEventListener('click', (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>('[data-t]')?.dataset.t;
   if (t === 'menu') setPaused(!paused);
@@ -706,7 +709,7 @@ function start(): void {
       if (drawn) effects.collect(world, seenAt);
       if (drawn && world.tick % 4 === 1) updateFog();
       acc -= TICK;
-      if (net?.desync != null) netGame.endNet('Désynchronisation', `Les deux parties ne sont plus identiques (tick ${net.desync}) : elle ne peut pas continuer. Le replay est enregistré.`);
+      if (net?.desync != null) netGame.endNet('Désynchronisation', `Les deux parties ne sont plus identiques (tick ${net.desync}) : elle ne peut pas continuer.`);
     }
   };
   // Network game: a background tab draws nothing (the browser stops or slows its frames), but its side of the match
