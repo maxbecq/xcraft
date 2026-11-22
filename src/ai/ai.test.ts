@@ -866,5 +866,17 @@ describe('AI Z blind spots', () => {
     w.players[0].minerals = 1000;
     expect(new AI(w, 0).think().some((c) => c.kind === 'attack' && c.ids.includes(u.id))).toBe(true);
   });
+  it('Z: no Intelligence nor its price, a Plate-forme still trains what the bank pays', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;
+    const pod = w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    const plat = w.spawn('plateforme', 0, ic.x + 10 * FP, ic.y);
+    plat.host = pod.id;
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'drone') w.remove(e);
+    w.remove(ic);
+    w.tick = thinkTick(12);
+    w.players[0].minerals = 500;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'train', ids: [plat.id] }));
+  });
 });
 

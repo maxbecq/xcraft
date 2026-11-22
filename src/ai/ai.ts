@@ -146,6 +146,8 @@ export class AI {
   private walking = new Map<number, { x: number; y: number; since: number }>();
   /** Fields each worker got stuck on its way to: never sent there again (two fields out of reach, it went back and forth). */
   private failed = new Map<number, Set<number>>();
+  /** No base left: a worker and the price of a headquarters (and of the next worker, a Z drone absorbed) are there. */
+  private rebuildable = false;
   /** A threat on our base stronger than the army at home, this turn (Mur d'énergie). */
   private danger: { x: number; y: number } | undefined;
 
@@ -189,7 +191,12 @@ export class AI {
     // builder was killed) too.
     const raisers = mine.filter((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)).length;
     const absorbed = hqDef.absorbs && raisers < 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
-    const rebuild = () => raisers && w.players[this.player].minerals >= hqCost.minerals + absorbed && w.players[this.player].energy >= hqCost.energy ? mine.find((e) => e.def.kind === 'building') : undefined;
+    const bankNow = w.players[this.player];
+    this.rebuildable = !!raisers && bankNow.minerals >= hqCost.minerals + absorbed && bankNow.energy >= hqCost.energy;
+    // Without its price, a building that can still train a unit the bank pays keeps the AI playing (a Plate-forme
+    // with 500 minerals sat out the game in a last stand).
+    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && (b.def as BuildingDef).trains?.some((t) => this.faction.army.some(([a]) => a === t) && (DEFS[t] as UnitDef).cost.minerals <= bankNow.minerals && (DEFS[t] as UnitDef).cost.energy <= bankNow.energy));
+    const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') : undefined);
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
     if (!home) return this.lastStand(mine);
     const bank = w.players[this.player].minerals;
@@ -381,7 +388,7 @@ export class AI {
     // Abandoned construction sites (builder killed) get a new serf. Warped buildings build themselves.
     for (const site of buildings.filter((b) => b.buildLeft > 0 && !(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs)) {
       if (serfs.some((s) => s.order?.kind === 'construct' && s.order.target === site.id)) continue;
-      const s = this.builder(serfs, [site.tx, site.ty], (site.def as BuildingDef).size);
+      const s = this.builder(serfs, [site.tx, site.ty], (site.def as BuildingDef).size, !this.settled(ctx.home));
       if (s) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: site.x, y: site.y, target: site.id });
     }
 
@@ -500,7 +507,7 @@ export class AI {
     // No base at all, a spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (building(f.hq) || !!this.spot(f.hq, home)));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -514,7 +521,8 @@ export class AI {
     // Not before its prerequisites stand: 400 energy kept for an Intelligence suprême that could not come yet held
     // back every socle from minute 6 (the Z army never grew past 5 to 8 units, its energy piled up unused).
     // Nor with its minerals short and none coming in: its energy, kept for good, held back the socles.
-    const zTech = zNext && !w.lacks(this.player, zNext) && (w.tick - this.lastIncome < ticks(60) || p.minerals >= (DEFS[zNext] as BuildingDef).cost.minerals) ? zNext : undefined;
+    // Nor with its energy short and none coming in (no Assimilateur standing).
+    const zTech = zNext && !w.lacks(this.player, zNext) && (w.tick - this.lastIncome < ticks(60) || p.minerals >= (DEFS[zNext] as BuildingDef).cost.minerals) && (p.energy >= (DEFS[zNext] as BuildingDef).cost.energy || buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) ? zNext : undefined;
     const wantSupreme = zTech === 'supreme' && !w.lacks(this.player, 'supreme');
     // The Intelligence is kept idle for its turn into the suprême (no drone, no Espion) only with its price there and a
     // drone left, or drones enough to mine it: raided down to a few, it waited for 300 minerals no drone was left to mine.
@@ -608,9 +616,16 @@ export class AI {
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
       // Nor where a building ordered this turn goes (two 3×3 centres got the same spot; the second was lost on arrival).
-      if (taken || ctx.out.some((c) => c.kind === 'build' && Math.abs(c.tx - spot[0]) < def.size + 3 && Math.abs(c.ty - spot[1]) < def.size + 3)) continue;
+      // Footprints compared by their middles (the same both ways round, whatever their sizes).
+      const near = (c: { tx: number; ty: number; type: string }) => {
+        const s2 = (DEFS[c.type] as BuildingDef).size;
+        return Math.abs(2 * c.tx + s2 - 2 * spot[0] - def.size) < s2 + def.size + 6 && Math.abs(2 * c.ty + s2 - 2 * spot[1] - def.size) < s2 + def.size + 6;
+      };
+      if (taken || ctx.out.some((c) => c.kind === 'build' && near(c))) continue;
       // An Isdaris robot pays a third more than the building (fiche 2010).
       const cost = builder.def.kind === 'unit' && def.faction === 'isdaris' ? w.beaconCost(def) : def.cost;
+      // The last Z drone, absorbed into what it builds, leaves the price of the next one (a Pod took the last 300).
+      if (def.absorbs && ctx.serfs.length <= 1 && ctx.minerals < cost.minerals + (DEFS[f.worker] as UnitDef).cost.minerals) continue;
       if (ctx.energy < cost.energy) continue;
       if (ctx.minerals < cost.minerals) {
         if (type === outpost) continue;
@@ -1684,7 +1699,7 @@ export class AI {
     const { f, mine, home, buildings, free, holdSupreme } = ctx;
     const council = buildings.filter((b) => kin(b, f.hq) && b.buildLeft === 0).sort((a, b) => a.queue.length - b.queue.length)[0] ?? home;
     const at = f.workerFrom ? mine.find((e) => e.type === f.workerFrom) : council;
-    if (!at || at.queue.length || home.buildLeft || free <= 0 || (holdSupreme && at.type === f.hq)) return undefined;
+    if (!at || at.queue.length || at.buildLeft || free <= 0 || (holdSupreme && at.type === f.hq)) return undefined;
     // Not a building that trains no worker (a Pod standing in for a lost headquarters).
     if (at.def.kind === 'building' && !(at.def as BuildingDef).trains?.includes(f.worker)) return undefined;
     return at;
@@ -1780,11 +1795,11 @@ export class AI {
       const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
       const start = lost ? startSite(w, this.player) : undefined;
       const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
-      // An expansion with minerals left round it (a site mined out, its base lost, was taken again for its last 800).
+      // An expansion with a field left round it (a site mined out, its base lost, was taken again for its last 800).
       const mined = (tx: number, ty: number) => {
         const [cx, cy] = [(tx + def.size / 2) * FP, (ty + def.size / 2) * FP];
         let n = 0;
-        for (const e of w.entities.values()) if (e.type === 'minerai' && dist(e.x, e.y, cx, cy) < 12 * FP && ++n >= 3) return false;
+        for (const e of w.entities.values()) if (e.type === 'minerai' && dist(e.x, e.y, cx, cy) < 12 * FP && ++n >= 1) return false;
         return true;
       };
       const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2));
@@ -1951,7 +1966,7 @@ export class AI {
     // Units in a queue, paid already, are on their way too. What can still be bought is judged on this turn's budget
     // (the worker's price kept is not for them).
     const army = this.faction.army.map(([t]) => t);
-    if (ctx.buildings.some((b) => b.queue.some((t) => army.includes(t)))) return true;
+    if (ctx.buildings.some((b) => b.queue.some((t) => army.includes(t))) || ctx.out.some((c) => c.kind === 'train' && army.includes(c.type))) return true;
     return ctx.free > 0 && army.some((t) => (DEFS[t] as UnitDef).cost.minerals <= ctx.minerals && (DEFS[t] as UnitDef).cost.energy <= ctx.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
   }
 
