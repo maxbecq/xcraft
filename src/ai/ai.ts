@@ -1621,10 +1621,13 @@ export class AI {
     const p = w.players[this.player];
     const f = this.faction;
     const market = mine.some((e) => e.type === 'marche' && e.buildLeft === 0);
-    const cannotPay = [f.worker, ...f.army.map(([t]) => t)].every((t) => {
-      const c = (DEFS[t] as UnitDef).cost;
-      return !((p.minerals >= c.minerals && p.energy >= c.energy) || (market && p.minerals + p.energy >= c.minerals + c.energy));
-    });
+    // Paid, and with something to train it (a lone Pod and 150 minerals: no drone nor Plate-forme could come, and the
+    // AI sat idle to the time limit), or an add-on the bank pays that would.
+    const pays = (c: { minerals: number; energy: number }) => (p.minerals >= c.minerals && p.energy >= c.energy) || (market && p.minerals + p.energy >= c.minerals + c.energy);
+    const ready = mine.filter((e) => e.buildLeft === 0);
+    // A Dieux god summons units too, and the Porte the gods.
+    const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t))));
+    const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t)));
     const beaten =
       cannotPay &&
       !mine.some((e) => (e.def.kind === 'unit' && !(e.def as UnitDef).worker && e.type !== f.builder) || (e.def.kind !== 'resource' && e.queue.length > 0));
