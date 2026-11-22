@@ -205,7 +205,12 @@ export class AI {
     // Without its price, a building that can still train a unit the bank pays keeps the AI playing (a Plate-forme
     // with 500 minerals sat out the game in a last stand).
     // A Z Pod too, which can raise a Plate-forme without a drone.
-    const pays = (t: string) => (DEFS[t] as BuildingDef | UnitDef).cost.minerals <= bankNow.minerals && (DEFS[t] as BuildingDef | UnitDef).cost.energy <= bankNow.energy;
+    // With what a Marché would give for the energy over the price (morph sells it).
+    const pays = (t: string) => {
+      const c = (DEFS[t] as BuildingDef | UnitDef).cost;
+      const sale = mine.some((e) => e.type === 'marche' && e.buildLeft === 0) ? Math.floor(Math.max(0, bankNow.energy - c.energy) / BALANCE.rules.trade.give) * BALANCE.rules.trade.get : 0;
+      return c.minerals <= bankNow.minerals + sale && c.energy <= bankNow.energy;
+    };
     // Any fighting unit (a Créaturium's saurians are not in the army list).
     const fights = (t: string) => DEFS[t]?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && !!(DEFS[t] as UnitDef).attack;
     const fields = (t: string) => fights(t) && pays(t);
@@ -839,7 +844,8 @@ export class AI {
       // Against flyers, what shoots them if one can be paid, else what can (the last Créaturium waited for an
       // Ankylosaure it could not pay, its Plésiosaure left out).
       const pick = (list: string[]) => list.slice().sort((a, b) => own(a) - own(b)).find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
-      const type = (this.enemyAir && antiAirTrains.length ? pick(antiAirTrains) : undefined) ?? pick(trains);
+      // (while minerals come in, it waits for the anti-air unit, as before).
+      const type = this.enemyAir && antiAirTrains.length ? (pick(antiAirTrains) ?? (w.tick - this.lastIncome >= ticks(60) ? pick(trains) : undefined)) : pick(trains);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
@@ -1102,8 +1108,11 @@ export class AI {
         // drones sent at a lone Phalangiste, 30 to machines from 6 tiles, against their 3 to it at contact).
         const power = (us: Entity[], them: Entity[]) => this.power(us.map((u) => [u.hp + u.shield, this.dpsVs(u, them)]));
         const ours = [...pulled, ...atHome];
-        fought = pulled.length > 0 && power(ours, threat.armed) >= power(threat.armed, ours);
-        if (fought) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
+        // Workers strike the raiders on foot only, and at one of them (sent at a Plésiosaure, they gathered under it).
+        const onFoot = threat.armed.filter((e) => !flies(e));
+        const workerPower = this.power(pulled.map((u) => [u.hp + u.shield, this.dpsVs(u, onFoot)])) + power(atHome, threat.armed);
+        fought = pulled.length > 0 && onFoot.length > 0 && workerPower >= power(threat.armed, ours);
+        if (fought) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: onFoot[0].x, y: onFoot[0].y, target: onFoot[0].id });
       }
       // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat (a
       // small raid they are too weak to fight too). Otherwise (one elsewhere) they come out and go back to work.
