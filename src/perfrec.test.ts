@@ -15,7 +15,7 @@ it("keeps a late frame's own simulation steps and events, taken when it ended", 
   let now = 1000;
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   const gl = { getExtension: () => null, getParameter: () => 'test', RENDERER: 0 };
-  const renderer = { info: { programs: [], memory: { textures: 0 } }, getContext: () => gl, domElement: { width: 1, height: 1 } } as unknown as WebGLRenderer;
+  const renderer = { info: { programs: [], memory: { textures: 0, geometries: 0 }, render: { calls: 12, triangles: 3400 }, reset: () => {} }, getContext: () => gl, domElement: { width: 1, height: 1 } } as unknown as WebGLRenderer;
   const rec = new PerfRecorder(renderer, {});
   expect(rec.on).toBe(true);
   // Frame 1 ran two simulation steps with a building done, then the game cleared its counts.
@@ -29,4 +29,7 @@ it("keeps a late frame's own simulation steps and events, taken when it ended", 
   rec.begin();
   const [spike] = JSON.parse(rec.report()).worst;
   expect(spike.ctx).toEqual({ tick: 40, ticks: 2, events: { done: 1 }, units: 7, moving: true });
+  // With its draw calls and triangles; and the report counts the steps timed.
+  expect([spike.calls, spike.triangles]).toEqual([12, 3400]);
+  expect(JSON.parse(rec.report()).simTicks).toBe(2);
 });
