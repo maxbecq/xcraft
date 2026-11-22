@@ -188,6 +188,9 @@ export function updateGhost(h: Hud): void {
   // The grid shows as soon as the order is armed: an extractor far from any well (no spot to snap to) still gets it,
   // the free wells lit, only without a footprint.
   if (h.placing && g) updateGrid(h, h.placing, g);
+  // Placing a Pod's add-on: its 8 places drawn at once, the free ones green.
+  const host = addonHost(h);
+  h.grid.slots(host && h.placing ? addonSlots(host.tx, host.ty, (host.def as BuildingDef).size, (DEFS[h.placing] as BuildingDef).size).map(([tx, ty]) => ({ tx, ty, size: (DEFS[h.placing!] as BuildingDef).size, ok: h.world.canPlace(h.placing!, tx, ty, h.player) })) : null);
   if (!spot) h.grid.noFootprint();
   if (!spot || !h.placing) return;
   const def = DEFS[h.placing] as BuildingDef;

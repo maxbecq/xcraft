@@ -20,6 +20,8 @@ export class PlaceGrid {
   private readonly foot = halo(1);
   /** The add-on's room: outlined and filled, without a halo, so it does not melt into the footprint's. */
   private readonly addon = halo(0);
+  /** A Z Pod's 8 places for the add-on being put (équilibreur 22/11), faint, green where free, red where taken. */
+  private readonly slotMarks = Array.from({ length: 8 }, () => halo(0));
   /** Free wells while an extractor is placed: drawn over the models, so a well behind a building still shows. */
   private readonly wellMarks: Mesh<PlaneGeometry, ShaderMaterial>[] = [];
   private readonly pos = new Float32Array(N * N * 4 * 3);
@@ -43,7 +45,8 @@ export class PlaceGrid {
     this.cells = new Mesh(g, cellMaterial());
     this.cells.frustumCulled = false;
     this.cells.renderOrder = 2;
-    this.group.add(this.cells, this.foot, this.addon);
+    this.group.add(this.cells, this.foot, this.addon, ...this.slotMarks);
+    for (const m of this.slotMarks) m.visible = false;
     this.group.visible = false;
     scene.add(this.group);
   }
@@ -101,6 +104,15 @@ export class PlaceGrid {
     this.wellMarks.forEach((m, i) => {
       m.visible = i < spots.length;
       if (m.visible) place(m, this.map, spots[i][0], spots[i][1], size, true, 0.8);
+    });
+  }
+
+  /** A Pod's 8 places for an add-on, all at once (none: hidden). */
+  slots(list: { tx: number; ty: number; size: number; ok: boolean }[] | null): void {
+    this.slotMarks.forEach((m, i) => {
+      const s = list?.[i];
+      m.visible = !!s;
+      if (s) place(m, this.map, s.tx, s.ty, s.size, s.ok, 0.45);
     });
   }
 
