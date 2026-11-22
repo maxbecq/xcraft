@@ -598,3 +598,20 @@ describe('a busy god (balance designer, 2026-11-22)', () => {
     expect(w.busy(thor)).toBe(false);
   });
 });
+
+describe('the Puits (balance designer, 2026-11-22)', () => {
+  it('yields nothing empty, a quarter of its rate for each Esprit inside, up to 4', () => {
+    const energyIn = (crew: number) => {
+      const w = createMatch(['dieux', 'humains']);
+      const puits = w.spawn('puitsdivin', 0, 40 * FP, 40 * FP);
+      for (let i = 0; i < crew; i++) Object.assign(w.spawn('esprit', 0, 40 * FP, 40 * FP), { inside: puits.id });
+      const before = w.players[0].energy;
+      run(w, 40);
+      return w.players[0].energy - before;
+    };
+    expect(energyIn(0)).toBe(0);
+    const [two, four] = [energyIn(2), energyIn(4)];
+    expect(Math.abs(four - 2 * two)).toBeLessThanOrEqual(2);
+    expect(four).toBeGreaterThan(0);
+  });
+});

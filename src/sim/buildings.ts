@@ -170,7 +170,8 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
   if (b.inside || (b.type === 'bourdon' && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
-  // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
+  // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully, the
+  // Dieux' Puits 4 Esprits.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
   // Notice (Chargement): the Bourdon may instead lift one vehicle, which takes all its room.
   if (b.type === 'bourdon' && BALANCE.rules.upgrades.chargementVehicles.includes(e.type)) return true;
@@ -222,8 +223,10 @@ export function operate(this: World, b: Entity): void {
       this.hit(b, t, attack);
     }
   }
-  // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
-  if (def.energyRate && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
+  // Each worker inside adds a quarter of the full rate: the Assimilateur's 3 drones on top of the 25 % it runs at alone
+  // (notice), the Puits' 4 Esprits from nothing (balance designer 2026-11-22).
+  const crew = def.bunker ? 4 - def.bunker + this.load(b) : 4;
+  if (def.energyRate && crew > 0 && ++b.timer >= idiv(ticks(1 / def.energyRate) * 4, crew)) {
     b.timer = 0;
     this.players[b.owner].energy++;
   }

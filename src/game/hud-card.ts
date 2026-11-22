@@ -495,7 +495,7 @@ export function showTip(h: Hud, button: HTMLElement): void {
     if (d.shield) stats.push(`${d.shield} bouclier`);
     if (d.attack) stats.push(`${d.attack.damage} dégâts${d.attack.range > 1 ? `, portée ${d.attack.range}` : ', mêlée'}`);
     if ((d as UnitDef).heal) stats.push('soigne');
-    if ((d as BuildingDef).bunker) stats.push(`abrite ${(d as BuildingDef).bunker} soldats`);
+    if ((d as BuildingDef).bunker) stats.push((d as BuildingDef).energyRate ? `${(d as BuildingDef).bunker} ouvriers à l’intérieur, 25 % chacun` : `abrite ${(d as BuildingDef).bunker} soldats`);
     if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
     lines.push(stats.join(' · '));
     // Z socles: a second step follows the click (the weapon), easy to miss.

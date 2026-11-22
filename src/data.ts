@@ -820,7 +820,8 @@ const BASE: Record<string, object> = {
   /** Frigg's Artefacterie (unique): the gods buy improvements wherever they are (ARTEFACTS). */
   artefacterie: { kind: 'building', name: 'Artefacterie', size: 3, warp: true, unique: true, requires: { frigg: 1 }, faction: 'dieux', hotkey: 'R' },
   antre: { kind: 'building', name: 'Antre', size: 4, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
-  puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, faction: 'dieux', hotkey: 'P' },
+  // Balance designer 2026-11-22: 4 Esprits inside to run, a quarter of the yield each.
+  puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, bunker: 4, faction: 'dieux', hotkey: 'P' },
   temple: {
     kind: 'building', name: 'Temple de vénération', size: 3, warp: true, requiresAny: { of: ['thor', 'seth', 'apollon'], count: 1 }, faction: 'dieux', hotkey: 'V',
     researches: ['dmelee1', 'dmelee2', 'dmelee3', 'dranged1', 'dranged2', 'dranged3', 'darmor1', 'darmor2', 'darmor3', 'celerite', 'offrandes', 'coupuissant', 'peauroc', 'prescience', 'drakegeant', 'auraputride', 'deracinement'],
