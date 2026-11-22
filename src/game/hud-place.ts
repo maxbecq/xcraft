@@ -12,6 +12,11 @@ export function place(h: Hud, ground: Vector3 | null, shift: boolean): void {
   if (!h.placing) return;
   const spot = ground && spotAt(h, h.placing, ground);
   const worker = h.workers().find((w) => raises(w.def as UnitDef, h.placing!));
+  // An extractor clicked away from any well: said, not silently dropped (the well may hide behind the main building).
+  if (ground && !spot && worker) {
+    h.notify([{ player: h.player, kind: 'error', text: `${DEFS[h.placing].name} : à poser sur un puits d’énergie libre (en vert).` }]);
+    return;
+  }
   // A Z Pod with no room for its add-on beside it would never get one.
   if (spot && worker && addonRoom(h, h.placing, spot) === null) {
     h.notify([{ player: h.player, kind: 'error', text: 'Pas de place pour l’extension du Pod.' }]);
