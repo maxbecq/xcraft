@@ -790,4 +790,45 @@ describe('AI Z blind spots', () => {
     w.tick += 10;
     expect(new AI(w, 0).think().some((c) => c.kind === 'build')).toBe(false);
   });
+  it('Z: its mineral line raided away with no drone price left, the Assimilateur crew comes out', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    const well = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => Math.hypot(a.x - ic.x, a.y - ic.y) - Math.hypot(b.x - ic.x, b.y - ic.y))[0];
+    const acc = w.spawn('assimilateur', 0, well.x, well.y);
+    const drones = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'drone');
+    for (const d of drones.slice(0, 3)) d.inside = acc.id;
+    for (const d of drones.slice(3)) w.remove(d);
+    w.tick = thinkTick(9);
+    w.players[0].minerals = 60;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'unload', ids: [acc.id] }));
+  });
+
+  it('Z: with no drone left, the suprême never takes the price of the next one', () => {
+    const w = createMatch(['z', 'humains']);
+    const ic = hqOf(w);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'drone') w.remove(e);
+    for (const [t, dx, up] of [['armement', -9, 'laser'], ['centrerecherche', 9, 'rquadripode']] as const) w.spawn(t, 0, ic.x + dx * FP, ic.y + 6 * FP).queue.push(up);
+    w.tick = thinkTick(7);
+    w.players[0].minerals = 300;
+    w.players[0].energy = 400;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [ic.id], type: 'drone' }));
+    expect(cmds.some((c) => c.kind === 'train' && c.type === 'supreme')).toBe(false);
+  });
+
+  it('Z: energy piling up, the heaviest socle is one its weapon can come with', () => {
+    const w = createMatch(['z', 'humains']);
+    const pod = w.spawn('pod', 0, 20 * FP, 30 * FP);
+    const plat = w.spawn('plateforme', 0, 22 * FP, 30 * FP);
+    plat.host = pod.id;
+    w.spawn('centresocles', 0, 30 * FP, 30 * FP);
+    for (const up of ['rquadripode', 'rhexapode', 'laser']) w.players[0].upgrades[up] = 1;
+    w.tick = thinkTick(12);
+    w.players[0].minerals = 330;
+    w.players[0].energy = 900;
+    const t = new AI(w, 0).think().find((c) => c.kind === 'train' && c.ids.includes(plat.id)) as { type: string } | undefined;
+    expect(t?.type).toBeDefined();
+    expect(t?.type).not.toBe('hexapode');
+  });
 });
+
