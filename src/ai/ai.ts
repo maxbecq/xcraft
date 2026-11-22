@@ -566,7 +566,8 @@ export class AI {
     for (const b of buildings) this.tried.delete(spotKey(b.tx, b.ty, (b.def as BuildingDef).size));
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
     const hosts = buildings.filter((b) => (b.def as BuildingDef).addons && b.buildLeft === 0 && w.addonsOf(b) < BALANCE.rules.z.podAddons).sort((a, b) => w.addonsOf(a) - w.addonsOf(b) || a.id - b.id);
-    for (let i = 0; i < wants.length; i++) {
+    // No add-on while a lost headquarters is to be raised again: they took the next drone's price kept with it.
+    for (let i = 0; i < wants.length && this.settled(home); i++) {
       if (!(DEFS[wants[i]] as BuildingDef).addon) continue;
       const at = hosts.findIndex((b) => w.addonSpot(b, wants[i]));
       const host = at < 0 ? undefined : hosts.splice(at, 1)[0];
@@ -625,7 +626,9 @@ export class AI {
       // An Isdaris robot pays a third more than the building (fiche 2010).
       const cost = builder.def.kind === 'unit' && def.faction === 'isdaris' ? w.beaconCost(def) : def.cost;
       // The last Z drone, absorbed into what it builds, leaves the price of the next one (a Pod took the last 300).
-      if (def.absorbs && ctx.serfs.length <= 1 && ctx.minerals < cost.minerals + (DEFS[f.worker] as UnitDef).cost.minerals) continue;
+      // Drones already given a building (this turn or before) are spoken for.
+      const spare = ctx.serfs.filter((s) => s.order?.kind !== 'build' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id))).length;
+      if (def.absorbs && spare <= 1 && ctx.minerals < cost.minerals + (DEFS[f.worker] as UnitDef).cost.minerals) continue;
       if (ctx.energy < cost.energy) continue;
       if (ctx.minerals < cost.minerals) {
         if (type === outpost) continue;
@@ -1666,7 +1669,8 @@ export class AI {
     if (energy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire', undefined, at)) return 'belluaire';
     // Healers on schedule, or to burn spare energy, but never more than a third of the army.
     const healers = own.filter((u) => (u.def as UnitDef).heal).length;
-    if (energy >= 100 && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
+    // With its minerals there: chosen for the energy alone, it held the last Caserne for good.
+    if (energy >= 100 && minerals >= (DEFS.soigneur as UnitDef).cost.minerals && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
     return !this.enemyAir && (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
   }
