@@ -1085,7 +1085,9 @@ export class AI {
       }
       // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat (a
       // small raid they are too weak to fight too). Otherwise (one elsewhere) they come out and go back to work.
-      const danger = !this.easy && strength(atHome) < threat.strength / 2 && (threat.count > 4 || (!fought && threat.strength > 1));
+      // Never against raiders that cannot hit the ground: shelter helps nothing there (a Pégase in the air kept the
+      // drones inside).
+      const danger = !this.easy && strength(atHome) < threat.strength / 2 && (threat.count > 4 || (!fought && threat.strength > 1)) && threat.armed.some((e) => !!w.weapon(e) && reaches(w.weapon(e)!, false));
       for (const b of shelters) {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
@@ -1904,8 +1906,9 @@ export class AI {
       // Its headquarters lost, any free site at all comes last (the start's spot taken by the enemy, it raised none).
       const found = site.find((s) => !mined(...s) && ok(s)) ?? (start ? site.find(ok) : undefined);
       if (found || !start) return found ?? null;
-      // Every site taken (the enemy built on the old one): any free ground round the start's spot, as other buildings.
-      near = { x: (start[0] + def.size / 2) * FP, y: (start[1] + def.size / 2) * FP };
+      // Every site taken (the enemy built on the old one): any free ground round what still stands of ours (the
+      // building or worker standing in for home), where its workers are, as other buildings.
+      near = { x: home.x, y: home.y };
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
     const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
@@ -2222,7 +2225,7 @@ export class AI {
       // home on defence and no wave ever left; its Impulsion only holds units still a few seconds).
       // Nor a flyer whose weapon cannot hit the ground (a Char Pégase in the air kept the drones in Refuge for good).
       // Unless one of our flyers is there for it to shoot.
-      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) < (w.weapon(e)!.range + 3) * FP))) continue;
+      if (flies(e) && !(w.weapon(e) && reaches(w.weapon(e)!, false)) && !(w.weapon(e) && ours.some((u) => dist(u.x, u.y, e.x, e.y) <= w.weapon(e)!.range * FP))) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
     }
