@@ -331,6 +331,8 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   let calling: DataConnection | null = null;
   let knocked = 0;
   let blamed = false;
+  /** When the introduction server last said there is no such room (yet): not the network's fault. */
+  let missingAt = 0;
   const dial = () => {
     dialed = performance.now();
     if (calling && calling !== conn) calling.close();
@@ -388,7 +390,10 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     else if (e.type === 'invalid-id') set('error', 'Code de partie invalide : vérifiez le lien ou le code.');
     else if (e.type === 'browser-incompatible') set('error', 'Ce navigateur ne permet pas le jeu en ligne.');
     else if (e.type === 'peer-unavailable' && them === null && performance.now() - began > FIND_MS) set('error', 'Partie introuvable : vérifiez le lien ou le code.');
-    else if (e.type === 'peer-unavailable' && them === null) set('connecting', "L'hôte n'est pas encore là, nouvel essai…");
+    else if (e.type === 'peer-unavailable' && them === null) {
+      missingAt = performance.now();
+      set('connecting', "L'hôte n'est pas encore là, nouvel essai…");
+    }
     // Anything else (the introduction server unreachable, a call that failed): the watch below tries again.
   });
   if (player === 0) peer.on('connection', attach);
@@ -400,7 +405,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     if (conn && performance.now() - lock.heard > SILENCE_MS) drop(conn);
     if (!conn && player === 1 && peer.open && performance.now() - dialed > 3000) dial();
     // Never connected after a while of calling, or of a guest knocking: the network is in the way.
-    if (them === null && !blamed && ((player === 1 && peer.open && performance.now() - began > DIRECT_MS) || (player === 0 && knocked && performance.now() - knocked > DIRECT_MS))) {
+    if (them === null && !blamed && ((player === 1 && peer.open && blamesNetwork(performance.now(), began, missingAt)) || (player === 0 && knocked && performance.now() - knocked > DIRECT_MS))) {
       blamed = true;
       set(player === 0 ? 'waiting' : 'connecting', NO_DIRECT);
     }
@@ -537,6 +542,13 @@ export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
  */
 const DIRECT_MS = 15_000;
 export const NO_DIRECT = "La connexion directe entre vos deux navigateurs n'aboutit pas : un réseau ou un pare-feu la bloque sans doute. Essayez un autre réseau (le partage de connexion d'un téléphone, par exemple), puis Réessayer.";
+/** A guest calling a room nobody has opened (yet): most often a code mistyped, never the network. */
+const NO_ROOM_YET = 'Aucun salon ouvert avec ce code pour l’instant : vérifiez le code (ou attendez que votre ami ouvre le sien). Nouvel essai…';
+
+/** A guest has called for a while without getting through: the network is to blame only if the room is known to exist. */
+export function blamesNetwork(now: number, began: number, missingAt: number): boolean {
+  return now - Math.max(began, missingAt) > DIRECT_MS;
+}
 const NO_SERVER = 'Serveur de mise en relation injoignable, nouvel essai…';
 
 /**
@@ -555,6 +567,8 @@ export function openLobby(
   let calledAt = 0;
   let knocked = 0;
   let said = false;
+  /** When the introduction server last said there is no such room (yet): a wrong code, or a host not there yet. */
+  let missingAt = 0;
   /** The friend's page answered with our version: only then is it in the room. */
   let checked = false;
   const peer = host ? new Peer(`xcraft-lobby-${room}`) : new Peer();
@@ -609,6 +623,8 @@ export function openLobby(
     else if (e.type === 'peer-unavailable' && performance.now() - began > 60_000) on.status('error', 'Partie introuvable : vérifiez le lien ou le code.');
     else if (e.type === 'peer-unavailable') {
       calling = null;
+      missingAt = performance.now();
+      on.status('trouble', NO_ROOM_YET);
       setTimeout(dial, 2000);
     } else if (!conn && ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(e.type)) on.status('trouble', NO_SERVER);
   });
@@ -623,7 +639,7 @@ export function openLobby(
     const now = performance.now();
     if (!host && calling && now - calledAt > 8000) dial();
     // Called, or knocked, for a while without a connection: the network is in the way.
-    if (!said && ((host && knocked && now - knocked > DIRECT_MS) || (!host && calling && now - began > DIRECT_MS))) {
+    if (!said && ((host && knocked && now - knocked > DIRECT_MS) || (!host && calling && blamesNetwork(now, began, missingAt)))) {
       said = true;
       on.status('trouble', NO_DIRECT);
     }

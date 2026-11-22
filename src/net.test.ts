@@ -14,7 +14,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { commandOk, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
+import { blamesNetwork, commandOk, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -379,5 +379,11 @@ describe('lockstep between two browsers', () => {
     expect(c.poll()).toBe('expired');
     expect(c.poll()).toBe('idle');
     expect(c.ack()).toBe(false); // too late
+  });
+
+  it('blames the network only for a room known to exist, never for a mistyped code', () => {
+    expect(blamesNetwork(16_000, 0, 0)).toBe(true); // called 16 s, never told the room is missing
+    expect(blamesNetwork(16_000, 0, 14_000)).toBe(false); // the server keeps saying no such room
+    expect(blamesNetwork(40_000, 0, 20_000)).toBe(true); // the room appeared, and still nothing gets through
   });
 });
