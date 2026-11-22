@@ -9,6 +9,8 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
   const def = DEFS[type] as BuildingDef;
   const g = this.grid;
   if (def.energyRate) {
+    // Z Assimilateur (équilibreur 22/11): on the creep too.
+    if (def.needsPower && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
     // Extractors go exactly on a free energy well.
     for (const w of this.entities.values()) {
       if (w.type === 'puits' && w.tx === tx && w.ty === ty) {
@@ -21,7 +23,8 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
   const cy = ty * FP + (def.size * FP) / 2;
   if (def.needsPower && player >= 0 && !this.powered(player, cx, cy)) return false;
   // An emitter must join the network: its zone has to touch the zone of a linked power building.
-  if (def.power && !def.dropoff && player >= 0 && !this.powerNetwork(player).some((b) => dist(b.x, b.y, cx, cy) <= (def.power! + (b.def as BuildingDef).power!) * FP)) return false;
+  // (Not a Z Pod: each creep stands by itself.)
+  if (def.power && !def.dropoff && def.faction !== 'z' && player >= 0 && !this.powerNetwork(player).some((b) => dist(b.x, b.y, cx, cy) <= (def.power! + (b.def as BuildingDef).power!) * FP)) return false;
   let level = -2;
   for (let y = ty; y < ty + def.size; y++) {
     for (let x = tx; x < tx + def.size; x++) {
@@ -64,9 +67,40 @@ export function addonsOf(this: World, pod: Entity): number {
   return n;
 }
 
-/** Where a Pod's add-on goes: against one of its sides, the free one nearest the map's middle. */
-export function addonSpot(this: World, pod: Entity, type: string): [number, number] | undefined {
-  return this.addonSpotAt(type, pod.tx, pod.ty, (pod.def as BuildingDef).size, pod.owner);
+/**
+ * The 8 places round a Pod for an add-on (équilibreur 22/11: the Pod in the middle of a noughts-and-crosses grid):
+ * north-west, north, north-east, west, east, south-west, south, south-east. A side place is centred on that side
+ * (an odd difference of size leaves half a tile, taken towards the north or the west); a corner one meets the Pod's
+ * corner. The add-on keeps its own size (the Plate-forme overhangs its square).
+ */
+export function addonSlots(tx: number, ty: number, own: number, size: number): [number, number][] {
+  const mid = Math.floor((own - size) / 2);
+  const at = (d: number) => (d < 0 ? -size : d > 0 ? own : mid);
+  const out: [number, number][] = [];
+  for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) if (dx || dy) out.push([tx + at(dx), ty + at(dy)]);
+  return out;
+}
+
+/**
+ * Where a Pod's add-on goes: in the place the player chose (`slot`, 0 to 7, none if taken), or else against one of its
+ * sides, the free one nearest the map's middle (the AI, and orders from before the 8 places).
+ */
+export function addonSpot(this: World, pod: Entity, type: string, slot?: number): [number, number] | undefined {
+  if (slot === undefined) return this.addonSpotAt(type, pod.tx, pod.ty, (pod.def as BuildingDef).size, pod.owner);
+  const at = addonSlots(pod.tx, pod.ty, (pod.def as BuildingDef).size, (DEFS[type] as BuildingDef).size)[slot];
+  return at && this.canPlace(type, at[0], at[1], pod.owner) ? at : undefined;
+}
+
+/**
+ * Is this Z building on its creep, and so working (équilibreur 22/11)? Those that need none (the Intelligences, the
+ * Pods) always; a Pod's add-on while its Pod stands (or inside a creep); any other only inside a creep of its side.
+ */
+export function onCreep(this: World, b: Entity): boolean {
+  const def = b.def as BuildingDef;
+  const host = def.addon ? this.entities.get(b.host) : undefined;
+  if (host && host.hp > 0) return true;
+  if (def.faction !== 'z' || (!def.needsPower && !def.addon)) return true;
+  return this.powered(b.owner, b.x, b.y);
 }
 
 /** The same for a Pod of size `own` at (tx, ty), placed or not (the placement preview checks its add-on has room). */
@@ -211,8 +245,10 @@ export function operate(this: World, b: Entity): void {
     return;
   }
   const def = b.def as BuildingDef;
-  // Z Gel électronique, Isdaris Bouclier de plasma: neither shoots nor produces while frozen or phased.
+  // Z Gel électronique, Isdaris Bouclier de plasma: neither shoots nor produces while frozen or phased; a Z building
+  // off its creep neither (équilibreur 22/11).
   if (b.frozen > 0 || b.phased > 0) return;
+  if (def.faction === 'z' && (def.needsPower || def.addon) && !this.onCreep(b)) return;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
   const attack = this.weapon(b);
   if (attack && b.cooldown === 0) {

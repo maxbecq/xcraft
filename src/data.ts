@@ -673,10 +673,12 @@ const BASE: Record<string, object> = {
   concentrateur: extension('Concentrateur énergétique', 'C', "Le Trône dresse un mur d'énergie que rien ne traverse.", 'trone'),
 
   // ---------------------------------------------------------------- Z (Z.doc, 2010): a nest of metal insects
-  // Drones merge into the buildings they raise. The Intelligence centrale (and Suprême) and the Pod supérieur spread a
-  // creep of cables (the Isdaris power field, drawn as cables) that only repairs what stands on it. The Plate-forme and
-  // the Tourelle are Pod add-ons, raised by a Pod beside it, one per Pod. Socles are unlocked at the Centre de socles and
-  // leave the Plate-forme with the weapon chosen when they were queued, for good.
+  // Drones merge into the buildings they raise. The Intelligence centrale (and Suprême), the Pod (2 round it) and the
+  // Pod supérieur (13) spread a creep of cables (the Isdaris power field, drawn as cables) that repairs what stands on
+  // it. Équilibreur 22/11: every other Z building goes only on the creep and stops working off it; a Pod's add-ons count
+  // as on it while their Pod stands. The Plate-forme and the Tourelle are Pod add-ons, raised by a Pod in one of the 8
+  // places round it (équilibreur 22/11), up to 3 a Pod. Socles are unlocked at the Centre de socles and leave the
+  // Plate-forme with the weapon chosen when they were queued, for good.
   drone: { kind: 'unit', name: 'Drone', radius: 0.375, worker: true, mechanical: true, faction: 'z', hotkey: 'D' },
   dronecombat: { kind: 'unit', name: 'Drone de combat', radius: 0.375, mechanical: true, faction: 'z', hotkey: 'C' },
   quadripode: { kind: 'unit', name: 'Quadripode', radius: 0.45, mechanical: true, requires: { rquadripode: 1 }, weapons: SOCLE_WEAPONS, faction: 'z', hotkey: 'Q' },
@@ -695,25 +697,25 @@ const BASE: Record<string, object> = {
   pod: { kind: 'building', name: 'Pod', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphs: ['podsup'], faction: 'z', hotkey: 'P' },
   podsup: { kind: 'building', name: 'Pod supérieur', size: 2, absorbs: true, addons: ['plateforme', 'tourelle'], morphOnly: true, requires: { podsuperieur: 1 }, faction: 'z', hotkey: 'U' },
   // Z.doc: « arme adaptable », like the Tourelle: a weapon bought for it, at level 2 (the Tourelle's machine gun free).
-  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'A' },
+  assimilateur: { kind: 'building', name: 'Assimilateur', size: 3, absorbs: true, needsPower: true, weapons: TOWER_WEAPONS, faction: 'z', hotkey: 'A' },
   plateforme: { kind: 'building', name: 'Plate-forme', size: 3, absorbs: true, addon: true, trains: ['dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'octopode', 'mastodonte', 'barge'], faction: 'z', hotkey: 'F' },
   tourelle: { kind: 'building', name: 'Tourelle', size: 2, absorbs: true, addon: true, weapons: TURRET_WEAPONS, faction: 'z', hotkey: 'T' },
   centresocles: {
-    kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
+    kind: 'building', name: 'Centre de socles', size: 3, absorbs: true, needsPower: true, requires: { pod: 1 }, faction: 'z', hotkey: 'S',
     researches: ['rquadripode', 'rquadripode2', 'rquadripode3', 'rhexapode', 'rhexapode2', 'rcoleoptere', 'rcoleoptere2', 'rcoleoptere3', 'roctopode', 'roctopode2', 'rmastodonte', 'rmastodonte2', 'rbarge', 'rbarge2'],
   },
   armement: {
-    kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
+    kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, needsPower: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
     researches: ['laser', 'lanceflammes', 'lanceroquettes', 'rdechiqueteur', 'rjetsonique', 'rarc', 'rreparateur', 'raccumulateur', 'rcanonx04'],
   },
   centrerecherche: {
-    kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
+    kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, needsPower: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
     researches: ['zproxi1', 'zproxi2', 'zproxi3', 'zdist1', 'zdist2', 'zdist3', 'zblindage1', 'zblindage2', 'zblindage3', 'titane', 'deploiement', 'sonderobuste', 'podsuperieur', 'impulsion', 'invistemp', 'megaespion'],
   },
-  optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, requires: { supreme: 1 }, researches: ['optimisationp'], faction: 'z', hotkey: 'O' },
+  optimisation: { kind: 'building', name: "Centre d'optimisation", size: 3, absorbs: true, needsPower: true, requires: { supreme: 1 }, researches: ['optimisationp'], faction: 'z', hotkey: 'O' },
   // Z.doc: sells support kits anywhere on the battlefield; one per player (its Canon IEM gone, équilibreur 22/11).
   centrek: {
-    kind: 'building', name: 'Centre K', size: 3, absorbs: true, unique: true, requires: { optimisation: 1 }, faction: 'z', hotkey: 'K',
+    kind: 'building', name: 'Centre K', size: 3, absorbs: true, unique: true, needsPower: true, requires: { optimisation: 1 }, faction: 'z', hotkey: 'K',
     abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise'],
   },
   rquadripode: research('Socle du Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),

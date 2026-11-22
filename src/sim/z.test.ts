@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import { type BuildingDef, DEFS, KIT, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import { FP, ticks } from './fixed';
+import { addonSlots } from './buildings';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
 
@@ -174,15 +175,17 @@ describe('Z', () => {
     p.minerals = 1000;
     p.energy = 0;
     const drone = of(w, 0, 'drone')[0];
-    const pod = w.spawn('pod', 0, 40 * FP, 40 * FP); // away from the creep
-    pod.hp = 1000;
-    w.step([{ player: 0, kind: 'smart', ids: [drone.id], x: pod.x, y: pod.y, target: pod.id }]);
+    // Away from the creep (a Centre de socles there works not, but is repaired all the same).
+    const site = w.spawn('centresocles', 0, 40 * FP, 40 * FP);
+    const def = DEFS.centresocles as BuildingDef;
+    site.hp = 100;
+    w.step([{ player: 0, kind: 'smart', ids: [drone.id], x: site.x, y: site.y, target: site.id }]);
     expect(drone.order?.kind).toBe('repair');
     run(w, 40);
-    expect(pod.hp).toBeGreaterThan(1000);
-    const healed = pod.hp - 1000;
-    // 300 minerals for 1500 hp at 25 %: a mineral every 20 hp.
-    expect(1000 - p.minerals).toBe(Math.floor((healed * 300 * 25) / 100 / 1500));
+    expect(site.hp).toBeGreaterThan(100);
+    const healed = site.hp - 100;
+    // At 25 % of its worth for a full repair.
+    expect(1000 - p.minerals).toBe(Math.floor((healed * def.cost.minerals * 25) / 100 / def.hp));
   });
 
   it("the Espion: trained at the Intelligence, detects, holds units with its Impulsion, hides, grows with Mega-Espion", () => {
@@ -316,11 +319,12 @@ describe('Z', () => {
     expect(w.room(barge)).toBe(12);
   });
 
-  it('only the Intelligence and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
+  it('the Intelligence, the Pod (2 round it) and the Pod supérieur spread creep, which repairs units and buildings 1 hp a second', () => {
     const w = createMatch(['z', 'humains']);
     const [ic] = of(w, 0, 'intelligence');
     const pod = w.spawn('pod', 0, 40 * FP, 40 * FP);
-    expect(w.powered(0, pod.x, pod.y)).toBe(false);
+    expect(w.powered(0, pod.x, pod.y)).toBe(true);
+    expect(w.powered(0, pod.x + 4 * FP, pod.y)).toBe(false);
     const near = w.spawn('armement', 0, ic.x + 6 * FP, ic.y);
     near.hp = 1000;
     run(w, 3);
@@ -477,6 +481,7 @@ describe('Z Réparateur (notice: « véhicules et bâtiments »; équilibreur 22
     expect((DEFS.assimilateur as BuildingDef).weapons).not.toContain('reparateur');
     const w = createMatch(['z', 'humains']);
     const t = w.spawn('tourelle', 0, 60 * FP, 60 * FP);
+    t.host = w.spawn('pod', 0, 58 * FP, 60 * FP).id;
     t.kit = 'reparateur';
     expect(w.weapon(t)).toBeUndefined();
     const near = w.spawn('hexapode', 0, 62 * FP, 60 * FP);
@@ -587,5 +592,81 @@ describe('Z, équilibreur 22/11: figures', () => {
     pod.hp = 1000;
     w.hurt(pod, 20);
     expect(1000 - pod.hp).toBe(plain - 2);
+  });
+});
+
+describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', () => {
+  const setup = () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = p.energy = 5000;
+    const pod = w.spawn('pod', 0, 40.5 * FP, 40.5 * FP);
+    return { w, p, pod };
+  };
+
+  it('the 8 places round the Pod, like a noughts-and-crosses grid, each the add-on\'s own size', () => {
+    expect(addonSlots(10, 10, 2, 2)).toEqual([[8, 8], [10, 8], [12, 8], [8, 10], [12, 10], [8, 12], [10, 12], [12, 12]]);
+    expect(addonSlots(10, 10, 2, 3)).toEqual([[7, 7], [9, 7], [12, 7], [7, 9], [12, 9], [7, 12], [9, 12], [12, 12]]);
+  });
+
+  it('raises the add-on in the place chosen; a taken place is refused', () => {
+    const { w, pod } = setup();
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle', slot: 2 }]);
+    const t = [...w.entities.values()].find((e) => e.type === 'tourelle' && e.host === pod.id)!;
+    expect([t.tx, t.ty]).toEqual(addonSlots(pod.tx, pod.ty, 2, 2)[2]);
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle', slot: 2 }]);
+    expect(w.addonsOf(pod)).toBe(1);
+    // A building over a place: that place is unavailable, the others not.
+    const [x, y] = addonSlots(pod.tx, pod.ty, 2, 3)[6];
+    w.spawn('armement', 0, (x + 1.5) * FP, (y + 1.5) * FP);
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'plateforme', slot: 6 }]);
+    expect(w.addonsOf(pod)).toBe(1);
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'plateforme', slot: 1 }]);
+    expect(w.addonsOf(pod)).toBe(2);
+  });
+
+  it('the Pod spreads a creep 2 round it, the Pod supérieur 13', () => {
+    expect((DEFS.pod as BuildingDef).power).toBe(3); // from its centre: 2 past its edge
+    expect((DEFS.podsup as BuildingDef).power).toBe(13);
+  });
+
+  it('other Z buildings go only on the creep (not the Intelligence nor the Pod), the Assimilateur too', () => {
+    const { w, pod } = setup();
+    // Open ground off any creep: the Pod goes there, a Centre d'armement not.
+    let open: [number, number] = [0, 0];
+    for (let i = 0; i < 400 && !open[0]; i++) {
+      const [x, y] = [60 + (i % 20), 60 + Math.floor(i / 20)];
+      if (w.canPlace('armement', x, y) && w.canPlace('pod', x, y, 0)) open = [x, y];
+    }
+    expect(open[0]).toBeGreaterThan(0);
+    expect(w.canPlace('armement', ...open, 0)).toBe(false);
+    expect(w.misplaced(DEFS.armement as BuildingDef, ...open, 0)).toBe('Hors du creep.');
+    const [ic] = of(w, 0, 'intelligence');
+    const spots: [number, number][] = [];
+    for (let dy = -9; dy <= 9; dy++) for (let dx = -9; dx <= 9; dx++) spots.push([ic.tx + dx, ic.ty + dy]);
+    expect(spots.some(([x, y]) => w.canPlace('armement', x, y, 0))).toBe(true); // on its creep
+    expect(w.canPlace('armement', pod.tx + 2, pod.ty, 0)).toBe(false); // a 3×3 centre 2.5 off: past the Pod's creep
+    const far = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => b.x - a.x)[0];
+    expect(w.canPlace('assimilateur', far.tx, far.ty, 0)).toBe(false);
+  });
+
+  it('a Z building off its creep stops working; a Pod\'s add-on stops when its Pod falls', () => {
+    const { w, p, pod } = setup();
+    const t = w.spawn('tourelle', 0, 43 * FP, 41 * FP);
+    t.host = pod.id;
+    const foe = w.spawn('legionnaire', 1, 46 * FP, 41 * FP);
+    foe.hp = foe.maxHp = 100000;
+    run(w, 3);
+    expect(foe.hp).toBeLessThan(100000);
+    pod.hp = 0;
+    run(w, 1);
+    const hp = foe.hp;
+    run(w, 3);
+    expect(foe.hp).toBe(hp);
+    // A Centre de recherche off any creep researches nothing.
+    const cr = w.spawn('centrerecherche', 0, 70 * FP, 70 * FP);
+    w.step([{ player: 0, kind: 'train', ids: [cr.id], type: 'titane' }]);
+    run(w, 80);
+    expect(p.upgrades.titane ?? 0).toBe(0);
   });
 });

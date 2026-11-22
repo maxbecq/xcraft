@@ -19,7 +19,7 @@ const FIELDS: Record<string, Record<string, string>> = {
   hold: {},
   patrol: { x: 'n', y: 'n', queue: 'b?' },
   build: { type: 's', tx: 'n', ty: 'n', queue: 'b?' },
-  train: { type: 's', weapon: 's?' },
+  train: { type: 's', weapon: 's?', slot: 'n?' },
   arm: { weapon: 's' },
   evolve: {},
   cancel: { slot: 'n?' },

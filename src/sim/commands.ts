@@ -191,8 +191,8 @@ export function apply(this: World, c: Command): void {
           if (b.buildLeft > 0 || this.addonsOf(b) >= BALANCE.rules.z.podAddons) continue;
           const lack = this.lacks(c.player, c.type);
           if (lack) return void this.say(c.player, lack);
-          const spot = this.addonSpot(b, c.type);
-          if (!spot) return void this.say(c.player, "Pas de place à côté du Pod.");
+          const spot = this.addonSpot(b, c.type, c.slot);
+          if (!spot) return void this.say(c.player, c.slot === undefined ? 'Pas de place à côté du Pod.' : 'Emplacement occupé.');
           const add = DEFS[c.type] as BuildingDef;
           if (!this.pay(c.player, add)) return;
           const a = this.spawn(c.type, c.player, spot[0] * FP, spot[1] * FP);

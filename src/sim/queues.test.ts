@@ -50,6 +50,7 @@ describe('queues', () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0]; p.minerals = 99999; p.energy = 99999;
     w.spawn('optimisation', 0, 60 * FP, 60 * FP);
+    w.spawn('podsup', 0, 28 * FP, 28 * FP); // a creep under both sites (équilibreur 22/11)
     const [d1, d2] = of(w, 0, 'drone');
     w.step([
       { player: 0, kind: 'build', ids: [d1.id], type: 'centrek', tx: 24, ty: 30 },
