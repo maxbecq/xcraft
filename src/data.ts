@@ -486,37 +486,37 @@ export const SKIN_RANGE = BALANCE.rules.peauDeRoc.range;
 export const SKIN_REDUCTION = BALANCE.rules.peauDeRoc.reduction;
 export const STIM_HP = BALANCE.rules.stimulantHp;
 
-/** Buildings each level needs, SC-like: level 2 a second Caserne, level 3 also a Tour alchimistique. */
-const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, { caserne: 2 }, { caserne: 2, tour: 1 }];
+/** Buildings each level needs: level 3 a Tour alchimistique (the balancer, 2026-11-22: no second Caserne any more). */
+const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, undefined, { tour: 1 }];
 
 /** What each thing is; its numbers come from balance.json (merged into DEFS below). */
 const BASE: Record<string, object> = {
   serf: { kind: 'unit', name: 'Serf', radius: 0.375, worker: true, faction: 'humains', hotkey: 'S' },
   auxiliaire: { kind: 'unit', name: 'Auxiliaire', radius: 0.375, ability: 'stimulant', faction: 'humains', hotkey: 'A' },
   legionnaire: { kind: 'unit', name: 'Légionnaire-scieur', radius: 0.375, ability: 'charge', faction: 'humains', hotkey: 'L' },
-  soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, ability: 'peauderoc', faction: 'humains', hotkey: 'O' },
+  soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
   conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], faction: 'humains', hotkey: 'C' },
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
-  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, requires: { creaturium: 1, metallurgie: 1, alchimisterie: 1 }, faction: 'humains', hotkey: 'G' },
+  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
   caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphs: ['casernevolante'], faction: 'humains', hotkey: 'K' },
   // Notice: a Caserne turned into one that takes off and lands at will, to set up behind the enemy.
-  casernevolante: { kind: 'building', name: 'Caserne volante', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphOnly: true, requires: { marche: 1 }, ability: 'envol', faction: 'humains', hotkey: 'V' },
+  casernevolante: { kind: 'building', name: 'Caserne volante', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphOnly: true, ability: 'envol', faction: 'humains', hotkey: 'V' },
   casernevol: { kind: 'unit', name: 'Caserne volante (en vol)', radius: 1.4, flying: true, mechanical: true, ability: 'atterrissage', faction: 'humains', hotkey: 'V' },
   mine: { kind: 'building', name: 'Mine', size: 3, faction: 'humains', hotkey: 'M' },
   // Mod: « Guilde métallurgique » (the notice's Forge).
   forge: {
-    kind: 'building', name: 'Forge', size: 3, ability: 'observation', faction: 'humains', hotkey: 'F',
+    kind: 'building', name: 'Forge', size: 3, requires: { caserne: 1 }, ability: 'observation', faction: 'humains', hotkey: 'F',
     researches: ['melee1', 'melee2', 'melee3', 'ranged1', 'ranged2', 'ranged3', 'armor1', 'armor2', 'armor3', 'vehicles1', 'vehicles2', 'vehicles3', 'skin1', 'skin2', 'skin3', 'canonsscies', 'cuirasse', 'scieassaut', 'lamesempoisonnees', 'chargenapalm', 'observation'],
   },
   // Notice: « Marché », trade one resource for the other at a poor rate, and economic research (mod: « Guilde des dresseurs-marchands »).
-  marche: { kind: 'building', name: 'Marché', size: 3, requires: { caserne: 1 }, researches: ['croissance', 'pillage', 'entrainementgroupe'], faction: 'humains', hotkey: 'R' },
+  marche: { kind: 'building', name: 'Marché', size: 3, requires: { grandconseil: 1 }, researches: ['croissance', 'pillage', 'entrainementgroupe'], faction: 'humains', hotkey: 'R' },
   // Mod: « Fortin », a bunker for four: soldiers inside are out of reach and shoot one tile farther.
   fortin: { kind: 'building', name: 'Fortin', size: 2, requires: { caserne: 1 }, faction: 'humains', hotkey: 'B' },
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
-  tour: { kind: 'building', name: 'Tour alchimistique', size: 2, faction: 'humains', hotkey: 'T' },
+  tour: { kind: 'building', name: 'Tour alchimistique', size: 2, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'T' },
   // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
   metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'scarabee', 'pegase'], researches: ['charlourd', 'decollage', 'chargement', 'scarabeassaut'], faction: 'humains', hotkey: 'M' },
   // Notice: « Scarabée », a slow amphibious armoured wagon: up to four Auxiliaires, Soigneurs, Phalangistes or Alchimistes
@@ -528,12 +528,12 @@ const BASE: Record<string, object> = {
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
   pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', abilities: ['posermine'], faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
-  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { forge: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
   alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, abilities: ['explosiftoxique', 'regenerant', 'reanimation'], faction: 'humains', hotkey: 'A' },
   // Notice: « Grande Alchimisterie », where the Réservoirs de substances are deployed.
   grandealchimisterie: {
-    kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, faction: 'humains', hotkey: 'G',
+    kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, requires: { grandconseil: 1 }, faction: 'humains', hotkey: 'G',
   },
   // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
   /** Laid by a Char Pégase, never trained. */
@@ -542,7 +542,7 @@ const BASE: Record<string, object> = {
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
   // Notice: « Créaturium », where the belluaires train saurians (mod: needs the Guilde des dresseurs-marchands, here a Caserne).
-  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { caserne: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures', 'trebuchet'], faction: 'humains', hotkey: 'C' },
+  creaturium: { kind: 'building', name: 'Créaturium', size: 3, requires: { alchimisterie: 1 }, trains: ['plesiosaure', 'ankylosaure', 'allosaure'], researches: ['oeilpercant', 'dressageallosaures', 'trebuchet'], faction: 'humains', hotkey: 'C' },
   // Notice: « Plésiosaure », a flying saurian with a heavy ballista against ground infantry (mod « Rodactylus »).
   plesiosaure: { kind: 'unit', name: 'Plésiosaure', radius: 0.6, flying: true, beast: true, faction: 'humains', hotkey: 'P' },
   // Notice: « Ankylosaure », slow and armoured, its spiked tail smashes buildings (mod « Kylosaurus »: 60, -30 light, +30 structures).
@@ -551,7 +551,7 @@ const BASE: Record<string, object> = {
   allosaure: { kind: 'unit', name: 'Allosaure', radius: 0.9, beast: true, ability: 'festin', requires: { creaturium: 1, dressageallosaures: 1 }, faction: 'humains', hotkey: 'L' },
   // Notice: « Belluaire », a halberdier on a reptile, deadly to infantry, nearly useless against machines; trained in the
   // Caserne once a Créaturium stands (mod: a flamethrower, 15 +25 against living targets).
-  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { creaturium: 1 }, abilities: ['coupcirculaire', 'camouflage'], faction: 'humains', hotkey: 'B' },
+  belluaire: { kind: 'unit', name: 'Belluaire', radius: 0.45, requires: { alchimisterie: 1 }, abilities: ['coupcirculaire', 'camouflage'], faction: 'humains', hotkey: 'B' },
   ...upgrades('melee', 'Attaque corps à corps', 'C'),
   ...upgrades('ranged', 'Attaque à distance', 'D'),
   ...upgrades('armor', 'Armure infanterie', 'A'),
@@ -568,13 +568,13 @@ const BASE: Record<string, object> = {
   entrainementgroupe: research('Entraînement groupé', 'E', 'Unités de la Caserne formées 25 % plus vite.'),
   armeschimiques: research('Armes chimiques', 'C', 'Les cocktails des Alchimistes touchent une zone.'),
   oeilpercant: research('Œil perçant', 'O', 'Les Plésiosaures détectent les unités invisibles.'),
-  dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures."),
+  dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures.", { grandconseil: 1 }),
   charlourd: research('Char lourd', 'L', 'Chars Pégase : au sol, 29 dégâts aux fantassins, 58 aux machines lourdes, 87 aux machines et bâtiments ; +1 armure.'),
   cocktail: research('Cocktail alchimistique', 'K', "Les Alchimistes lancent l'Explosif toxique."),
   regenerant: research('Régénérant chimique', 'R', 'Les Alchimistes lancent le Régénérant sur leurs alliés.'),
   acide: research('Acide anti-structure', 'Q', 'Les Réservoirs de substances peuvent dissoudre un bâtiment ennemi sous l\'acide.'),
   chargenapalm: research('Charge de napalm', 'H', 'Les Phalangistes lancent la Charge de napalm sur les véhicules.'),
-  decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.'),
+  decollage: research('Décollage', 'D', 'Les Chars Pégase peuvent décoller (tir anti-aérien) et atterrir.', { grandconseil: 1 }),
   chargement: research('Chargement', 'C', "Les Bourdons embarquent jusqu'à quatre fantassins, ou un véhicule (Scarabée, Char Pégase)."),
   scarabeassaut: research("Scarabée d'assaut", 'A', 'Les Scarabées reçoivent un canon et vont un peu plus vite.'),
   trebuchet: research('Trébuchet intégré', 'T', 'Les Ankylosaures bombardent les bâtiments de loin.'),

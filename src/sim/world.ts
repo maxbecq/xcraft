@@ -11,6 +11,11 @@ import * as combat from './combat';
 import * as abilities from './abilities';
 import { Vision } from './vision';
 
+
+/** What each building turned into came from (morphs: Alchimisterie → Grande Alchimisterie…). */
+const MORPHED_FROM: Record<string, string> = Object.fromEntries(
+  Object.entries(DEFS).flatMap(([k, d]) => ((d as BuildingDef).morphs ?? []).map((m) => [m, k])),
+);
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
   /** `skip`: fields this trip gave up on, no way into them, since tick `skipped` (economy.ts gather). */
@@ -819,7 +824,12 @@ export class World {
   /** How many finished buildings (and units) of each type a player has: one pass, for many requirement checks. */
   builtCounts(player: number): Map<string, number> {
     const n = new Map<string, number>();
-    for (const e of this.entities.values()) if (e.owner === player && e.buildLeft === 0) n.set(e.type, (n.get(e.type) ?? 0) + 1);
+    for (const e of this.entities.values()) {
+      if (e.owner !== player || e.buildLeft > 0) continue;
+      // A Humains building turned into another (Grande Alchimisterie, Caserne volante, Grand Conseil) still counts as
+      // what it was: « requiert Alchimisterie » stays met once it has grown (the balancer's tree, 2026-11-22).
+      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
+    }
     return n;
   }
 

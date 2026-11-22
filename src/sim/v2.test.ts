@@ -34,22 +34,14 @@ describe('Forge upgrades', () => {
     expect(w.researchable(0, 'ranged2')).toBe(true);
   });
 
-  it('needs a second Caserne for level 2, and a Tour alchimistique too for level 3', () => {
+  it('level 2 needs nothing more (the balancer, 2026-11-22: no second Caserne), level 3 a Tour alchimistique', () => {
     const w = new World(createMap());
     const forge = w.spawn('forge', 0, 40 * FP, 60 * FP);
     w.spawn('caserne', 0, 30 * FP, 60 * FP);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
     p.upgrades.armor = 1;
-    expect(w.lacks(0, 'armor1')).toBe('');
-    expect(w.lacks(0, 'armor2')).toBe('Requiert : 2 × Caserne');
-    w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
-    expect(forge.queue).toHaveLength(0);
-    expect(w.events[0].text).toBe('Requiert : 2 × Caserne');
-    const site = w.spawn('caserne', 0, 30 * FP, 64 * FP);
-    site.buildLeft = 10; // unfinished buildings do not count
-    expect(w.lacks(0, 'armor2')).not.toBe('');
-    site.buildLeft = 0;
+    expect(w.lacks(0, 'armor2')).toBe('');
     w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
     expect(forge.queue).toEqual(['armor2']);
     p.upgrades.armor = 2;

@@ -89,8 +89,9 @@ describe('Human abilities (notice 1.2-1)', () => {
   it('the Grand Conseil is unique and speeds production up', () => {
     const w = new World(createMap());
     const c = w.spawn('conseil', 0, 20 * FP, 20 * FP);
-    expect(w.lacks(0, 'grandconseil')).toBe('Requiert : Créaturium, Métallurgie, Alchimisterie');
-    for (const [k, type] of ['creaturium', 'metallurgie', 'alchimisterie'].entries()) w.spawn(type, 0, (30 + 5 * k) * FP, 20 * FP);
+    // The balancer (2026-11-22): a Caserne, and the Forge or the Alchimisterie.
+    expect(w.lacks(0, 'grandconseil')).toBe('Requiert : 1 parmi Forge, Alchimisterie');
+    for (const [k, type] of ['caserne', 'forge'].entries()) w.spawn(type, 0, (30 + 5 * k) * FP, 20 * FP);
     w.players[0].minerals = w.players[0].energy = 2000;
     w.step([{ player: 0, kind: 'train', ids: [c.id], type: 'grandconseil' }]);
     expect(w.lacks(0, 'grandconseil')).toBe('Un seul par joueur.');
