@@ -558,7 +558,9 @@ export class AI {
     // headquarters could not be paid any more).
     // Also once it is three minutes late, the army at home or not: under pressure it never stood 8 strong, and the
     // Isdaris kept one base and one Récepteur for the whole game, too short of energy for Druides or research.
-    const late = minute >= (councils < 2 ? firstAt : firstAt + EXPAND_EVERY * (councils - 1)) + 3;
+    // The natural only, and not with a threat at home stronger than the army there (saving for a third base, the
+    // Portails stood idle on 1300 minerals as 55 enemies came).
+    const late = councils < 2 && minute >= firstAt + 3 && !this.danger;
     // Up to its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the
     // bank never reached it).
     const outpostDef = DEFS[outpost] as BuildingDef;
