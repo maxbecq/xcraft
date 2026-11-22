@@ -249,7 +249,7 @@ export class AI {
       ctx.energy -= Math.ceil(((b.def as BuildingDef).cost.energy * R.percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
     }
     // No base to train one from (a headquarters to raise again): no worker's price kept from it.
-    if (!this.isBase(ctx.home)) ctx.low = 0;
+    if (!this.settled(ctx.home)) ctx.low = 0;
     ctx.minerals -= ctx.mending;
     this.tend(ctx);
     ctx.minerals -= ctx.low;
@@ -365,11 +365,11 @@ export class AI {
     // the drones in an Assimilateur come out.
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
     const dry = serfs.filter((s) => s.order?.kind === 'gather').length < 3 && (ctx.p.minerals < workerCost || ctx.free <= 0);
-    if (!this.isBase(ctx.home) || dry) for (const b of buildings) if ((b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker && this.world.load(b) > 0) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
+    if (!this.settled(ctx.home) || dry) for (const b of buildings) if ((b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker && this.world.load(b) > 0) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
     // Z: three drones work each Assimilateur (notice), taken from the mineral line, which keeps half the plan's drones
     // (raided down to three, all three went into it: no minerals came in again to replace them).
     let miners = serfs.filter((s) => s.order?.kind === 'gather').length;
-    for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker && this.isBase(ctx.home) && !dry)) {
+    for (const b of buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker && this.settled(ctx.home) && !dry)) {
       const coming = ctx.mine.filter((s) => s.order?.kind === 'enter' && s.order.target === b.id).length;
       for (let n = this.world.room(b) - this.world.load(b) - coming; n > 0 && miners > this.plan.serfs / 2; n--, miners--) {
         const s = this.builder(serfs.filter((s) => s.order?.kind === 'gather' && !ctx.out.some((c) => c.ids.includes(s.id))), [b.tx, b.ty], (b.def as BuildingDef).size);
@@ -389,7 +389,7 @@ export class AI {
     // From the turn's budget (less what sites are promised and repairs under way will cost), above the worker's price
     // kept; what it will cost is taken from that budget at once.
     // Not with no base: the repair took the price of the headquarters to raise again.
-    if (REPAIR[f.worker] && this.isBase(ctx.home)) {
+    if (REPAIR[f.worker] && this.settled(ctx.home)) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
         const part = (n: number) => Math.ceil((n * REPAIR[f.worker].percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
         const cost = part((b.def as BuildingDef).cost.minerals);
@@ -491,14 +491,16 @@ export class AI {
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
     const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
-    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich) && due && !!this.spot(outpost, home);
+    // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
+    // the last fields were at the expansion).
+    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
     // No base at all, a spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.isBase(home) && (building(f.hq) || !!this.spot(f.hq, home)));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (building(f.hq) || !!this.spot(f.hq, home)));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -600,8 +602,8 @@ export class AI {
       // Centre de socles instead), a site tried for nothing.
       const unordered = crew.filter((b) => !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(b.id)));
       // Gaïa, the Dieux's main builder, chains her buildings (a few at most) instead of placing one at a time.
-      const chained = f.builder && !this.builder(unordered, spot, def.size, !this.isBase(home)) ? crew.find((b) => b.next.length < 3) : undefined;
-      const builder = this.builder(unordered, spot, def.size, !this.isBase(home)) ?? chained;
+      const chained = f.builder && !this.builder(unordered, spot, def.size, !this.settled(home)) ? crew.find((b) => b.next.length < 3) : undefined;
+      const builder = this.builder(unordered, spot, def.size, !this.settled(home)) ?? chained;
       if (!spot || !builder) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
@@ -794,7 +796,7 @@ export class AI {
   private machines(ctx: Turn): void {
     const { w, f, mine, army, buildings, minute, enemyCloaks, unitReserve } = ctx;
     // No base: what is left goes to the headquarters to raise again.
-    if (!this.isBase(ctx.home)) return;
+    if (!this.settled(ctx.home)) return;
     // Z: socles resting at home evolve into their next tier once it is researched (Z.doc), when affordable.
     for (const u of army) {
       const next = w.nextTier(u);
@@ -1001,7 +1003,7 @@ export class AI {
       if (ids.length) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
       // No soldiers to speak of against a small raid: the workers next to it fight.
       if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4) {
-        const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack');
+        const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id)));
         if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
       // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat.
@@ -1697,6 +1699,11 @@ export class AI {
     return kin(e, this.faction.hq) || (!!this.faction.outpost && e.type === this.faction.outpost);
   }
 
+  /** A finished base stands at home: not a building standing in for a lost one, nor its site still rising. */
+  private settled(home: Entity): boolean {
+    return this.isBase(home) && home.buildLeft === 0;
+  }
+
   /** Workers wanted: the plan's number per base, up to three. */
   private serfTarget(ctx: Survey): number {
     return this.plan.serfs * Math.min(3, ctx.buildings.filter((b) => this.isBase(b) && b.buildLeft === 0).length);
@@ -1780,7 +1787,9 @@ export class AI {
         for (const e of w.entities.values()) if (e.type === 'minerai' && dist(e.x, e.y, cx, cy) < 12 * FP && ++n >= 3) return false;
         return true;
       };
-      return site.find(([tx, ty], i) => !(start && i === 0 ? false : mined(tx, ty)) && w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2))) ?? null;
+      const ok = ([tx, ty]: [number, number]) => w.canPlace(type, tx, ty, this.player) && this.fresh(tx, ty, def.size) && this.walkable(home, tx + Math.floor(def.size / 2), ty + Math.floor(def.size / 2));
+      // The start's spot first while it has minerals; mined out, a site with some, the start's spot as a last resort.
+      return site.find((s) => !mined(...s) && ok(s)) ?? (start && ok(site[0]) ? site[0] : null);
     }
     // The middle in half tiles (a building's middle is on a tile's centre or edge): whole, the same from every corner.
     const [c2x, c2y] = [Math.floor((2 * (near ?? home).x) / FP), Math.floor((2 * (near ?? home).y) / FP)];
@@ -1939,7 +1948,11 @@ export class AI {
   /** Some unit of the army can still be paid from the bank and trained (without income, the last ones are still to come). */
   private affordable(ctx: Turn): boolean {
     // With a building to train it and room in supply: none left, no unit is still to come.
-    return ctx.free > 0 && this.faction.army.some(([t]) => (DEFS[t] as UnitDef).cost.minerals <= ctx.p.minerals && (DEFS[t] as UnitDef).cost.energy <= ctx.p.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
+    // Units in a queue, paid already, are on their way too. What can still be bought is judged on this turn's budget
+    // (the worker's price kept is not for them).
+    const army = this.faction.army.map(([t]) => t);
+    if (ctx.buildings.some((b) => b.queue.some((t) => army.includes(t)))) return true;
+    return ctx.free > 0 && army.some((t) => (DEFS[t] as UnitDef).cost.minerals <= ctx.minerals && (DEFS[t] as UnitDef).cost.energy <= ctx.energy && ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.includes(t)));
   }
 
   /** Mineral fields left within reach of any of our finished bases. */
@@ -2000,7 +2013,7 @@ export class AI {
     for (const e of w.entities.values()) {
       if (!w.hostile(e.owner, this.player) || e.def.kind !== 'unit' || !w.sees(this.player, e)) continue;
       // Not an unarmed flyer (an Espion hovering by an outlying building, out of the defenders' reach, kept the army
-      // home on defence and no wave ever left).
+      // home on defence and no wave ever left; its Impulsion only holds units still a few seconds).
       if (flies(e) && !w.weapon(e)) continue;
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) foes.push(e);
