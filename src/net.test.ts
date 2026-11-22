@@ -134,10 +134,25 @@ describe('lockstep between two browsers', () => {
     expect(b.lock.rejected).toBe(0);
     expect(a.log).toEqual(b.log); // exactly the batch sent, on both sides
     const sent = a.log.flatMap(([, c]) => c);
-    expect(sent.length).toBe(200 + 3); // 3000 units in three orders, the NaN one dropped
+    expect(sent.every((c) => c.ids.length <= 1024 && c.kind === 'move' && Number.isFinite(c.x))).toBe(true); // the NaN one dropped
     expect(sent.reduce((n, c) => n + c.ids.length, 0)).toBe(200 + 3000);
     expect(Math.max(...a.log.map(([, c]) => c.length))).toBeLessThanOrEqual(64);
     warn.mockRestore();
+  });
+
+  it('keeps every message under what PeerJS sends (16 300 bytes), however many units are ordered at once', () => {
+    let largest = 0;
+    const big = (world: World, player: number): Command[] =>
+      player === 0 && world.tick === 10
+        ? Array.from({ length: 20 }, (_, k) => ({ player, kind: 'move', ids: Array.from({ length: 1000 }, (_, i) => 100_000 + k * 1000 + i), x: 1, y: 2 }) as Command)
+        : [];
+    const [a, b] = play(300, { latency: () => 40, lost: () => false }, big);
+    const sent = a.log.flatMap(([, c]) => c);
+    expect(sent.reduce((n, c) => n + c.ids.length, 0)).toBe(20_000);
+    expect(a.log).toEqual(b.log);
+    for (const [t, c] of a.log) largest = Math.max(largest, new TextEncoder().encode(JSON.stringify({ t, c, a: 999_999 })).length);
+    expect(largest).toBeLessThan(16_300);
+    expect(a.world.tick).toBe(300);
   });
 
   it('keeps both games identical over 1500 ticks of random orders from both sides, on a lossy jittery link', () => {

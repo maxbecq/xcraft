@@ -138,23 +138,30 @@ export class Lockstep {
   step(t: number, given: Command[]): Command[] {
     // Shaped as the other side checks it, and as it reads it off the wire (JSON): an order with too many units goes in
     // parts, one it would refuse is dropped here too, so both sides always run the very same batch.
+    const keep = (part: Command) => {
+      if (!commandOk(part)) return this.reject('own order the other side would refuse', part);
+      // Too long for its share of a message: in two halves (one unit's order always fits).
+      if (part.ids.length > 1 && bytes(part) > ORDER_BYTES) {
+        const half = Math.ceil(part.ids.length / 2);
+        keep({ ...part, ids: part.ids.slice(0, half) });
+        keep({ ...part, ids: part.ids.slice(half) });
+      } else this.held.push(part);
+    };
     for (const c of given) {
       const wire = JSON.parse(JSON.stringify({ ...c, player: this.player }));
-      const ids: unknown[] = Array.isArray(wire.ids) ? wire.ids : [];
-      for (let i = 0; i === 0 || i < ids.length; i += MAX_IDS) {
-        const part = Array.isArray(wire.ids) ? { ...wire, ids: ids.slice(i, i + MAX_IDS) } : wire;
-        if (commandOk(part)) this.held.push(part);
-        else this.reject('own order the other side would refuse', part);
-      }
+      if (!Array.isArray(wire.ids)) keep(wire);
+      else for (let i = 0; i === 0 || i < wire.ids.length; i += MAX_IDS) keep({ ...wire, ids: wire.ids.slice(i, i + MAX_IDS) });
     }
     // A shorter delay than the ticks already filled: the orders wait for the next free tick, so none runs early.
     if (t + this.delay >= this.next) {
       const at = Math.max(this.next, t + this.delay);
       // A longer delay: the ticks skipped get no orders, and say so.
       for (; this.next < at; this.next++) this.post(this.next, []);
-      // At most what the other side takes for one tick; the rest goes on the next.
-      this.post(this.next++, this.held.slice(0, MAX_ORDERS));
-      this.held = this.held.slice(MAX_ORDERS);
+      // At most what the other side takes for one tick, and what one message carries; the rest goes on the next.
+      let n = 0;
+      for (let size = 0; n < this.held.length && n < MAX_ORDERS && size + bytes(this.held[n]) <= BATCH_BYTES; n++) size += bytes(this.held[n]) + 1;
+      this.post(this.next++, this.held.slice(0, n));
+      this.held = this.held.slice(n);
     }
     const mine = this.ours.get(t) ?? [];
     const theirs = this.theirs.get(t) ?? [];
@@ -261,6 +268,15 @@ export class Confirm {
     this.since = -1;
   }
 }
+
+/**
+ * PeerJS (1.5) refuses a JSON message of 16 300 bytes or more, closing the channel, and the batch would go again on
+ * every reconnection: a tick's orders stay well under it, and one order under a share of it.
+ */
+const BATCH_BYTES = 12_000;
+const ORDER_BYTES = 4_000;
+const encoder = new TextEncoder();
+const bytes = (c: Command) => encoder.encode(JSON.stringify(c)).length;
 
 /** Without a word from the other side for this long, the match ends (by forfeit, or with no winner when the link is cut). */
 export const FORFEIT_MS = 60_000;
