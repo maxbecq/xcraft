@@ -89,6 +89,27 @@ describe('the state fingerprint', () => {
       p.upgrades = { ...was, armor: was.armor + 1 };
       return () => (p.upgrades = was);
     });
+    check('a research under another name, at the same level (keys count, not only values)', () => {
+      const p = other.players[0];
+      const was = p.upgrades;
+      const [k, lvl] = Object.entries(was)[0];
+      const moved: Record<string, number> = { ...was };
+      delete moved[k];
+      moved[`${k}x`] = lvl;
+      p.upgrades = moved as typeof was;
+      return () => (p.upgrades = was);
+    });
+    check('one tile blocked', () => {
+      const b = other.grid.blocked;
+      b[5] ^= 1;
+      return () => (b[5] ^= 1);
+    });
+    check('one tile explored', () => {
+      const t = other.vision[1].tiles;
+      const was = t[7];
+      t[7] = was === 0 ? 1 : 0;
+      return () => (t[7] = was);
+    });
   });
 
   it('stays cheap: it runs every 100 ticks', () => {

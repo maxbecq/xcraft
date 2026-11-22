@@ -12,6 +12,8 @@ import { type Command, World } from '../src/sim/world';
 // winner, world.hash(), full fingerprint, a checksum of the fingerprint taken every 200 ticks and of every command the
 // AIs gave, with the time the simulation and the AIs took (average and worst, ms). Run it before and after the change:
 // every line but the times must come out the same.
+// The fingerprint counts keys and the lasting grids since quality control lot A: its `fingerprint` and `course`
+// (which mixes it in) differ from a baseline taken before; compare tick, winner, hash and entities with such a one.
 // Games: AI against AI over the four factions and several maps, and a replay file if given (EMPREINTE_REPLAY=path, a
 // saved game or a measures file).
 // Run: EMPREINTE=1 npx vitest run scripts/empreinte.test.ts --silent=false
