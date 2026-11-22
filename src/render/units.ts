@@ -78,6 +78,8 @@ const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 const PLATFORM_DECK = 0.37;
 /** Half the Plate-forme's deck, side to side (its model, without the ramp): where a Pod's arm clamps on. */
 const PLATFORM_HALF = 1.22;
+/** The longest a Pod's arm gets: add-ons are built flush against the Pod (World.addonSpot), the arm never reaches out. */
+const DOCK_MAX = 1.2;
 /**
  * Z socle weapons: one module per weapon, public/models/zw_<weapon>.glb, the same on every socle; a socle built
  * without a weapon carries the free default machine gun. The nine weapons are Rodin Low Poly models (fal), made from
@@ -808,7 +810,7 @@ export class EntityRenderer {
           const from = dock.reach;
           arm.rotation.set(0, Math.atan2(-tz, tx), 0);
           arm.position.set((tx / gap) * from, dock.y, (tz / gap) * from);
-          bendDock(arm, Math.max(0.01, (gap - end - from) * grown), rise * grown);
+          bendDock(arm, Math.max(0.01, Math.min(DOCK_MAX, gap - end - from) * grown), rise * grown);
         });
       }
       if (e.type === 'puits') v.model.visible = !covered.has(e.tx * 4096 + e.ty);
