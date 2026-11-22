@@ -346,6 +346,7 @@ export function apply(this: World, c: Command): void {
       if (!b || c.x === undefined || c.y === undefined) return;
       const kind = c.name ?? (b.def as BuildingDef).ability!;
       const ab = ABILITIES[kind];
+      if (!ab) return;
       if (b.type === 'centrek') {
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
@@ -368,6 +369,9 @@ export function apply(this: World, c: Command): void {
         this.teleports.push({ phase: 'end', owner: c.player, x1: units[0].x, y1: units[0].y, x2: x, y2: y, ids: units.map((u) => u.id) });
         return;
       }
+      // A power with no energy cost (Envol, Redéploiement…) goes by its own path above, by name; unnamed, it is no
+      // aimed power: nothing to pay (an energy of undefined would leave the player's at NaN, every price then paid).
+      if (ab.energy === undefined) return;
       if (this.silenced(b.x, b.y)) return void this.say(c.player, 'Silence des ions : impossible ici.');
       const need = this.needs(c.player, ab.research, b);
       if (need) return void this.say(c.player, need);
