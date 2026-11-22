@@ -15,7 +15,7 @@ import { SHARED } from './models';
  */
 export const SPRITES = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sprites') !== '0';
 /** Buildings drawn as their picture (public/sprites/<type>.png, <type>-depth.png, <type>.json); the others stay 3D. */
-export const SPRITE_TYPES = ['pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche', 'centresocles', 'optimisation', 'vacarme', 'centrek'];
+export const SPRITE_TYPES = ['plateforme', 'pod', 'intelligence', 'podsup', 'supreme', 'assimilateur', 'centrerecherche', 'centresocles', 'optimisation', 'vacarme', 'centrek'];
 /**
  * A picture's size against the model it stands on. The Intelligence suprême's model is drawn 10 % larger
  * (LOOK_SCALE); its picture is painted over the Intelligence centrale's with the same base, and keeps it.
@@ -34,6 +34,12 @@ const SPRITE_PROXY: Record<string, { scale: number; x: number; z: number }> = {
  * drawn from another side (a 2D concept) would turn the model under it to match.
  */
 export const SPRITE_YAW: Record<string, number> = {};
+/** Moving parts left out of the picture and kept as 3D (names starting so): the Plate-forme's welding arm. */
+export const SPRITE_LIVE: Record<string, string[]> = { plateforme: ['zarm_'] };
+export const isLive = (type: string, o: Object3D): boolean => {
+  for (let p: Object3D | null = o; p; p = p.parent) if (SPRITE_LIVE[type]?.some((n) => p!.name.startsWith(n))) return true;
+  return false;
+};
 /** Image pixels per world unit, when baked. */
 export const SPRITE_PPU = 144;
 /** Depth span coded in the depth image (world units, centred on the building's origin). */
@@ -265,7 +271,7 @@ export function dressSprite(model: Object3D, type: string, teamColor: number): b
   }
   for (const c of [...model.children]) turned.add(c);
   turned.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh) || isLive(type, o)) return;
     o.material = PROXY;
     o.receiveShadow = false;
   });

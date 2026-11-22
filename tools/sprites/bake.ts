@@ -6,7 +6,7 @@
 import { ACESFilmicToneMapping, Box3, DirectionalLight, Group, HemisphereLight, OrthographicCamera, PMREMGenerator, Scene, ShaderMaterial, Vector3, WebGLRenderer } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadModels, preview } from '../../src/render/models';
-import { cameraAxes, DEPTH_RANGE, SPRITE_PPU, SPRITE_YAW } from '../../src/render/sprites';
+import { cameraAxes, DEPTH_RANGE, isLive, SPRITE_PPU, SPRITE_YAW } from '../../src/render/sprites';
 
 const params = new URLSearchParams(location.search);
 const types = (params.get('types') ?? 'pod,armement,intelligence').split(',');
@@ -45,6 +45,7 @@ for (const type of types) {
   const holder = new Group();
   holder.rotation.y = params.has('yaw') ? Number(params.get('yaw')) : (SPRITE_YAW[type] ?? 0);
   holder.add(preview(type, 0).object);
+  holder.traverse((o) => (o.visible &&= !isLive(type, o)));
   scene.add(holder);
   holder.updateMatrixWorld(true);
   // Framing: the model's box projected on the camera's axes, with a margin.
