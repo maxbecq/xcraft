@@ -457,6 +457,8 @@ export class AI {
     // Z: a Plate-forme takes a Pod of its own (and the drone each building absorbs): two by plan, a third only with
     // minerals to spare (below), or the bank went into Pods instead of socles.
     if (f === FACTIONS.z) casernesWanted = Math.min(casernesWanted, 2);
+    // No worker or no base left: one production building at least, to fight on (a lone Pod raised no Plate-forme).
+    if ((serfs.length === 0 || !this.settled(home)) && !f.gods) casernesWanted = Math.max(casernesWanted, 1);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
     if (ctx.minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
@@ -801,7 +803,10 @@ export class AI {
       const def = DEFS[type] as UnitDef;
       // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
       // the energy-hungry socles only, never holds back one that costs none.
-      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z ? 0 : reserve) < def.cost.energy) {
+      // A unit costing no energy is held back by the tech's energy only while energy comes in (no Mine left, the Caserne
+      // waited for ever for the Créaturium's saurians).
+      const energyIn = buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0);
+      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z || !energyIn ? 0 : reserve) < def.cost.energy) {
         // No minerals coming in: waiting for it is for ever, the rotation moves on to what the bank can pay.
         if (w.tick - this.lastIncome >= ticks(60)) this.trained++;
         continue;
@@ -1988,7 +1993,9 @@ export class AI {
     // A site that rises by itself, that is (no worker is left to raise a Grenier or a Branche).
     const short = minerals < (DEFS[f.worker] as UnitDef).cost.minerals || (supply.used >= supply.max && !buildings.some((b) => kin(b, f.supply) && b.buildLeft > 0 && ((b.def as BuildingDef).warp || (b.def as BuildingDef).absorbs)));
     // Nor anything to train one (a headquarters' site no worker can finish).
-    const trains = [...w.entities.values()].some((e) => e.owner === this.player && e.buildLeft === 0 && (e.type === f.workerFrom || (e.def.kind === 'building' && (e.def as BuildingDef).trains?.includes(f.worker))));
+    // A site rising by itself counts (a Z Intelligence its last drone went into).
+    const rising = (e: Entity) => e.buildLeft === 0 || !!(e.def as BuildingDef).absorbs || !!(e.def as BuildingDef).warp;
+    const trains = [...w.entities.values()].some((e) => e.owner === this.player && rising(e) && (e.type === f.workerFrom || (e.def.kind === 'building' && (e.def as BuildingDef).trains?.includes(f.worker))));
     if ((short || !trains) && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
