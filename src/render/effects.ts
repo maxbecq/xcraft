@@ -166,6 +166,8 @@ export class Effects {
       for (const e of world.entities.values()) {
         if (e.gravity > 0 && seen(e.x, e.y)) this.gravityField(this.at(e.x, e.y, 0.05));
         if (e.phased > 0 && e.def.kind === 'building' && seen(e.x, e.y)) this.bubble(this.at(e.x, e.y, 0), (e.def as { size: number }).size);
+        // Peau de roc: a shell of grey stone flakes round the unit (shortcut: particles, until a modelled shell).
+        if (e.skin > 0 && !e.inside && seen(e.x, e.y)) this.stoneShell(this.at(e.x, e.y, 0), e.radius / FP);
       }
     }
     for (const d of world.deaths) {
@@ -324,6 +326,15 @@ export class Effects {
   }
 
   /** A Bouclier de plasma: a shimmering dome of cyan glows over a building of this size. */
+  private stoneShell(p: Vector3, radius: number): void {
+    const r = radius + 0.25;
+    for (let i = 0; i < 18; i++) {
+      const t = Math.random() * Math.PI * 2;
+      const at = p.clone().add(new Vector3(r * Math.cos(t), 0.15 + Math.random() * 0.7, r * Math.sin(t)));
+      this.spawn(this.tex.smoke, 0x8a8478, at, new Vector3(), 0.55, 0.28, 0.24, 0.85, 0, false);
+    }
+  }
+
   private bubble(p: Vector3, size: number): void {
     const r = size * 0.75;
     for (let i = 0; i < 50; i++) {

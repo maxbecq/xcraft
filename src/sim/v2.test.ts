@@ -70,16 +70,16 @@ describe('Forge upgrades', () => {
 });
 
 describe('abilities', () => {
-  it('peau de roc protects the most wounded ally in range', () => {
+  it('peau de roc protects the ally it is aimed at (the balancer, 2026-11-22), +5 armour', () => {
     const w = new World(createMap());
     const medic = w.spawn('soigneur', 0, ...at(40, 60));
     const fine = w.spawn('auxiliaire', 0, ...at(41, 60));
     const hurt = w.spawn('auxiliaire', 0, ...at(40, 61));
     hurt.hp = 30;
-    w.spawn('auxiliaire', 0, ...at(50, 60)).hp = 10; // out of range
-    w.step([{ player: 0, kind: 'ability', ids: [medic.id] }]);
+    w.step([{ player: 0, kind: 'ability', ids: [medic.id], name: 'peauderoc', x: hurt.x, y: hurt.y }]);
     expect(hurt.skin).toBeGreaterThan(0);
     expect(fine.skin).toBe(0);
+    expect(w.armorBonus(hurt) - w.armorBonus(fine)).toBe(5);
     // A légionnaire's 20 damage drops to 15.
     w.remove(medic); // no healing during the measure
     const foe = w.spawn('legionnaire', 1, ...at(39, 61));

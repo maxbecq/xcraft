@@ -95,7 +95,7 @@ const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', '
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
-const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
+const SIMPLE = ['stimulant', 'charge', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
@@ -1287,11 +1287,19 @@ export class AI {
     const casters = army.filter((u) => {
       const ab = (u.def as UnitDef).ability;
       if (!ab || !w.ready(u, ab) || !SIMPLE.includes(ab)) return false;
-      if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    // Peau de roc (aimed at a unit since the balancer, 2026-11-22): on the one the Soigneur heals in a fight, else itself.
+    if (!this.easy) {
+      for (const u of army) {
+        if ((u.def as UnitDef).ability !== 'peauderoc' || !w.ready(u, 'peauderoc')) continue;
+        const healed = u.order?.kind === 'heal' ? w.entities.get(u.order.target) : undefined;
+        const t = healed && healed.skin === 0 ? healed : this.engaged(u) !== undefined && u.skin === 0 ? u : undefined;
+        if (t) ctx.out.push({ player: this.player, kind: 'ability', ids: [u.id], name: 'peauderoc', x: t.x, y: t.y });
+      }
+    }
     // Dieux: an Élémentaire comes « faible et chétive » (notice): it takes its fire form at once (it hits flyers too).
     const weak = army.filter((u) => u.type === 'elembase' && w.ready(u, 'formefeu'));
     if (weak.length) ctx.out.push({ player: this.player, kind: 'ability', ids: weak.map((u) => u.id), name: 'formefeu' });

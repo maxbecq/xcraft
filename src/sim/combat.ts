@@ -60,6 +60,8 @@ export function armorBonus(this: World, t: Entity): number {
   let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
   if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
+  // Peau de roc (the balancer, 2026-11-22): +5 armour, shown with the rest.
+  if (t.skin > 0) bonus += SKIN_REDUCTION;
   if (t.type === 'pegase' && this.level(t.owner, 'charlourd')) bonus += BALANCE.rules.upgrades.charlourd.armor;
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
   bonus += t.arts.filter((a) => a === 'artresistance').length * BALANCE.rules.upgrades.artefacts.resistance;
@@ -236,7 +238,6 @@ export function hurt(this: World, t: Entity, damage: number): number {
   // Z Gel électronique: a frozen building is unhurt; Cône de protection: allies round its caster too.
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
   if (t.def.kind === 'unit' && this.coned(t)) return 0;
-  if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
   // Régénérant (the balancer, 2026-11-22): the host takes 5 % of the damage.
   if (t.ferveur > 0) damage = Math.max(1, idiv(damage * BALANCE.rules.upgrades.regenerantTaken, 100));
   // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.

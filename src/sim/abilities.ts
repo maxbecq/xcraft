@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, soars, type Entity, type World } from './world';
 
@@ -205,16 +205,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       this.corpses.splice(this.corpses.indexOf(c), 1);
       this.spawn(c.type, e.owner, c.x, c.y);
     }
-  } else if (name === 'peauderoc') {
-    // The most wounded ally in range (itself included) not already protected.
-    let best: Entity | undefined;
-    for (const t of this.entities.values()) {
-      if (t.owner !== e.owner || t.def.kind !== 'unit' || t.skin > 0 || t.hp <= 0 || this.gap(e, t) > SKIN_RANGE * FP) continue;
-      if (!best || t.hp * best.maxHp < best.hp * t.maxHp) best = t;
-    }
-    if (!best) return;
-    best.skin = ticks(ab.duration);
-    this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
   } else {
     if (def.ability === 'stimulant') {
       if (e.hp <= STIM_HP) return;
@@ -425,6 +415,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
     for (const t of allies) t.ferveur = ticks(ab.duration);
+  } else if (name === 'peauderoc') {
+    // The ally aimed at (the balancer, 2026-11-22: a unit of one's choice), itself included: the one under the spot.
+    const t = [...this.entities.values()].filter((t) => t.owner === e.owner && t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= t.radius + FP / 2).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+    if (!t) return false;
+    t.skin = ticks(ab.duration);
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
   } else if (name === 'festin') {
     // Allosaure: devours the fresh organic body nearest the spot, ally or enemy: +75 HP, then a moment still.
     const c = this.corpses.filter((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.tick - b.tick)[0];

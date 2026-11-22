@@ -320,7 +320,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Légionnaire: runs twice as fast to close in. */
   charge: { name: 'Charge', effect: 'Court deux fois plus vite pour fondre sur l\'ennemi.', hotkey: 'C', ...BALANCE.abilities.charge },
   /** Soigneur (notice, mod « Peau de roc »): an ally within 4 tiles takes 5 less damage per hit. */
-  peauderoc: { name: 'Peau de roc', effect: 'Un allié proche encaisse moins de dégâts à chaque coup.', hotkey: 'R', ...BALANCE.abilities.peauderoc },
+  // The balancer (2026-11-22): on the ally aimed at, +5 armour, shown.
+  peauderoc: { name: 'Peau de roc', effect: "L'allié visé gagne +5 d'armure un moment.", hotkey: 'R', target: 'point', ...BALANCE.abilities.peauderoc },
   /** Forge (notice): its telescope reveals a zone and detects invisible units there, for 50 energy. */
   /** Z Espion (Z.doc): a beacon that gives sight of a zone for 50 s; units of a small zone held 5 s; invisible 20 s. */
   balisez: { name: 'Balise de révélation', effect: 'Pose une balise qui révèle une zone de la carte pendant un long moment.', hotkey: 'B', ...(BALANCE.abilities.balisez as object) } as AbilityDef,
