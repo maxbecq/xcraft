@@ -74,10 +74,10 @@ export class Portrait {
       if (stop()) break;
       previews.push(preview(type, owner).object);
     }
-    warm.add(...previews);
+    if (!stop()) warm.add(...previews); // else nothing more is gone through: only the previews made are freed
     // Each texture sent to the graphics chip is a step of its own: the time is asked before every one.
     const textures = new Set<Texture>();
-    warm.traverse((o) => {
+    if (!stop()) warm.traverse((o) => {
       if (!(o instanceof Mesh)) return;
       for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) textures.add(v);
     });

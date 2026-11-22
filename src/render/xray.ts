@@ -87,11 +87,15 @@ export function drawXray(renderer: WebGLRenderer, scene: Scene, camera: Camera, 
   renderer.clear(false, true, false);
   camera.layers.set(BUILDINGS);
   scene.overrideMaterial = depthOnly;
-  renderer.info.render.frame--;
-  renderer.render(scene, camera);
+  // Asked again right before the draw itself; without the buildings' depth there is nothing to cut the units against.
+  const cut = !!stop?.();
+  if (!cut) {
+    renderer.info.render.frame--;
+    renderer.render(scene, camera);
+  }
   renderer.setRenderTarget(target);
   for (const layer of used) {
-    if (stop?.()) break;
+    if (cut || stop?.()) break;
     camera.layers.set(layer);
     scene.overrideMaterial = (materials ??= makeMaterials())[layer - 1];
     renderer.info.render.frame--; // render() counts it back up: the same frame as the scene's render
