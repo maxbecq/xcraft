@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Quaternion, SRGBColorSpace, Texture, Vector3 } from 'three';
 import { isoOffset } from '../camera';
+import { SHARED } from './models';
 
 /**
  * A few Z buildings drawn as a painted picture instead of their 3D model (`?sprites=0` turns them back). The camera never
@@ -162,7 +163,9 @@ export async function loadSprites(types: string[]): Promise<void> {
       texture.colorSpace = SRGBColorSpace;
       texture.anisotropy = 4;
       texture.needsUpdate = true;
-      loaded.set(type, { color: texture, geometry: relief(meta, pixels(color), pixels(depth)) });
+      const geometry = relief(meta, pixels(color), pixels(depth));
+      SHARED.add(geometry); // one relief for every building of the type: never freed with a view, nor are its edges (units.ts)
+      loaded.set(type, { color: texture, geometry });
     } catch {
       // no picture: the 3D model
     }

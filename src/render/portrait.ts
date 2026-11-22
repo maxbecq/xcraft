@@ -1,4 +1,4 @@
-import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, Mesh, PerspectiveCamera, Scene, Texture, Vector3, WebGLRenderer } from 'three';
+import { AmbientLight, AnimationMixer, Box3, DirectionalLight, Group, Mesh, type Object3D, PerspectiveCamera, Scene, Texture, Vector3, WebGLRenderer } from 'three';
 import { freePreview, preview } from './models';
 
 /**
@@ -69,12 +69,22 @@ export class Portrait {
     // A scene of its own, lit as the portrait's (the same programs), so nothing of it ever shows.
     const warm = new Scene();
     warm.add(...this.scene.children.filter((o) => o !== this.holder).map((o) => o.clone()));
-    const previews = entries.map(([type, owner]) => preview(type, owner).object);
+    const previews: Object3D[] = [];
+    for (const [type, owner] of entries) {
+      if (stop()) break;
+      previews.push(preview(type, owner).object);
+    }
     warm.add(...previews);
+    // Each texture sent to the graphics chip is a step of its own: the time is asked before every one.
+    const textures = new Set<Texture>();
     warm.traverse((o) => {
       if (!(o instanceof Mesh)) return;
-      for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) renderer.initTexture(v);
+      for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) textures.add(v);
     });
+    for (const t of textures) {
+      if (stop()) break;
+      renderer.initTexture(t);
+    }
     try {
       if (!stop()) await renderer.compileAsync(warm, this.camera);
       // A first draw through an empty scissor: the programs' first use (uniforms, link check) is paid now too.

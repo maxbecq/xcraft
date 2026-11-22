@@ -464,6 +464,9 @@ if (!ATTRACT) {
   const limit = net ? 3000 : 20000;
   let deadline = Infinity;
   const late = () => waited || performance.now() >= deadline;
+  /** Settled as the loading screen stops waiting, the warm-up done or not. */
+  let started = () => {};
+  const stopped = new Promise<void>((r) => (started = r));
   // Then the match's first picture, drawn once behind the loading screen: the power network and the paving as they
   // stand, and the post-processing's own programs and buffers, which the first frame in play built (80 to 130 ms).
   const rehearse = () => {
@@ -472,7 +475,10 @@ if (!ATTRACT) {
     paving.update(world, sees);
     if (!late()) post.render();
   };
-  const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, limit))]).then(() => void (waited = true));
+  const warmed = (p: Promise<void>) => Promise.race([p.catch(() => {}), new Promise<void>((r) => setTimeout(r, limit))]).then(() => {
+    waited = true;
+    started();
+  });
   ready.then(() => {
     deadline = performance.now() + limit;
     return warmed((async () => {
@@ -480,7 +486,7 @@ if (!ATTRACT) {
       if (factions.includes('humains') && !late()) paving.warm();
       // Each begins with work of its own before it first waits: the time is asked again between them.
       const faces = late() ? undefined : hud.portrait.prewarm(portraits, late);
-      const shapes = late() ? undefined : compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: late, ghosts: !SPECTATE }, portraits).then(rehearse);
+      const shapes = late() ? undefined : compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: late, stopped, ghosts: !SPECTATE }, portraits).then(rehearse);
       await Promise.all([faces, shapes]);
     })());
   }).then(start);

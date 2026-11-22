@@ -31,6 +31,8 @@ export interface Prewarm {
   /** The loading screen stopped waiting, or its time is up: asked before each pass, the rest of the warm-up is dropped
    * (never run over the match in play, never past the time an online match gives it by more than the pass under way). */
   stop?: () => boolean;
+  /** Settled when the match starts, whether the warm-up is done or not: the catalogue leaves the scene then. */
+  stopped?: Promise<void>;
   /** Whether the viewer has a fog of war (not a spectator): enemy buildings then turn to grey ghosts out of sight. */
   ghosts?: boolean;
 }
@@ -73,7 +75,10 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   // Hidden while their programs compile (hidden things are compiled too, and shown for the draws below): should the
   // match start before the compiling ends, none of the catalogue ever shows in the middle of the map.
   for (const o of [...shapes.roots, ...bursts, ...fx]) o.visible = false;
+  let dropped = false;
   const drop = () => {
+    if (dropped) return;
+    dropped = true;
     shapes.clear();
     for (const b of bursts) {
       scene.remove(b);
@@ -86,6 +91,10 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   };
   const into = post.sceneTarget;
   if (m.stop?.()) return drop();
+  // The match starting takes the catalogue off the scene at once, whatever the compiling does (in a tab left behind
+  // it may never end: it then ends for nothing).
+  void m.stopped?.then(drop);
+  let failed = false;
   try {
     // The programs are made as the call begins, for the target then set (tone mapping and colour space differ by
     // target); it is let go before waiting for them, so a match started meanwhile draws where it should.
@@ -93,11 +102,11 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     const compiled = renderer.compileAsync(scene, rig.camera);
     renderer.setRenderTarget(null);
     await compiled;
-  } finally {
-    // Stopped meanwhile (the match may be running): the catalogue goes, nothing else is touched.
-    if (m.stop?.()) drop();
+  } catch {
+    failed = true; // a lost context: nothing more to ready
   }
-  if (m.stop?.()) return;
+  // Failed, or stopped meanwhile (the match may be running): the catalogue goes, nothing else is touched.
+  if (failed || m.stop?.()) return drop();
   const aspect = window.innerWidth / window.innerHeight;
   const [target, view, box] = [rig.target.clone(), rig.viewHeight, { ...sun.shadow.camera }];
   // An empty scissor: drawn, nothing shows.

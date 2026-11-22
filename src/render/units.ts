@@ -1471,17 +1471,17 @@ export class EntityRenderer {
   }
 }
 
-/** A model's edges for the Z armature, worked out once per geometry (a type's is the same for every building of it):
- * finding them in a 12 000-triangle model, or a painted building's relief of 50 000 points, held a frame for 45 ms
- * each time a Z building was begun, 200 ms on a slow machine. Kept as long as the geometry itself. Never freed with
- * the view when the geometry is a shared template's; else (a painted relief, a stand-in model made for one building)
- * the view frees their buffers as it frees the geometry's, and three sends them again if they are drawn again. */
+/** A model's edges for the Z armature, worked out once per shared geometry (a type's model, or its painted relief of
+ * up to 50 000 points, is the same for every building of it): finding them held a frame for 45 ms each time a Z building
+ * was begun, 200 ms on a slow machine. Those are shared in turn, never freed with a view (as many as there are types).
+ * A geometry that is one view's own (a stand-in model made for one building) gets edges of its own, freed with it. */
 const EDGES = new WeakMap<BufferGeometry, EdgesGeometry>();
 function edgesOf(g: BufferGeometry): EdgesGeometry {
+  if (!SHARED.has(g)) return new EdgesGeometry(g, 35);
   let edges = EDGES.get(g);
   if (!edges) {
     edges = new EdgesGeometry(g, 35);
-    if (SHARED.has(g)) SHARED.add(edges);
+    SHARED.add(edges);
     EDGES.set(g, edges);
   }
   return edges;
