@@ -2,7 +2,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { MAPS, type MapFile, mapFile } from '../maps';
 import { mapCards, seatsOf } from '../mappicker';
-import { Confirm, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
+import { Confirm, GUEST_GOES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
 import { BIOMES, type Biome, biomesFor, fitBiome } from '../render/biome';
@@ -440,9 +440,6 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }
   };
 }
-
-/** The guest's page goes once the host has not sent « Lancer » again for this long: longer than its resend cycle (400 ms). */
-const GUEST_GOES_MS = 1200;
 
 function launch(s: Setup, sandbox = false): void {
   const [a, b] = s.sides;

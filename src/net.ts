@@ -31,7 +31,7 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
  * `hi`: who this page is and its build, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
  * asked for; `go`: the host's room for it, once both asked.
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 } | { againOk: 1 };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -227,6 +227,9 @@ export function greeting(them: string | null, m: Record<string, unknown>, versio
   return typeof m.hi === 'string' && m.v === version ? 'ok' : 'other-version';
 }
 
+/** A guest goes to the rematch (or the match) once the host has not sent its room again for this long: more than its resend cycle. */
+export const GUEST_GOES_MS = 1200;
+
 /** A waiting room's channel open this long without the other page's version: given up, the seat freed. */
 const VERSION_MS = 8000;
 export function versionLapsed(checked: boolean, openedAt: number, now: number): boolean {
@@ -337,15 +340,20 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   const goSent = new Confirm(() => sendOn(conn, { go: rematchRoom } satisfies Message));
   /** The room the guest took: a resent `go` for it is acknowledged again (the first answer may have been lost). */
   let taken = '';
+  let lastGo = 0;
+  let gone = false;
+  /** Our rematch request, sent again (a cut may lose it) until the other side says it has it. */
+  const askSent = new Confirm(() => sendOn(conn, { again: 1 } satisfies Message), undefined, 1000, Infinity);
   const go = (room: string | null) => {
     if (!room) return;
     if (player === 0) {
       rematchRoom = room;
       goSent.start();
     } else {
+      // Said back, and again for each resend; the page goes once the host has stopped sending it (see the watch).
       taken = room;
+      lastGo = performance.now();
       sendOn(conn, { went: 1 } satisfies Message);
-      onStatus('go', room);
     }
   };
   let dialed = -Infinity;
@@ -391,11 +399,15 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         set('connected');
       } else if (c !== conn) return;
       else if ('again' in m) {
+        sendOn(conn, { againOk: 1 } satisfies Message);
         onStatus('again');
         go(again.theyAsk());
-      } else if ('go' in m) {
-        if (taken && m.go === taken) sendOn(conn, { went: 1 } satisfies Message);
-        else go(again.take(m.go));
+      } else if ('againOk' in m) askSent.ack();
+      else if ('go' in m) {
+        if (taken && m.go === taken) {
+          lastGo = performance.now();
+          sendOn(conn, { went: 1 } satisfies Message);
+        } else go(again.take(m.go));
       } else if ('went' in m) {
         if (player === 0 && goSent.ack()) onStatus('go', rematchRoom);
       }
@@ -432,6 +444,12 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       set(player === 0 ? 'waiting' : 'connecting', NO_DIRECT);
     }
     if (conn) lock.poll();
+    askSent.poll();
+    // The guest: the host has stopped sending the room for longer than its resend cycle, so it has the answer.
+    if (taken && !gone && performance.now() - lastGo > GUEST_GOES_MS) {
+      gone = true;
+      onStatus('go', taken);
+    }
     // The guest never said it was on its way: no rematch (it is taken as gone).
     if (goSent.poll() === 'expired') {
       again.lost();
@@ -442,7 +460,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     lock,
     /** Leaving on purpose: the other side is told at once. */
     again: () => {
-      sendOn(conn, { again: 1 } satisfies Message);
+      askSent.start();
       go(again.ask());
     },
     /** The other side is gone after the end: whatever comes later starts no rematch. */

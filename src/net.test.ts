@@ -419,4 +419,15 @@ describe('lockstep between two browsers', () => {
     expect(versionLapsed(false, 1000, 9500)).toBe(true); // stuck: the seat is given back
     expect(versionLapsed(true, 1000, 99_000)).toBe(false); // checked: in the room for good
   });
+
+  it('asks for a rematch again until the other side has it, however long a cut lasts', () => {
+    let now = 0;
+    let sent = 0;
+    const ask = new Confirm(() => sent++, () => now, 1000, Infinity);
+    ask.start();
+    for (now = 0; now <= 120_000; now += 250) expect(ask.poll()).toBe('waiting');
+    expect(sent).toBe(121);
+    expect(ask.ack()).toBe(true);
+    expect(ask.poll()).toBe('idle');
+  });
 });
