@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FP } from './fixed';
 import { createMatch } from './setup';
+import { fingerprint } from './fingerprint';
+import { commandOk } from './validate';
 import type { Faction } from '../data';
 
 // Quality control, lot A: simulation faults found by the probes (each one reproduced here first).
@@ -55,5 +57,25 @@ describe('quality control, lot A', () => {
     const v = [...w.entities.values()].find((e) => e.type === 'vacarme')!;
     expect([v.tx, v.ty]).toEqual([0, 6]);
     expect(v.tx).toBeLessThan(W);
+  });
+
+  it('an order the network or a replay accepts is the one the simulation applies, and the other way round', () => {
+    // Sent over the wire, an undefined field is gone: the same order with or without it, the same game.
+    const play = (c: Record<string, unknown>) => {
+      const w = createMatch(['z', 'humains']);
+      const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;
+      w.step([{ player: 0, ids: [hq.id], ...c } as never]);
+      for (let i = 0; i < 40; i++) w.step([]);
+      return fingerprint(w);
+    };
+    const refuge = { kind: 'ability', name: 'refuge' };
+    expect(play({ ...refuge, x: undefined, y: undefined })).toBe(play(refuge));
+    expect(play(refuge)).not.toBe(play({ kind: 'stop' }));
+    // A fractional position: refused by both, never half-applied.
+    expect(commandOk({ kind: 'move', ids: [1], x: 1.5, y: 2 })).toBe(false);
+    const w = createMatch(['humains', 'z']);
+    const serf = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'serf')!;
+    w.step([{ player: 0, kind: 'move', ids: [serf.id], x: 1.5, y: 2 } as never]);
+    expect(serf.order).toBeNull();
   });
 });

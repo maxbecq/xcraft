@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { onMap } from './abilities';
+import { commandOk } from './validate';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
@@ -33,9 +34,8 @@ export function enqueue(this: World, b: Entity, type: string, kit = ''): void {
 }
 
 export function apply(this: World, c: Command): void {
-  // Commands will come from other machines one day: reject malformed numbers.
-  if (!Array.isArray(c.ids) || ('x' in c && !(Number.isSafeInteger(c.x) && Number.isSafeInteger(c.y)))) return;
-  if ('tx' in c && !(Number.isSafeInteger(c.tx) && Number.isSafeInteger(c.ty))) return;
+  // The same check as for the other side's orders and a replay's (sim/validate.ts): none accepts what another drops.
+  if (!commandOk(c, true, true)) return;
   const mine = this.owned(c);
   const units = mine.filter((e) => e.def.kind === 'unit' && e.held === 0 && !e.inside);
   const buildings = mine.filter((e) => e.def.kind === 'building' && e.buildLeft === 0);

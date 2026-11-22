@@ -65,9 +65,14 @@ describe('replays read from storage or a file', () => {
     expect(refused(one({ kind: 'nope', ids: [] }))).toBe(true);
     expect(refused(one({ kind: 'constructor', ids: [] }))).toBe(true);
     // The Bac à sable's switches: in its own replays (one player) only.
-    const sandbox = { kind: 'sandbox', ids: [], tool: 'fog', on: true };
+    const sandbox = { kind: 'sandbox', ids: [], tool: 'reveal', on: true };
     expect(refused(one(sandbox))).toBe(true);
     expect(refused({ ...one(sandbox), factions: ['humains'], teams: [0], handicap: [100] })).toBe(false);
+    // A switch the simulation does not know: refused there too (it would have been dropped without a word).
+    expect(refused({ ...one({ ...sandbox, tool: 'fog' }), factions: ['humains'], teams: [0], handicap: [100] })).toBe(true);
+    // Positions and places in a queue are whole numbers, as the simulation takes them.
+    expect(refused(one({ kind: 'move', ids: [1], x: 1.5, y: 2 }))).toBe(true);
+    expect(refused(one({ kind: 'cancel', ids: [1], slot: 0.5 }))).toBe(true);
     // An AI giving up: in a replay, never from the network.
     expect(refused(one({ kind: 'resign', ids: [] }))).toBe(false);
     expect(commandOk({ player: 0, kind: 'resign', ids: [] })).toBe(false);
