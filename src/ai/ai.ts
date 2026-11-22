@@ -90,6 +90,8 @@ const MORE_EXTRA: Record<string, [string, number][]> = { humains: [['metallurgie
 const KITS: Record<string, number> = { ...BALANCE.ai.kits, accumulateur: 1 };
 const kin = (e: Entity, type: string) => e.type === type || !!(DEFS[type] as BuildingDef | undefined)?.morphs?.includes(e.type);
 
+/** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
+const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
 const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
@@ -867,6 +869,7 @@ export class AI {
     // Its energy at hand, the next research also keeps its minerals from the units.
     const researchCost = nextResearch && (DEFS[nextResearch] as UpgradeDef).cost;
     ctx.keep = researchCost && ctx.energy - researchReserve >= researchCost.energy ? researchCost.minerals : 0;
+    let advancedKeep = 0;
     // Heavier units from the other production buildings, one at a time, when affordable; a few of each support kind.
     for (const t of buildings.filter((b) => !kin(b, f.barracks) && !kin(b, f.hq) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).trains?.length)) {
       // The kind it has fewest of that it can pay for (Discobole and Chimère take turns; an Ankylosaure it could not pay
@@ -885,6 +888,12 @@ export class AI {
       // of the cheaper ones (the Ankylosaure, 390, never came: a Plésiosaure, 225, left each time the energy got there).
       const first = order.find((u) => (DEFS[u] as UnitDef).attack);
       if (t.type === f.tech && first && own(first) === 0 && !pays(first) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
+      // Humans: a unit an advanced building has none of and cannot pay yet keeps its minerals from the Casernes while
+      // minerals come in (the Casernes drained the bank each turn: no Scarabée at 500 nor Char Pégase at 650 came).
+      if (f === FACTIONS.humains && first && own(first) === 0 && !pays(first) && w.tick - this.lastIncome < ticks(60) && !order.some((u) => own(u) === 0 && pays(u))) {
+        advancedKeep = Math.max(advancedKeep, (DEFS[first] as UnitDef).cost.minerals);
+        continue;
+      }
       const type = order.find(pays);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
@@ -896,14 +905,17 @@ export class AI {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || this.room(ctx) <= 0) continue;
       // The invisible raiders counted too (out of the army, their cap was never reached).
-      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), [...army, ...ctx.raiders], ctx.minerals - ctx.keep - gatewaysKeep - zKeep, c, this.room(ctx));
+      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), [...army, ...ctx.raiders], ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep, c, this.room(ctx), Math.max(0, ctx.energy - reserve));
       const def = DEFS[type] as UnitDef;
       // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
       // the energy-hungry socles only, never holds back one that costs none.
       // A unit costing no energy is held back by the tech's energy only while energy comes in (no Mine left, the Caserne
       // waited for ever for the Créaturium's saurians).
       const energyIn = buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0);
-      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? unitReserve : f === FACTIONS.isdaris || f === FACTIONS.z || !energyIn ? 0 : reserve) < def.cost.energy) {
+      // A Phalangiste or Belluaire due for its share of the army: above the tech's reserve only, not the next
+      // research's too (625 to 1075 energy were wanted, never there).
+      const shared = SHARED.includes(type);
+      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? (shared ? reserve : unitReserve) : f === FACTIONS.isdaris || f === FACTIONS.z || !energyIn ? 0 : reserve) < def.cost.energy) {
         // No minerals coming in: waiting for it is for ever, the rotation moves on to what the bank can pay.
         if (w.tick - this.lastIncome >= ticks(60)) this.trained++;
         continue;
@@ -1859,7 +1871,8 @@ export class AI {
   }
 
   /** `at`: the building that will train it, whose own Isdaris extensions count (a Druide needs the Laboratoire there). */
-  private nextUnit(energy: number, own: Entity[], minerals: number, at?: Entity, room = Infinity): string {
+  /** `shareEnergy`: the energy for a Phalangiste or Belluaire due for its share (above the tech's reserve only). */
+  private nextUnit(energy: number, own: Entity[], minerals: number, at?: Entity, room = Infinity, shareEnergy = energy): string {
     if (this.faction !== FACTIONS.humains) {
       // Weighted rotation through the faction's army; energy-hungry units only when affordable, a few invisible ones at most.
       const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
@@ -1892,9 +1905,9 @@ export class AI {
     // Phalangistes (grenades, long range) once a Forge stands, one in five.
     // (One in five trained, they never came: the energy was seldom there on that turn. Now a sixth of the army each.)
     const share = (t: string) => own.filter((u) => u.type === t).length * 6 < own.length;
-    if (energy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste', undefined, at)) return 'phalangiste';
+    if (shareEnergy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste', undefined, at)) return 'phalangiste';
     // Belluaires (halberd riders, against infantry) once a Créaturium stands.
-    if (energy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire', undefined, at)) return 'belluaire';
+    if (shareEnergy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire', undefined, at)) return 'belluaire';
     // Healers on schedule, or to burn spare energy, but never more than a third of the army.
     const healers = own.filter((u) => (u.def as UnitDef).heal).length;
     // With its minerals there: chosen for the energy alone, it held the last Caserne for good.
