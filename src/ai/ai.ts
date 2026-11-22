@@ -355,10 +355,11 @@ export class AI {
       if (!s || s.carry > 0) this.failed.delete(id);
     }
 
-    // No base left (a headquarters to raise again), or the mineral line down to two with no drone's price in the bank:
+    // No base left (a headquarters to raise again), or the mineral line down to two with no drone to be had (its price
+    // or the supply for it short):
     // the drones in an Assimilateur come out.
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
-    const dry = serfs.filter((s) => s.order?.kind === 'gather').length < 3 && ctx.p.minerals < workerCost;
+    const dry = serfs.filter((s) => s.order?.kind === 'gather').length < 3 && (ctx.p.minerals < workerCost || ctx.free <= 0);
     if (!this.isBase(ctx.home) || dry) for (const b of buildings) if ((b.def as BuildingDef).energyRate && (b.def as BuildingDef).bunker && this.world.load(b) > 0) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
     // Z: three drones work each Assimilateur (notice), taken from the mineral line, which keeps half the plan's drones
     // (raided down to three, all three went into it: no minerals came in again to replace them).
@@ -382,7 +383,8 @@ export class AI {
     // A worker that can repair (drone, serf, esprit) repairs a building that has lost 40 % of its hit points, one each, with minerals to spare.
     // From the turn's budget (less what sites are promised and repairs under way will cost), above the worker's price
     // kept; what it will cost is taken from that budget at once.
-    if (REPAIR[f.worker]) {
+    // Not with no base: the repair took the price of the headquarters to raise again.
+    if (REPAIR[f.worker] && this.isBase(ctx.home)) {
       for (const b of buildings.filter((b) => b.buildLeft === 0 && b.hp < (b.maxHp * 6) / 10)) {
         const part = (n: number) => Math.ceil((n * REPAIR[f.worker].percent * (b.maxHp - b.hp)) / (100 * b.maxHp));
         const cost = part((b.def as BuildingDef).cost.minerals);
@@ -487,9 +489,9 @@ export class AI {
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
-    // No base at all: its price is kept from everything (spent while its builder came out of an Assimilateur, the
+    // No base at all, a spot for it: its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (noHq && !this.isBase(home));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (noHq && !this.isBase(home) && !!this.spot(f.hq, home));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -532,7 +534,8 @@ export class AI {
           (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
     // Z: the minerals of that next step are kept from the socles once three quarters of its energy is there (the socles
     // ate them all: the Centre d'optimisation never came, and the 500 energy kept for it piled up past 600, unspent).
-    const zKeep = zTech && p.energy >= ((DEFS[zTech] as BuildingDef).cost.energy * 3) / 4 ? (DEFS[zTech] as BuildingDef).cost.minerals : 0;
+    // Only while minerals come in: with none, it held every socle for a building that could not come.
+    const zKeep = zTech && p.energy >= ((DEFS[zTech] as BuildingDef).cost.energy * 3) / 4 && w.tick - this.lastIncome < ticks(60) ? (DEFS[zTech] as BuildingDef).cost.minerals : 0;
     return { reserve, researchReserve, unitReserve, wantSupreme, holdSupreme, gatewaysKeep, nextResearch, zKeep };
   }
 
@@ -849,7 +852,8 @@ export class AI {
         }
         else ctx.out.push({ player: this.player, kind: 'unload', ids: [barge.id] });
       } else if (dist(barge.x, barge.y, rally.x, rally.y) > 5 * FP) {
-        if (barge.order?.kind !== 'move') ctx.out.push({ player: this.player, kind: 'move', ids: [barge.id], x: rally.x, y: rally.y });
+        // Unloaded, it turns back at once (its flight to the target went on after the unload).
+        if (barge.order?.kind !== 'move' || dist(barge.order.x, barge.order.y, rally.x, rally.y) > 5 * FP) ctx.out.push({ player: this.player, kind: 'move', ids: [barge.id], x: rally.x, y: rally.y });
       } else if (goal) {
         let room = w.room(barge) - w.load(barge);
         const riders: number[] = [];
@@ -1228,9 +1232,10 @@ export class AI {
     });
   }
 
+  /** Damage per second of the weapon it fights with (a Z socle with the Réparateur or the Accumulateur: none). */
   private dps(e: Entity): number {
-    const a = (e.def as UnitDef | BuildingDef).attack!;
-    return a.damage / a.cooldown;
+    const a = this.world.weapon(e);
+    return a ? a.damage / a.cooldown : 0;
   }
 
   /** A group's fighting power: its hp and shields times its damage per second. */
@@ -1257,7 +1262,7 @@ export class AI {
     // whether seen or not: an army out of sight never sets it off.
     // Not one at a time, though: with no wave out to join, half a wave at least (a tower never seen killed lone soldiers).
     // Fewer than a wave against enemies we know of: never.
-    const armed = atHome.filter((u) => (u.def as UnitDef).attack);
+    const armed = atHome.filter((u) => !!this.world.weapon(u));
     const ours = this.power(armed.map((u) => [u.hp + u.shield, this.dps(u)]));
     if (known === 0) return this.waves > 0 && (this.wave.size > 0 || armed.length * 2 >= this.plan.wave) && ours > 0 && ours >= 3 * this.power(this.enemySoldiers().map((e) => [e.hp + e.shield, this.dps(e)]));
     return atHome.length >= this.plan.wave && ours >= 3 * known;
@@ -1271,7 +1276,7 @@ export class AI {
       if (out.has(u)) continue;
       const near = foes.filter((e) => dist(e.x, e.y, u.x, u.y) < 9 * FP);
       if (!near.length) continue;
-      const ours = wave.filter((o) => (o.def as UnitDef).attack && dist(o.x, o.y, u.x, u.y) < 7 * FP);
+      const ours = wave.filter((o) => !!this.world.weapon(o) && dist(o.x, o.y, u.x, u.y) < 7 * FP);
       // Isdaris fall back sooner: their shields recharge out of combat, so a group pulled out early comes back whole.
       if (power(ours) * 2 < power(near)) ours.forEach((o) => out.add(o));
     }
@@ -1559,9 +1564,16 @@ export class AI {
    * Z: the weapon a socle is built with, for good: a weighted rotation through the researched ones (only those that
    * hit flyers against them); the machine gun (undefined) before any is researched.
    */
-  /** Z: the minerals of the cheapest weapon researched for this socle (0 without one: the machine gun). */
+  /** Z: a weapon this socle may be built with: researched, and against flyers one that reaches them on this carrier. */
+  private kitAllowed(def: UnitDef, k: string): boolean {
+    const kit = WEAPONS[k];
+    // The Déchiqueteur reaches flyers on a flying socle.
+    return !!def.weapons?.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(weaponAt(k, 1, !!def.flying) ?? kit.attack, true));
+  }
+
+  /** Z: the minerals of the cheapest weapon this socle may get (0 without one: the machine gun). */
   private kitMinerals(def: UnitDef): number {
-    const kits = (def.weapons ?? []).filter((k) => k in KITS && WEAPONS[k].research && this.world.level(this.player, WEAPONS[k].research!));
+    const kits = Object.keys(KITS).filter((k) => this.kitAllowed(def, k));
     return kits.length ? Math.min(...kits.map((k) => WEAPONS[k].cost.minerals)) : 0;
   }
 
@@ -1573,11 +1585,7 @@ export class AI {
     const acc = WEAPONS.accumulateur;
     const accCost = withKit(def, 'accumulateur');
     if (def.weapons.includes('accumulateur') && this.world.level(this.player, acc.research!) && accCost.energy <= energy && accCost.minerals <= minerals && !ordered && ![...this.world.entities.values()].some((e) => e.owner === this.player && (e.kit === 'accumulateur' || e.kits.includes('accumulateur')))) return 'accumulateur';
-    const kits = Object.entries(KITS).filter(([k]) => {
-      const kit = WEAPONS[k];
-      // Against flyers, what reaches them on this carrier (the Déchiqueteur does on a flying socle).
-      return def.weapons!.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(weaponAt(k, 1, !!def.flying) ?? kit.attack, true));
-    });
+    const kits = Object.entries(KITS).filter(([k]) => this.kitAllowed(def, k));
     // Energy piling up: the weapons that spend it weigh three times as much.
     const weighted = kits.map(([k, wgt]): [string, number] => [k, energy >= 300 && WEAPONS[k].cost.energy > 0 ? wgt * 3 : wgt]);
     const total = weighted.reduce((n, [, wgt]) => n + wgt, 0);
