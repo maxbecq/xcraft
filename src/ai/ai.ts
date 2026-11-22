@@ -1078,8 +1078,16 @@ export class AI {
     // A raid of flyers the army cannot shoot still sends the drones near it into shelter, if its arms hit the ground (a
     // Drake over the mineral line, the drones left outside).
     if (!threat) for (const b of shelters) {
-      // Only from one within its reach of it (plus a few tiles): one hovering off kept them in for good.
-      const hide = !!raid && !this.easy && raid.armed.some((e) => !!w.weapon(e) && reaches(w.weapon(e)!, false) && this.toEdge(e, b) <= (w.weapon(e)!.range + 3) * FP);
+      // Only from one within its reach of it (plus a few tiles) or of a drone the Refuge would take in: one hovering off
+      // kept them in for good, and one over the mineral line was let be.
+      const take = (ABILITIES.refuge.radius ?? 8) * FP;
+      const exposed = serfs.filter((d) => dist(d.x, d.y, b.x, b.y) <= take);
+      const hide = !!raid && !this.easy && raid.armed.some((e) => {
+        const a = w.weapon(e);
+        if (!a || !reaches(a, false)) return false;
+        const r = (a.range + 1) * FP;
+        return this.toEdge(e, b) <= r + 2 * FP || exposed.some((d) => dist(d.x, d.y, e.x, e.y) <= r);
+      });
       if (hide) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
       else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
     }
@@ -2313,8 +2321,9 @@ export class AI {
       if (!buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) continue;
       // Nor a raider on foot that cannot walk to us (across a cliff from a Pod, it kept a full wave home for good).
       // Unless its weapon reaches one of them from there (a Phalangiste firing across the cliff).
-      const shoots = (w.weapon(e)?.range ?? 0) * FP;
-      if (!flies(e) && anchor && !buildings.some((b) => this.toEdge(e, b) <= shoots + (((e.def as UnitDef).radius ?? 0) + 0.125) * FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
+      // Its research's range too (Trébuchet intégré against buildings), as the simulation counts it.
+      const shoots = (b: Entity) => ((w.weapon(e)?.range ?? 0) + w.rangeBonus(e, b)) * FP;
+      if (!flies(e) && anchor && !buildings.some((b) => this.toEdge(e, b) <= shoots(b) + (((e.def as UnitDef).radius ?? 0) + 0.125) * FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
       foes.push(e);
     }
     if (!foes.length) return undefined;
