@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, CanvasTexture, type DataTexture, Group, Mesh, MeshStandardMaterial, type Object3D, RepeatWrapping, SRGBColorSpace } from 'three';
+import { BufferAttribute, BufferGeometry, CanvasTexture, type DataTexture, Group, Mesh, MeshStandardMaterial, type Object3D, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
 import type { BuildingDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -122,7 +122,16 @@ export class Paving {
     for (const owner of new Set(built.map((e) => e.owner))) this.build(built.filter((e) => e.owner === owner));
   }
 
-  /** Made on the first Human building, so matches without Humans never pay for the texture. */
+  /** With Humans in the match: the cobbles' texture drawn now, behind the loading screen (its 512 x 512 stones took
+   * 0.4 s of the first frame a Human building was seen in, more on a slow machine), and a hidden mesh of them for the
+   * warm-up to compile their program; gone at the first real paving. */
+  warm(): void {
+    const sample = new Mesh(new PlaneGeometry(0.01, 0.01), this.paving());
+    sample.visible = false;
+    this.root.add(sample);
+  }
+
+  /** Made on the first Human building (or by warm), so matches without Humans never pay for the texture. */
   private paving(): MeshStandardMaterial {
     if (this.material) return this.material;
     const [map, normalMap] = cobbles(this.relief);

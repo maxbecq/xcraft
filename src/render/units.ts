@@ -458,6 +458,15 @@ export class EntityRenderer {
   private ghosts: View[] = [];
 
   /** All entity roots, for picking; each carries its entity id in userData. */
+  /** The warm-up's (render/prewarm.ts): the roots of a faction's units, and every building turned to the grey ghost
+   * an enemy's becomes out of sight, so their programs are compiled before the match. */
+  rootsOf(faction: string): Object3D[] {
+    return [...this.views.values()].filter((v) => v.unit && (DEFS[v.type] as { faction?: string }).faction === faction).map((v) => v.root);
+  }
+  ghostAll(): void {
+    for (const v of this.views.values()) if (!v.unit && !v.ghost) toGhost(v);
+  }
+
   get roots(): Object3D[] {
     return [...this.views.values()].map((v) => v.root);
   }

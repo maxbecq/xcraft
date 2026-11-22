@@ -1,4 +1,4 @@
-import { type DirectionalLight, type Material, Mesh, type Object3D, type Scene, Vector3, type WebGLRenderer } from 'three';
+import { type DirectionalLight, DoubleSide, type Material, Mesh, type Object3D, Plane, type Scene, Vector3, type WebGLRenderer } from 'three';
 import type { CameraRig } from '../camera';
 import { DEFS } from '../data';
 import { FP } from '../sim/fixed';
@@ -26,6 +26,12 @@ export interface Prewarm {
   post: Post;
   /** The effects, for their particles' and stains' programs. */
   effects?: Effects;
+  /** Hidden meshes of what only shows later (an enemy's power network, the paving): compiled with the scene, kept. */
+  extras?: Object3D[];
+  /** The loading screen stopped waiting: the rest of the warm-up is dropped, never run over the match in play. */
+  stop?: () => boolean;
+  /** Whether the viewer has a fog of war (not a spectator): enemy buildings then turn to grey ghosts out of sight. */
+  ghosts?: boolean;
 }
 
 /**
@@ -58,7 +64,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   const bursts = burstSamples(new Vector3(map.width / 2, 1, map.height / 2));
   scene.add(...bursts);
   // The effects' particles and stains too: an ability's first cloud in play compiled them.
-  const fx = m.effects?.samples(new Vector3(map.width / 2, 1, map.height / 2)) ?? [];
+  const fx = [...(m.effects?.samples(new Vector3(map.width / 2, 1, map.height / 2)) ?? []), ...(m.extras ?? [])];
   scene.add(...fx);
   stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
   const into = post.sceneTarget;
@@ -78,6 +84,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     o.visible = true;
   });
   try {
+    if (m.stop?.()) return;
     rig.lookAt(map.width / 2, map.height / 2);
     rig.viewHeight = rig.overview(aspect);
     rig.update(aspect);
@@ -103,6 +110,29 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
       });
     renderer.render(scene, rig.camera);
     for (const [o, mat] of lit) o.material = mat;
+    // Once more with every Z unit cut by a plane, as a Plate-forme fabricates it layer by layer (units.ts): a cut,
+    // two-sided material is a program of its own, which the first socle of each kind compiled in play (0.5 s of one
+    // frame on an Intel HD). The copies are kept: freeing them would free their programs.
+    const plane = new Plane(new Vector3(0, -1, 0), 1e6);
+    const cut = (mat: Material) => Object.assign(mat.clone(), { clippingPlanes: [plane], clipShadows: true, side: DoubleSide });
+    const whole: [Mesh, Material | Material[]][] = [];
+    for (const root of shapes.rootsOf('z'))
+      root.traverse((o) => {
+        if (!(o instanceof Mesh) || o.userData.noPick) return;
+        whole.push([o, o.material]);
+        o.material = Array.isArray(o.material) ? o.material.map(cut) : cut(o.material);
+      });
+    if (whole.length) {
+      renderer.shadowMap.needsUpdate = true;
+      renderer.render(scene, rig.camera);
+      for (const [o, mat] of whole) o.material = mat;
+    }
+    // And with every building as the grey ghost an enemy's turns into once out of sight (views.ts): compiled when the
+    // first enemy building left the view.
+    if (m.ghosts) {
+      shapes.ghostAll();
+      renderer.render(scene, rig.camera);
+    }
     // Once more through the ambient occlusion's normal pass (post.ts): its skinned variant compiled in play when the
     // first animated character (a Human soldier, under a Z player's first Lance-flammes jet) came into view.
     if (post.normalMaterial) {
@@ -127,7 +157,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     }
     for (const o of fx) {
       scene.remove(o);
-      ((o as Mesh).material as Material).dispose();
+      if (!o.userData.keep) ((o as Mesh).material as Material).dispose();
     }
   }
 }

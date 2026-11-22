@@ -476,6 +476,21 @@ export class PowerNet {
     }
   }
 
+  /** One hidden mesh per material of the network, the enemy's variants too, for the warm-up to compile their programs
+   * and send their textures (render/prewarm.ts): an enemy's creep or beams first seen in play compiled them then. */
+  samples(): Object3D[] {
+    const g = new PlaneGeometry(0.01, 0.01);
+    const list: Object3D[] = [];
+    for (const m of Object.values(this)) {
+      if (!(m as Material)?.isMaterial) continue;
+      const mesh = new Mesh(g, m as Material);
+      mesh.userData.keep = true;
+      mesh.visible = false;
+      list.push(mesh);
+    }
+    return list;
+  }
+
   /** `highlight`: an Isdaris building is being placed, or a power building is selected. `foe`: whether an owner is the
    * viewer's enemy, whose creep and wires show only where the viewer sees now. */
   update(world: World, sees: (e: Entity) => boolean, highlight: boolean, foe: (owner: number) => boolean = () => false): void {
