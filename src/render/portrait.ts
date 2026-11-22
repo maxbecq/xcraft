@@ -5,6 +5,9 @@ import { freePreview, preview } from './models';
  * The selected entity, alive in the selection panel: its own model turning slowly (units play their idle
  * clip), drawn in a small canvas of its own. The HUD tints it like the rest of its screen.
  */
+/** Milliseconds between two pictures of the portrait (15 a second). */
+const PACE = 1000 / 15 - 2;
+
 export class Portrait {
   readonly canvas = document.createElement('canvas');
   private renderer: WebGLRenderer | null = null;
@@ -13,6 +16,8 @@ export class Portrait {
   private readonly holder = new Group();
   private mixer: AnimationMixer | null = null;
   private key = '';
+  /** The subject last drawn. */
+  private drawn = '';
   private last = performance.now();
 
   constructor() {
@@ -85,9 +90,13 @@ export class Portrait {
   /** Draws a frame when the portrait is on screen. */
   render(): void {
     const now = performance.now();
+    // 15 times a second, and at once for a new subject: it is a second WebGL picture (its own context, skinning),
+    // drawn on top of the game's every frame it shows; a slow turn and an idle sway read the same at that pace.
+    if (!this.key || (this.drawn === this.key && now - this.last < PACE)) return;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    if (!this.key || !this.canvas.isConnected || this.canvas.offsetParent === null) return;
+    if (!this.canvas.isConnected || this.canvas.offsetParent === null) return;
+    this.drawn = this.key;
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     if (!w || !h) return;

@@ -11,11 +11,11 @@ export function updateBar(h: Hud): void {
   const secs = Math.floor((h.world.tick / ticks(60)) * 60);
   if (!h.bar.children.length) h.bar.innerHTML = '<span class="res clock">-</span><span class="res min"><i></i>-</span><span class="res nrg"><i></i>-</span><span class="res sup"><i></i>-</span>';
   const [clock, min, nrg, sup] = h.bar.children as HTMLCollectionOf<HTMLElement>;
-  clock.lastChild!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  // Written only when it changes: the clock once a second, not at every call.
+  write(clock.lastChild!, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
   count(min, p.minerals);
   count(nrg, p.energy);
-  sup.lastChild!.textContent = `${s.used}/${s.max}`;
-  sup.classList.toggle('full', s.used >= s.max);
+  if (write(sup.lastChild!, `${s.used}/${s.max}`)) sup.classList.toggle('full', s.used >= s.max);
 }
 
 /** A click on a queued icon (selection panel or production panel): that one out of the queue. */
@@ -119,10 +119,18 @@ export function updateIdleProd(h: Hud): void {
 function count(span: HTMLElement, value: number): void {
   const text = span.lastChild!;
   const before = Number(text.textContent);
+  if (before === value) return;
   text.textContent = String(value);
-  if (Number.isNaN(before) || before === value) return;
+  if (Number.isNaN(before)) return;
   const dir = value > before ? 'gain' : 'spend';
   span.classList.remove('gain', 'spend');
   void span.offsetWidth;
   span.classList.add(dir);
+}
+
+/** Sets a text node's text if it differs; true when it did. */
+function write(node: ChildNode, text: string): boolean {
+  if (node.textContent === text) return false;
+  node.textContent = text;
+  return true;
 }

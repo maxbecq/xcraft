@@ -21,6 +21,14 @@ function setDetails(h: Hud, html: string): void {
 }
 
 export function updatePanel(h: Hud): void {
+  // Nothing it shows moves between two ticks but the portrait, which paces itself: the sheet was written out whole
+  // (24 tiles for a group) and compared every frame.
+  const key = `${h.world.tick}|${h.selKey}|${h.activeType}`;
+  if (key === h.panelKey) {
+    if (!h.portrait.canvas.hidden) h.portrait.render();
+    return;
+  }
+  h.panelKey = key;
   const sel = [...h.input.selected].map((id) => h.world.entities.get(id)).filter((e): e is Entity => !!e);
   h.portrait.show(sel.length === 1 ? sel[0].type : null, sel[0]?.owner);
   h.portrait.canvas.hidden = sel.length !== 1;

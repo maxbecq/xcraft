@@ -54,6 +54,8 @@ export class Hud {
   /** Control groups: one icon each (the group's most numerous type), with its key and head count. */
   readonly groups = el('div', 'groups');
   groupsKey = '';
+  /** When a group was last set, as the chips last showed. */
+  groupsAt = -1;
   buttons: Button[] = [];
   /** Hotkeys by place in the card rather than by name (Options). */
   gridKeys = false;
@@ -396,13 +398,29 @@ export class Hud {
     if (this.alertAt) this.focus(this.alertAt.x, this.alertAt.y);
   }
 
+  /** The tick the interface last showed: what only the simulation changes (resources, supply, idle workers, queues,
+   * health) is read again once a tick, not once a frame (each read went through every entity of the match). */
+  private shownTick = -1;
+  /** The selection's ids, joined once a frame for all that depends on it. */
+  selKey = '';
+  /** What the selection panel last showed (tick, selection, active kind). */
+  panelKey = '';
+
   update(): void {
-    updateBar(this);
+    const fresh = this.world.tick !== this.shownTick;
+    this.shownTick = this.world.tick;
+    this.selKey = [...this.input.selected].join();
+    if (fresh) {
+      updateBar(this);
+      updateIdle(this);
+      updateIdleProd(this);
+    }
     updatePanel(this);
-    updateIdle(this);
-    updateIdleProd(this);
-    updateProd(this);
-    updateGroups(this);
+    if (fresh || !this.prodKey) updateProd(this);
+    if (fresh || this.input.groupSet.time !== this.groupsAt) {
+      this.groupsAt = this.input.groupSet.time;
+      updateGroups(this);
+    }
     updateCard(this);
     updateGhost(this);
     showEnd(this);
@@ -412,7 +430,7 @@ export class Hud {
   /** Slides the sheet and the commands away once idle (never while a list, a placement, an aim or a tooltip is open). */
   private tuck(): void {
     const now = performance.now();
-    const sel = [...this.input.selected].join();
+    const sel = this.selKey;
     if (sel !== this.tuckSel || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
     this.tuckSel = sel;
     const tucked = document.body.classList.contains('tuck') && now - this.touchedAt > TUCK_MS;

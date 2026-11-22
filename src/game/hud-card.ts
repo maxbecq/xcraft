@@ -293,7 +293,7 @@ export function buttonsFor(h: Hud): Button[] {
 }
 
 export function updateCard(h: Hud): void {
-  const bk = `${h.world.tick}|${[...h.input.selected].join()}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.gridKeys}`;
+  const bk = `${h.world.tick}|${h.selKey}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.gridKeys}`;
   if (bk === h.buttonsKey) return placeMenu(h);
   h.buttonsKey = bk;
   h.buttons = buttonsFor(h);
