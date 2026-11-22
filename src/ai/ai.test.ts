@@ -922,7 +922,9 @@ describe('AI Isdaris blind spots', () => {
     w.tick = thinkTick(5);
     expect(turn(new AI(w, 0), w).b.gatewaysKeep).toBe(0);
     w.tick = thinkTick(7);
-    expect(turn(new AI(w, 0), w).b.gatewaysKeep).toBeGreaterThanOrEqual(200);
+    const ai = new AI(w, 0);
+    (ai as unknown as { lastIncome: number }).lastIncome = w.tick; // minerals coming in
+    expect(turn(ai, w).b.gatewaysKeep).toBeGreaterThanOrEqual(200);
   });
 
   it('an expansion is saved for up to what a robot pays for it (1330, not 1000)', () => {
@@ -952,6 +954,8 @@ describe('AI Isdaris blind spots', () => {
     const scout = w.spawn('espion', 0, foe.x - 10 * FP, foe.y - 10 * FP);
     const state = ai as unknown as { wave: Set<number>; waves: number };
     state.wave.add(scout.id);
+    // The wave's armed front round it.
+    for (let i = 0; i < 3; i++) state.wave.add(w.spawn('creature', 0, foe.x - (11 + i) * FP, foe.y - 11 * FP).id);
     state.waves = 1;
     const cmds = ai.think();
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [gate.id], name: 'couloir' }));

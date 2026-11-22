@@ -1222,18 +1222,24 @@ export class AI {
     const gaia = this.faction.builder ? ctx.builders.filter((b) => b.type === this.faction.builder && b.order?.kind !== 'build' && b.order?.kind !== 'construct') : [];
     // Passengers of a Fortin or a Scarabée use their powers from inside too (notice).
     const aboard = mine.filter((e) => e.inside && e.def.kind === 'unit' && w.abilitiesFor(e).length && (w.entities.get(e.inside)?.def.kind === 'building' || w.entities.get(e.inside)?.type === 'scarabee'));
-    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia, ...aboard]));
+    // The invisible raiders too (an Assassin's Choc mental was never cast).
+    if (!this.easy) ctx.out.push(...this.tactics([...army, ...gods, ...gaia, ...aboard, ...ctx.raiders]));
     // Isdaris Couloir temporel: one Espion stays at the rally point, the other goes with the wave; the reinforcements
     // gathered round the first go through to the second (it was never cast: one Espion only, no rule for it).
     const spies = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('couloir'));
     if (spies.length >= 2 && !this.easy && w.level(this.player, 'couloir')) {
       const gate = spies.find((u) => !this.wave.has(u.id));
-      const far = spies.find((u) => this.wave.has(u.id) && dist(u.x, u.y, home.x, home.y) > 25 * FP);
+      // With the wave's armed front still round it (left alone when the wave fell back, it drew packets to their death).
+      const far = spies.find((u) => this.wave.has(u.id) && dist(u.x, u.y, home.x, home.y) > 25 * FP && army.filter((o) => this.wave.has(o.id) && !!w.weapon(o) && dist(o.x, o.y, u.x, u.y) < 10 * FP).length >= 3);
       if (gate && dist(gate.x, gate.y, ctx.rally.x, ctx.rally.y) > 3 * FP && gate.order?.kind !== 'move') ctx.out.push({ player: this.player, kind: 'move', ids: [gate.id], x: ctx.rally.x, y: ctx.rally.y });
       const r = (ABILITIES.couloir.radius ?? 3) * FP;
       // Those round it, waiting or setting off with a new wave (muster has just sent them).
-      const waiting = gate ? army.filter((u) => u !== gate && !flies(u) && dist(u.x, u.y, gate.x, gate.y) <= r).length : 0;
-      if (gate && far && waiting >= 4 && w.ready(gate, 'couloir')) ctx.out.push({ player: this.player, kind: 'ability', ids: [gate.id], name: 'couloir' });
+      const waiting = gate ? army.filter((u) => u !== gate && !flies(u) && dist(u.x, u.y, gate.x, gate.y) <= r) : [];
+      if (gate && far && waiting.length >= 4 && w.ready(gate, 'couloir')) {
+        ctx.out.push({ player: this.player, kind: 'ability', ids: [gate.id], name: 'couloir' });
+        // Those sent through join the wave (outside it, they had no orders at the front).
+        for (const u of waiting) this.wave.add(u.id);
+      }
     }
     // Dieux: two Élémentaires waiting at home fuse into a Golem, late on; apart, one walks to the other.
     const elems = army.filter((u) => abilitiesOf(u.def as UnitDef).includes('fusion') && !this.wave.has(u.id) && !u.order && u.abilityCd === 0);
