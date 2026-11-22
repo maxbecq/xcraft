@@ -809,7 +809,7 @@ export class AI {
     } else if (market && !raising && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
-    } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || (!this.settled(ctx.home) && this.shortOfMinerals(ctx)))) {
+    } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || ((!this.settled(ctx.home) || ctx.serfs.length === 0) && this.shortOfMinerals(ctx)))) {
       // (with no base: for a unit short of minerals the sale can pay, as think counted it)
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
@@ -1075,7 +1075,13 @@ export class AI {
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
     // The danger gone, the sheltered drones come out (back to work as idle workers).
-    if (!threat) for (const b of shelters) if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
+    // A raid of flyers the army cannot shoot still sends the drones near it into shelter, if its arms hit the ground (a
+    // Drake over the mineral line, the drones left outside).
+    if (!threat) for (const b of shelters) {
+      const hide = !!raid && !this.easy && raid.armed.some((e) => !!w.weapon(e) && reaches(w.weapon(e)!, false)) && dist(b.x, b.y, raid.x, raid.y) < 12 * FP;
+      if (hide) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
+      else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
+    }
     if (threat) {
       const near = (u: Entity) => dist(u.x, u.y, threat.x, threat.y) < 12 * FP;
       // Outnumbered at home: the wave comes back, unless it is already fighting next to the threat.
@@ -2195,12 +2201,14 @@ export class AI {
     return !raisers.length || raisers.some((r) => !this.exposedRoad(r, c));
   }
 
-  /** No base: a fighting unit a building of ours trains is short of minerals only, and a sale leaves its energy. */
+  /** No base (or no worker): a fighting unit (the next worker) a building of ours trains is short of minerals only,
+   * and a sale leaves its energy. */
   private shortOfMinerals(ctx: Turn): boolean {
     const T = BALANCE.rules.trade;
     return ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.some((t) => {
       const d = DEFS[t] as UnitDef;
-      return d.kind === 'unit' && !d.worker && !!d.attack && ctx.minerals < d.cost.minerals && ctx.energy - T.give >= d.cost.energy && ctx.minerals + this.sale(ctx.energy, d.cost.energy) >= d.cost.minerals;
+      // (or, no worker left, the next worker)
+      return d.kind === 'unit' && (ctx.serfs.length === 0 && this.settled(ctx.home) ? t === this.faction.worker : !d.worker && !!d.attack) && ctx.minerals < d.cost.minerals && ctx.energy - T.give >= d.cost.energy && ctx.minerals + this.sale(ctx.energy, d.cost.energy) >= d.cost.minerals;
     }));
   }
 
@@ -2297,7 +2305,7 @@ export class AI {
       // Nor a raider on foot that cannot walk to us (across a cliff from a Pod, it kept a full wave home for good).
       // Unless its weapon reaches one of them from there (a Phalangiste firing across the cliff).
       const shoots = (w.weapon(e)?.range ?? 0) * FP;
-      if (!flies(e) && anchor && !buildings.some((b) => dist(e.x, e.y, b.x, b.y) <= shoots + (((b.def as BuildingDef).size ?? 0) * FP) / 2 + FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
+      if (!flies(e) && anchor && !buildings.some((b) => dist(e.x, e.y, b.x, b.y) <= shoots + (((b.def as BuildingDef).size ?? 0) * FP) / 2 + (((e.def as UnitDef).radius ?? 0) + 0.125) * FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
       foes.push(e);
     }
     if (!foes.length) return undefined;
