@@ -82,6 +82,8 @@ export interface UnitDef {
   /** Soigneur (fiche 2010, Soins): its hp come back `healPulse` at a time (every healPulse / heal s), `healRange` tiles off. */
   healPulse?: number;
   healRange?: number;
+  /** Passive effects shown as an icon on its card (ABILITIES entries without a button of their own to press). */
+  passives?: string[];
   /** Mana each pulse of healing costs (the Soin of the balance designer, 2026-11-22: 5 for 25 hp). */
   healMana?: number;
   worker?: boolean;
@@ -349,6 +351,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
   // Balance designer 2026-11-22: the Artefacterie works like the Z Centre K, an improvement picked there and given to a
   // god clicked on, wherever it stands (no longer bought at the god); its price that of the improvement.
+  // Passive effects, shown as an icon on the card (balance designer 2026-11-22); UnitDef.passives.
+  auraguerre: { name: 'Aura de guerre', effect: 'Effet permanent : les troupes autour d\'Odin frappent plus fort, +1 / +2 / +4 à 4 / 5 / 6 cases selon son niveau.', hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  auraprotection: { name: 'Aura défensive', effect: 'Effet permanent : les troupes autour d\'Athéna gagnent de l\'armure, +1 / +2 / +3 à 4 / 8 / 16 cases selon son niveau.', hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
   // Balance designer 2026-11-22: the Soin heals by itself, switched off and on again from this button.
   autosoin: { name: 'Soin automatique', effect: 'Active ou coupe le soin automatique des alliés blessés (pas des machines).', hotkey: 'W', target: 'self', cooldown: 0, duration: 0 } as AbilityDef,
   artforce: { name: 'Force', effect: 'Sur un dieu, où qu\'il soit : il frappe plus fort.', hotkey: 'G', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artforce.cost } as AbilityDef,
@@ -776,8 +781,8 @@ const BASE: Record<string, object> = {
   seth: { kind: 'unit', name: 'Seth', radius: 1.7, trains: ['sphinx'], unique: true, abilities: ['jetdesable', 'amonra'], ability: 'tempete', faction: 'dieux', hotkey: 'S' },
   // Second rank (notice): two first-rank gods standing open it. Odin's war aura and Athéna's protection aura are
   // passive (rules.auraguerre, rules.auraprotection).
-  odin: { kind: 'unit', name: 'Odin', radius: 1.7, trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
-  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, trains: ['minotaure', 'elembase'], unique: true, abilities: ['chouette', 'tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
+  odin: { kind: 'unit', name: 'Odin', radius: 1.7, passives: ['auraguerre'], trains: ['nain', 'corbeau', 'drake'], unique: true, abilities: ['jormungand'], ability: 'foudre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'O' },
+  athena: { kind: 'unit', name: 'Athéna', radius: 1.5, passives: ['auraprotection'], trains: ['minotaure', 'elembase'], unique: true, abilities: ['chouette', 'tempetezeus'], ability: 'cridegueurre', requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'H' },
   isis: { kind: 'unit', name: 'Isis', radius: 1.5, trains: ['sphinx', 'pretresse'], unique: true, abilities: ['autosoin', 'soinsdivins', 'resurrection', 'amonra'], requiresAny: { of: ['thor', 'apollon', 'seth'], count: 2 }, faction: 'dieux', hotkey: 'I' },
   /** Odin's ravens: fast flying scouts, invisible, that see the invisible. */
   corbeau: { kind: 'unit', name: 'Corbeau', radius: 0.35, flying: true, beast: true, cloaked: true, faction: 'dieux', hotkey: 'C' },

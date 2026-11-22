@@ -144,6 +144,8 @@ export function buttonsFor(h: Hud): Button[] {
       const on = ab === 'autosoin' ? (casters.some((u) => !u.autoOff) ? ' : oui' : ' : non') : '';
       list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
+    // Passive effects (Odin's war aura, Athéna's protection): an icon that does nothing, its effect in the tooltip.
+    for (const p of new Set(units.flatMap((u) => (u.def as UnitDef).passives ?? []))) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
     // Z socles: evolve into the next tier, in the field.
     const evolvers = units.filter((u) => h.world.nextTier(u) && !u.evolving);
     if (evolvers.length) {

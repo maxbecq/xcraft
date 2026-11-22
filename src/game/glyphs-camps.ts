@@ -100,6 +100,8 @@ export const DIEUX_GLYPHS: Record<string, string> = {
   tempetezeus: 'M6 14a4 4 0 0 1 1-8 5 5 0 0 1 9 1 3.5 3.5 0 0 1 1 7zM10 14l-2 4h3l-2 4M16 14l-2 3h3l-2 3',
   voile: 'M4 14a4 4 0 0 1 2-7 6 6 0 0 1 11 1 4 4 0 0 1 1 6zM4 18h16M6 21h12',
   voyage: 'M2 8h4l3 10h6l3-10h4M5 5l2 2 2-2M7 7V3M15 5l2-2 2 2M17 3v4',
+  auraguerre: 'M4 20L14 10M14 10l2-6 4-0-0 4-6 2M20 20L10 10M10 10L8 4 4 4l0 4 6 2M3 12a9 9 0 1 0 18 0',
+  auraprotection: 'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6zM12 7v10M8 11h8',
   auraputride: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M12 3v5M12 16v5M3 12h5M16 12h5M5.6 5.6l3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6',
   celerite: 'M3 19c3-10 12-12 17-8M20 11l-1 4M20 11l-4-1M3 21h4',
   coupuissant: 'M4 5c0 4 3 7 8 7s8-3 8-7M8 18l4-6 4 6M5 21h14',
