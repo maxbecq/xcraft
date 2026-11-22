@@ -358,6 +358,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   explosiftoxique: { name: 'Explosif toxique', effect: 'Un nuage toxique : 37 dégâts par seconde pendant 4 s aux ennemis qui s\'y trouvent ; plusieurs nuages s\'additionnent.', hotkey: 'E', target: 'point', research: 'cocktail', ...BALANCE.abilities.explosiftoxique },
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
   /** Char Pégase (notice, 2010 sheet, mod): invisible chemical mines, 5 in stock, one more every 12 s, 160 damage. */
+  // The balancer (2026-11-22): the Bourdon drops a mine, in sight, that goes off 3 s later on its own.
+  minealchimique: { name: 'Larguer une mine alchimique', effect: 'Largue au sol une mine visible qui explose 3 s plus tard : 160 dégâts dans un rayon de 1,75. Coûte 50 minerais et 15 énergie.', hotkey: 'M', ...BALANCE.abilities.minealchimique },
   posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve ; le char en refait une toutes les 12 s, pour 35 minerais et 20 énergie prélevés d\'office).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
   /** Isdaris major buildings (notice: Obélisque, Portail, Psycho-assembleur, Orbe de commandement, Trône): a plasma shield
    * that makes it unhurt for a while, unable to shoot or produce (sheet and mod « Déphasage »; the mod's 10 s, cooldown 90). */
@@ -524,7 +526,7 @@ const BASE: Record<string, object> = {
   scarabee: { kind: 'unit', name: 'Scarabée', radius: 0.8, mechanical: true, faction: 'humains', hotkey: 'S' },
   // The balancer (2026-11-22): the Bourdon and the Dirigeable are two units, by the 2010 sheet. The Bourdon: a small
   // anti-air gyrocopter (air only, range 5), a detector, dropping alchemical mines.
-  bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, faction: 'humains', hotkey: 'B' },
+  bourdon: { kind: 'unit', name: 'Bourdon', radius: 0.45, flying: true, mechanical: true, ability: 'minealchimique', faction: 'humains', hotkey: 'B' },
   // The Dirigeable: transport (4 of supply) and reconnaissance, a detector, unarmed.
   dirigeable: { kind: 'unit', name: 'Dirigeable', radius: 0.6, flying: true, mechanical: true, faction: 'humains', hotkey: 'G' },
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
@@ -540,6 +542,8 @@ const BASE: Record<string, object> = {
   // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
   /** Laid by a Char Pégase, never trained. */
   minechimique: { kind: 'unit', name: 'Mine chimique', radius: 0.3, cloaked: true, mechanical: true, faction: 'humains', hotkey: 'M' },
+  /** Dropped by a Bourdon, never trained: in sight, it goes off when its fuse runs out. */
+  minealchimique: { kind: 'unit', name: 'Mine alchimique', radius: 0.3, mechanical: true, faction: 'humains', hotkey: 'M' },
   cuve: { kind: 'unit', name: 'Réservoir de substances', radius: 0.7, mechanical: true, abilities: ['gazeuphorisants', 'acidedissolvant', 'explosioncuve'], faction: 'humains', hotkey: 'V' },
   // Notice: a fallen living unit raised by an Alchimiste, fighting for its side for a while (mod « Cadavre réanimé »).
   cadavre: { kind: 'unit', name: 'Cadavre réanimé', radius: 0.375, faction: 'humains', hotkey: 'Z' },
@@ -982,7 +986,7 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 }
 
 /** Types drawn with another's model and icon until they get their own (render only). */
-export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
 export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 

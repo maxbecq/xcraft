@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
-import { FP, speedPerTick } from './fixed';
+import { FP, speedPerTick, ticks } from './fixed';
 import { createMatch } from './setup';
 import type { World } from './world';
 
@@ -11,7 +11,7 @@ const humans = () => {
   return w;
 };
 let at = 20;
-const put = (w: World, type: string) => w.spawn(type, 0, (at += 6) * FP, 40 * FP);
+const put = (w: World, type: string) => w.spawn(type, 0, (at = at >= 80 ? 26 : at + 6) * FP, 40 * FP);
 
 describe('the balancer, Humains', () => {
   it('the tech tree', () => {
@@ -147,5 +147,26 @@ describe('the balancer, Humains', () => {
     expect(w.weapon(p)).toMatchObject({ cooldown: 2.3, air: true, ground: false });
     expect(w.baseSpeed(p)).toBe(speedPerTick(2.4));
     expect(p.speed).toBe(speedPerTick(2.4));
+  });
+
+  it('Larguer une mine alchimique: 50 minerals and 15 energy, a mine in sight that goes off 3 s later, 160 round 1.75, 10 s of cooldown', () => {
+    const w = humans();
+    const b = w.spawn('bourdon', 0, 26 * FP, 40 * FP);
+    const foe = w.spawn('legionnaire', 1, b.x + FP, b.y);
+    const far = w.spawn('legionnaire', 1, b.x + 4 * FP, b.y);
+    foe.held = far.held = 1e6; // they stay put
+    const [m0, e0] = [w.players[0].minerals, w.players[0].energy];
+    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'minealchimique' }]);
+    expect([m0 - w.players[0].minerals, e0 - w.players[0].energy]).toEqual([50, 15]);
+    const mine = [...w.entities.values()].find((e) => e.type === 'minealchimique')!;
+    expect(mine).toBeDefined();
+    expect(w.sees(1, mine) || !(mine.def as UnitDef).cloaked).toBe(true);
+    expect(b.abilityCd).toBeGreaterThanOrEqual(ticks(10) - 1);
+    for (let i = 0; i < ticks(3) - 2; i++) w.step([]);
+    expect(foe.hp).toBe(foe.maxHp);
+    for (let i = 0; i < 4; i++) w.step([]);
+    expect(foe.hp).toBeLessThan(foe.maxHp);
+    expect(far.hp).toBe(far.maxHp);
+    expect(w.entities.has(mine.id)).toBe(false);
   });
 });

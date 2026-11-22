@@ -484,7 +484,10 @@ export class World {
       if (e.reflect > 0) e.reflect--;
       // Régénérant wears off: the toxins turn on their host.
       if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
-      if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
+      if (e.ttl > 0 && --e.ttl === 0) {
+        if (e.type === 'minealchimique') this.mineBlast(e);
+        e.hp = 0;
+      }
       if (e.skin > 0) e.skin--;
       if (e.charged > 0) e.charged--;
       if (e.war > 0) e.war--;

@@ -167,6 +167,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
     return;
+  } else if (name === 'minealchimique') {
+    // Bourdon: a mine dropped on the ground under it, paid by its side.
+    if (!this.pay(e.owner, { cost: BALANCE.rules.upgrades.minealchimiquePrice })) return;
+    const [ox, oy] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y));
+    this.spawn('minealchimique', e.owner, ox * FP + FP / 2, oy * FP + FP / 2);
+    this.casts.push({ kind: 'posermine', x: e.x, y: e.y });
   } else if (name === 'posermine') {
     // Char Pégase: a chemical mine from its stock, under it, on the ground only; its own cooldown is the stock.
     if (e.airborne) return void this.say(e.owner, 'Les mines se posent au sol.');
@@ -468,6 +474,16 @@ export function mineTrigger(this: World, m: Entity): void {
   for (const t of foes) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
   m.hp = 0;
+}
+
+/** A Bourdon's alchemical mine at the end of its fuse: its damage on every enemy walker of the zone. */
+export function mineBlast(this: World, m: Entity): void {
+  const ab = ABILITIES.minealchimique;
+  const r = toFp(ab.radius!);
+  for (const t of [...this.entities.values()]) {
+    if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
+  }
+  this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
 }
 
 /** A Canon orbital shot lands: it spares nothing under it. */
