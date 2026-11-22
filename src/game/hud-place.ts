@@ -97,7 +97,33 @@ function addonRoom(h: Hud, type: string, spot: [number, number]): [number, numbe
   return h.world.addonSpotAt(big, spot[0], spot[1], def.size, h.player) ?? null;
 }
 
+/** Per HUD, the wells it last saw taken by an extractor (a well never seen taken counts as free). */
+const seenTaken = new WeakMap<Hud, { tick: number; taken: Map<number, boolean> }>();
+
+/**
+ * Which wells the player knows to be taken, as last seen: under the fog a well keeps the state it was seen in, so the
+ * placement grid never shows an enemy extractor the player cannot see. Brought up to date once a tick.
+ */
+export function takenAsSeen(h: Hud): Map<number, boolean> {
+  let m = seenTaken.get(h);
+  if (!m) seenTaken.set(h, (m = { tick: -1, taken: new Map() }));
+  if (m.tick === h.world.tick) return m.taken;
+  m.tick = h.world.tick;
+  const w = h.world;
+  const all = h.spectator || !!w.players[h.player]?.reveal;
+  const on = new Map<number, Entity>();
+  for (const e of w.entities.values()) if (e.def.kind === 'building' && (e.def as BuildingDef).energyRate) on.set(e.ty * w.map.width + e.tx, e);
+  for (const e of w.entities.values()) {
+    if (e.type !== 'puits') continue;
+    const x = on.get(e.ty * w.map.width + e.tx);
+    if (x && (all || w.sees(h.player, x))) m.taken.set(e.id, true);
+    else if (all || w.sees(h.player, e)) m.taken.set(e.id, false);
+  }
+  return m.taken;
+}
+
 export function updateGhost(h: Hud): void {
+  takenAsSeen(h);
   const touch = !!h.placing && h.input.touching;
   if (!h.placing) h.pin = null;
   else if (touch && !h.pin) h.pin = h.input.aim()?.clone() ?? null;
@@ -162,7 +188,7 @@ function updateGrid(h: Hud, type: string, at: Vector3): void {
     // Extractors: the free wells light up, every other tile is red.
     const free = new Set<number>();
     for (const w of h.world.entities.values()) {
-      if (w.type !== 'puits' || !h.world.canPlace(type, w.tx, w.ty, h.player)) continue;
+      if (w.type !== 'puits' || takenAsSeen(h).get(w.id)) continue;
       wells.push([w.tx, w.ty]);
       for (let y = w.ty; y < w.ty + def.size; y++) for (let x = w.tx; x < w.tx + def.size; x++) free.add(y * h.map.width + x);
     }

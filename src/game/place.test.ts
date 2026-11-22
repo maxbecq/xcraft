@@ -22,3 +22,26 @@ describe('placing an extractor', () => {
     expect(issued).toHaveLength(1);
   });
 });
+
+describe('free wells as the player knows them', () => {
+  it('an enemy extractor under the fog does not take its well off the grid; once seen, it does, and stays so', async () => {
+    const { takenAsSeen } = await import('./hud-place');
+    const w = createMatch(['isdaris', 'z']);
+    const hud = { world: w, player: 0, spectator: false };
+    const look = () => { for (let i = 0; i < 4; i++) w.step([]); }; // vision: every 4 ticks
+    look();
+    const wells = [...w.entities.values()].filter((e) => e.type === 'puits');
+    const far = wells.find((e) => !w.sees(0, e))!;
+    const enemy = Object.assign(w.spawn('recepteur', 1, far.x, far.y), { tx: far.tx, ty: far.ty }); // right on the well
+    look();
+    expect(w.canPlace('recepteur', far.tx, far.ty, 0)).toBe(false); // the simulation knows
+    expect(takenAsSeen(hud as never).get(far.id)).toBeFalsy(); // the player does not
+    const scout = w.spawn('moissonneur', 0, far.x, far.y);
+    look();
+    expect(takenAsSeen(hud as never).get(far.id)).toBe(true);
+    w.remove(scout);
+    look();
+    expect(w.sees(0, enemy)).toBe(false);
+    expect(takenAsSeen(hud as never).get(far.id)).toBe(true); // as last seen
+  });
+});
