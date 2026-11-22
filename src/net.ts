@@ -31,7 +31,7 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
  * `hi`: who this page is and its build, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
  * asked for; `go`: the host's room for it, once both asked.
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -220,6 +220,48 @@ export function greeting(them: string | null, m: Record<string, unknown>, versio
   return typeof m.hi === 'string' && m.v === version ? 'ok' : 'other-version';
 }
 
+/**
+ * A message that must get through before acting on it (a launch, a rematch): sent again every `every` ms until it is
+ * acknowledged, given up after `within`.
+ */
+export class Confirm {
+  private since = -1;
+  private last = 0;
+  constructor(
+    private readonly send: () => void,
+    private readonly now: () => number = () => performance.now(),
+    private readonly every = 400,
+    private readonly within = 6000,
+  ) {}
+  start(): void {
+    this.since = this.last = this.now();
+    this.send();
+  }
+  /** Called often: sends again when due. 'expired' once, when no answer came in time. */
+  poll(): 'idle' | 'waiting' | 'expired' {
+    if (this.since < 0) return 'idle';
+    const t = this.now();
+    if (t - this.since > this.within) {
+      this.since = -1;
+      return 'expired';
+    }
+    if (t - this.last >= this.every) {
+      this.last = t;
+      this.send();
+    }
+    return 'waiting';
+  }
+  /** The answer came: true the first time, when it is to be acted on. */
+  ack(): boolean {
+    const waiting = this.since >= 0;
+    this.since = -1;
+    return waiting;
+  }
+  cancel(): void {
+    this.since = -1;
+  }
+}
+
 /** Without a word from the other side for this long, the match ends (by forfeit, or with no winner when the link is cut). */
 export const FORFEIT_MS = 60_000;
 /** Shorter waits go unsaid: a hiccup, not a problem. */
@@ -268,10 +310,21 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   const peer = player === 0 ? new Peer(peerId(room)) : new Peer();
   const began = performance.now();
   const again = new Rematch(player);
+  /** The host's room for the rematch, sent again until the guest says it is on its way (then the host goes too). */
+  let rematchRoom = '';
+  const goSent = new Confirm(() => sendOn(conn, { go: rematchRoom } satisfies Message));
+  /** The room the guest took: a resent `go` for it is acknowledged again (the first answer may have been lost). */
+  let taken = '';
   const go = (room: string | null) => {
     if (!room) return;
-    if (player === 0) sendOn(conn, { go: room } satisfies Message);
-    onStatus('go', room);
+    if (player === 0) {
+      rematchRoom = room;
+      goSent.start();
+    } else {
+      taken = room;
+      sendOn(conn, { went: 1 } satisfies Message);
+      onStatus('go', room);
+    }
   };
   let dialed = -Infinity;
   /** The guest's call under way; when a guest first knocked at the host without getting in; the network blamed once. */
@@ -316,7 +369,12 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       else if ('again' in m) {
         onStatus('again');
         go(again.theyAsk());
-      } else if ('go' in m) go(again.take(m.go));
+      } else if ('go' in m) {
+        if (taken && m.go === taken) sendOn(conn, { went: 1 } satisfies Message);
+        else go(again.take(m.go));
+      } else if ('went' in m) {
+        if (player === 0 && goSent.ack()) onStatus('go', rematchRoom);
+      }
       else {
         lock.receive(m);
         if (lock.left) set('left', "L'adversaire a quitté la partie.");
@@ -347,6 +405,11 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       set(player === 0 ? 'waiting' : 'connecting', NO_DIRECT);
     }
     if (conn) lock.poll();
+    // The guest never said it was on its way: no rematch (it is taken as gone).
+    if (goSent.poll() === 'expired') {
+      again.lost();
+      onStatus('left');
+    }
   });
   return {
     lock,
@@ -433,7 +496,7 @@ const int = (v: unknown): v is number => Number.isSafeInteger(v);
 function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
   const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
   const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome);
-  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) : 'camp' in m ? id(m.camp) : false;
+  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) : 'camp' in m ? id(m.camp) : 'went' in m ? m.went === 1 : false;
 }
 
 /** Sends only on a channel still open: some browsers (Safari) throw, uncaught, on one closing. */
@@ -464,7 +527,7 @@ export interface LobbySetup {
   biome: string;
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match, with the setup both pages load. */
-type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup } | { v: string };
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup } | { went: 1 } | { v: string };
 /** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
 /**
@@ -492,6 +555,8 @@ export function openLobby(
   let calledAt = 0;
   let knocked = 0;
   let said = false;
+  /** The friend's page answered with our version: only then is it in the room. */
+  let checked = false;
   const peer = host ? new Peer(`xcraft-lobby-${room}`) : new Peer();
   const began = performance.now();
   const attach = (c: DataConnection) => {
@@ -502,17 +567,21 @@ export function openLobby(
       calling = null;
       knocked = 0;
       said = false;
-      sendOn(c, { v: VERSION });
-      on.status('here');
+      checked = false;
+      sendOn(c, { v: VERSION }); // 'here' once its own comes back, the same
     });
     c.on('data', (d) => {
       if (c !== conn || !isRecord(d)) return;
       const m = d;
       if (!('v' in m)) {
-        if (lobbyOk(m)) on.message(m);
+        if (checked && lobbyOk(m)) on.message(m);
         return;
       }
-      if (m.v === VERSION) return;
+      if (m.v === VERSION) {
+        if (!checked) on.status('here');
+        checked = true;
+        return;
+      }
       // Turned away, and said so on both sides; the host's room stays open for the friend once reloaded.
       conn = null;
       c.close();

@@ -14,7 +14,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { commandOk, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
+import { commandOk, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -360,5 +360,24 @@ describe('lockstep between two browsers', () => {
     expect(greeting('a', { hi: 'a', v: '1' }, '1')).toBe('ok'); // back after a cut
     expect(greeting('a', { hi: 'b', v: '0' }, '1')).toBe('stranger'); // the match goes on
     expect(greeting('a', { hi: 'b', v: '1' }, '1')).toBe('stranger');
+  });
+
+  it('sends a launch again until it is answered, then acts on it once; gives up in time', () => {
+    let now = 0;
+    let sent = 0;
+    const c = new Confirm(() => sent++, () => now, 400, 6000);
+    expect(c.poll()).toBe('idle');
+    c.start();
+    expect(sent).toBe(1);
+    for (now = 0; now <= 2000; now += 100) expect(c.poll()).toBe('waiting');
+    expect(sent).toBe(6); // every 400 ms
+    expect(c.ack()).toBe(true);
+    expect(c.ack()).toBe(false); // a second answer: nothing more to do
+    expect(c.poll()).toBe('idle');
+    c.start();
+    now += 6001;
+    expect(c.poll()).toBe('expired');
+    expect(c.poll()).toBe('idle');
+    expect(c.ack()).toBe(false); // too late
   });
 });

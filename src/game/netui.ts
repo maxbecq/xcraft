@@ -88,8 +88,8 @@ export class NetGame {
   private rematch(status: NetStatus, room?: string): void {
     const button = document.querySelector<HTMLButtonElement>('.hud-banner [data-p="restart"]');
     if (status === 'go') {
-      // The host's page leaves a moment after telling the other, so the room's name gets there.
-      setTimeout(() => (location.search = `?net=${NET_ROLE}&room=${room}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${this.biome.id}&map=${MAP.id}`), PLAYER === 0 ? 300 : 0);
+      // The host goes once the guest said it was on its way; the guest a moment after saying so, so that it gets there.
+      setTimeout(() => (location.search = `?net=${NET_ROLE}&room=${room}&camp=${factions[0]}&adversaire=${factions[1]}&biome=${this.biome.id}&map=${MAP.id}`), PLAYER === 0 ? 0 : 300);
     } else if (button && status === 'again') button.textContent = this.rematchAsked ? 'Revanche…' : 'Revanche (votre adversaire est prêt)';
     else if (button) {
       button.disabled = true;

@@ -2,7 +2,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { MAPS, type MapFile, mapFile } from '../maps';
 import { mapCards, seatsOf } from '../mappicker';
-import { newRoom, openLobby, readRoom, type LobbySetup } from '../net';
+import { Confirm, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
 import { BIOMES, type Biome, biomesFor, fitBiome } from '../render/biome';
@@ -361,8 +361,17 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
         setup.camps[1] = asFaction(m.camp);
         lobby.send({ setup });
       } else if ('go' in m && !host) {
-        if (!unknown(m.go)) return play(m.go);
-        status = UNKNOWN_TEXT;
+        if (unknown(m.go)) status = UNKNOWN_TEXT;
+        else {
+          // Said back (again for a resent one), and the page goes a moment later, so that the answer gets there.
+          lobby.send({ went: 1 });
+          if (!going) going = window.setTimeout(() => play(m.go), 300);
+          return;
+        }
+      } else if ('went' in m && host && launching?.ack()) {
+        const final = launching.setup;
+        unlaunch();
+        return play(final);
       }
       refresh();
     },
@@ -376,8 +385,17 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     else lobby.send({ camp: setup.camps[me] });
     refresh();
   };
-  /** « Lancer »'s page change, a moment after telling the other side: Retour or Réessayer call it off. */
+  /** The guest's page change, a moment after answering « Lancer »: Retour or Réessayer call it off. */
   let going = 0;
+  /** The host's « Lancer », sent again until the guest answers: only then does the host's page go. */
+  let launching: (Confirm & { setup: LobbySetup }) | null = null;
+  let launchWatch = 0;
+  const unlaunch = () => {
+    clearTimeout(going);
+    going = 0;
+    clearInterval(launchWatch);
+    launching = null;
+  };
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
     const m = button?.dataset.m;
@@ -395,16 +413,21 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     else if (m === 'go' && here) {
       // The setup as it stands now is the match, on both pages, whatever comes in meanwhile.
       const final: LobbySetup = { ...setup, camps: [...setup.camps] };
-      lobby.send({ go: final });
-      // A moment for the message to leave before the page does (called off by Retour or Réessayer meanwhile).
-      clearTimeout(going);
-      going = window.setTimeout(() => play(final), 300);
+      unlaunch();
+      launching = Object.assign(new Confirm(() => lobby.send({ go: final })), { setup: final });
+      launching.start();
+      launchWatch = window.setInterval(() => {
+        if (launching?.poll() !== 'expired') return;
+        unlaunch();
+        status = "Votre ami n'a pas répondu au lancement : vérifiez sa connexion, puis relancez.";
+        refresh();
+      }, 100);
     } else if (m === 'retry') {
-      clearTimeout(going);
+      unlaunch();
       lobby.close();
       showLobby(menu, host ? newRoom() : room, host);
     } else if (m === 'back') {
-      clearTimeout(going);
+      unlaunch();
       lobby.close();
       history.replaceState(null, '', location.pathname);
       showHome();
