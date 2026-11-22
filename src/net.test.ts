@@ -26,7 +26,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { blamesNetwork, commandOk, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
+import { blamesNetwork, commandOk, versionLapsed, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -412,5 +412,11 @@ describe('lockstep between two browsers', () => {
     expect(blamesNetwork(16_000, 0, 0)).toBe(true); // called 16 s, never told the room is missing
     expect(blamesNetwork(16_000, 0, 14_000)).toBe(false); // the server keeps saying no such room
     expect(blamesNetwork(40_000, 0, 20_000)).toBe(true); // the room appeared, and still nothing gets through
+  });
+
+  it("frees a waiting room's seat when the page in it never says its version", () => {
+    expect(versionLapsed(false, 1000, 5000)).toBe(false); // still exchanging
+    expect(versionLapsed(false, 1000, 9500)).toBe(true); // stuck: the seat is given back
+    expect(versionLapsed(true, 1000, 99_000)).toBe(false); // checked: in the room for good
   });
 });

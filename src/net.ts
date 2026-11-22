@@ -227,6 +227,12 @@ export function greeting(them: string | null, m: Record<string, unknown>, versio
   return typeof m.hi === 'string' && m.v === version ? 'ok' : 'other-version';
 }
 
+/** A waiting room's channel open this long without the other page's version: given up, the seat freed. */
+const VERSION_MS = 8000;
+export function versionLapsed(checked: boolean, openedAt: number, now: number): boolean {
+  return !checked && now - openedAt > VERSION_MS;
+}
+
 /**
  * A message that must get through before acting on it (a launch, a rematch): sent again every `every` ms until it is
  * acknowledged, given up after `within`.
@@ -517,7 +523,7 @@ const int = (v: unknown): v is number => Number.isSafeInteger(v);
 function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
   const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
   const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome);
-  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) : 'camp' in m ? id(m.camp) : 'went' in m ? m.went === 1 : false;
+  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) && int(m.id) : 'camp' in m ? id(m.camp) : 'went' in m ? int(m.went) : false;
 }
 
 /** Sends only on a channel still open: some browsers (Safari) throw, uncaught, on one closing. */
@@ -557,7 +563,7 @@ export interface LobbySetup {
   biome: string;
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match, with the setup both pages load. */
-type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup } | { went: 1 } | { v: string };
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup; id: number } | { went: number } | { v: string };
 /** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
 /**
@@ -594,8 +600,9 @@ export function openLobby(
   let said = false;
   /** When the introduction server last said there is no such room (yet): a wrong code, or a host not there yet. */
   let missingAt = 0;
-  /** The friend's page answered with our version: only then is it in the room. */
+  /** The friend's page answered with our version: only then is it in the room; when its channel opened. */
   let checked = false;
+  let openedAt = 0;
   const peer = host ? new Peer(`xcraft-lobby-${room}`) : new Peer();
   const began = performance.now();
   const attach = (c: DataConnection) => {
@@ -607,6 +614,7 @@ export function openLobby(
       knocked = 0;
       said = false;
       checked = false;
+      openedAt = performance.now();
       sendOn(c, { v: VERSION }); // 'here' once its own comes back, the same
     });
     c.on('data', (d) => {
@@ -660,8 +668,16 @@ export function openLobby(
   const watch = setInterval(() => {
     if (peer.destroyed) return;
     if (peer.disconnected) peer.reconnect();
-    if (conn) return;
     const now = performance.now();
+    // A page that opened a channel but never said its version (stuck, or not a game page) gives the seat back.
+    if (conn && versionLapsed(checked, openedAt, now)) {
+      const c = conn;
+      conn = null;
+      c.close();
+      on.status(host ? 'waiting' : 'gone');
+      if (!host) setTimeout(dial, 2000);
+    }
+    if (conn) return;
     if (!host && calling && now - calledAt > 8000) dial();
     // Called, or knocked, for a while without a connection: the network is in the way.
     if (!said && ((host && knocked && now - knocked > DIRECT_MS) || (!host && calling && blamesNetwork(now, began, missingAt)))) {

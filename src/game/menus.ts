@@ -306,6 +306,19 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }</label></fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="retry" hidden>Réessayer</button>${host ? '<button data-m="go" class="go" disabled>Lancer la partie</button>' : ''}</div>`;
   const $ = <T extends HTMLElement>(q: string) => menu.querySelector<T>(q);
+  /** The guest's page change, a moment after answering « Lancer »: Retour or Réessayer call it off. */
+  let going = 0;
+  /** The host's « Lancer », sent again until the guest answers: only then does the host's page go. */
+  let launching: (Confirm & { setup: LobbySetup; id: number }) | null = null;
+  let launchWatch = 0;
+  /** Each « Lancer » has its number: an answer to an older one starts nothing. */
+  let launches = 0;
+  const unlaunch = () => {
+    clearTimeout(going);
+    going = 0;
+    clearInterval(launchWatch);
+    launching = null;
+  };
   let drawnMaps = '';
   const refresh = () => {
     const invite = $('.lobby-invite');
@@ -325,7 +338,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
     const go = $<HTMLButtonElement>('[data-m="go"]');
-    if (go) go.disabled = !here;
+    if (go) go.disabled = !here || !!launching;
   };
   /** Into the match, with the setup the host sent: the host's page hosts it, the guest's joins it. */
   const play = (s: LobbySetup) => {
@@ -363,12 +376,15 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       } else if ('go' in m && !host) {
         if (unknown(m.go)) status = UNKNOWN_TEXT;
         else {
-          // Said back (again for a resent one), and the page goes a moment later, so that the answer gets there.
-          lobby.send({ went: 1 });
-          if (!going) going = window.setTimeout(() => play(m.go), 300);
+          // Said back, again for each one resent (an answer may be lost), and the page goes once the host has stopped
+          // sending it for longer than its resend cycle: the host has the answer, or has given up.
+          lobby.send({ went: m.id });
+          const go = m.go;
+          clearTimeout(going);
+          going = window.setTimeout(() => play(go), GUEST_GOES_MS);
           return;
         }
-      } else if ('went' in m && host && launching?.ack()) {
+      } else if ('went' in m && host && launching?.id === m.went && launching.ack()) {
         const final = launching.setup;
         unlaunch();
         return play(final);
@@ -378,6 +394,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   });
   refresh();
   menu.onchange = (e) => {
+    if (launching) return; // the setup sent is the match
     const el = e.target as HTMLSelectElement;
     if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
     else if (el.dataset.k === 'biome') setup.biome = el.value;
@@ -385,21 +402,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     else lobby.send({ camp: setup.camps[me] });
     refresh();
   };
-  /** The guest's page change, a moment after answering « Lancer »: Retour or Réessayer call it off. */
-  let going = 0;
-  /** The host's « Lancer », sent again until the guest answers: only then does the host's page go. */
-  let launching: (Confirm & { setup: LobbySetup }) | null = null;
-  let launchWatch = 0;
-  const unlaunch = () => {
-    clearTimeout(going);
-    going = 0;
-    clearInterval(launchWatch);
-    launching = null;
-  };
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
     const m = button?.dataset.m;
-    if (button?.dataset.map && host) {
+    if (button?.dataset.map && host && !launching) {
       setup.map = button.dataset.map;
       setup.biome = fitBiome(setup.biome, mapFile(setup.map)).id;
       lobby.send({ setup });
@@ -410,11 +416,11 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       navigator.clipboard?.writeText(link).catch(() => document.execCommand('copy'));
       button!.textContent = 'Lien copié';
     } else if (m === 'share') navigator.share({ title: 'Xcraft', text: 'Une partie de Xcraft ?', url: link }).catch(() => {});
-    else if (m === 'go' && here) {
-      // The setup as it stands now is the match, on both pages, whatever comes in meanwhile.
+    else if (m === 'go' && here && !launching) {
+      // The setup as it stands now is the match, on both pages, whatever comes in meanwhile; one launch at a time.
       const final: LobbySetup = { ...setup, camps: [...setup.camps] };
-      unlaunch();
-      launching = Object.assign(new Confirm(() => lobby.send({ go: final })), { setup: final });
+      const id = ++launches;
+      launching = Object.assign(new Confirm(() => lobby.send({ go: final, id })), { setup: final, id });
       launching.start();
       launchWatch = window.setInterval(() => {
         if (launching?.poll() !== 'expired') return;
@@ -434,6 +440,9 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }
   };
 }
+
+/** The guest's page goes once the host has not sent « Lancer » again for this long: longer than its resend cycle (400 ms). */
+const GUEST_GOES_MS = 1200;
 
 function launch(s: Setup, sandbox = false): void {
   const [a, b] = s.sides;
