@@ -53,7 +53,7 @@ export interface View {
   seam?: Mesh;
   /** Z building being fabricated: its own materials cut by a plane rising from `bottom` to `top`. */
   /** Z Pod: docking ports pulsing on its sides while it has no add-on, and the gantry reaching out to the add-on it has. */
-  dock?: { ports: Object3D; arm: Object3D; glow: MeshBasicMaterial; y: number; reach: number };
+  dock?: { ports: Object3D; arm: Object3D; arms: Object3D[]; glow: MeshBasicMaterial; y: number; reach: number };
   /** Z Plate-forme: its robot arms (upper part, forearm with the welding spark), animated while it builds. */
   arms?: { upper: Object3D; tip?: Object3D }[];
   /** Z Plate-forme: the socle being built on its deck, fabricated layer by layer as training goes on. */

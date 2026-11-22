@@ -13,7 +13,7 @@ import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
-import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock } from './sites';
+import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
 // Kept for main.ts, which imports them from here.
@@ -76,6 +76,8 @@ const RING_RADIUS: Record<string, number> = { reservepsy: 1.4, trone: 2.5 };
 const PICK_PROXY = new MeshBasicMaterial({ visible: false });
 /** Height of the Z Plate-forme's deck, where the socles are built. */
 const PLATFORM_DECK = 0.37;
+/** Half the Plate-forme's deck, side to side (its model, without the ramp): where a Pod's arm clamps on. */
+const PLATFORM_HALF = 1.22;
 /**
  * Z socle weapons: one module per weapon, public/models/zw_<weapon>.glb, the same on every socle; a socle built
  * without a weapon carries the free default machine gun. The nine weapons are Rodin Low Poly models (fal), made from
@@ -639,8 +641,8 @@ export class EntityRenderer {
       return false;
     });
     this.hostile = (a, b) => world.hostile(a, b);
-    const hosted = new Map<number, Entity>(); // Z Pod id -> its add-on
-    for (const e of world.entities.values()) if (e.host) hosted.set(e.host, e);
+    const hosted = new Map<number, Entity[]>(); // Z Pod id -> its add-ons
+    for (const e of world.entities.values()) if (e.host) hosted.set(e.host, [...(hosted.get(e.host) ?? []), e]);
     // Energy wells under a building drawn as a picture: their rocks go, the picture's own base takes their place.
     const covered = new Set<number>();
     for (const e of world.entities.values()) if (e.def.kind === 'building' && spriteOf(e.type)) covered.add(e.tx * 4096 + e.ty);
@@ -761,26 +763,51 @@ export class EntityRenderer {
       v.fx?.update(dt, now / 1000);
       const wanted = weaponModule(e);
       if (wanted !== (v.weapon?.name ?? '')) this.mount(v, e, wanted);
-      if (v.dock) {
-        const addon = hosted.get(e.id);
+      const dock = v.dock;
+      if (dock) {
+        const addons = hosted.get(e.id) ?? [];
         const ready = e.buildLeft <= 0;
-        v.dock.ports.visible = ready && !addon;
-        v.dock.glow.opacity = 0.45 + 0.4 * Math.sin(now / 300);
-        v.dock.arm.visible = ready && !!addon;
-        if (addon) {
-          // From the Pod's side to the add-on's, unfolding as the add-on rises.
-          const dx = (addon.x - e.x) / FP, dz = (addon.y - e.y) / FP;
-          const gap = Math.hypot(dx, dz);
-          // A tower (Tourelle, Vacarme) is met halfway up its side, sloping; the Plate-forme's flat deck at the Pod's height.
-          const tower = addon.type === 'tourelle' || addon.type === 'vacarme';
-          const size = tower ? this.views.get(addon.id)?.model.userData.size as Vector3 | undefined ?? this.measure(addon.id) : undefined;
-          const from = v.dock.reach, to = size ? gap - Math.min(size.x, size.z) * 0.4 : gap - (addon.def as BuildingDef).size / 2 + 0.6;
-          const rise = size ? size.y * 0.5 - v.dock.y : 0;
-          const grown = addon.buildLeft > 0 ? 1 - addon.buildLeft / world.buildTicks(addon) : 1;
-          v.dock.arm.rotation.set(0, Math.atan2(-dz, dx), 0);
-          v.dock.arm.position.set((dx / gap) * from, v.dock.y, (dz / gap) * from);
-          bendDock(v.dock.arm, Math.max(0.01, (to - from) * grown), rise * grown);
+        dock.ports.visible = ready && !addons.length;
+        dock.glow.opacity = 0.45 + 0.4 * Math.sin(now / 300);
+        // One arm per add-on, made the first time a Pod has that many (its own meshes, the dock's materials).
+        while (dock.arms.length < addons.length) {
+          const arm = dockArm(dock.y);
+          v.root.add(arm);
+          dock.arms.push(arm);
         }
+        dock.arms.forEach((arm, k) => {
+          const addon = addons[k];
+          arm.visible = ready && !!addon;
+          if (!addon) return;
+          // From the Pod's side to the add-on's, unfolding as the add-on rises.
+          const ax = (addon.x - e.x) / FP, az = (addon.y - e.y) / FP;
+          const grown = addon.buildLeft > 0 ? 1 - addon.buildLeft / world.buildTicks(addon) : 1;
+          const plate = (arm.userData.parts as { plate: Object3D }).plate;
+          // A tower (Tourelle, Vacarme) is met halfway up its side, sloping, aimed at its centre. The Plate-forme is
+          // clamped by a flange onto the middle of its deck's side that faces the Pod, under the deck's lip.
+          const tower = addon.type === 'tourelle' || addon.type === 'vacarme';
+          let tx = ax, tz = az, rise = 0, end = 0;
+          if (tower) {
+            const size = this.views.get(addon.id)?.model.userData.size as Vector3 | undefined ?? this.measure(addon.id);
+            end = size ? Math.min(size.x, size.z) * 0.4 : (addon.def as BuildingDef).size / 2 - 0.6;
+            rise = size ? size.y * 0.5 - dock.y : 0;
+          } else {
+            const half = addon.type === 'plateforme' ? PLATFORM_HALF : (addon.def as BuildingDef).size / 2 - 0.3;
+            const keep = half - 0.45; // off the deck's corners
+            const clamp = (v: number) => Math.max(-keep, Math.min(keep, v));
+            if (Math.abs(ax) >= Math.abs(az)) [tx, tz] = [ax - Math.sign(ax) * half, az + clamp(-az)];
+            else [tx, tz] = [ax + clamp(-ax), az - Math.sign(az) * half];
+            rise = (addon.type === 'plateforme' ? PLATFORM_DECK * 0.55 : 0) - dock.y;
+            // the flange flat on that side: its back into the deck, whatever way the arm comes at it
+            plate.rotation.y = (Math.abs(ax) >= Math.abs(az) ? (ax > 0 ? 0 : Math.PI) : (az > 0 ? -Math.PI / 2 : Math.PI / 2)) - Math.atan2(-tz, tx);
+          }
+          plate.visible = !tower && grown >= 1;
+          const gap = Math.hypot(tx, tz);
+          const from = dock.reach;
+          arm.rotation.set(0, Math.atan2(-tz, tx), 0);
+          arm.position.set((tx / gap) * from, dock.y, (tz / gap) * from);
+          bendDock(arm, Math.max(0.01, (gap - end - from) * grown), rise * grown);
+        });
       }
       if (e.type === 'puits') v.model.visible = !covered.has(e.tx * 4096 + e.ty);
       if (e.type === 'minerai') {

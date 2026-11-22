@@ -314,8 +314,17 @@ export function podDock(reach: number, height: number): NonNullable<View['dock']
     side.add(collar, ...jaws, ring);
     ports.add(side);
   }
-  // A short articulated arm out to the add-on (its chosen sketch): two round riveted segments bent up at an elbow,
-  // a cyan-lit collar at the Pod, at the elbow and at the add-on. Laid out along +x by bendDock to the gap's length.
+  const arm = dockArm(y);
+  for (const o of [ports, arm]) o.traverse((m) => (m.userData.noPick = true));
+  return { ports, arm, arms: [arm], glow, y, reach };
+}
+
+/**
+ * A short articulated arm out to an add-on (its chosen sketch): two round riveted segments bent up at an elbow,
+ * a cyan-lit collar at the Pod, at the elbow and at the add-on, and a flange plate where it clamps onto a flat side
+ * (the Plate-forme's deck). Laid out along +x by bendDock to the gap's length; one per add-on.
+ */
+export function dockArm(y: number): Object3D {
   const arm = new Group();
   const segment = () => {
     const g = new Group();
@@ -333,13 +342,19 @@ export function podDock(reach: number, height: number): NonNullable<View['dock']
   };
   const elbow = new Group();
   elbow.add(new Mesh(new SphereGeometry(0.16, 12, 8), ARM_STEEL), new Mesh(new CylinderGeometry(0.1, 0.1, 0.36, 10).rotateX(Math.PI / 2), DOCK_CYAN));
-  const parts = { a: segment(), b: segment(), from: collar(), to: collar(), elbow };
-  arm.add(parts.a, parts.b, parts.from, parts.to, parts.elbow);
+  // The flange: a square steel plate flat against the side it clamps, a cyan ring round the arm's end. Faces -x.
+  const plate = new Group();
+  const ring = new Mesh(new CylinderGeometry(0.2, 0.2, 0.03, 16).rotateZ(Math.PI / 2), DOCK_CYAN);
+  ring.position.x = -0.03;
+  plate.add(new Mesh(new BoxGeometry(0.05, 0.42, 0.42), ARM_STEEL), ring);
+  plate.visible = false;
+  const parts = { a: segment(), b: segment(), from: collar(), to: collar(), elbow, plate };
+  arm.add(parts.a, parts.b, parts.from, parts.to, parts.elbow, plate);
   arm.userData.parts = parts;
   arm.position.y = y;
   arm.visible = false;
-  for (const o of [ports, arm]) o.traverse((m) => (m.userData.noPick = true));
-  return { ports, arm, glow, y, reach };
+  arm.traverse((m) => (m.userData.noPick = true));
+  return arm;
 }
 
 /** Lays a dock arm out along its +x to `length`, its far end `rise` higher; the elbow raised a little between. */
@@ -356,6 +371,7 @@ export function bendDock(arm: Object3D, length: number, rise: number): void {
     seg.scale.set(1, Math.max(0.01, d.length()), 1);
   }
   p.elbow.position.copy(m);
+  (arm.userData.parts as { plate: Object3D }).plate.position.copy(b);
   for (const [c, at, toward] of [[p.from, a, m], [p.to, b, m]] as const) {
     c.position.copy(at);
     c.quaternion.setFromUnitVectors(up, toward.clone().sub(at).normalize());
