@@ -175,6 +175,8 @@ export class Input {
     return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
   }
   private touchAt: { x: number; y: number } | null = null;
+  /** When a tap last picked one of ours (the same again included): the HUD shows its folded panels again. */
+  pickedAt = 0;
   private aimed = { key: '', at: null as Vector3 | null };
 
   /**
@@ -436,6 +438,7 @@ export class Input {
       return;
     }
     if (target && target.owner === this.player) {
+      this.pickedAt = now;
       if (this.lastTap.type === target.type && now - this.lastTap.time < DOUBLE_TAP_MS) {
         this.sameOnScreen(target.type).forEach((id) => this.selected.add(id));
       } else {

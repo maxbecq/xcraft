@@ -14,7 +14,7 @@ import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdle
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
-const TUCK_MS = 2800;
+const TUCK_MS = 1200;
 /** Two taps this close in time are one double tap (as for units). */
 const DOUBLE_TAP_MS = 350;
 
@@ -459,7 +459,7 @@ export class Hud {
   private tuck(): void {
     const now = performance.now();
     const sel = this.selKey;
-    if (sel !== this.tuckSel || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
+    if (sel !== this.tuckSel || this.input.pickedAt > this.touchedAt || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
     this.tuckSel = sel;
     const tucked = document.body.classList.contains('tuck') && now - this.touchedAt > TUCK_MS;
     if (tucked === this.console.classList.contains('tucked')) return;
