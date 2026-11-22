@@ -434,7 +434,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Frigg (notice): takes control of the enemy nearest the point for a while. */
   soumission: { name: 'Soumission divine', effect: 'Prend le contrôle de l\'ennemi visé, un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.soumission },
   /** Frigg (notice): she and the troops round her vanish from sight, long. */
-  voile: { name: 'Voile de nuage', effect: 'Frigg et les troupes autour disparaissent de la vue, longtemps.', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
+  voile: { name: 'Voile de nuage', effect: 'Frigg et les troupes autour deviennent invisibles un long moment, même en s\'éloignant d\'elle.', hotkey: 'V', target: 'self', ...BALANCE.abilities.voile },
   /** Hadès (notice): a ray that splits to strike every enemy unit he sees. */
   rayonmort: { name: 'Rayon de mort', effect: 'Un rayon qui se divise et frappe chaque ennemi que voit Hadès.', hotkey: 'R', target: 'self', ...BALANCE.abilities.rayonmort },
   /** Hadès (notice): travels under ground to the point. */
@@ -454,7 +454,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Sphinx (notice, Peau de roc): turned to stone, slower and slower to shoot, but heavily armoured, mending. */
   statue: { name: 'Forme de statue', effect: 'Se change en pierre : très blindé et se répare, mais tire de plus en plus lentement.', hotkey: 'R', target: 'self', research: 'peauroc', ...BALANCE.abilities.statue },
   /** Athéna (notice): her owl flies over a zone and shows it a while. */
-  chouette: { name: 'Chouette', effect: 'La chouette d\'Athéna survole une zone et la montre un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
+  chouette: { name: 'Chouette', effect: 'La chouette d\'Athéna survole une zone, n\'importe où sur la carte, et la montre un moment.', hotkey: 'O', target: 'point', ...BALANCE.abilities.chouette },
   /** Prêtresse (notice): on an ally, ends what harms it; on an enemy, what helps it, and hurts summoned ones badly. */
   dissipation: { name: 'Dissipation', effect: 'Sur un allié, retire ce qui lui nuit ; sur un ennemi, ce qui l\'aide, et blesse durement les invocations.', hotkey: 'D', target: 'point', ...BALANCE.abilities.dissipation },
   /** Élémentaire (notice): Mutation to another form, and Fusion of two into a Golem. */
