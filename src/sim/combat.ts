@@ -1,6 +1,6 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, KIT, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
+import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
 
@@ -91,19 +91,7 @@ export function rangeBonus(this: World, e: Entity, t?: Entity): number {
 export function weapon(this: World, e: Entity): Attack | undefined {
   // Double énergétique (fiche « Hallucination », mod): an illusion has no attack.
   if (e.illusion) return undefined;
-  const a = this.ownWeapon(e);
-  // Z Balise offensive: its carrier's attack hits an area (Z.doc: a zone of 3).
-  return a && e.support & KIT.balise ? { ...a, splash: BALANCE.rules.z.beaconSplash } : a;
-}
-
-/** Does a carrier of the Balise offensive stand on this player's side? Counted once a tick. */
-export function beacon(this: World, player: number): boolean {
-  if (this.beaconsAt !== this.tick) {
-    this.beaconsAt = this.tick;
-    this.beacons.clear();
-    for (const u of this.entities.values()) if (u.support & KIT.balise && u.hp > 0) this.beacons.add(u.owner);
-  }
-  return this.beacons.has(player);
+  return this.ownWeapon(e);
 }
 
 /** The weapon a unit fights with, before any kit. */
@@ -458,8 +446,6 @@ export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
     for (const g of this.listed().odins) if (g.owner === e.owner && g.hp > 0 && dist(g.x, g.y, e.x, e.y) <= toFp(G.radius[g.lvl - 1])) aura = Math.max(aura, G.damage[g.lvl - 1]);
     upgrade += aura;
   }
-  // Z Balise offensive (Z.doc): +5 % to every attack of its owner's while a carrier stands; not cumulative.
-  if (e.owner >= 0 && this.players[e.owner].faction === 'z' && this.beacon(e.owner)) upgrade += idiv((base + bonus) * BALANCE.rules.z.beaconPercent, 100);
   return base + bonus + upgrade;
 }
 

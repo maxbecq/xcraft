@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import { type BuildingDef, DEFS, KIT, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
-import { FP, ticks } from './fixed';
+import { FP, ticks, tileOf } from './fixed';
 import { addonSlots } from './buildings';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
@@ -161,9 +161,11 @@ describe('Z', () => {
     run(w, 3);
     expect(quad.hp).toBeGreaterThanOrEqual(106); // 3 hp a second, away from any creep
     run(w, 10);
-    ability('kitbalise', quad.x, quad.y);
-    expect(w.weapon(quad)!.splash).toBe(3);
-    expect(w.beacon(0)).toBe(true);
+    // Patte ultramécanique in place of the Balise offensive (équilibreur 22/11).
+    expect((DEFS.centrek as BuildingDef).abilities).not.toContain('kitbalise');
+    ability('kitpatte', quad.x, quad.y);
+    expect(quad.support & KIT.patte).toBeTruthy();
+    expect(w.weapon(quad)!.splash).toBeUndefined();
     // Its Canon IEM is gone (équilibreur 22/11).
     expect((DEFS.centrek as BuildingDef).abilities).not.toContain('canoniem');
     expect(DEFS.canoniem).toBeUndefined();
@@ -668,5 +670,45 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
     w.step([{ player: 0, kind: 'train', ids: [cr.id], type: 'titane' }]);
     run(w, 80);
     expect(p.upgrades.titane ?? 0).toBe(0);
+  });
+});
+
+describe('Z Patte ultramécanique (équilibreur 22/11, in place of the Balise offensive)', () => {
+  it('a socle fitted with it climbs a cliff straight up and down; one without walks round', () => {
+    const w = createMatch(['z', 'humains']);
+    const g = w.grid;
+    // A cliff's foot and top side by side, both open ground and flat, away from the edges.
+    let pair: [number, number, number, number] | undefined;
+    for (let y = 10; y < g.height - 10 && !pair; y++)
+      for (let x = 10; x < g.width - 10 && !pair; x++)
+        if (g.open(x - 1, y) && g.open(x + 2, y) && g.flatLevel(x - 1, y) >= 0 && g.flatLevel(x + 2, y) > g.flatLevel(x - 1, y) && g.findPath(x - 1, y, x + 2, y).length >= 15 && g.findPath(x - 1, y, x + 2, y, true).length <= 4) pair = [x - 1, y, x + 2, y];
+    expect(pair).toBeDefined();
+    const [ax, ay, bx, by] = pair!;
+    const go = (patte: boolean) => {
+      const u = w.spawn('quadripode', 0, ax * FP + FP / 2, ay * FP + FP / 2);
+      if (patte) u.support |= KIT.patte;
+      w.step([{ player: 0, kind: 'move', ids: [u.id], x: bx * FP + FP / 2, y: by * FP + FP / 2 }]);
+      let t = 0;
+      while (t < ticks(60) && (tileOf(u.x) !== bx || tileOf(u.y) !== by)) {
+        w.step([]);
+        t++;
+      }
+      w.remove(u);
+      return t;
+    };
+    const climbing = go(true);
+    const walking = go(false);
+    expect(climbing).toBeLessThan(ticks(3));
+    expect(walking).toBeGreaterThan(climbing * 2);
+    // And down again.
+    expect(g.findPath(bx, by, ax, ay, true).length).toBeLessThanOrEqual(4);
+  });
+
+  it('only on a walking socle, sold at the Centre K', () => {
+    const w = createMatch(['z', 'humains']);
+    const k = w.spawn('centrek', 0, 30 * FP, 30 * FP);
+    const flyer = w.spawn('coleoptere', 0, 31 * FP, 30 * FP);
+    w.centreK(k, 'kitpatte', flyer.x, flyer.y);
+    expect(flyer.support & KIT.patte).toBe(0);
   });
 });

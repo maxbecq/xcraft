@@ -341,7 +341,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitdetection: { name: 'Détection', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui détecte les unités invisibles.', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
   kitinvisibilite: { name: 'Invisibilité', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le rend invisible.', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
   kitreparateur: { name: 'Auto-réparateur', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le répare peu à peu.', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
-  kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
+  // Équilibreur 22/11: in place of the Balise offensive, its socle climbs cliffs up or down, like a Colossus.
+  kitpatte: { name: 'Patte ultramécanique', effect: 'Équipe un de vos socles terrestres, où qu\'il soit, de pattes qui escaladent les falaises, vers le haut comme vers le bas.', hotkey: 'P', ...(BALANCE.abilities.kitpatte as object) } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
   observation: { name: 'Observation céleste', effect: 'Le télescope révèle une zone et y détecte les unités invisibles.', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
   /**
@@ -716,7 +717,7 @@ const BASE: Record<string, object> = {
   // Z.doc: sells support kits anywhere on the battlefield; one per player (its Canon IEM gone, équilibreur 22/11).
   centrek: {
     kind: 'building', name: 'Centre K', size: 3, absorbs: true, unique: true, needsPower: true, requires: { optimisation: 1 }, faction: 'z', hotkey: 'K',
-    abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitbalise'],
+    abilities: ['kitdetection', 'kitinvisibilite', 'kitreparateur', 'kitpatte'],
   },
   rquadripode: research('Socle du Quadripode', 'Q', 'Débloque le socle Quadripode.', undefined, 'z'),
   rhexapode: research("Socle de l'Hexapode", 'H', 'Débloque le socle Hexapode.', { centrerecherche: 1 }, 'z'),
@@ -884,7 +885,7 @@ function isd(name: string, hotkey: string, effect: string, requires?: Record<str
 }
 
 /** Z support kits (Centre K, Z.doc), as bits of an entity's `support`. */
-export const KIT = { detection: 1, invisibilite: 2, reparateur: 4, balise: 8 } as const;
+export const KIT = { detection: 1, invisibilite: 2, reparateur: 4, patte: 8 } as const;
 
 /** A Z socle's next tier: what evolving costs and takes, and its new hit points, armour and speed. */
 export interface TierStats {

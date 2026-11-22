@@ -598,8 +598,9 @@ export function centreK(this: World, b: Entity, kind: string, x: number, y: numb
   const ab = ABILITIES[kind];
   const near = (ok: (t: Entity) => boolean) =>
     [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && ok(t) && dist(t.x, t.y, x, y) <= toFp(ab.radius!)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
-  const bit = { kitdetection: KIT.detection, kitinvisibilite: KIT.invisibilite, kitreparateur: KIT.reparateur, kitbalise: KIT.balise }[kind] ?? 0;
-  const t = near((t) => t.owner === b.owner && !!(t.def as UnitDef).weaponLevel && !(t.support & bit));
+  const bit = { kitdetection: KIT.detection, kitinvisibilite: KIT.invisibilite, kitreparateur: KIT.reparateur, kitpatte: KIT.patte }[kind] ?? 0;
+  // The Patte ultramécanique only on a socle that walks.
+  const t = near((t) => t.owner === b.owner && !!(t.def as UnitDef).weaponLevel && !(t.support & bit) && (bit !== KIT.patte || !flies(t)));
   if (!t) return void this.say(b.owner, 'Aucun socle sans ce kit à cet endroit.');
   if (!this.pay(b.owner, { cost: { minerals: ab.minerals ?? 0, energy: ab.energy ?? 0 } })) return;
   t.support |= bit;

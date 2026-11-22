@@ -1003,7 +1003,7 @@ export class AI {
         return true;
       };
       const has = (bit: number) => mine.some((u) => u.support & bit);
-      if (!(enemyCloaks && !has(KIT.detection) && kit('kitdetection', socles[0])) && !(!has(KIT.balise) && kit('kitbalise', socles.find((u) => u.tier > 1) ?? socles[0]))) {
+      if (!(enemyCloaks && !has(KIT.detection) && kit('kitdetection', socles[0]))) {
         // Spare energy (nothing else takes it late on): Auto-réparateur on any socle, then Invisibilité.
         if (!kit('kitreparateur', socles.find((u) => (u.tier > 1 || ctx.energy > 600) && !(u.support & KIT.reparateur))) && ctx.energy > 600) kit('kitinvisibilite', socles.find((u) => !(u.support & KIT.invisibilite)));
       }

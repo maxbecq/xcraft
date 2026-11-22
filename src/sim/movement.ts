@@ -1,9 +1,12 @@
 /** Movement: paths, following them, pace, stepping aside, separation. */
-import { type UnitDef } from '../data';
+import { KIT, type UnitDef } from '../data';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, tileOf } from './fixed';
 import { soars, type Entity, type World } from './world';
 
 const REACH = FP / 4;
+
+/** A socle with the Patte ultramécanique (équilibreur 22/11): walks over cliffs, up or down. */
+export const climbs = (e: Entity): boolean => !!(e.support & KIT.patte);
 
 /** Distance from a unit's edge to a tile rectangle is within reach, and (on the ground) not across a cliff. */
 export function reachRect(this: World, e: Entity, tx: number, ty: number, size: number): boolean {
@@ -135,6 +138,8 @@ export function pathFor(this: World, e: Entity, gx: number, gy: number): number[
   const w = g.width;
   const sx = tileOf(e.x);
   const sy = tileOf(e.y);
+  // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed.
+  if (climbs(e)) return g.findPath(sx, sy, gx, gy, true);
   if (this.searchedAt !== this.tick) [this.searched, this.searchedAt] = [[], this.tick];
   const centre = (t: number) => [(t % w) * FP + FP / 2, Math.floor(t / w) * FP + FP / 2] as const;
   for (const s of this.searched) {
@@ -182,7 +187,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   let i = 0;
   while (i < pts.length) {
     let j = pts.length - 2;
-    while (j > i && !g.lineWalkable(ax, ay, pts[j], pts[j + 1])) j -= 2;
+    while (j > i && !g.lineWalkable(ax, ay, pts[j], pts[j + 1], climbs(e))) j -= 2;
     smooth.push(pts[j], pts[j + 1]);
     ax = pts[j];
     ay = pts[j + 1];
@@ -212,7 +217,7 @@ export function follow(this: World, e: Entity): boolean {
   }
   // Intermediate waypoints count as reached within half a tile, so a crowd never circles one point.
   // Only skip when the next waypoint is in straight reach, so corners around cliffs are still respected.
-  if (e.path.length > 2 && dist(e.x, e.y, e.path[0], e.path[1]) <= FP / 2 && this.grid.lineWalkable(e.x, e.y, e.path[2], e.path[3])) e.path.splice(0, 2);
+  if (e.path.length > 2 && dist(e.x, e.y, e.path[0], e.path[1]) <= FP / 2 && this.grid.lineWalkable(e.x, e.y, e.path[2], e.path[3], climbs(e))) e.path.splice(0, 2);
   const tx = e.path[0];
   const ty = e.path[1];
   const d = dist(e.x, e.y, tx, ty);
@@ -292,7 +297,7 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
   const ys = sides(e.y, ny);
   for (const [ax, bx] of xs) {
     for (const [ay, by] of ys) {
-      if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings))) return false;
+      if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings, climbs(e)))) return false;
     }
   }
   e.x = nx;

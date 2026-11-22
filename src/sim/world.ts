@@ -851,9 +851,6 @@ export class World {
   /** Cônes de protection active (Z Accumulateur): when none, no one looks for one. */
   cones = 0;
 
-  /** Players with a Balise offensive standing, as of tick `beaconsAt` (Z). */
-  beacons = new Set<number>();
-  beaconsAt = -1;
   /**
    * The entities a few scans look for, each list in the order of the entities themselves (by id), so a scan of a list
    * finds what the scan of every entity found, ties included: the buildings minerals are brought back to, the mineral

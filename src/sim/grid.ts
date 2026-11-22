@@ -26,6 +26,11 @@ export class Grid {
    * then only checks the tiles a step crosses for buildings, the very test canStep makes.
    */
   private readonly steps: Uint8Array;
+  /**
+   * The same for a socle with the Patte ultramécanique (équilibreur 22/11), which climbs cliffs up or down like a
+   * Colossus: any step onto a tile of the map that is not a chasm, whatever the levels.
+   */
+  private readonly climbs: Uint8Array;
   /** Each tile's lowest corner level (level(), on the map), worked out once: vision asks it for every tile it reveals. */
   readonly lowest: Int8Array;
 
@@ -52,6 +57,18 @@ export class Grid {
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < map.width; x++)
         for (let d = 0; d < 8; d++) if (this.canStep(x, y, x + DX[d], y + DY[d], true)) this.steps[y * map.width + x] |= 1 << d;
+    this.climbs = new Uint8Array(map.width * map.height);
+    for (let y = 0; y < map.height; y++)
+      for (let x = 0; x < map.width; x++)
+        for (let d = 0; d < 8; d++) if (this.climbStep(x, y, x + DX[d], y + DY[d], true)) this.climbs[y * map.width + x] |= 1 << d;
+  }
+
+  /** A climber's step (Patte ultramécanique): onto a tile of the map, no chasm, free (or `through`); a diagonal too
+   * through its two sides, as canStep. */
+  private climbStep(ax: number, ay: number, bx: number, by: number, through: boolean): boolean {
+    const ok = (x: number, y: number) => this.inside(x, y) && this.chasm[y * this.width + x] === 0 && (through || this.blocked[y * this.width + x] === 0);
+    if (!ok(bx, by) || Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1) return false;
+    return ax === bx || ay === by || (ok(bx, ay) && ok(ax, by));
   }
 
   inside(x: number, y: number): boolean {
@@ -86,7 +103,8 @@ export class Grid {
    * Can a ground unit step between two adjacent tiles (8-neighbourhood, no corner cutting)?
    * `throughBuildings` ignores buildings (to walk out from under one) but never cliffs.
    */
-  canStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
+  canStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false, climb = false): boolean {
+    if (climb) return this.climbStep(ax, ay, bx, by, throughBuildings);
     const dx = bx - ax;
     const dy = by - ay;
     if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0) || !this.inside(ax, ay)) return this.terrainStep(ax, ay, bx, by, throughBuildings);
@@ -123,7 +141,9 @@ export class Grid {
   }
 
   /** Can a unit walk in a straight line between two fixed-point points? */
-  lineWalkable(ax: number, ay: number, bx: number, by: number): boolean {
+  lineWalkable(ax: number, ay: number, bx: number, by: number, climb = false): boolean {
+    // A climber's lines are not kept (few walk so).
+    if (climb) return this.line(ax, ay, bx, by, true);
     // Between two tile centres the answer is kept while the grid stays as it was (`changes`): smoothing a path asks
     // for the same lines again and again, from each waypoint to every one after it, and every unit of a group sent
     // along one path asked for them all over (15 ms of a tick for a dozen units). The same answer, only not worked out twice.
@@ -144,10 +164,10 @@ export class Grid {
   private readonly lines = new Map<number, boolean>();
   private linesAt = -1;
 
-  private line(ax: number, ay: number, bx: number, by: number): boolean {
+  private line(ax: number, ay: number, bx: number, by: number, climb = false): boolean {
     // A start on a tile edge lies in the tile ahead along that axis, or, not moving along it, in both (both must do).
     const starts = (a: number, b: number) => (a % FP !== 0 ? [tileOf(a)] : b > a ? [a / FP] : b < a ? [a / FP - 1] : [a / FP - 1, a / FP]);
-    for (const tx of starts(ax, bx)) for (const ty of starts(ay, by)) if (!this.walkLine(ax, ay, bx, by, tx, ty)) return false;
+    for (const tx of starts(ax, bx)) for (const ty of starts(ay, by)) if (!this.walkLine(ax, ay, bx, by, tx, ty, climb)) return false;
     return true;
   }
 
@@ -155,10 +175,11 @@ export class Grid {
    * lineWalkable from a start tile. Samples on a tile edge stay in the tile they come from: floor put them beyond it
    * on one side of the map and short of it on the other, and a line and its mirror were judged differently.
    */
-  private walkLine(ax: number, ay: number, bx: number, by: number, tx: number, ty: number): boolean {
+  private walkLine(ax: number, ay: number, bx: number, by: number, tx: number, ty: number, climb = false): boolean {
     const len = isqrt((bx - ax) ** 2 + (by - ay) ** 2);
     const n = Math.max(1, Math.ceil(len / (FP / 4)));
     const [ddx, ddy, w] = [bx - ax, by - ay, this.width];
+    const mask = climb ? this.climbs : this.steps;
     // tileOf and idiv written out, and each step tested as findPath does (terrain mask, then buildings): this runs
     // four times a tile along every line a path is smoothed with.
     for (let i = 1; i <= n; i++) {
@@ -171,8 +192,8 @@ export class Grid {
       const dy = ny - ty;
       if (dx < -1 || dx > 1 || dy < -1 || dy > 1) return false;
       if (tx < 0 || ty < 0 || tx >= w || ty >= this.height) {
-        if (!this.canStep(tx, ty, nx, ny)) return false;
-      } else if (!(this.steps[ty * w + tx] & (1 << DIR[(dy + 1) * 3 + dx + 1])) || this.blocked[ny * w + nx] !== 0 || (dx !== 0 && dy !== 0 && (this.blocked[ty * w + nx] !== 0 || this.blocked[ny * w + tx] !== 0))) return false;
+        if (!this.canStep(tx, ty, nx, ny, false, climb)) return false;
+      } else if (!(mask[ty * w + tx] & (1 << DIR[(dy + 1) * 3 + dx + 1])) || this.blocked[ny * w + nx] !== 0 || (dx !== 0 && dy !== 0 && (this.blocked[ty * w + nx] !== 0 || this.blocked[ny * w + tx] !== 0))) return false;
       tx = nx;
       ty = ny;
     }
@@ -190,7 +211,7 @@ export class Grid {
   private search = 0;
   private readonly heap = new Heap();
 
-  findPath(sx: number, sy: number, gx: number, gy: number): number[] {
+  findPath(sx: number, sy: number, gx: number, gy: number, climb = false): number[] {
     const w = this.width;
     const start = sy * w + sx;
     const goal = gy * w + gx;
@@ -202,7 +223,8 @@ export class Grid {
     const { cost: g, from, seen, done } = this;
     const heap = this.heap;
     heap.clear();
-    const { steps, blocked } = this;
+    const { blocked } = this;
+    const steps = climb ? this.climbs : this.steps;
     // Equal costs are settled by the tiles' place relative to the line from start to goal (nearest it, then on its
     // left, then furthest along): the same for a map turned round, where the order of the eight directions was not,
     // and a unit took another road from the mirror of its spot.

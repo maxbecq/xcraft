@@ -40,7 +40,7 @@ export const Z_GLYPHS: Record<string, string> = {
   megaespion: `${EYE}M12 1v2M4 3l1.5 1.5M20 3l-1.5 1.5`,
   kitdetection: 'M12 4a8 8 0 1 0 0 16 8 8 0 1 0 0-16M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8M12 12l6-6',
   kitreparateur: WEAPON_GLYPHS.reparateur,
-  kitbalise: 'M12 3v5M12 16v5M3 12h5M16 12h5M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8',
+  kitpatte: 'M4 20l4-6 3 2 4-8 3 2 2-4M4 20h4M14 10l-2 6',
   canoniem: 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18M13 6l-4 7h4l-2 5',
   gel: 'M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 4l3 2 3-2M9 20l3-2 3 2',
   vacarme: 'M2 8.5v3M2 10h12M14 9.5c3 0 5-2 8-4.5v10c-3-2.5-5-4.5-8-4.5M7 10V6M10 10V6M13 10V6M6 6h2M9 6h2M12 6h2M5 10v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-3.5',

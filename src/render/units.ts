@@ -5,7 +5,7 @@ import {
 } from 'three';
 import { stableShadowDepth } from './shadowdepth';
 import { dressSprite, spriteOf } from './sprites';
-import { type BuildingDef, DEFS, FLY_HEIGHT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
+import { type BuildingDef, DEFS, FLY_HEIGHT, KIT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
 import { armillaries } from './life';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
@@ -695,7 +695,9 @@ export class EntityRenderer {
       }
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       const ground = heightAt(this.map, x, z);
-      v.ground = !soars(e) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * 3);
+      // A socle with the Patte ultramécanique (équilibreur 22/11) climbs a cliff in a quick stride, not a jump.
+      const climber = !!(e.support & KIT.patte);
+      v.ground = (!soars(e) && !climber) || v.ground === undefined ? ground : v.ground + (ground - v.ground) * Math.min(1, dt * (climber ? 8 : 3));
       v.root.position.set(x, v.ground, z);
       const hp = e.hp + e.shield;
       if (e.def.kind === 'unit' && v.hp !== undefined && hp < v.hp && !v.flash) {
