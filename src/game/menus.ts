@@ -247,7 +247,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
 function showJoin(menu: HTMLElement): void {
   menu.className = 'menu setup';
   menu.innerHTML = `<h2>Rejoindre un ami</h2>
-    <fieldset><legend>Code de la partie</legend><input class="net-input" maxlength="80" placeholder="K7QX" autocomplete="off" spellcheck="false"></fieldset>
+    <fieldset><legend>Code de la partie</legend><input class="net-input" maxlength="80" placeholder="K7QX3M" autocomplete="off" spellcheck="false"></fieldset>
     <p class="net-error" hidden></p>
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">Rejoindre</button></div>`;
   const field = menu.querySelector<HTMLInputElement>('.net-input')!;
@@ -257,7 +257,7 @@ function showJoin(menu: HTMLElement): void {
     const room = readRoom(field.value);
     if (room) return showLobby(menu, room, false);
     error.hidden = false;
-    error.textContent = 'Code invalide : quatre caractères, comme K7QX (ou collez le lien).';
+    error.textContent = 'Code invalide : six caractères, comme K7QX3M (ou collez le lien).';
   };
   field.onkeydown = (e) => {
     e.stopPropagation();

@@ -8,8 +8,20 @@ describe('friend codes', () => {
     expect(readRoom(` https://maxbecq.github.io/xcraft/?ami=${room} `)).toBe(room);
     expect(readRoom(`https://x/?ami=${room}&hote`)).toBe(room);
     expect(readRoom('ABC')).toBeNull();
-    expect(readRoom('AB0D')).toBeNull(); // 0 is never in a code: it reads like O
-    expect(readRoom('ABCD-HIL')).toBeNull();
+    expect(readRoom('ABCD')).toBeNull(); // the old four-letter codes
+    expect(readRoom('AB0DEF')).toBeNull(); // 0 is never in a code: it reads like O
+    expect(readRoom('ABCDEF-HIL')).toBeNull();
+  });
+
+  it('are six letters drawn evenly from the whole alphabet', () => {
+    const seen = new Map<string, number>();
+    for (let i = 0; i < 3000; i++) {
+      const room = newRoom();
+      expect(room).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/);
+      for (const c of room) seen.set(c, (seen.get(c) ?? 0) + 1);
+    }
+    expect(seen.size).toBe(31);
+    for (const n of seen.values()) expect(n).toBeGreaterThan(400); // 580 each on average
   });
 });
 
@@ -312,8 +324,8 @@ describe('lockstep between two browsers', () => {
   it("goes to a rematch only once both asked, on the host's word, and once", () => {
     const host = new Rematch(0);
     const guest = new Rematch(1);
-    expect(guest.take('ABCD')).toBe(null); // in the middle of the match: nobody asked
-    expect(host.take('ABCD')).toBe(null); // a host never takes a room
+    expect(guest.take('ABCDEF')).toBe(null); // in the middle of the match: nobody asked
+    expect(host.take('ABCDEF')).toBe(null); // a host never takes a room
     expect(host.theyAsk()).toBe(null);
     expect(guest.theyAsk()).toBe(null); // a guest never names one
     const room = host.ask();
@@ -322,7 +334,7 @@ describe('lockstep between two browsers', () => {
     guest.ask();
     expect(guest.take('<b>')).toBe(null);
     expect(guest.take(room)).toBe(room);
-    expect(guest.take('WXYZ')).toBe(null); // once
+    expect(guest.take('WXYZ23')).toBe(null); // once
   });
 
   it('starts no rematch once the other side is gone', () => {
@@ -333,7 +345,7 @@ describe('lockstep between two browsers', () => {
     const guest = new Rematch(1);
     guest.ask();
     guest.lost();
-    expect(guest.take('ABCD')).toBe(null);
+    expect(guest.take('ABCDEF')).toBe(null);
   });
 
   it('never takes a Bac à sable switch from the other side, wherever it stands in the list', () => {

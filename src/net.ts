@@ -514,14 +514,23 @@ function sendOn(c: DataConnection | null, m: unknown): void {
   }
 }
 
+/** Letters in a room code: six of 31, close to 900 million codes, drawn from the browser's secure random source. */
+const ROOM_LENGTH = 6;
 export function newRoom(): string {
-  return Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
+  let code = '';
+  const bytes = new Uint8Array(1);
+  while (code.length < ROOM_LENGTH) {
+    crypto.getRandomValues(bytes);
+    // Only bytes below a multiple of 31: every letter equally likely.
+    if (bytes[0] < 248) code += ALPHABET[bytes[0] % ALPHABET.length];
+  }
+  return code;
 }
 
 /** A room code read from what the friend sent: the code itself, or the whole link. Null if neither. */
 export function readRoom(text: string): string | null {
   const t = text.trim().toUpperCase();
-  const m = /[?&]AMI=([A-Z0-9]{4})\b/.exec(t) ?? /^([A-Z0-9]{4})$/.exec(t);
+  const m = /[?&]AMI=([A-Z0-9]{6})\b/.exec(t) ?? /^([A-Z0-9]{6})$/.exec(t);
   return m && [...m[1]].every((c) => ALPHABET.includes(c)) ? m[1] : null;
 }
 

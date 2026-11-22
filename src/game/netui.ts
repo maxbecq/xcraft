@@ -54,7 +54,7 @@ export class NetGame {
         location.search = `?biome=${this.biome.id}&map=${MAP.id}`;
       }
     });
-    if (NO_ROOM) this.showNet('error', "Ce lien ne contient pas de code de partie valide (quatre caractères, comme K7QX) : demandez à votre ami de vous le renvoyer.");
+    if (NO_ROOM) this.showNet('error', "Ce lien ne contient pas de code de partie valide (six caractères, comme K7QX3M) : demandez à votre ami de vous le renvoyer.");
     else if (UNKNOWN) this.showNet('error', 'Carte ou planète inconnue de cette version du jeu : rechargez la page (tous les deux).');
     else if (this.net) this.showNet(PLAYER === 0 ? 'waiting' : 'connecting');
     // Leaving the page tells the other side at once, rather than after the silence timeout.
