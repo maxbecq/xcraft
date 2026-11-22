@@ -237,6 +237,8 @@ export function hurt(this: World, t: Entity, damage: number): number {
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
   if (t.def.kind === 'unit' && this.coned(t)) return 0;
   if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
+  // Régénérant (the balancer, 2026-11-22): the host takes 5 % of the damage.
+  if (t.ferveur > 0) damage = Math.max(1, idiv(damage * BALANCE.rules.upgrades.regenerantTaken, 100));
   // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.
   if (damage > 0 && t.shield > 0 && t.owner >= 0 && this.players[t.owner]?.faction === 'isdaris') damage = Math.max(1, damage - this.level(t.owner, 'bouclier') * BALANCE.rules.upgrades.bouclierArmor);
   const absorbed = Math.min(t.shield, damage);

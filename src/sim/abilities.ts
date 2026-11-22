@@ -188,13 +188,8 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.corpses.splice(this.corpses.indexOf(c), 1);
     e.hp = Math.min(e.maxHp, e.hp + idiv(e.maxHp * ab.damage!, 100));
   } else if (name === 'explosioncuve') {
-    // The Cuve blows itself up: every unit on the ground around, friend or foe, and the enemy buildings take the blast, armour or not.
-    for (const t of [...this.entities.values()]) {
-      if (t === e || t.def.kind === 'resource' || t.hp <= 0 || t.inside || (t.def.kind === 'unit' ? flies(t) : !this.hostile(t.owner, e.owner))) continue;
-      if (this.gap(e, t) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
-    }
-    this.casts.push({ kind: name, x: e.x, y: e.y });
-    e.hp = 0;
+    // The balancer (2026-11-22): 2 s between the order and the blast (the fuse burns in World.step, then cuveBlast).
+    if (e.fuse === 0) e.fuse = ticks(BALANCE.rules.upgrades.explosionDelay);
     return;
   } else if (name === 'transe') {
     e.war = ticks(ab.duration);
@@ -354,6 +349,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
       t.skin = 0;
       t.reflect = 0;
       t.invuln = 0;
+      t.ferveur = 0;
       if (t.boost > 0) {
         t.boost = 0;
         t.speed = this.baseSpeed(t);
@@ -416,7 +412,8 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     t.reflect = ticks(ab.duration);
     t.reflectLeft = ab.max!;
   } else if (name === 'explosiftoxique') {
-    // A toxic cloud (2010 sheet, mod): its damage every second to every enemy unit in it, for its duration; clouds add up.
+    // A toxic cloud (2010 sheet, mod) on any spot, a unit there or not: its damage every second to every unit in it, allies
+    // too (the balancer, 2026-11-22), for its duration; clouds add up.
     this.clouds.push({ owner: e.owner, x, y, r: toFp(ab.radius!), damage: ab.damage!, hits: ab.duration, next: this.tick });
   } else if (name === 'gazeuphorisants') {
     // Allies of the zone (living ones) walk and strike faster for a while.
@@ -433,7 +430,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     // Every living ally of the zone (notice « ses troupes », 2010 sheet and mod: an area).
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
-    for (const t of allies) t.invuln = ticks(ab.duration);
+    for (const t of allies) t.ferveur = ticks(ab.duration);
   } else if (name === 'reanimation') {
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
     if (i < 0) return false;
@@ -454,11 +451,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   return true;
 }
 
-/** The toxic clouds hurt the enemy units in them, once a second; a spent cloud goes. */
+/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. */
 export function poisonClouds(this: World): void {
   for (const c of this.clouds) {
     if (c.next > this.tick) continue;
-    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, c.owner) && dist(t.x, t.y, c.x, c.y) <= c.r + t.radius) this.hurt(t, c.damage);
+    // Allies and enemies alike (the balancer, 2026-11-22).
+    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, c.x, c.y) <= c.r + t.radius) this.hurt(t, c.damage);
     c.hits--;
     c.next = this.tick + ticks(1);
   }
@@ -484,6 +482,18 @@ export function mineBlast(this: World, m: Entity): void {
     if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
   }
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
+}
+
+/** The Réservoir's Explosion suicidaire, its fuse burnt: every unit on the ground around, friend or foe, and the enemy
+ * buildings take the blast, armour or not. */
+export function cuveBlast(this: World, e: Entity): void {
+  const ab = ABILITIES.explosioncuve;
+  for (const t of [...this.entities.values()]) {
+    if (t === e || t.def.kind === 'resource' || t.hp <= 0 || t.inside || (t.def.kind === 'unit' ? flies(t) : !this.hostile(t.owner, e.owner))) continue;
+    if (this.gap(e, t) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+  }
+  this.casts.push({ kind: 'explosioncuve', x: e.x, y: e.y });
+  e.hp = 0;
 }
 
 /** A Canon orbital shot lands: it spares nothing under it. */

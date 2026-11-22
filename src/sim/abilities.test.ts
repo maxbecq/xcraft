@@ -36,17 +36,17 @@ describe('Human abilities (notice 1.2-1)', () => {
     expect(foe.poison > 0 || foe.hp < foe.maxHp).toBe(true);
   });
 
-  it('Régénérant: the ally takes no damage, then is left at 1 hp', () => {
+  it('Régénérant: the ally takes 5 % of the damage (the balancer, 2026-11-22), then is left at 1 hp', () => {
     const w = new World(createMap());
     w.players[0].upgrades.regenerant = 1;
     const a = Object.assign(w.spawn('alchimiste', 0, ...at(40, 60)), { mana: 1 << 30 });
     const ally = w.spawn('legionnaire', 0, ...at(41, 60));
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'regenerant', x: ally.x, y: ally.y }]);
     run(w, 0.2);
-    expect(ally.invuln).toBeGreaterThan(0);
+    expect(ally.ferveur).toBeGreaterThan(0);
     w.spawn('archer', 1, ...at(44, 60));
     run(w, ABILITIES.regenerant.duration - 1);
-    expect(ally.hp).toBe(ally.maxHp);
+    expect(ally.hp).toBeGreaterThan(ally.maxHp / 2);
     run(w, 1.5);
     expect(ally.hp).toBe(1);
   });

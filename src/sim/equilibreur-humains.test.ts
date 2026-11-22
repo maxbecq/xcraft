@@ -169,4 +169,40 @@ describe('the balancer, Humains', () => {
     expect(far.hp).toBe(far.maxHp);
     expect(w.entities.has(mine.id)).toBe(false);
   });
+
+  it('Régénérant: 5 % of the damage taken for 7 s, then 1 HP left', () => {
+    const w = humans();
+    const a = Object.assign(w.spawn('alchimiste', 0, 30 * FP, 40 * FP), { mana: 1 << 30 });
+    w.players[0].upgrades.regenerant = 1;
+    const ally = w.spawn('legionnaire', 0, 32 * FP, 40 * FP);
+    expect(w.castAt(a, 'regenerant', ally.x, ally.y)).toBe(true);
+    expect(w.hurt(ally, 100)).toBe(5);
+    for (let i = 0; i < ticks(7) + 1; i++) w.step([]);
+    expect([ally.hp, ally.ferveur]).toEqual([1, 0]);
+  });
+
+  it('Explosif toxique: aimed at any spot, it hurts allies as well as enemies', () => {
+    const w = humans();
+    const a = Object.assign(w.spawn('alchimiste', 0, 30 * FP, 40 * FP), { mana: 1 << 30 });
+    const ally = w.spawn('legionnaire', 0, 34 * FP, 40 * FP);
+    ally.held = 1e6;
+    expect(w.castAt(a, 'explosiftoxique', ally.x, ally.y)).toBe(true);
+    for (let i = 0; i < ticks(2); i++) w.step([]);
+    expect(ally.hp).toBeLessThan(ally.maxHp);
+    expect(w.castAt(a, 'explosiftoxique', 40 * FP, 50 * FP)).toBe(true); // nobody there
+  });
+
+  it('Explosion suicidaire: the Réservoir goes off 2 s after the order', () => {
+    const w = humans();
+    const c = w.spawn('cuve', 0, 30 * FP, 40 * FP);
+    const foe = w.spawn('legionnaire', 0, 32 * FP, 40 * FP); // an ally: the blast spares nobody, and the Réservoir does not shoot it
+    foe.held = 1e6;
+    w.step([{ player: 0, kind: 'ability', ids: [c.id], name: 'explosioncuve' }]);
+    for (let i = 0; i < ticks(2) - 2; i++) w.step([]);
+    expect(w.entities.has(c.id)).toBe(true);
+    expect(foe.hp).toBe(foe.maxHp);
+    for (let i = 0; i < 4; i++) w.step([]);
+    expect(w.entities.has(c.id)).toBe(false);
+    expect(foe.hp).toBeLessThan(foe.maxHp);
+  });
 });

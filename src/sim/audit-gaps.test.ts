@@ -70,8 +70,11 @@ describe('audit gaps', () => {
     const near = w.spawn('archer', 1, cuve.x + 2 * FP, cuve.y);
     const far = w.spawn('archer', 1, cuve.x + 8 * FP, cuve.y);
     const [nearHp, farHp] = [near.hp + near.shield, far.hp + far.shield];
+    // The 2 s fuse: the guns quiet meanwhile, to count the blast alone.
+    cuve.frozen = near.frozen = far.frozen = ticks(60);
+    far.held = ticks(60);
     w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'explosioncuve' }]);
-    run(w, 1);
+    run(w, 2.2); // 2 s between the order and the blast (the balancer, 2026-11-22)
     expect(w.entities.has(cuve.id)).toBe(false);
     expect(w.entities.has(near.id) ? nearHp - near.hp - near.shield : nearHp).toBeGreaterThanOrEqual(Math.min(nearHp, 356));
     expect(far.hp + far.shield).toBe(farHp);
@@ -85,8 +88,8 @@ describe('audit gaps', () => {
     const b = w.spawn('auxiliaire', 0, 33 * FP, 31 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [alch.id], name: 'regenerant', x: a.x, y: (a.y + b.y) / 2 }]);
     run(w, 1);
-    expect(a.invuln).toBeGreaterThan(0);
-    expect(b.invuln).toBeGreaterThan(0);
+    expect(a.ferveur).toBeGreaterThan(0);
+    expect(b.ferveur).toBeGreaterThan(0);
   });
 
   it('the Allosaure feasts on a corpse nearby to heal (notice), half its health (mod)', () => {

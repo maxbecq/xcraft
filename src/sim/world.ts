@@ -152,9 +152,13 @@ export interface Entity {
   lastHitBy: number;
   /** Ticks of poison left (Lames empoisonnées, Explosif toxique). */
   poison: number;
-  /** Ticks left: hidden from enemies without detection (Camouflage), unhurt (Régénérant), alive (Cadavre réanimé). */
+  /** Ticks left: hidden from enemies without detection (Camouflage), unhurt (the Fantômes), alive (Cadavre réanimé). */
   camo: number;
   invuln: number;
+  /** Ticks left of a Régénérant: 5 % of the damage taken, then 1 HP left when it wears off. */
+  ferveur: number;
+  /** Ticks before a Réservoir set to blow up goes off (Explosion suicidaire). */
+  fuse: number;
   ttl: number;
   /** Char Pégase in the air (Décollage). */
   airborne: boolean;
@@ -403,7 +407,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -482,8 +486,10 @@ export class World {
       if (e.camo > 0) e.camo--;
       if (e.phased > 0) e.phased--;
       if (e.reflect > 0) e.reflect--;
-      // Régénérant wears off: the toxins turn on their host.
-      if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
+      if (e.invuln > 0) e.invuln--;
+      // Régénérant wears off: the toxins turn on their host, 1 HP left (the balancer, 2026-11-22).
+      if (e.ferveur > 0 && --e.ferveur === 0) e.hp = Math.min(e.hp, 1);
+      if (e.fuse > 0 && --e.fuse === 0) this.cuveBlast(e);
       if (e.ttl > 0 && --e.ttl === 0) {
         if (e.type === 'minealchimique') this.mineBlast(e);
         e.hp = 0;
