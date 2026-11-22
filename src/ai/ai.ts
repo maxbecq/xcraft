@@ -200,8 +200,10 @@ export class AI {
     // with 500 minerals sat out the game in a last stand).
     // A Z Pod too, which can raise a Plate-forme without a drone.
     const pays = (t: string) => (DEFS[t] as BuildingDef | UnitDef).cost.minerals <= bankNow.minerals && (DEFS[t] as BuildingDef | UnitDef).cost.energy <= bankNow.energy;
-    const fields = (t: string) => this.faction.army.some(([a]) => a === t) && pays(t);
-    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some((t) => this.faction.army.some(([u]) => u === t)))));
+    // Any fighting unit (a Créaturium's saurians are not in the army list).
+    const fights = (t: string) => DEFS[t]?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && !!(DEFS[t] as UnitDef).attack;
+    const fields = (t: string) => fights(t) && pays(t);
+    const trainer = mine.some((b) => b.def.kind === 'building' && b.buildLeft === 0 && ((b.def as BuildingDef).trains?.some(fields) || (b.def as BuildingDef).addons?.some((a) => pays(a) && (DEFS[a] as BuildingDef).trains?.some(fights))));
     const rebuild = () => (this.rebuildable || trainer ? mine.find((e) => e.def.kind === 'building') : undefined);
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
     if (!home) return this.lastStand(mine);
@@ -510,11 +512,12 @@ export class AI {
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
-    // No base at all, a worker to raise it (a Conseil's site with its last serf killed never rose, and the savings for
-    // it held every unit for good), a spot for it or its site begun (its last minerals, the next worker's price, went into research
+    // No base at all, a worker to raise it or a site rising by itself (a Conseil's site with its last serf killed never
+    // rose, and the savings for it held every unit for good; a Z Intelligence absorbed its last drone and goes on), a
+    // spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && this.raisers > 0 && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -1984,7 +1987,9 @@ export class AI {
     // Supply under construction is supply to come.
     // A site that rises by itself, that is (no worker is left to raise a Grenier or a Branche).
     const short = minerals < (DEFS[f.worker] as UnitDef).cost.minerals || (supply.used >= supply.max && !buildings.some((b) => kin(b, f.supply) && b.buildLeft > 0 && ((b.def as BuildingDef).warp || (b.def as BuildingDef).absorbs)));
-    if (short && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
+    // Nor anything to train one (a headquarters' site no worker can finish).
+    const trains = [...w.entities.values()].some((e) => e.owner === this.player && e.buildLeft === 0 && (e.type === f.workerFrom || (e.def.kind === 'building' && (e.def as BuildingDef).trains?.includes(f.worker))));
+    if ((short || !trains) && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
