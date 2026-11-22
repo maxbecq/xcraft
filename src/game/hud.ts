@@ -15,6 +15,8 @@ import { makePinUi, place, spotAt, updateGhost } from './hud-place';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
 const TUCK_MS = 2800;
+/** Two taps this close in time are one double tap (as for units). */
+const DOUBLE_TAP_MS = 350;
 
 /** Resource bar, selection panel, command card, messages and building placement. */
 export class Hud {
@@ -320,9 +322,9 @@ export class Hud {
       this.placing = null;
       return true;
     }
-    // A finger does not place at the first tap: it moves the footprint there; ✓ places it (see pinUi).
+    // A finger does not place at the first tap: it moves the footprint there; ✓ or a second tap there places it.
     if (this.input.touching) {
-      if (ground) this.pin = ground.clone();
+      if (ground && !this.pinTapped(ground, false)) this.pin = ground.clone();
       return true;
     }
     place(this, ground, shift);
@@ -343,8 +345,34 @@ export class Hud {
     const g = this.input.groundAt(x, y);
     const spot = spotAt(this, this.placing, this.pin);
     if (!g || !spot) return false;
+    if (this.pinTapped(g, true)) return true;
     const size = (DEFS[this.placing] as BuildingDef).size;
     return g.x >= spot[0] - 1 && g.x <= spot[0] + size + 1 && g.z >= spot[1] - 1 && g.z <= spot[1] + size + 1;
+  }
+
+  private pinTap = { t: 0, x: 0, y: 0, down: false };
+  /**
+   * Touch: the second of two quick taps at the same spot places the building there (as ✓); refused there, it stays
+   * armed. Seen at the finger's touch-down (`grab`) and at its release (`click`): a release after its own touch-down is
+   * the same tap, not a second one.
+   */
+  private pinTapped(ground: Vector3, down: boolean): boolean {
+    const now = performance.now();
+    const s = this.input.toScreen(ground);
+    const last = this.pinTap;
+    this.pinTap = { t: now, ...s, down };
+    if (!this.placing || (last.down && !down) || now - last.t > DOUBLE_TAP_MS || Math.hypot(s.x - last.x, s.y - last.y) > 40) return false;
+    this.pinTap.t = 0;
+    this.pin = ground.clone();
+    const def = DEFS[this.placing] as BuildingDef;
+    const spot = spotAt(this, this.placing, ground);
+    if (spot && !def.energyRate && !this.world.canPlace(this.placing, spot[0], spot[1], this.player)) {
+      this.notify([{ player: this.player, kind: 'error', text: this.world.misplaced(def, spot[0], spot[1], this.player) }]);
+      return true;
+    }
+    this.audio.play('click');
+    place(this, ground, false);
+    return true;
   }
 
   /** The held footprint follows the finger. */
