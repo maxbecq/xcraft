@@ -915,13 +915,12 @@ export class AI {
       const def = DEFS[type] as UnitDef;
       // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
       // the energy-hungry socles only, never holds back one that costs none.
-      // A unit costing no energy is held back by the tech's energy only while energy comes in (no Mine left, the Caserne
-      // waited for ever for the Créaturium's saurians).
-      const energyIn = buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0);
+      // A unit costing no energy is never held back by the energy kept for the tech (it spends none of it: the Casernes
+      // trained nothing from minute 8 to 11, energy under the Créaturium's 400).
       // A Phalangiste or Belluaire due for its share of the army: above the tech's reserve only, not the next
       // research's too (625 to 1075 energy were wanted, never there).
       const shared = SHARED.includes(type);
-      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? (shared ? reserve : unitReserve) : f === FACTIONS.isdaris || f === FACTIONS.z || !energyIn ? 0 : reserve) < def.cost.energy) {
+      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? (shared ? reserve : unitReserve) : 0) < def.cost.energy) {
         // No minerals coming in: waiting for it is for ever, the rotation moves on to what the bank can pay.
         if (w.tick - this.lastIncome >= ticks(60)) this.trained++;
         continue;
