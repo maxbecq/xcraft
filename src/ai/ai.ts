@@ -574,6 +574,9 @@ export class AI {
   private budget(ctx: Survey & Need) {
     const { w, f, p, mine, serfs, builders, army, buildings, minute, moreEnergy, techWanted, techDef, techUp, unlocked, nextExtension } = ctx;
     const techMinute = (BALANCE.ai.tech as Record<string, { minute: number }>)[p.faction]?.minute ?? 0;
+    // The tech building's next unit keeps its energy only while that building is idle: training, it needs none, and
+    // the reserve held the Casernes' Phalangistes and Belluaires and every late research for good.
+    const techBusy = buildings.some((b) => b.type === f.tech && b.buildLeft === 0 && b.queue.length > 0);
     // Isdaris: the next extension (the Laboratoire on a Portail) keeps its price from minute 6, before the Psycho-
     // assembleur too: Créatures and Archers spent every mineral and point of energy as they came, and the Laboratoire,
     // with the Druides and every Portail research behind it, came late or never.
@@ -592,7 +595,7 @@ export class AI {
     const supreme = (DEFS.supreme as BuildingDef).cost;
     // And only with energy coming in (an Assimilateur standing): stuck at 350, it held the drones for good.
     const holdSupreme = wantSupreme && p.energy >= 300 && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0) && ((p.minerals >= supreme.minerals && p.energy >= supreme.energy && serfs.length > 0) || serfs.length >= this.plan.serfs / 2);
-    const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : extensionDue ? (DEFS[nextExtension!] as UpgradeDef).cost.energy : 0;
+    const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length && !techBusy ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : extensionDue ? (DEFS[nextExtension!] as UpgradeDef).cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
     // research on a production building (Isdaris Portail) waits for spare resources instead.
@@ -601,7 +604,9 @@ export class AI {
     const nextResearch = this.easy || army.length < this.plan.wave || w.tick - this.lastIncome >= ticks(60) ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
     // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
-    const researchReserve = techWanted && f !== FACTIONS.isdaris ? 0 : reserve;
+    // Not once the tech building is three minutes late: the Forge's research took every point of energy as it came,
+    // and the Créaturium (400) never stood, nor anything it unlocks.
+    const researchReserve = techWanted && f !== FACTIONS.isdaris && minute < techMinute + 3 ? 0 : reserve;
     const unitReserve = reserve + (nextResearch ? (DEFS[nextResearch] as UpgradeDef).cost.energy : 0);
     // Isdaris: the gateways and the morphs keep the minerals of the advanced units whenever the Psycho-assembleur is
     // idle, and, once a wave is out, of the second Récepteur and of the Psycho-assembleur itself (the gateways' cheap
@@ -870,13 +875,17 @@ export class AI {
       const own = (u: string) => mine.filter((o) => o.type === u).length;
       const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) < (abilitiesOf(DEFS[u] as UnitDef).includes('couloir') && w.level(this.player, 'couloir') ? 2 : 1)) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
+      const pays = (u: string) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx);
       // Against flyers, what shoots them if one can be paid, else what can (the last Créaturium waited for an
       // Ankylosaure it could not pay, its Plésiosaure left out).
-      const pick = (list: string[]) => list.slice().sort((a, b) => own(a) - own(b)).find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
       // (while minerals come in, it waits for the anti-air unit, as before).
       // Not for supply: minerals coming in free none.
-      const waitAir = w.tick - this.lastIncome < ticks(60) && antiAirTrains.some((u) => (DEFS[u] as UnitDef).supply <= this.room(ctx));
-      const type = this.enemyAir && antiAirTrains.length ? (pick(antiAirTrains) ?? (waitAir ? undefined : pick(trains))) : pick(trains);
+      const order = (this.enemyAir && antiAirTrains.length && (antiAirTrains.some(pays) || (w.tick - this.lastIncome < ticks(60) && antiAirTrains.some((u) => (DEFS[u] as UnitDef).supply <= this.room(ctx)))) ? antiAirTrains : trains).slice().sort((a, b) => own(a) - own(b));
+      // The tech building waits for the energy of a unit it has none of, its minerals there, rather than train another
+      // of the cheaper ones (the Ankylosaure, 390, never came: a Plésiosaure, 225, left each time the energy got there).
+      const first = order.find((u) => (DEFS[u] as UnitDef).attack);
+      if (t.type === f.tech && first && own(first) === 0 && !pays(first) && ctx.minerals - ctx.keep >= (DEFS[first] as UnitDef).cost.minerals && order.some((u) => u !== first && own(u) > 0 && pays(u)) && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0)) continue;
+      const type = order.find(pays);
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
