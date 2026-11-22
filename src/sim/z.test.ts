@@ -712,3 +712,48 @@ describe('Z Patte ultramécanique (équilibreur 22/11, in place of the Balise of
     expect(flyer.support & KIT.patte).toBe(0);
   });
 });
+
+describe('Z Patte ultramécanique in a crowd at a cliff', () => {
+  const scene = () => {
+    const w = createMatch(['z', 'humains']);
+    const g = w.grid;
+    let pair: [number, number, number, number] | undefined;
+    for (let y = 10; y < g.height - 10 && !pair; y++)
+      for (let x = 10; x < g.width - 10 && !pair; x++)
+        if (g.open(x - 1, y) && g.open(x + 2, y) && g.flatLevel(x - 1, y) >= 0 && g.flatLevel(x + 2, y) > g.flatLevel(x - 1, y) && g.findPath(x - 1, y, x + 2, y).length >= 15 && g.findPath(x - 1, y, x + 2, y, true).length <= 4) pair = [x - 1, y, x + 2, y];
+    const [ax, ay, bx, by] = pair!;
+    const climber = w.spawn('quadripode', 0, ax * FP + FP / 2, ay * FP + FP / 2);
+    climber.support |= KIT.patte;
+    // A crowd of socles round it at the cliff's foot, all sent to the same spot up top.
+    const crowd = [-1, 0, 1].flatMap((dy) => [-2, -1, 0].map((dx) => w.spawn('quadripode', 0, (ax + dx) * FP + FP / 2, (ay + dy) * FP + FP / 3)));
+    const all = [climber, ...crowd];
+    w.step([{ player: 0, kind: 'move', ids: all.map((u) => u.id), x: bx * FP + FP / 2, y: by * FP + FP / 2 }]);
+    return { w, g, climber, crowd, all, top: g.flatLevel(bx, by) };
+  };
+
+  it('the climber gets out of the crowd and up; none of the others is pushed up the cliff; no lasting overlap', () => {
+    const { w, g, climber, crowd, all, top } = scene();
+    let up = -1;
+    const start = crowd.map((u) => g.level(tileOf(u.x), tileOf(u.y)));
+    for (let t = 0; t < ticks(30); t++) {
+      w.step([]);
+      if (up < 0 && g.level(tileOf(climber.x), tileOf(climber.y)) === top) up = t;
+      // A walker is never shoved up the cliff by the crowd: in the first seconds (its way round is long) it stays at
+      // the level it started on.
+      if (t < ticks(2)) crowd.forEach((u, i) => expect(g.level(tileOf(u.x), tileOf(u.y))).toBeLessThanOrEqual(start[i]));
+    }
+    expect(up).toBeGreaterThanOrEqual(0);
+    expect(up).toBeLessThan(ticks(6));
+    // Once settled, no two stand on each other.
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++) expect(Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y)).toBeGreaterThan((all[i].radius + all[j].radius) * 0.5);
+  });
+
+  it('plays out the same every time', () => {
+    const runs = [scene(), scene()].map(({ w, all }) => {
+      for (let t = 0; t < ticks(10); t++) w.step([]);
+      return all.map((u) => [u.x, u.y]);
+    });
+    expect(runs[0]).toEqual(runs[1]);
+  });
+});
