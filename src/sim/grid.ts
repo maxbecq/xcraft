@@ -124,6 +124,25 @@ export class Grid {
 
   /** Can a unit walk in a straight line between two fixed-point points? */
   lineWalkable(ax: number, ay: number, bx: number, by: number): boolean {
+    // Between two tile centres the answer is kept while the grid stays as it was (`changes`): smoothing a path asks
+    // for the same lines again and again, from each waypoint to every one after it, and every unit of a group sent
+    // along one path asked for them all over (15 ms of a tick for a dozen units). The same answer, only not worked out twice.
+    const half = FP / 2;
+    if (ax % FP !== half || ay % FP !== half || bx % FP !== half || by % FP !== half || ax < 0 || ay < 0 || bx < 0 || by < 0) return this.line(ax, ay, bx, by);
+    if (this.linesAt !== this.changes || this.lines.size > 400_000) {
+      this.linesAt = this.changes;
+      this.lines.clear();
+    }
+    const n = this.width * this.height;
+    const key = (Math.floor(ay / FP) * this.width + Math.floor(ax / FP)) * n + Math.floor(by / FP) * this.width + Math.floor(bx / FP);
+    let ok = this.lines.get(key);
+    if (ok === undefined) this.lines.set(key, (ok = this.line(ax, ay, bx, by)));
+    return ok;
+  }
+  private readonly lines = new Map<number, boolean>();
+  private linesAt = -1;
+
+  private line(ax: number, ay: number, bx: number, by: number): boolean {
     // A start on a tile edge lies in the tile ahead along that axis, or, not moving along it, in both (both must do).
     const starts = (a: number, b: number) => (a % FP !== 0 ? [tileOf(a)] : b > a ? [a / FP] : b < a ? [a / FP - 1] : [a / FP - 1, a / FP]);
     for (const tx of starts(ax, bx)) for (const ty of starts(ay, by)) if (!this.walkLine(ax, ay, bx, by, tx, ty)) return false;

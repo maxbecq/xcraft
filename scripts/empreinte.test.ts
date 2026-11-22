@@ -3,6 +3,7 @@ import { it } from 'vitest';
 import { AI } from '../src/ai/ai';
 import type { Faction } from '../src/data';
 import { fingerprint } from '../src/sim/fingerprint';
+import { Grid } from '../src/sim/grid';
 import { ticks } from '../src/sim/fixed';
 import { createMatch } from '../src/sim/setup';
 import { type Command, World } from '../src/sim/world';
@@ -28,6 +29,9 @@ function play(name: string, world: World, commands: (w: World) => Command[]): vo
   let sum = 2166136261;
   const mix = (v: number) => (sum = Math.imul(sum ^ v, 16777619) >>> 0);
   const time = { sim: 0, simMax: 0, simMaxAt: 0, ai: 0, aiMax: 0, aiMaxAt: 0 };
+  const worst: { tick: number; ms: number; into: string }[] = [];
+  let before: Record<string, number> = {};
+  let callsBefore: Record<string, number> = {};
   while (world.winner === null && world.tick < LIMIT) {
     const t0 = performance.now();
     const cmds = commands(world);
@@ -35,6 +39,18 @@ function play(name: string, world: World, commands: (w: World) => Command[]): vo
     for (const c of cmds) for (const ch of JSON.stringify(c)) mix(ch.charCodeAt(0));
     world.step(cmds);
     const t2 = performance.now();
+    if (process.env.EMPREINTE_PROFIL) {
+      // The worst steps of the game, each with what its time went into.
+      const now = Object.fromEntries(Object.entries(PROFILE).map(([k, p]) => [k, p.ms]));
+      const calls = Object.fromEntries(Object.entries(PROFILE).map(([k, p]) => [k, p.calls]));
+      if (t2 - t1 > (worst[worst.length - 1]?.ms ?? 0) || worst.length < 5) {
+        worst.push({ tick: world.tick - 1, ms: t2 - t1, into: Object.entries(now).map(([k, ms]) => [k, ms - (before[k] ?? 0)] as [string, number]).filter(([, ms]) => ms >= 0.5).sort((x, y) => y[1] - x[1]).map(([k, ms]) => `${k} ${ms.toFixed(1)}/${calls[k] - (callsBefore[k] ?? 0)}`).join(', ') });
+        worst.sort((x, y) => y.ms - x.ms);
+        worst.length = Math.min(worst.length, 5);
+      }
+      before = now;
+      callsBefore = calls;
+    }
     time.ai += t1 - t0;
     time.sim += t2 - t1;
     if (t1 - t0 > time.aiMax) [time.aiMax, time.aiMaxAt] = [t1 - t0, world.tick];
@@ -45,6 +61,7 @@ function play(name: string, world: World, commands: (w: World) => Command[]): vo
   console.log('EMPREINTE', name, JSON.stringify({ tick: world.tick, winner: world.winner, hash: world.hash() >>> 0, fingerprint: fingerprint(world) >>> 0, course: sum, entities: world.entities.size }));
   if (process.env.EMPREINTE_PROFIL) {
     console.log('PROFIL', name, Object.entries(PROFILE).filter(([, p]) => p.calls).sort((x, y) => y[1].ms - x[1].ms).map(([k, p]) => `${k} ${p.ms.toFixed(0)} ms/${p.calls}`).join(' · '));
+    for (const w of worst) console.log('POINTE', name, `tick ${w.tick}: ${w.ms.toFixed(1)} ms (${w.into})`);
     for (const p of Object.values(PROFILE)) p.ms = p.calls = 0;
   }
   console.log('TEMPS', name, JSON.stringify({ simMsPerTick: r(time.sim / world.tick), simMax: r(time.simMax), simMaxAt: time.simMaxAt, aiMsPerTick: r(time.ai / world.tick), aiMax: r(time.aiMax), aiMaxAt: time.aiMaxAt, totalS: r((time.sim + time.ai) / 1000) }));
@@ -76,6 +93,8 @@ function profile(proto: object, names: string[]): void {
 it.skipIf(!process.env.EMPREINTE)('empreintes', () => {
   if (process.env.EMPREINTE_PROFIL) {
     profile(World.prototype, ['nearestDropoff', 'nearestField', 'nearCouncil', 'armorBonus', 'rechargeShields', 'blow', 'powerNetwork', 'canPlace', 'think', 'operate', 'separate', 'see', 'index', 'acquire', 'findPathFor', 'goNear']);
+    profile(Grid.prototype, ['findPath', 'nearestDoors', 'nearestOpen', 'lineWalkable']);
+    profile(World.prototype, ['plan', 'chase', 'gather', 'construct', 'hit', 'strike', 'judge', 'bury', 'repairOnCreep', 'apply', 'pulse', 'regenerate', 'revive']);
     profile(AI.prototype, ['spot', 'walkable', 'closeToResources', 'research', 'think']);
   }
   const only = process.env.EMPREINTE_GAMES?.split(',');
