@@ -256,14 +256,31 @@ describe('Z', () => {
     hurt.hp = 100;
     run(w, 2);
     expect(hurt.hp).toBeGreaterThan(110);
-    // Accumulateur: Cône de protection keeps the allies round the caster unhurt.
+    // Accumulateur: Nuage de nanites (équilibreur 22/11): allied machines within 6 of the caster take half the damage,
+    // living allies none of it off; two clouds over the same spot do not add up.
     const acc = at('quadripode', 0, 70, 70, 'accumulateur');
     expect(w.abilitiesFor(acc)).toEqual(['gel', 'vacarme', 'cone', 'gravite']);
-    const guarded = at('hexapode', 0, 71, 70);
+    const guarded = at('hexapode', 0, 75, 70);
+    const bare = at('hexapode', 0, 90, 90);
+    const living = w.spawn('auxiliaire', 0, 74 * FP, 71 * FP);
+    const lone = w.spawn('auxiliaire', 0, 92 * FP, 90 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'cone' }]);
-    const before = guarded.hp;
-    w.hurt(guarded, 50);
-    expect(guarded.hp).toBe(before);
+    const loss = (u: Entity) => {
+      u.hp = u.maxHp;
+      w.hurt(u, 60);
+      return u.maxHp - u.hp;
+    };
+    const armor = (DEFS.hexapode as UnitDef).armor + w.armorBonus(bare);
+    expect(loss(bare)).toBe(60 - armor);
+    expect(loss(guarded)).toBe(30 - armor);
+    expect(loss(living)).toBe(loss(lone));
+    const acc2 = at('quadripode', 0, 72, 70, 'accumulateur');
+    acc2.mana = 1 << 30;
+    w.step([{ player: 0, kind: 'ability', ids: [acc2.id], name: 'cone' }]);
+    expect(w.cones).toBe(2);
+    expect(loss(guarded)).toBe(30 - armor);
+    acc2.hp = 0;
+    w.step([]);
     // Killed with its cone still up, the count of live cones comes back to 0.
     expect(w.cones).toBe(1);
     acc.hp = 0;

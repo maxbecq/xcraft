@@ -277,7 +277,7 @@
   "abilities": {
     "gel": { "mana": 55, "cooldown": 1, "duration": 20, "radius": 2, "range": 5, "target": "point" },
     "vacarme": { "mana": 130, "cooldown": 30, "duration": 60, "radius": 4, "range": 8, "damage": 10, "target": "point" },
-    "cone": { "mana": 170, "cooldown": 15, "duration": 60, "radius": 3 },
+    "cone": { "mana": 170, "cooldown": 15, "duration": 60, "radius": 6 },
     "gravite": { "mana": 205, "cooldown": 15, "duration": 60, "radius": 18, "damage": 50, "max": 125 },
     "balisez": { "mana": 20, "cooldown": 1, "duration": 50, "radius": 4, "range": 6, "target": "point" },
     "impulsion": { "mana": 60, "cooldown": 40, "duration": 5, "radius": 2, "range": 3, "target": "point" },

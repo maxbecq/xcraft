@@ -220,9 +220,10 @@ export function fortify(this: World, u: Entity): void {
 export function hurt(this: World, t: Entity, damage: number): number {
   t.lastHit = this.tick;
   if (t.invuln > 0 || t.phased > 0) return 0;
-  // Z Gel électronique: a frozen building is unhurt; Cône de protection: allies round its caster too.
+  // Z Gel électronique: a frozen building is unhurt. Nuage de nanites (équilibreur 22/11): allied machines round its
+  // caster take half the damage; several clouds over the same spot do not add up.
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
-  if (t.def.kind === 'unit' && this.coned(t)) return 0;
+  if (t.def.kind === 'unit' && (t.def as UnitDef).mechanical && this.coned(t)) damage = idiv(damage, 2);
   if (t.skin > 0) damage = Math.max(1, damage - SKIN_REDUCTION);
   // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.
   if (damage > 0 && t.shield > 0 && t.owner >= 0 && this.players[t.owner]?.faction === 'isdaris') damage = Math.max(1, damage - this.level(t.owner, 'bouclier') * BALANCE.rules.upgrades.bouclierArmor);
@@ -292,7 +293,7 @@ export function healRate(this: World, e: Entity): number {
   return (e.def as UnitDef).heal ?? (e.kit ? WEAPONS[e.kit]?.heal : 0) ?? 0;
 }
 
-/** Inside a Cône de protection (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
+/** Inside a Nuage de nanites (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
 export function coned(this: World, t: Entity): boolean {
   if (!this.cones) return false;
   const r = toFp(ABILITIES.cone.radius!);
