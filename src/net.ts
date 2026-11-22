@@ -1,5 +1,5 @@
 import Peer, { type DataConnection } from 'peerjs';
-import { commandOk } from './sim/validate';
+import { commandOk, MAX_IDS } from './sim/validate';
 import type { Command } from './sim/world';
 
 /** The orders' check, the simulation's own (net and replay files share it). */

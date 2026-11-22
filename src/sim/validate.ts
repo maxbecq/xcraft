@@ -5,7 +5,7 @@
  */
 
 /** Units in one order: well above anything a player can give. */
-const MAX_IDS = 1024;
+export const MAX_IDS = 1024;
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** Every number of an order is a whole one: positions in fixed point, tiles, ids, a place in a queue. */
 const int = (v: unknown): v is number => Number.isSafeInteger(v) && Math.abs(v as number) < 2 ** 31;
