@@ -62,7 +62,9 @@ export class Portrait {
    * context, its shader programs (compiled side by side where the browser can) and its textures. Without it the
    * first click on a type froze the game for a third to half a second while its portrait's programs were built.
    */
-  async prewarm(entries: [string, number][]): Promise<void> {
+  async prewarm(entries: [string, number][], stop: () => boolean = () => false): Promise<void> {
+    // `stop`: the loading screen's wait is over (an online match must start); asked before each step, the rest left out.
+    if (stop()) return;
     const renderer = this.context();
     // A scene of its own, lit as the portrait's (the same programs), so nothing of it ever shows.
     const warm = new Scene();
@@ -74,12 +76,14 @@ export class Portrait {
       for (const m of [o.material].flat()) for (const v of Object.values(m)) if (v instanceof Texture) renderer.initTexture(v);
     });
     try {
-      await renderer.compileAsync(warm, this.camera);
+      if (!stop()) await renderer.compileAsync(warm, this.camera);
       // A first draw through an empty scissor: the programs' first use (uniforms, link check) is paid now too.
-      renderer.setScissorTest(true);
-      renderer.setScissor(0, 0, 0, 0);
-      renderer.render(warm, this.camera);
-      renderer.setScissorTest(false);
+      if (!stop()) {
+        renderer.setScissorTest(true);
+        renderer.setScissor(0, 0, 0, 0);
+        renderer.render(warm, this.camera);
+        renderer.setScissorTest(false);
+      }
     } catch {
       // a lost context: the first click builds them as before
     }

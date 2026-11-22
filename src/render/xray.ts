@@ -73,8 +73,9 @@ export function unxray(model: Object3D): void {
  * are not updated again. That work, done twice more a frame, was most of the passes' cost (6.5 to 2.5 ms a frame with
  * 80 units, CPU slowed 4 times).
  */
-export function drawXray(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null = null): void {
-  if (!used.size) return;
+export function drawXray(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null = null, stop?: () => boolean): void {
+  // `stop` (the warm-up's, render/prewarm.ts): asked before each of its draws of the scene, the rest left out.
+  if (!used.size || stop?.()) return;
   const [mask, override, background, autoClear, autoUpdate] = [camera.layers.mask, scene.overrideMaterial, scene.background, renderer.autoClear, scene.matrixWorldAutoUpdate];
   scene.background = null;
   scene.matrixWorldAutoUpdate = false;
@@ -90,6 +91,7 @@ export function drawXray(renderer: WebGLRenderer, scene: Scene, camera: Camera, 
   renderer.render(scene, camera);
   renderer.setRenderTarget(target);
   for (const layer of used) {
+    if (stop?.()) break;
     camera.layers.set(layer);
     scene.overrideMaterial = (materials ??= makeMaterials())[layer - 1];
     renderer.info.render.frame--; // render() counts it back up: the same frame as the scene's render

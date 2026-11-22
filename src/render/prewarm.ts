@@ -46,7 +46,9 @@ export interface Prewarm {
 export async function compileScene(m: Prewarm, catalog: [string, number][]): Promise<void> {
   const { renderer, scene, world, units, rig, sun, sunOffset: SUN_OFFSET, post } = m;
   const map = world.map;
+  if (m.stop?.()) return;
   units.sync(world, 0, m.selected, m.player, m.sees, m.seenAt);
+  if (m.stop?.()) return;
   // Every type the match can show (`catalog`: type and owner, for its colours), built and, for buildings, being built,
   // in a world of its own never stepped (the match's ids and simulation untouched), drawn by a renderer of its own:
   // a type first trained or built mid-game compiled its shaders then (the Marché held a frame 1.25 s, CPU slowed 4 times).
@@ -68,9 +70,34 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   const fx = [...(m.effects?.samples(new Vector3(map.width / 2, 1, map.height / 2)) ?? []), ...(m.extras ?? [])];
   scene.add(...fx);
   stableShadowDepth(scene); // the decor, deposits and ground (each entity's view gets it when made)
+  // Hidden while their programs compile (hidden things are compiled too, and shown for the draws below): should the
+  // match start before the compiling ends, none of the catalogue ever shows in the middle of the map.
+  for (const o of [...shapes.roots, ...bursts, ...fx]) o.visible = false;
+  const drop = () => {
+    shapes.clear();
+    for (const b of bursts) {
+      scene.remove(b);
+      b.geometry.dispose();
+    }
+    for (const o of fx) {
+      scene.remove(o);
+      if (!o.userData.keep) ((o as Mesh).material as Material).dispose();
+    }
+  };
   const into = post.sceneTarget;
-  renderer.setRenderTarget(into);
-  await renderer.compileAsync(scene, rig.camera);
+  if (m.stop?.()) return drop();
+  try {
+    // The programs are made as the call begins, for the target then set (tone mapping and colour space differ by
+    // target); it is let go before waiting for them, so a match started meanwhile draws where it should.
+    renderer.setRenderTarget(into);
+    const compiled = renderer.compileAsync(scene, rig.camera);
+    renderer.setRenderTarget(null);
+    await compiled;
+  } finally {
+    // Stopped meanwhile (the match may be running): the catalogue goes, nothing else is touched.
+    if (m.stop?.()) drop();
+  }
+  if (m.stop?.()) return;
   const aspect = window.innerWidth / window.innerHeight;
   const [target, view, box] = [rig.target.clone(), rig.viewHeight, { ...sun.shadow.camera }];
   // An empty scissor: drawn, nothing shows.
@@ -85,7 +112,6 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     o.visible = true;
   });
   try {
-    if (m.stop?.()) return;
     rig.lookAt(map.width / 2, map.height / 2);
     rig.viewHeight = rig.overview(aspect);
     rig.update(aspect);
@@ -101,7 +127,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     renderer.render(scene, rig.camera);
     // The buildings' depth and the silhouettes, one per side; not where they are off (the basse level): their programs
     // and their depth buffer, the size of the picture, would be kept for nothing.
-    if (post.xray) drawXray(renderer, scene, rig.camera, into);
+    if (post.xray) drawXray(renderer, scene, rig.camera, into, m.stop);
     if (m.stop?.()) return;
     // Once more with every unit of the catalogue lit by a hit (views.ts hitTint): a material that loses its emissive
     // map then needs a program of its own, which the first hits of a fight compiled.
@@ -157,14 +183,6 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     rig.target.copy(target);
     rig.viewHeight = view;
     rig.update(aspect);
-    shapes.clear();
-    for (const b of bursts) {
-      scene.remove(b);
-      b.geometry.dispose();
-    }
-    for (const o of fx) {
-      scene.remove(o);
-      if (!o.userData.keep) ((o as Mesh).material as Material).dispose();
-    }
+    drop();
   }
 }

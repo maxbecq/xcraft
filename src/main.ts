@@ -478,7 +478,10 @@ if (!ATTRACT) {
     return warmed((async () => {
       await new Promise((r) => setTimeout(r)); // the timer armed first: what follows runs inside the wait
       if (factions.includes('humains') && !late()) paving.warm();
-      await Promise.all([hud.portrait.prewarm(portraits), compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: late, ghosts: !SPECTATE }, portraits).then(rehearse)]);
+      // Each begins with work of its own before it first waits: the time is asked again between them.
+      const faces = late() ? undefined : hud.portrait.prewarm(portraits, late);
+      const shapes = late() ? undefined : compileScene({ renderer, scene, world, units, selected: input.selected, player: PLAYER, sees, seenAt, rig, sun, sunOffset: SUN_OFFSET, post, effects, extras: power.samples(), stop: late, ghosts: !SPECTATE }, portraits).then(rehearse);
+      await Promise.all([faces, shapes]);
     })());
   }).then(start);
   if (!net) ready.then(() => countMatch(REPLAY ? 'replay' : SPECTATE ? 'spectateur' : 'ia', MAP.id, factions[PLAYER]));
