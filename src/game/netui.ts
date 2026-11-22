@@ -1,15 +1,11 @@
 import { BIOMES, type Biome } from '../render/biome';
 import { MAPS } from '../maps';
-import { connect, NO_DIRECT, readRoom, type NetStatus } from '../net';
+import { connect, NO_DIRECT, readRoom, waitVerdict, type NetStatus } from '../net';
 import type { World } from '../sim/world';
 import { countMatch } from '../stats';
 import { factions, MAP, NET_ROLE, params, PLAYER } from './config';
 import { downloadReplay, type Replay } from './replay';
 
-/** Without a word from the other side for this long, the match is won by forfeit. */
-const FORFEIT_MS = 60_000;
-/** Shorter waits go unsaid: a hiccup, not a problem. */
-const QUIET_MS = 2000;
 /** After the end, a link cut this long: the other side is taken as gone, and no rematch can be agreed. */
 const GONE_AFTER_END_MS = 10_000;
 
@@ -134,17 +130,16 @@ export class NetGame {
       this.banner.hidden = false;
       this.banner.innerHTML = text;
     };
-    if (!this.net.started) return say('<h2>En attente de votre ami…</h2><p>Sa partie se charge.</p><button data-n="quit">Annuler</button>');
-    const since = this.cutSince || this.stalledSince;
-    const waited = since ? performance.now() - since : 0;
-    if (waited < QUIET_MS) {
+    const v = waitVerdict(this.net.started, this.cutSince, this.stalledSince, performance.now());
+    if (v.say === 'loading') return say('<h2>En attente de votre ami…</h2><p>Sa partie se charge.</p><button data-n="quit">Annuler</button>');
+    if (v.say === 'nothing') {
       if (this.warned) this.banner.hidden = true;
       this.warned = '';
       return;
     }
-    const left = Math.ceil((FORFEIT_MS - waited) / 1000);
-    if (left <= 0 && this.cutSince) return this.endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur ; le replay est enregistré.');
-    if (left <= 0) return this.endNet('Victoire par abandon', "L'adversaire ne répond plus.");
+    const left = v.left;
+    if (v.say === 'cut-over') return this.endNet('Partie interrompue', 'La connexion avec votre adversaire n\'a pas pu être rétablie. Aucun vainqueur ; le replay est enregistré.');
+    if (v.say === 'forfeit') return this.endNet('Victoire par abandon', "L'adversaire ne répond plus.");
     say(`<h2>L'adversaire ne répond plus</h2><p>${this.cutSince ? 'Connexion coupée, reconnexion…' : 'En attente de ses ordres…'}</p><p>${this.cutSince ? 'Partie interrompue' : 'Victoire par abandon'} dans ${left} s.</p><button data-n="quit">Quitter la partie</button>`);
   }
 }

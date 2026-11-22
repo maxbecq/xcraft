@@ -210,6 +210,25 @@ export class Lockstep {
   }
 }
 
+/** Without a word from the other side for this long, the match ends (by forfeit, or with no winner when the link is cut). */
+export const FORFEIT_MS = 60_000;
+/** Shorter waits go unsaid: a hiccup, not a problem. */
+const QUIET_MS = 2000;
+
+/**
+ * What a match waiting on the other side says. A cut comes first: a friend whose page closed while it was still loading
+ * is not waited for forever. Before its first orders (and no cut), its match is only loading; a short wait goes unsaid;
+ * a long one counts down (`left`, seconds), then ends: with no winner when the link is cut, else by forfeit.
+ */
+export function waitVerdict(started: boolean, cutSince: number, stalledSince: number, now: number): { say: 'loading' | 'nothing' | 'waiting' | 'cut-over' | 'forfeit'; left: number } {
+  if (!started && !cutSince) return { say: 'loading', left: 0 };
+  const since = cutSince || stalledSince;
+  const waited = since ? now - since : 0;
+  if (waited < QUIET_MS) return { say: 'nothing', left: 0 };
+  const left = Math.ceil((FORFEIT_MS - waited) / 1000);
+  return { say: left > 0 ? 'waiting' : cutSince ? 'cut-over' : 'forfeit', left };
+}
+
 /** 'again': the other side wants a rematch; 'go': both do, the detail is the new room. */
 export type NetStatus = 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'left' | 'error' | 'again' | 'go';
 /** Silence after which the link is taken as cut (each side pings every second, even from a background tab). */

@@ -14,7 +14,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { commandOk, Lockstep, START, type Message } from './net';
+import { commandOk, FORFEIT_MS, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -344,5 +344,13 @@ describe('lockstep between two browsers', () => {
     expect(lock.ready(START)).toBe(false);
     expect(lock.rejected).toBe(1);
     warn.mockRestore();
+  });
+
+  it('does not wait forever for a friend whose page closed while loading', () => {
+    expect(waitVerdict(false, 0, 0, 99_000).say).toBe('loading'); // still loading, linked
+    expect(waitVerdict(false, 1000, 0, 1500).say).toBe('nothing'); // a short cut
+    expect(waitVerdict(false, 1000, 0, 10_000)).toEqual({ say: 'waiting', left: 51 });
+    expect(waitVerdict(false, 1000, 0, 1000 + FORFEIT_MS).say).toBe('cut-over');
+    expect(waitVerdict(true, 0, 1000, 1000 + FORFEIT_MS).say).toBe('forfeit');
   });
 });
