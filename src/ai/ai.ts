@@ -385,7 +385,8 @@ export class AI {
       const failed = this.failed.get(s.id) ?? new Set<number>();
       this.failed.set(s.id, failed.add(o.target));
       // Only a field nearby (as the sim's own search, 12 tiles): never off to the other end of the map.
-      const f = this.nearest(s, (e) => e.type === 'minerai' && !failed.has(e.id) && !e.miner && dist(e.x, e.y, s.x, s.y) < STUCK_REACH * FP);
+      // Not one under an enemy's guns either.
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !failed.has(e.id) && !e.miner && dist(e.x, e.y, s.x, s.y) < STUCK_REACH * FP && !guarded(e));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
       this.walking.delete(s.id);
     }
