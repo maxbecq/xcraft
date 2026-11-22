@@ -302,6 +302,7 @@ const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 effects.muzzle = (id) => units.muzzle(id);
 effects.density = GFX.particles;
+effects.eye = rig.camera;
 setFxLite(GFX.particles < 1);
 const overlay = new Overlay(map);
 overlay.top = (id, built) => units.top(id, built);

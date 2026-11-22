@@ -1,9 +1,6 @@
 import { TEAM_COLORS } from './models';
-import {
-  AdditiveBlending, BoxGeometry, CanvasTexture, CircleGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
-  type Object3D, type Scene, Sprite,
-  SpriteMaterial, type Texture, Vector3,
-} from 'three';
+import { BoxGeometry, type Camera, CircleGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
+import { Particles, type Picture } from './particles';
 import type { Audio, Sfx } from '../audio';
 import { DEFS, FLY_HEIGHT } from '../data';
 import BALANCE from '../balance.json';
@@ -18,7 +15,7 @@ const FLAME_RATE = 220;
 const BUILDING_SIZES: Record<string, number> = { conseil: 5, caserne: 3, grenier: 2, mine: 3 };
 
 /** Soft round sprite textures, drawn once. */
-function blob(inner: string, outer: string, size = 64, noisy = false): Texture {
+function blob(inner: string, outer: string, size = 64, noisy = false): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
@@ -37,7 +34,7 @@ function blob(inner: string, outer: string, size = 64, noisy = false): Texture {
       ctx.fill();
     }
   }
-  return new CanvasTexture(c);
+  return c;
 }
 
 /** Fire colours: Human scrap burns orange with black smoke, Isdaris plasma blue with pale smoke. */
@@ -47,7 +44,7 @@ const FIRE = {
 };
 
 /** A tongue of flame: bright at the bottom, tapering upwards, soft edged. */
-function flame(size = 64): Texture {
+function flame(size = 64): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
@@ -61,19 +58,7 @@ function flame(size = 64): Texture {
   ctx.beginPath();
   ctx.ellipse(0, -size * 0.12, size * 0.5, size * 0.56, 0, 0, Math.PI * 2);
   ctx.fill();
-  return new CanvasTexture(c);
-}
-
-interface Particle {
-  sprite: Sprite;
-  vel: Vector3;
-  age: number;
-  life: number;
-  size0: number;
-  size1: number;
-  alpha: number;
-  gravity: number;
-  active: boolean;
+  return c;
 }
 
 interface Decal {
@@ -94,25 +79,23 @@ interface Debris {
  * Only what the player can see is spawned.
  */
 export class Effects {
-  private readonly pool: Particle[] = [];
+  /** Every particle, one draw call (render/particles.ts). */
+  private readonly particles = new Particles([blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true), flame()], MAX_PARTICLES);
   /** Particles flying now (for the telemetry). */
   get live(): number {
-    let n = 0;
-    for (const p of this.pool) if (p.active) n++;
-    return n;
+    return this.particles.live;
   }
+  /** The camera they face and are sorted for; set by the game. */
+  eye: Camera | null = null;
   private debris: Debris[] = [];
   private decals: Decal[] = [];
   private readonly decalGeo = new CircleGeometry(0.5, 20);
-  private readonly tex = {
-    glow: blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'),
-    smoke: blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true),
-    flame: flame(),
-  };
+  /** The particles' pictures, by their place in the particles' texture. */
+  private readonly tex = { glow: 0, smoke: 1, flame: 2 } as const;
   private readonly debrisGeo = new BoxGeometry(0.12, 0.12, 0.12);
   private readonly debrisMat = new MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 });
 
-  /** Share of particles spawned (src/quality.ts): fewer, each a draw call, on low-end graphics. */
+  /** Share of particles spawned (src/quality.ts): fewer to fill on low-end graphics. */
   density = 1;
 
   /** Where a Z weapon's muzzle is (world), by the shooter's id (render/units.ts); none if it shows none. */
@@ -122,16 +105,26 @@ export class Effects {
   private readonly jets = new Map<number, { id: number; from: Vector3; to: Vector3; left: number; spill: number }>();
 
   /** Sprites go to `fx` (drawn after ambient occlusion); debris, which casts shadows, to the main scene. */
-  constructor(private readonly fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {}
+  constructor(fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {
+    fx.add(this.particles.mesh);
+  }
 
   /** One particle and one ground stain, as the effects draw them, for the warm-up to compile their programs
    * (render/prewarm.ts): the abilities' clouds, rings and stains then cost no shader compile in play. */
   samples(at: Vector3): Object3D[] {
-    const sprite = new Sprite(new SpriteMaterial({ map: this.tex.glow, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending }));
+    // The particles' own geometry and material (kept: the warm-up must not free them).
+    const sprite = new Mesh(this.particles.mesh.geometry, this.particles.mesh.material);
+    sprite.frustumCulled = false;
+    sprite.userData.keep = true;
     const stain = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2c4a0c, transparent: true, opacity: 0.6, depthWrite: false }));
+    // A wreck's flying bit too (it casts a shadow: the depth program with it).
+    const bit = new Mesh(this.debrisGeo, this.debrisMat);
+    bit.castShadow = true;
+    bit.userData.keep = true;
     sprite.position.copy(at);
     stain.position.copy(at);
-    return [sprite, stain];
+    bit.position.copy(at);
+    return [sprite, stain, bit];
   }
 
   /** Collects the effects of the tick that just ran. */
@@ -512,27 +505,9 @@ export class Effects {
     }
   }
 
-  private spawn(tex: Texture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean): void {
+  private spawn(tex: Picture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean): void {
     if (this.density < 1 && Math.random() > this.density) return; // render only: the simulation never sees it
-    let p = this.pool.find((q) => !q.active);
-    if (!p) {
-      if (this.pool.length >= MAX_PARTICLES * this.density) return;
-      // No depth test: the post pass does not keep scene depth. Effects are short-lived and drawn over the scene.
-      const sprite = new Sprite(new SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
-      this.fx.add(sprite);
-      p = { sprite, vel: new Vector3(), age: 0, life: 0, size0: 0, size1: 0, alpha: 0, gravity: 0, active: false };
-      this.pool.push(p);
-    }
-    const m = p.sprite.material;
-    // Only a sprite's first texture changes its shader; swapping textures, colour or blending needs no recompile check.
-    if (!m.map) m.needsUpdate = true;
-    m.map = tex;
-    m.color.set(color);
-    m.blending = additive ? AdditiveBlending : NormalBlending;
-    p.sprite.position.copy(pos);
-    p.sprite.visible = true;
-    p.vel.copy(vel);
-    Object.assign(p, { age: 0, life, size0, size1, alpha, gravity, active: true });
+    this.particles.spawn(MAX_PARTICLES * this.density, tex, color, pos, vel, life, size0, size1, alpha, gravity, additive);
   }
 
   update(dt: number): void {
@@ -541,20 +516,7 @@ export class Effects {
       if (jet.left <= 0) this.jets.delete(jet.id);
       else this.flameJet(jet, dt);
     }
-    for (const p of this.pool) {
-      if (!p.active) continue;
-      p.age += dt;
-      const f = p.age / p.life;
-      if (f >= 1) {
-        p.active = false;
-        p.sprite.visible = false;
-        continue;
-      }
-      p.vel.y -= p.gravity * dt;
-      p.sprite.position.addScaledVector(p.vel, dt);
-      p.sprite.scale.setScalar(p.size0 + (p.size1 - p.size0) * f);
-      p.sprite.material.opacity = p.alpha * (1 - f) * Math.min(1, f * 8 + 0.3);
-    }
+    if (this.eye) this.particles.update(dt, this.eye);
     this.decals = this.decals.filter((d) => {
       d.age += dt;
       (d.mesh.material as MeshBasicMaterial).opacity = 0.6 * Math.min(1, (d.life - d.age) / (d.life * 0.3));
