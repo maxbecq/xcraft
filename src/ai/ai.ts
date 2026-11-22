@@ -208,7 +208,7 @@ export class AI {
     // With what a Marché would give for the energy over the price (morph sells it).
     const pays = (t: string) => {
       const c = (DEFS[t] as BuildingDef | UnitDef).cost;
-      const sale = mine.some((e) => e.type === 'marche' && e.buildLeft === 0) ? Math.floor(Math.max(0, bankNow.energy - c.energy) / BALANCE.rules.trade.give) * BALANCE.rules.trade.get : 0;
+      const sale = mine.some((e) => e.type === 'marche' && e.buildLeft === 0) ? this.sale(bankNow.energy, c.energy) : 0;
       return c.minerals <= bankNow.minerals + sale && c.energy <= bankNow.energy;
     };
     // Any fighting unit (a Créaturium's saurians are not in the army list).
@@ -809,8 +809,8 @@ export class AI {
     } else if (market && !raising && ctx.minerals > 500 && ctx.energy < unitReserve + 100) {
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'minerals' });
       ctx.minerals -= BALANCE.rules.trade.give;
-    } else if (market && ctx.minerals < 150 && (ctx.energy > 250 || (!this.settled(ctx.home) && ctx.energy >= BALANCE.rules.trade.give))) {
-      // (with no base, whatever energy there is: think counted that sale for what it could still train)
+    } else if (market && ((ctx.energy > 250 && ctx.minerals < 150) || (!this.settled(ctx.home) && this.shortOfMinerals(ctx)))) {
+      // (with no base: for a unit short of minerals the sale can pay, as think counted it)
       ctx.out.push({ player: this.player, kind: 'trade', ids: [market.id], sell: 'energy' });
       ctx.energy -= BALANCE.rules.trade.give;
     }
@@ -1068,7 +1068,10 @@ export class AI {
     // Dieux: their esprits at work count as the base too (raids killed them by waves, up to 33 in a game, while the
     // army stayed out: the fields lie beyond the reach watched around the buildings).
     const guarded = this.faction.gods ? [...buildings, ...serfs.filter((s) => s.order?.kind === 'gather')] : buildings;
-    const threat = this.threat(guarded) ?? (allied.length ? this.threat(allied) : undefined);
+    const raid = this.threat(guarded) ?? (allied.length ? this.threat(allied) : undefined);
+    // A raid of flyers none of the army can shoot holds no wave home (a flyer watching a Pod kept a full wave of
+    // ground socles there).
+    const threat = raid && raid.armed.length && raid.armed.every(flies) && !army.some((u) => w.weapon(u) && reaches(w.weapon(u)!, true)) ? undefined : raid;
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
     // The danger gone, the sheltered drones come out (back to work as idle workers).
@@ -1683,7 +1686,9 @@ export class AI {
     const market = mine.some((e) => e.type === 'marche' && e.buildLeft === 0);
     // Paid, and with something to train it (a lone Pod and 150 minerals: no drone nor Plate-forme could come, and the
     // AI sat idle to the time limit), or an add-on the bank pays that would.
-    const pays = (c: { minerals: number; energy: number }) => (p.minerals >= c.minerals && p.energy >= c.energy) || (market && p.minerals + p.energy >= c.minerals + c.energy);
+    // A Marché's sale at its real rate (minerals and energy added one for one, the side never resigned for a unit no
+    // sale could pay).
+    const pays = (c: { minerals: number; energy: number }) => p.energy >= c.energy && p.minerals + (market ? this.sale(p.energy, c.energy) : 0) >= c.minerals;
     // Finished, or a site rising by itself (a Z Intelligence its last drone went into, an Obélisque, a Porte).
     const ready = mine.filter((e) => e.buildLeft === 0 || (e.def as BuildingDef).absorbs || (e.def as BuildingDef).warp);
     // A Dieux god summons units too, and the Porte the gods.
@@ -2190,6 +2195,21 @@ export class AI {
     return !raisers.length || raisers.some((r) => !this.exposedRoad(r, c));
   }
 
+  /** No base: a fighting unit a building of ours trains is short of minerals only, and a sale leaves its energy. */
+  private shortOfMinerals(ctx: Turn): boolean {
+    const T = BALANCE.rules.trade;
+    return ctx.buildings.some((b) => b.buildLeft === 0 && (b.def as BuildingDef).trains?.some((t) => {
+      const d = DEFS[t] as UnitDef;
+      return d.kind === 'unit' && !d.worker && !!d.attack && ctx.minerals < d.cost.minerals && ctx.energy - T.give >= d.cost.energy && ctx.minerals + this.sale(ctx.energy, d.cost.energy) >= d.cost.minerals;
+    }));
+  }
+
+  /** Minerals a Marché would add for the energy over `keepEnergy`, at the trade's real rate (give energy, get minerals). */
+  private sale(energy: number, keepEnergy: number): number {
+    const T = BALANCE.rules.trade;
+    return Math.floor(Math.max(0, energy - keepEnergy) / T.give) * T.get;
+  }
+
   /** Armed soldiers manning a building (a Fortin's crew shoots from inside). */
   private crew(b: Entity): Entity[] {
     if (!(b.def as BuildingDef).bunker) return [];
@@ -2275,7 +2295,9 @@ export class AI {
       const reach = Math.max(DEFEND_RADIUS / 2, ((e.def as UnitDef).attack?.range ?? 0) * FP + 3 * FP);
       if (!buildings.some((b) => dist(e.x, e.y, b.x, b.y) < reach + (((b.def as BuildingDef).size ?? 0) * FP) / 2)) continue;
       // Nor a raider on foot that cannot walk to us (across a cliff from a Pod, it kept a full wave home for good).
-      if (!flies(e) && anchor && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
+      // Unless its weapon reaches one of them from there (a Phalangiste firing across the cliff).
+      const shoots = (w.weapon(e)?.range ?? 0) * FP;
+      if (!flies(e) && anchor && !buildings.some((b) => dist(e.x, e.y, b.x, b.y) <= shoots + (((b.def as BuildingDef).size ?? 0) * FP) / 2 + FP) && !this.walkable(anchor, Math.floor(e.x / FP), Math.floor(e.y / FP))) continue;
       foes.push(e);
     }
     if (!foes.length) return undefined;
