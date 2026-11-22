@@ -21,7 +21,15 @@ export interface Replay {
   biome: string;
   handicap: number[];
   ticks: [number, Command[]][];
+  /** The tick the game was kept at (its playback stops there) and why it stopped; missing in older replays (played to
+   * their last order, then on). */
+  endTick?: number;
+  end?: ReplayEnd;
 }
+
+/** Why a kept game stopped: won, left (page closed, Quitter), cut on the network, or saved while it went on. */
+export type ReplayEnd = 'victory' | 'left' | 'network' | 'ongoing';
+const ENDS: readonly string[] = ['victory', 'left', 'network', 'ongoing'] satisfies ReplayEnd[];
 
 /** Largest replay accepted (a long game is a few megabytes). */
 export const REPLAY_MAX_BYTES = 32 * 1024 * 1024;
@@ -61,6 +69,9 @@ export function parseReplay(text: string): Replay | string {
       if (!commandOk(c, n === 1, n > 1)) return `${bad} (commande invalide).`;
     }
   }
+  // An end before the last order (or no number) is not one: played as an older replay.
+  if (r.endTick !== undefined && (!Number.isInteger(r.endTick) || r.endTick <= last)) delete r.endTick;
+  if (r.end !== undefined && !ENDS.includes(r.end)) delete r.end;
   if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
@@ -91,21 +102,45 @@ export function withReplayBiome(params: URLSearchParams, r: Replay | null): URLS
   return p;
 }
 
-/** The replay to play: one opened from a file this session, else the last saved game. One that does not check out
- * is dropped from this session (so it does not stay in the way). */
-export function readReplay(): Replay | null {
-  for (const [store, read] of [['session', () => sessionStorage.getItem(REPLAY_KEY)], ['local', () => localStorage.getItem(REPLAY_KEY)]] as const) {
-    try {
-      const text = read();
-      if (!text) continue;
-      const r = parseReplay(text);
-      if (typeof r !== 'string') return r;
-      if (store === 'session') sessionStorage.removeItem(REPLAY_KEY);
-    } catch {
-      // storage unavailable: try the next place
-    }
+/** Where a replay to play comes from: the last game kept on this browser, or a file just opened. */
+export type ReplaySource = 'last' | 'file';
+
+/** A file opened, as read back from IndexedDB before the game's modules ran (see boot.ts). */
+let opened: string | null = null;
+
+/** The replay to play from `source` (an address from before the two were told apart, `?replay`, means the last game).
+ * One that does not check out is dropped, so it does not stay in the way. */
+export function readReplay(source: ReplaySource): Replay | null {
+  try {
+    const text = source === 'file' ? opened : localStorage.getItem(REPLAY_KEY);
+    if (!text) return null;
+    const r = parseReplay(text);
+    if (typeof r !== 'string') return r;
+    if (source === 'last') localStorage.removeItem(REPLAY_KEY);
+  } catch {
+    // storage unavailable
   }
   return null;
+}
+
+/** IndexedDB, where a file opened waits for the page that plays it: no quota as small as the session's storage. */
+function fileStore<T>(mode: IDBTransactionMode, act: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return new Promise((done, fail) => {
+    const open = indexedDB.open('xcraft', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('replay');
+    open.onerror = () => fail(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const req = act(db.transaction('replay', mode).objectStore('replay'));
+      req.onsuccess = () => (db.close(), done(req.result));
+      req.onerror = () => (db.close(), fail(req.error));
+    };
+  });
+}
+
+/** Run first (boot.ts) on a page playing a file: reads it back for `readReplay('file')`. */
+export async function loadOpenedReplay(): Promise<void> {
+  opened = (await fileStore<string | undefined>('readonly', (s) => s.get('file')).catch(() => undefined)) ?? null;
 }
 
 /** Keeps the game as the "last game"; false when it could not be written (storage full or blocked). */
@@ -118,8 +153,8 @@ export function saveReplay(r: Replay): boolean {
   }
 }
 
-export function playReplay(r: Replay | null): void {
-  if (r) location.search = `?replay&speed=2&biome=${r.biome}`;
+export function playReplay(r: Replay | null, source: ReplaySource): void {
+  if (r) location.search = `?replay=${source}&speed=2&biome=${r.biome}`;
 }
 
 /** A replay as its file was, to save again: whole, with its own map's id (even one this version lacks). */
@@ -169,11 +204,11 @@ export function openReplayFile(): void {
     const r = parseReplay(text);
     if (typeof r === 'string') return alert(r);
     try {
-      sessionStorage.setItem(REPLAY_KEY, JSON.stringify(r));
+      await fileStore('readwrite', (s) => s.put(JSON.stringify(r), 'file'));
     } catch {
-      return alert('Ce replay ne tient pas dans le stockage du navigateur.');
+      return alert('Ce replay n’a pas pu être gardé par le navigateur (stockage bloqué ?).');
     }
-    playReplay(r);
+    playReplay(r, 'file');
   };
   input.click();
 }

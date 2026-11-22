@@ -14,6 +14,12 @@ describe('replays read from storage or a file', () => {
     expect(parseReplay(text(good))).toEqual(good);
   });
 
+  it('keeps a stop tick and reason after the last order, and reads older replays without them', () => {
+    expect(parseReplay(text({ ...good, endTick: 40, end: 'left' }))).toEqual({ ...good, endTick: 40, end: 'left' });
+    expect(parseReplay(text({ ...good, endTick: 9, end: 'nope' }))).toEqual(good);
+    expect(parseReplay(text({ ...good, endTick: 2.5 }))).toEqual(good);
+  });
+
   it('refuses what is not a replay of this version', () => {
     expect(refused('not json')).toBe(true);
     expect(refused({ ...good, v: 2 })).toBe(true);

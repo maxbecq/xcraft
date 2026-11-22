@@ -17,7 +17,7 @@ export const NET_ROLE = params.get('net');
 export const SANDBOX = params.has('sandbox') && !params.has('replay') && !NET_ROLE;
 export const ATTRACT = !params.has('spectate') && !params.has('play') && !params.has('replay') && !NET_ROLE && !SANDBOX;
 /** `?replay`: plays back the last saved game (or one opened from a file), watched like a spectator. */
-export const REPLAY = params.has('replay') ? readReplay() : null;
+export const REPLAY = params.has('replay') ? readReplay(params.get('replay') === 'file' ? 'file' : 'last') : null;
 // Asked for a replay but none checks out (dropped, damaged): back to the menus rather than a game nobody asked for.
 if (params.has('replay') && !REPLAY) {
   alert('Aucun replay lisible à rejouer.');

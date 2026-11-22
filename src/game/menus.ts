@@ -91,7 +91,15 @@ export function showHome(): void {
     else if (m === 'friend') showLobby(menu as HTMLElement, newRoom(), true);
     else if (m === 'join') showJoin(menu as HTMLElement);
     else if (m === 'options') showOptions(menu as HTMLElement);
-    else if (m === 'last-replay') playReplay(readReplay());
+    else if (m === 'last-replay') {
+      const r = readReplay('last');
+      if (r) playReplay(r, 'last');
+      else {
+        // Unreadable (dropped by readReplay): said, and the button goes.
+        alert('La dernière partie gardée n’est plus lisible.');
+        (e.target as HTMLElement).remove();
+      }
+    }
     else if (m === 'open-replay') openReplayFile();
   };
 }

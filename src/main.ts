@@ -46,7 +46,7 @@ import { cameraControls } from './game/scroll';
 import { Marking } from './game/radial';
 import { NetGame } from './game/netui';
 import { controlFields, PAUSE_HTML, sandboxFields, skinField, TOOLS_HTML } from './game/pausemenu';
-import { downloadReplay, GAME_VERSION, measuresFile, type Replay, replaySource, saveFile, saveReplay, withReplayBiome } from './game/replay';
+import { downloadReplay, GAME_VERSION, measuresFile, type Replay, type ReplayEnd, replaySource, saveFile, saveReplay, withReplayBiome } from './game/replay';
 import { ATTRACT, factions, foeFaction, gameSpeed, MAP, myFaction, NET_ROLE, page, params, PLAYER, REPLAY, SANDBOX, slots, SPECTATE, TOUCH } from './game/config';
 
 /** The game just played has been kept as the last game. */
@@ -109,13 +109,22 @@ if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
 const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
 const replayed = new Map(REPLAY?.ticks ?? []);
+let replayEnded = false;
 /** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,
  * and the player is told, quietly, unless the page is going. */
 let keepTried = false;
-function keepGame(quiet = false): void {
+/** The record as it stands, with where and why it stops (a game won stays as it was won). */
+function sealed(end: ReplayEnd): Replay {
+  if (record.end !== 'victory') {
+    record.endTick = world.tick;
+    record.end = world.winner !== null ? 'victory' : end;
+  }
+  return record;
+}
+function keepGame(quiet = false, end: ReplayEnd = 'left'): void {
   if (saved || keepTried || REPLAY || ATTRACT || !record.ticks.length) return;
   keepTried = true;
-  saved = saveReplay(record);
+  saved = saveReplay(sealed(end));
   if (!saved && !quiet) hud.notify([{ player: PLAYER, kind: 'alert', text: 'Replay non conservé : stockage du navigateur plein ou bloqué. « Enregistrer le replay » le télécharge.' }]);
 }
 // A match under way, left by the browser (a stray « previous page », the tab closed): asked first.
@@ -176,7 +185,7 @@ let pending: Command[] = [];
 if (SANDBOX) for (const tool of params.get('outils')?.split(',') ?? []) if (tool in SANDBOX_TOOLS) pending.push({ player: PLAYER, kind: 'sandbox', ids: [], tool: tool as SandboxTool, on: true });
 
 const netGame = new NetGame(world, record, biome, () => {
-  keepGame();
+  keepGame(false, 'network');
   measuresOnce();
 });
 const { link, net } = netGame;
@@ -251,7 +260,7 @@ function showRecButtons(): void {
 let measured = '';
 function saveMeasures(): void {
   if (!rec.on || ATTRACT) return;
-  const f = measuresFile(REPLAY ? replaySource(REPLAY) : record, JSON.parse(rec.report({ ticks: world.tick, winner: world.winner })));
+  const f = measuresFile(REPLAY ? replaySource(REPLAY) : sealed('ongoing'), JSON.parse(rec.report({ ticks: world.tick, winner: world.winner })));
   measured ||= f.name; // saved again under the same name (the banner says it)
   saveFile(measured, f.text);
   showRecButtons();
@@ -413,7 +422,7 @@ document.addEventListener('click', (e) => {
     button!.textContent = 'Revanche : en attente de votre adversaire…';
     link.again();
   } else if (p === 'restart' && link) return;
-  else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : record); // watching one: the file itself, whole
+  else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : sealed('ongoing')); // watching one: the file itself, whole
   else if (p === 'perfrec') saveMeasures();
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
@@ -667,6 +676,19 @@ function start(): void {
         break;
       }
       netGame.stalledSince = 0;
+      // A replay stops where its game was kept (older ones, without that tick, play on).
+      if (REPLAY?.endTick !== undefined && world.tick >= REPLAY.endTick) {
+        acc = 0;
+        // Won, the victory banner says it; else this one, where the game was left.
+        if (!replayEnded && world.winner === null) {
+          const why = REPLAY.end === 'network' ? 'La partie a été interrompue : connexion perdue.' : REPLAY.end === 'ongoing' ? 'Le replay a été enregistré pendant la partie.' : 'La partie a été quittée avant sa fin.';
+          hud.banner.innerHTML = `<h1>Fin du replay</h1><p>${why}</p><div class="row"><button data-p="quit">Menu principal</button><button data-p="replay">Enregistrer le replay</button></div>`;
+          hud.banner.hidden = false;
+          hud.endShownAt = performance.now();
+        }
+        replayEnded = true;
+        break;
+      }
       const cmds = REPLAY ? (replayed.get(world.tick) ?? []) : net ? net.step(world.tick, pending) : [...pending, ...ais.flatMap((ai) => ai.think())];
       if (net && world.tick % 100 === 0) net.check(world.tick, fingerprint(world));
       if (cmds.length && !ATTRACT && !REPLAY) record.ticks.push([world.tick, cmds]);
