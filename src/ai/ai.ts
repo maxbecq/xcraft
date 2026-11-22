@@ -758,7 +758,8 @@ export class AI {
       // listed research behind the unit it trains, at its price: the Isdaris Portails, never idle nor 300 ahead, did no
       // research in 35 minutes.
       const hosts = buildings.filter((b) => !researching.has(b.id) && b.buildLeft === 0 && (b.def as BuildingDef).researches?.includes(t) && w.researchable(this.player, t, b) && !w.lacks(this.player, t, undefined, b));
-      const many = listed.includes(t) && hosts.length >= 3 && !!(hosts[0].def as BuildingDef).trains?.length;
+      // Three of its kind (the one with the Laboratoire for its research): that one takes it behind its units.
+      const many = listed.includes(t) && hosts.length > 0 && buildings.filter((b) => b.type === hosts[0].type && b.buildLeft === 0).length >= 3 && !!(hosts[0].def as BuildingDef).trains?.length;
       const host = hosts.find((b) => b.queue.length === 0) ?? (many ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
       const cost = (DEFS[t] as UpgradeDef).cost;
       // The researches off the list only with resources to spare, after the units' energy.
