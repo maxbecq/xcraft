@@ -184,7 +184,12 @@ export class AI {
     // At the price a worker pays for it (an Isdaris robot beams it down for a third more).
     const hqDef = DEFS[this.faction.hq] as BuildingDef;
     const hqCost = hqDef.faction === 'isdaris' ? w.beaconCost(hqDef) : hqDef.cost;
-    const rebuild = () => w.players[this.player].minerals >= hqCost.minerals && w.players[this.player].energy >= hqCost.energy && mine.some((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)) ? mine.find((e) => e.def.kind === 'building' && e.buildLeft === 0) : undefined;
+    // A Z drone is absorbed into what it builds: the last one leaves the price of the next drone too, or the new
+    // Intelligence stood with no drone and nothing to train one with. From any building, a site (a Grenier whose
+    // builder was killed) too.
+    const raisers = mine.filter((e) => e.def.kind === 'unit' && raises(e.def as UnitDef, this.faction.hq)).length;
+    const absorbed = hqDef.absorbs && raisers < 2 ? (DEFS[this.faction.worker] as UnitDef).cost.minerals : 0;
+    const rebuild = () => raisers && w.players[this.player].minerals >= hqCost.minerals + absorbed && w.players[this.player].energy >= hqCost.energy ? mine.find((e) => e.def.kind === 'building') : undefined;
     const home = mine.find((e) => kin(e, this.faction.hq)) ?? mine.find((e) => this.isBase(e) && e.buildLeft === 0) ?? rebuild();
     if (!home) return this.lastStand(mine);
     const bank = w.players[this.player].minerals;
@@ -420,7 +425,8 @@ export class AI {
     if (noHq) wants.push(f.hq);
     // Production: the casernes, or for the Dieux the Porte and its gods.
     const producers = f.gods ? 1 + gods.length : count(f.barracks);
-    if (supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply)) wants.push(f.supply);
+    const supplyShort = supply.max < 200 && supply.max - supply.used <= 2 + producers * 2 && !building(f.supply);
+    if (supplyShort) wants.push(f.supply);
     // Isdaris: an extra emitter whenever production grows, to widen the power field.
     if (f.pylon && count(f.pylon) < 1 + Math.floor(count(f.barracks) / 2) && !building(f.pylon)) wants.push(f.pylon);
     // One extractor per base: the main's well, then the expansion's (energy is the Isdaris bottleneck).
@@ -493,7 +499,7 @@ export class AI {
     // headquarters could not be paid any more).
     const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (noHq && !this.isBase(home) && !!this.spot(f.hq, home));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
-    return { wants, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
+    return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
 
   /** Energy (and minerals) kept back from cheaper spending for the tech, its units and the next research. */
@@ -504,7 +510,8 @@ export class AI {
     const zNext = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
     // Not before its prerequisites stand: 400 energy kept for an Intelligence suprême that could not come yet held
     // back every socle from minute 6 (the Z army never grew past 5 to 8 units, its energy piled up unused).
-    const zTech = zNext && !w.lacks(this.player, zNext) ? zNext : undefined;
+    // Nor with its minerals short and none coming in: its energy, kept for good, held back the socles.
+    const zTech = zNext && !w.lacks(this.player, zNext) && (w.tick - this.lastIncome < ticks(60) || p.minerals >= (DEFS[zNext] as BuildingDef).cost.minerals) ? zNext : undefined;
     const wantSupreme = zTech === 'supreme' && !w.lacks(this.player, 'supreme');
     // The Intelligence is kept idle for its turn into the suprême (no drone, no Espion) only with its price there and a
     // drone left, or drones enough to mine it: raided down to a few, it waited for 300 minerals no drone was left to mine.
@@ -569,7 +576,8 @@ export class AI {
         // Supply short: its price is saved from the units and research too (the Z Plates-formes spent every mineral as
         // it came, and the next Pod, at 300, came four minutes late, supply full).
         // Only while minerals come in: with none left, what is in the bank goes into units that fit.
-        if (type === f.supply && w.tick - this.lastIncome < ticks(60)) ctx.minerals = Math.min(ctx.minerals, 0);
+        // Not a Dieux Branche wanted as a defence only.
+        if (type === f.supply && ctx.supplyShort && w.tick - this.lastIncome < ticks(60)) ctx.minerals = Math.min(ctx.minerals, 0);
         break; // save up for the most urgent one
       }
       if (ctx.energy < def.cost.energy) continue;
@@ -594,7 +602,8 @@ export class AI {
       if (!spot || !builder) continue;
       // Not where a chained building already goes.
       const taken = builders.some((b) => [b.order, ...b.next].some((o) => o?.kind === 'build' && Math.abs(o.tx - spot[0]) < def.size + 3 && Math.abs(o.ty - spot[1]) < def.size + 3));
-      if (taken) continue;
+      // Nor where a building ordered this turn goes (two 3×3 centres got the same spot; the second was lost on arrival).
+      if (taken || ctx.out.some((c) => c.kind === 'build' && Math.abs(c.tx - spot[0]) < def.size + 3 && Math.abs(c.ty - spot[1]) < def.size + 3)) continue;
       // An Isdaris robot pays a third more than the building (fiche 2010).
       const cost = builder.def.kind === 'unit' && def.faction === 'isdaris' ? w.beaconCost(def) : def.cost;
       if (ctx.energy < cost.energy) continue;
@@ -741,7 +750,7 @@ export class AI {
       const type = (this.enemyAir && antiAirTrains.length ? antiAirTrains : trains)
         .slice()
         .sort((a, b) => own(a) - own(b))
-        .find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy);
+        .find((u) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx));
       const def = type && (DEFS[type] as UnitDef);
       if (!def || (saving && !(firstTech && t.type === f.tech)) || this.room(ctx) < def.supply) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [t.id], type });
@@ -781,6 +790,8 @@ export class AI {
   /** Z: socle evolutions, building weapons, Centre K kits and Canon IEM. */
   private machines(ctx: Turn): void {
     const { w, f, mine, army, buildings, minute, enemyCloaks, unitReserve } = ctx;
+    // No base: what is left goes to the headquarters to raise again.
+    if (!this.isBase(ctx.home)) return;
     // Z: socles resting at home evolve into their next tier once it is researched (Z.doc), when affordable.
     for (const u of army) {
       const next = w.nextTier(u);
@@ -997,7 +1008,9 @@ export class AI {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals)) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
+    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx.p))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
+      // No income left: half a wave at least goes, or the last units it can pay for (one at a time, each new Créature
+      // joined a wave of three dying under a manned Fortin, for twenty minutes, to a draw).
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
       // one soldier joining, it turned the front back to it).
       const fresh = this.wave.size === 0;
@@ -1227,7 +1240,8 @@ export class AI {
   private visibleFoes(): Entity[] {
     const w = this.world;
     return [...w.entities.values()].filter((e) => {
-      const a = (e.def as UnitDef | BuildingDef).attack;
+      // The weapon it fights with (an armed Z Assimilateur has none in its definition).
+      const a = w.weapon(e);
       return w.hostile(e.owner, this.player) && a && !(e.def as UnitDef).worker && (e.def.kind === 'unit' || e.buildLeft === 0) && w.sees(this.player, e);
     });
   }
@@ -1571,10 +1585,13 @@ export class AI {
     return !!def.weapons?.includes(k) && !(kit.research && !this.world.level(this.player, kit.research)) && (!this.enemyAir || !kit.attack || reaches(weaponAt(k, 1, !!def.flying) ?? kit.attack, true));
   }
 
-  /** Z: the minerals of the cheapest weapon this socle may get (0 without one: the machine gun). */
-  private kitMinerals(def: UnitDef): number {
+  /** Z: this socle can be paid with one of the weapons it may get (with none of them: the machine gun). */
+  private kitFits(def: UnitDef, minerals: number, energy: number): boolean {
     const kits = Object.keys(KITS).filter((k) => this.kitAllowed(def, k));
-    return kits.length ? Math.min(...kits.map((k) => WEAPONS[k].cost.minerals)) : 0;
+    return (kits.length ? kits : [undefined]).some((k) => {
+      const c = withKit(def, k);
+      return c.minerals <= minerals && c.energy <= energy;
+    });
   }
 
   /** `ordered`: an Accumulateur already ordered this turn. */
@@ -1610,8 +1627,8 @@ export class AI {
       const army = (this.enemyAir && antiAir.length ? antiAir : affordable).map(([t, wgt]) => [t, Math.max(1, Math.round(wgt * 4 * this.fit(t)))] as [string, number]);
       // Energy piling up: spend it on the unit that needs the most, rather than on more cheap ones; one whose minerals
       // are there (an Octopode at 675 picked with 200 in the bank held every Plate-forme while a drone de combat could come).
-      // A socle with its cheapest researched weapon (the Laser put an Hexapode out of reach every turn).
-      const rich = army.filter(([t]) => (DEFS[t] as UnitDef).cost.minerals + this.kitMinerals(DEFS[t] as UnitDef) <= minerals);
+      // A socle with a weapon it may get, minerals and energy (the Laser put an Hexapode out of reach every turn).
+      const rich = army.filter(([t]) => this.kitFits(DEFS[t] as UnitDef, minerals, energy));
       if (energy >= 300 && rich.length) return rich.reduce((a, b) => ((DEFS[b[0]] as UnitDef).cost.energy > (DEFS[a[0]] as UnitDef).cost.energy ? b : a))[0];
       const total = army.reduce((n, [, wgt]) => n + wgt, 0);
       let k = this.trained % total;
@@ -1909,6 +1926,11 @@ export class AI {
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
+  /** Some unit of the army can still be paid from the bank (without income, the last ones are still to come). */
+  private affordable(p: { minerals: number; energy: number }): boolean {
+    return this.faction.army.some(([t]) => (DEFS[t] as UnitDef).cost.minerals <= p.minerals && (DEFS[t] as UnitDef).cost.energy <= p.energy);
+  }
+
   /** Mineral fields left within reach of any of our finished bases. */
   private fieldsNear(buildings: Entity[]): number {
     const hqs = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
@@ -1996,7 +2018,7 @@ export class AI {
     // The enemy building that costs least to reach and take: its defences (armed buildings and soldiers we know of
     // round it), then distance; a headquarters counts as half defended, since its fall hurts most.
     const known = [...w.entities.values()].filter((e) => w.hostile(e.owner, this.player) && (e.def.kind === 'building' || w.sees(this.player, e)));
-    const guard = known.filter((e) => (e.def as UnitDef | BuildingDef).attack && !(e.def as UnitDef).worker);
+    const guard = known.filter((e) => !!w.weapon(e) && !(e.def as UnitDef).worker);
     let pick: Entity | undefined;
     let best = Infinity;
     for (const b of known) {

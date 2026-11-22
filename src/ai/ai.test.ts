@@ -830,5 +830,19 @@ describe('AI Z blind spots', () => {
     expect(t?.type).toBeDefined();
     expect(t?.type).not.toBe('hexapode');
   });
+  it('no income left: a lone soldier waits for the units the bank still pays, then goes with the last of them', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const u = w.spawn('auxiliaire', 0, hq.x, hq.y + 5 * FP);
+    w.tick = thinkTick(20);
+    w.players[0].minerals = 1000;
+    const goes = (cmds: Command[]) => cmds.some((c) => c.kind === 'attack' && c.ids.includes(u.id));
+    expect(goes(new AI(w, 0).think())).toBe(false);
+    w.players[0].minerals = 0;
+    w.players[0].energy = 0;
+    w.tick += 10;
+    expect(goes(new AI(w, 0).think())).toBe(true);
+  });
 });
 
