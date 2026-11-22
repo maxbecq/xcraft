@@ -776,7 +776,9 @@ describe('AI Z blind spots', () => {
     const ic = hqOf(w);
     w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
     w.remove(ic);
-    w.tick = thinkTick(8);
+    // Late (a worker's price kept from minute 10), every drone carrying minerals it has nowhere to bring.
+    for (const d of [...w.entities.values()]) if (d.owner === 0 && d.type === 'drone') d.carry = 5;
+    w.tick = thinkTick(11);
     w.players[0].minerals = 800;
     w.players[0].energy = 200;
     const cmds = new AI(w, 0).think();
