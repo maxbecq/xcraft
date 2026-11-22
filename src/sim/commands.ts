@@ -183,8 +183,8 @@ export function apply(this: World, c: Command): void {
           return;
         }
         if (def.morphs?.includes(c.type)) {
-          // Turning into another building (Isdaris): one at a time, nothing else queued.
-          if (b.queue.length) continue;
+          // Turning into another building: one at a time, nothing else queued; the Alchimisterie's behind what it makes.
+          if (b.queue.length && !(def.queuesMorph && !b.queue.includes(c.type) && b.queue.length < 5)) continue;
           const lack = this.lacks(c.player, c.type);
           if (lack) return void this.say(c.player, lack);
           const into = DEFS[c.type] as BuildingDef;

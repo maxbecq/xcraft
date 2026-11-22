@@ -190,6 +190,8 @@ export interface BuildingDef {
   bunker?: number;
   /** An extractor worked by workers inside (the Humains' Mine: 4), each its share; none, nothing comes out. */
   crew?: number;
+  /** Its morph may be queued behind what it is making (the Alchimisterie, the balancer 2026-11-22). */
+  queuesMorph?: boolean;
   /** Z Tourelle and Assimilateur: weapons (keys of WEAPONS) that can be bought for it, once (Z.doc: « arme adaptable »). */
   weapons?: string[];
   /** Z: the level its weapon fights at. */
@@ -508,7 +510,9 @@ const BASE: Record<string, object> = {
   conseil: { kind: 'building', name: 'Conseil des Échevins', size: 5, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
   grandconseil: { kind: 'building', name: 'Grand Conseil', size: 5, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
-  grenier: { kind: 'building', name: 'Grenier', size: 2, faction: 'humains', hotkey: 'G' },
+  grenier: { kind: 'building', name: 'Grenier', size: 2, morphs: ['silo'], faction: 'humains', hotkey: 'G' },
+  // The balancer (2026-11-22): each Grenier may become a Grenier à silo, no research needed: +200 HP, +5 supply.
+  silo: { kind: 'building', name: 'Grenier à silo', size: 2, morphOnly: true, faction: 'humains', hotkey: 'S' },
   caserne: { kind: 'building', name: 'Caserne', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphs: ['casernevolante'], faction: 'humains', hotkey: 'K' },
   // Notice: a Caserne turned into one that takes off and lands at will, to set up behind the enemy.
   casernevolante: { kind: 'building', name: 'Caserne volante', size: 3, trains: ['auxiliaire', 'legionnaire', 'soigneur', 'phalangiste', 'belluaire'], morphOnly: true, ability: 'envol', faction: 'humains', hotkey: 'V' },
@@ -538,7 +542,7 @@ const BASE: Record<string, object> = {
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
   pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
-  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'scientisme'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'scientisme'], morphs: ['grandealchimisterie'], queuesMorph: true, faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
   alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, abilities: ['explosiftoxique', 'regenerant', 'reanimation'], faction: 'humains', hotkey: 'A' },
   // Notice: « Grande Alchimisterie », where the Réservoirs de substances are deployed.
@@ -996,9 +1000,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
  * Soin as it always did, the Réanimation only when ordered, as before. */
 export const AUTOCAST: Record<string, boolean> = { soin: true, reanimation: false };
 
-export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'caserne', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', silo: 'grenier', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
+export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, silo: 1.15, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;

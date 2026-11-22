@@ -270,7 +270,8 @@ export function buttonsFor(h: Hud): Button[] {
   // Isdaris: turning into a stronger building, in place.
   for (const t of b.def.morphs ?? []) {
     const d = DEFS[t] as BuildingDef;
-    const idle = same.find((o) => o.queue.length === 0);
+    // The Alchimisterie: its Grande Alchimisterie queued behind what it makes (the balancer, 2026-11-22).
+    const idle = same.find((o) => o.queue.length === 0 || ((b.def as BuildingDef).queuesMorph && !o.queue.includes(t) && o.queue.length < 5));
     if (!idle) continue;
     list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
   }

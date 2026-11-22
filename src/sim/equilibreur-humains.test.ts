@@ -277,4 +277,28 @@ describe('the balancer, Humains', () => {
     expect([...w.entities.values()].filter((e) => e.inside === c.id && e.type === 'serf')).toHaveLength(6);
     expect(soldier.inside).toBe(0);
   });
+
+  it('a Grenier becomes a Grenier à silo (100 minerals, 15 s, no research): +200 HP, +5 supply', () => {
+    const w = humans();
+    const g = put(w, 'grenier');
+    const max = w.supply(0).max;
+    const m = w.players[0].minerals;
+    w.step([{ player: 0, kind: 'train', ids: [g.id], type: 'silo' }]);
+    expect(m - w.players[0].minerals).toBe(100);
+    for (let i = 0; i < ticks(15) + 2; i++) w.step([]);
+    expect(g.type).toBe('silo');
+    expect(g.maxHp).toBe((DEFS.grenier as UnitDef).hp + 200);
+    expect(w.supply(0).max).toBe(max + 5);
+  });
+
+  it('the Alchimisterie queues its Grande Alchimisterie behind an Alchimiste', () => {
+    const w = humans();
+    put(w, 'grandconseil');
+    const a = put(w, 'alchimisterie');
+    w.step([{ player: 0, kind: 'train', ids: [a.id], type: 'alchimiste' }]);
+    w.step([{ player: 0, kind: 'train', ids: [a.id], type: 'grandealchimisterie' }]);
+    expect(a.queue).toEqual(['alchimiste', 'grandealchimisterie']);
+    w.step([{ player: 0, kind: 'train', ids: [a.id], type: 'grandealchimisterie' }]);
+    expect(a.queue).toEqual(['alchimiste', 'grandealchimisterie']); // once only
+  });
 });
