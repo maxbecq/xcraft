@@ -1,6 +1,6 @@
 /** Building placement: the ghost and the grid under the cursor, and on a touch screen the pinned footprint with ✓ and ✕. */
 import { type MeshBasicMaterial, Vector3 } from 'three';
-import { type BuildingDef, DEFS, raises, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, OBSERVATION, raises, spell, type UnitDef } from '../data';
 import { heightAt } from '../map';
 import { FP, TICK_RATE } from '../sim/fixed';
 import { UNSEEN } from '../sim/vision';
@@ -135,6 +135,7 @@ export function freeAsSeen(h: Hud, w: Entity): boolean {
 
 export function updateGhost(h: Hud): void {
   takenAsSeen(h);
+  zoneCursor(h);
   // A Caserne volante about to land: the grid and footprint of where it would settle (the balancer, 2026-11-22).
   const placing = h.placing ?? (h.targeting && h.aimed === 'atterrissage' ? 'casernevolante' : null);
   const touch = !!h.placing && h.input.touching;
@@ -180,6 +181,17 @@ export function updateGhost(h: Hud): void {
   const cx = spot[0] + size / 2;
   const cz = spot[1] + size / 2;
   h.ghost.position.set(cx, heightAt(h.map, cx, cz) + 0.15, cz);
+}
+
+/** An aimed spell's cursor: its zone's size and shape under it (the balancer, 2026-11-22), a circle of its radius. */
+function zoneCursor(h: Hud): void {
+  const aim = h.targeting ? h.input.aim() : null;
+  // The unit ability being aimed, or (none) the selected building's power.
+  const caster = aim && [...h.input.selected].map((id) => h.world.entities.get(id)).find((e) => e && (h.aimed ? h.world.abilitiesFor(e).includes(h.aimed) : (e.def as BuildingDef).ability));
+  const name = h.aimed ?? (caster ? (caster.def as BuildingDef).ability : undefined);
+  const r = name && name !== 'rally' && ABILITIES[name] ? (name === 'observation' ? OBSERVATION.radius : spell(name, caster?.lvl ?? 1).radius) : undefined;
+  if (aim && r) h.grid.zone(aim.x, aim.z, r);
+  else h.grid.noZone();
 }
 
 /** The placement grid's tiles round the cursor, redrawn when it changes tile and once a second (sites come and go). */
