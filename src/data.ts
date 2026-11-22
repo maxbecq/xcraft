@@ -283,7 +283,7 @@ export interface AbilityDef {
 }
 
 /** Dieux: the three mythologies, each three gods (notice 1.2-1); all three standing charge its ultimate spell. */
-/** The Artefacterie's improvements, bought at a god (4 at most per god). */
+/** The Artefacterie's improvements, given from it to a god anywhere (4 at most per god). */
 export const ARTEFACTS = ['artforce', 'artresistance', 'artagilite', 'artvitesse'];
 
 export type Mythology = 'scandinave' | 'grec' | 'egyptien';
@@ -343,6 +343,12 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitinvisibilite: { name: 'Invisibilité', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le rend invisible.', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
   kitreparateur: { name: 'Auto-réparateur', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le répare peu à peu.', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
   kitbalise: { name: 'Balise offensive', effect: 'Équipe un de vos socles, où qu\'il soit, d\'une balise offensive.', hotkey: 'B', ...(BALANCE.abilities.kitbalise as object) } as AbilityDef,
+  // Balance designer 2026-11-22: the Artefacterie works like the Z Centre K, an improvement picked there and given to a
+  // god clicked on, wherever it stands (no longer bought at the god); its price that of the improvement.
+  artforce: { name: 'Force', effect: 'Sur un dieu, où qu\'il soit : il frappe plus fort.', hotkey: 'G', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artforce.cost } as AbilityDef,
+  artresistance: { name: 'Résistance', effect: 'Sur un dieu, où qu\'il soit : il gagne de l\'armure.', hotkey: 'J', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artresistance.cost } as AbilityDef,
+  artagilite: { name: 'Agilité', effect: 'Sur un dieu, où qu\'il soit : il frappe plus vite.', hotkey: 'K', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artagilite.cost } as AbilityDef,
+  artvitesse: { name: 'Vitesse', effect: 'Sur un dieu, où qu\'il soit : il se déplace plus vite.', hotkey: 'Q', target: 'point', cooldown: 10, duration: 0, radius: 2, ...BALANCE.units.artvitesse.cost } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
   canoniem: { name: 'Canon IEM', effect: 'Prend le contrôle d\'une machine ennemie pendant 50 s, tant que le Centre K tient.', hotkey: 'C', research: 'canoniem', ...(BALANCE.abilities.canoniem as object) } as AbilityDef,
   observation: { name: 'Observation céleste', effect: 'Le télescope révèle une zone et y détecte les unités invisibles.', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
@@ -820,7 +826,7 @@ const BASE: Record<string, object> = {
   /** Avatar of Jörmungand (ultimate): a giant serpent for a while; eats the dead to heal. */
   jormungandr: { kind: 'unit', name: 'Avatar de Jörmungand', radius: 1.2, lifetime: 60, faction: 'dieux', hotkey: 'J' },
   /** Frigg's Artefacterie (unique): the gods buy improvements wherever they are (ARTEFACTS). */
-  artefacterie: { kind: 'building', name: 'Artefacterie', size: 3, warp: true, unique: true, requires: { frigg: 1 }, faction: 'dieux', hotkey: 'R' },
+  artefacterie: { kind: 'building', name: 'Artefacterie', size: 3, warp: true, unique: true, requires: { frigg: 1 }, abilities: ARTEFACTS, faction: 'dieux', hotkey: 'R' },
   antre: { kind: 'building', name: 'Antre', size: 4, dropoff: true, warp: true, faction: 'dieux', hotkey: 'N' },
   // Balance designer 2026-11-22: 4 Esprits inside to run, a quarter of the yield each.
   puitsdivin: { kind: 'building', name: 'Puits', size: 3, warp: true, bunker: 4, faction: 'dieux', hotkey: 'P' },

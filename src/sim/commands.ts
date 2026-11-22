@@ -145,18 +145,6 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'train': {
-      if (ARTEFACTS.includes(c.type)) {
-        // An improvement from the Artefacterie, bought at a god anywhere; 4 at most per god, queued ones counted.
-        const lack = this.lacks(c.player, c.type);
-        if (lack) return void this.say(c.player, lack);
-        const max = BALANCE.rules.upgrades.artefacts.max;
-        const g = units.find((u) => (u.def as UnitDef).levels && this.artefacts(u) < max && u.queue.length < 5);
-        if (!g) return void this.say(c.player, `${max} améliorations au plus par dieu.`);
-        const up = DEFS[c.type] as UpgradeDef;
-        if (!this.pay(c.player, up)) return;
-        this.enqueue(g, c.type);
-        return;
-      }
       if (c.type === 'niveau') {
         // A god's next level, paid and queued at the god itself; one at a time, up to the last.
         const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau'));
@@ -373,6 +361,7 @@ export function apply(this: World, c: Command): void {
         if (need) return void this.say(c.player, need);
         return void this.centreK(b, kind, ax, ay);
       }
+      if (b.type === 'artefacterie') return void this.artefact(b, kind, ax, ay);
       if (kind === 'transfertgroupe') {
         // Second step of the Porte de déphasage: the latest group still phased goes to the point, out of phase.
         const need = this.needs(c.player, ab.research, b);

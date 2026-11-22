@@ -1,6 +1,6 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -164,16 +164,6 @@ export function buttonsFor(h: Hud): Button[] {
     if (g) list.push({ label: `Niveau ${g.lvl + 1}`, cmd: 'niveau', type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
     // A god that summons troops has a rally point too; its right click moves it, so only this button sets one.
     if (units.some((u) => (u.def as UnitDef).trains?.length)) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => h.setTargeting(true, true, 'rally') });
-    // The Artefacterie's improvements, once there is one, for a selected god with room left.
-    const buyers = units.filter((u) => (u.def as UnitDef).levels);
-    if (buyers.length && [...h.world.entities.values()].some((b) => b.owner === h.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
-      const max = BALANCE.rules.upgrades.artefacts.max;
-      const free = buyers.find((u) => h.world.artefacts(u) < max);
-      for (const t of ARTEFACTS) {
-        const d = DEFS[t] as UpgradeDef;
-        list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: free ? undefined : `${max} améliorations au plus par dieu`, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
-      }
-    }
     const summoning = units.find((u) => u.queue.length);
     if (summoning) list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
     return list;

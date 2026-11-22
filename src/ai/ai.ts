@@ -1125,14 +1125,17 @@ export class AI {
         ctx.energy -= cost.energy;
       }
       // With an Artefacterie and resources to spare: Force, Résistance, Force, Vitesse for each god in turn.
-      const arte = buildings.some((b) => b.type === 'artefacterie' && b.buildLeft === 0);
-      for (const g of arte ? gods.filter((e) => this.world.artefacts(e) < BALANCE.rules.upgrades.artefacts.max && e.queue.length <= 2) : []) {
+      // Given from the Artefacterie, one at a time (it rests between two).
+      const arte = buildings.find((b) => b.type === 'artefacterie' && b.buildLeft === 0 && b.abilityCd === 0);
+      const g = arte && gods.find((e) => this.world.artefacts(e) < BALANCE.rules.upgrades.artefacts.max);
+      if (arte && g) {
         const t = ['artforce', 'artresistance', 'artforce', 'artvitesse'][this.world.artefacts(g)];
         const cost = (DEFS[t] as UpgradeDef).cost;
-        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || ctx.energy - reserve < cost.energy) break;
-        ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: t });
-        ctx.minerals -= cost.minerals;
-        ctx.energy -= cost.energy;
+        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin >= cost.minerals && ctx.energy - reserve >= cost.energy) {
+          ctx.out.push({ player: this.player, kind: 'ability', ids: [arte.id], name: t, x: g.x, y: g.y });
+          ctx.minerals -= cost.minerals;
+          ctx.energy -= cost.energy;
+        }
       }
     }
   }

@@ -609,6 +609,27 @@ export function centreK(this: World, b: Entity, kind: string, x: number, y: numb
   this.casts.push({ kind, x: t.x, y: t.y });
 }
 
+/**
+ * The Artefacterie (balance designer 2026-11-22, like the Centre K): gives the improvement to the own god nearest the
+ * point, wherever it stands, 4 at most each; then it rests a moment.
+ */
+export function artefact(this: World, b: Entity, kind: string, x: number, y: number): void {
+  const ab = ABILITIES[kind];
+  if (b.abilityCd > 0) return void this.say(b.owner, 'L\u2019Artefacterie se prépare.');
+  const max = BALANCE.rules.upgrades.artefacts.max;
+  const g = [...this.entities.values()]
+    .filter((t) => t.owner === b.owner && t.hp > 0 && !t.inside && (t.def as UnitDef).levels && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
+    .sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+  if (!g) return void this.say(b.owner, 'Aucun dieu visé.');
+  if (this.artefacts(g) >= max) return void this.say(b.owner, `${max} améliorations au plus par dieu.`);
+  if (!this.pay(b.owner, { cost: { minerals: ab.minerals ?? 0, energy: ab.energy ?? 0 } })) return;
+  g.arts.push(kind);
+  if (g.boost === 0) g.speed = this.baseSpeed(g);
+  this.say(b.owner, `${g.def.name} : ${ab.name} (${g.arts.length}/${max}).`, 'done');
+  b.abilityCd = ticks(ab.cooldown);
+  this.casts.push({ kind, x: g.x, y: g.y });
+}
+
 /** A machine taken by the Canon IEM goes back to its player. */
 export function unseize(this: World, e: Entity): void {
   e.seizedBy = 0;

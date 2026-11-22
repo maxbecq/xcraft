@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Command, type Entity, World } from './world';
@@ -284,20 +284,25 @@ describe('Dieux', () => {
     expect(of(w, 0, 'jormungandr')).toHaveLength(1);
   });
 
-  it('the Artefacterie: a god buys up to 4 improvements where it stands, the same one several times', () => {
+  it('the Artefacterie gives up to 4 improvements to a god clicked on anywhere, the same one several times (like the Centre K)', () => {
     const w = createMatch(['dieux', 'humains']);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
-    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
-    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'artforce' }]);
-    expect(thor.queue).toEqual([]); // no Artefacterie yet
-    w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
-    for (const t of ['artforce', 'artforce', 'artresistance', 'artvitesse', 'artagilite']) w.step([{ player: 0, kind: 'train', ids: [thor.id], type: t }]);
-    expect(thor.queue).toHaveLength(4);
-    run(w, 4 * (DEFS.artforce as UpgradeDef).buildTime + 1);
+    const thor = Object.assign(w.spawn('thor', 0, 60 * FP, 60 * FP), { mana: 1 << 30 });
+    const arte = w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
+    const give = (t: string) => {
+      arte.abilityCd = 0;
+      w.step([{ player: 0, kind: 'ability', ids: [arte.id], name: t, x: thor.x, y: thor.y }]);
+    };
+    give('artforce');
+    expect(thor.arts).toEqual(['artforce']);
+    expect(w.busy(thor)).toBe(false); // nothing queued at the god: it walks on
+    w.step([{ player: 0, kind: 'ability', ids: [arte.id], name: 'artforce', x: thor.x, y: thor.y }]);
+    expect(thor.arts).toHaveLength(1); // the Artefacterie rests a moment
+    for (const t of ['artforce', 'artresistance', 'artvitesse', 'artagilite']) give(t);
     expect(thor.arts).toEqual(['artforce', 'artforce', 'artresistance', 'artvitesse']);
     expect(w.armorBonus(thor)).toBe(BALANCE.rules.upgrades.artefacts.resistance);
-    const dummy = w.spawn('grenier', 1, 30 * FP, 32 * FP);
+    const dummy = w.spawn('grenier', 1, 60 * FP, 62 * FP);
     const before = dummy.hp;
     w.hit(thor, dummy, (DEFS.thor as UnitDef).attack!);
     const plain = (DEFS.thor as UnitDef).attack!.damage;

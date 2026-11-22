@@ -1,6 +1,6 @@
 /** Buildings: placement, power network, production, research, morphs, bunkers and carriers. */
 import BALANCE from '../balance.json';
-import { ABILITIES, ARTEFACTS, type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -254,13 +254,6 @@ export function produce(this: World, b: Entity): void {
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
-    if (ARTEFACTS.includes(type)) {
-      b.arts.push(type);
-      if (b.boost === 0) b.speed = this.baseSpeed(b);
-      this.say(b.owner, `${b.def.name} : ${DEFS[type].name} (${b.arts.length}/${BALANCE.rules.upgrades.artefacts.max}).`, 'done');
-      this.next(b);
-      return;
-    }
     if (type === 'niveau') {
       this.ascend(b);
       this.next(b);
