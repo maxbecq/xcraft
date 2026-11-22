@@ -536,18 +536,19 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
       if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, this.aside(e, o, a));
     }
   }
-  // Z Lance-flammes (fiche « Double attaque »): the enemies on the ground just behind the target, in the jet's line.
-  if (a.behind) {
+  // Z Lance-flammes (équilibreur 22/11): a jet the length of its range from the shooter's edge, through the target and
+  // on; every enemy on the ground on it burns, between and behind (each the blow against its own class).
+  if (a.flame) {
     const [lx, ly] = [t.x - e.x, t.y - e.y];
-    const len2 = lx * lx + ly * ly || 1;
-    const reach = toFp(a.behind);
+    const len = dist(e.x, e.y, t.x, t.y) || 1;
+    const end = e.radius + toFp(a.range);
     for (const o of [...this.entities.values()]) {
       if (o === e || o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
-      const k = (o.x - t.x) * lx + (o.y - t.y) * ly;
-      if (k <= 0 || k * k > reach * reach * len2) continue;
-      const cross = Math.abs((o.x - t.x) * ly - (o.y - t.y) * lx);
-      // Each one the blow against its own class (fiche 2010).
-      if (cross * cross <= (o.radius + FP / 4) * (o.radius + FP / 4) * len2) this.hurt(o, this.aside(e, o, a));
+      // Along the line and off it, in whole units (no floating root in the simulation).
+      const k = idiv((o.x - e.x) * lx + (o.y - e.y) * ly, len);
+      if (k <= 0 || k - o.radius > end) continue;
+      const cross = idiv(Math.abs((o.x - e.x) * ly - (o.y - e.y) * lx), len);
+      if (cross <= o.radius + FP / 4) this.hurt(o, this.aside(e, o, a));
     }
   }
   // Z Canon X-04: fired at a target in contact, the shooter takes its own blast (Z.doc).

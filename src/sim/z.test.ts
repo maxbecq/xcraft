@@ -487,7 +487,28 @@ describe('Z Assimilateur (notice)', () => {
   });
 });
 
-describe('Z Lance-flammes (fiche « Double attaque »)', () => {
+describe('Z Lance-flammes (équilibreur 22/11: range 2, a line through and past the target)', () => {
+  it('reaches 2 and follows the Attaque de proximité upgrades', () => {
+    const w = createMatch(['z', 'humains']);
+    const burner = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    burner.kit = 'flammes';
+    expect(w.weapon(burner)!.range).toBe(2);
+    expect(w.attackLine(burner, w.weapon(burner)!)).toBe('zproxi');
+  });
+
+  it('burns the enemy between it and its target, and the one behind in the line', () => {
+    const w = createMatch(['z', 'humains']);
+    const burner = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
+    burner.kit = 'flammes';
+    const between = w.spawn('legionnaire', 1, 31 * FP, 30 * FP);
+    const target = w.spawn('legionnaire', 1, 31.8 * FP, 30 * FP);
+    const behind = w.spawn('legionnaire', 1, 32.6 * FP, 30 * FP);
+    const ally = w.spawn('quadripode', 0, 31.4 * FP, 30.2 * FP);
+    w.hit(burner, target, w.weapon(burner)!);
+    for (const u of [between, target, behind]) expect(u.hp).toBeLessThan(u.maxHp);
+    expect(ally.hp).toBe(ally.maxHp);
+  });
+
   it('hits the enemy right behind its target in the line, not one beside nor one far behind', () => {
     const w = createMatch(['z', 'humains']);
     const burner = w.spawn('quadripode', 0, 30 * FP, 30 * FP);
