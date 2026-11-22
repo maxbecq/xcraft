@@ -31,6 +31,25 @@ export function enqueue(this: World, b: Entity, type: string, kit = ''): void {
   b.queue.push(type);
   b.kits.push(kit);
   if (b.queue.length === 1) b.trainLeft = this.trainTime(b, type);
+  // A god summoning or going up a level stops where it stands.
+  if (this.busy(b) && b.order && STILL.has(b.order.kind)) this.setOrder(b, null);
+}
+
+/** What a god that is busy may not do: walk or fight. */
+const STILL = new Set(['move', 'attack', 'attackMove', 'follow', 'enter', 'build', 'cast']);
+
+/**
+ * A god other than Gaïa summoning, going up a level, or raising a building: it neither moves nor fights till that is
+ * done (balance designer, 2026-11-22). Gaïa's buildings rise alone and her Esprits come out as she walks.
+ */
+export function busy(this: World, e: Entity): boolean {
+  const d = e.def as UnitDef;
+  if (!d.unique || d.faction !== 'dieux' || !d.levels || e.type === 'gaia') return false;
+  if (e.queue.length) return true;
+  const b = e.raising ? this.entities.get(e.raising) : undefined;
+  if (b && b.hp > 0 && b.buildLeft > 0) return true;
+  e.raising = 0;
+  return false;
 }
 
 export function apply(this: World, c: Command): void {
@@ -505,6 +524,7 @@ export function formation(this: World, units: Entity[], to?: [number, number]): 
 }
 
 export function setOrder(this: World, e: Entity, order: Order | null): void {
+  if (order && STILL.has(order.kind) && this.busy(e)) return;
   const c = this.commanding;
   if (c && e.owner === c.player && Array.isArray(c.ids) && c.ids.includes(e.id)) e.next.splice(0);
   if (order && this.queueing && (e.order || e.next.length)) {
@@ -513,6 +533,7 @@ export function setOrder(this: World, e: Entity, order: Order | null): void {
   }
   // An order done (or dropped): the next one in the list, if any.
   if (!order && e.next.length) order = e.next.shift()!;
+  while (order && STILL.has(order.kind) && this.busy(e)) order = e.next.shift() ?? null;
   const old = e.order;
   if (old?.kind === 'gather') this.release(e, old.target);
   e.order = order;

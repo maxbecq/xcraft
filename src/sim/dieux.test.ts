@@ -53,12 +53,12 @@ describe('Dieux', () => {
     expect(thor).toBeDefined();
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }, { player: 0, kind: 'train', ids: [thor.id], type: 'minotaure' }]);
     expect(thor.queue).toEqual(['nain']); // only his own troops
-    // Walking, he does not summon.
+    // Summoning, he cannot walk away (balance designer 2026-11-22): the summons goes on.
+    const [x, left] = [thor.x, thor.trainLeft];
     w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 40 * FP }]);
-    const left = thor.trainLeft;
     run(w, 2);
-    expect(thor.trainLeft).toBe(left);
-    w.step([{ player: 0, kind: 'stop', ids: [thor.id] }]);
+    expect(thor.x).toBe(x);
+    expect(thor.trainLeft).toBeLessThan(left);
     run(w, (DEFS.nain as UnitDef).buildTime + 1);
     const [nain] = of(w, 0, 'nain');
     expect(nain).toBeDefined();
@@ -562,5 +562,39 @@ describe('Golem (notice: « dégâts aberrants aux bâtiments »)', () => {
     };
     expect(loss('caserne')).toBe(140);
     expect(loss('pegase')).toBe(70);
+  });
+});
+
+describe('a busy god (balance designer, 2026-11-22)', () => {
+  it('stands still and does not fight while it summons or goes up a level; Gaïa walks on', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].minerals = 5000;
+    w.players[0].energy = 5000;
+    w.spawn('branche', 0, 30 * FP, 14 * FP);
+    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }]);
+    expect(thor.queue.length).toBe(1);
+    expect(w.busy(thor)).toBe(true);
+    w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 30 * FP }]);
+    run(w, 2);
+    expect(thor.x).toBe(30 * FP);
+    const foe = w.spawn('legionnaire', 1, 31 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: foe.x, y: foe.y, target: foe.id }]);
+    expect(thor.order).toBeNull();
+    w.remove(foe);
+    run(w, (DEFS.nain as UnitDef).buildTime + 2);
+    expect(w.busy(thor)).toBe(false);
+    w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 30 * FP }]);
+    run(w, 2);
+    expect(thor.x).toBeGreaterThan(30 * FP);
+    const gaia = of(w, 0, 'gaia')[0];
+    w.step([{ player: 0, kind: 'train', ids: [gaia.id], type: 'esprit' }]);
+    expect(w.busy(gaia)).toBe(false);
+    // Raising a building: busy till it is up.
+    const site = w.site('fontaine', 0, 50, 50);
+    thor.raising = site.id;
+    expect(w.busy(thor)).toBe(true);
+    site.buildLeft = 0;
+    expect(w.busy(thor)).toBe(false);
   });
 });
