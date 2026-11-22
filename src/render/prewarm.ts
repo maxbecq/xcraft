@@ -63,6 +63,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     for (const kit of (DEFS[type] as { weapons?: string[] }).weapons ?? []) spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP).kit = kit;
     if (DEFS[type].kind === 'building') spare.spawn(type, owner, (map.width / 2) * FP, (map.height / 2) * FP).buildLeft = 1;
   }
+  if (m.stop?.()) return;
   const shapes = new EntityRenderer(scene, map);
   shapes.sync(spare, 0, new Set(), m.player, () => true, () => true);
   // The death bursts' points too: the first death of a match compiled their two programs.
@@ -133,6 +134,8 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     renderer.setRenderTarget(into);
     scissor(true);
     renderer.shadowMap.needsUpdate = true; // its programs too (the map is only drawn when asked for)
+    // The rule from here on: the time is asked right before every draw of the scene, never only before what readies it.
+    if (m.stop?.()) return;
     renderer.render(scene, rig.camera);
     // The buildings' depth and the silhouettes, one per side; not where they are off (the basse level): their programs
     // and their depth buffer, the size of the picture, would be kept for nothing.
@@ -147,6 +150,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
         lit.push([o, o.material]);
         o.material = Array.isArray(o.material) ? o.material.map(hitTint) : hitTint(o.material);
       });
+    if (m.stop?.()) return;
     renderer.render(scene, rig.camera);
     for (const [o, mat] of lit) o.material = mat;
     if (m.stop?.()) return;
@@ -163,6 +167,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
         o.material = Array.isArray(o.material) ? o.material.map(cut) : cut(o.material);
       });
     if (whole.length) {
+      if (m.stop?.()) return;
       renderer.shadowMap.needsUpdate = true;
       renderer.render(scene, rig.camera);
       for (const [o, mat] of whole) o.material = mat;
@@ -172,6 +177,7 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
     // first enemy building left the view.
     if (m.ghosts) {
       shapes.ghostAll();
+      if (m.stop?.()) return;
       renderer.render(scene, rig.camera);
     }
     if (m.stop?.()) return;

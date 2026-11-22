@@ -472,6 +472,7 @@ if (!ATTRACT) {
   const rehearse = () => {
     if (late()) return;
     power.update(world, sees, false, (o) => !SPECTATE && world.hostile(o, PLAYER));
+    if (late()) return;
     paving.update(world, sees);
     if (!late()) post.render();
   };
