@@ -45,6 +45,7 @@ FLAT = [
     ([(99, 77.1), (110, 77.1), (116.9, 84), (105.9, 84)], (-13, 0)),  # a house front under the south-east square's edge
     ([(70, 77.1), (82, 77.1), (88.9, 84), (76.9, 84)], (13, 0)),  # another under the centre's south house,
     ([(77.1, 73.5), (84, 73.5), (84, 77.5), (77.1, 77.5)], (0, -6)),  # and beside it
+    ([(27.2, 85), (46.4, 85), (46.4, 86.05), (27.2, 86.05)], (-14, -19)),  # the chasm's parapet south-west of the centre: blocks no unit climbs, slabs again
 ]
 QUALITY = 60  # WebP: half the weight of 84, nothing lost to the eye at the closest zoom
 
