@@ -893,3 +893,48 @@ describe('AI Z blind spots', () => {
   });
 });
 
+describe('AI Isdaris blind spots', () => {
+  const thinkTick = (min: number) => ticks(min * 60) - (ticks(min * 60) % 10);
+  const turn = (ai: AI, w: World) => {
+    const a = ai as unknown as { survey(m: Entity[], h: Entity): object; need(s: object): object; budget(n: object): { gatewaysKeep: number } };
+    const mine = [...w.entities.values()].filter((e) => e.owner === 0);
+    const s = a.survey(mine, mine.find((e) => e.type === 'obelisque')!);
+    const n = { ...s, ...a.need(s) } as { saving: boolean; wants: string[] };
+    return { n, b: a.budget(n) };
+  };
+
+  it('three Portails always busy: the least busy one takes the research behind its units', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    const portails = [-8, 0, 8].map((dx) => w.spawn('portail', 0, ob.x + dx * FP, ob.y + 8 * FP));
+    portails.forEach((p, i) => p.queue.push(...(i === 1 ? ['creature'] : ['creature', 'creature'])));
+    w.tick = thinkTick(10);
+    w.players[0].minerals = 600;
+    w.players[0].energy = 600;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [portails[1].id], type: 'miniportail' }));
+  });
+
+  it('from minute 6 the Portails keep the price of the Laboratoire', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    w.spawn('portail', 0, ob.x + 8 * FP, ob.y + 8 * FP);
+    w.tick = thinkTick(5);
+    expect(turn(new AI(w, 0), w).b.gatewaysKeep).toBe(0);
+    w.tick = thinkTick(7);
+    expect(turn(new AI(w, 0), w).b.gatewaysKeep).toBeGreaterThanOrEqual(200);
+  });
+
+  it('an expansion late by three minutes is saved for, up to what a robot pays for it', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    for (let i = 0; i < 12; i++) w.spawn('moissonneur', 0, ob.x + (i - 6) * FP, ob.y + 4 * FP);
+    w.tick = thinkTick(11);
+    w.players[0].minerals = 1100;
+    const ai = new AI(w, 0);
+    (ai as unknown as { lastIncome: number }).lastIncome = w.tick;
+    const { n } = turn(ai, w);
+    expect(n.wants).toContain('obelisque');
+    expect(n.saving).toBe(true);
+  });
+});

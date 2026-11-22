@@ -556,7 +556,14 @@ export class AI {
     // spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < 1000 && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    // Also once it is three minutes late, the army at home or not: under pressure it never stood 8 strong, and the
+    // Isdaris kept one base and one Récepteur for the whole game, too short of energy for Druides or research.
+    const late = minute >= (councils < 2 ? firstAt : firstAt + EXPAND_EVERY * (councils - 1)) + 3;
+    // Up to its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the
+    // bank never reached it).
+    const outpostDef = DEFS[outpost] as BuildingDef;
+    const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
+    const saving = (expand && (army.filter((u) => !this.wave.has(u.id)).length >= 8 || late) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -564,6 +571,11 @@ export class AI {
   /** Energy (and minerals) kept back from cheaper spending for the tech, its units and the next research. */
   private budget(ctx: Survey & Need) {
     const { w, f, p, mine, serfs, builders, army, buildings, minute, moreEnergy, techWanted, techDef, techUp, unlocked, nextExtension } = ctx;
+    const techMinute = (BALANCE.ai.tech as Record<string, { minute: number }>)[p.faction]?.minute ?? 0;
+    // Isdaris: the next extension (the Laboratoire on a Portail) keeps its price from minute 6, before the Psycho-
+    // assembleur too: Créatures and Archers spent every mineral and point of energy as they came, and the Laboratoire,
+    // with the Druides and every Portail research behind it, came late or never.
+    const extensionDue = !!nextExtension && minute >= 6 && !this.easy;
     // Z: once its prerequisites stand, the energy of the next step of its tech (Intelligence suprême, Centre
     // d'optimisation, Centre K) is kept from everything else.
     const zNext = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
@@ -578,7 +590,7 @@ export class AI {
     const supreme = (DEFS.supreme as BuildingDef).cost;
     // And only with energy coming in (an Assimilateur standing): stuck at 350, it held the drones for good.
     const holdSupreme = wantSupreme && p.energy >= 300 && buildings.some((b) => (b.def as BuildingDef).energyRate && b.buildLeft === 0) && ((p.minerals >= supreme.minerals && p.energy >= supreme.energy && serfs.length > 0) || serfs.length >= this.plan.serfs / 2);
-    const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : 0;
+    const reserve = zTech ? (DEFS[zTech] as BuildingDef).cost.energy : !techDef ? 0 : techUp ? (unlocked.length ? Math.min(...unlocked.map((t) => (DEFS[t] as UnitDef).cost.energy)) : 0) + (nextExtension ? (DEFS[nextExtension] as UpgradeDef).cost.energy : 0) : techWanted ? techDef.cost.energy : extensionDue ? (DEFS[nextExtension!] as UpgradeDef).cost.energy : 0;
     // The next research in line keeps its energy from the cheaper units and morphs too (otherwise it never came),
     // once the army is a wave strong (soldiers first), and only for a building that does nothing but research:
     // research on a production building (Isdaris Portail) waits for spare resources instead.
@@ -601,7 +613,11 @@ export class AI {
       f !== FACTIONS.isdaris || this.easy || w.tick - this.lastIncome >= ticks(60)
         ? 0
         : (techIdle ? Math.min(...techUnits.map((t) => (DEFS[t] as UnitDef).cost.minerals)) : 0) +
-          (army.length < this.plan.wave ? 0 : (moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) + (techWanted ? techDef!.cost.minerals : 0));
+          (army.length < this.plan.wave ? 0 : moreEnergy ? (DEFS[f.extractor] as BuildingDef).cost.minerals : 0) +
+          // The Psycho-assembleur's minerals also once it is three minutes late: under pressure, the army never stood a
+          // wave strong at home, and it never came (Carrefour, 27 minutes).
+          (techWanted && (army.length >= this.plan.wave || minute >= techMinute + 3) ? techDef!.cost.minerals : 0) +
+          (extensionDue ? (DEFS[nextExtension!] as UpgradeDef).cost.minerals : 0);
     // Z: the minerals of that next step are kept from the socles once three quarters of its energy is there (the socles
     // ate them all: the Centre d'optimisation never came, and the 500 energy kept for it piled up past 600, unspent).
     // Only while minerals come in: with none, it held every socle for a building that could not come.
@@ -736,11 +752,16 @@ export class AI {
       if (t.startsWith('zproxi') && !w.level(this.player, 'lanceflammes')) continue;
       if ((DEFS[t] as UpgradeDef).level > 1 && /^r(quadripode|hexapode|coleoptere)$/.test((DEFS[t] as UpgradeDef).line) && !w.level(this.player, 'lanceroquettes')) continue;
       // The building itself must allow it: an extension it lacks, the extension a research needs there (Laboratoire, Totem…).
-      const host = buildings.find((b) => !researching.has(b.id) && b.buildLeft === 0 && b.queue.length === 0 && (b.def as BuildingDef).researches?.includes(t) && w.researchable(this.player, t, b) && !w.lacks(this.player, t, undefined, b));
+      // A production building researches when idle, with minerals to spare. With three of them or more, one takes the
+      // listed research behind the unit it trains, at its price: the Isdaris Portails, never idle nor 300 ahead, did no
+      // research in 35 minutes.
+      const hosts = buildings.filter((b) => !researching.has(b.id) && b.buildLeft === 0 && (b.def as BuildingDef).researches?.includes(t) && w.researchable(this.player, t, b) && !w.lacks(this.player, t, undefined, b));
+      const many = listed.includes(t) && hosts.length >= 3 && !!(hosts[0].def as BuildingDef).trains?.length;
+      const host = hosts.find((b) => b.queue.length === 0) ?? (many ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
       const cost = (DEFS[t] as UpgradeDef).cost;
       // The researches off the list only with resources to spare, after the units' energy.
       const spare = listed.includes(t) ? 0 : 200;
-      if (!host || ctx.minerals < cost.minerals + spare + ((host.def as BuildingDef).trains?.length ? 300 : 0) || ctx.energy - (spare ? ctx.unitReserve + 100 : researchReserve) < cost.energy) continue;
+      if (!host || ctx.minerals < cost.minerals + spare + ((host.def as BuildingDef).trains?.length && !many ? 300 : 0) || ctx.energy - (spare ? ctx.unitReserve + 100 : researchReserve) < cost.energy) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: t });
       researching.add(host.id);
       ctx.minerals -= cost.minerals;
@@ -749,7 +770,10 @@ export class AI {
     // Isdaris extensions (notice), in order, on the building that hosts each.
     // The extension that unlocks the first tech unit does not wait for the expansion's savings (they held it three minutes).
     if (nextExtension && (!saving || (techUp && !unlocked.length)) && !this.easy) {
-      const host = buildings.find((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && b.queue.length === 0 && w.researchable(this.player, nextExtension, b));
+      // As for research: with three hosts or more, the least busy one takes it behind its units (the Laboratoire waited
+      // for an idle Portail that never came, and every Portail research with it).
+      const hosts = buildings.filter((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && w.researchable(this.player, nextExtension, b));
+      const host = hosts.find((b) => b.queue.length === 0) ?? (hosts.length >= 3 ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
       const cost = (DEFS[nextExtension] as UpgradeDef).cost;
       if (host && ctx.minerals >= cost.minerals && ctx.energy >= cost.energy) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: nextExtension });
