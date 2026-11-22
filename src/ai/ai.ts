@@ -579,7 +579,8 @@ export class AI {
       const def = DEFS[wants[i]] as BuildingDef;
       // Not with the minerals of a more urgent building before it (paid first, the add-ons took the price of the Pod
       // that would free supply, or of the Intelligence to raise again).
-      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0);
+      // Not a headquarters no worker can raise (no drone left: the Pod kept its 800 and raised nothing).
+      const ahead = wants.slice(0, i).reduce((n, t) => n + ((DEFS[t] as BuildingDef).addon || (t === f.hq && !this.rebuildable && !this.settled(home)) ? 0 : (DEFS[t] as BuildingDef).cost.minerals), 0);
       if (host && ctx.minerals - ahead >= def.cost.minerals && ctx.energy >= def.cost.energy && !w.lacks(this.player, wants[i])) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
         ctx.minerals -= def.cost.minerals;
@@ -1027,13 +1028,16 @@ export class AI {
       // No soldiers to speak of against a small raid: the workers next to it fight.
       // Not against a flyer their arms cannot reach (drones gathered under a Drake's blasts).
       const lead = w.entities.get(threat.target);
+      // Only with workers and defenders together as strong as the raid: three drones sent at four heavy units died.
+      let fought = false;
       if (threat.strength > 1 && strength(atHome) < threat.strength / 2 && threat.count <= 4 && !(lead && flies(lead))) {
         const pulled = serfs.filter((s) => near(s) && s.order?.kind !== 'build' && s.order?.kind !== 'construct' && s.order?.kind !== 'attack' && !ctx.out.some((c) => c.kind === 'build' && c.ids.includes(s.id)));
-        if (pulled.length) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
+        fought = pulled.length > 0 && strength(pulled) + strength(atHome) >= threat.strength;
+        if (fought) ctx.out.push({ player: this.player, kind: 'smart', ids: pulled.map((s) => s.id), x: threat.x, y: threat.y, target: threat.target });
       }
-      // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat.
-      // Otherwise (a smaller raid, or one elsewhere) they come out and go back to work.
-      const danger = !this.easy && strength(atHome) < threat.strength / 2 && threat.count > 4;
+      // Z Refuge: against more than the drones could hold off, they shelter in the Intelligence near the threat (a
+      // small raid they are too weak to fight too). Otherwise (one elsewhere) they come out and go back to work.
+      const danger = !this.easy && strength(atHome) < threat.strength / 2 && (threat.count > 4 || (!fought && threat.strength > 1));
       for (const b of shelters) {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
@@ -1973,7 +1977,9 @@ export class AI {
     const f = this.faction;
     const w = this.world;
     const supply = w.supply(this.player);
-    if ((minerals < (DEFS[f.worker] as UnitDef).cost.minerals || supply.used >= supply.max) && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
+    // Supply under construction is supply to come.
+    const short = minerals < (DEFS[f.worker] as UnitDef).cost.minerals || (supply.used >= supply.max && !buildings.some((b) => kin(b, f.supply) && b.buildLeft > 0));
+    if (short && ![...w.entities.values()].some((e) => e.owner === this.player && (e.type === f.worker || e.queue.includes(f.worker)))) return true;
     return this.mapDry() || (this.fieldsNear(buildings) === 0 && minerals < (DEFS[this.faction.outpost ?? this.faction.hq] as BuildingDef).cost.minerals);
   }
 
