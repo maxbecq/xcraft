@@ -64,7 +64,7 @@ describe('Forge upgrades', () => {
     expect(hit('legionnaire', 'serf', () => {})).toBe(20);
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.melee = 2))).toBe(24); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.ranged = 3))).toBe(20); // wrong line
-    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(17); // fiche 2010: 15 against BL, +10 % per level
+    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(16); // fiche 2010: 15 against BL; the balancer, 2026-11-22: +1 per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[1].upgrades.armor = 3))).toBe(17);
   });
 });

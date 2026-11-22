@@ -653,6 +653,9 @@ export function turn(this: World, e: Entity, owner: number): void {
  */
 export function manaOf(this: World, e: Entity): Mana | undefined {
   const own = (e.def as UnitDef | BuildingDef).mana;
+  // Scientisme (the balancer, 2026-11-22): more mana for the Soigneur, the Alchimiste and the Réservoir.
+  const more = (BALANCE.rules.upgrades.scientisme as Record<string, number>)[e.type];
+  if (own && more && this.level(e.owner, 'scientisme')) return [own[0] + more, own[1], own[2]];
   if (own) return own;
   // Dieux (XC.doc 2008): every god the same mana by its level, regained at 1 a second (half full at its summoning:
   // shortcut, no source gives a start; the mod's casters start at half).

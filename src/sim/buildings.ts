@@ -187,11 +187,13 @@ export function trainTime(this: World, b: Entity, type: string): number {
   const t = idiv(ticks((DEFS[type] as UnitDef | UpgradeDef).buildTime), b.def.kind === 'unit' ? b.lvl : 1);
   if (DEFS[type].kind !== 'unit') return t;
   let speedup = b.type === 'caserne' && this.level(b.owner, 'entrainementgroupe') ? BALANCE.rules.upgrades.entrainementSpeedup : 0;
-  // The Grand Conseil plans production: every unit comes out faster while it stands.
-  if ([...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0)) speedup += BALANCE.rules.upgrades.grandConseilSpeedup;
   // Z.doc: the Intelligence suprême turns drones out in 75 % of their time (Production accélérée).
   if (b.type === 'supreme') speedup += BALANCE.rules.z.supremeSpeedup;
-  return idiv(t * (100 - speedup), 100);
+  const time = idiv(t * (100 - speedup), 100);
+  // Planification industrielle (the balancer, 2026-11-22): while a Grand Conseil stands, every unit but the Serf is made
+  // 10 % faster (its speed, so its time divided by 1.1).
+  const planned = type !== 'serf' && [...this.entities.values()].some((g) => g.owner === b.owner && g.type === 'grandconseil' && g.buildLeft === 0);
+  return planned ? idiv(time * 100, 100 + BALANCE.rules.upgrades.grandConseilSpeedup) : time;
 }
 
 export function operate(this: World, b: Entity): void {

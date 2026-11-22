@@ -528,12 +528,12 @@ const BASE: Record<string, object> = {
   // Notice: « Char Pégase », a massive tank whose « Incineratus » cannon wrecks vehicles and buildings (mod « Pegasus », ground mode).
   pegase: { kind: 'unit', name: 'Char Pégase', radius: 0.9, mechanical: true, ability: 'decollage', faction: 'humains', hotkey: 'P' },
   // Notice: « Alchimisterie », the alchemy tier: Alchimistes (mod: needs the Guilde alchimistique, here the Forge).
-  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
+  alchimisterie: { kind: 'building', name: 'Alchimisterie', size: 3, requires: { caserne: 1 }, trains: ['alchimiste'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'scientisme'], morphs: ['grandealchimisterie'], faction: 'humains', hotkey: 'A' },
   // Notice: « Alchimiste », a fragile support that detects hidden units; mod: cocktail instable, 15 (+5 against living targets).
   alchimiste: { kind: 'unit', name: 'Alchimiste', radius: 0.375, abilities: ['explosiftoxique', 'regenerant', 'reanimation'], faction: 'humains', hotkey: 'A' },
   // Notice: « Grande Alchimisterie », where the Réservoirs de substances are deployed.
   grandealchimisterie: {
-    kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide'], morphOnly: true, requires: { grandconseil: 1 }, faction: 'humains', hotkey: 'G',
+    kind: 'building', name: 'Grande Alchimisterie', size: 3, trains: ['alchimiste', 'cuve'], researches: ['armeschimiques', 'cocktail', 'regenerant', 'acide', 'scientisme'], morphOnly: true, requires: { grandconseil: 1 }, faction: 'humains', hotkey: 'G',
   },
   // Notice: « Réservoir de substances », a heavy vat carried by serfs, its master alchemist throwing area bombs (mod « Cuve à efférents »).
   /** Laid by a Char Pégase, never trained. */
@@ -561,13 +561,15 @@ const BASE: Record<string, object> = {
   // (the balancer, 2026-11-22), kept for old replays: Entraînement groupé (the Marché's « production groupée »), Œil perçant.
   canonsscies: research('Canons sciés', 'N', 'Auxiliaires : +1 de portée.', { caserne: 1 }),
   cuirasse: research('Cuirasse', 'U', 'Légionnaires-scieurs : +1 d\'armure.', { caserne: 1 }),
-  scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : +5 dégâts contre les bâtiments et les machines lourdes.', { caserne: 1 }),
+  scieassaut: research("Scie d'assaut", 'S', 'Légionnaires-scieurs : +15 dégâts contre les bâtiments et les véhicules massifs.', { caserne: 1 }),
   lamesempoisonnees: research('Lames empoisonnées', 'L', 'Belluaires : leurs coups empoisonnent les unités organiques.', { creaturium: 1 }),
   observation: research('Observation céleste', 'B', 'Les Forges peuvent observer une zone de la carte.'),
   croissance: research('Croissance économique', 'C', 'Serfs et unités de la Caserne : +5 points de vie.'),
   pillage: research('Pillage', 'P', 'Chaque bâtiment ennemi détruit rapporte une part de son coût.'),
   entrainementgroupe: research('Entraînement groupé', 'E', 'Unités de la Caserne formées 25 % plus vite.'),
-  armeschimiques: research('Armes chimiques', 'C', 'Les cocktails des Alchimistes touchent une zone.'),
+  armeschimiques: research('Armes chimiques', 'C', 'Alchimistes, Réservoirs et Tours alchimistiques : leurs tirs touchent une zone (rayon 1), alliés compris.'),
+  // The 2010 sheet's research (at the Guilde alchimistique, not in the game: here the Alchimisterie), the balancer's numbers.
+  scientisme: research('Scientisme', 'I', 'Soigneurs : +25 de mana ; Alchimistes et Réservoirs de substances : +50.'),
   oeilpercant: research('Œil perçant', 'O', 'Les Plésiosaures détectent les unités invisibles.'),
   dressageallosaures: research("Dressage d'allosaures", 'D', "Permet de dresser des Allosaures.", { grandconseil: 1 }),
   charlourd: research('Char lourd', 'L', 'Chars Pégase : au sol, 29 dégâts aux fantassins, 58 aux machines lourdes, 87 aux machines et bâtiments ; +1 armure.'),

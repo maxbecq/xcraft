@@ -8,6 +8,9 @@ import { type Order, flies, type Entity, type World } from './world';
 const CELL_MARGIN = 4;
 
 /** Near one of its player's finished Conseils (or the Grand Conseil). */
+/** The shooters Armes chimiques gives a zone to. */
+const CHEMICAL = ['alchimiste', 'cuve', 'tour'];
+
 export function nearCouncil(this: World, e: Entity): boolean {
   const r = toFp(BALANCE.rules.upgrades.conseilAura.radius);
   for (const b of this.listed().councils) if (b.owner === e.owner && b.buildLeft === 0 && dist(b.x, b.y, e.x, e.y) <= r) return true;
@@ -462,7 +465,10 @@ export function classValue(this: World, e: Entity, a: Attack, cls: number): numb
 /** The attack research's share of a blow worth `value` (+10 % a level), for an attacker that gets it. */
 export function researched(this: World, e: Entity, a: Attack, value: number): number {
   const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
-  return armed ? this.level(e.owner, this.attackLine(e, a)) * Math.max(1, Math.round(value / 10)) : 0;
+  if (!armed) return 0;
+  // The Auxiliaire: +1 a level, not 10 % of its 15 (the balancer, 2026-11-22).
+  const step = e.type === 'auxiliaire' ? BALANCE.rules.upgrades.auxiliaireRanged : Math.max(1, Math.round(value / 10));
+  return this.level(e.owner, this.attackLine(e, a)) * step;
 }
 
 /** Cri de guerre (much harder for a while) and the Artefacterie's Force (for good), on a blow's value; `force` alone if `late`, the Cri alone if `late` is false. */
@@ -559,11 +565,15 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   t.lastHitBy = e.owner;
   // Lames empoisonnées: a Belluaire's blade poisons living units.
   if (e.type === 'belluaire' && t.def.kind === 'unit' && !machine && this.level(e.owner, 'lamesempoisonnees')) t.poison = ticks(U.poison.seconds);
-  // Area weapons splash, half damage, on the ground units round the target (Armes chimiques: the Alchimiste's cocktails too).
-  const splash = a.splash ?? (e.type === 'alchimiste' && this.level(e.owner, 'armeschimiques') ? U.chemicalSplash : 0);
+  // Area weapons splash, half damage, on the ground units round the target. Armes chimiques (the balancer, 2026-11-22):
+  // the Alchimiste, the Réservoir and the Tour alchimistique hit a zone of radius 1, allies too, on the target's own
+  // level (the Tour shoots flyers).
+  const chemical = CHEMICAL.includes(e.type) && this.level(e.owner, 'armeschimiques') > 0;
+  const splash = chemical ? Math.max(a.splash ?? 0, U.chemicalSplash) : a.splash;
   if (splash) {
     for (const o of [...this.entities.values()]) {
-      if (o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
+      if (o === t || o === e || o.def.kind !== 'unit' || o.hp <= 0 || o.inside) continue;
+      if (chemical ? flies(o) !== flies(t) : flies(o) || !this.hostile(o.owner, e.owner)) continue;
       if (dist(o.x, o.y, t.x, t.y) <= toFp(splash)) this.hurt(o, idiv(this.aside(e, o, a), 2));
     }
   }

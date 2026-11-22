@@ -25,7 +25,7 @@ describe('economy', () => {
     for (const p of [0, 1]) {
       expect(of(w, p, 'conseil')).toHaveLength(1);
       expect(of(w, p, 'serf')).toHaveLength(START.serfs);
-      expect(w.supply(p)).toEqual({ used: START.serfs, max: 10 });
+      expect(w.supply(p)).toEqual({ used: START.serfs, max: 12 }); // the balancer, 2026-11-22: the Conseil gives 12
     }
   });
 
@@ -68,7 +68,7 @@ describe('economy', () => {
         t++;
       }
       expect(site.buildLeft).toBe(0);
-      expect(w.supply(0).max).toBe(20);
+      expect(w.supply(0).max).toBe(22);
       expect(w.players[0].minerals).toBe(800);
       return t;
     };
@@ -89,11 +89,12 @@ describe('economy', () => {
     w.players[0].minerals = 2000;
     const conseil = of(w, 0, 'conseil')[0];
     const train: Command = { player: 0, kind: 'train', ids: [conseil.id], type: 'serf' };
+    for (let i = 0; i < 2; i++) w.spawn('serf', 0, conseil.x, conseil.y + 4 * FP);
     w.step([train, train, train, train, train]);
-    expect(conseil.queue).toHaveLength(4); // 6 serfs + 4 queued = 10 supply
+    expect(conseil.queue).toHaveLength(4); // 8 serfs + 4 queued = 12 supply (the balancer, 2026-11-22: the Conseil gives 12)
     expect(w.events.some((e) => e.text.includes('Logistique'))).toBe(true);
     run(w, (DEFS.serf as UnitDef).buildTime * 4 + 1);
-    expect(of(w, 0, 'serf')).toHaveLength(10);
+    expect(of(w, 0, 'serf')).toHaveLength(12);
   });
 
   it('produces energy from a mine on an energy well', () => {
