@@ -341,7 +341,8 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitdetection: { name: 'Détection', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui détecte les unités invisibles.', hotkey: 'D', ...(BALANCE.abilities.kitdetection as object) } as AbilityDef,
   kitinvisibilite: { name: 'Invisibilité', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le rend invisible.', hotkey: 'I', ...(BALANCE.abilities.kitinvisibilite as object) } as AbilityDef,
   kitreparateur: { name: 'Auto-réparateur', effect: 'Équipe un de vos socles, où qu\'il soit, d\'un kit qui le répare peu à peu.', hotkey: 'A', ...(BALANCE.abilities.kitreparateur as object) } as AbilityDef,
-  // Équilibreur 22/11: in place of the Balise offensive, its socle climbs cliffs up or down, like a Colossus.
+  // Équilibreur 22/11: in place of the Balise offensive, its socle climbs cliffs up or down, like a Colossus. Its price
+  // (balance kitpatte), the Balise's: proposition 5, provisional.
   kitpatte: { name: 'Patte ultramécanique', effect: 'Équipe un de vos socles terrestres, où qu\'il soit, de pattes qui escaladent les falaises, vers le haut comme vers le bas.', hotkey: 'P', ...(BALANCE.abilities.kitpatte as object) } as AbilityDef,
   /** Z Centre K (Z.doc): takes control of an enemy machine for 50 s, until it dies or the Centre K falls. */
   observation: { name: 'Observation céleste', effect: 'Le télescope révèle une zone et y détecte les unités invisibles.', hotkey: 'O', research: 'observation', ...BALANCE.abilities.observation },
@@ -974,6 +975,9 @@ const STATS: Record<string, object> = BALANCE.units;
 export const DEFS = Object.fromEntries(
   Object.entries(BASE).map(([type, d]) => [type, { ...d, ...STATS[type], ...((d as { line?: string }).line === '' ? { line: type } : {}) }]),
 ) as Record<string, Def>;
+// Équilibreur 22/11 (proposition 1, provisional): the Pod's creep of 2, counted from its edge (from its centre then: 2
+// plus half its size) or, `fromEdge` false, from its centre.
+(DEFS.pod as BuildingDef).power = BALANCE.rules.z.podCreep.radius + (BALANCE.rules.z.podCreep.fromEdge ? (DEFS.pod as BuildingDef).size / 2 : 0);
 
 /** What a unit costs with its weapon (Z socles), or alone. */
 export function withKit(def: { cost: Cost }, weapon?: string): Cost {

@@ -267,7 +267,8 @@ export function rechargeShields(this: World, e: Entity): void {
   this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
 }
 
-/** The level of a Z weapon on its socle or tower (1 to 4): its base weapon level and its tier. */
+/** The level of a Z weapon on its socle or tower (1 to 4): its base weapon level and its tier (the Réparateur's « niveau
+ * de socle », proposition 3, provisional: a Tourelle at its weapon level 2). */
 export function kitLevel(e: Entity): number {
   return Math.min(4, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
 }
@@ -537,7 +538,8 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     const len = dist(e.x, e.y, t.x, t.y) || 1;
     const end = e.radius + toFp(a.range);
     for (const o of [...this.entities.values()]) {
-      if (o === e || o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner)) continue;
+      // Proposition 4 (provisional): allies on the line spared.
+      if (o === e || o === t || o.def.kind !== 'unit' || o.hp <= 0 || o.inside || flies(o) || (!BALANCE.rules.z.flameHitsAllies && !this.hostile(o.owner, e.owner))) continue;
       // Along the line and off it, in whole units (no floating root in the simulation).
       const k = idiv((o.x - e.x) * lx + (o.y - e.y) * ly, len);
       if (k <= 0 || k - o.radius > end) continue;

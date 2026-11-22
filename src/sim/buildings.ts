@@ -71,7 +71,7 @@ export function addonsOf(this: World, pod: Entity): number {
  * The 8 places round a Pod for an add-on (équilibreur 22/11: the Pod in the middle of a noughts-and-crosses grid):
  * north-west, north, north-east, west, east, south-west, south, south-east. A side place is centred on that side
  * (an odd difference of size leaves half a tile, taken towards the north or the west); a corner one meets the Pod's
- * corner. The add-on keeps its own size (the Plate-forme overhangs its square).
+ * corner. The add-on keeps its own size (the Plate-forme overhangs its square): proposition 2, provisional, all here.
  */
 export function addonSlots(tx: number, ty: number, own: number, size: number): [number, number][] {
   const mid = Math.floor((own - size) / 2);
@@ -97,7 +97,8 @@ export function addonSpot(this: World, pod: Entity, type: string, slot?: number)
  */
 export function onCreep(this: World, b: Entity): boolean {
   const def = b.def as BuildingDef;
-  const host = def.addon ? this.entities.get(b.host) : undefined;
+  // Proposition 1 (provisional): an add-on works while its Pod stands, wherever the creep ends.
+  const host = def.addon && BALANCE.rules.z.addonOnCreepWithPod ? this.entities.get(b.host) : undefined;
   if (host && host.hp > 0) return true;
   if (def.faction !== 'z' || (!def.needsPower && !def.addon)) return true;
   return this.powered(b.owner, b.x, b.y);
@@ -248,9 +249,10 @@ export function operate(this: World, b: Entity): void {
   // Z Gel électronique, Isdaris Bouclier de plasma: neither shoots nor produces while frozen or phased; a Z building
   // off its creep neither (équilibreur 22/11).
   if (b.frozen > 0 || b.phased > 0) return;
-  if (def.faction === 'z' && (def.needsPower || def.addon) && !this.onCreep(b)) return;
+  // Proposition 6 (provisional): what a Z building off its creep stops doing (all of it), its hp kept.
+  const off = def.faction === 'z' && (def.needsPower || def.addon) && !this.onCreep(b) ? BALANCE.rules.z.offCreep : undefined;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
-  const attack = this.weapon(b);
+  const attack = off && !off.shoots ? undefined : this.weapon(b);
   if (attack && b.cooldown === 0) {
     const t = this.enemyNear(b, toFp(attack.range), true);
     if (t && (!b.kit || reaches(attack, flies(t)))) {
@@ -259,7 +261,7 @@ export function operate(this: World, b: Entity): void {
     }
   }
   // Z Tourelle with a Réparateur (équilibreur 22/11): mends the most hurt machine or building in its reach, once a second.
-  if (b.kit === 'reparateur' && b.cooldown === 0) {
+  if (b.kit === 'reparateur' && b.cooldown === 0 && !(off && !off.shoots)) {
     const p = this.patient(b);
     if (p) {
       p.hp = Math.min(p.maxHp, p.hp + this.healRate(b));
@@ -268,11 +270,11 @@ export function operate(this: World, b: Entity): void {
     }
   }
   // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
-  if (def.energyRate && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
+  if (def.energyRate && !(off && !off.energy) && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
     b.timer = 0;
     this.players[b.owner].energy++;
   }
-  this.produce(b);
+  if (!(off && !off.produces)) this.produce(b);
 }
 
 /** Training, research and morphing through the queue of a building, or of a god (Dieux). */

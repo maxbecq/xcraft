@@ -151,7 +151,7 @@
     "rbarge2": {"cost": {"minerals": 375, "energy": 75}, "buildTime": 45},
     "intelligence": { "cls": "S", "hp": 3000, "armor": 6, "sight": 13, "supply": 10, "cost": { "minerals": 800, "energy": 0 }, "buildTime": 120, "power": 10 },
     "supreme": { "cls": "S", "hp": 4500, "armor": 6, "sight": 15, "supply": 15, "cost": { "minerals": 300, "energy": 400 }, "buildTime": 70, "power": 10 },
-    "pod": { "cls": "S", "hp": 1500, "armor": 2, "sight": 8, "supply": 15, "cost": { "minerals": 300, "energy": 0 }, "buildTime": 40, "power": 3 },
+    "pod": { "cls": "S", "hp": 1500, "armor": 2, "sight": 8, "supply": 15, "cost": { "minerals": 300, "energy": 0 }, "buildTime": 40 },
     "podsup": { "cls": "S", "hp": 1750, "armor": 3, "sight": 8, "supply": 20, "cost": { "minerals": 100, "energy": 150 }, "buildTime": 30, "power": 13 },
     "assimilateur": { "cls": "S", "weaponLevel": 2, "hp": 1800, "armor": 1, "sight": 5, "supply": 0, "cost": { "minerals": 200, "energy": 0 }, "buildTime": 30, "energyRate": 2.5, "bunker": 3 },
     "plateforme": { "cls": "S", "hp": 800, "armor": 1, "sight": 3, "supply": 0, "cost": { "minerals": 200, "energy": 0 }, "buildTime": 40 },
@@ -369,7 +369,8 @@
     "creepRepair": 1,
     "canonDelay": 5,
     "repair": { "drone": { "hp": 4, "percent": 25, "units": true }, "serf": { "hp": 4, "percent": 25, "units": true }, "esprit": { "hp": 8, "percent": 25, "units": false } },
-    "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "kitRepair": 3, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25, "podAddons": 3 }
+    "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "kitRepair": 3, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25, "podAddons": 3,
+      "podCreep": { "radius": 2, "fromEdge": true }, "addonOnCreepWithPod": true, "flameHitsAllies": false, "offCreep": { "shoots": false, "produces": false, "energy": false } }
   },
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },
