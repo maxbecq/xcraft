@@ -348,19 +348,20 @@ export class AI {
     const bases = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
     const dropAt = (e: Entity) => bases.reduce((a, b) => (dist(b.x, b.y, e.x, e.y) < dist(a.x, a.y, e.x, e.y) ? b : a), bases[0] ?? ctx.home);
     // The road the workers really take, not a straight line (a Fortin over the only ramp, off the line's middle).
-    const guarded = (e: Entity) => this.underFire(e) || this.exposedRoad(dropAt(e), e);
+    // From the worker too, when far from that base (sent from the main across a pass to the expansion's fields).
+    const guarded = (e: Entity, from?: Entity) => this.underFire(e) || this.exposedRoad(dropAt(e), e) || (!!from && dist(from.x, from.y, e.x, e.y) > 12 * FP && this.exposedRoad(from, e));
     for (const s of serfs) {
       // One mining a field under fire (the simulation moved it on to the next field when its own ran out) goes to a
       // safe one, if any.
       const target = s.order?.kind === 'gather' ? w0.entities.get(s.order.target) : undefined;
-      if (target && guarded(target) && s.carry === 0) {
-        const safe = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
+      if (target && guarded(target, s) && s.carry === 0) {
+        const safe = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
         // None safe left: it stops rather than walk under the guns.
         ctx.out.push(safe ? { player: this.player, kind: 'smart', ids: [s.id], x: safe.x, y: safe.y, target: safe.id } : { player: this.player, kind: 'stop', ids: [s.id] });
         continue;
       }
       if (s.order) continue;
-      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e));
+      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
 
@@ -1629,7 +1630,9 @@ export class AI {
     const ready = mine.filter((e) => e.buildLeft === 0 || (e.def as BuildingDef).absorbs || (e.def as BuildingDef).warp);
     // A Dieux god summons units too, and the Porte the gods.
     const trainable = (t: string) => ready.some((e) => (e.type === f.workerFrom && t === f.worker) || (e.def.kind === 'unit' && !!(e.def as UnitDef).trains?.includes(t))) || ready.some((b) => b.def.kind === 'building' && ((b.def as BuildingDef).trains?.includes(t) || (b.def as BuildingDef).addons?.some((a) => pays((DEFS[a] as BuildingDef).cost) && (DEFS[a] as BuildingDef).trains?.includes(t))));
-    const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t)));
+    // With room for it in supply (a Plate-forme alone gives none).
+    const sup = w.supply(this.player);
+    const cannotPay = [f.worker, ...f.army.map(([t]) => t), ...(f.gods ?? [])].every((t) => !(pays((DEFS[t] as UnitDef).cost) && trainable(t) && sup.max - sup.used >= (DEFS[t] as UnitDef).supply));
     const beaten =
       cannotPay &&
       // A headquarters' site rising (by itself or with a worker left to raise it) is hope too: the economy restarts once
@@ -2073,7 +2076,7 @@ export class AI {
   private exposed = new Map<string, boolean>();
   private exposedAt = -1;
 
-  private exposedRoad(base: Entity, field: Entity): boolean {
+  private exposedRoad(base: { x: number; y: number }, field: Entity): boolean {
     const w = this.world;
     this.underFire(base); // fills this tick's guns
     if (!this.guns.list.length) return false;
@@ -2086,12 +2089,15 @@ export class AI {
     const [x0, x1] = [Math.min(base.x, field.x) - pad, Math.max(base.x, field.x) + pad];
     const [y0, y1] = [Math.min(base.y, field.y) - pad, Math.max(base.y, field.y) + pad];
     if (!this.guns.list.some(([g]) => g.x >= x0 && g.x <= x1 && g.y >= y0 && g.y <= y1)) return false;
-    const key = `${base.id}:${field.id}`;
+    // By the 4-tile cell it starts from.
+    const key = `${Math.floor(base.x / FP / 4)},${Math.floor(base.y / FP / 4)}:${field.id}`;
     let hit = this.exposed.get(key);
     if (hit === undefined) {
       const g = w.grid;
       const [sx, sy] = g.nearestOpen(Math.floor(base.x / FP), Math.floor(base.y / FP), -1, [(g.width - 1) / 2, (g.height - 1) / 2]);
-      const path = g.findPath(sx, sy, Math.floor(field.x / FP), Math.floor(field.y / FP));
+      // To the open tile by the field (the field's own tile is blocked: the search went over the whole area).
+      const [fx, fy] = g.nearestOpen(Math.floor(field.x / FP), Math.floor(field.y / FP), -1, [sx, sy]);
+      const path = g.findPath(sx, sy, fx, fy);
       hit = false;
       for (let i = 0; i < path.length && !hit; i += 2) hit = this.underFire({ x: ((path[i] % g.width) + 0.5) * FP, y: (Math.floor(path[i] / g.width) + 0.5) * FP });
       this.exposed.set(key, hit);
