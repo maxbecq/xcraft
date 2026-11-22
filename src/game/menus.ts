@@ -177,6 +177,15 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
       .join('')}</select>`;
   const factions = Object.fromEntries(Object.entries(FACTIONS).map(([f, d]) => [f, d.name]));
   const teams = { 0: 'Équipe 1', 1: 'Équipe 2', 2: 'Équipe 3', 3: 'Équipe 4' };
+  // The teams as the match will have them (encodeSeats): two sides are always each other's foes, and more all in one
+  // team play each for themselves. Two: the team shown as it will be, not to be picked; more, one team: said.
+  const seated = s.sides.filter((x) => x.control !== 'none');
+  const duel = seated.length <= 2;
+  const oneTeam = !duel && seated.every((x) => x.team === seated[0].team);
+  const teamOf = (i: number) =>
+    duel
+      ? select(`t${i}`, teams, String(seated.indexOf(s.sides[i]))).replace('<select', '<select disabled title="À deux joueurs, chacun son équipe"')
+      : select(`t${i}`, teams, String(s.sides[i].team));
   const row = (i: number) => {
     const controls: Record<string, string> = { ...CONTROLS };
     delete controls.none; // closing a seat is the switch's job
@@ -187,7 +196,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     const toggle = i < 2 ? '<span class="seat-fixed"></span>' : `<label class="switch"><input type="checkbox" data-k="on${i}"${open ? ' checked' : ''}><span></span></label>`;
     return `<div class="seat${open ? '' : ' off'}">
       <span class="chip" style="background:${color}"></span><span class="who">Joueur ${i + 1}</span>${toggle}
-      ${open ? `${select(`f${i}`, factions, s.sides[i].faction)}${select(`c${i}`, controls, s.sides[i].control)}${select(`t${i}`, teams, String(s.sides[i].team))}` : '<span class="closed">Emplacement fermé</span>'}
+      ${open ? `${select(`f${i}`, factions, s.sides[i].faction)}${select(`c${i}`, controls, s.sides[i].control)}${teamOf(i)}` : '<span class="closed">Emplacement fermé</span>'}
     </div>`;
   };
   if (sandbox) s.sides[0].control = 'you';
@@ -197,7 +206,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   const title = sandbox ? 'Bac à sable' : 'Nouvelle partie';
   const seats = sandbox
     ? `<fieldset class="seats"><legend>Votre camp</legend><div class="seat"><span class="chip" style="background:#${TEAM_COLORS[0].toString(16).padStart(6, '0')}"></span><span class="who">Joueur 1</span><span class="seat-fixed"></span>${select('f0', factions, s.sides[0].faction)}</div></fieldset>`
-    : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}</fieldset>`;
+    : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}${oneTeam ? '<p class="seat-note">Tous dans la même équipe : chaque joueur jouera pour lui seul.</p>' : ''}</fieldset>`;
   const compact = COMPACT.matches;
   const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
     <p class="map-about">${chosen.description ?? ''}</p>`;
