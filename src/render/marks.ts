@@ -1,6 +1,7 @@
 import { AdditiveBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, PlaneGeometry, type Scene, ShaderMaterial, Color } from 'three';
 import BALANCE from '../balance.json';
-import { FLY_HEIGHT } from '../data';
+import { FLY_HEIGHT, KIT } from '../data';
+import { HELD_BY } from './effects';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -29,7 +30,12 @@ const CHARM = M('soumission', 0xff4ad0, false);
 const SWARM = M('nuee', 0x9a9a40, false);
 const FROZEN = M('gel', 0x7ad0ff, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
-const SEIZED = M('impulsion', 0x5ae0ff, false);
+const SEIZED = M('canoniem', 0x8cff5a, false);
+const IMPULSE = M('impulsion', 0x5ae0ff, false);
+const DEAFENED = M('vacarme', 0xd8ff8a, false);
+const NANITES = M('cone', 0x5affb0, true);
+const HIDDEN = M('kitinvisibilite', 0xb8ffc8, true);
+const MENDING = M('kitreparateur', 0x9affd0, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
@@ -38,11 +44,18 @@ const SEIZED = M('impulsion', 0x5ae0ff, false);
  * the Cadavre réanimé.
  */
 export function marksOf(e: Entity, world: World): Mark[] {
-  void world;
   const out: Mark[] = [];
   if (e.charm > 0) out.push(CHARM);
-  if (e.frozen > 0) out.push(FROZEN);
+  if (e.frozen > 0) out.push(e.def.kind === 'building' ? FROZEN : DEAFENED);
   if (e.seizedLeft > 0) out.push(SEIZED);
+  if (HELD_BY.get(e.id) === 'impulsion' && e.held > 0) out.push(IMPULSE);
+  // A machine under an allied Accumulateur's Nuage de nanites (the Accumulateur itself carries `cone`).
+  if (e.cone === 0 && e.def.kind === 'unit' && (e.def as { mechanical?: boolean }).mechanical && world.cones > 0) {
+    const R = BALANCE.abilities.cone.radius * FP;
+    for (const c of world.entities.values()) if (c.cone > 0 && c.hp > 0 && !world.hostile(c.owner, e.owner) && Math.hypot(c.x - e.x, c.y - e.y) <= R) { out.push(NANITES); break; }
+  }
+  if (e.support & KIT.invisibilite) out.push(HIDDEN);
+  if (e.support & KIT.reparateur) out.push(MENDING);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
   if (e.phased > 0 && e.def.kind === 'unit') out.push(PHASED);
   if (e.reflect > 0) out.push(REFLECT);

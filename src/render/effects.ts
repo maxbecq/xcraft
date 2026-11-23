@@ -3,7 +3,7 @@ import { BoxGeometry, type Camera, CircleGeometry, IcosahedronGeometry, Instance
 import { Particles, type Picture } from './particles';
 import { Streaks } from './streaks';
 import type { Audio, Sfx } from '../audio';
-import { DEFS, FLY_HEIGHT, type UnitDef } from '../data';
+import { DEFS, FLY_HEIGHT, KIT } from '../data';
 import BALANCE from '../balance.json';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -17,6 +17,11 @@ const MAX_ROCKS = 480;
  * badges, is the one kept for the spells with no look of their own yet). */
 const PARAMS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 export const FX_STYLE = PARAMS.get('fx') || 'c';
+/** Proposal stage (Z lasting spells, 2026-11-23): ?sorts=1|2 shows the two ideas of each. */
+const SPELL_IDEA = PARAMS.get('sorts') ?? '';
+/** Who holds a unit where it stands, by its id, as the effects saw it cast (render only): a Napalm burns, an Impulsion
+ * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
+export const HELD_BY = new Map<number, 'napalm' | 'impulsion'>();
 /** A shot's colour by the shooter's camp: Humans' powder orange, Isdaris' cyan light, Z's green, the Gods' gold. */
 /**
  * What a Human weapon throws (the balancer, 2026-11-23: each its own look, the camp's orange running through them all).
@@ -24,12 +29,13 @@ export const FX_STYLE = PARAMS.get('fx') || 'c';
  * Réservoir); obus: the Pégase's cannon; roquette: the Tour's anti-air rockets; carreau: the Plésiosaure's ballista;
  * rocher: the Ankylosaure's Trébuchet; flamme: the Belluaire's flamethrower, at arm's length.
  */
-type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme';
+type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz';
 const AMMO: Record<string, Ammo> = {
   auxiliaire: 'balle', scarabee: 'balle', bourdon: 'balle', soigneur: 'dard', phalangiste: 'grenade', alchimiste: 'fiole', cuve: 'bombe',
   pegase: 'obus', tour: 'roquette', plesiosaure: 'carreau', ankylosaure: 'rocher', belluaire: 'flamme',
 };
 /** Lobbed shots: seconds in the air per tile, height of the arc per tile, head size, smoke behind. */
+const Z_GREEN_LOB = 0x8cff5a;
 const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smoke: number; color: number }>> = {
   grenade: { pace: 0.09, arc: 0.28, size: 0.3, smoke: 6, color: 0xffa040 },
   fiole: { pace: 0.1, arc: 0.32, size: 0.3, smoke: 0, color: 0x9aff6a },
@@ -37,7 +43,12 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   obus: { pace: 0.035, arc: 0.06, size: 0.36, smoke: 14, color: 0xffc060 },
   rocher: { pace: 0.12, arc: 0.45, size: 0.5, smoke: 24, color: 0x8a7a62 },
   roquette: { pace: 0.06, arc: 0.04, size: 0.3, smoke: 30, color: 0xffa040 },
+  obusz: { pace: 0.09, arc: 0.3, size: 0.4, smoke: 16, color: Z_GREEN_LOB },
 };
+/** Proposal stage (Z, 2026-11-23): ?z=1 shows each Z kit's own shot, until the user picks; the camp tracers otherwise. */
+const Z_STYLE = PARAMS.get('z') === '1';
+/** The Z's green, and its hot core. */
+const Z_GREEN = 0x8cff5a;
 const SHOT_COLORS: Record<string, number> = { humains: 0xffa040, isdaris: 0x5ae0ff, z: 0x8cff5a, dieux: 0xffe28a };
 /** The Lance-flammes' cooldown (seconds, a shot keeps its jet going that long), and the flame sprites it throws a second. */
 const FLAME_COOLDOWN = BALANCE.weapons.flammes.cooldown;
@@ -112,7 +123,7 @@ export class Effects {
   /** Every particle, one draw call (render/particles.ts). */
   private readonly streaks = new Streaks(MAX_STREAKS);
   /** Lobbed shots on their way (grenades, flasks, bombs, shells, rockets, stones). */
-  private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3 }[] = [];
+  private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3; color?: number }[] = [];
   /** Rounds on their way: where they land, in what colour, in how long. */
   private hits: { at: Vector3; color: number; left: number }[] = [];
   private readonly particles = new Particles([blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true), flame()], MAX_PARTICLES);
@@ -179,8 +190,15 @@ export class Effects {
       this.audio.play(s.type === 'orbe' ? 'plasma' : s.kind === 'ranged' && faction === 'isdaris' ? 'ray' : s.kind, 0.6);
       const shooter = s.id === undefined ? undefined : world.entities.get(s.id);
       if (shooter?.kit === 'flammes' && s.kind === 'ranged') {
-        const to = this.at(s.x2, s.y2, 0.4 + (s.air2 ? FLY_HEIGHT : 0));
+        let to = this.at(s.x2, s.y2, 0.4 + (s.air2 ? FLY_HEIGHT : 0));
         const from = this.at(s.x1, s.y1, 0.55 + (s.air1 ? FLY_HEIGHT : 0));
+        if (Z_STYLE) {
+          // The jet runs its whole reach from the shooter's edge, through the target and on (it burns all on the line).
+          const reach = shooter.radius / FP + BALANCE.weapons.flammes.range;
+          const flat = to.clone().sub(from).setY(0);
+          const p = from.clone().addScaledVector(flat.normalize(), reach);
+          to = new Vector3(p.x, heightAt(this.map, p.x, p.z) + 0.35, p.z);
+        }
         const jet = this.jets.get(s.id!) ?? { id: s.id!, from, to, left: 0, spill: 0 };
         [jet.from, jet.to, jet.left] = [from, to, FLAME_COOLDOWN * 1.15];
         this.jets.set(s.id!, jet);
@@ -189,6 +207,7 @@ export class Effects {
       this.shot(s, world);
     }
     for (const c of world.casts) {
+      if (c.kind === 'napalm' || c.kind === 'impulsion') this.holds(world, c.kind, c.x, c.y);
       if (!seen(c.x, c.y)) continue;
       if (c.kind !== 'rappel') this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
       this.ability(c.kind, this.at(c.x, c.y, 0.1));
@@ -230,6 +249,14 @@ export class Effects {
     for (const t of world.teleports) {
       for (const [x, y] of [[t.x1, t.y1], [t.x2, t.y2]]) if (seen(x, y)) this.column(this.at(x, y, 0.05), t.phase === 'end');
     }
+  }
+
+  /** Notes which units a Napalm (the machine nearest the point) or an Impulsion magnétique (every unit of its zone) holds. */
+  private holds(world: World, kind: 'napalm' | 'impulsion', x: number, y: number): void {
+    const r = (BALANCE.abilities[kind].radius ?? 1.5) * FP;
+    const near = [...world.entities.values()].filter((e) => e.def.kind === 'unit' && e.held > 0 && Math.hypot(e.x - x, e.y - y) <= r + e.radius);
+    if (kind === 'napalm') near.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).splice(1);
+    for (const e of near) HELD_BY.set(e.id, kind);
   }
 
   /** A cloud of glows round p: n of them, spread wide, drifting up, each living about `life` seconds. */
@@ -368,7 +395,7 @@ export class Effects {
     let rocks = 0;
     for (const e of world.entities.values()) {
       if (e.def.kind !== 'unit' || e.inside || e.hp <= 0 || !sees(e)) continue;
-      const lasting = e.skin > 0 || e.ferveur > 0 || e.pace > 0 || e.camo > 0 || e.poison > 0 || e.held > 0 || e.fuse > 0 || e.type === 'cadavre' || e.type === 'minechimique' || e.type === 'minealchimique';
+      const lasting = e.skin > 0 || e.ferveur > 0 || e.pace > 0 || e.camo > 0 || e.poison > 0 || HELD_BY.has(e.id) || e.fuse > 0 || e.type === 'cadavre' || e.type === 'minechimique' || e.type === 'minealchimique';
       if (!lasting) continue;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
@@ -401,10 +428,10 @@ export class Effects {
       if (e.poison > 0 && chance(18)) {
         this.spawn(this.tex.glow, 0x9aff3a, onBody(Math.random() * 6.28, 0.6 + Math.random() * 0.3), new Vector3(), 0.6, 0.22, 0.12, 1, 6, true);
       }
-      // Napalm: a machine held where it stands burns (not a Rappel's hold, nor Amon-Râ's blinding one).
-      if (e.held > 0 && e.blind === 0 && e.owner >= 0 && (e.def as UnitDef).mechanical && !world.recalls.some((c) => c.ids.includes(e.id))) {
-        this.burn(foot.clone().setY(foot.y + 0.3), 0.15, r * 1.6, dt, e.id);
-      }
+      // Napalm: the machine it holds burns where it stands.
+      const by = HELD_BY.get(e.id);
+      if (by && e.held === 0) HELD_BY.delete(e.id);
+      else if (by === 'napalm') this.burn(foot.clone().setY(foot.y + 0.3), 0.15, r * 1.6, dt, e.id);
       // Mines: a red light blinking, the Bourdon's quicker, and a faint circle at their trigger reach on each blink.
       if (e.type === 'minechimique' || e.type === 'minealchimique') {
         const rate = e.type === 'minealchimique' ? 3 : 1;
@@ -420,6 +447,7 @@ export class Effects {
     }
     this.rocks.count = rocks;
     this.rocks.instanceMatrix.needsUpdate = true;
+    if (SPELL_IDEA === '1' || SPELL_IDEA === '2') this.zLasting(world, sees, alpha, dt, SPELL_IDEA === '1');
     // Explosif toxique: a low green fog over the whole zone.
     for (const c of world.clouds) {
       if (c.hits <= 0) continue;
@@ -441,6 +469,118 @@ export class Effects {
         const a = Math.random() * 6.28;
         const d = Math.sqrt(Math.random()) * R;
         this.spawn(this.tex.glow, 0xfff6dc, p.clone().add(new Vector3(Math.cos(a) * d, 0.3, Math.sin(a) * d)), new Vector3(0, 0.2, 0), 1, 0.1, 0.03, 0.9, 0, true);
+      }
+    }
+  }
+
+
+  /** Proposal stage: the Z's lasting spells, two ideas each (one: ?sorts=1, two: ?sorts=2). Render only. */
+  private zLasting(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number, one: boolean): void {
+    const t = performance.now() / 1000;
+    const chance = (rate: number) => Math.random() < dt * rate;
+    const cones = [...world.entities.values()].filter((c) => c.cone > 0 && c.hp > 0);
+    const R = BALANCE.abilities.cone.radius * FP;
+    for (const e of world.entities.values()) {
+      if (e.inside || e.hp <= 0 || !sees(e)) continue;
+      const x = (e.px + (e.x - e.px) * alpha) / FP;
+      const z = (e.py + (e.y - e.py) * alpha) / FP;
+      const foot = new Vector3(x, heightAt(this.map, x, z) + (soars(e) ? FLY_HEIGHT : 0), z);
+      const building = e.def.kind === 'building';
+      const r = building ? (e.def as { size: number }).size * 0.5 : e.radius / FP;
+      const tall = building ? 1.2 + r * 0.6 : 0.9 + r * 0.8;
+      const seed = e.id * 7.31;
+      const onBody = (a: number, h: number, out = 0.05) => foot.clone().add(new Vector3(Math.cos(a) * (r + out), h * tall, Math.sin(a) * (r + out)));
+      // Gravité alourdie, on a slowed enemy: weights of violet light pressing down (1) or rings crushing down on it (2).
+      if (e.heavy > 0) {
+        if (one) { if (chance(25)) this.spawn(this.tex.glow, 0xa07aff, onBody(Math.random() * 6.28, 1.4, -r * 0.5), new Vector3(0, -2.5, 0), 0.5, 0.24, 0.12, 1, 0, true); }
+        else if (Math.floor(t / 0.35 + seed) !== Math.floor((t - dt) / 0.35 + seed)) for (let i = 0; i < 16; i++) this.spawn(this.tex.glow, 0xb89aff, onBody((i / 16) * 6.28, 1.3, 0.2), new Vector3(0, -2.4, 0), 0.5, 0.16, 0.08, 1, 0, true);
+      }
+      // Nuage de nanites, on an allied machine near a casting Accumulateur: a swarm of nanites (1) or a cage of light (2).
+      if (e.def.kind === 'unit' && (e.def as { mechanical?: boolean }).mechanical && cones.some((c) => !world.hostile(c.owner, e.owner) && Math.hypot(c.x - e.x, c.y - e.y) <= R)) {
+        if (one) for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0x9affb0, onBody(t * (2 + i * 0.3) + i, 0.2 + ((i * 0.31 + t * 0.2) % 0.8), 0.15), 0.07, 1, dt, true);
+        else for (let h = 0; h < 3; h++) for (let i = 0; i < 10; i++) this.hold(this.tex.glow, 0x5affb0, onBody((i / 10) * 6.28 + h * 0.3 + t * 0.4, 0.15 + h * 0.35, 0.18), 0.06, 0.8, dt, true);
+      }
+      // Gel électronique, on a frozen building: ice-blue crackles and frost (1) or a frozen grid turning round it (2).
+      if (building && e.frozen > 0) {
+        if (one) {
+          if (chance(14)) this.spawn(this.tex.glow, 0x9ad8ff, onBody(Math.random() * 6.28, Math.random(), -0.2), rnd(0.4), 0.25, 0.25, 0.05, 1, 0, true);
+          if (chance(6)) this.spawn(this.tex.glow, 0xffffff, onBody(Math.random() * 6.28, 1, -r * Math.random()), new Vector3(0, -0.6, 0), 1.2, 0.08, 0.05, 1, 0, true);
+        } else for (let k = 0; k < 8; k++) {
+          const a = t * 0.5 + (k * Math.PI) / 2;
+          const h = 0.15 + ((t * 0.3 + (k >> 2) * 0.45) % 0.9);
+          this.streaks.spawn(0x7ad0ff, onBody(a, h, 0.25), onBody(a + Math.PI / 2, h, 0.25), 0, dt * 1.5, 0, 0.09, 1);
+        }
+      }
+      // Balise de vacarme: sound rings from the beacon (1); jagged bars over the deafened (2).
+      if (e.type === 'vacarme') {
+        const RV = BALANCE.abilities.vacarme.radius;
+        if (one && Math.floor(t / 0.7 + seed) !== Math.floor((t - dt) / 0.7 + seed)) {
+          for (let i = 0; i < 32; i++) {
+            const a = (i / 32) * 6.28;
+            this.spawn(this.tex.glow, 0xd8ff8a, foot.clone().setY(foot.y + 0.3), new Vector3(Math.cos(a) * RV / 0.9, 0, Math.sin(a) * RV / 0.9), 0.9, 0.14, 0.1, 0.8, 0, true);
+          }
+        }
+      }
+      if (!one && !building && e.frozen > 0 && chance(20)) {
+        const top = foot.clone().setY(foot.y + tall + 0.2);
+        let a = top.clone().add(new Vector3(-0.2, 0, 0));
+        for (let k = 1; k <= 4; k++) {
+          const b = top.clone().add(new Vector3(-0.2 + k * 0.1, (k % 2) * 0.15, 0));
+          this.streaks.spawn(0xd8ff8a, a, b, 0, 0.25, 0, 0.06, 1);
+          a = b;
+        }
+      }
+      // Impulsion magnétique: little electric arcs crackling over it (1), or magnetic rings orbiting it (2).
+      if (HELD_BY.get(e.id) === 'impulsion') {
+        if (one) {
+          if (chance(40)) {
+            let a = onBody(Math.random() * 6.28, Math.random(), 0.05);
+            for (let k = 0; k < 3; k++) {
+              const b = a.clone().add(rnd(0.18));
+              this.streaks.spawn(0x9affe8, a, b, 0, 0.12, 0, 0.06, 1);
+              a = b;
+            }
+          }
+        } else for (let k = 0; k < 2; k++) for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * 6.28 + t * (k ? -2 : 2);
+          this.hold(this.tex.glow, 0x6affd8, foot.clone().add(new Vector3(Math.cos(a) * (r + 0.25), tall * (0.35 + k * 0.35) + Math.sin(a) * 0.15 * (k ? 1 : -1), Math.sin(a) * (r + 0.25))), 0.06, 0.9, dt, true);
+        }
+      }
+      // Canon IEM, on a seized unit: a link of green light to the Centre K (1), a crown of sparks over it (2).
+      if (e.seizedLeft > 0) {
+        const k = world.entities.get(e.seizedBy);
+        if (one && k) {
+          if (chance(20)) this.streaks.spawn(0x8cff5a, this.at(k.x, k.y, 2), foot.clone().setY(foot.y + tall), 0, 0.15, 0, 0.05, 0.8);
+        } else if (!one) for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0x8cff5a, onBody(t * 1.5 + (i * 6.28) / 8, 1.1, -r * 0.4), 0.14, 1, dt, true);
+      }
+      // Kit d'invisibilité, seen by its own side: green sparkles (1) or scan lines climbing it (2).
+      if (e.support & KIT.invisibilite) {
+        if (one) { if (chance(40)) this.spawn(this.tex.glow, 0xb8ffc8, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.22, 0.04, 1, 0, true); }
+        else {
+          for (const off of [0, 0.33, 0.66]) {
+            const h = (t * 0.6 + seed + off) % 1;
+            this.streaks.spawn(0x8cff5a, onBody(-0.8, h, 0.05), onBody(0.8, h, 0.05), 0, dt * 1.5, 0, 0.06, 1);
+            this.streaks.spawn(0x8cff5a, onBody(2.3, h, 0.05), onBody(3.9, h, 0.05), 0, dt * 1.5, 0, 0.06, 1);
+          }
+        }
+      }
+      // Kit auto-réparateur: welding sparks now and then (1), green glints rising (2).
+      if (e.support & KIT.reparateur) {
+        if (one) { if (chance(8)) for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, i % 2 ? 0xffffff : 0x9affd0, onBody(seed + t, 0.6), rnd(1.5).setY(1), 0.3, 0.09, 0.02, 1, 9, true); }
+        else if (chance(14)) this.spawn(this.tex.glow, 0x9affd0, onBody(Math.random() * 6.28, 0.2), new Vector3(0, 0.9, 0), 0.8, 0.2, 0.05, 1, 0, true);
+      }
+    }
+    // Balise de révélation (a Z player's scans): a radar sweep (1), a beam and a pulse at its reach (2).
+    for (const sc of world.scans) {
+      if (sc.left <= 0 || world.players[sc.owner]?.faction !== 'z') continue;
+      const p = this.at(sc.x, sc.y, 0.1);
+      const Rs = sc.radius ?? 4;
+      if (one) {
+        const a = t * 1.8;
+        this.streaks.spawn(0x8cff5a, p, p.clone().add(new Vector3(Math.cos(a) * Rs, 0, Math.sin(a) * Rs)), 0, 0.35, 0, 0.12, 0.6);
+      } else {
+        if (chance(40)) this.spawn(this.tex.glow, 0x8cff5a, p.clone().add(rnd(0.15)).setY(p.y + Math.random() * 4), new Vector3(0, 1.5, 0), 0.8, 0.7, 0.4, 0.6, 0, true);
+        if (Math.floor(t / 1.2) !== Math.floor((t - dt) / 1.2)) this.ring(p, 0x8cff5a, Rs, 1);
       }
     }
   }
@@ -511,6 +651,8 @@ export class Effects {
     }
     const ammo = s.type ? AMMO[s.type] : undefined;
     if (ammo && this.munition(ammo, s, from, to, world)) return;
+    const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
+    if (z && Z_STYLE && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
     if (s.kind === 'melee') {
       // A white flash where the blow lands and a spray of sparks.
       this.spawn(this.tex.glow, 0xfff4d8, to.clone(), new Vector3(), 0.12, 0.25, 0.55, 1, 0, true);
@@ -573,6 +715,70 @@ export class Effects {
     return true;
   }
 
+  /**
+   * A Z weapon's own look, by its kit (Z.doc): machine gun bursts, laser beam, rockets, shredder, sonic jet along its line,
+   * electric arc, X-04 shell, repair beam. The Z's green runs through them all. False: not one it draws.
+   */
+  private zShot(kit: string, s: Shot, from: Vector3, to: Vector3): boolean {
+    const muzzle = (s.id !== undefined && this.muzzle(s.id)) || from;
+    const dist = muzzle.distanceTo(to);
+    if (s.kind === 'heal' || kit === 'reparateur') {
+      // Réparateur: a steady green-white beam, sparks of welding where it lands.
+      this.streaks.spawn(0x9affd0, muzzle, to, 0, 0.3, 0, 0.07, 0.9);
+      for (let i = 0; i < 5; i++) this.spawn(this.tex.glow, i % 2 ? 0xffffff : 0x9affd0, to.clone(), rnd(1.5).setY(1 + Math.random()), 0.3, 0.09, 0.02, 1, 9, true);
+      return true;
+    }
+    if (kit === 'dechiqueteur' || s.kind === 'melee') {
+      // Déchiqueteur: metal torn, white and orange sparks sprayed, a green flash.
+      this.spawn(this.tex.glow, Z_GREEN, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 0.9, 0, true);
+      for (let i = 0; i < 14; i++) this.spawn(this.tex.glow, i % 3 ? 0xffd27a : 0xffffff, to.clone(), rnd(3.5).setY(1 + Math.random() * 2.5), 0.35, 0.12, 0.02, 1, 9, true);
+      return true;
+    }
+    this.flash(muzzle, Z_GREEN, kit === 'canonx04' ? 2 : 1);
+    const flight = Math.min(0.3, Math.max(0.06, dist / 30));
+    switch (kit) {
+      case 'mitrailleuse': // a burst of three short green tracers
+        for (let k = 0; k < 3; k++) {
+          const off = rnd(0.12);
+          this.streaks.spawn(Z_GREEN, muzzle.clone().addScaledVector(to.clone().sub(muzzle), -k * 0.12), to.clone().add(off), flight * (1 + k * 0.35), 0.04, 0.6, 0.09, 1);
+        }
+        this.hits.push({ at: to, color: Z_GREEN, left: flight });
+        return true;
+      case 'laser': // a straight beam, instant, fading
+        this.streaks.spawn(0x7affb8, muzzle, to, 0, 0.25, 0, 0.1, 1);
+        this.streaks.spawn(0xffffff, muzzle, to, 0, 0.12, 0, 0.04, 1);
+        this.hits.push({ at: to, color: 0x7affb8, left: 0 });
+        return true;
+      case 'roquettes': // two rockets with green exhaust, in a slight arc
+        for (let k = 0; k < 2; k++) this.lobs.push({ ammo: 'roquette', from: muzzle.clone().add(rnd(0.1)), to: to.clone().add(rnd(0.25)), age: -k * 0.08, flight: Math.max(0.2, dist * 0.06), arc: Math.max(0.3, dist * 0.06), chem: false, spill: 0, color: Z_GREEN });
+        return true;
+      case 'canonx04': // a heavy shell high in the air, a big blast the size of its splash
+        this.lobs.push({ ammo: 'obusz', from: muzzle.clone(), to: to.clone(), age: 0, flight: Math.max(0.4, dist * 0.09), arc: Math.max(1, dist * 0.3), chem: false, spill: 0, color: Z_GREEN });
+        return true;
+      case 'jetsonique': { // rings of sound running along the line, through all it hits
+        const dir = to.clone().sub(muzzle).normalize();
+        for (let k = 0; k < 6; k++) {
+          const at = muzzle.clone().addScaledVector(dir, (k / 5) * dist);
+          this.spawn(this.tex.glow, k % 2 ? 0xd8ffd0 : Z_GREEN, at, dir.clone().multiplyScalar(3), 0.25 + k * 0.03, 0.2, 0.9, 0.55, 0, true);
+        }
+        this.streaks.spawn(0xd8ffd0, muzzle, to, 0, 0.2, 0, 0.18, 0.5);
+        return true;
+      }
+      case 'arc': { // a jagged bolt of lightning, flickering
+        let a = muzzle.clone();
+        const n = Math.max(3, Math.round(dist * 2));
+        for (let k = 1; k <= n; k++) {
+          const b = muzzle.clone().lerp(to, k / n).add(k < n ? rnd(0.22) : new Vector3());
+          this.streaks.spawn(k % 2 ? 0xb8fff0 : 0x6affd8, a, b, 0, 0.18, 0, 0.07, 1);
+          a = b;
+        }
+        this.hits.push({ at: to, color: 0x6affd8, left: 0 });
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** A muzzle's flash: white core, the camp's colour round it. */
   private flash(p: Vector3, color: number, k: number): void {
     this.spawn(this.tex.glow, 0xffffff, p, new Vector3(), 0.08, 0.45 * k, 0.2 * k, 1, 0, true);
@@ -582,17 +788,18 @@ export class Effects {
   /** One frame of a lobbed shot: its head along the arc, its smoke behind, and its blast when it lands. */
   private flyLob(l: (typeof this.lobs)[number], dt: number): boolean {
     const lob = LOBS[l.ammo]!;
-    l.age += dt;
+    const color = l.color ?? lob.color;
+    if ((l.age += dt) < 0) return true; // a second rocket waiting its turn
     const k = Math.min(1, l.age / l.flight);
     const at = l.from.clone().lerp(l.to, k);
     at.y += 4 * l.arc * k * (1 - k);
     if (k < 1) {
       // The head: hot white in the middle, its own colour round it (a stone: dark, no glow).
       // A trail drawn along its arc, fading behind it: the path reads at a glance (a stone's pale dust, the rest glowing).
-      if (l.prev) this.streaks.spawn(l.ammo === 'rocher' ? 0xc8b090 : lob.color, l.prev, at, 0, 0.18, 0, lob.size * 0.45, l.ammo === 'rocher' ? 0.6 : 0.9);
+      if (l.prev) this.streaks.spawn(l.ammo === 'rocher' ? 0xc8b090 : color, l.prev, at, 0, 0.18, 0, lob.size * 0.45, l.ammo === 'rocher' ? 0.6 : 0.9);
       if (l.ammo === 'rocher') this.spawn(this.tex.smoke, 0x5a4e40, at, new Vector3(), 0.05, lob.size, lob.size, 1, 0, false);
       else {
-        this.spawn(this.tex.glow, lob.color, at, new Vector3(), 0.06, lob.size * 1.6, lob.size * 1.4, 0.9, 0, true);
+        this.spawn(this.tex.glow, color, at, new Vector3(), 0.06, lob.size * 1.6, lob.size * 1.4, 0.9, 0, true);
         this.spawn(this.tex.glow, 0xffffff, at, new Vector3(), 0.05, lob.size * 0.6, lob.size * 0.5, 1, 0, true);
       }
       l.prev = at;
@@ -622,8 +829,14 @@ export class Effects {
         for (let i = 0; i < 6; i++) this.spawn(this.tex.smoke, 0x2c2622, p.clone().add(rnd(0.3)), rnd(0.5).setY(0.8), 2, 0.4, 1.3, 0.7, -0.1, false);
         this.decal(p.clone().setY(heightAt(this.map, p.x, p.z) + 0.03), 0.9, 0x1a1410, 12);
         break;
+      case 'obusz': // the X-04's shell: a big blast, a ring the size of its splash
+        this.flash(p, color, 2.4);
+        this.explosion(p, 0.9);
+        this.ring(p.clone().setY(heightAt(this.map, p.x, p.z) + 0.1), color, BALANCE.weapons.canonx04.splash, 0.6);
+        this.decal(p.clone().setY(heightAt(this.map, p.x, p.z) + 0.03), 1.4, 0x1a1410, 15);
+        break;
       case 'roquette':
-        this.flash(p, 0xffa040, 1.6);
+        this.flash(p, color, 1.6);
         for (let i = 0; i < 6; i++) this.spawn(this.tex.smoke, 0x8a827a, p.clone().add(rnd(0.2)), rnd(0.6), 1.2, 0.3, 1, 0.6, 0, false);
         break;
       case 'rocher':
