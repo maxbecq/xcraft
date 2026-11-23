@@ -23,6 +23,7 @@ export type FaultKind =
   | 'unite-cle-exposee'
   | 'armee-eparpillee'
   | 'pas-de-repli'
+  | 'renforts-goutte-a-goutte'
   | 'composition-inadaptee';
 
 export const FAULTS: Record<FaultKind, { family: Family; label: string }> = {
@@ -36,6 +37,7 @@ export const FAULTS: Record<FaultKind, { family: Family; label: string }> = {
   'unite-cle-exposee': { family: 'tactique', label: 'Dieu ou unité clé isolé et exposé' },
   'armee-eparpillee': { family: 'tactique', label: 'Armée éparpillée' },
   'pas-de-repli': { family: 'tactique', label: 'Pas de repli' },
+  'renforts-goutte-a-goutte': { family: 'tactique', label: 'Renforts envoyés au compte-gouttes' },
   'composition-inadaptee': { family: 'tactique', label: 'Composition mal adaptée à l’adversaire' },
 };
 
@@ -51,6 +53,15 @@ export interface Fault {
   detail: string;
 }
 
+/** Something worth seeing in the game's story that is not a fault: `echange-de-bases`, the army away at the enemy's
+ * while its own base is under attack (a race may be a choice, so no penalty). */
+export interface GameNote {
+  player: number;
+  kind: 'echange-de-bases';
+  tick: number;
+  detail: string;
+}
+
 /** Every ten seconds, each player's state: for an end-of-game screen's curves. */
 export interface Sample {
   tick: number;
@@ -62,6 +73,7 @@ export interface Analysis {
   ticks: number;
   winner: number | null;
   faults: Fault[];
+  notes: GameNote[];
   timeline: Sample[];
 }
 
@@ -94,6 +106,18 @@ export const THRESHOLDS = {
   /** A group fighting outnumbered that loses this share within `wipeTime` did not fall back. */
   wiped: 0.8,
   wipeTime: 30,
+  /** Trickle: combat units dying with at most `trickleAlone` others of theirs within `fightRadius` while the enemy there
+   * is worth `fightFloor`; `trickleDeaths` of them within `trickleWindow` seconds, spread over `trickleSpread` at least
+   * (a group wiped at once is « pas de repli », not this). */
+  trickleAlone: 2,
+  trickleDeaths: 6,
+  trickleWindow: 90,
+  trickleSpread: 30,
+  /** Base race: own base hit while this share of the army stands (or stood within `raceWindow` seconds) nearer enemy
+   * buildings than its own; once per `raceGap`. */
+  raceAway: 0.5,
+  raceWindow: 30,
+  raceGap: 60,
   /** A key unit: a god, a unique one, a hero, or one costing this much. */
   keyValue: 400,
   /** Alone: own support within this radius under this share of the enemy's, and under `keyAway` of the rest of its army
@@ -154,6 +178,10 @@ function fit(a: Attack | undefined, cost: number, mix: [Entity, number][]): numb
 export class Analyzer {
   readonly faults: Fault[] = [];
   readonly timeline: Sample[] = [];
+  readonly notes: GameNote[] = [];
+  /** Lone deaths (ticks) per player, and the trickle being counted. */
+  private lone: number[][] = [];
+  private trickle: ({ from: number; last: number; count: number; noted: boolean } | undefined)[] = [];
   private since = new Map<string, { tick: number; peak: number }>();
   private lastNoted = new Map<string, number>();
   private bases: Set<number>[];
@@ -173,6 +201,7 @@ export class Analyzer {
   /** Call after each `world.step`; looks once a second. */
   observe(): void {
     const w = this.world;
+    this.lonely();
     if (w.tick % TICK_RATE !== 0) return;
     const armies = w.players.map((p) => [...w.entities.values()].filter((e) => e.owner === p.id && this.combatant(e)));
     const worth = armies.map((a) => a.reduce((s, e) => s + strength(e), 0));
@@ -190,6 +219,7 @@ export class Analyzer {
       this.fights(p.id, armies[p.id], foes, worth[p.id]);
       this.scattered(p.id, armies[p.id]);
       this.composition(p.id, armies[p.id], foeArmy, worth[p.id], enemy);
+      this.race(p.id, armies[p.id], foes, worth[p.id]);
     }
     this.followUp();
     if (w.tick % sec(10) === 0) {
@@ -208,6 +238,7 @@ export class Analyzer {
   finish(): Analysis {
     const w = this.world;
     for (const key of [...this.since.keys()]) this.close(key, w.tick);
+    for (let p = 0; p < w.players.length; p++) this.closeTrickle(p);
     for (const l of this.lost) {
       if (l.fault || (this.gone[l.player] ?? w.tick) - l.tick < sec(T.baseGrace)) continue;
       this.note({ player: l.player, kind: 'base-perdue', tick: l.tick, detail: `${DEFS[l.type]?.name ?? l.type} perdu, jamais remplacé (fin à ${clock(w.tick)})` });
@@ -220,7 +251,7 @@ export class Analyzer {
       }
     }
     this.faults.sort((a, b) => a.tick - b.tick || a.player - b.player);
-    return { factions: w.players.map((p) => p.faction), ticks: w.tick, winner: w.winner, faults: this.faults, timeline: this.timeline };
+    return { factions: w.players.map((p) => p.faction), ticks: w.tick, winner: w.winner, faults: this.faults, notes: this.notes, timeline: this.timeline };
   }
 
   private combatant(e: Entity): boolean {
@@ -345,6 +376,60 @@ export class Analyzer {
     this.groups.push({ player: p, tick: w.tick, ids: f.ids, worth: f.own, x, y });
   }
 
+  /** Each tick: combat units just killed with hardly any of theirs round them, in front of a real enemy force. */
+  private lonely(): void {
+    const w = this.world;
+    for (const d of w.deaths) {
+      const def = DEFS[d.type] as UnitDef | undefined;
+      if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
+      const foes = w.players.filter((q) => q.id !== d.owner && w.hostile(d.owner, q.id)).map((q) => q.id);
+      const f = this.forces(d.owner, foes, d.x, d.y, T.fightRadius);
+      if (f.enemy < T.fightFloor || f.ids.length > T.trickleAlone) continue;
+      const lone = (this.lone[d.owner] ??= []);
+      lone.push(w.tick);
+      while (lone.length && w.tick - lone[0] > sec(T.trickleWindow)) lone.shift();
+      const t = this.trickle[d.owner];
+      if (t && w.tick - t.last <= sec(T.trickleWindow)) {
+        t.last = w.tick;
+        t.count++;
+      } else {
+        this.closeTrickle(d.owner);
+        if (lone.length >= T.trickleDeaths && w.tick - lone[0] >= sec(T.trickleSpread)) this.trickle[d.owner] = { from: lone[0], last: w.tick, count: lone.length, noted: false };
+      }
+    }
+    for (let p = 0; p < w.players.length; p++) if (this.trickle[p] && w.tick - this.trickle[p]!.last > sec(T.trickleWindow)) this.closeTrickle(p);
+  }
+
+  private closeTrickle(p: number): void {
+    const t = this.trickle[p];
+    if (!t) return;
+    this.trickle[p] = undefined;
+    this.lone[p] = [];
+    this.note({ player: p, kind: 'renforts-goutte-a-goutte', tick: t.from, endTick: t.last, detail: `${t.count} unités tuées isolées (au plus ${T.trickleAlone} des leurs autour) en ${clock(t.last - t.from)}` });
+  }
+
+  /** Own base under attack while most of the army is, or was within `raceWindow`, at the enemy's: a race, told as a
+   * neutral note (the army often dies over there before the base is hit, so its share is the highest of the window). */
+  private race(p: number, army: Entity[], foes: number[], worth: number): void {
+    const w = this.world;
+    const buildings = [...w.entities.values()].filter((e) => e.def.kind === 'building' && (e.owner === p || foes.includes(e.owner)));
+    // Away: nearer an enemy building than any of its own.
+    const nearest = (e: Entity) => buildings.reduce<Entity | null>((n, b) => (!n || Math.hypot(b.x - e.x, b.y - e.y) < Math.hypot(n.x - e.x, n.y - e.y) ? b : n), null);
+    const away = worth > 0 ? army.filter((e) => nearest(e)?.owner !== p).reduce((s, e) => s + strength(e), 0) / worth : 0;
+    const seen = (this.away[p] ??= []);
+    seen.push([w.tick, away]);
+    while (w.tick - seen[0][0] > sec(T.raceWindow)) seen.shift();
+    const key = `race:${p}`;
+    if (w.tick - (this.lastNoted.get(key) ?? -Infinity) < sec(T.raceGap)) return;
+    const hit = [...w.entities.values()].some((e) => e.owner === p && w.tick - e.lastHit < TICK_RATE && e.lastHit > 0 && (e.def.kind === 'building' || (e.def as UnitDef).worker));
+    const most = Math.max(...seen.map(([, a]) => a));
+    if (!hit || most < T.raceAway) return;
+    this.lastNoted.set(key, w.tick);
+    this.notes.push({ player: p, kind: 'echange-de-bases', tick: w.tick, detail: `base attaquée alors que ${Math.round(100 * most)} % de l’armée était chez l’adversaire` });
+  }
+
+  private away: [number, number][][] = [];
+
   /** Fights and key units noted earlier: did the group get wiped, did the key unit die? */
   private followUp(): void {
     const w = this.world;
@@ -437,6 +522,12 @@ export function reportMarkdown(a: Analysis): string {
       if (!list.length) out.push('Rien de relevé.', '');
       for (const f of list) out.push(`- ${clock(f.tick)}${f.endTick !== undefined ? `–${clock(f.endTick)}` : ''} · ${FAULTS[f.kind].label} : ${f.detail}${f.x !== undefined ? ` (case ${f.x}, ${f.y})` : ''}`);
       if (list.length) out.push('');
+    }
+    const notes = a.notes.filter((n) => n.player === p);
+    if (notes.length) {
+      out.push('### Chronologie (sans pénalité)', '');
+      for (const n of notes) out.push(`- ${clock(n.tick)} · Échange de bases : ${n.detail}`);
+      out.push('');
     }
   }
   return out.join('\n');

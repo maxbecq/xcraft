@@ -56,6 +56,22 @@ describe('analyse de partie', () => {
     expect(kinds(a, 1).has('combat-en-inferiorite')).toBe(false);
   });
 
+  it('relève des renforts envoyés un par un, pas un groupe perdu d’un coup', () => {
+    for (const oneByOne of [true, false]) {
+      const w = createMatch(['isdaris', 'humains']);
+      const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+      const a = new Analyzer(w);
+      const send = (n: number): Command[] => {
+        const ids = Array.from({ length: n }, (_, i) => w.spawn('creature', 0, cx - 8 * FP, cy + (i % 4) * FP).id);
+        return [{ player: 0, kind: 'attack', ids, x: cx, y: cy }];
+      };
+      // One Créature every 6 s, or the eight at once.
+      run(w, 60, a, (w) => (oneByOne ? (w.tick % (6 * TICK_RATE) === 0 && w.tick < 48 * TICK_RATE ? send(1) : []) : w.tick === 1 ? send(8) : []));
+      expect(kinds(a, 0).has('renforts-goutte-a-goutte')).toBe(oneByOne);
+    }
+  });
+
   it('rejoue un replay et trouve la même chose que pendant la partie', () => {
     const factions = ['z', 'isdaris'] as const;
     const live = createMatch([...factions]);
@@ -73,6 +89,7 @@ describe('analyse de partie', () => {
     const again = analyzeReplay(replay);
     expect(again.ticks).toBe(done.ticks);
     expect(again.faults).toEqual(done.faults);
+    expect(again.notes).toEqual(done.notes);
     expect(again.timeline.length).toBe(Math.floor(live.tick / (10 * TICK_RATE)));
     for (const f of done.faults) expect(f.tick).toBeLessThanOrEqual(done.ticks);
     const md = reportMarkdown(again);

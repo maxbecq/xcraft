@@ -60,6 +60,8 @@ export function frequencies(games: Analysis[]): string {
     out.push(`## ${FACTIONS[f as Faction]?.name ?? f}`, '', `${seats.length} parties, ${won} gagnées (pour situer, pas une mesure).`, '', '| Faute | Famille | Parties | Par partie | Première (médiane) |', '|---|---|---|---|---|');
     for (const r of rows) out.push(`| ${FAULTS[r.kind].label} | ${FAULTS[r.kind].family === 'economie' ? 'économie' : 'tactique'} | ${Math.round(100 * r.share)} % | ${r.per.toFixed(1)} | ${r.first === null ? '–' : clock(r.first)} |`);
     out.push('');
+    const races = seats.filter(({ g, p }) => g.notes.some((n) => n.player === p && n.kind === 'echange-de-bases')).length;
+    out.push(`Échange de bases (événement neutre, pas une faute) : ${races} parties sur ${seats.length}.`, '');
   }
   return out.join('\n');
 }
