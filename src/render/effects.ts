@@ -1,5 +1,5 @@
 import { TEAM_COLORS } from './models';
-import { BoxGeometry, type Camera, CanvasTexture, CircleGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
+import { BoxGeometry, type Camera, CanvasTexture, CircleGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
 import { Particles, type Picture } from './particles';
 import { Streaks } from './streaks';
 import type { Audio, Sfx } from '../audio';
@@ -46,7 +46,7 @@ export function seeThrough(e: Entity): boolean {
  * Réservoir); obus: the Pégase's cannon; roquette: the Tour's anti-air rockets; carreau: the Plésiosaure's ballista;
  * rocher: the Ankylosaure's Trébuchet; flamme: the Belluaire's flamethrower, at arm's length.
  */
-type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma';
+type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma' | 'lance';
 const AMMO: Record<string, Ammo> = {
   auxiliaire: 'balle', scarabee: 'balle', bourdon: 'balle', soigneur: 'dard', phalangiste: 'grenade', alchimiste: 'fiole', cuve: 'bombe',
   pegase: 'obus', tour: 'roquette', plesiosaure: 'carreau', ankylosaure: 'rocher', belluaire: 'flamme',
@@ -64,6 +64,7 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   orbepsy: { pace: 0.08, arc: 0.08, size: 0.34, smoke: 0, color: 0xb88aff },
   disque: { pace: 0.05, arc: 0.02, size: 0.3, smoke: 0, color: 0x5ae0ff },
   plasma: { pace: 0.09, arc: 0.25, size: 0.42, smoke: 0, color: 0x8ad8ff },
+  lance: { pace: 0.05, arc: 0.08, size: 0.1, smoke: 0, color: 0xfff0c0 },
 };
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
@@ -182,7 +183,21 @@ export class Effects {
   /** Every particle, one draw call (render/particles.ts). */
   private readonly streaks = new Streaks(MAX_STREAKS);
   /** Lobbed shots on their way (grenades, flasks, bombs, shells, rockets, stones). */
-  private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3; color?: number }[] = [];
+  private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3; color?: number; solid?: Object3D }[] = [];
+  /** Solid projectiles (the Golem's boulder, the Walkyrie's spear): shared geometry and materials, and spears stuck
+   * in what they hit a moment. */
+  private readonly boulderGeo = new IcosahedronGeometry(1, 1);
+  private readonly boulderMat = new MeshStandardMaterial({ color: 0x7a6e5e, roughness: 1, flatShading: true });
+  private readonly shaftGeo = new CylinderGeometry(0.03, 0.03, 1.3, 6).rotateX(Math.PI / 2);
+  private readonly tipGeo = new ConeGeometry(0.07, 0.3, 6).rotateX(Math.PI / 2).translate(0, 0, 0.8);
+  private readonly shaftMat = new MeshStandardMaterial({ color: 0x8a5a2a, roughness: 0.8 });
+  private readonly tipMat = new MeshStandardMaterial({ color: 0xffe080, emissive: 0x8a6010, metalness: 0.8, roughness: 0.3 });
+  private stuck: { obj: Object3D; left: number }[] = [];
+  private spear(): Object3D {
+    const g = new Group();
+    g.add(new Mesh(this.shaftGeo, this.shaftMat), new Mesh(this.tipGeo, this.tipMat));
+    return g;
+  }
   /** Frigg's frost bolt on its way: shards and mist to shed along it, and the frost where it lands, in how long. */
   private frost: { at: Vector3; left: number; impact?: boolean }[] = [];
   /** Thor's blows coming down: where, in how long, how many bolts. */
@@ -1102,9 +1117,13 @@ export class Effects {
         for (let k = 0; k < 8; k++) this.spawn(this.tex.glow, 0xf0f8ff, from.clone().addScaledVector(dir, (k / 7) * dist).add(rnd(0.15)), dir.clone().multiplyScalar(4), 0.25, 0.25, 0.5, 0.5, 0, true);
         return true;
       }
-      case 'golem': // a boulder thrown high
-        this.lobs.push({ ammo: 'rocher', from: from.clone().setY(from.y + 0.8), to: to.clone(), age: 0, flight: Math.max(0.5, dist * 0.08), arc: Math.max(1.2, dist * 0.25), chem: false, spill: 0 });
+      case 'golem': { // a great boulder thrown high, tumbling
+        const rock = new Mesh(this.boulderGeo, this.boulderMat);
+        rock.scale.setScalar(0.55);
+        rock.castShadow = true;
+        this.lobs.push({ ammo: 'rocher', from: from.clone().setY(from.y + 0.3), to: to.clone(), age: 0, flight: Math.max(0.6, dist * 0.09), arc: Math.max(1.5, dist * 0.28), chem: false, spill: 0, solid: rock });
         return true;
+      }
       case 'frigg': { // a frost bolt, glacier blue and white: ice shards shed along it, cold mist, frost where it hits
         this.streaks.spawn(0x6ac8ff, from, to, flight * 1.3, 0.12, 1.4, 0.2, 1);
         this.streaks.spawn(0xffffff, from, to, flight * 1.3, 0.08, 1, 0.07, 1);
@@ -1121,12 +1140,16 @@ export class Effects {
         this.hits.push({ at: to, color: 0x6a2ab8, left: flight });
         for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0x1a1020, to.clone().add(rnd(0.2)), rnd(0.3).setY(0.5), 1.2, 0.3, 0.8, 0.7, 0, false);
         return true;
-      case 'walkyrie': // a golden spear
-        this.streaks.spawn(0xfff0c0, from, to, flight, 0.05, 1.6, 0.08, 1);
-        this.hits.push({ at: to, color: GOLD, left: flight });
+      case 'walkyrie': { // a spear, shaft and golden head, flying to the foe and planted in it a moment
+        const sp = this.spear();
+        sp.scale.setScalar(1.2);
+        this.lobs.push({ ammo: 'lance', from: from.clone(), to: to.clone().setY(to.y + 0.1), age: 0, flight: Math.max(0.2, dist * 0.06), arc: Math.max(0.15, dist * 0.06), chem: false, spill: 0, solid: sp });
         return true;
-      case 'titan': // a bolt of lightning
-        this.bolt(from, to, 0xfff0a0, 0.1, 0.18);
+      }
+      case 'titan': // a bolt of lightning from his raised hand all the way to the foe, wide zigzags, twice
+        this.bolt(from, to, 0xfff0a0, 0.16, 0.32, 0.45);
+        this.bolt(from, to, 0xffffff, 0.06, 0.22, 0.3);
+        this.flash(from, GOLD, 1.2);
         this.hits.push({ at: to, color: GOLD, left: 0 });
         return true;
       case 'sphinx': // a stream of sand
@@ -1220,6 +1243,23 @@ export class Effects {
     const k = Math.min(1, l.age / l.flight);
     const at = l.from.clone().lerp(l.to, k);
     at.y += 4 * l.arc * k * (1 - k);
+    if (l.solid) {
+      if (!l.solid.parent) this.scene.add(l.solid);
+      if (l.prev && at.distanceToSquared(l.prev) > 1e-8) l.solid.lookAt(l.solid.position.clone().add(at.clone().sub(l.prev)));
+      l.solid.position.copy(at);
+      if (l.ammo === 'rocher') l.solid.rotation.x += dt * 6;
+    }
+    if (k < 1 && l.solid) {
+      if (l.prev && l.ammo === 'lance') this.streaks.spawn(0xfff0c0, l.prev, at, 0, 0.12, 0, 0.05, 0.7);
+      if (l.ammo === 'rocher' && l.prev) this.spawn(this.tex.smoke, 0xb8a888, at.clone(), new Vector3(0, 0.2, 0), 0.6, 0.3, 0.7, 0.5, 0, false);
+      l.prev = at;
+      return true;
+    }
+    if (l.solid) {
+      // A spear stays planted in what it hit a moment; a boulder is gone in its dust.
+      if (l.ammo === 'lance') this.stuck.push({ obj: l.solid, left: 0.8 });
+      else this.scene.remove(l.solid);
+    }
     if (k < 1) {
       // The head: hot white in the middle, its own colour round it (a stone: dark, no glow).
       // A trail drawn along its arc, fading behind it: the path reads at a glance (a stone's pale dust, the rest glowing).
@@ -1237,6 +1277,10 @@ export class Effects {
     }
     const p = l.to;
     switch (l.ammo) {
+      case 'lance': // the spear strikes: a gold glint, a few sparks
+        this.flash(p, GOLD, 1.2);
+        for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, i % 2 ? GOLD : 0xffffff, p.clone(), rnd(2).setY(1 + Math.random()), 0.3, 0.1, 0.02, 1, 9, true);
+        break;
       case 'grenade':
         this.flash(p, 0xffa040, 1.4);
         for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, 0xffc060, p.clone(), rnd(2.5).setY(1.5 + Math.random() * 1.5), 0.35, 0.14, 0.03, 1, 9, true);
@@ -1465,6 +1509,11 @@ export class Effects {
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
+    this.stuck = this.stuck.filter((st) => {
+      if ((st.left -= dt) > 0) return true;
+      this.scene.remove(st.obj);
+      return false;
+    });
     this.frost = this.frost.filter((f) => {
       if ((f.left -= dt) > 0) return true;
       if (f.impact) {
