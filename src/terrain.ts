@@ -2,7 +2,7 @@ import {
   BufferGeometry, Color, DataTexture, DoubleSide, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
-import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
+import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt, CLIFF_FOOT } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
 import { crackMask, fbm, groundImages, groundTextures, isLite, lavaTexture, noiseTexture, rockTextures } from './render/textures';
@@ -28,12 +28,6 @@ export function setBiome(b: Biome): void {
 }
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
-/**
- * The strip at a cliff's foot that units cannot walk (tiles, from the blocked tile's edge): the rock's slope fills it.
- * A foot never reaches past it, and where the wall would stop well short of it, its base flares out into scree.
- * shortcut: a local copy of the simulation's width, replace by its shared constant when the two branches meet.
- */
-const FOOT_STRIP = 0.5;
 /** City map: height of the lower city's deck, seen through the chasms. */
 export const UNDER_DECK = -6;
 /** City map: thickness of the playable deck's slab, seen at the edge of the chasms. */
@@ -147,7 +141,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
       const pb = new Vector2(x + CORNER_POS[b][0], y + CORNER_POS[b][1]);
       const out = new Vector2(CORNER_POS[cut][0] - 0.5, CORNER_POS[cut][1] - 0.5).normalize();
       // Keep walls clockwise around the plateau (top on the left when looking from outside).
-      cliffWall(cliffs, pb, pa, t.level * LEVEL_HEIGHT, t.level * LEVEL_HEIGHT, low * LEVEL_HEIGHT, low * LEVEL_HEIGHT, out);
+      cliffWall(cliffs, pb, pa, t.level * LEVEL_HEIGHT, t.level * LEVEL_HEIGHT, low * LEVEL_HEIGHT, low * LEVEL_HEIGHT, out, false);
     }
   }
 
@@ -403,11 +397,20 @@ function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
   return d.lengthSq() > 1e-6 ? d.normalize() : fallback;
 }
 
+/** Whether a diagonal cliff (a cut tile) touches this grid corner. */
+function byCut(c: Vector2): boolean {
+  if (!Number.isInteger(c.x) || !Number.isInteger(c.y)) return true; // a diagonal wall's own middle points
+  for (let y = c.y - 1; y <= c.y; y++) for (let x = c.x - 1; x <= c.x; x++) if (tileAt(leanMap, x, y) && cutCorner(leanMap, x, y) >= 0) return true;
+  return false;
+}
+
 /**
- * A rocky cliff face from top edge p0→p1 (heights t0, t1) down to b0, b1, leaning out along `out`.
+ * A rocky cliff face from top edge p0→p1 (heights t0, t1) down to b0, b1, leaning out along `out`. `strip`: its foot
+ * fills the band no unit walks at a cliff's base (CLIFF_FOOT, see Grid.keepOff) and never reaches past it; a diagonal
+ * cliff has no such band and keeps its plain lean.
  * Shared end points lean along the terrain's downhill direction, so neighbouring faces always meet.
  */
-function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2): void {
+function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2, strip = true): void {
   // The top follows the ground's rim, pushed in and out like the plateau's edge (see rimShift).
   const [c0, c1] = [p0, p1];
   const s0 = rimShift(p0.x, p0.y);
@@ -445,13 +448,18 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       // A rim pulled in (rounded corner) slopes back out to the foot, so the foot still meets the lower ground.
       return [lean + Math.max(0, -sh.dot(dir)) * s, n, sh.dot(dir)];
     };
-    // Rock walls: the foot ends inside the strip no unit walks. Short of this column's share of it (55 to 95 %, by
-    // broad noise), the base flares out to it, as scree does; past the strip, the wall is squeezed back into it.
-    const rock = built && !under;
+    // Rock walls: the foot ends inside the band no unit walks. Short of this column's share of it (70 to 100 %, by
+    // broad noise), the base flares out to it, as scree does; past the band, the wall is eased back into it.
+    const rock = strip && built && !under;
     const [footBack, , rim] = reach(1, bottom);
     const footOver = rim + footBack;
-    const want = FOOT_STRIP * (0.55 + 0.4 * noise(px * 0.9, pz * 0.9, 1, 53));
-    const scree = rock && footOver < want ? want - footOver : 0;
+    const want = CLIFF_FOOT * (0.7 + 0.3 * noise(px * 0.9, pz * 0.9, 1, 53));
+    // Less of it on a low wall (a ramp's side, which meets the full wall beside it at the ramp's foot), and none at an
+    // end shared with a diagonal cliff, which has no band: the faces still meet there.
+    const tall = Math.min(1, (top - bottom) / LEVEL_HEIGHT);
+    const ease = (c: Vector2, d: number) => (byCut(c) ? Math.min(1, d * 2) : 1);
+    const banded = ease(c0, t) * ease(c1, 1 - t);
+    const scree = rock && footOver < want ? (want - footOver) * tall * banded : 0;
     for (let j = 0; j <= WALL_ROWS; j++) {
       const s = j / WALL_ROWS;
       const y = top + (bottom - top) * s;
@@ -462,10 +470,10 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
       let back = reached + scree * Math.pow(s, 2.2);
       if (rock && rim + back > 0) {
         // Never past the strip: what reaches over the low tile is eased under it (a soft limit, the bulges stay).
-        const most = Math.max(FOOT_STRIP, rim * (1 - s) + FOOT_STRIP * s);
+        const most = Math.max(CLIFF_FOOT, rim * (1 - s) + CLIFF_FOOT * s);
         const over = rim + back;
         const knee = most * 0.6; // as it is up to there, then easing towards the limit
-        if (over > knee) back = knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - rim;
+        if (over > knee) back += (knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - over) * banded;
       }
       row.push(new Vector3(px + dir.x * back, y + lift, pz + dir.y * back));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
