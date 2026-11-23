@@ -29,7 +29,8 @@ const GOLD = 0xffd060;
 /** Where a Gods' shooter's shot leaves its model: height (share of the model's), side and ahead (in radii). */
 const GRIPS: Record<string, [number, number, number]> = {
   apollon: [0.82, 0.55, 0.3], isis: [0.5, 0.65, 0.3], frigg: [0.66, 0.7, 0.3], hades: [0.6, 0.6, 0.3], titan: [0.88, 0.6, 0.2],
-  golem: [0.9, 0, 0.3], walkyrie: [0.55, 0.4, 0.5], unit: [0.55, 0.4, 0.4],
+  golem: [0.9, 0, 0.3], walkyrie: [0.55, 0.4, 0.5], drake: [0.6, 0, 1.1], sphinx: [0.7, 0, 0.9], elementaire: [0.65, 0.3, 0.5],
+  elemeau: [0.65, 0.3, 0.5], elemair: [0.65, 0.3, 0.5], protecteur: [0.8, 0, 0.3], unit: [0.55, 0.4, 0.4],
 };
 /** Drawn see-through (render/units.ts), as its side and an enemy detecting it see it: a Z socle under its invisibility
  * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit. */
@@ -182,6 +183,8 @@ export class Effects {
   private readonly streaks = new Streaks(MAX_STREAKS);
   /** Lobbed shots on their way (grenades, flasks, bombs, shells, rockets, stones). */
   private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3; color?: number }[] = [];
+  /** Frigg's frost bolt on its way: shards and mist to shed along it, and the frost where it lands, in how long. */
+  private frost: { at: Vector3; left: number; impact?: boolean }[] = [];
   /** Thor's blows coming down: where, in how long, how many bolts. */
   private blows: { at: Vector3; left: number; n: number }[] = [];
   /** Rounds on their way: where they land, in what colour, in how long. */
@@ -1102,10 +1105,17 @@ export class Effects {
       case 'golem': // a boulder thrown high
         this.lobs.push({ ammo: 'rocher', from: from.clone().setY(from.y + 0.8), to: to.clone(), age: 0, flight: Math.max(0.5, dist * 0.08), arc: Math.max(1.2, dist * 0.25), chem: false, spill: 0 });
         return true;
-      case 'frigg': // a frost bolt
-        this.streaks.spawn(0xc8e8ff, from, to, flight, 0.06, 1.1, 0.13, 1);
-        this.hits.push({ at: to, color: 0xe8f8ff, left: flight });
+      case 'frigg': { // a frost bolt, glacier blue and white: ice shards shed along it, cold mist, frost where it hits
+        this.streaks.spawn(0x6ac8ff, from, to, flight * 1.3, 0.12, 1.4, 0.2, 1);
+        this.streaks.spawn(0xffffff, from, to, flight * 1.3, 0.08, 1, 0.07, 1);
+        const dir = to.clone().sub(from);
+        for (let k = 0; k < 10; k++) {
+          const at = from.clone().addScaledVector(dir, k / 10);
+          this.frost.push({ at, left: (k / 10) * flight * 1.3 });
+        }
+        this.frost.push({ at: to.clone(), left: flight * 1.3, impact: true });
         return true;
+      }
       case 'hades': // a bolt of darkness, smoke where it hits
         this.streaks.spawn(0x9a4aff, from, to, flight, 0.08, 1.4, 0.2, 1);
         this.hits.push({ at: to, color: 0x6a2ab8, left: flight });
@@ -1455,6 +1465,21 @@ export class Effects {
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
+    this.frost = this.frost.filter((f) => {
+      if ((f.left -= dt) > 0) return true;
+      if (f.impact) {
+        // Frost bursting where it hits: a white flash, crystals flying, a pale ring of rime on the ground.
+        this.flash(f.at, 0x9ad8ff, 1.4);
+        for (let i = 0; i < 12; i++) this.spawn(this.tex.glow, i % 2 ? 0xffffff : 0x9ad8ff, f.at.clone(), rnd(2.2).setY(1 + Math.random() * 1.5), 0.6, 0.14, 0.04, 1, 7, true);
+        this.ring(f.at.clone().setY(heightAt(this.map, f.at.x, f.at.z) + 0.05), 0xd8f0ff, 0.7, 0.8);
+        for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0xe8f4ff, f.at.clone().add(rnd(0.3)), rnd(0.3).setY(0.2), 1.4, 0.3, 0.8, 0.6, 0, false);
+      } else {
+        // An ice shard falling off the bolt, a wisp of cold mist.
+        this.spawn(this.tex.glow, 0xe8f8ff, f.at.clone(), rnd(0.6).setY(-0.2), 0.5, 0.12, 0.06, 1, 6, true);
+        this.spawn(this.tex.smoke, 0xd8ecff, f.at.clone().add(rnd(0.1)), new Vector3(0, 0.3, 0), 1, 0.15, 0.45, 0.5, 0, false);
+      }
+      return false;
+    });
     this.blows = this.blows.filter((b) => {
       if ((b.left -= dt) > 0) return true;
       for (let k = 0; k < b.n; k++) this.bolt(b.at.clone().add(rnd(0.3)).setY(b.at.y + 5), b.at, 0xfff0a0, 0.14, 0.25, 0.35);
