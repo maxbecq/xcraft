@@ -318,6 +318,9 @@ describe('lockstep between two browsers', () => {
       { kind: 'sandbox', ids: [], tool: 'fog', on: true },
       { kind: 'toString', ids: [] },
       { kind: 'move', ids: Array(2000).fill(1), x: 1, y: 2 },
+      // Fields the kind does not declare: a Shift `queue` on an aimed power, anything else (Codex review, 2026-11-23).
+      { kind: 'ability', ids: [1], x: 1, y: 2, name: 'pluiedefeu', queue: true },
+      { kind: 'stop', ids: [1], extra: 1 },
     ];
     for (const c of bad) expect(commandOk(c), JSON.stringify(c).slice(0, 40)).toBe(false);
   });

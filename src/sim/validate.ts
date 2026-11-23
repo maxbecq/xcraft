@@ -46,6 +46,8 @@ export function commandOk(c: unknown, sandbox = false, replay = false): boolean 
   if (c.kind === 'sandbox' && !SANDBOX_TOOLS.includes(c.tool as string)) return false;
   // Both coordinates or neither (an aimed power).
   if ((c.x === undefined) !== (c.y === undefined)) return false;
+  // Nothing more than the kind declares: a `queue` on an order without one would be read all the same (World.step).
+  if (Object.keys(c).some((k) => k !== 'kind' && k !== 'player' && k !== 'ids' && !Object.hasOwn(fields, k))) return false;
   return Object.entries(fields).every(([k, t]) => {
     const v = c[k];
     if (t.endsWith('?') && v === undefined) return true;
