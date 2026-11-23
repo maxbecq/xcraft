@@ -309,6 +309,20 @@ describe('lockstep between two browsers', () => {
       { player: 0, kind: 'hold', ids: [1] },
     ];
     for (const c of ok) expect(commandOk(JSON.parse(JSON.stringify(c))), c.kind).toBe(true);
+    // As the HUD, the input and the AI build them, before any JSON: optional fields left undefined, Shift as a flag.
+    const local = [
+      { player: 0, kind: 'smart', ids: [1], x: 1, y: 2, target: undefined, queue: false },
+      { player: 0, kind: 'rally', ids: [1], x: 1, y: 2, target: undefined },
+      { player: 0, kind: 'attack', ids: [1], x: 1, y: 2, target: undefined, queue: true },
+      { player: 0, kind: 'patrol', ids: [1], x: 1, y: 2, queue: false },
+      { player: 0, kind: 'build', ids: [1], type: 'caserne', tx: 5, ty: 6, queue: true },
+      { player: 0, kind: 'train', ids: [1], type: 'socle', weapon: undefined },
+      { player: 0, kind: 'ability', ids: [1], name: undefined, x: 1, y: 2 },
+      { player: 0, kind: 'cancel', ids: [1], slot: undefined },
+    ];
+    for (const c of local) expect(commandOk(c, true, true), c.kind).toBe(true);
+    expect(commandOk({ player: 0, kind: 'sandbox', ids: [], tool: 'reveal', on: true }, true)).toBe(true);
+    expect(commandOk({ player: 0, kind: 'resign', ids: [] }, false, true)).toBe(true);
     const bad = [
       { kind: 'move', ids: [1], x: 'a', y: 2 },
       { kind: 'move', ids: [1.5], x: 1, y: 2 },
