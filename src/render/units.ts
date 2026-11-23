@@ -223,6 +223,23 @@ export class EntityRenderer {
   /** Height of the top of a view's model in the world (its full height, measured once, above where it stands);
    * undefined while it has no view yet. The overlay hangs a building's health bar just above it. */
   /** Where a Z Plate-forme's welding torch ends (world), for its sparks; none if its model has no cut-out arm. */
+  /**
+   * A point on a unit's model (world), in its own frame: `h` of its height up from its lowest point, `side` and `fwd` in
+   * radii to its right and ahead (a god's hand, say). The model's extent is measured once, at rest. None if not drawn.
+   */
+  handAt(id: number, h: number, side: number, fwd: number, radius: number): Vector3 | undefined {
+    const v = this.views.get(id);
+    if (!v) return undefined;
+    v.root.updateWorldMatrix(true, true);
+    if (v.model.userData.span === undefined) {
+      TOP.setFromObject(v.model, true);
+      v.model.userData.span = [TOP.min.y - v.root.position.y, TOP.max.y - TOP.min.y];
+    }
+    const [low, height] = v.model.userData.span as [number, number];
+    const a = v.model.rotation.y;
+    return v.root.position.clone().add(new Vector3(Math.sin(a) * fwd * radius + Math.cos(a) * side * radius, low + h * height, Math.cos(a) * fwd * radius - Math.sin(a) * side * radius));
+  }
+
   /** Where a Déchiqueteur's saw is (world): its sparks spray from there; none if it shows none. */
   saw(id: number): Vector3 | undefined {
     return this.views.get(id)?.weapon?.saw?.getWorldPosition(new Vector3());
@@ -782,6 +799,7 @@ export class EntityRenderer {
       if (e.def.kind === 'unit') {
         v.model.rotation.y = v.heading;
         this.animate(v, e, dt);
+        if (e.type === 'thor') this.hammer(v, e, world, dt);
         this.standOff(v, e, e.order?.kind === 'attack' ? this.views.get(e.order.target) : undefined, world.entities.get(e.order?.kind === 'attack' ? e.order.target : -1), dt);
       } else if (v.weapon?.pivot) {
         this.ringFight(v, e, world, dt);
@@ -1147,6 +1165,22 @@ export class EntityRenderer {
     const yaw0 = (o.userData.yaw0 as number | undefined) ?? 0;
     const d = Math.atan2(Math.sin(want - (o.rotation.y - yaw0)), Math.cos(want - (o.rotation.y - yaw0)));
     o.rotation.y += d * Math.min(1, dt * 8);
+  }
+
+  /**
+   * Thor brings his hammer down (proposal, ?dx=1): his model is one block, so the whole body rocks back then slams
+   * forward over its feet at each blow; the lightning falls at the slam (Effects.godShot). Render only.
+   */
+  private hammer(v: View, e: Entity, world: World, dt: number): void {
+    if (!HAMMER) return;
+    // Its own clock (render time, slowed with the game), so the slam meets the lightning.
+    const since = ((v.model.userData.blow as number | undefined) ?? 1e9) + dt * 1000;
+    v.model.userData.blow = since;
+    for (const s of world.shots) if (s.id === e.id && s.kind === 'melee') v.model.userData.blow = 0;
+    const k = (v.model.userData.blow as number) / HAMMER_MS;
+    v.model.rotation.order = 'YXZ';
+    // Back over 40 %, slam forward by 55 %, then ease back upright.
+    v.model.rotation.x = k < 0 || k > 1 ? 0 : k < 0.4 ? -0.18 * (k / 0.4) : k < 0.55 ? -0.18 + 0.58 * ((k - 0.4) / 0.15) : 0.4 * (1 - (k - 0.55) / 0.45);
   }
 
   /** A building's Déchiqueteur: its ring turns to its last foe, the saw spins and comes down as it strikes. */
@@ -1572,3 +1606,6 @@ function edgesOf(g: BufferGeometry): EdgesGeometry {
 }
 
 const TOP = new Box3();
+/** Thor's blow (proposal stage, ?dx=1): its length, ms; the lightning falls at its slam, 55 % in (render/effects.ts). */
+const HAMMER = typeof location !== 'undefined' && new URLSearchParams(location.search).get('dx') === '1';
+export const HAMMER_MS = 600;

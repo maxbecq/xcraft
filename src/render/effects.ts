@@ -13,8 +13,8 @@ const MAX_PARTICLES = 1200;
 const MAX_STREAKS = 1500;
 /** Peau de roc's stone scales, 16 a unit. */
 const MAX_ROCKS = 480;
-/** The Glace's blocks of ice, 7 a unit. */
-const MAX_ICE = 280;
+/** The Glace's blocks of ice, one a unit. */
+const MAX_ICE = 120;
 /** Preview only: ?fx=avant shows the old shots and no marks, ?fx=a|b the other mark styles, ?fx=aucun no badges (c,
  * badges, is the one kept for the spells with no look of their own yet). */
 const PARAMS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
@@ -26,6 +26,11 @@ const CYAN = 0x5ae0ff;
 /** Proposal stage (Dieux, 2026-11-23): ?dx=1 shows each god's and unit's own shot, until the user picks. */
 const DX_STYLE = PARAMS.get('dx') === '1';
 const GOLD = 0xffd060;
+/** Where a Gods' shooter's shot leaves its model: height (share of the model's), side and ahead (in radii). */
+const GRIPS: Record<string, [number, number, number]> = {
+  apollon: [0.82, 0.55, 0.3], isis: [0.5, 0.65, 0.3], frigg: [0.66, 0.7, 0.3], hades: [0.6, 0.6, 0.3], titan: [0.88, 0.6, 0.2],
+  golem: [0.9, 0, 0.3], walkyrie: [0.55, 0.4, 0.5], unit: [0.55, 0.4, 0.4],
+};
 /** Drawn see-through (render/units.ts), as its side and an enemy detecting it see it: a Z socle under its invisibility
  * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit. */
 export function seeThrough(e: Entity): boolean {
@@ -177,6 +182,8 @@ export class Effects {
   private readonly streaks = new Streaks(MAX_STREAKS);
   /** Lobbed shots on their way (grenades, flasks, bombs, shells, rockets, stones). */
   private lobs: { ammo: Ammo; from: Vector3; to: Vector3; age: number; flight: number; arc: number; chem: boolean; spill: number; prev?: Vector3; color?: number }[] = [];
+  /** Thor's blows coming down: where, in how long, how many bolts. */
+  private blows: { at: Vector3; left: number; n: number }[] = [];
   /** Rounds on their way: where they land, in what colour, in how long. */
   private hits: { at: Vector3; color: number; left: number }[] = [];
   private readonly particles = new Particles([blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true), flame()], MAX_PARTICLES);
@@ -197,8 +204,8 @@ export class Effects {
   private readonly rocks = new InstancedMesh(new IcosahedronGeometry(1, 0), new MeshStandardMaterial({ color: 0x5e5a56, roughness: 1, flatShading: true }), MAX_ROCKS);
   private readonly rockM = new Matrix4();
   private readonly rockScale = new Vector3(0.12, 0.072, 0.12);
-  /** Blocks of ice on the units the Glace slows: one instanced mesh, laid out every frame. */
-  private readonly ice = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ color: 0xc8eeff, emissive: 0x3a7aa0, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.8 }), MAX_ICE);
+  /** A block of ice round each unit the Glace slows: one instanced mesh, laid out every frame. */
+  private readonly ice = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ color: 0xc8eeff, emissive: 0x2a6a90, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.45, depthWrite: false }), MAX_ICE);
   private readonly iceM = new Matrix4();
   private readonly iceScale = new Vector3();
   private readonly debrisMat = new MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 });
@@ -208,6 +215,8 @@ export class Effects {
 
   /** Where a building's model tops out (world y), by its id (render/units.ts): an Isdaris tower shoots from its top. */
   top: (id: number) => number | undefined = () => undefined;
+  /** A point on a unit's model (world), its hand say: render/units.ts handAt. */
+  hand: (id: number, h: number, side: number, fwd: number, radius: number) => Vector3 | undefined = () => undefined;
   /** Where a Z weapon's muzzle is (world), by the shooter's id (render/units.ts); none if it shows none. */
   muzzle: (id: number) => Vector3 | undefined = () => undefined;
   /** Lance-flammes firing, by shooter: from its nozzle to its target until `left` runs out (a shot every cooldown
@@ -809,13 +818,10 @@ export class Effects {
       }
       // Foudre d'Odin: gold arcs crackling over what it holds.
       if (HELD_BY.get(e.id) === 'foudre' && e.held > 0 && chance(30)) { const a = Math.random() * 6.28; this.bolt(onBody(a, Math.random()), onBody(a + 0.9, Math.random()), 0xfff0a0, 0.07, 0.25, 0.15); }
-      // Glace: blocks of ice stuck to the body.
-      if (e.chill > 0) {
-        for (let i = 0; i < 7 && ice < MAX_ICE; i++) {
-          const k = ((i * 0.37) % 1);
-          this.iceM.makeRotationY(seed + i * 1.3).scale(this.iceScale.set(0.13 + k * 0.08, 0.16 + k * 0.1, 0.13 + k * 0.08)).setPosition(onBody(seed + i * 2.39, 0.12 + k * 0.7, -0.02));
-          this.ice.setMatrixAt(ice++, this.iceM);
-        }
+      // Glace: the unit caught in one great block of ice, see-through.
+      if (e.chill > 0 && ice < MAX_ICE) {
+        this.iceM.makeRotationY(seed).scale(this.iceScale.set(r * 2.3 + 0.2, tall * 1.05, r * 2.3 + 0.2)).setPosition(foot.clone().setY(foot.y + tall * 0.5));
+        this.ice.setMatrixAt(ice++, this.iceM);
       }
     }
     this.ice.count = ice;
@@ -1045,16 +1051,19 @@ export class Effects {
    * Yggdrasill trees' thorns and roots; at arm's length, Thor's hammer striking lightning (more under his Courroux),
    * golden sparks for the others, a ghost's chill, the serpent's venom. False: not one it draws.
    */
-  private godShot(e: Entity, s: Shot, from: Vector3, to: Vector3): boolean {
+  private godShot(e: Entity, s: Shot, from0: Vector3, to: Vector3): boolean {
     if (s.kind === 'heal') return false;
     const type = e.type;
+    // Shots leave the hand (or what it holds) of a god or a unit, not its feet: where on each model, by eye.
+    const grip = GRIPS[type] ?? GRIPS.unit;
+    const from = this.hand(e.id, grip[0], grip[1], grip[2], e.radius / FP) ?? from0;
     const dist = from.distanceTo(to);
     const flight = Math.min(0.3, Math.max(0.06, dist / 28));
     if (s.kind === 'melee') {
       if (type === 'thor') {
-        // The hammer strikes: a bolt from the sky onto the foe (two under his Courroux), gold sparks.
-        for (let k = 0; k < (e.charged > 0 ? 2 : 1); k++) this.bolt(to.clone().add(rnd(0.3)).setY(to.y + 5), to, 0xfff0a0, 0.12, 0.2, 0.35);
-        this.flash(to, GOLD, 1.6);
+        // The hammer comes down (render/units.ts rocks him over it): at the slam, a bolt from the sky onto the foe (two
+        // under his Courroux), gold sparks.
+        this.blows.push({ at: to.clone(), left: 0.55 * 0.6, n: e.charged > 0 ? 2 : 1 });
       } else if (type === 'fantome') {
         for (let i = 0; i < 6; i++) this.spawn(this.tex.glow, 0xbfe8ff, to.clone().add(rnd(0.2)), rnd(0.8).setY(0.6), 0.6, 0.18, 0.05, 0.8, 0, true);
       } else if (type === 'jormungandr') {
@@ -1446,6 +1455,13 @@ export class Effects {
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
+    this.blows = this.blows.filter((b) => {
+      if ((b.left -= dt) > 0) return true;
+      for (let k = 0; k < b.n; k++) this.bolt(b.at.clone().add(rnd(0.3)).setY(b.at.y + 5), b.at, 0xfff0a0, 0.14, 0.25, 0.35);
+      this.flash(b.at, GOLD, 2);
+      for (let i = 0; i < 12; i++) this.spawn(this.tex.glow, i % 2 ? GOLD : 0xffffff, b.at.clone(), rnd(3).setY(1 + Math.random() * 2), 0.35, 0.13, 0.02, 1, 9, true);
+      return false;
+    });
     this.hits = this.hits.filter((h) => {
       if ((h.left -= dt) > 0) return true;
       this.spawn(this.tex.glow, 0xffffff, h.at, new Vector3(), 0.1, 0.2, 0.45, 1, 0, true);

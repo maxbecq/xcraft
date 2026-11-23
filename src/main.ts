@@ -320,6 +320,7 @@ const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 effects.muzzle = (id) => units.muzzle(id);
 effects.top = (id) => units.top(id);
+effects.hand = (id, h, side, fwd, radius) => units.handAt(id, h, side, fwd, radius);
 effects.density = GFX.particles;
 effects.eye = rig.camera;
 setFxLite(GFX.particles < 1);
@@ -826,7 +827,7 @@ function start(): void {
     return n;
   };
   // Dev: xcraft.frame(dt) advances one frame by hand (handy when the browser throttles animation frames).
-  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer, rec });
+  if (import.meta.env.DEV) Object.assign((window as unknown as { xcraft: object }).xcraft, { frame, effects, fxScene, scene, input, renderer, rec, units });
   // Two frames on (the first compiles the shaders), the picture is ready: the loading screen fades away.
   rec.loaded('ready');
   requestAnimationFrame(() => requestAnimationFrame(() => {
