@@ -23,8 +23,8 @@ export interface RigSpec {
   armSwing?: number;
   /** Wings: beyond |x| > [0], their root at height [1]. */
   wings?: [number, number];
-  /** quad: fore legs ahead of this z, hind legs behind. */
-  front?: number;
+  /** quad: shoulders and hips at |x| = [0], fore legs at z = [1], hind legs at z = [2] (a tail behind stays on the hips). */
+  paws?: [number, number, number];
   /** Ground covered in one full cycle (two steps), at most. */
   stride?: number;
   /** A ponderous walker (Golem, Titan): slower, heavier steps, a deeper sway. */
@@ -63,7 +63,7 @@ export const RIGS: Record<string, RigSpec> = {
   immortel: { kind: 'walk', hip: 0.25, blend: 0.08, swing: 0.45, arms: [0.27, 1.05] },
   golem: { kind: 'walk', hip: 0.42, blend: 0.12, swing: 0.35, heavy: true },
   pretresse: { kind: 'walk', hip: 0.38, blend: 0.12, swing: 0.14, arms: [0.12, 0.62] },
-  sphinx: { kind: 'quad', hip: 0.5, blend: 0.12, swing: 0.45, front: -0.1, depth: 0.6 },
+  sphinx: { kind: 'quad', hip: 0.5, blend: 0.12, swing: 0.45, paws: [0.2, 0.5, -0.3], plant: true },
   esprit: { kind: 'float', hip: 0.35, arms: [0.12, 0.45] },
   elementaire: { kind: 'float', hip: 0.35, arms: [0.12, 0.65] },
   elemeau: { kind: 'float', hip: 0.25, arms: [0.17, 0.45] },
@@ -130,7 +130,7 @@ export function procRig(scene: Group, spec: RigSpec): void {
   const blend = spec.blend ?? half * 0.2;
   if (spec.kind === 'walk') for (const s of [1, -1]) legs.push(node(`leg_${legs.length}`, hips, s * blend, spec.hip));
   if (spec.kind === 'float') legs.push(node('leg_0', hips, 0, spec.hip));
-  if (spec.kind === 'quad') for (const f of [1, -1]) for (const s of [1, -1]) legs.push(node(`leg_${legs.length}`, hips, s * blend, spec.hip, (spec.front ?? 0) + f * blend));
+  if (spec.kind === 'quad') for (const z of [spec.paws![1], spec.paws![2]]) for (const s of [1, -1]) legs.push(node(`leg_${legs.length}`, hips, s * spec.paws![0], spec.hip, z));
   const arms = spec.arms ? [1, -1].map((s, i) => node(`arm_${i}`, torso, s * spec.arms![0], spec.arms![1])) : [];
   const wings = spec.wings ? [1, -1].map((s, i) => node(`wing_${i}`, torso, s * spec.wings![0], spec.wings![1])) : [];
   const segs: Object3D[] = [];
@@ -228,11 +228,14 @@ function weigh(spec: RigSpec, p: Vector3, w: number[], b: Parts): void {
       w[b.index(b.legs[0])] = leg * s;
       w[b.index(b.legs[1])] = leg * (1 - s);
     } else if (spec.kind === 'quad') {
-      const f = smooth((spec.front ?? 0) - b.blend, (spec.front ?? 0) + b.blend, p.z);
+      const [, fore, hind] = spec.paws!;
+      const mid = (fore + hind) / 2;
+      const f = smooth(mid - b.blend, mid + b.blend, p.z);
+      const tail = smooth(hind - 0.35, hind - 0.2, p.z);
       w[b.index(b.legs[0])] = leg * s * f;
       w[b.index(b.legs[1])] = leg * (1 - s) * f;
-      w[b.index(b.legs[2])] = leg * s * (1 - f);
-      w[b.index(b.legs[3])] = leg * (1 - s) * (1 - f);
+      w[b.index(b.legs[2])] = leg * s * (1 - f) * tail;
+      w[b.index(b.legs[3])] = leg * (1 - s) * (1 - f) * tail;
     } else w[b.index(b.legs[0])] = leg;
   }
   let rest = 1 - leg;
@@ -292,7 +295,8 @@ function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boole
   const stride = (s.stride ?? s.hip * (s.heavy ? 2.2 : 2.6)) * r.scale;
   let cycle = Math.min(stride, Math.max(0.05, r.speed) * (s.heavy ? 1.6 : 1.25));
   // A planted foot sweeps STANCE * cycle / 2 each way: no further than a 0.45 rad leg, so a fast one steps quicker.
-  if (s.plant) cycle = Math.min(cycle, (2 * s.hip * r.scale * Math.sin(0.45)) / STANCE);
+  const stance = s.kind === 'quad' ? 0.7 : STANCE;
+  if (s.plant) cycle = Math.min(cycle, (2 * s.hip * r.scale * Math.sin(0.45)) / stance);
   if (moved < 1) r.phase += (moved / cycle) * Math.PI * 2;
   const ph = r.phase;
   const swing = s.swing ?? 0.4;
@@ -315,14 +319,16 @@ function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boole
     ease(torso, 'y', -Math.sin(ph) * 0.14 * k);
     ease(torso, 'x', (heavy ? 0.06 : 0.04) * k + (fighting ? 0.05 : 0) + breathe * 0.012 * (1 - k));
     ease(torso, 'z', -Math.sin(ph) * (heavy ? 0.04 : 0.02) * k);
-    if (s.kind === 'walk' && s.plant) {
-      // On the ground for STANCE of the cycle, the foot goes from reach ahead to reach behind at the body's pace
-      // (the leg's angle is that of the foot under a fixed hip); then swung back ahead, eased.
-      const reach = (STANCE * cycle) / 2 / (s.hip * r.scale);
+    if (s.plant) {
+      // On the ground for `stance` of the cycle, the foot goes from reach ahead to reach behind at the body's pace
+      // (the leg's angle is that of the foot under a fixed hip); then swung back ahead, eased. Four legs step in
+      // a walk's order: hind left, fore left, hind right, fore right.
+      const reach = (stance * cycle) / 2 / (s.hip * r.scale);
+      const order = s.kind === 'quad' ? [0.25, 0.75, 0, 0.5] : [0, 0.5];
       r.legs.forEach((l, i) => {
-        const u = (((ph / (Math.PI * 2) + i * 0.5) % 1) + 1) % 1;
-        const w = (u - STANCE) / (1 - STANCE);
-        const f = u < STANCE ? 1 - (2 * u) / STANCE : -1 + 2 * w * w * (3 - 2 * w);
+        const u = (((ph / (Math.PI * 2) + order[i]) % 1) + 1) % 1;
+        const w = (u - stance) / (1 - stance);
+        const f = u < stance ? 1 - (2 * u) / stance : -1 + 2 * w * w * (3 - 2 * w);
         l.rotation.x = -Math.asin(Math.max(-1, Math.min(1, f * reach))) * k;
       });
     } else if (s.kind === 'walk') {
