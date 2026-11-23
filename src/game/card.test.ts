@@ -24,6 +24,7 @@ const twice = (c: Card) => {
   const seen = new Map<string, string>();
   const out: string[] = [];
   for (const b of c) {
+    if (!b.key) continue; // a passive effect's icon: no key to share
     if (seen.has(b.key)) out.push(`${b.key}: ${seen.get(b.key)} / ${b.label}`);
     else seen.set(b.key, b.label);
   }
@@ -75,5 +76,13 @@ describe("a god's spell button", () => {
     expect(label()).toContain('125 énergie');
     apollon.lvl = 3;
     expect(label()).toContain('121 énergie');
+  });
+  it('shows the Humains\' passive effects on the buildings they come from, pressing nothing', () => {
+    const w = createMatch(['humains', 'z']);
+    const at = (type: string) => w.spawn(type, 0, 40 * FP, 40 * FP);
+    const passives = (type: string) => card(w, [at(type)]).filter((b) => b.label.endsWith('(passif)')).map((b) => b.label);
+    expect(passives('conseil')).toEqual(['Présence des Échevins (passif)']);
+    expect(passives('grandconseil')).toEqual(['Présence des Échevins (passif)', 'Planification industrielle (passif)']);
+    expect(passives('tour')).toEqual(['Détecteur (passif)']);
   });
 });

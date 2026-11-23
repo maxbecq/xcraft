@@ -238,6 +238,8 @@ export function buttonsFor(h: Hud): Button[] {
     const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: able.map((o) => o.id), name }) : () => h.setTargeting(true, true, name);
     list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
   }
+  // Passive effects (the Humains' Échevins, Planification, Tour's detector): an icon that does nothing, its effect in the tooltip.
+  for (const p of (b.def as BuildingDef).passives ?? []) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
   // Z Tourelle and Assimilateur: a weapon bought once, for those that have none yet.
   if ((b.def as BuildingDef).weapons) {
     const bare = same.filter((o) => !o.kit && o.buildLeft === 0);

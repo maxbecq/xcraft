@@ -6,6 +6,10 @@ export const HUMAINS_GLYPHS: Record<string, string> = {
   stimulant: 'M14 4l6 6M17 7l-9 9-3 1 1-3 9-9M9 11l2 2M11 9l2 2M3 21l3-3',
   charge: 'M2 8h6M2 12h8M2 16h6M12 6l9 6-9 6z',
   peauderoc: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6zM9 9l3 3-2 3M12 12l3-1',
+  // Passive icons: a ring round a raised sword (the Échevins' presence), cogs (Planification), an eye (detector).
+  presenceechevins: 'M12 3v13M9 13h6M12 16v5M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0',
+  planificationindustrielle: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',
+  detecteurtour: 'M2 12c3-5 7-7 10-7s7 2 10 7c-3 5-7 7-10 7s-7-2-10-7zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
   autosoin: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
   coupcirculaire: 'M19 8a8 8 0 1 1-2.5-3M19 2v6h-6M12 8v8M10 10h4',
   camouflage: 'M5 19C5 10 10 5 19 5c0 9-5 14-14 14zM5 19l9-9M9 14h4M11 11v-3',

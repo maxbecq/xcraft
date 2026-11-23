@@ -155,6 +155,8 @@ export interface GodLevels {
 }
 
 export interface BuildingDef {
+  /** Passive effects shown as an icon on its card (ABILITIES entries without a button of their own to press). */
+  passives?: string[];
   mana?: Mana;
   /** Isdaris Obélisque (fiche 2010, mod): the buildings it materialises in its side's transfer zone. */
   builds?: string[];
@@ -362,7 +364,11 @@ export const ABILITIES: Record<string, AbilityDef> = {
   kitpatte: { name: 'Patte ultramécanique', effect: 'Équipe un de vos socles terrestres, où qu\'il soit, de pattes qui escaladent les falaises, vers le haut comme vers le bas.', hotkey: 'P', ...(BALANCE.abilities.kitpatte as object) } as AbilityDef,
   // Balance designer 2026-11-22: the Artefacterie works like the Z Centre K, an improvement picked there and given to a
   // god clicked on, wherever it stands (no longer bought at the god); its price that of the improvement.
-  // Passive effects, shown as an icon on the card (balance designer 2026-11-22); UnitDef.passives.
+  // Passive effects, shown as an icon on the card (balance designer 2026-11-22); UnitDef.passives, BuildingDef.passives.
+  // The Humains' three (the balancer, 2026-11-22), on the building each comes from.
+  presenceechevins: { name: 'Présence des Échevins', effect: `Effet permanent : vos troupes à ${BALANCE.rules.upgrades.conseilAura.radius} cases du Conseil gagnent +${BALANCE.rules.upgrades.conseilAura.damage} d'attaque.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  planificationindustrielle: { name: 'Planification industrielle', effect: `Effet permanent : tant qu'un Grand Conseil tient, toutes vos unités sauf les serfs sont produites ${BALANCE.rules.upgrades.grandConseilSpeedup} % plus vite.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  detecteurtour: { name: 'Détecteur', effect: `Effet permanent : révèle les unités invisibles à ${BALANCE.units.tour.detector} cases.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
   auraguerre: { name: 'Aura de guerre', effect: 'Effet permanent : les troupes autour d\'Odin frappent plus fort, +1 / +2 / +4 à 4 / 5 / 6 cases selon son niveau.', hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
   auraprotection: { name: 'Aura défensive', effect: 'Effet permanent : les troupes autour d\'Athéna gagnent de l\'armure, +1 / +2 / +3 à 4 / 8 / 16 cases selon son niveau.', hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
   // Balance designer 2026-11-22: the Soin heals by itself, switched off and on again from this button.
@@ -528,9 +534,9 @@ const BASE: Record<string, object> = {
   soigneur: { kind: 'unit', name: 'Soigneur', radius: 0.375, requires: { alchimisterie: 1 }, ability: 'peauderoc', abilities: ['autosoin'], faction: 'humains', hotkey: 'O' },
   // Mod: grenades alchimiques, 30 (20 against living targets: nearly all units), +10 here against buildings.
   phalangiste: { kind: 'unit', name: 'Phalangiste', radius: 0.4, requires: { forge: 1 }, ability: 'napalm', faction: 'humains', hotkey: 'P' },
-  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 4, trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
+  conseil: { kind: 'building', name: 'Conseil des Échevins', size: 4, passives: ['presenceechevins'], trains: ['serf'], dropoff: true, morphs: ['grandconseil'], abilities: ['refuge'], faction: 'humains', hotkey: 'C' },
   // Notice: « Grand Conseil », the one planning office: while it stands, every unit is produced faster.
-  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 4, trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
+  grandconseil: { kind: 'building', name: 'Grand Conseil', size: 4, passives: ['presenceechevins', 'planificationindustrielle'], trains: ['serf'], dropoff: true, morphOnly: true, unique: true, abilities: ['refuge'], requires: { caserne: 1 }, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'G' },
   grenier: { kind: 'building', name: 'Grenier', size: 2, morphs: ['silo'], faction: 'humains', hotkey: 'G' },
   // The balancer (2026-11-22): each Grenier may become a Grenier à silo, no research needed: +200 HP, +5 supply.
   silo: { kind: 'building', name: 'Grenier à silo', size: 2, morphOnly: true, faction: 'humains', hotkey: 'S' },
@@ -549,7 +555,7 @@ const BASE: Record<string, object> = {
   // Mod: « Fortin », a bunker for four: soldiers inside are out of reach and shoot one tile farther.
   fortin: { kind: 'building', name: 'Fortin', size: 2, requires: { caserne: 1 }, faction: 'humains', hotkey: 'B' },
   // Mod: « Tour anti-air », a detector with a rocket launcher against flying units only (40, range 8).
-  tour: { kind: 'building', name: 'Tour alchimistique', size: 2, requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'T' },
+  tour: { kind: 'building', name: 'Tour alchimistique', size: 2, passives: ['detecteurtour'], requiresAny: { of: ['forge', 'alchimisterie'], count: 1 }, faction: 'humains', hotkey: 'T' },
   // Notice: « Métallurgie », the vehicle workshop (mod « Machinerie », needing the Guilde métallurgique, here the Forge).
   metallurgie: { kind: 'building', name: 'Métallurgie', size: 3, requires: { forge: 1 }, trains: ['bourdon', 'dirigeable', 'scarabee', 'pegase'], researches: ['charlourd', 'decollage', 'scarabeassaut'], faction: 'humains', hotkey: 'M' },
   // Notice: « Scarabée », a slow amphibious armoured wagon: up to four Auxiliaires, Soigneurs, Phalangistes or Alchimistes
