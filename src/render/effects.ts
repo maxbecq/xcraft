@@ -1,5 +1,5 @@
 import { TEAM_COLORS } from './models';
-import { BoxGeometry, type Camera, CircleGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
+import { BoxGeometry, type Camera, CanvasTexture, CircleGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
 import { Particles, type Picture } from './particles';
 import { Streaks } from './streaks';
 import type { Audio, Sfx } from '../audio';
@@ -109,6 +109,47 @@ function flame(size = 64): HTMLCanvasElement {
   return c;
 }
 
+/** The mark a unit leaves where it died, as an alpha picture (its colour stays the decal's): an uneven blot with a
+ * soft rim (`blot`) or a smaller blot with drops thrown round it (`splash`). Drawn once, from a fixed seed. */
+const STAIN: 'blot' | 'splash' = 'blot';
+function stainTexture(): CanvasTexture {
+  const n = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d')!;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const spot = (a: number, d: number, r: number, alpha: number) => {
+    const x = n / 2 + Math.cos(a) * d;
+    const y = n / 2 + Math.sin(a) * d;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    grad.addColorStop(0.8, `rgba(255,255,255,${alpha * 0.9})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  };
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, n, n);
+  if (STAIN === 'blot') {
+    // Lobes round the middle make the rim uneven; none reaches the disc's edge.
+    for (let i = 0; i < 9; i++) spot(rnd() * Math.PI * 2, n * (0.06 + rnd() * 0.12), n * (0.12 + rnd() * 0.1), 0.7);
+    spot(0, 0, n * 0.2, 0.8);
+  } else {
+    for (let i = 0; i < 6; i++) spot(rnd() * Math.PI * 2, n * (0.03 + rnd() * 0.06), n * (0.1 + rnd() * 0.06), 0.8);
+    for (let i = 0; i < 14; i++) {
+      const a = rnd() * Math.PI * 2;
+      const d = n * (0.2 + rnd() * 0.24);
+      const r = n * (0.015 + rnd() * 0.03);
+      spot(a, d, r, 0.9);
+      if (rnd() < 0.5) spot(a, d - r * 1.8, r * 0.6, 0.8);
+    }
+  }
+  return new CanvasTexture(c);
+}
+
 interface Decal {
   mesh: Mesh;
   age: number;
@@ -143,6 +184,7 @@ export class Effects {
   private debris: Debris[] = [];
   private decals: Decal[] = [];
   private readonly decalGeo = new CircleGeometry(0.5, 20);
+  private readonly stain = stainTexture();
   /** The particles' pictures, by their place in the particles' texture. */
   private readonly tex = { glow: 0, smoke: 1, flame: 2 } as const;
   private readonly debrisGeo = new BoxGeometry(0.12, 0.12, 0.12);
@@ -180,14 +222,17 @@ export class Effects {
     sprite.frustumCulled = false;
     sprite.userData.keep = true;
     const stain = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2c4a0c, transparent: true, opacity: 0.6, depthWrite: false }));
+    // The mark a unit leaves where it died: its own program (an alpha picture).
+    const mark = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2a1a12, alphaMap: this.stain, transparent: true, opacity: 0.6, depthWrite: false }));
     // A wreck's flying bit too (it casts a shadow: the depth program with it).
     const bit = new Mesh(this.debrisGeo, this.debrisMat);
     bit.castShadow = true;
     bit.userData.keep = true;
     sprite.position.copy(at);
     stain.position.copy(at);
+    mark.position.copy(at);
     bit.position.copy(at);
-    return [sprite, stain, bit];
+    return [sprite, stain, mark, bit];
   }
 
   /** Collects the effects of the tick that just ran. */
@@ -250,7 +295,8 @@ export class Effects {
         this.explosion(this.at(d.x, d.y, FLY_HEIGHT), 0.8);
       } else if (d.type !== 'minerai') {
         this.dust(this.at(d.x, d.y, 0.3), d.owner);
-        this.decal(this.at(d.x, d.y, 0.03), 0.8, 0x2a1a12, 15);
+        // Raised clear of the snow's bumps, which cut a mark laid lower in half.
+        this.decal(this.at(d.x, d.y, 0.15), STAIN === 'blot' ? 1.3 : 1.6, 0x2a1a12, 15, this.stain);
       }
     }
     // Rappel: a column of light at the zone and at the Obélisque, a soft one while channelling, a flash on arrival.
@@ -1041,8 +1087,8 @@ export class Effects {
   }
 
   /** A dark scorch mark on the ground that fades away. */
-  private decal(p: Vector3, size: number, color: number, life: number): void {
-    const mesh = new Mesh(this.decalGeo, new MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false }));
+  private decal(p: Vector3, size: number, color: number, life: number, alphaMap: CanvasTexture | null = null): void {
+    const mesh = new Mesh(this.decalGeo, new MeshBasicMaterial({ color, alphaMap, transparent: true, opacity: 0.6, depthWrite: false }));
     mesh.rotation.x = -Math.PI / 2;
     mesh.rotation.z = Math.random() * Math.PI;
     mesh.scale.set(size, size * (0.7 + Math.random() * 0.3), 1);
