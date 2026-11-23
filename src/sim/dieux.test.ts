@@ -604,6 +604,40 @@ describe('a busy god (balance designer, 2026-11-22)', () => {
   });
 });
 
+describe('a busy healer god and Gaïa on the move (Codex review, 2026-11-23)', () => {
+  it('Isis summoning heals only within reach: she does not walk to a wounded ally, and her queue runs on', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const isis = Object.assign(w.spawn('isis', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    w.enqueue(isis, 'sphinx');
+    const left = isis.trainLeft;
+    const hurt = w.spawn('nain', 0, 37 * FP, 30 * FP);
+    hurt.hp = 10;
+    run(w, 2);
+    expect(isis.x).toBe(30 * FP);
+    expect(hurt.hp).toBe(10);
+    expect(isis.trainLeft).toBeLessThan(left);
+    // Within reach, she still heals.
+    hurt.x = 32 * FP;
+    run(w, 2);
+    expect(hurt.hp).toBeGreaterThan(10);
+  });
+
+  it('Gaïa summons an Esprit as she walks', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].minerals = 5000;
+    const gaia = of(w, 0, 'gaia')[0];
+    const esprits = of(w, 0, 'esprit').length;
+    w.step([{ player: 0, kind: 'train', ids: [gaia.id], type: 'esprit' }]);
+    const [x, y] = [gaia.x, gaia.y];
+    for (let i = 0; i < ticks((DEFS.esprit as UnitDef).buildTime + 2); i++) {
+      if (!gaia.goal && !gaia.order) w.step([{ player: 0, kind: 'move', ids: [gaia.id], x: x === gaia.x ? 60 * FP : x, y }]);
+      else w.step([]);
+    }
+    expect(gaia.x !== x || gaia.y !== y).toBe(true);
+    expect(of(w, 0, 'esprit').length).toBe(esprits + 1);
+  });
+});
+
 describe('the Puits (balance designer, 2026-11-22)', () => {
   it('yields nothing empty, a quarter of its rate for each Esprit inside, up to 4', () => {
     const energyIn = (crew: number) => {

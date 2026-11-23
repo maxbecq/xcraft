@@ -905,8 +905,9 @@ export class World {
 
   private think(e: Entity): void {
     if (e.inside) return this.shelter(e);
-    // A god summons only while it stands still (even pushed onto a blocked tile, which it steps off without a goal).
-    if (e.queue.length && !e.goal && e.held === 0) this.produce(e);
+    // A god summons only while it stands still (even pushed onto a blocked tile, which it steps off without a goal);
+    // Gaïa's Esprits come out as she walks (balance designer, 2026-11-22).
+    if (e.queue.length && (!e.goal || e.type === 'gaia') && e.held === 0) this.produce(e);
     // Caught under a new building (with or without orders): walk out first.
     if (!soars(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
     if (e.held > 0) return;
