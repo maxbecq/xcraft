@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction, raises, reaches, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { onMap } from './abilities';
+import { healable } from './combat';
 import { commandOk } from './validate';
 import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
@@ -31,6 +32,25 @@ export function enqueue(this: World, b: Entity, type: string, kit = ''): void {
   b.queue.push(type);
   b.kits.push(kit);
   if (b.queue.length === 1) b.trainLeft = this.trainTime(b, type);
+  // A god summoning or going up a level stops where it stands.
+  if (this.busy(b) && b.order && STILL.has(b.order.kind)) this.setOrder(b, null);
+}
+
+/** What a god that is busy may not do: walk or fight. */
+const STILL = new Set(['move', 'attack', 'attackMove', 'follow', 'enter', 'build', 'cast']);
+
+/**
+ * A god other than Gaïa summoning, going up a level, or raising a building: it neither moves nor fights till that is
+ * done (balance designer, 2026-11-22). Gaïa's buildings rise alone and her Esprits come out as she walks.
+ */
+export function busy(this: World, e: Entity): boolean {
+  const d = e.def as UnitDef;
+  if (!d.unique || d.faction !== 'dieux' || !d.levels || e.type === 'gaia') return false;
+  if (e.queue.length) return true;
+  const b = e.raising ? this.entities.get(e.raising) : undefined;
+  if (b && b.hp > 0 && b.buildLeft > 0) return true;
+  e.raising = 0;
+  return false;
 }
 
 export function apply(this: World, c: Command): void {
@@ -128,18 +148,6 @@ export function apply(this: World, c: Command): void {
     case 'train': {
       // A place (`slot`) is for a Pod's add-on only: on anything else the order is no order.
       if (c.slot !== undefined && !(DEFS[c.type] as BuildingDef | undefined)?.addon) return;
-      if (ARTEFACTS.includes(c.type)) {
-        // An improvement from the Artefacterie, bought at a god anywhere; 4 at most per god, queued ones counted.
-        const lack = this.lacks(c.player, c.type);
-        if (lack) return void this.say(c.player, lack);
-        const max = BALANCE.rules.upgrades.artefacts.max;
-        const g = units.find((u) => (u.def as UnitDef).levels && this.artefacts(u) < max && u.queue.length < 5);
-        if (!g) return void this.say(c.player, `${max} améliorations au plus par dieu.`);
-        const up = DEFS[c.type] as UpgradeDef;
-        if (!this.pay(c.player, up)) return;
-        this.enqueue(g, c.type);
-        return;
-      }
       if (c.type === 'niveau') {
         // A god's next level, paid and queued at the god itself; one at a time, up to the last.
         const gods = units.filter((u) => (u.def as UnitDef).levels && !u.queue.includes('niveau'));
@@ -358,6 +366,7 @@ export function apply(this: World, c: Command): void {
         if (need) return void this.say(c.player, need);
         return void this.centreK(b, kind, ax, ay);
       }
+      if (b.type === 'artefacterie') return void this.artefact(b, kind, ax, ay);
       if (kind === 'transfertgroupe') {
         // Second step of the Porte de déphasage: the latest group still phased goes to the point, out of phase.
         const need = this.needs(c.player, ab.research, b);
@@ -418,7 +427,7 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
     const worker = (e.def as UnitDef).worker;
     if (t && this.hostile(t.owner, e.owner) && this.weapon(e) && reaches(this.weapon(e)!, t.def.kind === 'unit' && flies(t))) {
       this.setOrder(e, { kind: 'attack', target: t.id, auto: false, lx: e.x, ly: e.y });
-    } else if (!worker && t && t.owner === e.owner && t.def.kind === 'unit' && (e.def as UnitDef).heal && t.hp < t.maxHp) {
+    } else if (!worker && t && t.owner === e.owner && (e.def as UnitDef).heal && healable(t) && t.hp < t.maxHp) {
       this.setOrder(e, { kind: 'heal', target: t.id });
     } else if (worker && t?.def.kind === 'resource' && t.type === 'minerai') {
       this.setOrder(e, { kind: 'gather', target: t.id, phase: 'go', timer: 0 });
@@ -509,6 +518,7 @@ export function formation(this: World, units: Entity[], to?: [number, number]): 
 }
 
 export function setOrder(this: World, e: Entity, order: Order | null): void {
+  if (order && STILL.has(order.kind) && this.busy(e)) return;
   const c = this.commanding;
   if (c && e.owner === c.player && Array.isArray(c.ids) && c.ids.includes(e.id)) e.next.splice(0);
   if (order && this.queueing && (e.order || e.next.length)) {
@@ -517,6 +527,7 @@ export function setOrder(this: World, e: Entity, order: Order | null): void {
   }
   // An order done (or dropped): the next one in the list, if any.
   if (!order && e.next.length) order = e.next.shift()!;
+  while (order && STILL.has(order.kind) && this.busy(e)) order = e.next.shift() ?? null;
   const old = e.order;
   if (old?.kind === 'gather') this.release(e, old.target);
   e.order = order;

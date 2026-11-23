@@ -1,8 +1,19 @@
 /** Combat: weapons and their upgrades, target search, attacks, damage, regeneration. */
 import BALANCE from '../balance.json';
-import { type Attack, type BuildingDef, CLASSES, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
+import { type Attack, type BuildingDef, CLASSES, type DamageClass, DEFS, reaches, SKIN_REDUCTION, spell, type UnitDef, type TierStats, type UpgradeLine, weaponAt, WEAPONS, ABILITIES } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { type Order, flies, type Entity, type World } from './world';
+
+/** A target's armour class; a Sphinx turned to stone is a heavy machine (équilibreur 2026-11-22). */
+export const clsOf = (t: Entity): DamageClass => (t.statue > 0 ? 'MM' : ((t.def as UnitDef | BuildingDef).cls ?? 'BL'));
+
+/** A machine for healing: mechanical, or of a machine's class (the Golem, the Titan, a Sphinx turned to stone: MM). */
+export const machineLike = (t: Entity): boolean => !!(t.def as UnitDef).mechanical || clsOf(t) === 'M' || clsOf(t) === 'MM';
+/** What a Soin heals (healers, Soins divins, the Fontaine): a living unit that is no machine, checked at each pulse. */
+export const healable = (t: Entity): boolean => t.def.kind === 'unit' && t.hp > 0 && !machineLike(t);
+
+/** Can this attack strike that target: in the air or not, and of a class it may hit. */
+export const hits = (a: Attack, t: Entity): boolean => reaches(a, t.def.kind === 'unit' && flies(t)) && (!a.only || a.only.includes(clsOf(t)));
 
 /** Reach of the cell index beyond a search range, in tiles: the widest building's half plus a tick's walk. */
 const CELL_MARGIN = 4;
@@ -30,11 +41,12 @@ export function empower(this: World, u: Entity, type: string): void {
     u.maxShield += extra;
     u.shield += extra;
     this.unlist(); // the lists of what carries a shield (World.listed)
-  } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'armurezodiacale' && u.type === 'titan')) {
-    // Drake géant, Armure zodiacale: more health, the wounds kept.
-    const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.zodiacale.hp;
+  } else if ((type === 'drakegeant' && u.type === 'drake') || (type === 'auraputride' && u.type === 'immortel')) {
+    // Drake géant, Aura putride: more health, the wounds kept (the Immortel's speed is read in baseSpeed).
+    const extra = type === 'drakegeant' ? idiv((u.def as UnitDef).hp * U.drakegeant.hp, 100) : U.auraputride.hp;
     u.maxHp += extra;
     u.hp += extra;
+    if (type === 'auraputride' && u.boost === 0) u.speed = this.baseSpeed(u);
   } else if (type === 'boostgenetique' && u.type === 'creature') {
     u.maxHp += U.boost.hp;
     u.hp += U.boost.hp;
@@ -53,7 +65,6 @@ export function armorBonus(this: World, t: Entity): number {
   if (d.levels) bonus += d.levels.armor[t.lvl - 1] - d.armor;
   bonus += t.arts.filter((a) => a === 'artresistance').length * BALANCE.rules.upgrades.artefacts.resistance;
   if (t.statue > 0) bonus += BALANCE.rules.upgrades.statue.armor;
-  if (t.type === 'titan' && this.level(t.owner, 'armurezodiacale')) bonus += BALANCE.rules.upgrades.zodiacale.armor;
   // Athéna's protection aura, the strongest of her side's in reach.
   const A = BALANCE.rules.upgrades.auraprotection;
   let aura = 0;
@@ -123,7 +134,7 @@ export function baseSpeed(this: World, e: Entity): number {
   // Scarabée amélioré (fiche 2010): +0.1 of speed.
   const assault = e.type === 'scarabee' && e.owner >= 0 && this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeSpeed : 0;
   // Boost génétique (fiche 2010): +0.25 of speed for the Créature.
-  const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : 0;
+  const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : e.type === 'immortel' && e.owner >= 0 && this.level(e.owner, 'auraputride') ? BALANCE.rules.upgrades.auraputride.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
   return speedPerTick(((mega ? d.speed + BALANCE.rules.z.megaEspion.speed : d.levels ? d.levels.speed[e.lvl - 1] : e.tier > 1 ? d.tiers![e.tier - 2].speed : d.speed + assault + genetic) * (100 + fast) * stone) / 10000);
@@ -142,14 +153,15 @@ export function ascend(this: World, g: Entity): void {
 }
 
 /**
- * Once a second: Osiris's putrid aura (and the Immortel's, at his first level) hurts the living enemies round him;
+ * Once a second: Osiris's putrid aura (and the Immortel's once Aura putride is researched, at Osiris's first level)
+ * hurts the living enemies round him;
  * his Nuée nauséabonde hurts the enemies round him and gives him what it takes; the Fontaine du Nil heals the living
  * allies round it.
  */
 export function pulse(this: World, e: Entity): void {
   const U = BALANCE.rules.upgrades;
   const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical;
-  if (e.type === 'osiris' || e.type === 'immortel') {
+  if (e.type === 'osiris' || (e.type === 'immortel' && this.level(e.owner, 'auraputride'))) {
     const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
     for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
   }
@@ -184,7 +196,7 @@ export function pulse(this: World, e: Entity): void {
     }
   }
   if (e.type === 'fontaine' && e.buildLeft === 0) {
-    for (const t of this.entities.values()) if (living(t) && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
+    for (const t of this.entities.values()) if (healable(t) && !t.inside && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
   }
 }
 
@@ -273,21 +285,35 @@ export function kitLevel(e: Entity): number {
   return Math.min(4, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
 }
 
+/** A healer's Soin spends its energy (healMana, balance designer 2026-11-22); false when it has run dry. The Z
+ * Réparateur draws none (équilibreur 22/11). */
+export function mends(this: World, e: Entity): boolean {
+  const mana = (e.def as UnitDef).healMana;
+  if (!mana) return true;
+  if (e.mana < toFp(mana)) return false;
+  e.mana -= toFp(mana);
+  return true;
+}
+
 /** Hit points a second a unit gives back: a healer's, or a Z Réparateur's by its level (équilibreur 22/11: 2, 4, 8, 16). */
 export function healRate(this: World, e: Entity): number {
+  const def = e.def as UnitDef;
+  if (def.levels?.heal) return def.levels.heal[e.lvl - 1];
   const heal = e.kit ? WEAPONS[e.kit]?.heal : undefined;
-  return (e.def as UnitDef).heal ?? (heal ? heal[kitLevel(e) - 1] : 0);
+  return def.heal ?? (heal ? heal[kitLevel(e) - 1] : 0);
+}
+
+/** Hp a pulse of healing gives: a god's by its level (a pulse a second), a Soigneur's card, a Réparateur its rate once
+ * a second, one otherwise. */
+export function healPulse(this: World, e: Entity): number {
+  const lv = (e.def as UnitDef).levels?.heal;
+  return lv ? lv[e.lvl - 1] : ((e.def as UnitDef).healPulse ?? (e.kit === 'reparateur' ? this.healRate(e) : 1));
 }
 
 /** How far it heals from (its edge): a healer's own range, a Z Réparateur's by its level (2 to 5). */
 export function healReach(this: World, e: Entity): number {
   const range = e.kit ? WEAPONS[e.kit]?.healRange : undefined;
   return toFp(range ? range[kitLevel(e) - 1] : ((e.def as UnitDef).healRange ?? 2));
-}
-
-/** Hit points given back at once: a Soigneur's pulse, a Réparateur its rate once a second, one otherwise. */
-function pulseOf(this: World, e: Entity): number {
-  return (e.def as UnitDef).healPulse ?? (e.kit === 'reparateur' ? this.healRate(e) : 1);
 }
 
 /** Inside a Nuage de nanites (Z Accumulateur): a unit of a caster's team within its radius, the caster excepted. */
@@ -302,7 +328,7 @@ export function coned(this: World, t: Entity): boolean {
 export function acquire(this: World, e: Entity): void {
   const def = e.def as UnitDef;
   if (def.worker) return;
-  const patient = this.healRate(e) ? this.patient(e) : undefined;
+  const patient = this.healRate(e) && !e.autoOff ? this.patient(e) : undefined;
   if (patient) return this.setOrder(e, { kind: 'heal', target: patient.id });
   if (!def.attack || !this.weapon(e)) return;
   // Holding position: only what is already within reach.
@@ -314,11 +340,12 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   const def = e.def as UnitDef;
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
-    if (this.gap(e, t) > this.healReach(e)) return this.chase(e, t);
+    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e) || ((e.def as UnitDef).heal && !healable(t))) return this.setOrder(e, null);
+    // A god summoning or going up a level heals only what is within reach: it may not walk.
+    if (this.gap(e, t) > this.healReach(e)) return this.busy(e) ? this.setOrder(e, null) : this.chase(e, t);
     e.goal = null;
-    if (e.cooldown === 0) {
-      const pulse = pulseOf.call(this, e);
+    if (e.cooldown === 0 && this.mends(e)) {
+      const pulse = this.healPulse(e);
       t.hp = Math.min(t.maxHp, t.hp + pulse);
       e.cooldown = ticks(pulse / this.healRate(e));
       if (pulse > 1) this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
@@ -328,12 +355,12 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   }
   if (o.kind === 'attackMove') {
     // Heal on the way if needed, otherwise engage what comes into sight, then carry on.
-    if (this.healRate(e) && (this.tick + e.id) % 4 === 0) {
+    if (this.healRate(e) && !e.autoOff && (this.tick + e.id) % 4 === 0) {
       const p = this.patient(e);
       if (p) {
         if (this.gap(e, p) > this.healReach(e)) return this.chase(e, p);
-        if (e.cooldown === 0) {
-          const pulse = pulseOf.call(this, e);
+        if (e.cooldown === 0 && this.mends(e)) {
+          const pulse = this.healPulse(e);
           p.hp = Math.min(p.maxHp, p.hp + pulse);
           e.cooldown = ticks(pulse / this.healRate(e));
         }
@@ -384,7 +411,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
 export function strike(this: World, e: Entity, t: Entity): void {
   const a = this.weapon(e);
   if (!a) return;
-  if (!reaches(a, flies(t))) return this.setOrder(e, null);
+  if (!hits(a, t)) return this.setOrder(e, null);
   if (this.gap(e, t) > toFp(a.range + this.rangeBonus(e, t)) + FP / 8) return e.stand ? this.setOrder(e, null) : this.chase(e, t);
   e.shortTicks = 0;
   e.goal = null;
@@ -426,9 +453,9 @@ export function strike(this: World, e: Entity, t: Entity): void {
  */
 export function blow(this: World, e: Entity, t: Entity, a: Attack): number {
   const U = BALANCE.rules.upgrades;
-  const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical;
+  const machine = t.def.kind === 'building' || !!(t.def as UnitDef).mechanical || t.statue > 0;
   // Fiches 2010: the attack's value against the target's class; else the plain damage, more or less against machines.
-  const cls = CLASSES.indexOf((t.def as UnitDef | BuildingDef).cls ?? 'BL');
+  const cls = CLASSES.indexOf(clsOf(t));
   const base = this.classValue(e, a, cls);
   let bonus = a.vs ? 0 : (machine ? (a.vsMechanical ?? 0) : 0) + (t.def.kind === 'building' ? (a.vsStructure ?? 0) : 0);
   // Scie d'assaut (2010 sheet): +5 against structures and heavy machines.
@@ -491,7 +518,6 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   // Coup puissant: one blow in four, by a fixed draw on the tick and the attacker (the simulation has no randomness).
   if (e.type === 'minotaure' && this.level(e.owner, 'coupuissant') && (Math.imul(this.tick + 1, 2654435761) ^ e.id) % 4 === 0) damage *= 2;
   // Seth (notice: he hits the weakest soldiers hard, to finish them cruelly): more against a unit under half its health.
-  if (e.type === 'seth' && t.def.kind === 'unit' && t.hp * 2 < t.maxHp) damage += idiv(damage * U.sethCruel, 100);
   damage = this.boost(e, damage, true);
   // Courroux du marteau: the charged blow.
   if (e.charged > 0 && a.range < 1) {
@@ -577,13 +603,13 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
   // Idle soldiers hit from afar fight back; against a soldier shooting out of a bunker, at the bunker.
   if (e.inside) e = this.entities.get(e.inside) ?? e;
   const td = t.def as UnitDef;
-  if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && reaches(td.attack, flies(e))) {
+  if (!t.order && !t.held && t.def.kind === 'unit' && td.attack && !td.worker && hits(td.attack, e)) {
     this.setOrder(t, { kind: 'attack', target: e.id, auto: true, lx: t.x, ly: t.y });
   }
   // So do soldiers attack-moving that are not already fighting a soldier, even while walking on past an
   // unreachable target (calmUntil), unless the shooter is the very one they just gave up on.
   const o = t.order;
-  if (o?.kind === 'attackMove' && !t.held && td.attack && reaches(td.attack, flies(e)) && !(e.id === t.ignore && this.tick < t.ignoreUntil)) {
+  if (o?.kind === 'attackMove' && !t.held && td.attack && hits(td.attack, e) && !(e.id === t.ignore && this.tick < t.ignoreUntil)) {
     const current = this.entities.get(o.target);
     if (!current || current.hp <= 0 || this.rank(current) > this.rank(e)) {
       o.target = e.id;
@@ -658,7 +684,7 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
   let bestScore = Infinity;
   for (const t of this.around(e.x, e.y, range)) {
     if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
-    if (a && !reaches(a, flies(t))) continue;
+    if (a && !hits(a, t)) continue;
     if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
     if (t.inside) continue; // sheltering in a bunker: hit the bunker
     const d = this.gap(e, t);
@@ -678,12 +704,15 @@ export function patient(this: World, e: Entity): Entity | undefined {
   const mender = !(e.def as UnitDef).heal;
   // A Réparateur on a Tourelle mends only what is in its reach; on a socle, a little further (it goes there).
   const range = mender ? this.healReach(e) + (e.def.kind === 'building' ? 0 : 2 * FP) : (e.def as UnitDef).sight * FP;
+  const busy = this.busy(e);
   for (const t of this.entities.values()) {
     if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
-    if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || (mender && !(t.def as UnitDef).mechanical)) continue;
+    // A healer's Soin mends no machine (balance designer 2026-11-22).
+    if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || mender !== machineLike(t)) continue;
     // A Tourelle's reach counts from its edge, as a Réparateur's does (it cannot step closer).
     if ((t.def.kind === 'building' || e.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
+    if (busy && this.gap(e, t) > this.healReach(e)) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];
   }

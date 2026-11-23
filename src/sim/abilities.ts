@@ -3,6 +3,7 @@ import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, soars, type Entity, type World } from './world';
+import { healable } from './combat';
 
 /** Rappel: holds the army units around (x, y) for the channel; false if there are none. */
 export function recall(this: World, b: Entity, x: number, y: number): boolean {
@@ -70,6 +71,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   const ab = name && spell(name, e.lvl);
   // Gone since the order (a caster merged into a Golem by another's Fusion earlier in the same command): no cast.
   if (this.entities.get(e.id) !== e) return;
+  if (name === 'autosoin') {
+    // Off: the healing under way stops too, else it goes on paying mana for a patient picked before.
+    e.autoOff = !e.autoOff;
+    if (e.autoOff && e.order?.kind === 'heal') this.setOrder(e, null);
+    return;
+  }
   if (!ab || e.illusion || ab.target === 'point' || !this.ready(e, name) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
@@ -122,7 +129,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       t.war = ticks(ab.duration);
     }
   } else if (name === 'soinsdivins') {
-    const hurt = around(ab.radius!, (t) => t.owner === e.owner && !(t.def as UnitDef).mechanical && t.hp < t.maxHp);
+    const hurt = around(ab.radius!, (t) => t.owner === e.owner && healable(t) && t.hp < t.maxHp);
     if (!hurt.length) return;
     for (const t of hurt) {
       t.hp = Math.min(t.maxHp, t.hp + ab.damage!);
@@ -137,11 +144,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     for (const t of seen) {
       this.hit(e, t, { damage: ab.damage!, range: 99, cooldown: 0 });
       this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
-    }
-  } else if (name === 'armeeenfers') {
-    for (let i = 0; i < (ab.max ?? 1); i++) {
-      const g = this.spawnBeside('fantome', e);
-      g.invuln = g.ttl; // unhurt for all their short life
     }
   } else if (name!.startsWith('forme')) {
     // Mutation: another form, its wounds kept; a flyer only lands on open ground.
@@ -187,9 +189,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.casts.push({ kind: name, x: e.x, y: e.y });
     e.hp = 0;
     return;
-  } else if (name === 'transe') {
-    e.war = ticks(ab.duration);
-    e.warPct = ab.damage!;
   } else if (name === 'statue') {
     // To stone, or back (each way once its cooldown is over).
     e.statue = e.statue > 0 ? 0 : ticks(ab.duration);
@@ -380,16 +379,13 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'ranged' });
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
-  } else if (name === 'flechegaia') {
-    const t = [...this.entities.values()]
-      .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
-      .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
-    if (!t) return false;
-    this.hit(e, t, { damage: ab.damage!, range: ab.range!, cooldown: 0 });
   } else if (name === 'pluiedefeu') {
-    const foes = near((t) => this.hostile(t.owner, e.owner));
-    if (!foes.length) return false;
-    for (const t of foes) this.hurt(t, ab.damage!);
+    // Balance designer 2026-11-22: on an area, friend and foe alike, buildings too at a share of the damage by level.
+    for (const t of near(() => true)) this.hurt(t, ab.damage!);
+    for (const b of [...this.entities.values()]) {
+      if (b.def.kind !== 'building' || b.hp <= 0 || dist(b.x, b.y, x, y) > toFp(ab.radius! + (b.def as BuildingDef).size / 2)) continue;
+      this.hurt(b, idiv(ab.damage! * ab.building!, 100));
+    }
   } else if (name === 'teleportgaia') {
     const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
     if (!b) return false;
@@ -608,6 +604,27 @@ export function centreK(this: World, b: Entity, kind: string, x: number, y: numb
   this.casts.push({ kind, x: t.x, y: t.y });
 }
 
+/**
+ * The Artefacterie (balance designer 2026-11-22, like the Centre K): gives the improvement to the own god nearest the
+ * point, wherever it stands, 4 at most each; then it rests a moment.
+ */
+export function artefact(this: World, b: Entity, kind: string, x: number, y: number): void {
+  const ab = ABILITIES[kind];
+  if (b.abilityCd > 0) return void this.say(b.owner, 'L\u2019Artefacterie se prépare.');
+  const max = BALANCE.rules.upgrades.artefacts.max;
+  const g = [...this.entities.values()]
+    .filter((t) => t.owner === b.owner && t.hp > 0 && !t.inside && (t.def as UnitDef).levels && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
+    .sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
+  if (!g) return void this.say(b.owner, 'Aucun dieu visé.');
+  if (this.artefacts(g) >= max) return void this.say(b.owner, `${max} améliorations au plus par dieu.`);
+  if (!this.pay(b.owner, { cost: { minerals: ab.minerals ?? 0, energy: ab.energy ?? 0 } })) return;
+  g.arts.push(kind);
+  if (g.boost === 0) g.speed = this.baseSpeed(g);
+  this.say(b.owner, `${g.def.name} : ${ab.name} (${g.arts.length}/${max}).`, 'done');
+  b.abilityCd = ticks(ab.cooldown);
+  this.casts.push({ kind, x: g.x, y: g.y });
+}
+
 /** A machine taken by the Canon IEM goes back to its player. */
 export function unseize(this: World, e: Entity): void {
   e.seizedBy = 0;
@@ -644,7 +661,8 @@ export function manaOf(this: World, e: Entity): Mana | undefined {
   if (own) return own;
   // Dieux (XC.doc 2008): every god the same mana by its level, regained at 1 a second (half full at its summoning:
   // shortcut, no source gives a start; the mod's casters start at half).
-  if ((e.def as UnitDef).levels && (e.def as UnitDef).faction === 'dieux') {
+  // Thor has none (balance designer 2026-11-22): his hammer waits on its cooldown alone.
+  if ((e.def as UnitDef).levels && (e.def as UnitDef).faction === 'dieux' && !BALANCE.rules.godMana.none.includes(e.type)) {
     const g = BALANCE.rules.godMana;
     const max = g.max[Math.min(g.max.length, e.lvl) - 1];
     return [max, g.max[0] / 2, g.regen];

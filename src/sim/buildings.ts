@@ -1,6 +1,6 @@
 /** Buildings: placement, power network, production, research, morphs, bunkers and carriers. */
 import BALANCE from '../balance.json';
-import { ABILITIES, ARTEFACTS, type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
 import { flies, type Entity, type World } from './world';
 
@@ -213,7 +213,8 @@ export function boards(this: World, e: Entity, b: Entity): boolean {
   if (b.inside || (b.type === 'bourdon' && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
   if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
-  // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully.
+  // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully, the
+  // Dieux' Puits 4 Esprits.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
   // Notice (Chargement): the Bourdon may instead lift one vehicle, which takes all its room.
   if (b.type === 'bourdon' && BALANCE.rules.upgrades.chargementVehicles.includes(e.type)) return true;
@@ -277,10 +278,16 @@ export function operate(this: World, b: Entity): void {
       this.shots.push({ x1: b.x, y1: b.y, x2: p.x, y2: p.y, kind: 'heal' });
     }
   }
-  // Notice: the Assimilateur runs at 25 % from the start, and each of up to 3 drones inside adds 25 %.
-  if (def.energyRate && !(off && !off.energy) && ++b.timer >= (def.bunker ? idiv(ticks(1 / def.energyRate) * 4, 1 + this.load(b)) : ticks(1 / def.energyRate))) {
-    b.timer = 0;
-    this.players[b.owner].energy++;
+  // Each worker inside adds a quarter of the full rate: the Assimilateur's 3 drones on top of the 25 % it runs at alone
+  // (notice), the Puits' 4 Esprits from nothing (balance designer 2026-11-22).
+  // Quarters of work pile up tick by tick, so a crew coming in or out changes only the ticks after it.
+  if (def.energyRate && !(off && !off.energy)) {
+    b.timer += def.bunker ? 4 - def.bunker + this.load(b) : 4;
+    const full = ticks(1 / def.energyRate) * 4;
+    if (b.timer >= full) {
+      b.timer -= full;
+      this.players[b.owner].energy++;
+    }
   }
   if (!(off && !off.produces)) this.produce(b);
 }
@@ -306,13 +313,6 @@ export function produce(this: World, b: Entity): void {
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
-    if (ARTEFACTS.includes(type)) {
-      b.arts.push(type);
-      if (b.boost === 0) b.speed = this.baseSpeed(b);
-      this.say(b.owner, `${b.def.name} : ${DEFS[type].name} (${b.arts.length}/${BALANCE.rules.upgrades.artefacts.max}).`, 'done');
-      this.next(b);
-      return;
-    }
     if (type === 'niveau') {
       this.ascend(b);
       this.next(b);
@@ -338,7 +338,7 @@ export function produce(this: World, b: Entity): void {
       if (type === 'megaespion') for (const u of this.entities.values()) if (u.owner === b.owner && u.type === 'zespion') this.fortify(u);
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && (u.type === 'drone' || u.type === 'dronecombat')) this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
-      if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'armurezodiacale'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
+      if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'auraputride'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
       this.next(b);
       return;
     }

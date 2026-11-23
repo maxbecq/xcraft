@@ -636,12 +636,13 @@ export function model(type: string, team: Material, seed = 0): Group {
   }
   const d = DEFS[type];
   if (d && 'faction' in d && d.faction === 'dieux' && d.kind === 'unit' && d.unique) {
+    // Only the body selects a god (balance designer 2026-11-22): its circle, halo and aura were caught too, a click
+    // well off its figure took it. Its own meshes go see-through for clicks, an unseen column over the body instead.
+    g.traverse((o) => (o.userData.noPick = true));
     godAura(g, t);
     // The Blender gods stand in a cyan circle of their own; the image-to-3D ones get it here.
-    if (STATIC_MESHY.includes(type)) {
-      godRing(g, (d as UnitDef).radius);
-      godPick(g, (d as UnitDef).radius, godTop.get(t) ?? 2);
-    }
+    if (STATIC_MESHY.includes(type)) godRing(g, (d as UnitDef).radius);
+    godPick(g, godWidth.get(t)!, godTop.get(t)!);
   }
   return g;
 }
@@ -652,11 +653,16 @@ export function model(type: string, team: Material, seed = 0): Group {
  */
 const godTop = new WeakMap<Object3D, number>();
 let auraTexture: CanvasTexture | undefined;
+const godWidth = new WeakMap<Object3D, number>();
 let pickMaterial: MeshBasicMaterial | undefined;
-/** An unseen column over a slender image-to-3D god, so a click anywhere on its figure selects it, not only its feet. */
-function godPick(g: Object3D, radius: number, top: number): void {
+/**
+ * An unseen column over a god's body, what a click or a box catches it by: a sixth of its model's width (its circle on
+ * the ground included) across, up to its shoulders.
+ */
+function godPick(g: Object3D, width: number, top: number): void {
   pickMaterial ??= new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
-  const column = new Mesh(new CylinderGeometry(radius * 0.35, radius * 0.35, top, 12).translate(0, top / 2, 0), pickMaterial);
+  const [r, h] = [width / 6, top * 0.8];
+  const column = new Mesh(new CylinderGeometry(r, r, h, 12).translate(0, h / 2, 0), pickMaterial);
   column.castShadow = false;
   g.add(column);
 }
@@ -676,7 +682,11 @@ function godRing(g: Object3D, radius: number): void {
 
 function godAura(g: Object3D, template: Object3D): void {
   let top = godTop.get(template);
-  if (top === undefined) godTop.set(template, (top = new Box3().setFromObject(template).max.y));
+  if (top === undefined) {
+    const box = new Box3().setFromObject(template);
+    godTop.set(template, (top = box.max.y));
+    godWidth.set(template, Math.max(box.max.x - box.min.x, box.max.z - box.min.z));
+  }
   if (!auraTexture) {
     const c = document.createElement('canvas');
     c.width = c.height = 128;

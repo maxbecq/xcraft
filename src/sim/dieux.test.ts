@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AI } from '../ai/ai';
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, type UnitDef, type UpgradeDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Command, type Entity, World } from './world';
@@ -53,12 +53,12 @@ describe('Dieux', () => {
     expect(thor).toBeDefined();
     w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }, { player: 0, kind: 'train', ids: [thor.id], type: 'minotaure' }]);
     expect(thor.queue).toEqual(['nain']); // only his own troops
-    // Walking, he does not summon.
+    // Summoning, he cannot walk away (balance designer 2026-11-22): the summons goes on.
+    const [x, left] = [thor.x, thor.trainLeft];
     w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 40 * FP }]);
-    const left = thor.trainLeft;
     run(w, 2);
-    expect(thor.trainLeft).toBe(left);
-    w.step([{ player: 0, kind: 'stop', ids: [thor.id] }]);
+    expect(thor.x).toBe(x);
+    expect(thor.trainLeft).toBeLessThan(left);
     run(w, (DEFS.nain as UnitDef).buildTime + 1);
     const [nain] = of(w, 0, 'nain');
     expect(nain).toBeDefined();
@@ -127,7 +127,7 @@ describe('Dieux', () => {
     const nearHp = near.hp;
     thor.charged = 100;
     w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: target.x, y: target.y, target: target.id }]);
-    run(w, 3);
+    run(w, 6); // Thor walks at 1.1 at his second level
     expect(target.hp).toBeLessThan(target.maxHp);
     expect(near.hp).toBeLessThan(nearHp);
   });
@@ -163,7 +163,7 @@ describe('Dieux', () => {
       return before - dummy.hp;
     };
     const plain = hit();
-    Object.assign(w.spawn('odin', 0, 34 * FP, 34 * FP), { mana: 1 << 30 });
+    Object.assign(w.spawn('odin', 0, 33 * FP, 31 * FP), { mana: 1 << 30 }); // within his aura's 4 at his first level
     expect(hit()).toBe(plain + BALANCE.rules.upgrades.auraguerre.damage[0]);
   });
 
@@ -209,7 +209,7 @@ describe('Dieux', () => {
     const nain = w.spawn('nain', 0, 31 * FP, 30 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [frigg.id], name: 'voile' }]);
     expect(nain.camo).toBeGreaterThan(0);
-    // Rayon de mort on every enemy Hadès sees; the ghosts of his army cannot be hurt.
+    // Rayon de mort on every enemy Hadès sees (no more Armée des enfers: équilibreur 2026-11-22).
     const w2 = createMatch(['dieux', 'humains']);
     const hades = Object.assign(w2.spawn('hades', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const a = w2.spawn('legionnaire', 1, 34 * FP, 30 * FP);
@@ -219,12 +219,7 @@ describe('Dieux', () => {
     w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'rayonmort' }]);
     expect(a.hp).toBeLessThan(ha);
     expect(b.hp).toBeLessThan(hb);
-    hades.abilityCd = 0;
-    w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'armeeenfers' }]);
-    const ghosts = of(w2, 0, 'fantome');
-    expect(ghosts).toHaveLength(ABILITIES.armeeenfers.max!);
-    w2.hurt(ghosts[0], 100);
-    expect(ghosts[0].hp).toBe(ghosts[0].maxHp);
+    expect((DEFS.hades as UnitDef).abilities).not.toContain('armeeenfers');
     hades.abilityCd = 0;
     w2.step([{ player: 0, kind: 'ability', ids: [hades.id], name: 'voyage', x: 45 * FP, y: 30 * FP }]);
     run(w2, 6);
@@ -289,20 +284,25 @@ describe('Dieux', () => {
     expect(of(w, 0, 'jormungandr')).toHaveLength(1);
   });
 
-  it('the Artefacterie: a god buys up to 4 improvements where it stands, the same one several times', () => {
+  it('the Artefacterie gives up to 4 improvements to a god clicked on anywhere, the same one several times (like the Centre K)', () => {
     const w = createMatch(['dieux', 'humains']);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
-    const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
-    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'artforce' }]);
-    expect(thor.queue).toEqual([]); // no Artefacterie yet
-    w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
-    for (const t of ['artforce', 'artforce', 'artresistance', 'artvitesse', 'artagilite']) w.step([{ player: 0, kind: 'train', ids: [thor.id], type: t }]);
-    expect(thor.queue).toHaveLength(4);
-    run(w, 4 * (DEFS.artforce as UpgradeDef).buildTime + 1);
+    const thor = Object.assign(w.spawn('thor', 0, 60 * FP, 60 * FP), { mana: 1 << 30 });
+    const arte = w.spawn('artefacterie', 0, 20 * FP, 20 * FP);
+    const give = (t: string) => {
+      arte.abilityCd = 0;
+      w.step([{ player: 0, kind: 'ability', ids: [arte.id], name: t, x: thor.x, y: thor.y }]);
+    };
+    give('artforce');
+    expect(thor.arts).toEqual(['artforce']);
+    expect(w.busy(thor)).toBe(false); // nothing queued at the god: it walks on
+    w.step([{ player: 0, kind: 'ability', ids: [arte.id], name: 'artforce', x: thor.x, y: thor.y }]);
+    expect(thor.arts).toHaveLength(1); // the Artefacterie rests a moment
+    for (const t of ['artforce', 'artresistance', 'artvitesse', 'artagilite']) give(t);
     expect(thor.arts).toEqual(['artforce', 'artforce', 'artresistance', 'artvitesse']);
     expect(w.armorBonus(thor)).toBe(BALANCE.rules.upgrades.artefacts.resistance);
-    const dummy = w.spawn('grenier', 1, 30 * FP, 32 * FP);
+    const dummy = w.spawn('grenier', 1, 60 * FP, 62 * FP);
     const before = dummy.hp;
     w.hit(thor, dummy, (DEFS.thor as UnitDef).attack!);
     const plain = (DEFS.thor as UnitDef).attack!.damage;
@@ -339,7 +339,7 @@ describe('Dieux', () => {
     expect(of(w, 0, 'elemterre').length + of(w, 0, 'elemeau').length).toBe(0);
   });
 
-  it("the Temple de vénération's other research: Coup puissant, Peau de roc, Prescience, Drake géant, Armure zodiacale; the Transe", () => {
+  it("the Temple de vénération's other research: Coup puissant, Peau de roc, Prescience, Drake géant, Aura putride; no more Transe", () => {
     const w = createMatch(['dieux', 'humains']);
     const up = w.players[0].upgrades;
     // Peau de roc: the Sphinx turns to stone, armoured and mending.
@@ -362,17 +362,19 @@ describe('Dieux', () => {
       w.step([]);
     }
     expect(blows.size).toBe(2);
-    // Drake géant and Armure zodiacale, on those standing and to come.
+    // Drake géant and Aura putride, on those standing and to come.
     const drake = w.spawn('drake', 0, 60 * FP, 50 * FP);
     up.drakegeant = 1;
     w.empower(drake, 'drakegeant');
     expect(drake.maxHp).toBeGreaterThan((DEFS.drake as UnitDef).hp);
     expect(w.room(drake)).toBe(BALANCE.rules.upgrades.drakegeant.room);
-    up.armurezodiacale = 1;
-    expect(w.spawn('titan', 0, 64 * FP, 50 * FP).maxHp).toBe((DEFS.titan as UnitDef).hp + BALANCE.rules.upgrades.zodiacale.hp);
-    // Transe enragée.
-    w.step([{ player: 0, kind: 'ability', ids: [mino.id], name: 'transe' }]);
-    expect(mino.war).toBeGreaterThan(0);
+    const slow = w.spawn('immortel', 0, 66 * FP, 50 * FP);
+    up.auraputride = 1;
+    const imm = w.spawn('immortel', 0, 64 * FP, 50 * FP);
+    expect(imm.maxHp).toBe((DEFS.immortel as UnitDef).hp + BALANCE.rules.upgrades.auraputride.hp);
+    expect(imm.speed).toBeGreaterThan(slow.speed);
+    // The Minotaure lost its Transe enragée.
+    expect((DEFS.minotaure as UnitDef).ability).toBeUndefined();
   });
 
   it('Déracinement: an Yggdrasill walks, then takes root again elsewhere', () => {
@@ -436,7 +438,7 @@ describe('Dieux', () => {
     expect(w.lacks(0, 'protecteur')).toBe('');
   });
 
-  it('Courroux du marteau triples the next blow; the Tempête de sable silences enemy shooters', () => {
+  it('Courroux du marteau doubles the next blow (balance designer 2026-11-22); the Tempête de sable silences enemy shooters', () => {
     const w = createMatch(['dieux', 'humains']);
     const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const dummy = w.spawn('conseil', 1, 31 * FP, 28 * FP);
@@ -445,7 +447,7 @@ describe('Dieux', () => {
     expect(thor.charged).toBeGreaterThan(0);
     w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: dummy.x, y: dummy.y, target: dummy.id }]);
     run(w, 3);
-    expect(before - dummy.hp).toBeGreaterThanOrEqual(3 * (DEFS.thor as UnitDef).attack!.damage - 10);
+    expect(before - dummy.hp).toBeGreaterThanOrEqual(2 * (DEFS.thor as UnitDef).attack!.damage - 10);
     expect(thor.charged).toBe(0);
 
     const seth = Object.assign(w.spawn('seth', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
@@ -565,5 +567,210 @@ describe('Golem (notice: « dégâts aberrants aux bâtiments »)', () => {
     };
     expect(loss('caserne')).toBe(140);
     expect(loss('pegase')).toBe(70);
+  });
+});
+
+describe('a busy god (balance designer, 2026-11-22)', () => {
+  it('stands still and does not fight while it summons or goes up a level; Gaïa walks on', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].minerals = 5000;
+    w.players[0].energy = 5000;
+    w.spawn('branche', 0, 30 * FP, 14 * FP);
+    const thor = w.spawn('thor', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }]);
+    expect(thor.queue.length).toBe(1);
+    expect(w.busy(thor)).toBe(true);
+    w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 30 * FP }]);
+    run(w, 2);
+    expect(thor.x).toBe(30 * FP);
+    const foe = w.spawn('legionnaire', 1, 31 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'attack', ids: [thor.id], x: foe.x, y: foe.y, target: foe.id }]);
+    expect(thor.order).toBeNull();
+    w.remove(foe);
+    run(w, (DEFS.nain as UnitDef).buildTime + 2);
+    expect(w.busy(thor)).toBe(false);
+    w.step([{ player: 0, kind: 'move', ids: [thor.id], x: 40 * FP, y: 30 * FP }]);
+    run(w, 2);
+    expect(thor.x).toBeGreaterThan(30 * FP);
+    const gaia = of(w, 0, 'gaia')[0];
+    w.step([{ player: 0, kind: 'train', ids: [gaia.id], type: 'esprit' }]);
+    expect(w.busy(gaia)).toBe(false);
+    // Raising a building: busy till it is up.
+    const site = w.site('fontaine', 0, 50, 50);
+    thor.raising = site.id;
+    expect(w.busy(thor)).toBe(true);
+    site.buildLeft = 0;
+    expect(w.busy(thor)).toBe(false);
+  });
+});
+
+describe('a busy healer god and Gaïa on the move (Codex review, 2026-11-23)', () => {
+  it('Isis summoning heals only within reach: she does not walk to a wounded ally, and her queue runs on', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const isis = Object.assign(w.spawn('isis', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    w.enqueue(isis, 'sphinx');
+    const left = isis.trainLeft;
+    const hurt = w.spawn('nain', 0, 37 * FP, 30 * FP);
+    hurt.hp = 10;
+    run(w, 2);
+    expect(isis.x).toBe(30 * FP);
+    expect(hurt.hp).toBe(10);
+    expect(isis.trainLeft).toBeLessThan(left);
+    // Within reach, she still heals.
+    hurt.x = 32 * FP;
+    run(w, 2);
+    expect(hurt.hp).toBeGreaterThan(10);
+  });
+
+  it('Gaïa summons an Esprit as she walks', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].minerals = 5000;
+    const gaia = of(w, 0, 'gaia')[0];
+    const esprits = of(w, 0, 'esprit').length;
+    w.step([{ player: 0, kind: 'train', ids: [gaia.id], type: 'esprit' }]);
+    const [x, y] = [gaia.x, gaia.y];
+    for (let i = 0; i < ticks((DEFS.esprit as UnitDef).buildTime + 2); i++) {
+      if (!gaia.goal && !gaia.order) w.step([{ player: 0, kind: 'move', ids: [gaia.id], x: x === gaia.x ? 60 * FP : x, y }]);
+      else w.step([]);
+    }
+    expect(gaia.x !== x || gaia.y !== y).toBe(true);
+    expect(of(w, 0, 'esprit').length).toBe(esprits + 1);
+  });
+});
+
+describe('the Puits (balance designer, 2026-11-22)', () => {
+  it('yields nothing empty, a quarter of its rate for each Esprit inside, up to 4', () => {
+    const energyIn = (crew: number) => {
+      const w = createMatch(['dieux', 'humains']);
+      const puits = w.spawn('puitsdivin', 0, 40 * FP, 40 * FP);
+      for (let i = 0; i < crew; i++) Object.assign(w.spawn('esprit', 0, 40 * FP, 40 * FP), { inside: puits.id });
+      const before = w.players[0].energy;
+      run(w, 40);
+      return w.players[0].energy - before;
+    };
+    expect(energyIn(0)).toBe(0);
+    const [two, four] = [energyIn(2), energyIn(4)];
+    expect(Math.abs(four - 2 * two)).toBeLessThanOrEqual(2);
+    expect(four).toBeGreaterThan(0);
+  });
+
+  it('pays the work done by the crew of each tick, not by the crew of the moment', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const puits = w.spawn('puitsdivin', 0, 40 * FP, 40 * FP);
+    const full = ticks(1 / (DEFS.puitsdivin as BuildingDef).energyRate!);
+    const one = w.spawn('esprit', 0, 40 * FP, 40 * FP);
+    one.inside = puits.id;
+    const before = w.players[0].energy;
+    // Alone, one Esprit does a quarter of the work: three quarters of an energy in three full periods.
+    for (let i = 0; i < 3 * full; i++) w.step([]);
+    one.inside = 0;
+    run(w, 5);
+    for (let i = 0; i < 4; i++) Object.assign(w.spawn('esprit', 0, 40 * FP, 40 * FP), { inside: puits.id });
+    w.step([]);
+    expect(w.players[0].energy - before).toBe(0);
+  });
+
+  it('counts no crew in a bunker that yields no energy', () => {
+    const w = createMatch(['humains', 'dieux']);
+    w.spawn('fortin', 0, 40 * FP, 40 * FP);
+    const load = vi.spyOn(w, 'load');
+    run(w, 1);
+    expect(load).not.toHaveBeenCalled();
+  });
+});
+
+describe('Apollon\'s Pluie de feu (balance designer, 2026-11-22)', () => {
+  it('falls on an area, burns friend and foe, and buildings at a quarter, a third, a half by level', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = Object.assign(w.spawn('apollon', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const friend = w.spawn('nain', 0, 34 * FP, 30 * FP);
+    const store = w.spawn('grenier', 1, 35 * FP, 32 * FP);
+    const [fh, sh] = [friend.hp, store.hp];
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: 34 * FP, y: 31 * FP }]);
+    expect(friend.hp).toBeLessThan(fh);
+    const toStore = sh - store.hp;
+    expect(toStore).toBeGreaterThan(0);
+    expect(toStore).toBeLessThan(ABILITIES.pluiedefeu.damage! / 2);
+    // On bare ground too.
+    apollon.spellCd = {};
+    apollon.abilityCd = 0;
+    const mana = apollon.mana;
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: 26 * FP, y: 26 * FP }]);
+    expect(apollon.mana).toBeLessThan(mana);
+  });
+});
+
+describe('the automatic Soin (balance designer, 2026-11-22)', () => {
+  it('the Prêtresse heals 25 for 5 mana, by itself or not, never a machine; Isis 25 a second at her first level', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 32 * FP, 30 * FP);
+    const sphinx = Object.assign(w.spawn('sphinx', 0, 30 * FP, 32 * FP), { statue: 0 });
+    const golem = w.spawn('golem', 0, 28 * FP, 30 * FP);
+    nain.hp = golem.hp = 10;
+    // Switched off: nobody healed.
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    expect(pretresse.autoOff).toBe(true);
+    run(w, 3);
+    expect(nain.hp).toBe(10);
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    const mana = pretresse.mana;
+    run(w, 3);
+    expect(nain.hp).toBeGreaterThan(10);
+    expect(golem.hp).toBe(10); // a machine
+    expect(pretresse.mana).toBeLessThan(mana);
+    expect(sphinx.hp).toBe(sphinx.maxHp);
+    const isis = Object.assign(w.spawn('isis', 0, 50 * FP, 50 * FP), { mana: 1 << 30 });
+    const hurt = w.spawn('nain', 0, 52 * FP, 50 * FP);
+    hurt.hp = 10;
+    run(w, 1.5);
+    expect(hurt.hp).toBeGreaterThanOrEqual(10 + 25);
+    expect(w.healPulse(isis)).toBe(25);
+    isis.lvl = 3;
+    expect(w.healPulse(isis)).toBe(35);
+  });
+
+  it('switched off, the Prêtresse drops the patient she was walking to and pays no more (Codex review, 2026-11-23)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 37 * FP, 30 * FP);
+    nain.held = 1 << 20; // stays where it is
+    nain.hp = 10;
+    run(w, 0.5);
+    expect(pretresse.order?.kind).toBe('heal');
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    expect(pretresse.order).toBeNull();
+    const mana = pretresse.mana;
+    run(w, 4);
+    expect(nain.hp).toBe(10);
+    expect(pretresse.mana).toBeGreaterThanOrEqual(mana);
+  });
+
+  it('one rule for every Soin: no machine healed by Soins divins nor the Fontaine, a Sphinx turned to stone dropped', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const isis = Object.assign(w.spawn('isis', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const golem = w.spawn('golem', 0, 32 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 30 * FP, 32 * FP);
+    golem.hp = nain.hp = 10;
+    w.step([{ player: 0, kind: 'ability', ids: [isis.id], name: 'soinsdivins' }]);
+    expect(nain.hp).toBeGreaterThan(10);
+    expect(golem.hp).toBe(10);
+    w.spawn('fontaine', 0, 60 * FP, 60 * FP);
+    const g2 = w.spawn('golem', 0, 61 * FP, 60 * FP);
+    g2.hp = 10;
+    run(w, 3);
+    expect(g2.hp).toBe(10);
+    // A Prêtresse healing a Sphinx that turns to stone stops.
+    const pretresse = w.spawn('pretresse', 0, 80 * FP, 80 * FP);
+    const sphinx = Object.assign(w.spawn('sphinx', 0, 81 * FP, 80 * FP), { mana: 1 << 30 });
+    sphinx.hp = 10;
+    w.setOrder(pretresse, { kind: 'heal', target: sphinx.id });
+    w.step([]);
+    expect(pretresse.order?.kind).toBe('heal');
+    sphinx.statue = ticks(15); // Forme de statue
+    const mana = pretresse.mana;
+    run(w, 2);
+    expect(pretresse.order?.kind).not.toBe('heal');
+    expect(pretresse.mana).toBeGreaterThanOrEqual(mana); // its stone mends it, not her
   });
 });

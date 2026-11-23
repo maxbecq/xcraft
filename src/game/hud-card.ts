@@ -1,6 +1,6 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
 import { type Command, cdOf } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -125,7 +125,7 @@ export function buttonsFor(h: Hud): Button[] {
     if (h.workers().length) {
       list.push({ label: 'Construire', cmd: 'construire', key: 'B', action: () => (h.buildMenu = 'basic') });
       // The LCD console shows every building at once, as a tree: no second, « advanced » list.
-      if (!lcdTree(h) && !onlyOwn(h)) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
+      if (!lcdTree(h) && !onlyOwn(h) && FACTIONS[h.world.players[h.player].faction].advanced.length) list.push({ label: 'Avancé', cmd: 'avance', key: 'V', action: () => (h.buildMenu = 'advanced') });
     }
     // One button per active ability among the selected units; each ready unit uses it.
     for (const ab of new Set(units.flatMap((u) => h.world.abilitiesFor(u)))) {
@@ -140,8 +140,12 @@ export function buttonsFor(h: Hud): Button[] {
       const payer = casters.find((u) => h.world.manaOf(u));
       const price = payer ? spell(ab, payer.lvl).mana : undefined;
       const mana = price !== undefined ? ` · ${price} énergie` : '';
-      list.push({ label: `${a.name}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
+      // The automatic Soin says whether it is on (all the selected healers' state: on if any heals by itself).
+      const on = ab === 'autosoin' ? (casters.some((u) => !u.autoOff) ? ' : oui' : ' : non') : '';
+      list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
     }
+    // Passive effects (Odin's war aura, Athéna's protection): an icon that does nothing, its effect in the tooltip.
+    for (const p of new Set(units.flatMap((u) => (u.def as UnitDef).passives ?? []))) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
     // Z socles: evolve into the next tier, in the field.
     const evolvers = units.filter((u) => h.world.nextTier(u) && !u.evolving);
     if (evolvers.length) {
@@ -164,16 +168,6 @@ export function buttonsFor(h: Hud): Button[] {
     if (g) list.push({ label: `Niveau ${g.lvl + 1}`, cmd: 'niveau', type: 'niveau', key: (DEFS.niveau as UpgradeDef).hotkey, cost: (g.def as UnitDef).levels!.cost[g.lvl - 1], seconds: (g.def as UnitDef).levels!.time[g.lvl - 1], action: () => cmd({ kind: 'train', ids: [g.id], type: 'niveau' }) });
     // A god that summons troops has a rally point too; its right click moves it, so only this button sets one.
     if (units.some((u) => (u.def as UnitDef).trains?.length)) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => h.setTargeting(true, true, 'rally') });
-    // The Artefacterie's improvements, once there is one, for a selected god with room left.
-    const buyers = units.filter((u) => (u.def as UnitDef).levels);
-    if (buyers.length && [...h.world.entities.values()].some((b) => b.owner === h.player && b.type === 'artefacterie' && b.buildLeft === 0)) {
-      const max = BALANCE.rules.upgrades.artefacts.max;
-      const free = buyers.find((u) => h.world.artefacts(u) < max);
-      for (const t of ARTEFACTS) {
-        const d = DEFS[t] as UpgradeDef;
-        list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: free ? undefined : `${max} améliorations au plus par dieu`, action: () => free && cmd({ kind: 'train', ids: [free.id], type: t }) });
-      }
-    }
     const summoning = units.find((u) => u.queue.length);
     if (summoning) list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [summoning.id] }) });
     return list;
@@ -501,7 +495,7 @@ export function showTip(h: Hud, button: HTMLElement): void {
     if (d.shield) stats.push(`${d.shield} bouclier`);
     if (d.attack) stats.push(`${d.attack.damage} dégâts${d.attack.range > 1 ? `, portée ${d.attack.range}` : ', mêlée'}`);
     if ((d as UnitDef).heal) stats.push('soigne');
-    if ((d as BuildingDef).bunker) stats.push(`abrite ${(d as BuildingDef).bunker} soldats`);
+    if ((d as BuildingDef).bunker) stats.push((d as BuildingDef).energyRate ? `${(d as BuildingDef).bunker} ouvriers à l’intérieur, 25 % chacun` : `abrite ${(d as BuildingDef).bunker} soldats`);
     if ((d as BuildingDef).trains?.length) stats.push(`produit : ${(d as BuildingDef).trains!.map((t) => DEFS[t].name).join(', ')}`);
     lines.push(stats.join(' · '));
     // Z socles: a second step follows the click (the weapon), easy to miss.

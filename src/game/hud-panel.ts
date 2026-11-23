@@ -78,7 +78,8 @@ export function updatePanel(h: Hud): void {
   }
   // The Temple primordial: each mythology's ultimate, charging while its three gods stand.
   if (e.type === 'primordial' && e.buildLeft === 0 && e.owner === h.player) {
-    html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => progress(`${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})`, ultimatePct(h, m) / 100)).join('')}</div>`;
+    // One short line each, by mythology (the spell and gods in its tooltip): spelt out, the third fell below the panel.
+    html += `<div class="prod">${(Object.keys(MYTHS) as Mythology[]).map((m) => `<div title="${ABILITIES[MYTHS[m].spell].name} (${MYTHS[m].gods.map((g) => DEFS[g].name).join(', ')})">${progress(`${MYTHS[m].name[0].toUpperCase()}${MYTHS[m].name.slice(1)} · ${ultimatePct(h, m)} %`, ultimatePct(h, m) / 100)}</div>`).join('')}</div>`;
   }
   if (e.def.kind === 'unit' && e.carry) html += `<div class="info">Transporte ${e.carry} minerai</div>`;
   // Druide's Double énergétique: its owner alone knows it is a decoy, and for how long.

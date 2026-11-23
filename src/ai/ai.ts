@@ -95,7 +95,7 @@ const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', '
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
-const SIMPLE = ['stimulant', 'charge', 'peauderoc', 'transe'];
+const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
@@ -1120,14 +1120,17 @@ export class AI {
         ctx.energy -= cost.energy;
       }
       // With an Artefacterie and resources to spare: Force, Résistance, Force, Vitesse for each god in turn.
-      const arte = buildings.some((b) => b.type === 'artefacterie' && b.buildLeft === 0);
-      for (const g of arte ? gods.filter((e) => this.world.artefacts(e) < BALANCE.rules.upgrades.artefacts.max && e.queue.length <= 2) : []) {
+      // Given from the Artefacterie, one at a time (it rests between two).
+      const arte = buildings.find((b) => b.type === 'artefacterie' && b.buildLeft === 0 && b.abilityCd === 0);
+      const g = arte && gods.find((e) => this.world.artefacts(e) < BALANCE.rules.upgrades.artefacts.max);
+      if (arte && g) {
         const t = ['artforce', 'artresistance', 'artforce', 'artvitesse'][this.world.artefacts(g)];
         const cost = (DEFS[t] as UpgradeDef).cost;
-        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || ctx.energy - reserve < cost.energy) break;
-        ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: t });
-        ctx.minerals -= cost.minerals;
-        ctx.energy -= cost.energy;
+        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin >= cost.minerals && ctx.energy - reserve >= cost.energy) {
+          ctx.out.push({ player: this.player, kind: 'ability', ids: [arte.id], name: t, x: g.x, y: g.y });
+          ctx.minerals -= cost.minerals;
+          ctx.energy -= cost.energy;
+        }
       }
     }
   }
@@ -1284,7 +1287,7 @@ export class AI {
       if (!ab || !w.ready(u, ab) || !SIMPLE.includes(ab)) return false;
       if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
-      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : ab === 'transe' ? d < 2 * FP : d > 2 * FP);
+      return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
     // Dieux: an Élémentaire comes « faible et chétive » (notice): it takes its fire form at once (it hits flyers too).
@@ -1654,7 +1657,8 @@ export class AI {
         } else if (CROWD[name]) {
           // Silence only where enemy casters stand.
           const pool = name === 'silence' ? inReach.filter((f) => abilitiesOf(f.def as UnitDef).length) : inReach.filter((f) => !flies(f));
-          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
+          // The Pluie de feu burns its own side too: not where as many of ours stand.
+          const best = pool.map((f) => [f, around(pool, f.x, f.y, radius).length - (name === 'pluiedefeu' ? 2 * around(army, f.x, f.y, radius).length : 0)] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
           if (best && best[1] >= CROWD[name]) cmd = at(u, name, best[0]);
         } else if (name === 'jetdesable') {
           // The toughest enemy machine in reach.
@@ -1665,7 +1669,7 @@ export class AI {
           const air = near.some((f) => flies(f));
           const ground = near.some((f) => !flies(f));
           if (name === 'formeair' ? air && !ground : ground && u.type === 'elemair') cmd = self(u, name);
-        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre' || name === 'flechegaia') {
+        } else if (name === 'deflagration' || name === 'chocmental' || name === 'foudre') {
           // The toughest enemy in reach (for the stun, a caster first).
           const pick = inReach.filter((f) => !(f.def as UnitDef).worker).sort((a, b) => Number(name === 'chocmental' && !!abilitiesOf(b.def as UnitDef).length) - Number(name === 'chocmental' && !!abilitiesOf(a.def as UnitDef).length) || b.hp + b.shield - (a.hp + a.shield) || a.id - b.id)[0];
           if (pick && pick.maxHp + pick.maxShield >= 100) cmd = at(u, name, pick);
@@ -1708,8 +1712,6 @@ export class AI {
           if (this.engaged(u) !== undefined && around(army, u.x, u.y, radius).length >= 5) cmd = self(u, name);
         } else if (name === 'rayonmort') {
           if (around(near, u.x, u.y, (u.def as UnitDef).sight * FP).length >= 4) cmd = self(u, name);
-        } else if (name === 'armeeenfers') {
-          if (this.engaged(u) !== undefined) cmd = self(u, name);
         } else if (name === 'nuee') {
           if (around(near, u.x, u.y, radius + u.radius).length >= 2) cmd = self(u, name);
         } else if (name === 'statue') {
@@ -2080,12 +2082,15 @@ export class AI {
     if (type === this.faction.hq || type === this.faction.outpost) {
       // Centred on the site, laid out for a headquarters: a smaller outpost (the Dieux' Antre) at its top-left corner
       // stood two tiles off the mirror of the one in the opposite corner.
-      const inset = Math.floor(((DEFS[this.faction.hq] as BuildingDef).size - def.size) / 2);
+      // An odd gap (a 4-wide Antre on a 5-wide site) leaves half a tile over, which goes toward the map's middle: the
+      // base in the opposite corner gets the mirror of the spot.
+      const gap = (DEFS[this.faction.hq] as BuildingDef).size - def.size;
+      const inset = (t: number, mid: number) => (2 * t + gap < mid ? Math.ceil(gap / 2) : Math.floor(gap / 2));
       // Its headquarters lost, its start's spot comes first (left out of the expansions, it could not be raised again
       // there once the other sites were taken).
       const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
       const start = lost ? startSite(w, this.player) : undefined;
-      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset, ty + inset]);
+      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset(tx, w.map.width - (DEFS[this.faction.hq] as BuildingDef).size), ty + inset(ty, w.map.height - (DEFS[this.faction.hq] as BuildingDef).size)]);
       // An expansion with a field left round it (a site mined out, its base lost, was taken again for its last 800).
       const mined = (tx: number, ty: number) => {
         const [cx, cy] = [(tx + def.size / 2) * FP, (ty + def.size / 2) * FP];
