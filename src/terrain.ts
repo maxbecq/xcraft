@@ -454,12 +454,14 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
     const [footBack, , rim] = reach(1, bottom);
     const footOver = rim + footBack;
     const want = CLIFF_FOOT * (0.7 + 0.3 * noise(px * 0.9, pz * 0.9, 1, 53));
-    // Less of it on a low wall (a ramp's side, which meets the full wall beside it at the ramp's foot), and none at an
-    // end shared with a diagonal cliff, which has no band: the faces still meet there.
-    const tall = Math.min(1, (top - bottom) / LEVEL_HEIGHT);
+    // Only where the wall stands half a level high or more, growing to its full share at three quarters: the
+    // simulation keeps no band along a lower one (a ramp's side near its top, see Grid.keepOff), units walk to its
+    // edge. And none at an end shared with a diagonal cliff, which has no band either. Both by the column's own
+    // height and place, so two faces sharing a corner still meet there.
+    const tall = Math.min(1, Math.max(0, ((top - bottom) / LEVEL_HEIGHT - 0.5) * 4));
     const ease = (c: Vector2, d: number) => (byCut(c) ? Math.min(1, d * 2) : 1);
-    const banded = ease(c0, t) * ease(c1, 1 - t);
-    const scree = rock && footOver < want ? (want - footOver) * tall * banded : 0;
+    const banded = ease(c0, t) * ease(c1, 1 - t) * tall;
+    const scree = rock && footOver < want ? (want - footOver) * banded : 0;
     for (let j = 0; j <= WALL_ROWS; j++) {
       const s = j / WALL_ROWS;
       const y = top + (bottom - top) * s;
