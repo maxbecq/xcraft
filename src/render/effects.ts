@@ -924,7 +924,8 @@ export class Effects {
       return;
     }
     const ammo = s.type ? AMMO[s.type] : undefined;
-    if (ammo && this.munition(ammo, s, from, to, world)) return;
+    // A Human's round leaves the point of what it holds (a barrel, a staff's orb), when its model holds one.
+    if (ammo && this.munition(ammo, s, (s.id !== undefined && ammo !== 'flamme' && this.muzzle(s.id)) || from, to, world)) return;
     const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
     const isd = FX_STYLE !== 'avant' && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'isdaris';
     if (isd && this.isShot(s.type!, s, from, to)) return;

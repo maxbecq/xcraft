@@ -154,7 +154,7 @@ const RING_RISE = 0.35;
 const RING_CLIFF = 0.6;
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
-const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', -1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
+const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** A death burst's material: sparks for a machine, dark drops for the living. */
 function burstMaterial(mechanical: boolean): PointsMaterial {
   return mechanical
@@ -250,8 +250,12 @@ export class EntityRenderer {
 
   /** Where a unit's or building's weapon module has its muzzle (world); none if it shows none. */
   muzzle(id: number): Vector3 | undefined {
-    const w = this.views.get(id)?.weapon;
-    return w?.mod && w.tip ? w.mod.localToWorld(w.tip.clone()) : undefined;
+    const v = this.views.get(id);
+    const w = v?.weapon;
+    if (w?.mod && w.tip) return w.mod.localToWorld(w.tip.clone());
+    // A character's hand weapon (models.ts arm): its point, a staff's crystal or orb, a gun's barrel.
+    const held = v?.model.getObjectByName('held');
+    return held && typeof held.userData.tip === 'number' ? held.localToWorld(new Vector3(0, 0, held.userData.tip)) : undefined;
   }
 
   weld(id: number): Vector3 | undefined {

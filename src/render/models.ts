@@ -200,7 +200,8 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
   serf: { height: 0.72, weapon: 'piqueur', grip: 'drill', basket: true }, // puny next to the soldiers; a wicker basket on its back
   legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole', shield: 'scutum' }, // a scutum on the left arm, in the team's colour
-  soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
+  soigneur: { height: 0.86, weapon: 'cristal', grip: 'pole' }, // a monk's staff, its cyan crystal up
+  alchimiste: { height: 0.86, weapon: 'globe', grip: 'pole' }, // a staff with a glass orb of green liquid
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
@@ -208,7 +209,7 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'alchimiste', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
   'minotaure', 'temple', 'gaia',
   // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches
