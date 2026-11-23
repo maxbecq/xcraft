@@ -11,11 +11,11 @@ import type { Audio } from '../audio';
 import { type BuildingDef, DEFS } from '../data';
 import { type GameMap, heightAt } from '../map';
 import type { Entity, World } from '../sim/world';
-import { params } from './config';
 
 const LOOKS = ['eclair', 'fantome', 'onde', 'icone'] as const;
 type Look = (typeof LOOKS)[number];
-const LOOK = LOOKS.find((l) => l === params.get('pose')) ?? null;
+// Read here, not from game/config: the HUD's tests load this without a page.
+const LOOK = typeof location === 'undefined' ? null : (LOOKS.find((l) => l === new URLSearchParams(location.search).get('pose')) ?? null);
 
 interface Shown {
   obj: Object3D;
