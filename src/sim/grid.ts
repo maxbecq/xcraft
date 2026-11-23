@@ -79,6 +79,38 @@ export class Grid {
     return this.inside(x, y) && this.blocked[y * this.width + x] === 0 && this.chasm[y * this.width + x] === 0;
   }
 
+  /**
+   * A body of radius `r` (fixed point) at (x, y), moved inside its own tile so it stays clear of the cliffs there:
+   * the tile's sides no ground unit crosses on terrain (a cliff, a chasm, the map's edge) and the corner of a plateau
+   * standing diagonally. Only the centre is tested against the terrain when moving, so a body could stand half in the
+   * rock (équilibreur 22/11). `r` is kept under half a tile: a one-tile pass stays open to any unit.
+   * Buildings are not counted: units still crowd against them.
+   */
+  keepOff(x: number, y: number, r: number): [number, number] {
+    const tx = tileOf(x);
+    const ty = tileOf(y);
+    if (r <= 0 || !this.inside(tx, ty) || this.cut[ty * this.width + tx]) return [x, y];
+    const c = Math.min(r, KEEP_OFF);
+    const s = this.sides[ty * this.width + tx];
+    const x0 = tx * FP;
+    const y0 = ty * FP;
+    // A plateau's corner across the diagonal (both own sides open, the diagonal step not): pushed straight away from it.
+    for (const [dx, dy] of CORNERS) {
+      if (!(s & (dx < 0 ? 8 : 2)) || !(s & (dy < 0 ? 1 : 4)) || this.steps[ty * this.width + tx] & (1 << DIR[(dy + 1) * 3 + dx + 1])) continue;
+      const cx = dx < 0 ? x0 : x0 + FP;
+      const cy = dy < 0 ? y0 : y0 + FP;
+      const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      if (d >= c) continue;
+      if (d === 0) [x, y] = [cx - dx * c, cy - dy * c];
+      else [x, y] = [cx + Math.trunc(((x - cx) * c) / d), cy + Math.trunc(((y - cy) * c) / d)];
+    }
+    if (!(s & 8)) x = Math.max(x, x0 + c);
+    if (!(s & 2)) x = Math.min(x, x0 + FP - c);
+    if (!(s & 1)) y = Math.max(y, y0 + c);
+    if (!(s & 4)) y = Math.min(y, y0 + FP - c);
+    return [x, y];
+  }
+
   /** Level of a flat, buildable tile, or -1 for a ramp or a cut cliff corner. */
   flatLevel(x: number, y: number): number {
     if (this.cut[y * this.width + x]) return -1;
@@ -352,6 +384,9 @@ export class Grid {
   }
 }
 
+/** Most a body is kept off a cliff (keepOff), just under half a tile. */
+const KEEP_OFF = Math.trunc((FP * 45) / 100);
+const CORNERS: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 /** canStep's sides: bit, and the step across it. */
 const SIDES: [number, number, number][] = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]];
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];

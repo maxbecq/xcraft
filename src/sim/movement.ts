@@ -300,6 +300,16 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
       if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings, climbs(e)))) return false;
     }
   }
+  // The body, not only its centre, kept off the cliffs: never half in the rock (équilibreur 22/11). A climber walks
+  // over them.
+  if (!climbs(e)) {
+    const [kx, ky] = this.grid.keepOff(nx, ny, e.radius);
+    // Held back to no headway at all (heading straight into the wall): a blocked step, so a walker stuck there
+    // replans (blockedTicks) instead of pressing on in place for good. Along the wall or round a corner, it slides.
+    const [dx, dy] = [nx - e.x, ny - e.y];
+    if ((kx !== nx || ky !== ny) && (kx - e.x) * dx + (ky - e.y) * dy <= 0) return false;
+    [nx, ny] = [kx, ky];
+  }
   e.x = nx;
   e.y = ny;
   return true;
