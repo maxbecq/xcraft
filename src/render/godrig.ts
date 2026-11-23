@@ -29,6 +29,8 @@ export interface RigSpec {
   stride?: number;
   /** A ponderous walker (Golem, Titan): slower, heavier steps, a deeper sway. */
   heavy?: boolean;
+  /** Feet seen below the hem: a planted foot sweeps back exactly the ground covered, instead of a swing. */
+  plant?: boolean;
   /** A god's circle and ornaments on the ground: flat parts low and wide stay put. */
   ring?: boolean;
   /** Legs reach no further than this from z = 0: a cape or a train behind follows the hips, not the stride. */
@@ -39,12 +41,15 @@ export interface RigSpec {
  * The Dieux's silhouettes (tools/blender/dieux, and the image-to-3D Minotaure and Gaïa), read off their models:
  * legs below `hip`, robes on the gods, wings and arms beyond their x.
  */
+/** Share of a planted gait's cycle a foot stays on the ground. */
+const STANCE = 0.6;
+
 export const RIGS: Record<string, RigSpec> = {
   // Gods: robed, legs under the robe; their circle on the ground.
   thor: { kind: 'walk', depth: 0.4, hip: 1.25, blend: 0.25, swing: 0.3, arms: [0.4, 2.3, 4.2], armSwing: 0.4, ring: true, heavy: true },
   odin: { kind: 'walk', depth: 0.4, hip: 1.3, blend: 0.4, swing: 0.2, arms: [0.48, 2.25], ring: true },
   apollon: { kind: 'walk', depth: 0.4, hip: 1.1, blend: 0.22, swing: 0.32, arms: [0.5, 2.25], ring: true },
-  seth: { kind: 'walk', depth: 0.4, hip: 1.2, blend: 0.4, swing: 0.2, arms: [0.55, 2.2], ring: true },
+  seth: { kind: 'walk', depth: 0.4, hip: 1.2, blend: 0.4, swing: 0.2, plant: true, arms: [0.55, 2.2], ring: true },
   athena: { kind: 'walk', depth: 0.4, hip: 1.25, blend: 0.4, swing: 0.2, arms: [0.48, 2.2], ring: true },
   isis: { kind: 'walk', depth: 0.4, hip: 1.3, blend: 0.45, swing: 0.16, arms: [0.5, 2.25], ring: true },
   hades: { kind: 'walk', depth: 0.4, hip: 1.25, blend: 0.35, swing: 0.2, arms: [0.48, 2.25], ring: true },
@@ -285,7 +290,9 @@ function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boole
   const k = r.walk;
   // A full cycle covers at most the model's stride, and turns at least once in 1.25 s (a slow god still steps).
   const stride = (s.stride ?? s.hip * (s.heavy ? 2.2 : 2.6)) * r.scale;
-  const cycle = Math.min(stride, Math.max(0.05, r.speed) * (s.heavy ? 1.6 : 1.25));
+  let cycle = Math.min(stride, Math.max(0.05, r.speed) * (s.heavy ? 1.6 : 1.25));
+  // A planted foot sweeps STANCE * cycle / 2 each way: no further than a 0.45 rad leg, so a fast one steps quicker.
+  if (s.plant) cycle = Math.min(cycle, (2 * s.hip * r.scale * Math.sin(0.45)) / STANCE);
   if (moved < 1) r.phase += (moved / cycle) * Math.PI * 2;
   const ph = r.phase;
   const swing = s.swing ?? 0.4;
@@ -303,12 +310,22 @@ function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boole
     const bob = (heavy ? Math.pow(pass, 0.5) - 0.7 : pass - 0.6) * s.hip * (heavy ? 0.09 : 0.07) * k;
     lift(hips, r.rest[0], bob + breathe * s.hip * 0.008 * (1 - k));
     ease(hips, 'z', Math.sin(ph) * (heavy ? 0.07 : 0.04) * k + bank * 0.3 * k);
-    ease(hips, 'y', Math.sin(ph) * 0.08 * k);
+    ease(hips, 'y', s.plant ? 0 : Math.sin(ph) * 0.08 * k); // a hip twist would drag a planted foot
     ease(hips, 'x', (heavy ? 0.05 : 0.03) * k);
     ease(torso, 'y', -Math.sin(ph) * 0.14 * k);
     ease(torso, 'x', (heavy ? 0.06 : 0.04) * k + (fighting ? 0.05 : 0) + breathe * 0.012 * (1 - k));
     ease(torso, 'z', -Math.sin(ph) * (heavy ? 0.04 : 0.02) * k);
-    if (s.kind === 'walk') {
+    if (s.kind === 'walk' && s.plant) {
+      // On the ground for STANCE of the cycle, the foot goes from reach ahead to reach behind at the body's pace
+      // (the leg's angle is that of the foot under a fixed hip); then swung back ahead, eased.
+      const reach = (STANCE * cycle) / 2 / (s.hip * r.scale);
+      r.legs.forEach((l, i) => {
+        const u = (((ph / (Math.PI * 2) + i * 0.5) % 1) + 1) % 1;
+        const w = (u - STANCE) / (1 - STANCE);
+        const f = u < STANCE ? 1 - (2 * u) / STANCE : -1 + 2 * w * w * (3 - 2 * w);
+        l.rotation.x = -Math.asin(Math.max(-1, Math.min(1, f * reach))) * k;
+      });
+    } else if (s.kind === 'walk') {
       ease(r.legs[0], 'x', Math.sin(ph) * swing * k, 18);
       ease(r.legs[1], 'x', -Math.sin(ph) * swing * k, 18);
     } else
