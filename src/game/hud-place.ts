@@ -37,6 +37,7 @@ export function place(h: Hud, ground: Vector3 | null, shift: boolean): void {
   }
   if (spot && worker) {
     h.issue({ player: h.player, kind: 'build', ids: [worker.id], type: h.placing, tx: spot[0], ty: spot[1], queue: shift });
+    h.pose.placed(h.placing, spot[0], spot[1], worker.id);
     if (!shift) {
       h.placing = null;
       h.buildMenu = false;
@@ -165,6 +166,7 @@ export function freeAsSeen(h: Hud, w: Entity): boolean {
 }
 
 export function updateGhost(h: Hud): void {
+  h.pose.update(h.world);
   takenAsSeen(h);
   zoneCursor(h);
   // A Caserne volante about to land: the grid and footprint of where it would settle (the balancer, 2026-11-22).

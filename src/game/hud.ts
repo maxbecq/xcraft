@@ -12,6 +12,7 @@ import { showEnd, showEvents } from './hud-toasts';
 import { updatePanel } from './hud-panel';
 import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
+import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
 const TUCK_MS = 1200;
@@ -100,6 +101,8 @@ export class Hud {
   ringOpen = false;
   private tuckSel = '';
   readonly ghost: Mesh;
+  /** A building just ordered, shown where it will rise (a prototype: ?pose=). */
+  readonly pose: PoseConfirm;
   readonly grid: PlaceGrid;
   /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
   gridKey = '';
@@ -177,6 +180,7 @@ export class Hud {
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
+    this.pose = new PoseConfirm(scene, map, audio);
     this.grid = new PlaceGrid(scene, map);
     makePinUi(this);
 

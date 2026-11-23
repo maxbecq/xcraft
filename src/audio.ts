@@ -6,6 +6,8 @@ import { SCROLL } from './game/settings';
 export type Sfx =
   | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'menu' | 'order' | 'target'
   | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive'
+  /** A building ordered (the ?pose=icone prototype): a stake knocked in, and a tick. */
+  | 'pose'
   /** Units answering, without words: `ack` when selected, `go` when given an order, one voice per faction. */
   | 'ackhumains' | 'gohumains' | 'ackz' | 'goz' | 'ackisdaris' | 'goisdaris';
 
@@ -136,6 +138,11 @@ export class Audio {
       o.stop(t + delay + dur + 0.02);
     };
     switch (sfx) {
+      case 'pose':
+        thump(180, 70, 0.22, 0.09);
+        burst('bandpass', 1800, 0.08, 0.04);
+        blip('triangle', 1320, 1320, 0.05, 0.12, 0.09);
+        break;
       case 'ackhumains': // armour shifting, a low brass note: "ready"
         burst('bandpass', 2400, 0.06, 0.05);
         blip('sawtooth', 220, 220, 0.05, 0.16, 0.02);
