@@ -25,7 +25,8 @@ it.skipIf(!process.env.TOURNEY)('tournament', () => {
       avant: { games: [], seats: [], wins: 0, strategies: {}, foes: {} },
       apres: { games: [], seats: [], wins: 0, strategies: {}, foes: {} },
     };
-    for (const foe of all.filter((f) => f !== camp)) {
+    const foes = process.env.TOURNEY_FOES ? (process.env.TOURNEY_FOES.split(',') as Faction[]) : all;
+    for (const foe of foes.filter((f) => f !== camp)) {
       for (const seat of [0, 1]) {
         for (let k = 0; k < n; k++) {
           for (const mode of (process.env.TOURNEY_AFTER ? ['apres'] : ['avant', 'apres']) as ('avant' | 'apres')[]) {

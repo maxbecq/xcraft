@@ -26,6 +26,10 @@ export interface Strategy {
   attackMinute?: number;
   wave?: number;
   waveGrowth?: number;
+  /** Isdaris: the minute the next extension (Laboratoire first) keeps its price (6 when absent), and the one the
+   * Psycho-assembleur is wanted from (ai.tech when absent). */
+  extensionMinute?: number;
+  techMinute?: number;
 }
 
 /** The doctrine, shared by every strategy: tuned by AI-against-AI tournaments, judged by the analyser. */
@@ -48,12 +52,22 @@ export interface Doctrine {
   godLevel: number;
   /** Dieux: the minute of the first expansion (0: the usual 7). */
   dieuxExpand: number;
+  /** With this many production buildings of a kind, one takes the listed research behind its units (the old rule: 3;
+   * the Isdaris Portails, never idle, researched nothing in 40 % of the games). */
+  researchHosts: number;
+  /** The counter table weighs shooters up against an army of shooters. Off: Isdaris Archers against the Humans'
+   * Auxiliaires did worse than the Créatures (tournament 23/11: 11 wins in 32 with it, 17 without). */
+  counterRanged: boolean;
 }
 
-export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godLevel: 3, dieuxExpand: 5 };
+export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godLevel: 3, dieuxExpand: 5, researchHosts: 2, counterRanged: false };
+
+/** Camps whose AI plays its strategies and the doctrine by default, each after a tournament showed a clear gain
+ * (23/11, against the AI as it was, 96 games a side: Dieux 71 wins against 51). */
+export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris'];
 
 /** The AI before strategies: the usual lists, no doctrine (for comparison and the older tests). */
-export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0 };
+export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0, researchHosts: 3, counterRanged: false };
 
 const USUAL: Strategy = { id: 'classique', name: 'Classique' };
 
@@ -100,7 +114,38 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       attackMinute: 7,
     },
   ],
-  isdaris: [USUAL],
+  isdaris: [
+    {
+      id: 'tir',
+      name: 'Tir psychique',
+      // Archers first, the Laboratoire early for the Druides and the Portail's attack: at range, against the infantry.
+      army: { archer: 5, creature: 2, druide: 2 },
+      research: ['portailatk1', 'portailarmor1', 'portailatk2', 'deflagration'],
+      extensionMinute: 3,
+      attackMinute: 7,
+    },
+    {
+      id: 'essaim',
+      name: 'Essaim',
+      // Créatures in numbers with Enfouissement and Archers behind them, an early strike (the Psycho-assembleur and the
+      // Orbe de commandement sooner for the Assassins cost it every second game: 21 wins in 48).
+      army: { creature: 4, archer: 3, druide: 1 },
+      research: ['portailatk1', 'enfouissement', 'portailarmor1', 'portailatk2'],
+      extensionMinute: 4,
+      attackMinute: 6,
+      wave: 10,
+    },
+    {
+      id: 'mages',
+      name: 'Mages',
+      // Druides and Archers behind a few Créatures, Déflagration early; a later, harder strike.
+      army: { druide: 3, archer: 3, creature: 2 },
+      research: ['deflagration', 'portailatk1', 'portailarmor1', 'silence', 'portailatk2'],
+      extensionMinute: 3,
+      attackMinute: 8,
+      wave: 10,
+    },
+  ],
   z: [USUAL],
   humains: [USUAL],
 };
@@ -132,7 +177,7 @@ export type Seen = Map<string, number>;
  * more, a third as much for those that cannot. Otherwise each weight times how well the unit's damage fits the classes
  * seen (fiches 2010), against its best. Units without classes keep their weight.
  */
-export function counter(army: [string, number][], seen: Seen): [string, number][] {
+export function counter(army: [string, number][], seen: Seen, ranged = true): [string, number][] {
   let total = 0;
   let air = 0;
   const cls = new Map<number, number>();
@@ -146,9 +191,15 @@ export function counter(army: [string, number][], seen: Seen): [string, number][
   }
   if (!total) return army;
   const flyers = air * 3 >= total;
+  // Mostly shooters seen (Auxiliaires, Archers): our own shooters count twice, melee half (Créatures charging a line of
+  // Auxiliaires lost the Isdaris their games against the Humans).
+  let shooting = 0;
+  for (const [t, n] of seen) if ((DEFS[t] as UnitDef | undefined)?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && ((DEFS[t] as UnitDef).attack?.range ?? 0) >= 3) shooting += n;
+  const shooters = ranged && shooting * 2 >= total;
   return army.map(([t, wgt]) => {
     const a = (DEFS[t] as UnitDef).attack;
     if (flyers && a) return [t, reaches(a, true) ? wgt * 3 : wgt / 3];
+    if (shooters && a) wgt = a.range >= 3 ? wgt * 2 : wgt / 2;
     if (!a?.vs) return [t, wgt];
     let fit = 0;
     for (const [i, n] of cls) fit += n * a.vs[i];

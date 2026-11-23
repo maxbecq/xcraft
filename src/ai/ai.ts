@@ -2,7 +2,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSE
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions, startSite } from '../sim/setup';
-import { armyOf, counter, DOCTRINE, type Doctrine, hash, LEGACY, pickStrategy, type Seen, type Strategy, USUAL_GODS } from './strategy';
+import { armyOf, counter, DOCTRINE, ON_BY_DEFAULT, type Doctrine, hash, LEGACY, pickStrategy, type Seen, type Strategy, USUAL_GODS } from './strategy';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -189,8 +189,8 @@ export class AI {
    * soldiers focus their fire on the enemy they can finish.
    */
   /**
-   * Strategies and doctrine (strategy.ts): by default for the Dieux only, the camp whose tournament showed a gain
-   * (23/11: 34 wins in 48 against 22 for the AI before); the other camps play as before (`legacy`) until theirs do.
+   * Strategies and doctrine (strategy.ts): by default for the camps whose tournament showed a gain (ON_BY_DEFAULT);
+   * the others play as before (`legacy`) until theirs do.
    * `opts.strategies` or `opts.strategy` turns them on, `opts.legacy` off.
    * `opts.seed`: the game's seed the strategy is drawn with (by default one from the sides and the map).
    */
@@ -198,7 +198,7 @@ export class AI {
     this.faction = FACTIONS[world.players[player].faction];
     const faction = world.players[player].faction;
     const seed = opts.seed ?? hash(world.players.map((p) => p.faction).join(','), world.map.width, world.map.height);
-    const legacy = opts.legacy ?? !(opts.strategies || opts.strategy || faction === 'dieux');
+    const legacy = opts.legacy ?? !(opts.strategies || opts.strategy || ON_BY_DEFAULT.includes(faction));
     this.strategy = legacy ? { id: 'classique', name: 'Classique' } : pickStrategy(faction, seed, player, opts.strategy);
     this.doctrine = opts.doctrine ?? (legacy ? LEGACY : DOCTRINE);
     this.gods = this.strategy.gods ?? USUAL_GODS;
@@ -318,6 +318,9 @@ export class AI {
     }
     // No base to train one from (a headquarters to raise again): no worker's price kept from it.
     if (!this.settled(ctx.home)) ctx.low = 0;
+    // Doctrine: short of a worker's price with nothing coming in, it is not kept either: 99 minerals held for a 100
+    // robot that could never come kept the Isdaris from their last Créature for 20 minutes, to a draw.
+    if (this.doctrine !== LEGACY && ctx.p.minerals < ctx.low && w.tick - this.lastIncome >= ticks(60)) ctx.low = 0;
     ctx.minerals -= ctx.mending;
     this.tend(ctx);
     ctx.minerals -= ctx.low;
@@ -350,7 +353,7 @@ export class AI {
     const now = new Map<string, number>();
     for (const e of w.entities.values()) if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.hostile(e.owner, this.player) && w.sees(this.player, e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
     for (const [t, n] of now) this.seen.set(t, Math.max(n, this.seen.get(t) ?? 0));
-    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy), this.seen);
+    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy), this.seen, this.doctrine.counterRanged);
     // The enemy's fighters and armed buildings, as last seen, for `sends` (dominates keeps the same memory).
     const seen = this.visibleFoes();
     for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
@@ -577,7 +580,7 @@ export class AI {
     // Humans: the Créaturium mid-game (energy is kept for it), its saurians outlasting the Isdaris infantry.
     // Isdaris: the Psycho-assembleur on a clock too: waiting for spare minerals and energy, it never came.
     const tech = (BALANCE.ai.tech as Record<string, { minute: number; barracks: number }>)[p.faction];
-    const techTime = !!tech && minute >= tech.minute && count(f.barracks) >= tech.barracks;
+    const techTime = !!tech && minute >= (this.strategy.techMinute ?? tech.minute) && count(f.barracks) >= tech.barracks;
     const techWanted = !!f.tech && count(f.tech) === 0 && techTime && !w.lacks(this.player, f.tech);
     if (techWanted) wants.push(f.tech!);
     // Energy kept back for the tech building, then for its units, so cheaper units do not eat it all.
@@ -630,7 +633,7 @@ export class AI {
   /** Energy (and minerals) kept back from cheaper spending for the tech, its units and the next research. */
   private budget(ctx: Survey & Need) {
     const { w, f, p, mine, serfs, builders, army, buildings, minute, moreEnergy, techWanted, techDef, techUp, unlocked, nextExtension } = ctx;
-    const techMinute = (BALANCE.ai.tech as Record<string, { minute: number }>)[p.faction]?.minute ?? 0;
+    const techMinute = this.strategy.techMinute ?? (BALANCE.ai.tech as Record<string, { minute: number }>)[p.faction]?.minute ?? 0;
     // The tech building's next unit keeps its energy only while that building is idle: training, it needs none, and
     // the reserve held the Casernes' Phalangistes and Belluaires and every late research for good.
     // Humans only: the Isdaris Psycho-assembleur trains on without gaps from that reserve.
@@ -638,7 +641,7 @@ export class AI {
     // Isdaris: the next extension (the Laboratoire on a Portail) keeps its price from minute 6, before the Psycho-
     // assembleur too: Créatures and Archers spent every mineral and point of energy as they came, and the Laboratoire,
     // with the Druides and every Portail research behind it, came late or never.
-    const extensionDue = !!nextExtension && minute >= 6 && !this.easy;
+    const extensionDue = !!nextExtension && minute >= (this.strategy.extensionMinute ?? 6) && !this.easy;
     // Z: once its prerequisites stand, the energy of the next step of its tech (Intelligence suprême, Centre
     // d'optimisation, Centre K) is kept from everything else.
     const zNext = f === FACTIONS.z ? (['supreme', 'optimisation', 'centrek'] as const).find((t, i) => minute > 6 + 4 * i && !mine.some((b) => b.type === t || b.queue.includes(t)) && !builders.some((d) => d.order?.kind === 'build' && d.order.type === t)) : undefined;
@@ -829,7 +832,7 @@ export class AI {
       // research in 35 minutes.
       const hosts = buildings.filter((b) => !researching.has(b.id) && b.buildLeft === 0 && (b.def as BuildingDef).researches?.includes(t) && w.researchable(this.player, t, b) && !w.lacks(this.player, t, undefined, b));
       // Three of its kind (the one with the Laboratoire for its research): that one takes it behind its units.
-      const many = listed.includes(t) && hosts.length > 0 && buildings.filter((b) => b.type === hosts[0].type && b.buildLeft === 0).length >= 3 && !!(hosts[0].def as BuildingDef).trains?.length;
+      const many = listed.includes(t) && hosts.length > 0 && buildings.filter((b) => b.type === hosts[0].type && b.buildLeft === 0).length >= this.doctrine.researchHosts && !!(hosts[0].def as BuildingDef).trains?.length;
       const host = hosts.find((b) => b.queue.length === 0) ?? (many ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
       const cost = (DEFS[t] as UpgradeDef).cost;
       // The researches off the list only with resources to spare, after the units' energy.
@@ -846,7 +849,8 @@ export class AI {
       // As for research: with three hosts or more, the least busy one takes it behind its units (the Laboratoire waited
       // for an idle Portail that never came, and every Portail research with it).
       const hosts = buildings.filter((b) => (b.def as BuildingDef).researches?.includes(nextExtension) && b.buildLeft === 0 && w.researchable(this.player, nextExtension, b));
-      const host = hosts.find((b) => b.queue.length === 0) ?? (hosts.length >= 3 ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
+      // The doctrine's count (2): with two Portails, never both idle, the Laboratoire waited for good, its price kept.
+      const host = hosts.find((b) => b.queue.length === 0) ?? (hosts.length >= this.doctrine.researchHosts ? hosts.slice().sort((a, b) => a.queue.length - b.queue.length || a.id - b.id)[0] : undefined);
       const cost = (DEFS[nextExtension] as UpgradeDef).cost;
       if (host && ctx.minerals >= cost.minerals && ctx.energy >= cost.energy) {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: nextExtension });
