@@ -585,10 +585,16 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   weapon.name = 'held';
   weapon.userData.tip = (new Box3().setFromObject(weapon, true).max.z - weapon.position.z) / weapon.scale.z;
   weapon.lookAt(aim[grip]);
+  // A prop built of flat faces (tools/meshy/lancegrenades.py, a glTF extra on its node) opts out of the rim light: seen
+  // edge-on by the high camera, whole faces went white.
+  let rim = true;
+  weapon.traverse((o) => {
+    if (o.userData.noRim) rim = false;
+  });
   weapon.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     o.castShadow = true;
-    rimLight(o.material as Material, 0.45);
+    if (rim) rimLight(o.material as Material, 0.45);
   });
   weapon.updateMatrixWorld();
   right.attach(weapon);
