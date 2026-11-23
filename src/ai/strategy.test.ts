@@ -40,7 +40,8 @@ describe('stratégies', () => {
 
   it('les Dieux font sortir les dieux et les unités de leur stratégie', () => {
     for (const s of STRATEGIES.dieux) {
-      const w = createMatch(['dieux', 'humains']);
+      // Against the Z, whose early waves leave a game long enough to see the arsenal come.
+      const w = createMatch(['dieux', 'z']);
       const ai = new AI(w, 0, undefined, 'normal', { strategy: s.id });
       const foe = new AI(w, 1, undefined, 'normal', { legacy: true });
       expect(ai.strategy.id).toBe(s.id);

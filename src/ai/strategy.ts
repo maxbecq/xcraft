@@ -40,12 +40,20 @@ export interface Doctrine {
   escort: number;
   /** Dieux: units a god keeps queued with minerals to spare (the old rule: 1 ahead). */
   godQueue: number;
+  /** The gods at home fight a raid on the base with the army. */
+  godsDefend: boolean;
+  /** Dieux: the second- and third-rank gods go out with the waves (else they stay home and summon). */
+  godsWave: boolean;
+  /** Dieux: the level each god buys as soon as its minerals are there, without the usual margin (1: none). */
+  godLevel: number;
+  /** Dieux: the minute of the first expansion (0: the usual 7). */
+  dieuxExpand: number;
 }
 
-export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 2 };
+export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godLevel: 3, dieuxExpand: 5 };
 
 /** The AI before strategies: the usual lists, no doctrine (for comparison and the older tests). */
-export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1 };
+export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0 };
 
 const USUAL: Strategy = { id: 'classique', name: 'Classique' };
 
@@ -107,6 +115,7 @@ export function hash(...parts: (string | number)[]): number {
 /** The strategy a player draws: by the game's seed and its seat, or the one named. */
 export function pickStrategy(faction: Faction, seed: number, player: number, named?: string): Strategy {
   const list = STRATEGIES[faction] ?? [USUAL];
+  if (named === USUAL.id) return USUAL;
   return list.find((s) => s.id === named) ?? list[hash(seed, player, faction) % list.length];
 }
 

@@ -189,15 +189,16 @@ export class AI {
    * soldiers focus their fire on the enemy they can finish.
    */
   /**
-   * Strategies (strategy.ts) only when asked for: `opts.strategies`, or `opts.strategy` naming one. Not yet in the game:
-   * the first tournament (23/11, Dieux) showed no gain over the AI as it is, which stays the default (`legacy`).
+   * Strategies and doctrine (strategy.ts): by default for the Dieux only, the camp whose tournament showed a gain
+   * (23/11: 34 wins in 48 against 22 for the AI before); the other camps play as before (`legacy`) until theirs do.
+   * `opts.strategies` or `opts.strategy` turns them on, `opts.legacy` off.
    * `opts.seed`: the game's seed the strategy is drawn with (by default one from the sides and the map).
    */
   constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal', opts: { seed?: number; strategy?: string; strategies?: boolean; legacy?: boolean; doctrine?: Doctrine } = {}) {
     this.faction = FACTIONS[world.players[player].faction];
     const faction = world.players[player].faction;
     const seed = opts.seed ?? hash(world.players.map((p) => p.faction).join(','), world.map.width, world.map.height);
-    const legacy = opts.legacy ?? !(opts.strategies || opts.strategy);
+    const legacy = opts.legacy ?? !(opts.strategies || opts.strategy || faction === 'dieux');
     this.strategy = legacy ? { id: 'classique', name: 'Classique' } : pickStrategy(faction, seed, player, opts.strategy);
     this.doctrine = opts.doctrine ?? (legacy ? LEGACY : DOCTRINE);
     this.gods = this.strategy.gods ?? USUAL_GODS;
@@ -601,7 +602,7 @@ export class AI {
     const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
     // Every base, a headquarters turned into another included (the Z Intelligence suprême was not counted).
     const councils = buildings.filter((b) => this.isBase(b)).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
-    const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : 7;
+    const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : f.gods && this.doctrine.dieuxExpand ? this.doctrine.dieuxExpand : 7;
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
@@ -1126,15 +1127,21 @@ export class AI {
           ctx.energy -= def.cost.energy;
         }
       }
-      for (const g of gods) {
+      // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
+      const share = Object.fromEntries(this.armyList) as Record<string, number>;
+      // A unit counted in the forms it turns into (an Élémentaire takes its fire form at once: never counted, Athéna
+      // trained nothing else).
+      const kinds = (t: string) => [t, ...(FORMS[t] ?? [])];
+      const have = (t: string) => mine.filter((e) => kinds(t).includes(e.type)).length + gods.reduce((n, o) => n + o.queue.filter((q) => q === t).length, 0);
+      const ratio = (g: Entity) => Math.min(...(g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).map((t) => have(t) / share[t]), Infinity);
+      // Doctrine: the god whose troop the army lacks most is served first, and the others queue nothing more ahead
+      // (Thor's Nains, first in line, took every mineral: Apollon's Minotaures and Athéna's Élémentaires never came).
+      const order = this.doctrine === LEGACY ? gods : gods.slice().sort((a, b) => ratio(a) - ratio(b) || a.id - b.id);
+      const most = order.length ? ratio(order[0]) : Infinity;
+      for (const g of order) {
         // A god keeps `godQueue` summons ahead once minerals pile up (one ahead held the Dieux' bank at 2000 to 2600).
         if (g.queue.length > (this.easy ? 0 : ctx.minerals > 400 ? this.doctrine.godQueue : 1)) continue;
-        // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
-        const share = Object.fromEntries(this.armyList) as Record<string, number>;
-        // A unit counted in the forms it turns into (an Élémentaire takes its fire form at once: never counted, Athéna
-        // trained nothing else).
-        const kinds = (t: string) => [t, ...(FORMS[t] ?? [])];
-        const have = (t: string) => mine.filter((e) => kinds(t).includes(e.type)).length + gods.reduce((n, o) => n + o.queue.filter((q) => q === t).length, 0);
+        if (this.doctrine !== LEGACY && g.queue.length > 0 && ratio(g) > most + 1) continue;
         const pays = (t: string) => {
           const d = DEFS[t] as UnitDef;
           // A troop that costs no energy is never held back by the energy kept (for the next god).
@@ -1162,7 +1169,7 @@ export class AI {
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
         // Doctrine: a god's second level at once, without the margin: it summons twice as fast (base time over its
         // level), the one way the Dieux' production keeps up with their income.
-        const second = this.doctrine !== LEGACY && g.lvl === 1;
+        const second = this.doctrine !== LEGACY && g.lvl < this.doctrine.godLevel;
         if (!cost || !(allGods || cost.energy === 0 || second)) continue;
         if (ctx.minerals - ctx.keep - (second ? 0 : BALANCE.ai.godLevelMargin) < cost.minerals || (cost.energy > 0 && ctx.energy - reserve < cost.energy)) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
@@ -1272,6 +1279,12 @@ export class AI {
       // defences) instead of running at it one by one as they come out.
       const weak = this.doctrine !== LEGACY && atHome.length < this.doctrine.regroup && strength(atHome) * this.doctrine.retreat < threat.strength;
       if (ids.length && !weak) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
+      // Doctrine: the gods at home fight a raid on the base too (left out of the army, Thor stood by while the first
+      // wave killed the Nains one by one); not one badly hurt, nor one already fighting.
+      if (this.doctrine.godsDefend) {
+        const godIds = gods.filter((g) => !this.wave.has(g.id) && g.hp * 2 > g.maxHp && dist(g.x, g.y, threat.x, threat.y) < 25 * FP && g.order?.kind !== 'attack' && g.order?.kind !== 'attackMove').map((g) => g.id);
+        if (godIds.length) ctx.out.push({ player: this.player, kind: 'attack', ids: godIds, x: threat.x, y: threat.y });
+      }
       // No soldiers to speak of against a small raid: the workers next to it fight.
       // Not against flyers their arms cannot reach (drones gathered under a Drake's blasts).
       // Only with workers and defenders together as strong as the raid: three drones sent at four heavy units died.
@@ -1321,7 +1334,7 @@ export class AI {
       // the first rank stays home and summons.
       // Once no income is left, every god goes: nothing is left to summon with, and gods alone never made a wave.
       const dry = this.starved(buildings, ctx.p.minerals);
-      for (const g of gods) if ((dry || ((g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) && (this.wave.has(g.id) || this.wave.size < cap)) this.wave.add(g.id);
+      for (const g of gods) if ((dry || (this.doctrine.godsWave && (g.def as UnitDef).requiresAny && g.hp * 2 > g.maxHp)) && (this.wave.has(g.id) || this.wave.size < cap)) this.wave.add(g.id);
       // Nobody left (the easy cap full): no wave.
       if (this.wave.size > before) {
         // A wave, not a reinforcement: the next wave's size grows with each wave sent (a soldier joining the one out, as

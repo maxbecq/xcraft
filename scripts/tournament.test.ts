@@ -34,8 +34,8 @@ it.skipIf(!process.env.TOURNEY)('tournament', () => {
             const hs = [100, 90, 110];
             w.players[0].handicap = hs[k % 3];
             w.players[1].handicap = hs[(k + 1) % 3];
-            const only = process.env.TOURNEY_STRATEGIES?.split(',');
-            const list = STRATEGIES[camp].filter((s) => !only || only.includes(s.id));
+            const only = process.env.TOURNEY_STRATEGIES ? process.env.TOURNEY_STRATEGIES.split(',') : undefined;
+            const list = only?.includes('classique') ? [{ id: 'classique' }] : STRATEGIES[camp].filter((s) => !only || only.includes(s.id));
             const strategy = list[k % list.length].id;
             const ais = [0, 1].map((p) => new AI(w, p, undefined, 'normal', p === seat && mode === 'apres' ? { strategy, doctrine } : { legacy: true }));
             const delay = [k * 10, ((k * 3) % 5) * 10];
