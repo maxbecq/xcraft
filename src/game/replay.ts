@@ -131,9 +131,11 @@ function fileStore<T>(mode: IDBTransactionMode, act: (s: IDBObjectStore) => IDBR
     open.onerror = () => fail(open.error);
     open.onsuccess = () => {
       const db = open.result;
-      const req = act(db.transaction('replay', mode).objectStore('replay'));
-      req.onsuccess = () => (db.close(), done(req.result));
-      req.onerror = () => (db.close(), fail(req.error));
+      const tx = db.transaction('replay', mode);
+      const req = act(tx.objectStore('replay'));
+      // Settled with the transaction, not the request: a write is only there for the next page once committed.
+      tx.oncomplete = () => (db.close(), done(req.result));
+      tx.onerror = tx.onabort = () => (db.close(), fail(tx.error ?? req.error));
     };
   });
 }
