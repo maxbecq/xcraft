@@ -339,7 +339,8 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
     if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
-    if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.chase(e, t);
+    // A god summoning or going up a level heals only what is within reach: it may not walk.
+    if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.busy(e) ? this.setOrder(e, null) : this.chase(e, t);
     e.goal = null;
     if (e.cooldown === 0 && this.mends(e)) {
       const pulse = this.healPulse(e);
@@ -700,12 +701,14 @@ export function patient(this: World, e: Entity): Entity | undefined {
   let worst = 1;
   const mender = !(e.def as UnitDef).heal;
   const range = (mender ? WEAPONS[e.kit].healRange! + 2 : (e.def as UnitDef).sight) * FP;
+  const busy = this.busy(e);
   for (const t of this.entities.values()) {
     if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
     // A healer's Soin mends no machine (balance designer 2026-11-22).
     if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || mender !== machineLike(t)) continue;
     if ((t.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
+    if (busy && this.gap(e, t) > ((e.def as UnitDef).healRange ?? 2) * FP) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];
   }
