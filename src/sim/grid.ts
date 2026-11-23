@@ -1,4 +1,4 @@
-import { type GameMap, cornerLevels, cutCorner } from '../map';
+import { CLIFF_FOOT, type GameMap, SUB, cornerLevels, cutCorner } from '../map';
 import { FP, isqrt, tileOf } from './fixed';
 
 /** Ground passability: cliffs from the map plus tiles blocked by buildings. */
@@ -27,6 +27,11 @@ export class Grid {
    */
   private readonly steps: Uint8Array;
   /**
+   * Per tile, the sides at a cliff's foot (bits 1 N, 2 E, 4 S, 8 W: the ground beyond rises half a level or more) and
+   * the corners under a plateau across the diagonal (bits 16 NW, 32 NE, 64 SE, 128 SW): see keepOff.
+   */
+  private readonly feet: Uint8Array;
+  /**
    * The same for a socle with the Patte ultramécanique (équilibreur 22/11), which climbs cliffs up or down like a
    * Colossus: any step onto a tile of the map that is not a chasm, whatever the levels.
    */
@@ -49,6 +54,8 @@ export class Grid {
     }
     this.lowest = new Int8Array(map.width * map.height);
     for (let i = 0; i < this.lowest.length; i++) this.lowest[i] = Math.min(this.corners[i * 4], this.corners[i * 4 + 1], this.corners[i * 4 + 2], this.corners[i * 4 + 3]);
+    this.feet = new Uint8Array(map.width * map.height);
+    for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) this.feet[y * map.width + x] = this.footOf(x, y);
     this.sides = new Uint8Array(map.width * map.height);
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < map.width; x++)
@@ -79,35 +86,74 @@ export class Grid {
     return this.inside(x, y) && this.blocked[y * this.width + x] === 0 && this.chasm[y * this.width + x] === 0;
   }
 
+  /** The cliff feet of a tile (see `feet`): sides and corners where the ground beyond stands higher. */
+  private footOf(x: number, y: number): number {
+    if (!this.inside(x, y) || this.chasm[y * this.width + x] || this.cut[y * this.width + x]) return 0;
+    const c = this.corners;
+    const at = (tx: number, ty: number, k: number) => c[(ty * this.width + tx) * 4 + k];
+    const beyond = (tx: number, ty: number) => this.inside(tx, ty) && !this.chasm[ty * this.width + tx];
+    let f = 0;
+    // A side: the two corners beyond it both as high or higher, half a level higher between them.
+    for (const [bit, dx, dy, a1, a2, b1, b2] of FOOT_SIDES) {
+      const [nx, ny] = [x + dx, y + dy];
+      if (!beyond(nx, ny)) continue;
+      const [p, q, u, v] = [at(x, y, a1), at(x, y, a2), at(nx, ny, b1), at(nx, ny, b2)];
+      if (u >= p && v >= q && u + v - p - q >= SUB) f |= bit;
+    }
+    // A corner: the diagonal tile's corner there half a level higher than this tile's.
+    for (const [bit, dx, dy, a, b] of FOOT_CORNERS) if (beyond(x + dx, y + dy) && 2 * (at(x + dx, y + dy, b) - at(x, y, a)) >= SUB) f |= bit;
+    return f;
+  }
+
+  /** A tile between two cliff feet facing each other: no ground unit's body fits there, so no path goes through it. */
+  private narrow(x: number, y: number): boolean {
+    const f = this.inside(x, y) ? this.feet[y * this.width + x] : 0;
+    return (f & 5) === 5 || (f & 10) === 10;
+  }
+
   /**
-   * A body of radius `r` (fixed point) at (x, y), moved inside its own tile so it stays clear of the cliffs there:
-   * the tile's sides no ground unit crosses on terrain (a cliff, a chasm, the map's edge) and the corner of a plateau
-   * standing diagonally. Only the centre is tested against the terrain when moving, so a body could stand half in the
-   * rock (équilibreur 22/11). `r` is kept under half a tile: a one-tile pass stays open to any unit.
-   * Buildings are not counted: units still crowd against them.
+   * A body of radius `r` (fixed point) at (x, y), moved inside its own tile so it stays clear of the cliffs: at a cliff's
+   * foot it keeps out of the band CLIFF_FOOT wide where the rock's slope is drawn (équilibreur 22/11, units sunk in the
+   * cliffs), and off any other side no ground unit crosses (a cliff's top, a chasm, the map's edge) and a plateau's
+   * corner across the diagonal. Only the centre is tested against the terrain when moving. `r` counts up to just under
+   * half a tile (gods included), so a pass three tiles wide stays open to every unit. Buildings are not counted.
    */
   keepOff(x: number, y: number, r: number): [number, number] {
     const tx = tileOf(x);
     const ty = tileOf(y);
     if (r <= 0 || !this.inside(tx, ty) || this.cut[ty * this.width + tx]) return [x, y];
     const c = Math.min(r, KEEP_OFF);
-    const s = this.sides[ty * this.width + tx];
+    const i = ty * this.width + tx;
+    const s = this.sides[i];
+    const f = this.feet[i];
     const x0 = tx * FP;
     const y0 = ty * FP;
-    // A plateau's corner across the diagonal (both own sides open, the diagonal step not): pushed straight away from it.
-    for (const [dx, dy] of CORNERS) {
-      if (!(s & (dx < 0 ? 8 : 2)) || !(s & (dy < 0 ? 1 : 4)) || this.steps[ty * this.width + tx] & (1 << DIR[(dy + 1) * 3 + dx + 1])) continue;
+    const off = (bit: number) => (f & bit ? FOOT + c : s & bit ? 0 : c);
+    const sides = () => {
+      // Between two feet (a tile no path takes, see narrow): the middle along that axis.
+      if (off(8) + off(2) >= FP) x = x0 + FP / 2;
+      else x = Math.min(Math.max(x, x0 + off(8)), x0 + FP - off(2));
+      if (off(1) + off(4) >= FP) y = y0 + FP / 2;
+      else y = Math.min(Math.max(y, y0 + off(1)), y0 + FP - off(4));
+    };
+    sides();
+    // Corners, once off the sides: under a plateau (its foot's band), or a plateau's corner across the diagonal (both
+    // own sides open, the diagonal step not): pushed straight away from it, then kept off the sides again.
+    let moved = false;
+    for (let k = 0; k < 4; k++) {
+      const [dx, dy] = CORNERS[k];
+      const foot = (f & (16 << k)) !== 0;
+      if (!foot && (!(s & (dx < 0 ? 8 : 2)) || !(s & (dy < 0 ? 1 : 4)) || this.steps[i] & (1 << DIR[(dy + 1) * 3 + dx + 1]))) continue;
+      const m = foot ? FOOT + c : c;
       const cx = dx < 0 ? x0 : x0 + FP;
       const cy = dy < 0 ? y0 : y0 + FP;
       const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-      if (d >= c) continue;
-      if (d === 0) [x, y] = [cx - dx * c, cy - dy * c];
-      else [x, y] = [cx + Math.trunc(((x - cx) * c) / d), cy + Math.trunc(((y - cy) * c) / d)];
+      if (d >= m) continue;
+      moved = true;
+      if (d === 0) [x, y] = [cx - dx * m, cy - dy * m];
+      else [x, y] = [cx + Math.trunc(((x - cx) * m) / d), cy + Math.trunc(((y - cy) * m) / d)];
     }
-    if (!(s & 8)) x = Math.max(x, x0 + c);
-    if (!(s & 2)) x = Math.min(x, x0 + FP - c);
-    if (!(s & 1)) y = Math.max(y, y0 + c);
-    if (!(s & 4)) y = Math.min(y, y0 + FP - c);
+    if (moved) sides();
     return [x, y];
   }
 
@@ -155,6 +201,8 @@ export class Grid {
   private terrainStep(ax: number, ay: number, bx: number, by: number, throughBuildings = false): boolean {
     // Leaving a blocked tile is allowed, so units caught under a new building can walk out.
     if (!this.inside(ax, ay) || !this.inside(bx, by) || this.chasm[by * this.width + bx] || (!throughBuildings && !this.open(bx, by))) return false;
+    // Between two cliff feet facing each other no body fits (keepOff): never stepped into.
+    if (this.narrow(bx, by)) return false;
     const dx = bx - ax;
     const dy = by - ay;
     if (dx !== 0 && dy !== 0) {
@@ -386,7 +434,14 @@ export class Grid {
 
 /** Most a body is kept off a cliff (keepOff), just under half a tile. */
 const KEEP_OFF = Math.trunc((FP * 45) / 100);
+/** The band at a cliff's foot (CLIFF_FOOT), in fixed point. */
+const FOOT = Math.round(CLIFF_FOOT * FP);
+/** Corners NW, NE, SE, SW (keepOff's bits 16 << k). */
 const CORNERS: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+/** A side's bit, the step across, this tile's two corners on it and the neighbour's matching ones. */
+const FOOT_SIDES: [number, number, number, number, number, number, number][] = [[1, 0, -1, 0, 1, 3, 2], [2, 1, 0, 1, 2, 0, 3], [4, 0, 1, 3, 2, 0, 1], [8, -1, 0, 0, 3, 1, 2]];
+/** A corner's bit, the diagonal step to the tile across it, this tile's corner there and that tile's. */
+const FOOT_CORNERS: [number, number, number, number, number][] = [[16, -1, -1, 0, 2], [32, 1, -1, 1, 3], [64, 1, 1, 2, 0], [128, -1, 1, 3, 1]];
 /** canStep's sides: bit, and the step across it. */
 const SIDES: [number, number, number][] = [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]];
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];

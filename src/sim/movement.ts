@@ -180,6 +180,8 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   if (exact && end === gy * g.width + gx) {
     pts.splice(-2, 2, x, y); // on an empty path too: it then holds just the point
   }
+  // Every waypoint, the goal too, where the body may stand: out of a cliff's foot (Grid.keepOff).
+  if (!climbs(e)) for (let k = 0; k < pts.length; k += 2) [pts[k], pts[k + 1]] = g.keepOff(pts[k], pts[k + 1], e.radius);
   // String-pulling: skip waypoints that can be reached in a straight line.
   const smooth: number[] = [];
   let ax = e.x;
@@ -300,7 +302,7 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
       if ((ax !== bx || ay !== by) && (Math.abs(bx - ax) > 1 || Math.abs(by - ay) > 1 || !this.grid.canStep(ax, ay, bx, by, throughBuildings, climbs(e)))) return false;
     }
   }
-  // The body, not only its centre, kept off the cliffs: never half in the rock (équilibreur 22/11). A climber walks
+  // The body, not only its centre, kept off the cliffs and out of their foot (équilibreur 22/11). A climber walks
   // over them.
   if (!climbs(e)) {
     const [kx, ky] = this.grid.keepOff(nx, ny, e.radius);

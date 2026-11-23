@@ -40,6 +40,11 @@ export interface Site {
 export const LEVEL_HEIGHT = 1.25;
 /** Ramps are this many tiles long, for a gentle slope. */
 export const RAMP_LENGTH = 4;
+/**
+ * Width (tiles) of the band at a cliff's foot, on its low side, that no ground unit's body enters: the rock's slope
+ * is drawn there (terrain.ts never leans the foot further out), the simulation keeps bodies out of it (Grid.keepOff).
+ */
+export const CLIFF_FOOT = 0.5;
 /** Corner heights are integers in 1/SUB of a level (so ramps can climb in steps). */
 export const SUB = 12;
 
