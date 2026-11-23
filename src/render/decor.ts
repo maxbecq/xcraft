@@ -44,8 +44,8 @@ export class Decor {
   readonly root = new Object3D();
   private readonly city: boolean;
 
-  /** `clearOfVoid`: floating rocks over space (Astéroïdes): nothing within 2 tiles of the void, nor on an arch. */
-  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false, streets?: [number, number][][], clearOfVoid = false) {
+  /** `skip`: scenery this planet leaves out (Biome.decorSkip). `clearOfVoid`: floating rocks over space (Astéroïdes): nothing within 2 tiles of the void, nor on an arch. */
+  constructor(private readonly map: GameMap, world: World, private readonly tint = new Color(1, 1, 1), private readonly greyStones = false, streets?: [number, number][][], clearOfVoid = false, private readonly skip: string[] = []) {
     this.city = !!streets;
     const keepClear = new Set<number>();
     const clear = (cx: number, cy: number, r: number) => {
@@ -206,7 +206,7 @@ export class Decor {
     for (const [type, list] of byType) {
       const node = gltf.scene.getObjectByName(type);
       // The Moon (grey stones): nothing but stones, no plants, wrecks or scrap.
-      if (!node || (this.greyStones && !STONES.includes(type)) || (this.city && !URBAN.includes(type))) continue;
+      if (!node || this.skip.includes(type) || (this.greyStones && !STONES.includes(type)) || (this.city && !URBAN.includes(type))) continue;
       const parts: Mesh[] = [];
       node.traverse((o) => o instanceof Mesh && parts.push(o));
       const ims = parts.map((part) => {

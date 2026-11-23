@@ -36,6 +36,8 @@ export interface Biome {
   dunes?: number;
   /** Scattered stones in plain grey. */
   greyStones?: boolean;
+  /** Scenery left out on this planet (names from decor.ts, e.g. 'wreck': the burnt-out cars). */
+  decorSkip?: string[];
   /** Built world instead of natural ground ('city': metal decks, wall cladding, neon, a void below). */
   style?: 'city';
   /** Ground pictures instead of the drawn ground (public/textures/<name>-sol.jpg and its normal map). */
@@ -65,6 +67,7 @@ export const BIOMES: Record<string, Biome> = {
     background: 0x0d0f12,
     exposure: 1.05,
     decorTint: new Color(1, 1, 1),
+    decorSkip: ['wreck'], // no car hulks in the desert
     // A shallow crevasse: a short drop of rock onto dark, stony sand.
     chasm: { depth: 1.4, floor: new Color(0x5a4028) },
   },

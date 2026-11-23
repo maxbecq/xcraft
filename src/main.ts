@@ -159,7 +159,7 @@ if (painted) {
   terrain.visible = GFX.shadows > 0;
   scene.add(painted.root);
 }
-const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, painted ? [] : roads?.streets, !!biome.space);
+const decor = new Decor(map, world, biome.decorTint, !!biome.greyStones, painted ? [] : roads?.streets, !!biome.space, biome.decorSkip);
 // The asteroids float over space, seen through the chasms and past the edges.
 const space = biome.space ? new Space(map.width, map.height) : null;
 if (space) scene.add(space.root);
