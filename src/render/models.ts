@@ -196,10 +196,10 @@ export function owned<T extends { userData: Record<string, unknown> }>(x: T): T 
  * Static ones (robots, beasts) are plain textured meshes, already sized by normalize.py.
  */
 type Grip = 'rifle' | 'pole' | 'drill';
-export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip; basket?: boolean }> = {
+export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip; basket?: boolean; shield?: string }> = {
   auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
   serf: { height: 0.72, weapon: 'piqueur', grip: 'drill', basket: true }, // puny next to the soldiers; a wicker basket on its back
-  legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole' },
+  legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole', shield: 'scutum' }, // a scutum on the left arm, in the team's colour
   soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
@@ -226,7 +226,7 @@ const FIXED_TEAM: Record<string, number> = { assimilateur: 0x2cff50 };
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'fortin', 'tour', 'metallurgie', 'alchimisterie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
 const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI / 2 };
-export const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[] }>();
+export const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[]; shields?: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
 
@@ -356,10 +356,22 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
           });
           if (skin && character.weapon) {
             const weapon = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${character.weapon}-meshy.glb`)).scene;
+            weapon.traverse((o) => o instanceof Mesh && litProp(o.material as MeshStandardMaterial));
             if (isHuman(type)) weapon.traverse((o) => o instanceof Mesh && (o.material as MeshStandardMaterial).color.multiplyScalar(1.4));
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
           if (character.basket) backBasket(gltf.scene, gltf.animations);
+          let shield: MeshStandardMaterial | undefined;
+          if (skin && character.shield) {
+            const board = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${character.shield}-meshy.glb`)).scene;
+            board.traverse((o) => {
+              if (!(o instanceof Mesh)) return;
+              shield = o.material as MeshStandardMaterial;
+              litProp(shield); // and so the team colour, which repaints the base colour's blue, can take
+              o.userData.shield = true; // model() gives it the team's copy of its material
+            });
+            brace(gltf.scene, gltf.animations, board);
+          }
           if (skin) {
             // Culling bounds from the rest pose, widened so a lunge or a fall stays inside them; copies inherit them.
             gltf.scene.updateMatrixWorld(true);
@@ -369,7 +381,13 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
               o.computeBoundingSphere();
               o.boundingSphere!.radius *= 2.5;
             });
-            rigged.set(type, { scene: share(gltf.scene), clips: gltf.animations, skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type), false, isHuman(type))) });
+            rigged.set(type, {
+              scene: share(gltf.scene),
+              clips: gltf.animations,
+              skins: TEAM_COLORS.map((c) => teamSkin(skin!, c, 0.45, false, true, !isHuman(type), false, isHuman(type))),
+              // The shield's blue face in each team's colour, as the body's tabard (no rim: the body has one).
+              shields: shield && TEAM_COLORS.map((c) => teamSkin(shield!, c, 0)),
+            });
             return;
           }
         } catch {
@@ -676,6 +694,60 @@ function backBasket(character: Group, clips: AnimationClip[]): void {
   mixer.stopAllAction();
 }
 
+/**
+ * Rodin Low Poly's 'Shaded' export paints a prop in its emissive map over a black base colour: lit by nothing, a
+ * carbine read white. Moved into the base colour, it shades like the body that holds it.
+ */
+function litProp(m: MeshStandardMaterial): void {
+  if (m.map || !m.emissiveMap) return;
+  m.map = m.emissiveMap;
+  m.emissiveMap = null;
+  m.color.set(0xffffff);
+  m.emissive.set(0);
+  m.needsUpdate = true;
+}
+
+/**
+ * A shield on the left arm: its face turned forward and a little out to the left, upright, its middle at the left
+ * hand as the idle clip holds it, then parented to that hand so it follows every swing and falls with the body.
+ * The board comes from prop.py (longest side along +Z, its thinnest across the face).
+ */
+function brace(character: Group, clips: AnimationClip[], board: Group): void {
+  const stance = clips.find((c) => c.name === 'idle');
+  const hand = character.getObjectByName('LeftHand');
+  if (!stance || !hand) return;
+  const mixer = new AnimationMixer(character);
+  mixer.clipAction(stance).play();
+  mixer.update(0);
+  character.updateMatrixWorld(true);
+  board.scale.setScalar(character.scale.x);
+  board.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(board, true);
+  const size = box.getSize(new Vector3());
+  const centre = box.getCenter(new Vector3());
+  // Its axes: tall along Z (prop.py), thin across X or Y; the face looks along the thin one.
+  const thin = size.x < size.y ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0);
+  const wide = size.x < size.y ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+  // Into the world: tall up, the face forward (+Z, the model's front) turned 20 degrees out to the left (+X).
+  const face = new Vector3(Math.sin(0.35), 0, Math.cos(0.35));
+  const up = new Vector3(0, 1, 0);
+  const across = new Vector3().crossVectors(up, face);
+  // The Rodin board's painted face looks down its thin axis's negative side (its handle is on the positive one).
+  const from = new Matrix4().makeBasis(wide.clone().negate(), thin.clone().negate(), new Vector3(0, 0, 1));
+  const to = new Matrix4().makeBasis(across, face, up);
+  const turn = to.multiply(from.invert());
+  const holder = new Group();
+  holder.name = 'shield';
+  board.position.sub(centre); // its middle on the holder's origin
+  board.applyMatrix4(turn);
+  holder.add(board);
+  // Held a little out from the hand, on the outside of the forearm, the face outwards.
+  holder.position.copy(hand.getWorldPosition(new Vector3())).addScaledVector(face, 0.06 * size.z);
+  holder.updateMatrixWorld(true);
+  hand.attach(holder);
+  mixer.stopAllAction();
+}
+
 /** Frees what a preview copy allocated for itself (its cloned skeletons' bone textures, a placeholder's shapes). */
 export function freePreview(object: Object3D): void {
   free(object);
@@ -711,9 +783,11 @@ export function model(type: string, team: Material, seed = 0): Group {
   if (r) {
     const g = new Group();
     const character = cloneSkinned(r.scene);
+    const k = Math.max(0, teamMaterials.indexOf(team as MeshStandardMaterial));
     character.traverse((o) => {
+      if (o instanceof Mesh && o.userData.shield && r.shields) o.material = r.shields[k] ?? r.shields[0];
       if (!(o instanceof SkinnedMesh)) return;
-      o.material = r.skins[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? r.skins[0];
+      o.material = r.skins[k] ?? r.skins[0];
       o.castShadow = true;
       o.receiveShadow = true;
     });
