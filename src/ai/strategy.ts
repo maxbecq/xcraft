@@ -30,6 +30,9 @@ export interface Strategy {
    * Psycho-assembleur is wanted from (ai.tech when absent). */
   extensionMinute?: number;
   techMinute?: number;
+  /** Humans: the share of Légionnaires among the infantry, and one Soigneur per this many units (the plan's when absent). */
+  legionShare?: number;
+  healerEvery?: number;
 }
 
 /** The doctrine, shared by every strategy: tuned by AI-against-AI tournaments, judged by the analyser. */
@@ -63,7 +66,8 @@ export interface Doctrine {
 export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godLevel: 3, dieuxExpand: 5, researchHosts: 2, counterRanged: false };
 
 /** Camps whose AI plays its strategies and the doctrine by default, each after a tournament showed a clear gain
- * (23/11, against the AI as it was, 96 games a side: Dieux 71 wins against 51). */
+ * (23/11, against the AI as it was, 96 games a side: Dieux 71 wins against 51, Isdaris 64 against 56, Z 56 against
+ * 30). Not the Humains: theirs showed none (44 against 48), their strategies stay opt-in. */
 export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris', 'z'];
 
 /** The AI before strategies: the usual lists, no doctrine (for comparison and the older tests). */
@@ -177,7 +181,34 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       wave: 18,
     },
   ],
-  humains: [USUAL],
+  humains: [
+    {
+      id: 'legion',
+      name: 'Légion',
+      // Légionnaires for half the infantry, melee research first, an early strike.
+      legionShare: 0.5,
+      research: ['melee1', 'armor1', 'ranged1', 'melee2'],
+      attackMinute: 5,
+    },
+    {
+      id: 'bastion',
+      name: 'Bastion',
+      // The Auxiliaires' line with more Soigneurs, armour and range researched first, one bigger wave later.
+      healerEvery: 3,
+      research: ['armor1', 'ranged1', 'armor2', 'ranged2'],
+      attackMinute: 8,
+      wave: 14,
+    },
+    {
+      id: 'creaturium',
+      name: 'Créaturium',
+      // The Créaturium early for its saurians and Belluaires, behind the usual infantry.
+      techMinute: 5,
+      research: ['ranged1', 'armor1', 'croissance', 'melee1'],
+      attackMinute: 7,
+      wave: 12,
+    },
+  ],
 };
 
 /** A 32-bit hash (FNV-1a) of a few numbers and words: the same game, the same draw. */

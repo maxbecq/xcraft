@@ -205,6 +205,8 @@ export class AI {
     this.researchList = [...new Set([...(this.strategy.research ?? []), ...(RESEARCH[faction] ?? [])])];
     this.armyList = armyOf(faction, this.strategy);
     if (this.strategy.wave) plan = this.plan = { ...plan, wave: this.strategy.wave, waveGrowth: this.strategy.waveGrowth ?? plan.waveGrowth };
+    if (this.strategy.legionShare !== undefined) plan = this.plan = { ...plan, legionShare: this.strategy.legionShare };
+    if (this.strategy.healerEvery) plan = this.plan = { ...plan, healerEvery: this.strategy.healerEvery };
     this.easy = level === 'easy';
     if (this.easy) this.plan = { ...plan, ...(LEVELS.easy.plan as Partial<Plan>) };
     // Z: waves of 12, not 8. Sent eight at a time against a bigger army, its socles died to the last one, and the
