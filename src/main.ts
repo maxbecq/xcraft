@@ -372,6 +372,8 @@ const pause = document.createElement('div');
 pause.className = 'pause';
 pause.hidden = true;
 pause.innerHTML = PAUSE_HTML;
+// Online, a match is started over only from its end (the rematch, both agreeing), never from the pause menu.
+if (link) pause.querySelector<HTMLElement>('[data-p="restart"]')!.hidden = true;
 tools.append(hud.idle, hud.idleProd, hud.prodToggle, hud.groups);
 document.body.append(tools, pause);
 const helpText = pause.querySelector<HTMLElement>('.help')!;
@@ -420,6 +422,7 @@ document.addEventListener('click', (e) => {
     page.leaving = true;
     setTimeout(() => location.reload(), fresh ? 400 : 0);
   }
+  else if (p === 'restart' && link && !button?.closest('.hud-banner')) return;
   else if (p === 'restart' && link && !netGame.rematchAsked) {
     netGame.rematchAsked = true;
     button!.textContent = 'Revanche : en attente de votre adversaire…';
