@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AI } from '../ai/ai';
 import BALANCE from '../balance.json';
 import { ABILITIES, type BuildingDef, DEFS, type UnitDef } from '../data';
@@ -618,6 +618,30 @@ describe('the Puits (balance designer, 2026-11-22)', () => {
     const [two, four] = [energyIn(2), energyIn(4)];
     expect(Math.abs(four - 2 * two)).toBeLessThanOrEqual(2);
     expect(four).toBeGreaterThan(0);
+  });
+
+  it('pays the work done by the crew of each tick, not by the crew of the moment', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const puits = w.spawn('puitsdivin', 0, 40 * FP, 40 * FP);
+    const full = ticks(1 / (DEFS.puitsdivin as BuildingDef).energyRate!);
+    const one = w.spawn('esprit', 0, 40 * FP, 40 * FP);
+    one.inside = puits.id;
+    const before = w.players[0].energy;
+    // Alone, one Esprit does a quarter of the work: three quarters of an energy in three full periods.
+    for (let i = 0; i < 3 * full; i++) w.step([]);
+    one.inside = 0;
+    run(w, 5);
+    for (let i = 0; i < 4; i++) Object.assign(w.spawn('esprit', 0, 40 * FP, 40 * FP), { inside: puits.id });
+    w.step([]);
+    expect(w.players[0].energy - before).toBe(0);
+  });
+
+  it('counts no crew in a bunker that yields no energy', () => {
+    const w = createMatch(['humains', 'dieux']);
+    w.spawn('fortin', 0, 40 * FP, 40 * FP);
+    const load = vi.spyOn(w, 'load');
+    run(w, 1);
+    expect(load).not.toHaveBeenCalled();
   });
 });
 

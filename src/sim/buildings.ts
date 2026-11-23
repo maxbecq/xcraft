@@ -225,10 +225,14 @@ export function operate(this: World, b: Entity): void {
   }
   // Each worker inside adds a quarter of the full rate: the Assimilateur's 3 drones on top of the 25 % it runs at alone
   // (notice), the Puits' 4 Esprits from nothing (balance designer 2026-11-22).
-  const crew = def.bunker ? 4 - def.bunker + this.load(b) : 4;
-  if (def.energyRate && crew > 0 && ++b.timer >= idiv(ticks(1 / def.energyRate) * 4, crew)) {
-    b.timer = 0;
-    this.players[b.owner].energy++;
+  // Quarters of work pile up tick by tick, so a crew coming in or out changes only the ticks after it.
+  if (def.energyRate) {
+    b.timer += def.bunker ? 4 - def.bunker + this.load(b) : 4;
+    const full = ticks(1 / def.energyRate) * 4;
+    if (b.timer >= full) {
+      b.timer -= full;
+      this.players[b.owner].energy++;
+    }
   }
   this.produce(b);
 }
