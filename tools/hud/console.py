@@ -11,9 +11,7 @@ Run:  python3 tools/hud/console.py dieux                 -> docs/consoles/consol
       python3 tools/hud/console.py dieux --bg shot.png    -> a game screenshot behind instead of plain ground
 """
 import argparse
-import html
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -32,8 +30,7 @@ SAMPLES = {
 
 
 def fonts_link() -> str:
-    m = re.search(r'<link href="(https://fonts\.googleapis\.com/css2[^"]+)"', (ROOT / 'index.html').read_text())
-    return f'<link rel="stylesheet" href="{html.escape(m.group(1))}">' if m else ''
+    return '<link rel="stylesheet" href="public/fonts/fonts.css">'
 
 
 def page(faction: str, bg: str | None) -> str:

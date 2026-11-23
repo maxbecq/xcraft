@@ -1,7 +1,7 @@
 """Game models and HUD icons of the Dieux, from the concept sculptures (gods.py, units.py, buildings.py).
 
 Usage (from the repo root):
-  /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/dieux/export.py -- public/models public/icons [type ...]
+  ${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P tools/blender/dieux/export.py -- public/models public/icons [type ...]
 then compress the models as `npm run models` does (node tools/compress-models.mjs public/models/<type>.glb).
 
 The concept materials are procedural (they do not survive glTF): each part gets a flat stand-in of the same colour;

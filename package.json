@@ -10,7 +10,7 @@
     "test": "vitest run",
     "balance:big": "BIG=1 vitest run scripts/big.test.ts --silent=false",
     "balance": "REPORT=1 vitest run scripts/balance.test.ts --silent=false",
-    "models": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/models.py -- public/models public/icons && node tools/compress-models.mjs public/models/*.glb"
+    "models": "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P tools/blender/models.py -- public/models public/icons && node tools/compress-models.mjs public/models/*.glb"
   },
   "dependencies": {
     "peerjs": "^1.5.4",

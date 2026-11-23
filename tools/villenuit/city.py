@@ -69,7 +69,7 @@ def log(*a):
 
 def blender(mode, sx, sy, out, *more):
     if not os.path.exists(out):
-        subprocess.check_call(["python3", "tools/meshy/local3d.py", "--gpu", "blender", "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", mode, str(sx), str(sy), str(PPU), str(W), str(H), out, *map(str, more)], stdout=subprocess.DEVNULL)
+        subprocess.check_call(["python3", "tools/meshy/local3d.py", "--gpu", os.environ.get("BLENDER", "blender"), "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", mode, str(sx), str(sy), str(PPU), str(W), str(H), out, *map(str, more)], stdout=subprocess.DEVNULL)
 
 
 def spot(x, z):

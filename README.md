@@ -49,7 +49,7 @@ npm run dev                 # http://localhost:5173/xcraft/
 npm test                    # simulation, pathfinding, économie, combat, IA
 npm run balance             # rapport minute par minute d'une partie IA contre IA
 npm run balance:big         # équilibre des factions sur 98 parties
-npm run models              # régénère les modèles .glb et les icônes avec Blender
+npm run models              # régénère les modèles .glb et les icônes avec Blender ($BLENDER, sinon /Applications/Blender.app)
 ```
 
 Architecture :

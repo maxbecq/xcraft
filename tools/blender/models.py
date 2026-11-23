@@ -1,7 +1,7 @@
 """Builds Xcraft's low-poly models and HUD icons in Blender, headless.
 
 Usage (from the repo root):
-  /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/models.py -- public/models public/icons [type ...]
+  ${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P tools/blender/models.py -- public/models public/icons [type ...]
 
 Conventions: 1 Blender unit = 1 tile, Z up, models face -Y (glTF turns that into +Z, the game's forward),
 origin on the ground at the footprint centre. Faces using the material named "team" are recoloured per player in game.

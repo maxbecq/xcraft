@@ -96,9 +96,9 @@ def main(name, sx, sy, seed=3):
     os.makedirs(WORK, exist_ok=True)
     f = lambda k: f"{WORK}/{name}-{k}.png"
     if not os.path.exists(f("volumes")):
-        subprocess.check_call(["blender", "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", "tile", str(sx), str(sy), str(PPU), str(W), str(H), f("volumes")], stdout=subprocess.DEVNULL)
+        subprocess.check_call([os.environ.get("BLENDER", "blender"), "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", "tile", str(sx), str(sy), str(PPU), str(W), str(H), f("volumes")], stdout=subprocess.DEVNULL)
     if not os.path.exists(f("mask")):
-        subprocess.check_call(["blender", "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", "mask", str(sx), str(sy), str(PPU), str(W), str(H), f("mask")], stdout=subprocess.DEVNULL)
+        subprocess.check_call([os.environ.get("BLENDER", "blender"), "-b", "--factory-startup", "-P", "tools/villenuit/blockout.py", "--", "mask", str(sx), str(sy), str(PPU), str(W), str(H), f("mask")], stdout=subprocess.DEVNULL)
     # the ground a unit walks on, away from the walls (three quarters of a tile): there the second pass may only add grain
     open_ground = Image.open(f("mask")).convert("L").filter(ImageFilter.GaussianBlur(12)).point(lambda v: 255 if v > 250 else 0)
     klein(f("volumes"), f("pass1"), PASS1, seed)
