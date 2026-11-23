@@ -101,7 +101,7 @@ export class Hud {
   ringOpen = false;
   private tuckSel = '';
   readonly ghost: Mesh;
-  /** A building just ordered, shown where it will rise (a prototype: ?pose=). */
+  /** A building just ordered, shown where it will rise. */
   readonly pose: PoseConfirm;
   /** The end banner offers the game's analysis (a prototype: ?bilan=). */
   bilan = false;
@@ -182,7 +182,7 @@ export class Hud {
     this.ghost = new Mesh(new BoxGeometry(1, 0.3, 1), new MeshBasicMaterial({ color: 0x55ff66, transparent: true, opacity: 0.45, depthWrite: false }));
     this.ghost.visible = false;
     scene.add(this.ghost);
-    this.pose = new PoseConfirm(scene, map, audio);
+    this.pose = new PoseConfirm(scene, map);
     this.grid = new PlaceGrid(scene, map);
     makePinUi(this);
 
