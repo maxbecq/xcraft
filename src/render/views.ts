@@ -1,3 +1,4 @@
+import type { Rig } from './godrig';
 import {
   SpriteMaterial, AdditiveBlending, BackSide, Plane, Color, LineBasicMaterial, LineSegments, Vector3, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, AnimationMixer, type AnimationAction,
   SkinnedMesh, ShaderMaterial, type Material, PointsMaterial,
@@ -18,6 +19,8 @@ export function ghost(body: Object3D): void {
   });
 }
 export interface View {
+  /** A Dieux model's made-up skeleton (render/godrig.ts): walks, floats, flies or slithers. */
+  rig?: Rig;
   /** Animation time not yet played while the view was off screen (s), caught up when it comes back. */
   idle?: number;
   /** Entity type it was built for: a building turned into another gets a new view. */

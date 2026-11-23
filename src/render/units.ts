@@ -11,6 +11,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
+import { findRig, stepRig } from './godrig';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { seeThrough } from './effects';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
@@ -1106,20 +1107,22 @@ export class EntityRenderer {
     const rolling = !!v.wheels;
     // Walkers with knees crouch as they walk, and rise a little on each step.
     const crouch = moving && v.limbs.insect?.[0]?.ik ? -v.gait!.crouch : 0;
-    const bob = hover + crouch + (hover ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
+    // A made-up skeleton (the Dieux) bobs, sways and leans at its hips, its circle left on the ground.
+    const bob = hover + crouch + (hover || v.rig ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
     v.model.position.y += (bob - v.model.position.y) * 0.4;
     // The heavy Mastodonte rolls and pitches a little as it hangs in the air, more slowly than the light flyers.
     const heavy = e.type === 'mastodonte' ? 1 : 0;
-    ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
+    ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving && !v.rig ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
     if (heavy && flying) body.rotation.x += (Math.sin(t * 0.6 + e.id * 2) * 0.035 - (moving ? 0.06 : 0)) * 0.15; // nose down as it flies off
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
-    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
+    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling && !v.rig ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting && !v.weapon ? (fired - 0.5) * 0.8 : 0, 0.3);
     // Recoil on each shot; none for a blade (a socle's Déchiqueteur keeps its body still as it cuts).
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
+    if (v.rig && this.inView(v.root.position.x, v.root.position.z)) stepRig(v.rig, v.root.position.x, v.root.position.z, dt, t, moving, turn, fighting);
   }
 
   /**
@@ -1510,6 +1513,7 @@ export class EntityRenderer {
     });
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
     const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: 7 } : undefined, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+      rig: findRig(body, body.getWorldScale(new Vector3()).x, e.id),
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
     if (clips) {

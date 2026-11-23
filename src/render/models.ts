@@ -10,6 +10,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { DEFS, LOOKS, type UnitDef } from '../data';
 import { graffiti, rimLight, weather } from './weathering';
 import { LIFE_GLSL } from './life';
+import { procRig, RIGS } from './godrig';
 
 /** Player colours: blue, red, green, purple. */
 export const TEAM_COLORS = [0x3a7bd5, 0xc8402f, 0x38b04c, 0x9a52d8];
@@ -333,6 +334,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
               // not built yet: the bare Meshy model
             }
           }
+          if (RIGS[type] && DEFS[type]?.kind === 'unit') procRig(gltf.scene, RIGS[type]);
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
           holder.add(gltf.scene);
@@ -392,6 +394,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
         // Bright silhouette edges on everything but mineral fields, stronger on units.
         if (!type.startsWith('minerai')) gltf.scene.traverse((o) => o instanceof Mesh && rimLight(o.material as Material, d?.kind === 'unit' ? 0.45 : 0.22));
         if (isdaris && d.faction === 'z' && d.kind === 'unit') rigidSkin(gltf.scene);
+        if (RIGS[type] && d?.kind === 'unit') procRig(gltf.scene, RIGS[type]);
         templates.set(type, share(type.startsWith('minerai') ? mergeGeodes(gltf.scene) : gltf.scene));
       } catch {
         // keep the placeholder
@@ -602,8 +605,12 @@ export function model(type: string, team: Material, seed = 0): Group {
   if (t.userData.rigid) {
     const nodes: Object3D[] = [];
     g.traverse((o) => nodes.push(o));
+    // One skeleton per copy, shared by its meshes as by the template's: three works it out once a frame.
+    const skeletons = new Map<Skeleton, Skeleton>();
     for (const o of nodes) {
-      if (o instanceof SkinnedMesh && o.userData.rigid) o.bind(new Skeleton((o.userData.rigid as number[]).map((i) => nodes[i]) as never[], o.skeleton.boneInverses), o.bindMatrix);
+      if (!(o instanceof SkinnedMesh && o.userData.rigid)) continue;
+      const own = skeletons.get(o.skeleton) ?? skeletons.set(o.skeleton, new Skeleton((o.userData.rigid as number[]).map((i) => nodes[i]) as never[], o.skeleton.boneInverses)).get(o.skeleton)!;
+      o.bind(own, o.bindMatrix);
     }
   }
   let tagIndex = 0;
