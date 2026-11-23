@@ -32,6 +32,8 @@ export interface View {
   /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
   hp?: number;
   flash?: { left: number; saved: [Mesh, Material | Material[]][] };
+  /** A Sphinx in Forme de statue: drawn in grey stone; its own materials, to put back. */
+  stone?: [Mesh, Material | Material[]][];
   /** A Z socle under its invisibility kit: drawn see-through; its own materials, to put back. */
   cloak?: [Mesh, Material | Material[]][];
   /** An enemy building out of sight: drawn grey, frozen as last seen; its own materials, to put back. */
@@ -240,6 +242,42 @@ export function setCloak(v: View, on: boolean): void {
     if (!(o instanceof Mesh) || !o.visible) return;
     v.cloak!.push([o, o.material]);
     o.material = Array.isArray(o.material) ? o.material.map(cloakOf) : cloakOf(o.material);
+  });
+}
+
+/** Grey stone copies of materials (Forme de statue), one per material. */
+const stoned = new WeakMap<Material, Material>();
+const STONE_COLOR = new Color(0x8e8a82);
+function stoneOf(m: Material): Material {
+  let c = stoned.get(m);
+  if (!c) {
+    c = m.clone();
+    const sm = c as Material & { color?: Color; map?: unknown; roughness?: number; metalness?: number; emissive?: Color };
+    sm.color?.copy(STONE_COLOR);
+    if ('map' in sm) sm.map = null;
+    if ('roughness' in sm) sm.roughness = 1;
+    if ('metalness' in sm) sm.metalness = 0;
+    sm.emissive?.setRGB(0, 0, 0);
+    c.needsUpdate = true;
+    stoned.set(m, c);
+  }
+  return c;
+}
+
+/** A unit drawn in grey stone (a Sphinx in Forme de statue) or back to itself. */
+export function setStone(v: View, on: boolean): void {
+  if (on === !!v.stone) return;
+  if (!on) {
+    for (const [o, m] of v.stone!) o.material = m;
+    v.stone = undefined;
+    return;
+  }
+  unflash(v);
+  v.stone = [];
+  v.model.traverse((o) => {
+    if (!(o instanceof Mesh) || !o.visible) return;
+    v.stone!.push([o, o.material]);
+    o.material = Array.isArray(o.material) ? o.material.map(stoneOf) : stoneOf(o.material);
   });
 }
 

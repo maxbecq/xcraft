@@ -14,7 +14,7 @@ import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, t
 import { findRig, stepRig } from './godrig';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { seeThrough } from './effects';
-import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
+import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, setStone, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
@@ -729,6 +729,8 @@ export class EntityRenderer {
       if (v.flash && (v.flash.left -= dt) <= 0) unflash(v);
       // Kit d'invisibilité (the user's pick, 2026-11-23): see-through for its side and for an enemy detecting it.
       setCloak(v, seeThrough(e));
+      // Forme de statue (the user's pick, 2026-11-23): the Sphinx turned to grey stone while it lasts.
+      if (e.type === 'sphinx') setStone(v, e.statue > 0);
       // Enfouissement (the user's pick, 2026-11-23): a buried Créature sinks into the ground, and comes back up out of it.
       if (e.type === 'creature') {
         const k = (v.model.userData.burrow ??= 0) as number;
@@ -790,6 +792,7 @@ export class EntityRenderer {
       const wanted = weaponModule(e, world);
       if (wanted !== (v.weapon?.name ?? '')) {
         setCloak(v, false); // the new module is cloaked with the rest next frame
+        setStone(v, false);
         this.mount(v, e, wanted);
       }
       const dock = v.dock;

@@ -14,54 +14,32 @@ export interface Mark {
 
 const M = (key: string, color: number, good: boolean): Mark => ({ key, color, good });
 const BOOST = M('stimulant', 0xff5a3a, true);
-const WAR = M('cridegueurre', 0xffb830, true);
 const INVULN = M('invuln', 0xfff6c0, true);
-const CHARGED = M('courroux', 0x8ab8ff, true);
-const STATUE = M('statue', 0xb0a898, true);
-const CHILL = M('gel', 0x9ad8ff, false);
-const BLIND = M('amonra', 0xffd040, false);
-const CHARM = M('soumission', 0xff4ad0, false);
-const SWARM = M('nuee', 0x9a9a40, false);
-const SLOW = M('jetdesable', 0xd8b070, false);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
  * stands in for it until it does. The Humans' spells drawn their own way (render/effects.ts, Effects.lasting) have none:
  * Peau de roc, Régénérant, Gaz euphorisants, the Belluaire's Camouflage, poison, Napalm, mines, the Réservoir's fuse,
  * the Cadavre réanimé; nor the Isdaris' (Effects.isSpells, see-through bodies: units.ts): Choc mental, Double, Manteau,
- * Sphère de renvoi, Déphasage; nor the Z's (Effects.zSpells): Gravité alourdie, Nuage de nanites, Gel électronique, Balise de
+ * Sphère de renvoi, Déphasage; nor the Gods' (Effects.godSpells): Courroux, Cri de guerre, Soumission, Voile, Nuée,
+ * Forme de statue, Jet de sable, Lumière ardente, Amon-Râ, Glace, the auras and the Tempête de sable; nor the Z's (Effects.zSpells): Gravité alourdie, Nuage de nanites, Gel électronique, Balise de
  * vacarme, Impulsion magnétique, Canon IEM, the invisibility and repair kits.
  */
 export function marksOf(e: Entity): Mark[] {
   const out: Mark[] = [];
-  if (e.charm > 0) out.push(CHARM);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
-  if (e.war > 0) out.push(WAR);
   if (e.boost > 0) out.push(BOOST);
-  if (e.charged > 0) out.push(CHARGED);
-  if (e.statue > 0) out.push(STATUE);
-  if (e.pace > 0 && e.paceMove <= 100 && e.paceAtk >= 100) out.push(SLOW);
-  if (e.chill > 0) out.push(CHILL);
-  if (e.blind > 0) out.push(BLIND);
-  if (e.swarm > 0) out.push(SWARM);
   return out;
 }
 
 /** Zones that last on the ground: their centre, reach (tiles) and colour. */
 function zones(world: World, seen: (x: number, y: number) => boolean, put: (x: number, z: number, r: number, color: number) => void): void {
-  const now = world.tick;
-  for (const z of world.storms) if (z.until > now && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.r / FP, 0xe0b870);
   for (const z of world.clouds) if (z.hits > 0 && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.r / FP, 0x8aff4a);
   // Zones revealed for a while (Observation céleste, balises, Observatoire…): their reach in tiles, the Forge's by default.
   for (const z of world.scans) if (z.left > 0 && world.players[z.owner]?.faction !== 'isdaris' && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.radius ?? BALANCE.rules.observation.radius, 0xfff0c0);
   for (const e of world.entities.values()) {
     if (e.hp <= 0 || !seen(e.x, e.y)) continue;
     if (e.gravity > 0) put(e.x / FP, e.y / FP, BALANCE.abilities.gravite.radius, 0xa07aff);
-    // The Gods' standing auras: Athéna's protection, Odin's war.
-    const lvl = Math.max(0, Math.min(2, e.lvl - 1));
-    if (e.type === 'athena') put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.auraprotection.radius[lvl], 0x9ad8ff);
-    if (e.type === 'fontaine' && e.buildLeft === 0) put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.fontaine.radius, 0x7affb0);
-    if (e.type === 'odin') put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.auraguerre.radius[lvl], 0xffb830);
   }
 }
 
