@@ -1094,6 +1094,16 @@ export class EntityRenderer {
     h.moved = true;
   }
 
+  /** Lowers a rigged model so its lowest toe rests on the ground (a crouching pose that left them hanging). */
+  private plantFeet(v: View): void {
+    const m = v.model;
+    v.toes ??= ['LeftToeBase', 'RightToeBase'].map((n) => m.getObjectByName(n)).filter((o): o is Object3D => !!o);
+    if (!v.toes.length) return;
+    m.updateMatrixWorld(true);
+    const low = Math.min(...v.toes.map((o) => o.getWorldPosition(IK_T).y)) - v.root.position.y;
+    m.position.y -= Math.max(0, low - 0.02);
+  }
+
   /** The aim pose's upper body (spine and arms, its first key), over another clip's: the walk keeps its legs. */
   private aimArms(v: View): void {
     v.aimPose ??= (() => {
@@ -1221,12 +1231,18 @@ export class EntityRenderer {
       if (has(CLIP.aim)) {
         // A two-handed gun (the Phalangiste's launcher): held at the hip in the aim pose whether it stands or fires, its
         // arms kept in that pose over the walk's legs, the barrel along its facing (it turns to its foe to shoot).
+        // Firing it crouches like a mortar man, and stays down a moment after its last shot, so it does not bob up
+        // between shots; it stands to walk.
+        if (attacking) v.crouchUntil = t + 1.5;
+        const down = !moving && has(CLIP.crouch) && (v.crouchUntil ?? 0) > t;
         if (moving) play(v, CLIP.walk, (def.speed * GAME_SPEED) / WALK_STRIDE);
-        else play(v, CLIP.aim, 1);
+        else play(v, down ? CLIP.crouch : CLIP.aim, 1);
         v.model.position.y = 0;
         v.model.children[0].rotation.x = 0;
         this.pose(v, dt);
         if (moving) this.aimArms(v);
+        // Crouched (or getting there), the pose's feet may hang a little: lower the body until its toes touch the ground.
+        if (down || v.playing === v.clips!.get(CLIP.crouch)) this.plantFeet(v);
         this.holdAim(v, attacking ? Math.max(0.001, (e.cooldown / ticks(def.attack?.cooldown ?? 1) - 0.8) * 5) : 0);
         this.leftGrip(v);
         return;

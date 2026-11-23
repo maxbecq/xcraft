@@ -54,6 +54,10 @@ export interface View {
   aimAt?: number;
   /** Where that foe is (world, as a shot aims at it), for a lobbing gun's raised barrel. */
   aimTo?: Vector3;
+  /** Until when (performance clock, s) a gunner stays crouched after its last shot. */
+  crouchUntil?: number;
+  /** Its toe bones, to plant a crouching rigged model's feet (render/units.ts plantFeet). */
+  toes?: Object3D[];
   /** A two-handed gunner's left arm, for its IK onto the gun's front grip (render/units.ts leftGrip). */
   leftArm?: { arm: Object3D; fore: Object3D; hand: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
