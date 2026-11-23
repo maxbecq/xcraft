@@ -103,6 +103,8 @@ export class Hud {
   readonly ghost: Mesh;
   /** A building just ordered, shown where it will rise (a prototype: ?pose=). */
   readonly pose: PoseConfirm;
+  /** The end banner offers the game's analysis (a prototype: ?bilan=). */
+  bilan = false;
   readonly grid: PlaceGrid;
   /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
   gridKey = '';

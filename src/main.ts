@@ -2,6 +2,8 @@ import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight,
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
+import { RECAP_LAYOUT, showRecap } from './game/recap';
+import { Recorder } from './game/recap-data';
 import { CameraRig, MAX_VIEW } from './camera';
 import { stageAttract } from './game/attract';
 import { Hud } from './game/hud';
@@ -79,6 +81,8 @@ renderer.shadowMap.type = PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
+/** The end-of-game analysis being gathered (a prototype: ?bilan=). */
+const recap = RECAP_LAYOUT && !ATTRACT ? new Recorder(world) : null;
 /** `?perf=rec` or the Options box: frame-by-frame telemetry of this game, to send at the end. */
 const rec = new PerfRecorder(renderer, {
   version: typeof __VERSION__ === 'string' ? __VERSION__ : 'dev',
@@ -278,6 +282,7 @@ function measuresOnce(): void {
   saveMeasures();
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
+hud.bilan = !!recap;
 hud.online = !!NET_ROLE;
 const marking = new Marking(hud);
 hud.gridKeys = SCROLL.grid && !TOUCH;
@@ -435,6 +440,7 @@ document.addEventListener('click', (e) => {
   } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : sealed('ongoing')); // watching one: the file itself, whole
   else if (p === 'perfrec') saveMeasures();
+  else if (p === 'bilan' && recap) showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name));
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
     // Left before the end, measuring: the measures saved first, the page left a moment later so the download goes through.
@@ -697,7 +703,7 @@ function start(): void {
         // Won, the victory banner says it; else this one, where the game was left.
         if (!replayEnded && world.winner === null) {
           const why = REPLAY.end === 'network' ? 'La partie a été interrompue : connexion perdue.' : REPLAY.end === 'ongoing' ? 'Le replay a été enregistré pendant la partie.' : 'La partie a été quittée avant sa fin.';
-          hud.banner.innerHTML = `<h1>Fin du replay</h1><p>${why}</p><div class="row"><button data-p="quit">Menu principal</button><button data-p="replay">Enregistrer le replay</button></div>`;
+          hud.banner.innerHTML = `<h1>Fin du replay</h1><p>${why}</p><div class="row"><button data-p="quit">Menu principal</button><button data-p="replay">Enregistrer le replay</button>${recap ? '<button data-p="bilan">Analyse de la partie</button>' : ''}</div>`;
           hud.banner.hidden = false;
           hud.endShownAt = performance.now();
         }
@@ -708,6 +714,7 @@ function start(): void {
       if (net && world.tick % 100 === 0) net.check(world.tick, fingerprint(world));
       if (cmds.length && !ATTRACT && !REPLAY) record.ticks.push([world.tick, cmds]);
       world.step(cmds);
+      recap?.observe(cmds);
       if (rec.on) {
         stepped++;
         for (const ev of world.events) happened[ev.kind] = (happened[ev.kind] ?? 0) + 1;
