@@ -54,6 +54,8 @@ export interface View {
   aimAt?: number;
   /** Where that foe is (world, as a shot aims at it), for a lobbing gun's raised barrel. */
   aimTo?: Vector3;
+  /** A two-handed gunner's left arm, for its IK onto the gun's front grip (render/units.ts leftGrip). */
+  leftArm?: { arm: Object3D; fore: Object3D; hand: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */

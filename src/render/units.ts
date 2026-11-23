@@ -186,6 +186,20 @@ const DIE_S = 0.3;
 const BURST_S = 0.4;
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
+/** Scratch vectors for the left arm's IK (leftGrip). */
+const [IK_T, IK_S, IK_E, IK_H, IK_U, IK_P, IK_W, IK_A, IK_B] = Array.from({ length: 9 }, () => new Vector3());
+const IK_Q = new Quaternion();
+const IK_R = new Quaternion();
+
+/** Turns a bone, about its own head, so that the world direction `from` comes onto `to`. */
+function turnBone(bone: Object3D, from: Vector3, to: Vector3): void {
+  IK_Q.setFromUnitVectors(from.normalize(), to.normalize()); // the turn, in the world
+  bone.getWorldQuaternion(IK_R);
+  IK_R.premultiply(IK_Q); // the bone's new world rotation
+  const parent = bone.parent!.getWorldQuaternion(new Quaternion()).invert();
+  bone.quaternion.copy(parent.multiply(IK_R));
+}
+
 /** Scratch vectors for a drilling Serf's hands and tool (holdBit). */
 const [HAND_R, HAND_L, HAND_S, HAND_P] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 
@@ -1112,14 +1126,60 @@ export class EntityRenderer {
     m.updateMatrixWorld(true);
     const r = h.right.getWorldPosition(HAND_R);
     const firing = kick > 0 && v.aimAt !== undefined;
-    const yaw = firing ? v.aimAt! : v.heading; // firing: at the foe, not only where it faces yet
+    // Firing: at the foe, not only where it faces yet. Otherwise carried a little across the body (towards its left),
+    // so the left hand reaches its front grip.
+    const yaw = firing ? v.aimAt! : v.heading + 0.7;
     // Firing a lobbing gun: the barrel raised along the start of the grenade's arc (effects.ts lobLaunch); otherwise
     // level, a little up.
-    const ahead = (firing && v.aimTo && lobLaunch(v.type, r, v.aimTo, HAND_L)) || HAND_L.set(Math.sin(yaw), 0.08, Math.cos(yaw)).normalize();
+    const ahead = (firing && v.aimTo && lobLaunch(v.type, r, v.aimTo, HAND_L)) || HAND_L.set(Math.sin(yaw), 0.3, Math.cos(yaw)).normalize();
     r.addScaledVector(ahead, -0.04 * Math.min(1, kick));
     h.tool.position.copy(h.tool.parent!.worldToLocal(HAND_P.copy(r)));
     h.tool.lookAt(HAND_S.copy(r).add(ahead));
     h.moved = true;
+  }
+
+  /**
+   * The left hand onto a two-handed gun's front grip, under its barrels, wherever the gun points (raised to fire, swung
+   * by the walk): two-bone IK on the left arm (shoulder, elbow, wrist), the elbow kept on the side it bends to.
+   */
+  private leftGrip(v: View): void {
+    const tool = v.held?.moved ? v.held.tool : undefined;
+    if (!tool) return;
+    const m = v.model;
+    v.leftArm ??= (() => {
+      const [arm, fore, hand] = ['LeftArm', 'LeftForeArm', 'LeftHand'].map((n) => m.getObjectByName(n));
+      return arm && fore && hand ? { arm, fore, hand } : undefined;
+    })();
+    const a = v.leftArm;
+    if (!a) return;
+    m.updateMatrixWorld(true);
+    const s = a.arm.getWorldPosition(IK_S);
+    const e = a.fore.getWorldPosition(IK_E);
+    const h = a.hand.getWorldPosition(IK_H);
+    const l1 = e.distanceTo(s);
+    const l2 = h.distanceTo(e);
+    // The front grip (tools/meshy/lancegrenades.py), a third of the way to the muzzle under the barrels; held level at
+    // the hip it can be out of the arm's reach: then the hand slides back under the barrels to where it reaches.
+    const tip = tool.userData.tip as number;
+    let t = IK_T;
+    for (let k = 0.33; k >= 0.1; k -= 0.025) {
+      t = tool.localToWorld(IK_T.set(0, -0.06 * tip / 0.53, k * tip / 0.53));
+      if (t.distanceTo(s) <= (l1 + l2) * 0.97) break;
+    }
+    const to = IK_U.subVectors(t, s);
+    const d = Math.min(to.length(), (l1 + l2) * 0.999);
+    to.normalize();
+    const side = IK_P.subVectors(e, s);
+    side.addScaledVector(to, -side.dot(to));
+    if (side.lengthSq() < 1e-10) side.set(0, -1, 0);
+    side.normalize();
+    const cos = Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)));
+    const elbow = IK_W.copy(s).addScaledVector(to, Math.cos(Math.acos(cos)) * l1).addScaledVector(side, Math.sin(Math.acos(cos)) * l1);
+    turnBone(a.arm, IK_A.subVectors(e, s), IK_B.subVectors(elbow, s));
+    a.arm.updateMatrixWorld(true);
+    const e2 = a.fore.getWorldPosition(IK_E);
+    turnBone(a.fore, IK_A.subVectors(a.hand.getWorldPosition(IK_H), e2), IK_B.subVectors(t, e2));
+    a.fore.updateMatrixWorld(true);
   }
 
   /** The tool back in the hand as the idle pose holds it, once a drilling Serf stops. */
@@ -1168,6 +1228,7 @@ export class EntityRenderer {
         this.pose(v, dt);
         if (moving) this.aimArms(v);
         this.holdAim(v, attacking ? Math.max(0.001, (e.cooldown / ticks(def.attack?.cooldown ?? 1) - 0.8) * 5) : 0);
+        this.leftGrip(v);
         return;
       }
       if (moving) {
