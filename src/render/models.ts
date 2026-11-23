@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, type Material, type Texture,
+  ShaderMaterial, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, RepeatWrapping,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -196,9 +196,9 @@ export function owned<T extends { userData: Record<string, unknown> }>(x: T): T 
  * Static ones (robots, beasts) are plain textured meshes, already sized by normalize.py.
  */
 type Grip = 'rifle' | 'pole' | 'drill';
-export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip }> = {
+export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip; basket?: boolean }> = {
   auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
-  serf: { height: 0.72, weapon: 'piqueur', grip: 'drill' }, // puny next to the soldiers
+  serf: { height: 0.72, weapon: 'piqueur', grip: 'drill', basket: true }, // puny next to the soldiers; a wicker basket on its back
   legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole' },
   soigneur: { height: 0.86, weapon: 'injecteur', grip: 'rifle' },
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
@@ -359,6 +359,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             if (isHuman(type)) weapon.traverse((o) => o instanceof Mesh && (o.material as MeshStandardMaterial).color.multiplyScalar(1.4));
             arm(gltf.scene, gltf.animations, weapon, character.grip ?? 'rifle');
           }
+          if (character.basket) backBasket(gltf.scene, gltf.animations);
           if (skin) {
             // Culling bounds from the rest pose, widened so a lunge or a fall stays inside them; copies inherit them.
             gltf.scene.updateMatrixWorld(true);
@@ -574,6 +575,88 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   right.attach(weapon);
   // Its pose in the hand, to go back to when a drilling pose let it go.
   weapon.userData.rest = [...weapon.position.toArray(), ...weapon.quaternion.toArray()];
+  mixer.stopAllAction();
+}
+
+let wicker: MeshStandardMaterial | undefined;
+
+/** Woven willow, drawn once: tan rods going round, darker stakes going up, a little shading where they cross. */
+function wickerMaterial(): MeshStandardMaterial {
+  if (wicker) return wicker;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#4a3420';
+  g.fillRect(0, 0, 128, 128);
+  for (let row = 0; row < 16; row++) {
+    for (let col = 0; col < 8; col++) {
+      // Rods in and out of the stakes: every other cell is lit, the pattern shifted one cell on every row.
+      const lit = (row + col) % 2 === 0;
+      const grad = g.createLinearGradient(0, row * 8, 0, row * 8 + 8);
+      grad.addColorStop(0, lit ? '#c9a36a' : '#8a6a42');
+      grad.addColorStop(0.5, lit ? '#e0bd84' : '#a07c4e');
+      grad.addColorStop(1, lit ? '#9c7748' : '#6c5032');
+      g.fillStyle = grad;
+      g.fillRect(col * 16 + 1, row * 8 + 1, 14, 6);
+    }
+  }
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.repeat.set(3, 2);
+  wicker = new MeshStandardMaterial({ map: tex, roughness: 0.95, side: DoubleSide });
+  return wicker;
+}
+
+/**
+ * A wicker basket (hotte) on a Serf's back, as on its board: wider at the top, a rim, and the ore it carries heaped in
+ * it, as `cargo` (render/units.ts shows it while the Serf carries). Placed as the idle clip holds the body, then
+ * parented to the upper spine, it bends with the drill pose, walks and falls with the body.
+ */
+function backBasket(character: Group, clips: AnimationClip[]): void {
+  const spine = character.getObjectByName('Spine');
+  const stance = clips.find((c) => c.name === 'idle');
+  if (!spine || !stance) return;
+  const mixer = new AnimationMixer(character);
+  mixer.clipAction(stance).play();
+  mixer.update(0);
+  character.updateMatrixWorld(true);
+  const height = new Box3().setFromObject(character, true).getSize(new Vector3()).y;
+  const k = height / 0.72; // drawn for a 0.72 Serf
+  const basket = new Group();
+  basket.name = 'basket';
+  const profile = [[0.05, 0], [0.065, 0.004], [0.075, 0.06], [0.088, 0.14], [0.1, 0.2]].map(([r, y]) => new Vector2(r * k, y * k));
+  const body = new Mesh(new LatheGeometry(profile, 14), wickerMaterial());
+  body.scale.set(0.85, 1, 0.75); // no wider than the back, flatter against it
+  const rim = new Mesh(new TorusGeometry(0.1 * k, 0.008 * k, 5, 18), mat(0x6a4a2a, { roughness: 0.9 }));
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.2 * k;
+  rim.scale.set(0.85, 0.75, 1);
+  const bottom = new Mesh(new CylinderGeometry(0.05 * k, 0.05 * k, 0.006 * k, 12), wickerMaterial());
+  bottom.scale.set(0.85, 1, 0.75);
+  basket.add(body, rim, bottom);
+  // The load: lumps of the field's glowing ore heaped above the rim.
+  const cargo = new Group();
+  cargo.name = 'cargo';
+  // Heaped high enough to show over the shoulders of a Serf walking towards the camera.
+  const lumps: [number, number, number, number][] = [[0, 0.215, 0, 0.055], [0.04, 0.2, 0.02, 0.042], [-0.04, 0.2, -0.015, 0.04], [0.012, 0.265, -0.01, 0.04], [-0.02, 0.21, 0.035, 0.034], [0.02, 0.245, 0.03, 0.03]];
+  for (const [x, y, z, r] of lumps) {
+    const lump = new Mesh(new IcosahedronGeometry(r * k, 0), ore);
+    lump.position.set(x * k, y * k, z * k);
+    lump.rotation.set(x * 40, y * 30, z * 50);
+    cargo.add(lump);
+  }
+  cargo.visible = false;
+  basket.add(cargo);
+  basket.traverse((o) => {
+    if (o instanceof Mesh) o.castShadow = true;
+  });
+  // On the back, between the shoulder blades and the waist, its top tipped back a little (the model faces +Z).
+  const at = spine.getWorldPosition(new Vector3());
+  basket.position.set(at.x, at.y - 0.14 * height, at.z - 0.095 * height);
+  basket.rotation.x = -0.18;
+  basket.updateMatrixWorld();
+  spine.attach(basket);
   mixer.stopAllAction();
 }
 
