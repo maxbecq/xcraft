@@ -59,6 +59,18 @@ describe('quality control, lot A', () => {
     expect(v.tx).toBeLessThan(W);
   });
 
+  it('a unit spell aimed off the map is kept on it from the order on: an Espion casts on the edge tile in reach, never walks out', () => {
+    const w = createMatch(['z', 'humains']);
+    const spy = w.spawn('zespion', 0, 5 * FP + FP / 2, 20 * FP);
+    spy.mana = 999 * FP;
+    const x0 = spy.x;
+    // Balise de révélation, reach 6: the point 2 tiles off the map is 7.5 away, the edge tile 5 away.
+    w.step([{ player: 0, kind: 'ability', ids: [spy.id], name: 'balisez', x: -2 * FP, y: 20 * FP }]);
+    for (let i = 0; i < 3; i++) w.step([]);
+    expect(w.scans.some((s) => s.owner === 0 && s.x === FP / 2)).toBe(true);
+    expect(spy.x).toBe(x0);
+  });
+
   it('an order the network or a replay accepts is the one the simulation applies, and the other way round', () => {
     // Sent over the wire, an undefined field is gone: the same order with or without it, the same game.
     const play = (c: Record<string, unknown>) => {

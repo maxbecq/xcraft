@@ -324,7 +324,7 @@ export function apply(this: World, c: Command): void {
         if (!casters.length && able.some((e) => this.manaOf(e) && e.abilityCd === 0 && (e.spellCd[c.name!] ?? 0) <= this.tick)) return void this.say(c.player, "Pas assez d'énergie.");
         if (ab.target !== 'point') return void casters.forEach((e) => this.cast(e, c.name));
         if (c.x === undefined || c.y === undefined || !casters.length) return;
-        const [x, y] = [c.x, c.y];
+        const [x, y] = onMap(this.map, c.x, c.y);
         const e = casters.sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
         if (e.inside) {
           // From inside it cannot walk up: within reach of the shelter's edge, or not at all.
