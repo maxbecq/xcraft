@@ -353,4 +353,22 @@ describe('the balancer, Humains', () => {
     expect(s.order?.kind === 'attack' && s.order.target).toBe(foe.id);
   });
 
+  it('Refuge sends in only as many workers as there are seats free, the nearest first; the others keep to their work', () => {
+    const w = humans();
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'conseil')!;
+    const serfs = [...w.entities.values()].filter((e) => e.owner === 0 && e.type === 'serf');
+    const seats = w.room(hq);
+    for (let i = 0; i < seats - 1; i++) w.spawn('serf', 0, hq.x, hq.y).inside = hq.id;
+    const away = { kind: 'move' as const, x: hq.x + 12 * FP, y: hq.y };
+    w.step([{ player: 0, kind: 'move', ids: serfs.map((e) => e.id), x: away.x, y: away.y }]);
+    w.step([{ player: 0, kind: 'ability', ids: [hq.id], name: 'refuge' }]);
+    const entering = serfs.filter((e) => e.order?.kind === 'enter');
+    expect(entering.length).toBe(1);
+    const gap = (e: (typeof serfs)[number]) => w.gap(e, hq);
+    expect(serfs.every((e) => e.order?.kind === 'enter' || (e.order?.kind === 'move' && gap(e) >= gap(entering[0])))).toBe(true);
+    // Full now: a second Refuge diverts nobody.
+    w.step([{ player: 0, kind: 'ability', ids: [hq.id], name: 'refuge' }]);
+    expect(serfs.filter((e) => e.order?.kind === 'enter').length).toBe(1);
+  });
+
 });
