@@ -43,6 +43,8 @@ export function commandOk(c: unknown, sandbox = false, replay = false): boolean 
   const fields = sandbox && c.kind === 'sandbox' ? SANDBOX_FIELDS : replay && c.kind === 'resign' ? {} : Object.hasOwn(FIELDS, c.kind) ? FIELDS[c.kind] : null;
   if (!fields) return false;
   if (!Array.isArray(c.ids) || c.ids.length > MAX_IDS || !c.ids.every(int)) return false;
+  // Soin is cast by healing (a heal order or its autocast), never on its own: alone it spent mana and healed nobody.
+  if (c.kind === 'ability' && c.name === 'soin') return false;
   if (c.kind === 'trade' && c.sell !== 'minerals' && c.sell !== 'energy') return false;
   if (c.kind === 'sandbox' && !SANDBOX_TOOLS.includes(c.tool as string)) return false;
   // Both coordinates or neither (an aimed power).

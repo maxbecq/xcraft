@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
 import { FP, speedPerTick, ticks } from './fixed';
 import { createMatch } from './setup';
+import { commandOk } from './validate';
 import type { World } from './world';
 
 // The balancer's answer of 2026-11-22, section « 1. Humains »: followed to the letter.
@@ -333,4 +334,13 @@ describe('the balancer, Humains', () => {
     for (const s of w.map.sites!) expect(w.nearMinerals(s.hq[0], s.hq[1], 4), `${s.hq}`).toBe(false);
     expect(w.misplaced(DEFS.conseil as never, m.tx + 2, m.ty, 0)).toContain('gisement');
   });
+  it('Soin is never cast on its own: refused by the shared order check, so no mana spent and no cooldown', () => {
+    expect(commandOk({ kind: 'ability', ids: [1], name: 'soin' })).toBe(false);
+    const w = humans();
+    const s = put(w, 'soigneur');
+    const mana = s.mana;
+    w.step([{ player: 0, kind: 'ability', ids: [s.id], name: 'soin' }]);
+    expect([s.mana >= mana, s.abilityCd, s.spellCd.soin ?? 0]).toEqual([true, 0, 0]);
+  });
+
 });
