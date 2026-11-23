@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, RepeatWrapping, TubeGeometry, CatmullRomCurve3,
+  ShaderMaterial, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -578,32 +578,6 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   mixer.stopAllAction();
 }
 
-/** `?hotte=tissu`: the Serf's back carrier in cloth and leather; otherwise riveted sheet metal (the user picks). */
-const HOTTE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('hotte') === 'tissu' ? 'tissu' : 'metal';
-
-let canvasCloth: CanvasTexture | undefined;
-
-/** Thick canvas, drawn once: a coarse weave of light and dark threads. */
-function clothTexture(): CanvasTexture {
-  if (canvasCloth) return canvasCloth;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#8a6a46';
-  g.fillRect(0, 0, 64, 64);
-  for (let i = 0; i < 64; i += 2) {
-    g.fillStyle = i % 4 ? 'rgba(255,240,210,0.10)' : 'rgba(40,25,10,0.14)';
-    g.fillRect(i, 0, 1, 64);
-    g.fillStyle = i % 4 ? 'rgba(40,25,10,0.12)' : 'rgba(255,240,210,0.08)';
-    g.fillRect(0, i, 64, 1);
-  }
-  canvasCloth = new CanvasTexture(c);
-  canvasCloth.colorSpace = SRGBColorSpace;
-  canvasCloth.wrapS = canvasCloth.wrapT = RepeatWrapping;
-  canvasCloth.repeat.set(4, 3);
-  return canvasCloth;
-}
-
 /** A body of revolution standing on y = 0, flattened against the back (the model faces +Z). */
 function vessel(profile: number[][], k: number, material: Material, segments: number): Mesh {
   const m = new Mesh(new LatheGeometry(profile.map(([r, y]) => new Vector2(r * k, y * k)), segments), material);
@@ -621,8 +595,8 @@ function band(r: number, y: number, tube: number, k: number, material: Material)
 }
 
 /**
- * The Serf's back carrier, as on its board but not in wicker: riveted sheet metal in the steel and brass of its
- * jackhammer with a glowing cyan cell (`metal`), or a thick canvas sack with leather straps (`tissu`). Its load, a heap
+ * The Serf's back carrier, as on its board but in riveted sheet metal: the steel and brass of its jackhammer with a
+ * small glowing cyan cell. Its load, a heap
  * of the field's glowing ore named `cargo`, shows only while the Serf carries (render/units.ts). Two shoulder straps
  * run from its top over the shoulders down the chest. Placed as the idle clip holds the body, then parented to the
  * upper spine: it bends with the drill pose, walks, falls and darkens (toCorpse) with the body.
@@ -642,40 +616,29 @@ function backBasket(character: Group, clips: AnimationClip[]): void {
   const brass = mat(0xb08a3a, { metalness: 0.8, roughness: 0.35 });
   const carrier = new Group();
   carrier.name = 'basket';
-  if (HOTTE === 'metal') {
-    const steel = mat(0x9ca2a8, { metalness: 0.6, roughness: 0.45, flatShading: true, side: DoubleSide });
-    carrier.add(vessel([[0, 0], [0.068, 0], [0.072, 0.01], [0.09, 0.19], [0.095, 0.2]], k, steel, 8));
-    carrier.add(band(0.074, 0.03, 0.009, k, brass), band(0.092, 0.185, 0.01, k, brass));
-    // Rivets along the upper band.
-    for (let n = 0; n < 8; n++) {
-      const a = (n / 8) * Math.PI * 2;
-      const rivet = new Mesh(new SphereGeometry(0.006 * k, 4, 3), brass);
-      rivet.position.set(Math.cos(a) * 0.094 * k * 0.85, 0.15 * k, Math.sin(a) * 0.094 * k * 0.72);
-      carrier.add(rivet);
-    }
-    // A small power cell on the outside of its back, a touch of the jackhammer's cyan, not a lantern.
-    const cell = new Mesh(new CapsuleGeometry(0.009 * k, 0.045 * k, 3, 8), mat(0x3ccbe8, { emissive: 0x1fa8d8, emissiveIntensity: 0.55, roughness: 0.3 }));
-    cell.position.set(0, 0.1 * k, -0.072 * k);
-    carrier.add(cell);
-    for (const y of [0.07, 0.13]) {
-      const cap = new Mesh(new CylinderGeometry(0.012 * k, 0.012 * k, 0.008 * k, 8), brass);
-      cap.position.set(0, y * k, -0.072 * k);
-      carrier.add(cap);
-    }
-  } else {
-    const cloth = mat(0xffffff, { map: clothTexture(), roughness: 0.95, side: DoubleSide });
-    carrier.add(vessel([[0, 0], [0.04, 0.003], [0.078, 0.03], [0.094, 0.09], [0.09, 0.16], [0.072, 0.2], [0.08, 0.215]], k, cloth, 12));
-    carrier.add(band(0.094, 0.07, 0.007, k, leather), band(0.088, 0.15, 0.007, k, leather));
-    for (const y of [0.07, 0.15]) {
-      const buckle = new Mesh(new BoxGeometry(0.022 * k, 0.016 * k, 0.006 * k), brass);
-      buckle.position.set(0, y * k, -0.069 * k);
-      carrier.add(buckle);
-    }
+  const steel = mat(0x9ca2a8, { metalness: 0.6, roughness: 0.45, flatShading: true, side: DoubleSide });
+  carrier.add(vessel([[0, 0], [0.068, 0], [0.072, 0.01], [0.09, 0.19], [0.095, 0.2]], k, steel, 8));
+  carrier.add(band(0.074, 0.03, 0.009, k, brass), band(0.092, 0.185, 0.01, k, brass));
+  // Rivets along the upper band.
+  for (let n = 0; n < 8; n++) {
+    const a = (n / 8) * Math.PI * 2;
+    const rivet = new Mesh(new SphereGeometry(0.006 * k, 4, 3), brass);
+    rivet.position.set(Math.cos(a) * 0.094 * k * 0.85, 0.15 * k, Math.sin(a) * 0.094 * k * 0.72);
+    carrier.add(rivet);
+  }
+  // A small power cell on the outside of its back, a touch of the jackhammer's cyan, not a lantern.
+  const cell = new Mesh(new CapsuleGeometry(0.009 * k, 0.045 * k, 3, 8), mat(0x3ccbe8, { emissive: 0x1fa8d8, emissiveIntensity: 0.55, roughness: 0.3 }));
+  cell.position.set(0, 0.1 * k, -0.072 * k);
+  carrier.add(cell);
+  for (const y of [0.07, 0.13]) {
+    const cap = new Mesh(new CylinderGeometry(0.012 * k, 0.012 * k, 0.008 * k, 8), brass);
+    cap.position.set(0, y * k, -0.072 * k);
+    carrier.add(cap);
   }
   // The load: lumps of the field's glowing ore heaped above the rim, high enough to show over the shoulders.
   const cargo = new Group();
   cargo.name = 'cargo';
-  const top = HOTTE === 'metal' ? 0.2 : 0.21;
+  const top = 0.2;
   const lumps: [number, number, number, number][] = [[0, 0.015, 0, 0.055], [0.04, 0, 0.02, 0.042], [-0.04, 0, -0.015, 0.04], [0.012, 0.05, -0.01, 0.04], [-0.02, 0.01, 0.035, 0.034], [0.02, 0.03, 0.03, 0.03]];
   for (const [x, y, z, r] of lumps) {
     const lump = new Mesh(new IcosahedronGeometry(r * k, 0), ore);
