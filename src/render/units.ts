@@ -10,7 +10,7 @@ import { armillaries } from './life';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
-import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
+import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP, skinClock } from './models';
 import { findRig, stepRig } from './godrig';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { seeThrough } from './effects';
@@ -522,6 +522,7 @@ export class EntityRenderer {
   }
 
   sync(world: World, alpha: number, selected: ReadonlySet<number>, player: number, sees: (e: Entity) => boolean, seenAt: (x: number, y: number) => boolean): void {
+    skinClock.frame++;
     const now = performance.now();
     veinTime.value = now / 1000;
     const dt = Math.min(0.1, (now - this.last) / 1000);

@@ -581,6 +581,23 @@ export function preview(type: string, owner: number): { object: Group; clips: An
   return { object, clips: (object.userData.clips as AnimationClip[] | undefined) ?? [] };
 }
 
+/** Frames drawn so far (EntityRenderer.sync counts them). */
+export const skinClock = { frame: 0 };
+/**
+ * A made-up skeleton works its bones out and uploads them once a frame: three does it once a render, and the ambient
+ * occlusion's normal pass is a render of its own (160 Dieux: 320 bone uploads a frame instead of 160).
+ */
+function onceAFrame(s: Skeleton): Skeleton {
+  let last = -1;
+  const update = s.update.bind(s);
+  s.update = () => {
+    if (last === skinClock.frame) return;
+    last = skinClock.frame;
+    update();
+  };
+  return s;
+}
+
 /** A copy of a Blender model; `seed` picks its graffiti. */
 export function model(type: string, team: Material, seed = 0): Group {
   if (!templates.has(type)) type = LOOKS[type] ?? type;
@@ -601,6 +618,20 @@ export function model(type: string, team: Material, seed = 0): Group {
   const t = templates.get(type);
   if (!t) return placeholder(type, team);
   const g = t.clone(true);
+  // The Dieux (godrig): a skeleton of its own, its bones cloned out of the scene as the template's.
+  if (t.userData.rig) {
+    let own: Skeleton | undefined;
+    g.traverse((o) => {
+      if (!(o instanceof SkinnedMesh && o.userData.godRig)) return;
+      if (!own) {
+        const src = o.skeleton;
+        const root = src.bones[0].clone(true);
+        root.updateMatrixWorld(true);
+        own = onceAFrame(new Skeleton(src.bones.map((b, i) => (i ? root.getObjectByName(b.name)! : root)) as never[], src.boneInverses));
+      }
+      o.bind(own, o.bindMatrix);
+    });
+  }
   // Z machines (rigidSkin): the copy's skins follow the copy's nodes (the skins come last in the traversal).
   if (t.userData.rigid) {
     const nodes: Object3D[] = [];
@@ -609,7 +640,7 @@ export function model(type: string, team: Material, seed = 0): Group {
     const skeletons = new Map<Skeleton, Skeleton>();
     for (const o of nodes) {
       if (!(o instanceof SkinnedMesh && o.userData.rigid)) continue;
-      const own = skeletons.get(o.skeleton) ?? skeletons.set(o.skeleton, new Skeleton((o.userData.rigid as number[]).map((i) => nodes[i]) as never[], o.skeleton.boneInverses)).get(o.skeleton)!;
+      const own = skeletons.get(o.skeleton) ?? skeletons.set(o.skeleton, onceAFrame(new Skeleton((o.userData.rigid as number[]).map((i) => nodes[i]) as never[], o.skeleton.boneInverses))).get(o.skeleton)!;
       o.bind(own, o.bindMatrix);
     }
   }

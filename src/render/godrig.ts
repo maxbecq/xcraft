@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, type Group, Matrix4, Mesh, Object3D, Skeleton, SkinnedMesh, Vector3 } from 'three';
+import { Box3, BufferAttribute, DetachedBindMode, BufferGeometry, type Group, Matrix4, Mesh, Object3D, Skeleton, SkinnedMesh, Vector3 } from 'three';
 
 /**
  * The Dieux are drawn as single blocks (one mesh per material, no limbs, no skeleton): they glided over the ground.
@@ -78,6 +78,8 @@ const smooth = (a: number, b: number, x: number) => {
 /** A made-up skeleton's bones, by role, found again on each copy by name. */
 export interface Rig {
   spec: RigSpec;
+  /** The bones' root, out of the scene: their matrices are worked out here (stepRig). */
+  root: Object3D;
   hips: Object3D;
   torso: Object3D;
   legs: Object3D[];
@@ -96,24 +98,26 @@ export interface Rig {
 
 /**
  * Turns a Dieux model into skinned meshes bound to a skeleton made from `spec` (one mesh per material still: no
- * draw call added). Bones are plain nodes under the scene, so a copy (models.ts model) binds its own, as the Z machines'.
+ * draw call added). The bones stand apart from the scene, in the model's own frame, bound detached: every mesh of
+ * every copy then draws with the same bind matrices, where bones in the scene made three send each mesh its own
+ * (1 700 matrix uploads a frame in a battle of 160 Dieux, a third more render time). A copy (models.ts model) clones
+ * the bones and binds its own skeleton; the view moves them and works out their matrices (stepRig).
  */
 export function procRig(scene: Group, spec: RigSpec): void {
   scene.updateMatrixWorld(true);
   const box = new Box3().setFromObject(scene);
   const top = box.max.y;
   const half = Math.max(-box.min.x, box.max.x);
-  const node = (name: string, parent: Object3D, x: number, y: number, z = 0) => {
+  const node = (name: string, parent: Object3D | null, x: number, y: number, z = 0) => {
     const o = new Object3D();
     o.name = `grig_${name}`;
     // Bones hold positions relative to their parent: given here in the model's frame.
-    const p = parent.worldToLocal(new Vector3(x, y, z));
-    o.position.copy(p);
-    parent.add(o);
+    o.position.copy(parent ? parent.worldToLocal(new Vector3(x, y, z)) : new Vector3(x, y, z));
+    parent?.add(o);
     o.updateMatrixWorld(true);
     return o;
   };
-  const root = node('root', scene, 0, 0);
+  const root = node('root', null, 0, 0);
   const hips = node('hips', root, 0, spec.hip);
   const torso = node('torso', hips, 0, spec.hip);
   const bones: Object3D[] = [root, hips, torso];
@@ -136,19 +140,14 @@ export function procRig(scene: Group, spec: RigSpec): void {
   const w = new Array<number>(bones.length);
   const p = new Vector3();
   for (const mesh of meshes) {
-    // Floats throughout (the packed models quantise normals), placed where the node puts them.
-    const g = new BufferGeometry();
-    for (const [name, a] of Object.entries((mesh.geometry as BufferGeometry).attributes as Record<string, BufferAttribute>)) {
-      const out = new Float32Array(a.count * a.itemSize);
-      for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) out[i * a.itemSize + c] = a.getComponent(i, c);
-      g.setAttribute(name, new BufferAttribute(out, a.itemSize));
-    }
-    g.setIndex(mesh.geometry.index ? Array.from(mesh.geometry.index.array) : null);
-    g.applyMatrix4(mesh.matrixWorld);
+    // The packed attributes as they are (quantised normals): a skinned vertex is drawn in up to four passes a frame.
+    const g = (mesh.geometry as BufferGeometry).clone();
+    if (!mesh.matrixWorld.equals(new Matrix4())) g.applyMatrix4(mesh.matrixWorld);
     const pos = g.getAttribute('position');
     const n = pos.count;
-    const skinIndex = new Uint16Array(n * 4);
-    const skinWeight = new Float32Array(n * 4);
+    // Bytes: a few bones, weights to 1/255.
+    const skinIndex = new Uint8Array(n * 4);
+    const skinWeight = new Uint8Array(n * 4);
     for (let i = 0; i < n; i++) {
       p.fromBufferAttribute(pos, i);
       w.fill(0);
@@ -156,34 +155,34 @@ export function procRig(scene: Group, spec: RigSpec): void {
       // The four strongest, normalised.
       const best = w.map((v, k) => [v, k] as const).filter(([v]) => v > 1e-3).sort((a, b) => b[0] - a[0]).slice(0, 4);
       const sum = best.reduce((s, [v]) => s + v, 0) || 1;
+      let left = 255;
       best.forEach(([v, k], j) => {
         skinIndex[i * 4 + j] = k;
-        skinWeight[i * 4 + j] = v / sum;
+        const q = j === best.length - 1 ? left : Math.round((v / sum) * 255);
+        skinWeight[i * 4 + j] = q;
+        left -= q;
       });
-      if (!best.length) skinWeight[i * 4] = 1; // the root
+      if (!best.length) skinWeight[i * 4] = 255; // the root
     }
+    mesh.parent!.remove(mesh);
     g.setAttribute('skinIndex', new BufferAttribute(skinIndex, 4));
-    g.setAttribute('skinWeight', new BufferAttribute(skinWeight, 4));
+    g.setAttribute('skinWeight', new BufferAttribute(skinWeight, 4, true));
     const skin = new SkinnedMesh(g, mesh.material);
     skin.name = mesh.name;
     Object.assign(skin.userData, mesh.userData);
-    mesh.parent!.remove(mesh);
     scene.add(skin);
   }
   scene.updateMatrixWorld(true);
   const skeleton = new Skeleton(bones as never[]);
-  const nodes: Object3D[] = [];
-  scene.traverse((o) => void nodes.push(o));
-  for (const o of nodes) {
-    if (!(o instanceof SkinnedMesh) || o.userData.rigid) continue;
+  scene.traverse((o) => {
+    if (!(o instanceof SkinnedMesh)) return;
+    o.bindMode = DetachedBindMode;
     o.bind(skeleton, new Matrix4());
     o.computeBoundingBox();
     o.computeBoundingSphere();
     o.boundingSphere!.radius *= 1.3; // limbs swing out of the rest pose
-  }
-  // Where each bone sits in the model's traversal order, once every mesh is in place (models.ts model).
-  for (const o of nodes) if (o instanceof SkinnedMesh) o.userData.rigid = bones.map((b) => nodes.indexOf(b));
-  scene.userData.rigid = true;
+    o.userData.godRig = true;
+  });
   scene.userData.rig = spec;
 }
 
@@ -250,18 +249,22 @@ function weigh(spec: RigSpec, p: Vector3, w: number[], b: Parts): void {
 /** The made-up skeleton of a copy, if its model has one. */
 export function findRig(body: Object3D, scale: number, seed: number): Rig | undefined {
   const spec = body.userData.rig as RigSpec | undefined;
-  const hips = spec && body.getObjectByName('grig_hips');
-  if (!spec || !hips) return undefined;
+  let root: Object3D | undefined;
+  body.traverse((o) => {
+    if (!root && (o as SkinnedMesh).isSkinnedMesh && o.userData.godRig) root = (o as SkinnedMesh).skeleton.bones[0];
+  });
+  if (!spec || !root) return undefined;
   const all = (prefix: string) => {
     const out: Object3D[] = [];
     for (let i = 0; ; i++) {
-      const o = body.getObjectByName(`grig_${prefix}_${i}`);
+      const o = root!.getObjectByName(`grig_${prefix}_${i}`);
       if (!o) return out;
       out.push(o);
     }
   };
-  const torso = body.getObjectByName('grig_torso')!;
-  return { spec, hips, torso, legs: all('leg'), arms: all('arm'), wings: all('wing'), segs: all('seg'), rest: [hips.position.y, torso.position.y], phase: seed, walk: 0, at: undefined, speed: 0, scale, seed };
+  const hips = root.getObjectByName('grig_hips')!;
+  const torso = root.getObjectByName('grig_torso')!;
+  return { spec, root, hips, torso, legs: all('leg'), arms: all('arm'), wings: all('wing'), segs: all('seg'), rest: [hips.position.y, torso.position.y], phase: seed, walk: 0, at: undefined, speed: 0, scale, seed };
 }
 
 /**
@@ -269,6 +272,11 @@ export function findRig(body: Object3D, scale: number, seed: number): Rig | unde
  * turn (radians, for a lean into the bend); `fighting`: it strikes or casts, standing.
  */
 export function stepRig(r: Rig, x: number, z: number, dt: number, t: number, moving: boolean, turn: number, fighting: boolean): void {
+  pose(r, x, z, dt, t, moving, turn, fighting);
+  r.root.updateMatrixWorld(true); // out of the scene: three does not
+}
+
+function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boolean, turn: number, fighting: boolean): void {
   const s = r.spec;
   const moved = r.at ? Math.hypot(x - r.at[0], z - r.at[1]) : 0;
   r.at = [x, z];
