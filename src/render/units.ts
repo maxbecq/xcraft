@@ -185,6 +185,9 @@ const DIE_S = 0.3;
 const BURST_S = 0.4;
 
 /** Keeps one 3D object per simulated entity, interpolated between ticks. */
+/** Scratch vectors for a drilling Serf's hands and tool (holdBit). */
+const [HAND_R, HAND_L, HAND_S, HAND_P] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+
 export class EntityRenderer {
   /**
    * Whether a ground point (tiles) is in view or near it: off screen, skeletons wait. Animating every unit of the
@@ -719,9 +722,9 @@ export class EntityRenderer {
       const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
       if (foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach) v.target = Math.atan2(foe.x - e.x, foe.y - e.y);
       else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
-      else if (o?.kind === 'gather' && o.phase === 'mine') {
+      else if ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct') {
         const field = world.entities.get(o.target);
-        if (field) v.target = Math.atan2(field.x - e.x, field.y - e.y); // a miner faces the crystal it works
+        if (field) v.target = Math.atan2(field.x - e.x, field.y - e.y); // a miner faces the crystal it works, a builder its site
       }
       if (e.def.kind === 'unit') v.heading = turnToward(v.heading, v.target, dt * TURN_SPEED);
       const ground = heightAt(this.map, x, z);
@@ -1038,6 +1041,51 @@ export class EntityRenderer {
     });
   }
 
+  /**
+   * A drilling Serf: its tool runs from the right hand through the left one, its point on the ground; `held.bit` keeps
+   * that point for the sparks. Done after the skeleton has moved, every frame it drills.
+   */
+  private holdBit(v: View): void {
+    const m = v.model;
+    v.held ??= (() => {
+      const tool = m.getObjectByName('held');
+      const right = m.getObjectByName('RightHand');
+      return tool && right ? { tool, right, moved: false } : undefined;
+    })();
+    const h = v.held;
+    if (!h || !this.inView(v.root.position.x, v.root.position.z)) return;
+    m.updateMatrixWorld(true);
+    // Gripped in the right hand, swung the way the Serf faces (it turns to its field or site), its point down on the
+    // ground: the haft as long as the tool is, so it reaches the ground ahead of the feet at that length.
+    const r = h.right.getWorldPosition(HAND_R);
+    const ahead = HAND_L.set(Math.sin(v.heading), 0, Math.cos(v.heading));
+    if (ahead.lengthSq() < 1e-8) return;
+    ahead.normalize();
+    const len = (h.tool.userData.tip as number) * h.tool.getWorldScale(HAND_S).z;
+    const drop = r.y - v.root.position.y;
+    const run = Math.sqrt(Math.max(len * len - drop * drop, len * len * 0.1));
+    const bit = (h.bit ??= new Vector3()).copy(r).addScaledVector(ahead, run).setY(r.y - Math.min(drop, len * 0.95));
+    h.tool.position.copy(h.tool.parent!.worldToLocal(HAND_P.copy(r)));
+    h.tool.lookAt(bit);
+    h.moved = true;
+  }
+
+  /** The tool back in the hand as the idle pose holds it, once a drilling Serf stops. */
+  private letGo(v: View): void {
+    const h = v.held;
+    if (!h?.moved) return;
+    const rest = h.tool.userData.rest as number[];
+    h.tool.position.fromArray(rest, 0);
+    h.tool.quaternion.fromArray(rest, 3);
+    h.moved = false;
+    h.bit = undefined;
+  }
+
+  /** Where a drilling Serf's tool bites the ground (world); none when it is not drilling or out of view. */
+  bit(id: number): Vector3 | undefined {
+    return this.views.get(id)?.held?.bit;
+  }
+
   /** Moves a skeleton on by `dt`, or, off screen, keeps the time for when it is seen again. */
   private pose(v: View, dt: number): void {
     if (!this.inView(v.root.position.x, v.root.position.z)) {
@@ -1052,6 +1100,8 @@ export class EntityRenderer {
     const t = performance.now() / 1000;
     const moving = e.x !== e.px || e.y !== e.py || !!v.emerge;
     if (v.mixer) {
+      // The tool goes back in the hand; a Serf still drilling has it put on the ground again below.
+      this.letGo(v);
       const kind = e.order?.kind;
       const def = e.def as UnitDef;
       const attacking = e.cooldown > 0 && (kind === 'attack' || kind === 'attackMove' || kind === 'heal');
@@ -1066,12 +1116,15 @@ export class EntityRenderer {
         const clip = v.clips!.get(CLIP.attack)!.getClip();
         play(v, CLIP.attack, def.attack ? clip.duration / (def.attack.cooldown / GAME_SPEED) : 1);
       } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && CHARACTERS[e.type]?.grip === 'drill') {
-        // Jackhammer: lean on it and shudder fast, rather than the slow hammer swing of the work clip.
-        play(v, CLIP.idle, 0.3);
+        // Jackhammer: bent over it, both hands on the haft, its point in the ground (the drill pose, as on the Serf's
+        // board); a model without that pose leans on its idle one instead.
+        const bent = has(CLIP.drill);
+        play(v, bent ? CLIP.drill : CLIP.idle, bent ? 1 : 0.3);
         this.pose(v, dt);
         // A light judder, not a bounce: the sparks show the work.
         v.model.position.y = Math.abs(Math.sin(t * 47 + e.id)) * 0.008;
-        v.model.children[0].rotation.x = 0.12 + Math.sin(t * 61 + e.id) * 0.006; // leaning forward, whatever the heading
+        v.model.children[0].rotation.x = (bent ? 0 : 0.12) + Math.sin(t * 61 + e.id) * 0.006; // leaning forward, whatever the heading
+        if (bent) this.holdBit(v);
         return;
       } else if ((kind === 'gather' || kind === 'construct' || kind === 'build') && has(CLIP.work)) play(v, CLIP.work, 1.6);
       else play(v, CLIP.idle, attacking ? 1.4 : 0.8);

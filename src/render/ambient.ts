@@ -24,12 +24,15 @@ export function ambientEffects(world: World, units: EntityRenderer, effects: Eff
       const p = foe && Math.hypot(foe.x - e.x, foe.y - e.y) <= e.radius + foe.radius + 1.5 * FP ? units.saw(e.id) : undefined;
       if (p) effects.grind(p, dt);
     }
-    // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site); a Z drone
-    // drilling a crystal throws the same.
+    // Serfs at work: the jackhammer bites the field or the building site; a Z drone drilling a crystal too.
     const o = e.order;
     if ((e.type === 'serf' || e.type === 'drone') && e.x === e.px && e.y === e.py && sees(e) && ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct')) {
+      // A Serf in its drill pose sprays grinding sparks from its tool's point; otherwise (a Z drone, a model without
+      // the pose) blue sparks at the foot of the target.
+      const bit = e.type === 'serf' ? units.bit(e.id) : undefined;
       const t = world.entities.get(o.target);
-      if (t) {
+      if (bit) effects.drill(bit, dt);
+      else if (t) {
         const x = e.x / FP;
         const z = e.y / FP;
         const d = Math.hypot(t.x / FP - x, t.y / FP - z) || 1;

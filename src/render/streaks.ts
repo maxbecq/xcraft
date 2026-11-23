@@ -16,6 +16,8 @@ export class Streaks {
   /** Per streak: age, life, flight (seconds to reach the target, 0: a beam), length, width, alpha. */
   private readonly course: Float32Array;
   private readonly rgb: Float32Array;
+  /** Per streak: how high its path bows above the straight line, mid-way (0: straight; a spark's ballistic arc). */
+  private readonly arc: Float32Array;
   private readonly a: InstancedBufferAttribute;
   private readonly b: InstancedBufferAttribute;
   private readonly color: InstancedBufferAttribute;
@@ -29,6 +31,7 @@ export class Streaks {
     this.line = new Float32Array(capacity * 6);
     this.course = new Float32Array(capacity * 6);
     this.rgb = new Float32Array(capacity * 3);
+    this.arc = new Float32Array(capacity);
     const geometry = new InstancedBufferGeometry();
     const quad = new PlaneGeometry(1, 1);
     geometry.setIndex(quad.getIndex());
@@ -87,8 +90,9 @@ export class Streaks {
     this.mesh.visible = false;
   }
 
-  /** A streak from `from` to `to`: `flight` seconds to get there (0: a beam over the whole line), then `linger` to fade. */
-  spawn(color: number, from: Vector3, to: Vector3, flight: number, linger: number, length: number, width: number, alpha: number): void {
+  /** A streak from `from` to `to`: `flight` seconds to get there (0: a beam over the whole line), then `linger` to fade;
+   * `arc` bows its path up by that much mid-way, so a spark flies up and falls back onto `to`. */
+  spawn(color: number, from: Vector3, to: Vector3, flight: number, linger: number, length: number, width: number, alpha: number, arc = 0): void {
     let i = this.free.pop();
     if (i === undefined) {
       if (this.used >= this.capacity) return;
@@ -98,6 +102,7 @@ export class Streaks {
     this.live++;
     this.line.set([from.x, from.y, from.z, to.x, to.y, to.z], i * 6);
     this.course.set([0, flight + linger, flight, length, width, alpha], i * 6);
+    this.arc[i] = arc;
     this.tint.set(color);
     this.rgb.set([this.tint.r, this.tint.g, this.tint.b], i * 3);
   }
@@ -128,10 +133,11 @@ export class Streaks {
         if (age > flight) k0 += (1 - k0) * ((age - flight) / (life - flight));
         fade = 1;
       }
+      const bow = this.arc[i] * 4;
       const t = this.mid.lerpVectors(p0, p1, k0);
-      A.set([t.x, t.y, t.z, width], n * 4);
+      A.set([t.x, t.y + bow * k0 * (1 - k0), t.z, width], n * 4);
       const h = p0.lerp(p1, k1);
-      B.set([h.x, h.y, h.z], n * 3);
+      B.set([h.x, h.y + bow * k1 * (1 - k1), h.z], n * 3);
       C.set([this.rgb[i * 3], this.rgb[i * 3 + 1], this.rgb[i * 3 + 2], alpha * fade * fade], n * 4);
       n++;
     }

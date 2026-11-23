@@ -1443,6 +1443,23 @@ export class Effects {
     }
   }
 
+  /**
+   * A Serf's jackhammer biting rock: grinding sparks, short thin bright strokes, white-yellow cooling to orange, thrown in
+   * a fan from the bit, arcing up and falling back to the ground within a step or two, gone in a blink. No halo, no
+   * sprite: streaks only, one draw call shared with the shots; fewer of them on low-end graphics. Call every frame.
+   */
+  drill(p: Vector3, dt: number): void {
+    const n = Math.floor(dt * 55 * this.density) + (Math.random() < (dt * 55 * this.density) % 1 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.12 + Math.random() * 0.38;
+      const to = new Vector3(p.x + Math.cos(a) * r, p.y - 0.02, p.z + Math.sin(a) * r);
+      const hot = Math.random();
+      const color = hot < 0.35 ? 0xfff6d8 : hot < 0.75 ? 0xffc85a : 0xff8a2a;
+      this.streaks.spawn(color, p, to, 0.12 + Math.random() * 0.14, 0.03, 0.05 + Math.random() * 0.05, 0.012 + Math.random() * 0.008, 1, 0.06 + Math.random() * 0.14);
+    }
+  }
+
   /** Light, steady smoke from a chimney or fire; call every frame. */
   ambient(p: Vector3, dt: number, dark: boolean): void {
     if (Math.random() < dt * 3) {

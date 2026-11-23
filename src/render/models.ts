@@ -559,6 +559,11 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   weapon.position.copy(right.getWorldPosition(new Vector3()));
   weapon.scale.setScalar(character.scale.x);
   const aim = { rifle: left.getWorldPosition(new Vector3()), pole: weapon.position.clone().add(new Vector3(0, 1, 0.45)), drill: weapon.position.clone().add(new Vector3(0, -1, 0.35)) };
+  // Its point along +Z (prop.py), in its own units, measured while it is only moved and scaled: a drilling Serf puts it
+  // on the ground (units.ts, holdBit).
+  weapon.updateMatrixWorld(true);
+  weapon.name = 'held';
+  weapon.userData.tip = (new Box3().setFromObject(weapon, true).max.z - weapon.position.z) / weapon.scale.z;
   weapon.lookAt(aim[grip]);
   weapon.traverse((o) => {
     if (!(o instanceof Mesh)) return;
@@ -567,6 +572,8 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   });
   weapon.updateMatrixWorld();
   right.attach(weapon);
+  // Its pose in the hand, to go back to when a drilling pose let it go.
+  weapon.userData.rest = [...weapon.position.toArray(), ...weapon.quaternion.toArray()];
   mixer.stopAllAction();
 }
 
@@ -862,4 +869,4 @@ function placeholder(type: string, team: Material): Group {
   return g;
 }
 /** Clip roles baked by tools/meshy/pack.py; only idle, walk and die are always there. */
-export const CLIP = { idle: 'idle', walk: 'walk', attack: 'attack', fire: 'fire', work: 'work', carry: 'carry', die: 'die' };
+export const CLIP = { idle: 'idle', walk: 'walk', attack: 'attack', fire: 'fire', work: 'work', carry: 'carry', die: 'die', drill: 'drill' };
