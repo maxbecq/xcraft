@@ -328,9 +328,11 @@ export function acquire(this: World, e: Entity): void {
     const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= reach).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || b.tick - a.tick)[0];
     if (c) this.castAt(e, 'reanimation', c.x, c.y); // its own mana spent there
   }
-  if (!def.attack || !this.weapon(e)) return;
+  // The weapon it has now, not only its sheet's (the Scarabée's cannon comes with a research).
+  const a = this.weapon(e);
+  if (!a) return;
   // Holding position: only what is already within reach.
-  const t = this.enemyNear(e, e.stand ? toFp(def.attack.range) + e.radius + FP : def.sight * FP);
+  const t = this.enemyNear(e, e.stand ? toFp(a.range) + e.radius + FP : def.sight * FP, false, a);
   if (t) this.setOrder(e, { kind: 'attack', target: t.id, auto: true, lx: e.x, ly: e.y });
 }
 

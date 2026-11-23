@@ -343,4 +343,14 @@ describe('the balancer, Humains', () => {
     expect([s.mana >= mana, s.abilityCd, s.spellCd.soin ?? 0]).toEqual([true, 0, 0]);
   });
 
+  it('an empty assault Scarabée left alone fires on a foe in reach (its cannon comes from the research, not its sheet)', () => {
+    const w = humans();
+    w.players[0].upgrades.scarabeassaut = 1;
+    const s = w.spawn('scarabee', 0, 40 * FP, 40 * FP);
+    const foe = w.spawn('auxiliaire', 1, 42 * FP, 40 * FP);
+    foe.held = ticks(60);
+    for (let i = 0; i < 10; i++) w.step([]);
+    expect(s.order?.kind === 'attack' && s.order.target).toBe(foe.id);
+  });
+
 });
