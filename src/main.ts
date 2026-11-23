@@ -419,11 +419,15 @@ document.addEventListener('click', (e) => {
   if (button?.closest('.hud-banner') && pressedAt < hud.endShownAt) return;
   const p = button?.dataset.p;
   if (p === 'resume') setPaused(false);
-  else if (p === 'help') helpText.hidden = !helpText.hidden;
-  else if (p === 'options') {
+  // One section open at a time: opening one folds the other.
+  else if (p === 'help') {
+    helpText.hidden = !helpText.hidden;
+    if (!helpText.hidden) pauseOptions.hidden = true;
+  } else if (p === 'options') {
     // Built on opening, so the fields show the values in force.
     if (pauseOptions.hidden) pauseOptions.innerHTML = sandboxFields(world) + skinField(factions[PLAYER]) + controlFields(true) + perf.field(rec.field());
     pauseOptions.hidden = !pauseOptions.hidden;
+    if (!pauseOptions.hidden) helpText.hidden = true;
   }
   else if (p === 'fullscreen') toggleFullscreen();
   else if (p === 'restart' && !net) {
