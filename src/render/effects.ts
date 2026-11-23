@@ -620,7 +620,7 @@ export class Effects {
       if (z.until <= world.tick) continue;
       const p = this.at(z.x, z.y, 0.05);
       const R = z.r / FP;
-      if (one) { if (chance(120)) { const a = Math.random() * 6.28; const f = Math.acos(Math.random() * 0.9); this.spawn(this.tex.glow, 0x8ab8ff, p.clone().add(new Vector3(R * Math.sin(f) * Math.cos(a), R * 0.5 * Math.cos(f), R * Math.sin(f) * Math.sin(a))), new Vector3(), 0.8, 0.3, 0.25, 0.6, 0, true); } }
+      if (one) for (let n = 0; n < 4; n++) { if (chance(90)) { const a = Math.random() * 6.28; const f = Math.acos(Math.random() * 0.9); this.spawn(this.tex.glow, 0x8ab8ff, p.clone().add(new Vector3(R * Math.sin(f) * Math.cos(a), R * 0.5 * Math.cos(f), R * Math.sin(f) * Math.sin(a))), new Vector3(), 1.2, 0.55, 0.45, 0.7, 0, true); } }
       else if (chance(25 * R)) { const a = Math.random() * 6.28; const d = Math.sqrt(Math.random()) * R; this.spawn(this.tex.glow, 0xc8e0ff, p.clone().add(new Vector3(Math.cos(a) * d, 2 + Math.random(), Math.sin(a) * d)), new Vector3(0, -0.8, 0), 2.5, 0.22, 0.14, 1, 0, true); }
     }
     // Observatoire (an Isdaris scan): a column of cyan light (1), sparkles over the whole zone (2).
