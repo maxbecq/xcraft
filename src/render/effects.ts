@@ -46,7 +46,7 @@ export function seeThrough(e: Entity): boolean {
  * Réservoir); obus: the Pégase's cannon; roquette: the Tour's anti-air rockets; carreau: the Plésiosaure's ballista;
  * rocher: the Ankylosaure's Trébuchet; flamme: the Belluaire's flamethrower, at arm's length.
  */
-type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma' | 'lance' | 'feu';
+type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma' | 'lance' | 'feu' | 'epine';
 const AMMO: Record<string, Ammo> = {
   auxiliaire: 'balle', scarabee: 'balle', bourdon: 'balle', soigneur: 'dard', phalangiste: 'grenade', alchimiste: 'fiole', cuve: 'bombe',
   pegase: 'obus', tour: 'roquette', plesiosaure: 'carreau', ankylosaure: 'rocher', belluaire: 'flamme',
@@ -66,6 +66,7 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   plasma: { pace: 0.09, arc: 0.25, size: 0.42, smoke: 0, color: 0x8ad8ff },
   lance: { pace: 0.05, arc: 0.08, size: 0.1, smoke: 0, color: 0xfff0c0 },
   feu: { pace: 0.08, arc: 0.1, size: 0.65, smoke: 20, color: 0xff7a20 },
+  epine: { pace: 0.06, arc: 0.12, size: 0.1, smoke: 0, color: 0x7a8a40 },
 };
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
@@ -201,6 +202,15 @@ export class Effects {
   }
   /** A gust of wind on its way: wisps to blow along its path, now and then a leaf or dust carried off. */
   private gust: { at: Vector3; left: number; leaf: boolean; way: Vector3; prev?: Vector3 }[] = [];
+  /** The Sphinx's streams of sand pouring: from, to, time left, grains owed. */
+  private sands: { from: Vector3; to: Vector3; left: number; spill: number }[] = [];
+  /** The Yggdrasill furieux's roots on their way under the ground, and those bursting out (a mesh rising then sinking). */
+  private burrows: { from: Vector3; to: Vector3; age: number; flight: number; mark: number }[] = [];
+  private roots: { obj: Object3D; age: number }[] = [];
+  private readonly thornGeo = new ConeGeometry(0.1, 0.9, 5).rotateX(Math.PI / 2);
+  private readonly thornMat = new MeshStandardMaterial({ color: 0x8a9a3a, emissive: 0x2a3a08, roughness: 0.7 });
+  private readonly rootGeo = new ConeGeometry(0.4, 2.4, 6).translate(0, 1.2, 0);
+  private readonly rootMat = new MeshStandardMaterial({ color: 0x8a5a30, emissive: 0x2a1408, roughness: 1, flatShading: true });
   /** Frigg's frost bolt on its way: shards and mist to shed along it, and the frost where it lands, in how long. */
   private frost: { at: Vector3; left: number; impact?: boolean }[] = [];
   /** Thor's blows coming down: where, in how long, how many bolts. */
@@ -1170,19 +1180,22 @@ export class Effects {
         this.flash(from, GOLD, 1.2);
         this.hits.push({ at: to, color: GOLD, left: 0 });
         return true;
-      case 'sphinx': // a stream of sand
-        this.streaks.spawn(0xe8c880, from, to, flight, 0.1, 1.5, 0.18, 0.9);
-        for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0xd8b070, to.clone().add(rnd(0.2)), rnd(0.6).setY(0.4), 0.8, 0.25, 0.6, 0.8, 0, false);
+      case 'sphinx': // a thick, slow stream of sand pouring from the mouth, spreading in a cone, dust falling
+        this.sands.push({ from: from.clone(), to: to.clone(), left: 0.9, spill: 0 });
         return true;
       case 'branche':
-      case 'protecteur': // a volley of thorns
-        for (let k = 0; k < 3; k++) this.streaks.spawn(0x9ad060, from.clone().add(rnd(0.15)), to.clone().add(rnd(0.15)), flight * (1 + k * 0.2), 0.04, 0.5, 0.06, 1);
-        this.hits.push({ at: to, color: 0x9ad060, left: flight });
+      case 'protecteur': // a volley of wooden thorns from its boughs, stuck in the foe a moment
+        for (let k = 0; k < 5; k++) {
+          const th = new Mesh(this.thornGeo, this.thornMat);
+          th.scale.setScalar(1 + Math.random() * 0.4);
+          this.lobs.push({ ammo: 'epine', from: from.clone().add(rnd(0.35)), to: to.clone().add(rnd(0.25)).setY(to.y + Math.random() * 0.3), age: -k * 0.05, flight: Math.max(0.25, dist * 0.06), arc: Math.max(0.3, dist * 0.08), chem: false, spill: 0, solid: th });
+        }
         return true;
-      case 'furieux': // a great root bursting from the ground under the foe
-        for (let i = 0; i < 10; i++) this.spawn(this.tex.smoke, i % 2 ? 0x5a3e24 : 0x7a9a40, to.clone().add(rnd(0.3)).setY(to.y - 0.4), rnd(1).setY(2 + Math.random() * 1.5), 0.8, 0.35, 0.2, 1, 6, false);
-        this.ring(to.clone().setY(to.y - 0.4), 0x9ad060, 1.25, 0.5);
+      case 'furieux': { // a root burrowing under the ground from the tree to the foe, then bursting out
+        const start = from.clone().lerp(to, Math.min(0.9, (e.radius / FP + 0.3) / Math.max(0.1, dist)));
+        this.burrows.push({ from: start.setY(0), to: to.clone().setY(0), age: 0, flight: Math.max(0.5, dist * 0.1), mark: 0 });
         return true;
+      }
     }
     return false;
   }
@@ -1275,7 +1288,7 @@ export class Effects {
     }
     if (l.solid) {
       // A spear stays planted in what it hit a moment; a boulder is gone in its dust.
-      if (l.ammo === 'lance') this.stuck.push({ obj: l.solid, left: 0.8 });
+      if (l.ammo === 'lance' || l.ammo === 'epine') this.stuck.push({ obj: l.solid, left: 0.8 });
       else this.scene.remove(l.solid);
     }
     if (k < 1) {
@@ -1296,6 +1309,9 @@ export class Effects {
     }
     const p = l.to;
     switch (l.ammo) {
+      case 'epine': // a thorn bites: a puff of green and bark
+        for (let i = 0; i < 4; i++) this.spawn(this.tex.glow, i % 2 ? 0x9ad060 : 0xd8e0a0, p.clone(), rnd(1.5).setY(0.8), 0.25, 0.08, 0.02, 1, 9, true);
+        break;
       case 'feu': // the fireball bursts in flames
         this.flash(p, 0xff7a20, 2);
         for (let i = 0; i < 14; i++) this.spawn(this.tex.flame, i % 2 ? 0xff6a10 : 0xffc040, p.clone().add(rnd(0.3)), rnd(1.5).setY(1.5 + Math.random()), 0.6, 0.4, 0.1, 1, 0, false);
@@ -1533,6 +1549,63 @@ export class Effects {
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
+    this.sands = this.sands.filter((sd) => {
+      if ((sd.left -= dt) <= 0) return false;
+      const dir = sd.to.clone().sub(sd.from);
+      const reach = Math.max(0.3, dir.length());
+      dir.divideScalar(reach);
+      const speed = 6;
+      for (sd.spill += dt * 320; sd.spill >= 1; sd.spill--) {
+        // Grains of all sizes, ochre to pale beige, spreading as they go: born anywhere along the stream so far.
+        const u = Math.random();
+        const at = sd.from.clone().addScaledVector(dir, u * reach * 0.9).add(rnd(0.06 + 0.35 * u));
+        const big = Math.random();
+        const c = [0xc8903a, 0xd8b070, 0xe8d0a0, 0xa87a3a][Math.floor(Math.random() * 4)];
+        this.spawn(this.tex.smoke, c, at, dir.clone().multiplyScalar(speed).add(rnd(0.6)), (reach * (1 - u)) / speed + 0.1, 0.1 + big * 0.2, 0.14 + big * 0.26, 1, 2, false);
+      }
+      // A cloud of dust where it lands, settling slowly.
+      if (Math.random() < dt * 14) this.spawn(this.tex.smoke, Math.random() < 0.5 ? 0xd8b880 : 0xc8a060, sd.to.clone().add(rnd(0.3)), rnd(0.8).setY(0.3), 1.6, 0.3, 1, 0.7, 0.3, false);
+      return true;
+    });
+    this.burrows = this.burrows.filter((b) => {
+      b.age += dt;
+      const k = Math.min(1, b.age / b.flight);
+      const head = b.from.clone().lerp(b.to, k);
+      // The root's head winds under the ground: off the line in waves.
+      const side = new Vector3(-(b.to.z - b.from.z), 0, b.to.x - b.from.x).normalize();
+      head.addScaledVector(side, Math.sin(k * Math.PI * 3) * 0.35);
+      head.y = heightAt(this.map, head.x, head.z);
+      if (k < 1) {
+        // The ground heaves over it: clods and dust thrown up, a dark crack left behind.
+        for (let i = 0; i < 2; i++) this.spawn(this.tex.smoke, i ? 0x4a3420 : 0x7a5a38, head.clone().add(rnd(0.15)).setY(head.y + 0.1), rnd(0.8).setY(1.2 + Math.random()), 0.6, 0.16, 0.1, 1, 8, false);
+        this.hold(this.tex.smoke, 0x6a4a2c, head.clone().setY(head.y + 0.15), 0.8, 1, dt, false);
+        this.hold(this.tex.smoke, 0xa8865a, head.clone().setY(head.y + 0.3), 0.45, 1, dt, false);
+        if (b.age - b.mark > 0.04) {
+          b.mark = b.age;
+          this.decal(head.clone().setY(head.y + 0.03), 0.4, 0x2a1a0e, 4);
+        }
+        return true;
+      }
+      // Out it bursts: a root thrusting up, earth flying, a ring of it.
+      const root = new Mesh(this.rootGeo, this.rootMat);
+      root.position.copy(head);
+      root.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * 6.28, (Math.random() - 0.5) * 0.4);
+      root.castShadow = true;
+      this.scene.add(root);
+      this.roots.push({ obj: root, age: 0 });
+      for (let i = 0; i < 14; i++) this.spawn(this.tex.smoke, i % 2 ? 0x4a3420 : 0x7a9a40, head.clone().add(rnd(0.3)).setY(head.y + 0.2), rnd(1.5).setY(2.5 + Math.random() * 1.5), 0.9, 0.3, 0.18, 1, 7, false);
+      this.ring(head.clone().setY(head.y + 0.05), 0x9ad060, 1.25, 0.5);
+      return false;
+    });
+    this.roots = this.roots.filter((r) => {
+      r.age += dt;
+      // Up in 0.12 s, held, back down by 1 s.
+      const sc = r.age < 0.12 ? r.age / 0.12 : r.age < 1.2 ? 1 : Math.max(0, 1 - (r.age - 1.2) / 0.5);
+      r.obj.scale.set(1, Math.max(0.01, sc), 1);
+      if (r.age < 1.7) return true;
+      this.scene.remove(r.obj);
+      return false;
+    });
     this.gust = this.gust.filter((g) => {
       if ((g.left -= dt) > 0) return true;
       // A wisp of air, white and see-through, drifting on with the wind, growing as it fades.
