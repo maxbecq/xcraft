@@ -29,10 +29,11 @@ export function updateAlt(h: Hud): void {
   on = true;
   if (!h.spectator) h.prod.hidden = false; // the queues' column stays (none when watching, as before)
   const own = h.input.own();
-  // Workers just picked: their build tree at once (its Retour, or Échap, gives back their usual orders).
+  // One worker just picked: its build tree at once (its Retour, or Échap, gives back its usual orders). Several, or
+  // with other units: their orders, as for any troop (Construire still opens the tree) (the user's choice of 2026-11-24).
   if (h.selKey !== h.altSel) {
     h.altSel = h.selKey;
-    if (own.length && own.every((e) => e.def.kind === 'unit') && h.workers().length === own.length) h.buildMenu = 'basic';
+    if (!h.placing) h.buildMenu = own.length === 1 && own[0].def.kind === 'unit' && h.workers().length === 1 ? 'basic' : false;
   }
   const b = bubbleOf(h);
   h.card.classList.toggle('bubble', !!b);

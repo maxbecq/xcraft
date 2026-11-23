@@ -299,10 +299,29 @@ export class Input {
   /** The last left press picked something (so its release, if it stays a click, has nothing more to do). */
   private pressPicked = false;
 
-  /** A click on `hit`: it alone, or all of its kind on screen (Ctrl/Cmd, or a second click); Shift adds or takes out. */
+  /** The alternative interface (game/hud-alt.ts), set by the game: a click on a fighter picks the whole army. */
+  alt = false;
+
+  /** Ours that fight or cast: not workers or builders, nor what can do neither (transports, unarmed scouts). */
+  private fighter(e: Entity): boolean {
+    const d = e.def as UnitDef;
+    return e.owner === this.player && d.kind === 'unit' && !d.worker && !d.builder && !e.inside && (!!this.world.weapon(e) || this.world.abilitiesFor(e).length > 0);
+  }
+
+  /** A click on `hit`: it alone, or all of its kind on screen (Ctrl/Cmd, or a second click); Shift adds or takes out.
+   * The alternative interface (the user's choice of 2026-11-24): a click on one of our fighters picks the whole army,
+   * on all the map; a second click on it, that one alone. */
   private pick(hit: Entity, ctrl: boolean, shift: boolean): void {
-    const kind = hit.owner === this.player ? hit.type : '';
     const now = performance.now();
+    if (this.alt && !ctrl && !shift && this.fighter(hit)) {
+      const again = this.lastClick.type === `#${hit.id}` && now - this.lastClick.time < DOUBLE_TAP_MS;
+      this.lastClick = { time: again ? 0 : now, type: `#${hit.id}` };
+      this.selected.clear();
+      if (again) this.selected.add(hit.id);
+      else for (const e of this.world.entities.values()) if (this.fighter(e)) this.selected.add(e.id);
+      return;
+    }
+    const kind = hit.owner === this.player ? hit.type : '';
     const all = !!kind && (ctrl || (kind === this.lastClick.type && now - this.lastClick.time < DOUBLE_TAP_MS));
     this.lastClick = { time: all ? 0 : now, type: kind };
     if (!shift) this.selected.clear();

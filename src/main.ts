@@ -336,7 +336,7 @@ const overlay = new Overlay(map);
 const marks = new Marks(scene, map, FX_STYLE);
 overlay.top = (id, built) => units.top(id, built);
 hud.top = overlay.top;
-hud.alt = SCROLL.alt && !TOUCH;
+hud.alt = input.alt = SCROLL.alt && !TOUCH;
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
@@ -659,7 +659,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
     SCROLL[k] = (field as HTMLInputElement).checked;
     document.body.classList.toggle('lcd', SCROLL.lcd && !(SCROLL.alt && !TOUCH));
     document.body.classList.toggle('alt', SCROLL.alt && !TOUCH);
-    hud.alt = SCROLL.alt && !TOUCH;
+    hud.alt = input.alt = SCROLL.alt && !TOUCH;
     document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
     document.body.classList.toggle('tuck', TOUCH && SCROLL.tuck);
     hud.buttonsKey = ''; // the card redrawn in its new form
