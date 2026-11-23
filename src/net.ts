@@ -29,9 +29,10 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
  * `t`: our orders for tick t; `a`: the first tick of theirs we still miss (everything before it arrived), on every
  * message, so each side forgets what the other has. `h`/`v`: a state fingerprint. `p`/`q`: ping and its echo.
  * `hi`: who this page is and its build, first thing on every connection. `bye`: leaving the match on purpose. `again`: a rematch
- * asked for; `go`: the host's room for it, once both asked.
+ * asked for; `go`: the host's room for it, once both asked; `went`: the guest's answer; `goOk`: the host has that answer
+ * and goes, so the guest goes too (never on silence alone: a cut would leave the two on different pages).
  */
-export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 } | { againOk: 1 } | { nogo: 1 };
+export type Message = { t: number; c: Command[]; a: number } | { h: number; v: number } | { p: number; a: number } | { q: number } | { hi: string; v?: string } | { bye: 1 } | { again: 1 } | { go: string } | { went: 1 } | { againOk: 1 } | { nogo: 1 } | { goOk: 1 };
 
 export class Lockstep {
   /** The other side's orders, by tick. */
@@ -227,8 +228,10 @@ export function greeting(them: string | null, m: Record<string, unknown>, versio
   return typeof m.hi === 'string' && m.v === version ? 'ok' : 'other-version';
 }
 
-/** A guest goes to the rematch (or the match) once the host has not sent its room again for this long: more than its resend cycle. */
-export const GUEST_GOES_MS = 1200;
+/** The host's go-ahead is waited for this long after its first `go`: past the host's own give-up (Confirm, 6 s), the launch is off. */
+export const GUEST_WAITS_MS = 8000;
+/** The host leaves this long after its go-ahead, so the message is out before the page and its channel go. */
+export const HOST_LEAVES_MS = 250;
 
 /** A waiting room's channel open this long without the other page's version: given up, the seat freed. */
 const VERSION_MS = 8000;
@@ -340,7 +343,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
   const goSent = new Confirm(() => sendOn(conn, { go: rematchRoom } satisfies Message));
   /** The room the guest took: a resent `go` for it is acknowledged again (the first answer may have been lost). */
   let taken = '';
-  let lastGo = 0;
+  let takenAt = 0;
   let gone = false;
   /** Our rematch request, sent again (a cut may lose it) until the other side says it has it. */
   const askSent = new Confirm(() => sendOn(conn, { again: 1 } satisfies Message), undefined, 1000, Infinity);
@@ -350,9 +353,9 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
       rematchRoom = room;
       goSent.start();
     } else {
-      // Said back, and again for each resend; the page goes once the host has stopped sending it (see the watch).
+      // Said back, and again for each resend; the page goes on the host's go-ahead only.
       taken = room;
-      lastGo = performance.now();
+      takenAt = performance.now();
       sendOn(conn, { went: 1 } satisfies Message);
     }
   };
@@ -404,12 +407,15 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         go(again.theyAsk());
       } else if ('againOk' in m) askSent.ack();
       else if ('go' in m) {
-        if (taken && m.go === taken) {
-          lastGo = performance.now();
-          sendOn(conn, { went: 1 } satisfies Message);
-        } else go(again.take(m.go));
+        if (taken && m.go === taken) sendOn(conn, { went: 1 } satisfies Message);
+        else go(again.take(m.go));
       } else if ('went' in m) {
-        if (player === 0 && goSent.ack()) onStatus('go', rematchRoom);
+        if (player === 0 && goSent.ack()) {
+          sendOn(conn, { goOk: 1 } satisfies Message);
+          setTimeout(() => onStatus('go', rematchRoom), HOST_LEAVES_MS);
+        }
+      } else if ('goOk' in m) {
+        if (taken && !gone) goNow();
       }
       else if ('nogo' in m) {
         // The host gave up waiting for our answer: no rematch, we stay.
@@ -418,9 +424,7 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
         onStatus('left');
       } else {
         lock.receive(m);
-        // The host leaving once we said we were on our way: it has gone to the rematch.
-        if (lock.left && taken && !gone) goNow();
-        else if (lock.left) set('left', "L'adversaire a quitté la partie.");
+        if (lock.left && !gone) set('left', "L'adversaire a quitté la partie.");
       }
     });
     c.on('close', () => drop(c));
@@ -445,8 +449,12 @@ export function connect(player: number, room: string, onStatus: (s: NetStatus, d
     onStatus('go', taken);
   };
   const stop = every(250, () => {
-    // The guest: the host has stopped sending the room for longer than its resend cycle, so it has the answer.
-    if (taken && !gone && performance.now() - lastGo > GUEST_GOES_MS) goNow();
+    // The guest: no go-ahead in time, the host has given up (its `nogo` lost): no rematch, we stay.
+    if (taken && !gone && performance.now() - takenAt > GUEST_WAITS_MS) {
+      taken = '';
+      again.lost();
+      onStatus('left');
+    }
     if (status === 'left' || status === 'error') return stop();
     if (peer.disconnected && !peer.destroyed) peer.reconnect();
     if (conn && performance.now() - lock.heard > SILENCE_MS) drop(conn);
@@ -550,7 +558,7 @@ const int = (v: unknown): v is number => Number.isSafeInteger(v);
 function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
   const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
   const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome);
-  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) && int(m.id) : 'camp' in m ? id(m.camp) : 'went' in m ? int(m.went) : false;
+  return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) && int(m.id) : 'camp' in m ? id(m.camp) : 'went' in m ? int(m.went) : 'goOk' in m ? int(m.goOk) : false;
 }
 
 /** Sends only on a channel still open: some browsers (Safari) throw, uncaught, on one closing. */
@@ -590,7 +598,7 @@ export interface LobbySetup {
   biome: string;
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match, with the setup both pages load. */
-type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup; id: number } | { went: number } | { v: string };
+type LobbyMessage = { setup: LobbySetup } | { camp: string } | { go: LobbySetup; id: number } | { went: number } | { goOk: number } | { v: string };
 /** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
 /**

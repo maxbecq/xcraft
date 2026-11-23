@@ -2,7 +2,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { MAPS, type MapFile, mapFile } from '../maps';
 import { mapCards, seatsOf } from '../mappicker';
-import { Confirm, GUEST_GOES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
+import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
 import { BIOMES, type Biome, biomesFor, fitBiome } from '../render/biome';
@@ -323,8 +323,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }</label></fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="retry" hidden>Réessayer</button>${host ? '<button data-m="go" class="go" disabled>Lancer la partie</button>' : ''}</div>`;
   const $ = <T extends HTMLElement>(q: string) => menu.querySelector<T>(q);
-  /** The guest's page change, a moment after answering « Lancer »: Retour or Réessayer call it off. */
+  /** The guest has answered « Lancer » and waits for the host's go-ahead (this timer: the wait given up). */
   let going = 0;
+  /** The launch the guest answered, and its setup: the host's go-ahead names it. */
+  let answered: { id: number; setup: LobbySetup } | null = null;
   /** The host's « Lancer », sent again until the guest answers: only then does the host's page go. */
   let launching: (Confirm & { setup: LobbySetup; id: number }) | null = null;
   let launchWatch = 0;
@@ -333,6 +335,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   const unlaunch = () => {
     clearTimeout(going);
     going = 0;
+    answered = null;
     clearInterval(launchWatch);
     launching = null;
   };
@@ -388,8 +391,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       if ('setup' in m && !host) {
         // The host gave up a launch we answered too late (it sends the setup again then): we stay in the room.
         if (going) {
-          clearTimeout(going);
-          going = 0;
+          unlaunch();
           status = "Le lancement n'a pas abouti : votre ami peut relancer.";
         }
         // The guest's own pick stays as it is here: the host's copy may be older, and the start brings the final one.
@@ -401,18 +403,31 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       } else if ('go' in m && !host) {
         if (unknown(m.go)) status = UNKNOWN_TEXT;
         else {
-          // Said back, again for each one resent (an answer may be lost), and the page goes once the host has stopped
-          // sending it for longer than its resend cycle: the host has the answer, or has given up.
+          // Said back, again for each one resent (an answer may be lost); the page goes on the host's go-ahead only,
+          // never on silence (a cut would leave the host in the room and us in the match).
           lobby.send({ went: m.id });
-          const go = m.go;
-          clearTimeout(going);
-          going = window.setTimeout(() => play(go), GUEST_GOES_MS);
+          if (answered?.id !== m.id) {
+            answered = { id: m.id, setup: m.go };
+            clearTimeout(going);
+            going = window.setTimeout(() => {
+              unlaunch();
+              status = "Le lancement n'a pas abouti : votre ami peut relancer.";
+              refresh();
+            }, GUEST_WAITS_MS);
+          }
           return refresh();
         }
-      } else if ('went' in m && host && launching?.id === m.went && launching.ack()) {
-        const final = launching.setup;
+      } else if ('goOk' in m && !host && answered?.id === m.goOk) {
+        const final = answered.setup;
         unlaunch();
         return play(final);
+      } else if ('went' in m && host && launching?.id === m.went && launching.ack()) {
+        // The go-ahead, then the page goes a moment later, so it is out before the channel closes.
+        const final = launching.setup;
+        lobby.send({ goOk: m.went });
+        clearInterval(launchWatch);
+        window.setTimeout(() => play(final), HOST_LEAVES_MS);
+        return;
       }
       refresh();
     },

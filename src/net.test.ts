@@ -26,7 +26,7 @@ describe('friend codes', () => {
 });
 
 import { AI } from './ai/ai';
-import { blamesNetwork, commandOk, versionLapsed, Confirm, FORFEIT_MS, greeting, Lockstep, START, type Message, waitVerdict } from './net';
+import { blamesNetwork, commandOk, versionLapsed, Confirm, FORFEIT_MS, greeting, GUEST_WAITS_MS, Lockstep, START, type Message, waitVerdict } from './net';
 import { fingerprint } from './sim/fingerprint';
 import { createMatch } from './sim/setup';
 import type { Command, World } from './sim/world';
@@ -446,5 +446,15 @@ describe('lockstep between two browsers', () => {
     expect(sent).toBe(121);
     expect(ask.ack()).toBe(true);
     expect(ask.poll()).toBe('idle');
+  });
+});
+
+describe('the guest of a launch or rematch', () => {
+  it("gives up waiting for the host's go-ahead only after the host has given up resending (6 s)", () => {
+    const now = { t: 0 };
+    const c = new Confirm(() => {}, () => now.t);
+    c.start();
+    now.t = GUEST_WAITS_MS - 1000; // the guest still waits, a margin for the last message in flight
+    expect(c.poll()).toBe('expired');
   });
 });
