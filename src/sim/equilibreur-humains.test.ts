@@ -371,4 +371,10 @@ describe('the balancer, Humains', () => {
     expect(serfs.filter((e) => e.order?.kind === 'enter').length).toBe(1);
   });
 
+  it('Carrefour at four: the shared middle stays one site, and no two sites overlap', () => {
+    const w = createMatch(['humains', 'humains', 'humains', 'humains'], undefined, 'carrefour');
+    const sites = w.map.sites!;
+    expect(sites.filter((s) => s.turn === -1).length).toBe(1);
+    for (const a of sites) for (const b of sites) if (a !== b) expect(Math.abs(a.hq[0] - b.hq[0]) < 4 && Math.abs(a.hq[1] - b.hq[1]) < 4, `${a.hq} ${b.hq}`).toBe(false);
+  });
 });

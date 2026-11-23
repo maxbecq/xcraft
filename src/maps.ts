@@ -259,13 +259,18 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
     map.streets = turns.flatMap((q) => def.streets!.map((s) => ({ width: s.width, points: s.points.map(([x, y]) => turnPoint(width, x, y, q)) })));
   }
   // A base in the very middle turns onto itself: one spot, shared by everyone (turn -1).
+  // Matched by the file's 5x5 slot, before the 4x4 corner is picked: a shared middle slot turned stays one site.
   map.sites = [];
+  const slots: [number, number][] = [];
   for (const turn of turns) {
     for (const b of def.bases) {
-      const hq = rotateFootprint(width, ...hqSlot(def, b.hq), HQ_SIZE, turn);
-      const same = map.sites.find((s) => s.hq[0] === hq[0] && s.hq[1] === hq[1]);
-      if (same) same.turn = -1;
-      else map.sites.push({ hq, turn, start: !!b.start });
+      const slot = rotateFootprint(width, ...b.hq, 5, turn);
+      const at = slots.findIndex((s) => s[0] === slot[0] && s[1] === slot[1]);
+      if (at >= 0) map.sites[at].turn = -1;
+      else {
+        slots.push(slot);
+        map.sites.push({ hq: rotateFootprint(width, ...hqSlot(def, b.hq), HQ_SIZE, turn), turn, start: !!b.start });
+      }
     }
   }
   return map;
