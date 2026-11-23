@@ -11,7 +11,7 @@ export class Grid {
    * the grid (a road found, a tile found open) holds while this stays the same. Counted where `blocked` is written. */
   changes = 0;
   private readonly corners: Int8Array;
-  /** Tiles drawn with a diagonal cliff cut: walkable, but not buildable. */
+  /** Tiles drawn with a diagonal cliff cut: walkable, but not buildable. The corner cut away + 1 (cutCorner), 0 for none. */
   private readonly cut: Uint8Array;
   /** Chasms: never walkable nor buildable. */
   private readonly chasm: Uint8Array;
@@ -49,7 +49,7 @@ export class Grid {
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         this.corners.set(cornerLevels(map, x, y), (y * map.width + x) * 4);
-        this.cut[y * map.width + x] = cutCorner(map, x, y) >= 0 ? 1 : 0;
+        this.cut[y * map.width + x] = cutCorner(map, x, y) + 1;
       }
     }
     this.lowest = new Int8Array(map.width * map.height);
@@ -92,16 +92,18 @@ export class Grid {
     const c = this.corners;
     const at = (tx: number, ty: number, k: number) => c[(ty * this.width + tx) * 4 + k];
     const beyond = (tx: number, ty: number) => this.inside(tx, ty) && !this.chasm[ty * this.width + tx];
+    // A diagonal cliff's cut corner is drawn as low ground, its wall without a band: no foot beside it.
+    const cutAt = (tx: number, ty: number, k: number) => this.cut[ty * this.width + tx] === k + 1;
     let f = 0;
     // A side: the two corners beyond it both as high or higher, half a level higher between them.
     for (const [bit, dx, dy, a1, a2, b1, b2] of FOOT_SIDES) {
       const [nx, ny] = [x + dx, y + dy];
-      if (!beyond(nx, ny)) continue;
+      if (!beyond(nx, ny) || cutAt(nx, ny, b1) || cutAt(nx, ny, b2)) continue;
       const [p, q, u, v] = [at(x, y, a1), at(x, y, a2), at(nx, ny, b1), at(nx, ny, b2)];
       if (u >= p && v >= q && u + v - p - q >= SUB) f |= bit;
     }
     // A corner: the diagonal tile's corner there half a level higher than this tile's.
-    for (const [bit, dx, dy, a, b] of FOOT_CORNERS) if (beyond(x + dx, y + dy) && 2 * (at(x + dx, y + dy, b) - at(x, y, a)) >= SUB) f |= bit;
+    for (const [bit, dx, dy, a, b] of FOOT_CORNERS) if (beyond(x + dx, y + dy) && !cutAt(x + dx, y + dy, b) && 2 * (at(x + dx, y + dy, b) - at(x, y, a)) >= SUB) f |= bit;
     return f;
   }
 
@@ -129,17 +131,23 @@ export class Grid {
     const x0 = tx * FP;
     const y0 = ty * FP;
     const off = (bit: number) => (f & bit ? FOOT + c : s & bit ? 0 : c);
+    // Along one axis, between its low side's clearance `lo` and its high side's `hi`. Where both do not fit: off the
+    // foot if only one side is one (the other a cliff's top, a chasm or the map's edge: the body overhangs that, the
+    // rock is not walked into), the middle between two feet (a tile no path takes, see narrow).
+    const axis = (v: number, v0: number, lo: number, hi: number, footLo: boolean, footHi: boolean) => {
+      if (lo + hi < FP) return Math.min(Math.max(v, v0 + lo), v0 + FP - hi);
+      return footLo === footHi ? v0 + FP / 2 : footLo ? v0 + lo : v0 + FP - hi;
+    };
     const sides = () => {
-      // Between two feet (a tile no path takes, see narrow): the middle along that axis.
-      if (off(8) + off(2) >= FP) x = x0 + FP / 2;
-      else x = Math.min(Math.max(x, x0 + off(8)), x0 + FP - off(2));
-      if (off(1) + off(4) >= FP) y = y0 + FP / 2;
-      else y = Math.min(Math.max(y, y0 + off(1)), y0 + FP - off(4));
+      x = axis(x, x0, off(8), off(2), (f & 8) !== 0, (f & 2) !== 0);
+      y = axis(y, y0, off(1), off(4), (f & 1) !== 0, (f & 4) !== 0);
     };
     sides();
     // Corners, once off the sides: under a plateau (its foot's band), or a plateau's corner across the diagonal (both
-    // own sides open, the diagonal step not): pushed straight away from it, then kept off the sides again.
-    let moved = false;
+    // own sides open, the diagonal step not): pushed straight away from it, then kept off the sides again. The one
+    // reached deepest first, not in the corners' fixed order: two pushes do not commute, and the map turned round must
+    // give the turned point (a scene and its mirror).
+    const pushes: [number, number, number, number][] = [];
     for (let k = 0; k < 4; k++) {
       const [dx, dy] = CORNERS[k];
       const foot = (f & (16 << k)) !== 0;
@@ -148,12 +156,17 @@ export class Grid {
       const cx = dx < 0 ? x0 : x0 + FP;
       const cy = dy < 0 ? y0 : y0 + FP;
       const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      if (d < m) pushes.push([m - d, k, cx, cy]);
+    }
+    pushes.sort((p, q) => q[0] - p[0] || p[1] - q[1]);
+    for (const [, k, cx, cy] of pushes) {
+      const m = (f & (16 << k)) !== 0 ? FOOT + c : c;
+      const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
       if (d >= m) continue;
-      moved = true;
-      if (d === 0) [x, y] = [cx - dx * m, cy - dy * m];
+      if (d === 0) [x, y] = [cx - CORNERS[k][0] * m, cy - CORNERS[k][1] * m];
       else [x, y] = [cx + Math.trunc(((x - cx) * m) / d), cy + Math.trunc(((y - cy) * m) / d)];
     }
-    if (moved) sides();
+    if (pushes.length) sides();
     return [x, y];
   }
 

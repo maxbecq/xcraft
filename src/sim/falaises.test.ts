@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFS, type UnitDef } from '../data';
-import { CLIFF_FOOT } from '../map';
+import { CLIFF_FOOT, cutCorner } from '../map';
 import { FP, ticks } from './fixed';
 import { fingerprint } from './fingerprint';
 import { createMatch } from './setup';
@@ -75,5 +75,64 @@ describe('cliffs', () => {
     w.step([{ player: 0, kind: 'move', ids: [god.id], x: gx, y: gy }]);
     for (let i = 0; i < ticks(240) && god.order; i++) w.step([]);
     expect(Math.hypot(god.x - gx, god.y - gy) / FP).toBeLessThan(2);
+  });
+
+  /** The grid's per-tile masks, for the checks below (see Grid.feet, sides). */
+  const masks = (w: ReturnType<typeof createMatch>) => w.grid as unknown as { feet: Uint8Array; sides: Uint8Array; narrow(x: number, y: number): boolean };
+
+  it('a foot facing a side no unit crosses (a cliff\'s top, a chasm): the body keeps off the foot, not the middle', () => {
+    let seen = 0;
+    for (const map of ['origine', 'carrefour']) {
+      const w = createMatch(['humains', 'humains'], undefined, map);
+      const { feet, sides } = masks(w);
+      for (let ty = 0; ty < w.map.height; ty++) {
+        for (let tx = 0; tx < w.map.width; tx++) {
+          const i = ty * w.map.width + tx;
+          for (const [foot, other, horizontal] of [[8, 2, true], [2, 8, true], [1, 4, false], [4, 1, false]] as const) {
+            if (!(feet[i] & foot) || feet[i] & other || sides[i] & other) continue;
+            seen++;
+            const [x, y] = w.grid.keepOff(tx * FP + FP / 2, ty * FP + FP / 2, KEEP);
+            const v = horizontal ? x - tx * FP : y - ty * FP;
+            expect(foot === 8 || foot === 1 ? v : FP - v).toBeGreaterThanOrEqual(BAND + KEEP);
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('beside a diagonal cliff\'s cut corner, drawn as low ground with no band, no foot', () => {
+    const w = createMatch(['humains', 'humains'], undefined, 'origine');
+    const { feet } = masks(w);
+    const W = w.map.width;
+    let seen = 0;
+    for (let ty = 1; ty < w.map.height - 1; ty++) {
+      for (let tx = 1; tx < W - 1; tx++) {
+        const c = cutCorner(w.map, tx, ty);
+        if (c < 0) continue;
+        seen++;
+        const [dx, dy] = [[-1, -1], [1, -1], [1, 1], [-1, 1]][c];
+        // The two tiles beside the cut (their side facing it) and the one across the cut corner (its corner there).
+        expect(feet[ty * W + tx + dx] & (dx < 0 ? 2 : 8)).toBe(0);
+        expect(feet[(ty + dy) * W + tx] & (dy < 0 ? 4 : 1)).toBe(0);
+        expect(feet[(ty + dy) * W + tx + dx] & (16 << ((c + 2) % 4))).toBe(0);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('a move ordered onto a tile between two feet ends beside it, without replanning for good', () => {
+    const w = createMatch(['humains', 'humains'], undefined, 'le-col');
+    const { narrow } = masks(w);
+    const g = w.grid;
+    let goal: [number, number] | null = null;
+    for (let ty = 0; ty < w.map.height && !goal; ty++) for (let tx = 0; tx < w.map.width && !goal; tx++) if (g.open(tx, ty) && narrow.call(g, tx, ty)) goal = [tx, ty];
+    const [gx, gy] = goal!;
+    const [sx, sy] = g.nearestOpen(gx + 6, gy, g.level(gx, gy));
+    const a = w.spawn(big, 0, sx * FP + FP / 2, sy * FP + FP / 2);
+    w.step([{ player: 0, kind: 'move', ids: [a.id], x: gx * FP + FP / 2, y: gy * FP + FP / 2 }]);
+    for (let i = 0; i < 300 && a.order; i++) w.step([]);
+    expect(a.order).toBeNull();
+    expect(Math.hypot(a.x / FP - gx - 0.5, a.y / FP - gy - 0.5)).toBeLessThan(2.5);
   });
 });
