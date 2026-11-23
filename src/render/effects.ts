@@ -13,11 +13,10 @@ const MAX_PARTICLES = 1200;
 const MAX_STREAKS = 1500;
 /** Peau de roc's stone scales, 16 a unit. */
 const MAX_ROCKS = 480;
-/** Proposal stage only: ?fx=avant shows the old shots and no marks, ?fx=a|b the other mark styles (c, badges, is the
- * one kept for now); ?sorts=1|2 the two ideas of each lasting spell's own look, until the user picks. */
+/** Preview only: ?fx=avant shows the old shots and no marks, ?fx=a|b the other mark styles, ?fx=aucun no badges (c,
+ * badges, is the one kept for the spells with no look of their own yet). */
 const PARAMS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 export const FX_STYLE = PARAMS.get('fx') || 'c';
-export const SPELL_IDEA = PARAMS.get('sorts') ?? '';
 /** A shot's colour by the shooter's camp: Humans' powder orange, Isdaris' cyan light, Z's green, the Gods' gold. */
 /**
  * What a Human weapon throws (the balancer, 2026-11-23: each its own look, the camp's orange running through them all).
@@ -360,8 +359,8 @@ export class Effects {
    * The Humans' lasting spells, each drawn its own way on the unit or the ground while it lasts (chosen by the user,
    * 2026-11-23): Peau de roc's stone scales, Régénérant's green veins, Gaz euphorisants' pink bubbles, Camouflage's haze,
    * poison drops, Napalm's flames on a held machine, a mine's blink and trigger circle, the Réservoir's fuse sparks,
-   * Explosif toxique's fog, Observation céleste's column of light. The Stimulant keeps its badge. Call every frame;
-   * render only. A Cadavre réanimé's look is still to be chosen (?sorts=z1|z2 shows the two ideas).
+   * Explosif toxique's fog, Observation céleste's column of light, a Cadavre réanimé's flies. The Stimulant keeps its
+   * badge. Call every frame; render only.
    */
   lasting(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number): void {
     const t = performance.now() / 1000;
@@ -416,7 +415,8 @@ export class Effects {
       }
       // Explosion suicidaire: the Réservoir's fuse throwing yellow sparks.
       if (e.fuse > 0 && chance(30)) this.spawn(this.tex.glow, 0xffd060, foot.clone().setY(foot.y + tall), rnd(1.5).setY(1.5), 0.3, 0.1, 0.02, 1, 6, true);
-      if (e.type === 'cadavre') this.zombie(onBody, foot, tall, t, dt, chance);
+      // Cadavre réanimé: black flies round its head.
+      if (e.type === 'cadavre') this.flies(foot, tall, t, dt);
     }
     this.rocks.count = rocks;
     this.rocks.instanceMatrix.needsUpdate = true;
@@ -445,22 +445,13 @@ export class Effects {
     }
   }
 
-  /** A Cadavre réanimé: proposal stage, two zombie looks (?sorts=z1: flies; z2: empty eyes and falling earth). */
-  private zombie(onBody: (a: number, h: number, out?: number) => Vector3, foot: Vector3, tall: number, t: number, dt: number, chance: (rate: number) => boolean): void {
+  /** A Cadavre réanimé (the user's pick, 2026-11-23): a swarm of small black flies buzzing round its head. */
+  private flies(foot: Vector3, tall: number, t: number, dt: number): void {
     const head = foot.clone().setY(foot.y + tall * 0.78);
-    if (SPELL_IDEA === 'z1') {
-      // Mouches: a swarm of small dark flies buzzing round its head.
-      for (let i = 0; i < 10; i++) {
-        const a = t * (3 + i * 0.7) + i * 1.7;
-        const d = 0.22 + 0.1 * Math.sin(t * 5 + i * 2);
-        this.hold(this.tex.smoke, 0x0c0a08, head.clone().add(new Vector3(Math.cos(a) * d, 0.1 * Math.sin(t * 7 + i), Math.sin(a) * d)), 0.15, 1, dt, false);
-      }
-    } else if (SPELL_IDEA === 'z2' && this.eye) {
-      // Yeux vides et terre: two dull glowing eyes turned to the camera, clods of earth dropping off its body.
-      const toCam = this.eye.getWorldDirection(new Vector3()).negate().setY(0).normalize();
-      const side = new Vector3(-toCam.z, 0, toCam.x);
-      for (const k of [-0.05, 0.05]) this.hold(this.tex.glow, 0xd8d070, head.clone().setY(foot.y + tall * 0.86).addScaledVector(toCam, 0.12).addScaledVector(side, k), 0.07, 0.85, dt, true);
-      if (chance(10)) this.spawn(this.tex.smoke, 0x3a2c1e, onBody(Math.random() * 6.28, 0.5, 0), new Vector3(0, 0, 0), 0.7, 0.18, 0.12, 1, 8, false);
+    for (let i = 0; i < 10; i++) {
+      const a = t * (3 + i * 0.7) + i * 1.7;
+      const d = 0.22 + 0.1 * Math.sin(t * 5 + i * 2);
+      this.hold(this.tex.smoke, 0x0c0a08, head.clone().add(new Vector3(Math.cos(a) * d, 0.1 * Math.sin(t * 7 + i), Math.sin(a) * d)), 0.15, 1, dt, false);
     }
   }
 

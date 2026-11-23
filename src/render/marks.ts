@@ -30,17 +30,16 @@ const SWARM = M('nuee', 0x9a9a40, false);
 const FROZEN = M('gel', 0x7ad0ff, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
 const SEIZED = M('impulsion', 0x5ae0ff, false);
-const RAISED = M('reanimation', 0x6aff8a, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
  * stands in for it until it does. The Humans' spells drawn their own way (render/effects.ts, Effects.lasting) have none:
- * Peau de roc, Régénérant, Gaz euphorisants, the Belluaire's Camouflage, poison, Napalm, mines, the Réservoir's fuse.
+ * Peau de roc, Régénérant, Gaz euphorisants, the Belluaire's Camouflage, poison, Napalm, mines, the Réservoir's fuse,
+ * the Cadavre réanimé.
  */
 export function marksOf(e: Entity, world: World): Mark[] {
   void world;
   const out: Mark[] = [];
-  if (e.type === 'cadavre') out.push(RAISED);
   if (e.charm > 0) out.push(CHARM);
   if (e.frozen > 0) out.push(FROZEN);
   if (e.seizedLeft > 0) out.push(SEIZED);
