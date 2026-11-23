@@ -1049,4 +1049,4 @@ function placeholder(type: string, team: Material): Group {
   return g;
 }
 /** Clip roles baked by tools/meshy/pack.py; only idle, walk and die are always there. */
-export const CLIP = { idle: 'idle', walk: 'walk', attack: 'attack', fire: 'fire', work: 'work', carry: 'carry', die: 'die', drill: 'drill' };
+export const CLIP = { idle: 'idle', walk: 'walk', attack: 'attack', fire: 'fire', work: 'work', carry: 'carry', die: 'die', drill: 'drill', aim: 'aim' };

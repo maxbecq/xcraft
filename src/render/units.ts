@@ -1,5 +1,6 @@
 import { occluder, unxray, xrayable } from './xray';
 import {
+  Quaternion,
   AdditiveBlending, Box3, Matrix4, TorusGeometry, MeshStandardMaterial, Plane, BufferAttribute, DoubleSide, CanvasTexture, BoxGeometry, EdgesGeometry, LineBasicMaterial, LineSegments, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
   Object3D, Raycaster, AnimationMixer, type AnimationClip, LoopOnce, SkinnedMesh, RingGeometry, SphereGeometry, BufferGeometry, type Material, type Scene, Points, PointsMaterial,
 } from 'three';
@@ -726,7 +727,9 @@ export class EntityRenderer {
       const o = e.order;
       const foe = o && (o.kind === 'attack' || o.kind === 'attackMove' || o.kind === 'heal') && o.target ? world.entities.get(o.target) : undefined;
       const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
-      if (foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach) v.target = Math.atan2(foe.x - e.x, foe.y - e.y);
+      // A gunner's barrel points at its foe outright, even while its body is still turning to it (render/units.ts holdAim).
+      v.aimAt = foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach ? Math.atan2(foe.x - e.x, foe.y - e.y) : undefined;
+      if (v.aimAt !== undefined) v.target = v.aimAt;
       else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       else if ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct') {
         const field = world.entities.get(o.target);
@@ -1076,6 +1079,45 @@ export class EntityRenderer {
     h.moved = true;
   }
 
+  /** The aim pose's upper body (spine and arms, its first key), over another clip's: the walk keeps its legs. */
+  private aimArms(v: View): void {
+    v.aimPose ??= (() => {
+      const clip = v.clips!.get(CLIP.aim)!.getClip();
+      const out: [Object3D, Quaternion][] = [];
+      for (const t of clip.tracks) {
+        const [bone, prop] = t.name.split('.');
+        if (prop !== 'quaternion' || !/^(Spine0?\d?|(Left|Right)(Shoulder|Arm|ForeArm|Hand))$/.test(bone)) continue;
+        const o = v.model.getObjectByName(bone);
+        if (o) out.push([o, new Quaternion().fromArray(t.values as unknown as number[], 0)]);
+      }
+      return out;
+    })();
+    for (const [o, q] of v.aimPose) o.quaternion.copy(q);
+  }
+
+  /**
+   * A two-handed gun: its grip in the right hand, its barrel straight along the way the unit faces (to its foe when it
+   * fires), a little raised, so the round leaves along the barrel; `kick` (0..1) jerks it back as it fires.
+   */
+  private holdAim(v: View, kick: number): void {
+    const m = v.model;
+    v.held ??= (() => {
+      const tool = m.getObjectByName('held');
+      const right = m.getObjectByName('RightHand');
+      return tool && right ? { tool, right, moved: false } : undefined;
+    })();
+    const h = v.held;
+    if (!h || !this.inView(v.root.position.x, v.root.position.z)) return;
+    m.updateMatrixWorld(true);
+    const r = h.right.getWorldPosition(HAND_R);
+    const yaw = kick > 0 && v.aimAt !== undefined ? v.aimAt : v.heading; // firing: at the foe, not only where it faces yet
+    const ahead = HAND_L.set(Math.sin(yaw), 0.08, Math.cos(yaw)).normalize();
+    r.addScaledVector(ahead, -0.04 * Math.min(1, kick));
+    h.tool.position.copy(h.tool.parent!.worldToLocal(HAND_P.copy(r)));
+    h.tool.lookAt(HAND_S.copy(r).add(ahead));
+    h.moved = true;
+  }
+
   /** The tool back in the hand as the idle pose holds it, once a drilling Serf stops. */
   private letGo(v: View): void {
     const h = v.held;
@@ -1112,6 +1154,18 @@ export class EntityRenderer {
       const def = e.def as UnitDef;
       const attacking = e.cooldown > 0 && (kind === 'attack' || kind === 'attackMove' || kind === 'heal');
       const has = (role: string) => v.clips!.has(role);
+      if (has(CLIP.aim)) {
+        // A two-handed gun (the Phalangiste's launcher): held at the hip in the aim pose whether it stands or fires, its
+        // arms kept in that pose over the walk's legs, the barrel along its facing (it turns to its foe to shoot).
+        if (moving) play(v, CLIP.walk, (def.speed * GAME_SPEED) / WALK_STRIDE);
+        else play(v, CLIP.aim, 1);
+        v.model.position.y = 0;
+        v.model.children[0].rotation.x = 0;
+        this.pose(v, dt);
+        if (moving) this.aimArms(v);
+        this.holdAim(v, attacking ? Math.max(0.001, (e.cooldown / ticks(def.attack?.cooldown ?? 1) - 0.8) * 5) : 0);
+        return;
+      }
       if (moving) {
         const pace = (def.speed * GAME_SPEED) / WALK_STRIDE;
         // Serfs keep walking with their jackhammer when loaded (their carry clip has no legs moving).

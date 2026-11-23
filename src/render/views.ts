@@ -1,6 +1,6 @@
 import type { Rig } from './godrig';
 import {
-  SpriteMaterial, AdditiveBlending, BackSide, Plane, Color, LineBasicMaterial, LineSegments, Vector3, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, AnimationMixer, type AnimationAction,
+  Quaternion, SpriteMaterial, AdditiveBlending, BackSide, Plane, Color, LineBasicMaterial, LineSegments, Vector3, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, AnimationMixer, type AnimationAction,
   SkinnedMesh, ShaderMaterial, type Material, PointsMaterial,
 } from 'three';
 import { owned, haloShape } from './models';
@@ -48,6 +48,10 @@ export interface View {
   weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D; reach?: number; mod?: Object3D; tip?: Vector3; sawR?: number; pivot?: Object3D; aim?: [number, number] };
   /** A rigged character's hand tool and the hand holding it; `bit` (world), the tool's point while it drills, where its sparks fly. */
   held?: { tool: Object3D; right: Object3D; moved: boolean; bit?: Vector3 };
+  /** A two-handed gunner's aim pose for its spine and arms (render/units.ts aimArms), laid over its walk. */
+  aimPose?: [Object3D, Quaternion][];
+  /** Toward its foe (yaw, as `heading`) while one is within reach, for a gunner's barrel. */
+  aimAt?: number;
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
