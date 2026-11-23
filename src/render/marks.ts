@@ -60,6 +60,7 @@ function zones(world: World, seen: (x: number, y: number) => boolean, put: (x: n
     // The Gods' standing auras: Athéna's protection, Odin's war.
     const lvl = Math.max(0, Math.min(2, e.lvl - 1));
     if (e.type === 'athena') put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.auraprotection.radius[lvl], 0x9ad8ff);
+    if (e.type === 'fontaine' && e.buildLeft === 0) put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.fontaine.radius, 0x7affb0);
     if (e.type === 'odin') put(e.x / FP, e.y / FP, BALANCE.rules.upgrades.auraguerre.radius[lvl], 0xffb830);
   }
 }

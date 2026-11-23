@@ -3,7 +3,7 @@ import { BoxGeometry, type Camera, CanvasTexture, CircleGeometry, IcosahedronGeo
 import { Particles, type Picture } from './particles';
 import { Streaks } from './streaks';
 import type { Audio, Sfx } from '../audio';
-import { DEFS, FLY_HEIGHT, KIT } from '../data';
+import { DEFS, FLY_HEIGHT, KIT, type UnitDef } from '../data';
 import BALANCE from '../balance.json';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
@@ -19,8 +19,13 @@ const PARAMS = typeof location !== 'undefined' ? new URLSearchParams(location.se
 export const FX_STYLE = PARAMS.get('fx') || 'c';
 /** Who holds a unit where it stands, by its id, as the effects saw it cast (render only): a Napalm burns, an Impulsion
  * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
-export const HELD_BY = new Map<number, 'napalm' | 'impulsion' | 'chocmental'>();
+export const HELD_BY = new Map<number, 'napalm' | 'impulsion' | 'chocmental' | 'foudre'>();
 const CYAN = 0x5ae0ff;
+/** Proposal stage (Dieux, 2026-11-23): ?dx=1 shows each god's and unit's own shot; ?sorts=1|2 the two ideas of each
+ * lasting spell of the Gods. Until the user picks. */
+const DX_STYLE = PARAMS.get('dx') === '1';
+const SPELL_IDEA = PARAMS.get('sorts') ?? '';
+const GOLD = 0xffd060;
 /** Drawn see-through (render/units.ts), as its side and an enemy detecting it see it: a Z socle under its invisibility
  * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit. */
 export function seeThrough(e: Entity): boolean {
@@ -261,7 +266,7 @@ export class Effects {
       this.shot(s, world);
     }
     for (const c of world.casts) {
-      if (c.kind === 'napalm' || c.kind === 'impulsion' || c.kind === 'chocmental') this.holds(world, c.kind, c.x, c.y);
+      if (c.kind === 'napalm' || c.kind === 'impulsion' || c.kind === 'chocmental' || c.kind === 'foudre') this.holds(world, c.kind, c.x, c.y);
       if (!seen(c.x, c.y)) continue;
       if (c.kind !== 'rappel') this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
       this.ability(c.kind, this.at(c.x, c.y, 0.1));
@@ -307,7 +312,7 @@ export class Effects {
 
   /** Notes which units a Napalm or a Choc mental (the unit nearest the point) or an Impulsion magnétique (every unit of its
    * zone) holds. */
-  private holds(world: World, kind: 'napalm' | 'impulsion' | 'chocmental', x: number, y: number): void {
+  private holds(world: World, kind: 'napalm' | 'impulsion' | 'chocmental' | 'foudre', x: number, y: number): void {
     const r = (BALANCE.abilities[kind].radius ?? 1.5) * FP;
     const near = [...world.entities.values()].filter((e) => e.def.kind === 'unit' && e.held > 0 && Math.hypot(e.x - x, e.y - y) <= r + e.radius);
     if (kind !== 'impulsion') near.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).splice(1);
@@ -504,6 +509,7 @@ export class Effects {
     this.rocks.instanceMatrix.needsUpdate = true;
     this.zSpells(world, sees, alpha, dt);
     this.isSpells(world, sees, alpha, dt);
+    if (SPELL_IDEA === '1' || SPELL_IDEA === '2') this.godLasting(world, sees, alpha, dt, SPELL_IDEA === '1');
     // Explosif toxique: a low green fog over the whole zone.
     for (const c of world.clouds) {
       if (c.hits <= 0) continue;
@@ -710,6 +716,125 @@ export class Effects {
     }
   }
 
+
+  /** Proposal stage: the Gods' lasting spells and auras, two ideas each (one: ?sorts=1, two: ?sorts=2). Render only. */
+  private godLasting(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number, one: boolean): void {
+    const t = performance.now() / 1000;
+    const chance = (rate: number) => Math.random() < dt * rate;
+    const tick = (period: number, seed: number) => Math.floor(t / period + seed) !== Math.floor((t - dt) / period + seed);
+    const U = BALANCE.rules.upgrades;
+    const auras: [Entity, number, number][] = [];
+    for (const e of world.entities.values()) {
+      if (e.inside || e.hp <= 0 || !sees(e)) continue;
+      const x = (e.px + (e.x - e.px) * alpha) / FP;
+      const z = (e.py + (e.y - e.py) * alpha) / FP;
+      const foot = new Vector3(x, heightAt(this.map, x, z) + (soars(e) ? FLY_HEIGHT : 0), z);
+      const building = e.def.kind === 'building';
+      const r = building ? (e.def as { size: number }).size * 0.5 : e.radius / FP;
+      const tall = building ? 1.2 + r * 0.6 : 0.9 + r * 0.8;
+      const seed = e.id * 7.31;
+      const onBody = (a: number, h: number, out = 0.05) => foot.clone().add(new Vector3(Math.cos(a) * (r + out), h * tall, Math.sin(a) * (r + out)));
+      const lvl = Math.max(0, Math.min(2, e.lvl - 1));
+      // Auras (Odin's war, Athéna's protection) and the Fontaine: zones drawn below.
+      if (e.type === 'odin') auras.push([e, U.auraguerre.radius[lvl], 0xffb030]);
+      if (e.type === 'athena') auras.push([e, U.auraprotection.radius[lvl], 0x9ad8ff]);
+      if (e.type === 'fontaine' && e.buildLeft === 0) auras.push([e, U.fontaine.radius, 0x7affb0]);
+      // Courroux du marteau: lightning crackling over Thor (1), a gold pulse at his feet and sparks rising (2).
+      if (e.charged > 0) {
+        if (one) { if (chance(30)) { const a = Math.random() * 6.28; this.bolt(onBody(a, 0.2 + Math.random() * 0.6), onBody(a + 0.7, 0.4 + Math.random() * 0.6), 0xfff0a0, 0.09, 0.25, 0.2); } }
+        else { if (tick(0.6, seed)) this.ring(foot.clone().setY(foot.y + 0.1), GOLD, r + 0.3, 0.5); if (chance(15)) this.spawn(this.tex.glow, GOLD, onBody(Math.random() * 6.28, 0.1), new Vector3(0, 1.4, 0), 0.7, 0.14, 0.04, 1, 0, true); }
+      }
+      // Cri de guerre: red-gold flames of fervour rising off the shoulders (1), a red heartbeat ring at the feet (2).
+      if (e.war > 0) {
+        if (one) { if (chance(30)) this.spawn(this.tex.flame, Math.random() < 0.5 ? 0xff5a20 : 0xffc040, onBody(Math.random() * 6.28, 0.8, -r * 0.5), new Vector3(0, 1.2, 0), 0.5, 0.32, 0.1, 1, 0, true); }
+        else if (tick(0.8, seed) || tick(0.8, seed + 0.15)) this.ring(foot.clone().setY(foot.y + 0.08), 0xff4030, r + 0.25, 0.35);
+      }
+      // Soumission: a pink tether to the Frigg who holds it (1), a pink crown of motes over its head (2).
+      if (e.charm > 0) {
+        if (one) {
+          const f = [...world.entities.values()].filter((o) => o.type === 'frigg' && o.owner === e.owner && o.hp > 0).sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y))[0];
+          if (f) this.streaks.spawn(0xff6ad8, this.at(f.x, f.y, 1.6), foot.clone().setY(foot.y + tall * 0.7), 0, 0.06, 0, 0.08, 1);
+        } else for (let i = 0; i < 7; i++) this.hold(this.tex.glow, 0xff6ad8, onBody(t * 2 + (i * 6.28) / 7, 1.12, -r * 0.4), 0.1, 1, dt, true);
+      }
+      // Voile de nuage (a veil other than the Belluaire's): see-through only (1, as now), see-through and cloud puffs (2).
+      if (e.camo > 0 && e.type !== 'belluaire' && !one && chance(6)) this.spawn(this.tex.smoke, 0xf4f8ff, onBody(Math.random() * 6.28, 0.2 + Math.random() * 0.5, 0.15), new Vector3(0.1, 0.1, 0), 1.6, 0.3, 0.6, 0.55, 0, false);
+      // Nuée nauséabonde: a swarm of locusts circling round Osiris (1), a sickly miasma over its reach (2).
+      if (e.swarm > 0) {
+        const R = BALANCE.abilities.nuee.radius;
+        if (one) for (let i = 0; i < 40; i++) {
+          const a = t * (1.5 + (i % 5) * 0.3) + i * 1.7;
+          const d = R * (0.4 + ((i * 0.37) % 0.6));
+          this.hold(this.tex.smoke, 0x1a1810, foot.clone().add(new Vector3(Math.cos(a) * d, 0.6 + 0.4 * Math.sin(t * 3 + i), Math.sin(a) * d)), 0.18, 1, dt, false);
+        }
+        else if (chance(14)) { const a = Math.random() * 6.28; const d = Math.sqrt(Math.random()) * R; this.spawn(this.tex.smoke, 0x8a9a40, foot.clone().add(new Vector3(Math.cos(a) * d, 0.2, Math.sin(a) * d)), new Vector3(0, 0.2, 0), 2, 0.5, 1.1, 0.45, 0, false); }
+      }
+      // Forme de statue: stone scales all over the Sphinx (1), sand trickling off it (2).
+      if (e.statue > 0) {
+        if (one) for (let i = 0; i < 24; i++) this.hold(this.tex.smoke, i % 3 ? 0x6a665e : 0x9a948a, onBody(seed + i * 2.39, 0.1 + ((i * 0.37) % 0.85), -r * 0.2), 0.2 + r * 0.25, 1, dt, false);
+        else if (chance(30)) this.spawn(this.tex.smoke, 0xc8a870, onBody(Math.random() * 6.28, 0.8 + Math.random() * 0.2, -0.05), new Vector3(0, 0, 0), 0.9, 0.16, 0.1, 1, 4, false);
+      }
+      // A change of pace that slows (Jet de sable on a machine, Lumière ardente on the living).
+      if (e.pace > 0 && e.paceMove < 100) {
+        if ((e.def as UnitDef).mechanical) {
+          // Jet de sable: sand pouring out of the works (1), a sand swirl round it (2).
+          if (one) { if (chance(16)) this.spawn(this.tex.smoke, 0xd8b070, onBody(Math.random() * 6.28, 0.5, 0), rnd(0.3).setY(0), 0.8, 0.12, 0.08, 1, 5, false); }
+          else for (let i = 0; i < 10; i++) this.hold(this.tex.smoke, 0xe0c080, onBody(t * 3 + i * 0.63, 0.2 + (i % 3) * 0.25, 0.2), 0.14, 0.9, dt, false);
+        } else {
+          // Lumière ardente: a glare of sunlight over the head (1), heat shimmering up off the body (2).
+          if (one) this.hold(this.tex.glow, 0xfff2b0, foot.clone().setY(foot.y + tall + 0.2), 0.35 + 0.06 * Math.sin(t * 5), 0.9, dt, true);
+          else if (chance(12)) this.spawn(this.tex.glow, 0xffe090, onBody(Math.random() * 6.28, 0.2), new Vector3(0, 1.1, 0), 0.6, 0.12, 0.25, 0.4, 0, true);
+        }
+      }
+      // Amon-Râ (blind): a sun disc burning over the head (1), a dark veil over the eyes (2).
+      if (e.blind > 0) {
+        if (one) { this.hold(this.tex.glow, 0xffd040, foot.clone().setY(foot.y + tall + 0.35), 0.4, 1, dt, true); if (chance(10)) this.spawn(this.tex.glow, 0xffe880, foot.clone().setY(foot.y + tall + 0.35), rnd(1.2).setY(0), 0.3, 0.1, 0.02, 1, 0, true); }
+        else this.hold(this.tex.smoke, 0x101010, foot.clone().setY(foot.y + tall * 0.95), 0.32, 1, dt, false);
+      }
+      // Foudre (held by Odin's lightning): gold arcs crackling over it (1), smoke and sparks rising from it (2).
+      if (HELD_BY.get(e.id) === 'foudre' && e.held > 0) {
+        if (one) { if (chance(30)) { const a = Math.random() * 6.28; this.bolt(onBody(a, Math.random()), onBody(a + 0.9, Math.random()), 0xfff0a0, 0.07, 0.25, 0.15); } }
+        else { if (chance(16)) this.spawn(this.tex.smoke, 0x2a2420, onBody(Math.random() * 6.28, 0.6), new Vector3(0, 0.7, 0), 1.2, 0.25, 0.6, 0.75, 0, false); if (chance(10)) this.spawn(this.tex.glow, GOLD, onBody(Math.random() * 6.28, 0.5), rnd(1).setY(1.5), 0.3, 0.08, 0.02, 1, 6, true); }
+      }
+      // Glace (the water Élémentaire's shot): frost crystals on the body (1), a blue mist at its feet (2).
+      if (e.chill > 0) {
+        if (one) for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0xe8f8ff, onBody(seed + i * 2.39, 0.1 + ((i * 0.37) % 0.8), 0), 0.08, 1, dt, true);
+        else if (chance(10)) this.spawn(this.tex.smoke, 0xb8e0ff, onBody(Math.random() * 6.28, 0.05, 0.1), new Vector3(0, 0.1, 0), 1, 0.25, 0.5, 0.55, 0, false);
+      }
+    }
+    // The zones: Odin's war aura, Athéna's protection, the Fontaine's healing, Seth's Tempête de sable.
+    for (const [e, R, color] of auras) {
+      const p = this.at(e.x, e.y, 0.08);
+      if (one) {
+        // A circle of slow runes of light at its reach.
+        const n = Math.round(R * 9);
+        for (let i = 0; i < n; i++) this.hold(this.tex.glow, i % 4 ? color : 0xffffff, p.clone().add(new Vector3(Math.cos((i / n) * 6.28 + t * 0.15) * R, 0.1, Math.sin((i / n) * 6.28 + t * 0.15) * R)), i % 4 ? 0.26 : 0.42, 1, dt, true);
+      } else {
+        // Motes rising off the allies inside it.
+        for (const o of world.entities.values()) {
+          if (o.owner !== e.owner || o.def.kind !== 'unit' || o.hp <= 0 || o === e || Math.hypot(o.x - e.x, o.y - e.y) > R * FP || !chance(6)) continue;
+          this.spawn(this.tex.glow, color, this.at(o.x, o.y, 0.1).add(rnd(0.25).setY(0)), new Vector3(0, 1.2, 0), 1, 0.22, 0.06, 1, 0, true);
+        }
+      }
+    }
+    for (const st of world.storms) {
+      if (st.until <= world.tick) continue;
+      const p = this.at(st.x, st.y, 0.1);
+      const R = st.r / FP;
+      if (one) {
+        // A vortex of sand turning over the zone.
+        for (let i = 0; i < 90; i++) {
+          const a = t * (1 + (i % 4) * 0.25) + i * 2.4;
+          const d = R * Math.sqrt(((i * 0.618) % 1));
+          this.hold(this.tex.smoke, i % 2 ? 0xf0dca8 : 0x6a4020, p.clone().add(new Vector3(Math.cos(a) * d, 0.2 + ((i * 0.37) % 1) * 1.5, Math.sin(a) * d)), 0.7, 1, dt, false);
+        }
+      } else {
+        // A brown haze over the zone, gusts streaking across it.
+        if (chance(20 * R)) { const a = Math.random() * 6.28; const d = Math.sqrt(Math.random()) * R; this.spawn(this.tex.smoke, 0x7a5028, p.clone().add(new Vector3(Math.cos(a) * d, 0.3, Math.sin(a) * d)), new Vector3(1.5, 0, 0.5), 1.5, 0.7, 1.4, 0.6, 0, false); }
+        if (chance(6)) { const z0 = (Math.random() - 0.5) * 2 * R; this.streaks.spawn(0xe8d0a0, p.clone().add(new Vector3(-R, 0.5, z0)), p.clone().add(new Vector3(R, 0.6, z0 + 0.5)), 0.35, 0.1, 1.5, 0.05, 0.8); }
+      }
+    }
+  }
+
   /** A Cadavre réanimé (the user's pick, 2026-11-23): a swarm of small black flies buzzing round its head. */
   private flies(foot: Vector3, tall: number, t: number, dt: number): void {
     const head = foot.clone().setY(foot.y + tall * 0.78);
@@ -768,6 +893,8 @@ export class Effects {
     const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
     const isd = FX_STYLE !== 'avant' && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'isdaris';
     if (isd && this.isShot(s.type!, s, from, to)) return;
+    const god = DX_STYLE && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'dieux' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
+    if (god && this.godShot(god, s, from, to)) return;
     if (z && FX_STYLE !== 'avant' && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
     if (s.kind === 'melee') {
       // A white flash where the blow lands and a spray of sparks.
@@ -901,6 +1028,107 @@ export class Effects {
    * top, the Pylône sanglant's crimson beam from the sky, the Dragon's twin bolts, the Béhémoth's heavy plasma and its
    * shockwave; the Créature's bite, the Assassin's blades. False: not one it draws.
    */
+
+  /** A jagged bolt of lightning from a to b, in segments a few tenths of a tile off the line. */
+  private bolt(a: Vector3, b: Vector3, color: number, width: number, life: number, jag = 0.22): void {
+    let p = a.clone();
+    const n = Math.max(3, Math.round(a.distanceTo(b) * 1.5));
+    for (let k = 1; k <= n; k++) {
+      const q = a.clone().lerp(b, k / n).add(k < n ? rnd(jag) : new Vector3());
+      this.streaks.spawn(k % 2 ? color : 0xffffff, p, q, 0, life, 0, width, 1);
+      p = q;
+    }
+  }
+
+  /**
+   * Proposal stage: a god's or a Gods' unit's own shot (gold, the camp's light): Apollon's sun arrows, Isis's ray, the
+   * Drake's fire breath, the fire Élémentaire's fireball, the water one's ice shard, the air one's gust, the Golem's
+   * boulder, Frigg's frost, Hadès's dark bolt, the Walkyrie's spear, the Titan's lightning, the Sphinx's sand, the
+   * Yggdrasill trees' thorns and roots; at arm's length, Thor's hammer striking lightning (more under his Courroux),
+   * golden sparks for the others, a ghost's chill, the serpent's venom. False: not one it draws.
+   */
+  private godShot(e: Entity, s: Shot, from: Vector3, to: Vector3): boolean {
+    if (s.kind === 'heal') return false;
+    const type = e.type;
+    const dist = from.distanceTo(to);
+    const flight = Math.min(0.3, Math.max(0.06, dist / 28));
+    if (s.kind === 'melee') {
+      if (type === 'thor') {
+        // The hammer strikes: a bolt from the sky onto the foe (two under his Courroux), gold sparks.
+        for (let k = 0; k < (e.charged > 0 ? 2 : 1); k++) this.bolt(to.clone().add(rnd(0.3)).setY(to.y + 5), to, 0xfff0a0, 0.12, 0.2, 0.35);
+        this.flash(to, GOLD, 1.6);
+      } else if (type === 'fantome') {
+        for (let i = 0; i < 6; i++) this.spawn(this.tex.glow, 0xbfe8ff, to.clone().add(rnd(0.2)), rnd(0.8).setY(0.6), 0.6, 0.18, 0.05, 0.8, 0, true);
+      } else if (type === 'jormungandr') {
+        for (let i = 0; i < 12; i++) this.spawn(this.tex.glow, 0x8aff4a, to.clone(), rnd(2.5).setY(1.5 + Math.random()), 0.5, 0.15, 0.04, 1, 9, true);
+      } else {
+        this.spawn(this.tex.glow, 0xfff4d0, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 1, 0, true);
+        for (let i = 0; i < 10; i++) this.spawn(this.tex.glow, i % 2 ? GOLD : 0xffffff, to.clone(), rnd(3).setY(1 + Math.random() * 2), 0.3, 0.12, 0.02, 1, 9, true);
+      }
+      return true;
+    }
+    switch (type) {
+      case 'apollon': // a golden arrow of sunlight
+        this.flash(from, GOLD, 1.2);
+        this.streaks.spawn(0xffe070, from, to, flight, 0.06, 1.3, 0.14, 1);
+        this.hits.push({ at: to, color: 0xffb030, left: flight });
+        return true;
+      case 'isis': // a thin ray of gold-white light
+        this.streaks.spawn(0xfff0b0, from, to, 0, 0.25, 0, 0.08, 1);
+        this.hits.push({ at: to, color: GOLD, left: 0 });
+        return true;
+      case 'drake': // a burst of fire breath
+        if (s.id !== undefined) this.jets.set(s.id, { id: s.id, from: from.clone(), to: to.clone(), left: 0.5, spill: 0 });
+        return true;
+      case 'elementaire': // a fireball, lobbed low
+        this.lobs.push({ ammo: 'grenade', from: from.clone(), to: to.clone(), age: 0, flight: Math.max(0.2, dist * 0.08), arc: Math.max(0.2, dist * 0.08), chem: false, spill: 0, color: 0xff7a20 });
+        return true;
+      case 'elemeau': // an ice shard, frost where it hits
+        this.streaks.spawn(0xb8e8ff, from, to, flight, 0.05, 0.8, 0.12, 1);
+        this.hits.push({ at: to, color: 0xd8f4ff, left: flight });
+        return true;
+      case 'elemair': { // a gust: white swirls running along the line
+        const dir = to.clone().sub(from).normalize();
+        for (let k = 0; k < 8; k++) this.spawn(this.tex.glow, 0xf0f8ff, from.clone().addScaledVector(dir, (k / 7) * dist).add(rnd(0.15)), dir.clone().multiplyScalar(4), 0.25, 0.25, 0.5, 0.5, 0, true);
+        return true;
+      }
+      case 'golem': // a boulder thrown high
+        this.lobs.push({ ammo: 'rocher', from: from.clone().setY(from.y + 0.8), to: to.clone(), age: 0, flight: Math.max(0.5, dist * 0.08), arc: Math.max(1.2, dist * 0.25), chem: false, spill: 0 });
+        return true;
+      case 'frigg': // a frost bolt
+        this.streaks.spawn(0xc8e8ff, from, to, flight, 0.06, 1.1, 0.13, 1);
+        this.hits.push({ at: to, color: 0xe8f8ff, left: flight });
+        return true;
+      case 'hades': // a bolt of darkness, smoke where it hits
+        this.streaks.spawn(0x9a4aff, from, to, flight, 0.08, 1.4, 0.2, 1);
+        this.hits.push({ at: to, color: 0x6a2ab8, left: flight });
+        for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0x1a1020, to.clone().add(rnd(0.2)), rnd(0.3).setY(0.5), 1.2, 0.3, 0.8, 0.7, 0, false);
+        return true;
+      case 'walkyrie': // a golden spear
+        this.streaks.spawn(0xfff0c0, from, to, flight, 0.05, 1.6, 0.08, 1);
+        this.hits.push({ at: to, color: GOLD, left: flight });
+        return true;
+      case 'titan': // a bolt of lightning
+        this.bolt(from, to, 0xfff0a0, 0.1, 0.18);
+        this.hits.push({ at: to, color: GOLD, left: 0 });
+        return true;
+      case 'sphinx': // a stream of sand
+        this.streaks.spawn(0xe8c880, from, to, flight, 0.1, 1.5, 0.18, 0.9);
+        for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0xd8b070, to.clone().add(rnd(0.2)), rnd(0.6).setY(0.4), 0.8, 0.25, 0.6, 0.8, 0, false);
+        return true;
+      case 'branche':
+      case 'protecteur': // a volley of thorns
+        for (let k = 0; k < 3; k++) this.streaks.spawn(0x9ad060, from.clone().add(rnd(0.15)), to.clone().add(rnd(0.15)), flight * (1 + k * 0.2), 0.04, 0.5, 0.06, 1);
+        this.hits.push({ at: to, color: 0x9ad060, left: flight });
+        return true;
+      case 'furieux': // a great root bursting from the ground under the foe
+        for (let i = 0; i < 10; i++) this.spawn(this.tex.smoke, i % 2 ? 0x5a3e24 : 0x7a9a40, to.clone().add(rnd(0.3)).setY(to.y - 0.4), rnd(1).setY(2 + Math.random() * 1.5), 0.8, 0.35, 0.2, 1, 6, false);
+        this.ring(to.clone().setY(to.y - 0.4), 0x9ad060, 1.25, 0.5);
+        return true;
+    }
+    return false;
+  }
+
   private isShot(type: string, s: Shot, from: Vector3, to: Vector3): boolean {
     if (s.kind === 'heal') return false;
     const building = (DEFS[type] as { kind?: string } | undefined)?.kind === 'building';
