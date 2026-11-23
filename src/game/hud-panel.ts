@@ -88,13 +88,7 @@ export function updatePanel(h: Hud): void {
   const aboard = [...h.world.entities.values()].filter((u) => u.inside === e.id);
   if (aboard.length) {
     const out = e.owner === h.player && !h.spectator ? ' (clic : débarquer)' : '';
-    html += `<div class="prod cargo"><div class="info">À bord : ${aboard.length}</div><div class="grid">${aboard
-      .map((u) => {
-        // In a Fortin or a Scarabée, a passenger with powers is picked by a click, to use them from inside (notice).
-        const pick = (e.def.kind === 'building' || e.type === 'scarabee') && h.world.abilitiesFor(u).length > 0;
-        return `<div class="tile" data-unload="${u.id}" data-of="${e.id}"${pick ? ' data-pick="1"' : ''} style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${pick && out ? ' (clic : ses pouvoirs)' : out}">${img(u.type, u.def.name)}</div>`;
-      })
-      .join('')}</div></div>`;
+    html += `<div class="prod cargo"><div class="info">À bord : ${aboard.length}</div><div class="grid">${aboardTiles(h, e, aboard, out)}</div></div>`;
   }
   if ((e.def as UnitDef).weapons) {
     const arm = e.kit ? WEAPONS[e.kit].name : e.def.kind === 'unit' || (e.def as BuildingDef).attack ? 'Mitrailleuse' : 'aucune';
@@ -147,4 +141,16 @@ function stats(h: Hud, e: Entity): string {
 
 function progress(label: string, f: number): string {
   return `<div class="info">${label}</div><div class="bar"><div style="width:${Math.round(100 * f)}%"></div></div>`;
+}
+
+/** Who is inside a carrier or a bunker, a tile each with its health; a click lets one out (hud.ts). The selection
+ * panel shows them, and the alternative interface's bubble too. */
+export function aboardTiles(h: Hud, e: Entity, aboard: Entity[], out = e.owner === h.player && !h.spectator ? ' (clic : débarquer)' : ''): string {
+  return aboard
+    .map((u) => {
+      // In a Fortin or a Scarabée, a passenger with powers is picked by a click, to use them from inside (notice).
+      const pick = (e.def.kind === 'building' || e.type === 'scarabee') && h.world.abilitiesFor(u).length > 0;
+      return `<div class="tile" data-unload="${u.id}" data-of="${e.id}"${pick ? ' data-pick="1"' : ''} style="--hp:${u.hp / u.maxHp}" title="${u.def.name}${pick && out ? ' (clic : ses pouvoirs)' : out}">${img(u.type, u.def.name)}</div>`;
+    })
+    .join('');
 }

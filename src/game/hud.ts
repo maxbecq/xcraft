@@ -13,6 +13,7 @@ import { updatePanel } from './hud-panel';
 import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
 import { leaveAlt, updateAlt } from './hud-alt';
+import { altProdClick, altProdUndo } from './hud-altprod';
 import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
@@ -167,6 +168,7 @@ export class Hud {
       if (t instanceof HTMLCanvasElement) e.stopPropagation();
     }, { capture: true });
     this.prod.addEventListener('click', (e) => {
+      if (altProdClick(this, e.target as HTMLElement)) return;
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
       if (q) return cancelSlot(this, q);
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
@@ -175,6 +177,9 @@ export class Hud {
       this.input.selected.clear();
       this.input.selected.add(b.id);
       this.focus(b.x / FP, b.y / FP);
+    });
+    this.prod.addEventListener('contextmenu', (e) => {
+      if (altProdUndo(this, e.target as HTMLElement)) e.preventDefault();
     });
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'F3' || spectator) return;
@@ -254,24 +259,30 @@ export class Hud {
     // On the window: the card may be rebuilt between the press and the release, its button gone from the page.
     window.addEventListener('pointerup', () => release(true));
     window.addEventListener('pointercancel', () => release(false));
+    // A passenger's picture (the panel's, or the alternative interface's bubble): out, or picked for its powers.
+    const unload = (out: HTMLElement) => {
+      const of = Number(out.dataset.of);
+      if (this.world.entities.get(of)?.owner !== this.player || this.spectator) return;
+      this.audio.play('click');
+      // A passenger with powers (notice: they use them from a Fortin or a Scarabée) is picked: its card shows them,
+      // and a Sortir button; the others step out at once.
+      const u = this.world.entities.get(Number(out.dataset.unload));
+      if (u && this.world.abilitiesFor(u).length && out.dataset.pick) {
+        this.input.selected.clear();
+        this.input.selected.add(u.id);
+        return;
+      }
+      return this.issue({ player: this.player, kind: 'unload', ids: [of], unit: Number(out.dataset.unload) });
+    };
+    this.card.addEventListener('pointerdown', (e) => {
+      const out = (e.target as HTMLElement).closest<HTMLElement>('[data-unload]');
+      if (out) unload(out);
+    });
     this.panel.addEventListener('pointerdown', (e) => {
       const q = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
       if (q) return cancelSlot(this, q);
       const out = (e.target as HTMLElement).closest<HTMLElement>('[data-unload]');
-      if (out) {
-        const of = Number(out.dataset.of);
-        if (this.world.entities.get(of)?.owner !== this.player || this.spectator) return;
-        this.audio.play('click');
-        // A passenger with powers (notice: they use them from a Fortin or a Scarabée) is picked: its card shows them,
-        // and a Sortir button; the others step out at once.
-        const u = this.world.entities.get(Number(out.dataset.unload));
-        if (u && this.world.abilitiesFor(u).length && out.dataset.pick) {
-          this.input.selected.clear();
-          this.input.selected.add(u.id);
-          return;
-        }
-        return this.issue({ player: this.player, kind: 'unload', ids: [of], unit: Number(out.dataset.unload) });
-      }
+      if (out) return unload(out);
       const id = Number((e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id);
       if (!id) return;
       this.input.selected.clear();

@@ -4,7 +4,7 @@ import { ABILITIES, abilitiesOf, type BuildingDef, type Cost, DEFS, FACTIONS, ra
 import { type Command, cdOf, type Entity } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
-import { ultimatePct } from './hud-panel';
+import { aboardTiles, ultimatePct } from './hud-panel';
 import { SCROLL } from './settings';
 
 export interface Button {
@@ -308,7 +308,7 @@ export function updateCard(h: Hud): void {
   // The LCD tree ticks what is built: a building finished while it is open must redraw it, though no button changed.
   const ticks = lcdTree(h) && h.buildMenu ? [...built(h)].map(([t, n]) => t + n).sort().join() : '';
   const bubble = !!bubbleOf(h);
-  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + ticks + h.alt + bubble;
+  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + ticks + h.alt + bubble + (bubble ? aboardKey(h) : '');
   if (key === h.cardKey) return placeMenu(h);
   h.cardKey = key;
   h.menu.innerHTML = h.menuItems
@@ -335,6 +335,12 @@ export function bubbleOf(h: Hud): Entity | undefined {
   return own.length && own.every((e) => e.def.kind === 'building') ? (own.find((e) => e.type === h.activeType) ?? own[0]) : undefined;
 }
 
+/** Who is inside the bubble's building, and how hurt: its pictures redrawn when that changes. */
+function aboardKey(h: Hud): string {
+  const b = bubbleOf(h)!;
+  return [...h.world.entities.values()].filter((u) => u.inside === b.id).map((u) => `${u.id}:${u.hp}`).join(',');
+}
+
 /** What a bubble button belongs to, for its group's title (none: the building's plain orders). */
 function groupOf(b: Button): string {
   const kind = DEFS[b.type ?? b.icon ?? '']?.kind;
@@ -350,7 +356,12 @@ function groupOf(b: Button): string {
 function groupedHtml(h: Hud): string {
   const groups = new Map<string, Button[]>();
   for (const b of h.buttons) groups.set(groupOf(b), [...(groups.get(groupOf(b)) ?? []), b]);
-  return [...groups].map(([name, bs]) => `<div class="cmd-group"><em>${name}</em><div>${bs.map((b) => buttonHtml(h, b)).join('')}</div></div>`).join('');
+  const html = [...groups].map(([name, bs]) => `<div class="cmd-group"><em>${name}</em><div>${bs.map((b) => buttonHtml(h, b)).join('')}</div></div>`);
+  // Who is inside (a Mine's serfs, a Fortin's soldiers…): their pictures, a click lets one out, as in the panel.
+  const b = bubbleOf(h);
+  const aboard = b ? [...h.world.entities.values()].filter((u) => u.inside === b.id) : [];
+  if (b && aboard.length) html.push(`<div class="cmd-group aboard"><em>À bord</em><div>${aboardTiles(h, b, aboard)}</div></div>`);
+  return html.join('');
 }
 
 /** Builders of one building or so (Thor, Osiris, Frigg): theirs in a single list, no « advanced » one. */

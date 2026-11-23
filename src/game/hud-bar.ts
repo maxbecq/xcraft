@@ -2,6 +2,7 @@
 import { type BuildingDef, DEFS, FACTIONS } from '../data';
 import { ticks } from '../sim/fixed';
 import { img } from './glyphs';
+import { updateAltProd } from './hud-altprod';
 import type { Hud } from './hud';
 
 /** The resource bar: the clock, both resources and the supply. */
@@ -41,6 +42,7 @@ export function toggleProd(h: Hud): void {
 /** The production panel: rows rebuilt when a queue changes, progress bars moved every frame. */
 export function updateProd(h: Hud): void {
   if (!h.prodToggle.firstChild) h.prodToggle.innerHTML = `${img(FACTIONS[h.world.players[h.player].faction].barracks, '')}<b>≡</b>`;
+  if (h.alt) return updateAltProd(h);
   if (h.prod.hidden) return;
   const producers = [...h.world.entities.values()]
     .filter((e) => e.owner === h.player && e.buildLeft === 0 && (e.def.kind === 'building' ? !!(e.def as BuildingDef).trains?.length || e.queue.length > 0 : e.queue.length > 0))
