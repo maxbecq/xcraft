@@ -28,6 +28,12 @@ export function setBiome(b: Biome): void {
 }
 /** How far a cliff's foot leans out from its top, in tiles. */
 const SLANT = 0.32;
+/**
+ * The strip at a cliff's foot that units cannot walk (tiles, from the blocked tile's edge): the rock's slope fills it.
+ * A foot never reaches past it, and where the wall would stop well short of it, its base flares out into scree.
+ * shortcut: a local copy of the simulation's width, replace by its shared constant when the two branches meet.
+ */
+const FOOT_STRIP = 0.5;
 /** City map: height of the lower city's deck, seen through the chasms. */
 export const UNDER_DECK = -6;
 /** City map: thickness of the playable deck's slab, seen at the edge of the chasms. */
@@ -425,22 +431,42 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
     const dir = ends && Number.isInteger(corner.x) && Number.isInteger(corner.y) ? downhill(corner.x, corner.y, out) : out;
     const row: Vector3[] = [];
     const crow: Color[] = [];
-    for (let j = 0; j <= WALL_ROWS; j++) {
-      const s = j / WALL_ROWS;
-      const y = top + (bottom - top) * s;
+    // The city's walls are built: straight and plumb, no rock noise.
+    const built = B.style === 'city' ? 0 : 1;
+    // How far out the wall reaches at height s, past the blocked tile's edge (its own lean and its rim's shift).
+    const reach = (s: number, y: number): [number, number, number] => {
       // Position-only noise: two faces sharing a point displace it the same way.
-      // The city's walls are built: straight and plumb, no rock noise.
-      const built = B.style === 'city' ? 0 : 1;
       const n = (noise(px * 2.3 + y * 1.1, pz * 2.3 - y * 1.1, 1, 13) - 0.5 + (noise(px * 5 + y * 3, pz * 5 - y * 3, 1, 29) - 0.5) * 0.6) * built;
-      const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
       // Broad bulges and hollows along the cliff, so its foot meanders instead of following the tile edge.
       const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4) * built;
       // Over space the rock narrows downwards (an asteroid's underside, an arch's vault), in proportion to its thickness.
       const flare = under ? -0.1 * (top - bottom) * Math.pow(s, 1.6) : built ? SLANT * Math.pow(s, 0.8) : 0.04 * s;
-      const lean = j === 0 ? 0 : flare + n * 0.6 + bulge * Math.pow(s, 0.6);
-      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
+      const lean = s === 0 ? 0 : flare + n * 0.6 + bulge * Math.pow(s, 0.6);
       // A rim pulled in (rounded corner) slopes back out to the foot, so the foot still meets the lower ground.
-      const back = lean + Math.max(0, -sh.dot(dir)) * s;
+      return [lean + Math.max(0, -sh.dot(dir)) * s, n, sh.dot(dir)];
+    };
+    // Rock walls: the foot ends inside the strip no unit walks. Short of this column's share of it (55 to 95 %, by
+    // broad noise), the base flares out to it, as scree does; past the strip, the wall is squeezed back into it.
+    const rock = built && !under;
+    const [footBack, , rim] = reach(1, bottom);
+    const footOver = rim + footBack;
+    const want = FOOT_STRIP * (0.55 + 0.4 * noise(px * 0.9, pz * 0.9, 1, 53));
+    const scree = rock && footOver < want ? want - footOver : 0;
+    for (let j = 0; j <= WALL_ROWS; j++) {
+      const s = j / WALL_ROWS;
+      const y = top + (bottom - top) * s;
+      const [reached, n] = reach(s, y);
+      const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
+      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
+      // The scree spreads low on the wall (the base flares, the top keeps its line).
+      let back = reached + scree * Math.pow(s, 2.2);
+      if (rock && rim + back > 0) {
+        // Never past the strip: what reaches over the low tile is eased under it (a soft limit, the bulges stay).
+        const most = Math.max(FOOT_STRIP, rim * (1 - s) + FOOT_STRIP * s);
+        const over = rim + back;
+        const knee = most * 0.6; // as it is up to there, then easing towards the limit
+        if (over > knee) back = knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - rim;
+      }
       row.push(new Vector3(px + dir.x * back, y + lift, pz + dir.y * back));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
     }
