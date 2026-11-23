@@ -12,7 +12,7 @@ import { showEnd, showEvents } from './hud-toasts';
 import { updatePanel } from './hud-panel';
 import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
-import { updateAlt } from './hud-alt';
+import { leaveAlt, updateAlt } from './hud-alt';
 import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
@@ -466,7 +466,7 @@ export class Hud {
     }
     updateCard(this);
     if (this.alt) updateAlt(this);
-    else this.card.classList.remove('bubble');
+    else leaveAlt(this);
     updateGhost(this);
     showEnd(this);
     this.tuck();

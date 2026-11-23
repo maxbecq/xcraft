@@ -99,7 +99,8 @@ document.body.classList.toggle('z', factions[PLAYER] === 'z');
 document.body.classList.toggle('dieux', factions[PLAYER] === 'dieux');
 document.body.classList.toggle('humains', factions[PLAYER] === 'humains');
 document.body.classList.toggle('spectate', SPECTATE);
-document.body.classList.toggle('lcd', SCROLL.lcd);
+// The alternative interface has no console: the Machines' LCD one gives way to it (its build tree stays).
+document.body.classList.toggle('lcd', SCROLL.lcd && !(SCROLL.alt && !TOUCH));
 document.body.classList.toggle('alt', SCROLL.alt && !TOUCH);
 document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
 document.body.classList.toggle('tuck', TOUCH && SCROLL.tuck);
@@ -656,7 +657,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   if (!k || !(k in SCROLL_BASE)) return false;
   if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'alt' || k === 'mute') {
     SCROLL[k] = (field as HTMLInputElement).checked;
-    document.body.classList.toggle('lcd', SCROLL.lcd);
+    document.body.classList.toggle('lcd', SCROLL.lcd && !(SCROLL.alt && !TOUCH));
     document.body.classList.toggle('alt', SCROLL.alt && !TOUCH);
     hud.alt = SCROLL.alt && !TOUCH;
     document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);

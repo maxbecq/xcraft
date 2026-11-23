@@ -1,7 +1,7 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
-import { type Command, cdOf } from '../sim/world';
+import { type Command, cdOf, type Entity } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
 import { ultimatePct } from './hud-panel';
@@ -307,7 +307,8 @@ export function updateCard(h: Hud): void {
   const p = h.world.players[h.player];
   // The LCD tree ticks what is built: a building finished while it is open must redraw it, though no button changed.
   const ticks = lcdTree(h) && h.buildMenu ? [...built(h)].map(([t, n]) => t + n).sort().join() : '';
-  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + ticks;
+  const bubble = !!bubbleOf(h);
+  const key = [...h.buttons, ...h.menuItems].map((b) => `${b.key}${b.label}${b.cost && afford(p, b.cost)}${b.reason}`).join('|') + h.gridKeys + h.weaponMenu + ticks + h.alt + bubble;
   if (key === h.cardKey) return placeMenu(h);
   h.cardKey = key;
   h.menu.innerHTML = h.menuItems
@@ -321,9 +322,35 @@ export function updateCard(h: Hud): void {
   const tree = lcdTree(h) && !!h.buildMenu && h.workers().length > 0;
   h.card.classList.toggle('tree', tree);
   if (!tree) h.card.classList.remove('more');
-  h.card.innerHTML = tree ? treeHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
+  h.card.innerHTML = tree ? treeHtml(h) : bubble ? groupedHtml(h) : h.buttons.map((b) => buttonHtml(h, b)).join('');
   if (tree) drawLinks(h.card), relinkOnResize(h.card);
   placeMenu(h);
+}
+
+/** The alternative interface: the building whose commands float in a bubble above it (only buildings of ours picked). */
+export function bubbleOf(h: Hud): Entity | undefined {
+  // A builder building's list (the Isdaris Obélisque, Matérialiser) is a tree, at the bottom like the workers'.
+  if (!h.alt || h.buildMenu) return undefined;
+  const own = h.input.own();
+  return own.length && own.every((e) => e.def.kind === 'building') ? (own.find((e) => e.type === h.activeType) ?? own[0]) : undefined;
+}
+
+/** What a bubble button belongs to, for its group's title (none: the building's plain orders). */
+function groupOf(b: Button): string {
+  const kind = DEFS[b.type ?? b.icon ?? '']?.kind;
+  if (b.label.startsWith('→')) return 'Évoluer';
+  if (kind === 'upgrade') return 'Recherches';
+  if (kind === 'unit' || b.weapon) return 'Produire';
+  if (kind === 'building') return 'Construire';
+  if (b.ability) return 'Pouvoirs';
+  return '';
+}
+
+/** The bubble's buttons by group, each under its title, in the order the groups first come. */
+function groupedHtml(h: Hud): string {
+  const groups = new Map<string, Button[]>();
+  for (const b of h.buttons) groups.set(groupOf(b), [...(groups.get(groupOf(b)) ?? []), b]);
+  return [...groups].map(([name, bs]) => `<div class="cmd-group"><em>${name}</em><div>${bs.map((b) => buttonHtml(h, b)).join('')}</div></div>`).join('');
 }
 
 /** Builders of one building or so (Thor, Osiris, Frigg): theirs in a single list, no « advanced » one. */
