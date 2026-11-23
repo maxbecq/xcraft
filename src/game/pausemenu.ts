@@ -46,15 +46,16 @@ export function skinField(faction: string): string {
 }
 
 export function controlFields(inMatch: boolean): string {
-  // A touch screen: only the trial touch controls (off by default, the usual ones untouched then).
-  if (TOUCH) return `<fieldset class="options"><legend>Commandes tactiles</legend>
+  const range = (k: keyof typeof SCROLL_RANGE, label: string, step: number, unit = '') =>
+    `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${SCROLL_RANGE[k][0]}" max="${SCROLL_RANGE[k][1]}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
+  const check = (k: 'lock' | 'grid' | 'halo' | 'mute', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
+  const sound = `<fieldset class="options"><legend>Son</legend>${range('volume', 'Volume', 0.05, '%')}${check('mute', 'Couper le son')}</fieldset>`;
+  // A touch screen: the sound and the trial touch controls only (off by default, the usual ones untouched then).
+  if (TOUCH) return `${sound}<fieldset class="options"><legend>Commandes tactiles</legend>
       <label><input type="checkbox" data-k="tactile"${SCROLL.tactile ? ' checked' : ''}> Essai : menu en étoile à l'appui long sur une unité ou un bâtiment, actions rapides en bas</label>
       <label><input type="checkbox" data-k="tuck"${SCROLL.tuck ? ' checked' : ''}> Replier les panneaux : la fiche et les commandes glissent vers le bas après quelques secondes, la languette ▲ les rappelle</label>
     </fieldset>`;
-  const range = (k: keyof typeof SCROLL_RANGE, label: string, step: number, unit = '') =>
-    `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${SCROLL_RANGE[k][0]}" max="${SCROLL_RANGE[k][1]}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
-  const check = (k: 'lock' | 'grid' | 'halo', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
-  return `<fieldset class="options"><legend>Défilement par les bords</legend>
+  return `${sound}<fieldset class="options"><legend>Défilement par les bords</legend>
       ${range('speed', 'Vitesse', 0.1, '×')}
       ${range('band', 'Largeur des bords', 0.1, '×')}
       ${range('ramp', 'Accélération', 0.1, '×')}

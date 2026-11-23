@@ -1,6 +1,8 @@
 // Sound effects, synthesised with WebAudio, except the interface sounds: those are files with their reverb baked
 // in (tools/sfx/bake.mjs), the game adds no effect on top. Music is handled separately.
 
+import { SCROLL } from './game/settings';
+
 export type Sfx =
   | 'ranged' | 'melee' | 'heal' | 'death' | 'error' | 'done' | 'alert' | 'click' | 'menu' | 'order' | 'target'
   | 'ray' | 'plasma' | 'stimulant' | 'charge' | 'peauderoc' | 'observation' | 'rappel' | 'arrive'
@@ -29,7 +31,7 @@ export class Audio {
     }
     this.ctx = new AudioContext();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.5;
+    this.level();
     this.master.connect(this.ctx.destination);
     this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate / 4, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -37,6 +39,11 @@ export class Audio {
     for (const [name, file] of this.files) {
       file.then((b) => b && this.ctx!.decodeAudioData(b)).then((buf) => buf && this.baked.set(name, buf)).catch(() => {});
     }
+  }
+
+  /** The player's volume and mute (Options, pause menu), applied to everything played. */
+  level(): void {
+    if (this.ctx) this.master.gain.value = SCROLL.mute ? 0 : SCROLL.volume;
   }
 
   /** Call once per frame to reset the per-frame sound budget. */

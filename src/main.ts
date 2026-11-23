@@ -636,7 +636,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd' || k === 'tactile' || k === 'tuck') {
+  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'mute') {
     SCROLL[k] = (field as HTMLInputElement).checked;
     document.body.classList.toggle('lcd', SCROLL.lcd);
     document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
@@ -649,6 +649,7 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
     const out = field.nextElementSibling;
     if (out instanceof HTMLOutputElement) out.value = fmt(SCROLL[k], field.dataset.unit ?? '');
   }
+  audio.level();
   saveControls();
   return true;
 }

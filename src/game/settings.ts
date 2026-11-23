@@ -7,12 +7,13 @@ import type { Faction } from '../data';
 export const SCROLL_KEY = 'xcraft.scroll';
 /** `lcd`: the Machines' console as three floating LCD screens, with the build list drawn as a tech tree (Z only).
  * `tactile`: the trial touch controls (phones and tablets): a marking menu on a long press, quick actions at the bottom.
- * `tuck`: touch screens, the selection sheet and the commands slide away a moment after the last touch (on unless unticked). */
-export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, lcd: false, tactile: false, tuck: true, game: 1 };
+ * `tuck`: touch screens, the selection sheet and the commands slide away a moment after the last touch (on unless unticked).
+ * `volume`, `mute`: the sound's level (0 to 1) and whether it is cut. */
+export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, halo: true, lcd: false, tactile: false, tuck: true, game: 1, volume: 0.5, mute: false };
 export type Controls = typeof SCROLL_BASE;
 /** The sliders' ends (pause menu, Options): a stored value outside them (an old or edited one) is brought back in,
  * so a game speed of 0 cannot freeze a match, nor a huge one hang the page catching up. */
-export const SCROLL_RANGE = { speed: [0.5, 2], band: [0.4, 1.6], ramp: [0, 2], coast: [0, 1], mouse: [0.5, 2], game: [0.5, 2] } as const;
+export const SCROLL_RANGE = { speed: [0.5, 2], band: [0.4, 1.6], ramp: [0, 2], coast: [0, 1], mouse: [0.5, 2], game: [0.5, 2], volume: [0, 1] } as const;
 export const SCROLL: Controls = (() => {
   const base = { ...SCROLL_BASE };
   try {
@@ -20,7 +21,7 @@ export const SCROLL: Controls = (() => {
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
     for (const k of Object.keys(SCROLL_RANGE) as (keyof typeof SCROLL_RANGE)[])
       if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = Math.min(SCROLL_RANGE[k][1], Math.max(SCROLL_RANGE[k][0], stored[k]));
-    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false, lcd: stored.lcd === true, tactile: stored.tactile === true, tuck: stored.tuck !== false };
+    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, halo: stored.halo !== false, lcd: stored.lcd === true, tactile: stored.tactile === true, tuck: stored.tuck !== false, mute: stored.mute === true };
   } catch {
     return base;
   }
@@ -82,4 +83,4 @@ export function toggleFullscreen(): void {
   else void document.documentElement.requestFullscreen().catch(() => {});
 }
 
-export const fmt = (v: number, unit: string) => (unit === '×' ? `×${+v.toFixed(2)}` : `${+v.toFixed(2)}${unit}`);
+export const fmt = (v: number, unit: string) => (unit === '×' ? `×${+v.toFixed(2)}` : unit === '%' ? `${Math.round(v * 100)} %` : `${+v.toFixed(2)}${unit}`);
