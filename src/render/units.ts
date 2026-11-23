@@ -1168,11 +1168,10 @@ export class EntityRenderer {
   }
 
   /**
-   * Thor brings his hammer down (proposal, ?dx=1): his hammer arm winds back and slams down at each blow (the whole body
+   * Thor brings his hammer down: his hammer arm winds back and slams down at each blow (the whole body
    * rocks instead on a model with no skeleton); the lightning falls at the slam (Effects.godShot). Render only.
    */
   private hammer(v: View, e: Entity, world: World, dt: number): void {
-    if (!HAMMER) return;
     // Its own clock (render time, slowed with the game), so the slam meets the lightning.
     const since = ((v.model.userData.blow as number | undefined) ?? 1e9) + dt * 1000;
     v.model.userData.blow = since;
@@ -1625,6 +1624,5 @@ function edgesOf(g: BufferGeometry): EdgesGeometry {
 }
 
 const TOP = new Box3();
-/** Thor's blow (proposal stage, ?dx=1): its length, ms; the lightning falls at its slam, 55 % in (render/effects.ts). */
-const HAMMER = typeof location !== 'undefined' && new URLSearchParams(location.search).get('dx') === '1';
+/** Thor's blow: its length, ms; the lightning falls at its slam, 55 % in (render/effects.ts). */
 export const HAMMER_MS = 600;

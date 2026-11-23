@@ -23,8 +23,6 @@ export const FX_STYLE = PARAMS.get('fx') || 'c';
  * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
 export const HELD_BY = new Map<number, 'napalm' | 'impulsion' | 'chocmental' | 'foudre'>();
 const CYAN = 0x5ae0ff;
-/** Proposal stage (Dieux, 2026-11-23): ?dx=1 shows each god's and unit's own shot, until the user picks. */
-const DX_STYLE = PARAMS.get('dx') === '1';
 const GOLD = 0xffd060;
 /** Where a Gods' shooter's shot leaves its model: height (share of the model's), side and ahead (in radii). */
 const GRIPS: Record<string, [number, number, number]> = {
@@ -930,7 +928,7 @@ export class Effects {
     const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
     const isd = FX_STYLE !== 'avant' && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'isdaris';
     if (isd && this.isShot(s.type!, s, from, to)) return;
-    const god = DX_STYLE && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'dieux' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
+    const god = FX_STYLE !== 'avant' && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'dieux' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
     if (god && this.godShot(god, s, from, to)) return;
     if (z && FX_STYLE !== 'avant' && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
     if (s.kind === 'melee') {
