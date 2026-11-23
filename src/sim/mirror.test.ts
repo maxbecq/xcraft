@@ -30,7 +30,8 @@ describe('moves turned with the map', () => {
     for (const e of [...w.entities.values()]) if (e.def.kind === 'unit') w.entities.delete(e.id);
         const ids: number[] = [];
         for (let k = 0; k < 8; k++) {
-          const [x, y] = turn(S, hq.x + 4 * FP + (k % 4) * 700, hq.y + 4 * FP + Math.floor(k / 4) * 700, q);
+          // Half a tile off the 4x4 Conseil's middle (on a tile's edge), as they were off the 5x5 one's: not spawned on edges.
+          const [x, y] = turn(S, hq.x + 4 * FP + FP / 2 + (k % 4) * 700, hq.y + 4 * FP + FP / 2 + Math.floor(k / 4) * 700, q);
           ids.push(w.spawn(k % 2 ? 'minotaure' : 'auxiliaire', owner, x, y).id);
         }
         const [tx, ty] = turn(S, far.x, far.y, q);

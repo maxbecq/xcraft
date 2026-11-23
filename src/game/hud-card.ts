@@ -25,6 +25,8 @@ export interface Button {
   ability?: string;
   /** The Z weapon it is about (fitted, bought or researched): its pictogram stands for its icon (WEAPON_GLYPHS). */
   weapon?: string;
+  /** A switch for an ability going on its own (autosoin, autoreanimation): whether it is on, a gold light round it. */
+  auto?: boolean;
   action: () => void;
 }
 
@@ -140,9 +142,11 @@ export function buttonsFor(h: Hud): Button[] {
       const payer = casters.find((u) => h.world.manaOf(u));
       const price = payer ? spell(ab, payer.lvl).mana : undefined;
       const mana = price !== undefined ? ` · ${price} énergie` : '';
-      // The automatic Soin says whether it is on (all the selected healers' state: on if any heals by itself).
-      const on = ab === 'autosoin' ? (casters.some((u) => !u.autoOff) ? ' : oui' : ' : non') : '';
-      list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab });
+      // On its own or not (the balancer, 2026-11-22): the Soin and the Réanimation switch from a button of their own, a
+      // gold light running round it while on (any of the selected casters).
+      const auto = ab === 'autosoin' ? casters.some((u) => !u.autoOff) : ab === 'autoreanimation' ? casters.some((u) => u.autoRaise) : undefined;
+      const on = auto === undefined ? '' : auto ? ' : oui' : ' : non';
+      list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab, auto });
     }
     // Passive effects (Odin's war aura, Athéna's protection): an icon that does nothing, its effect in the tooltip.
     for (const p of new Set(units.flatMap((u) => (u.def as UnitDef).passives ?? []))) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
@@ -259,7 +263,8 @@ export function buttonsFor(h: Hud): Button[] {
   // Isdaris: turning into a stronger building, in place.
   for (const t of b.def.morphs ?? []) {
     const d = DEFS[t] as BuildingDef;
-    const idle = same.find((o) => o.queue.length === 0);
+    // The Alchimisterie: its Grande Alchimisterie queued behind what it makes (the balancer, 2026-11-22).
+    const idle = same.find((o) => o.queue.length === 0 || ((b.def as BuildingDef).queuesMorph && !o.queue.includes(t) && o.queue.length < 5));
     if (!idle) continue;
     list.push({ label: `→ ${d.name}`, icon: t, key: d.hotkey, cost: d.cost, reason: h.world.lacks(h.player, t, built(h)) || undefined, action: () => cmd({ kind: 'train', ids: [idle.id], type: t }) });
   }
@@ -338,7 +343,7 @@ export function buttonHtml(h: Hud, b: Button, extra = '', cls = '', style = ''):
   const pic = b.icon ? img(b.icon, '') : b.weapon ? weaponIcon(b.weapon) : b.cmd ? `<img class="ico-cmd" src="${import.meta.env.BASE_URL}icons/cmd/${p.faction}/${b.cmd}.svg" alt="">` : glyph ? pictogram(glyph) : '';
   const anim = b.key === h.pressed.key && performance.now() - h.pressed.at < 150 ? ` ${h.pressed.anim}` : '';
   const open = h.weaponMenu && b.icon === h.weaponMenu ? ' open' : '';
-  return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}${cls}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}${style}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}${extra}</button>`;
+  return `<button class="cmd${off}${anim}${open}${pic ? ' has-icon' : ''}${b.auto ? ' autocast' : ''}${cls}" data-key="${b.key}" aria-label="${b.label}"${b.reason ? ' aria-disabled="true"' : ''}${style}><kbd>${keyLabel(h, b)}</kbd>${pic}<span>${b.label}</span>${cost}${extra}</button>`;
 }
 
 /**

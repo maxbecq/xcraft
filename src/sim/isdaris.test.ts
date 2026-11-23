@@ -69,8 +69,9 @@ describe('Isdaris', () => {
     const far = (dx: number) => w.canPlace('emetteur', otx + dx, oty, 0);
     // Zones of 9 (obelisk) and 7 (emitter) touch up to 16 tiles apart; further, it cannot be placed.
     expect(far(19)).toBe(false);
-    const a = w.spawn('emetteur', 0, (otx + 14) * FP + FP, oty * FP + FP);
-    const b = w.spawn('emetteur', 0, (otx + 27) * FP + FP, oty * FP + FP);
+    // (The obelisk 4x4 since the balancer, 2026-11-22: its middle on a tile's edge, half a tile nearer than the 5x5's.)
+    const a = w.spawn('emetteur', 0, (otx + 13) * FP + FP, oty * FP + FP);
+    const b = w.spawn('emetteur', 0, (otx + 26) * FP + FP, oty * FP + FP);
     expect(w.powerNetwork(0)).toContain(b);
     expect(w.powered(0, b.x + 3 * FP, b.y)).toBe(true);
     w.remove(a); // the link in the middle goes: the far emitter is cut off

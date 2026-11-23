@@ -109,6 +109,7 @@ const WEAPON_MOUNTS: Record<
   // most), towards the front of its long back.
   octopode: { size: 0.5, meleeSize: 0.7, forward: 0.08, grow: { '*': 1.3, zw_roquettes: 1.5 } },
   hexapode: { saw: 1.22, grow: { '*': 1.18, zw_jetsonique: 1, zw_reparateur: 1 } },
+  scarabee: { size: 0.45 },
   // Buildings: a turret on the roof, not a module the width of the whole building.
   // Centred on its dome's axis: its bounding box takes in the capsules on its sides.
   assimilateur: { size: 0.4, apex: true },
@@ -126,8 +127,11 @@ const RING_SAW_GROWTH = 3.4;
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
-function weaponModule(e: Entity): string {
+function weaponModule(e: Entity, world?: World): string {
   if (e.type === 'dronecombat') return 'zw_mitrailleuse'; // its one gun, a module like the others: no socle keeps a built-in one
+  // The Scarabée armed (Scarabée d'assaut): a machine gun on its hull, like a Z socle's (the balancer, 2026-11-22;
+  // shortcut: the Z module, until a gun of its own).
+  if (e.type === 'scarabee') return world && e.owner >= 0 && world.level(e.owner, 'scarabeassaut') ? 'zw_mitrailleuse' : '';
   if (!(e.def as { weapons?: string[] }).weapons) return '';
   if (e.kit) return `zw_${e.kit}`;
   return e.def.kind === 'unit' ? 'zw_mitrailleuse' : '';
@@ -765,7 +769,7 @@ export class EntityRenderer {
       }
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
-      const wanted = weaponModule(e);
+      const wanted = weaponModule(e, world);
       if (wanted !== (v.weapon?.name ?? '')) this.mount(v, e, wanted);
       const dock = v.dock;
       if (dock) {

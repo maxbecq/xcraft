@@ -1,6 +1,6 @@
 /** Abilities: casts, aimed casts, Rappel, walls, take-off, transmutations, and the zones they leave. */
 import BALANCE from '../balance.json';
-import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
+import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, soars, type Entity, type World } from './world';
 import { healable } from './combat';
@@ -77,6 +77,11 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     if (e.autoOff && e.order?.kind === 'heal') this.setOrder(e, null);
     return;
   }
+  if (name === 'autoreanimation') {
+    // The Alchimiste raises a fresh body in reach by itself, or only when told to (the balancer, 2026-11-22).
+    e.autoRaise = !e.autoRaise;
+    return;
+  }
   if (!ab || e.illusion || ab.target === 'point' || !this.ready(e, name) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
@@ -110,6 +115,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     // Take off, or land where the ground is open; either takes a moment.
     if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
     e.airborne = !e.airborne;
+    e.speed = this.baseSpeed(e); // its speed in the air or on the ground
     e.held = ticks(ab.duration);
     e.path = [];
     e.goal = null;
@@ -166,6 +172,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     g.held = ticks(ab.duration);
     this.casts.push({ kind: name, x: mx, y: my });
     return;
+  } else if (name === 'minealchimique') {
+    // Bourdon: a mine dropped on the ground under it, paid by its side.
+    if (!this.pay(e.owner, { cost: BALANCE.rules.upgrades.minealchimiquePrice })) return;
+    const [ox, oy] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y));
+    this.spawn('minealchimique', e.owner, ox * FP + FP / 2, oy * FP + FP / 2);
+    this.casts.push({ kind: 'posermine', x: e.x, y: e.y });
   } else if (name === 'posermine') {
     // Char Pégase: a chemical mine from its stock, under it, on the ground only; its own cooldown is the stock.
     if (e.airborne) return void this.say(e.owner, 'Les mines se posent au sol.');
@@ -174,20 +186,9 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     this.spawnBeside('minechimique', e);
     this.casts.push({ kind: name, x: e.x, y: e.y });
     return;
-  } else if (name === 'festin') {
-    // Allosaure: devours the nearest fresh organic corpse and gets back a share of its health.
-    const c = this.corpses.filter((c) => dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)[0];
-    if (!c || e.hp >= e.maxHp) return;
-    this.corpses.splice(this.corpses.indexOf(c), 1);
-    e.hp = Math.min(e.maxHp, e.hp + idiv(e.maxHp * ab.damage!, 100));
   } else if (name === 'explosioncuve') {
-    // The Cuve blows itself up: every unit on the ground around, friend or foe, and the enemy buildings take the blast, armour or not.
-    for (const t of [...this.entities.values()]) {
-      if (t === e || t.def.kind === 'resource' || t.hp <= 0 || t.inside || (t.def.kind === 'unit' ? flies(t) : !this.hostile(t.owner, e.owner))) continue;
-      if (this.gap(e, t) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
-    }
-    this.casts.push({ kind: name, x: e.x, y: e.y });
-    e.hp = 0;
+    // The balancer (2026-11-22): 2 s between the order and the blast (the fuse burns in World.step, then cuveBlast).
+    if (e.fuse === 0) e.fuse = ticks(BALANCE.rules.upgrades.explosionDelay);
     return;
   } else if (name === 'statue') {
     // To stone, or back (each way once its cooldown is over).
@@ -206,16 +207,6 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       this.corpses.splice(this.corpses.indexOf(c), 1);
       this.spawn(c.type, e.owner, c.x, c.y);
     }
-  } else if (name === 'peauderoc') {
-    // The most wounded ally in range (itself included) not already protected.
-    let best: Entity | undefined;
-    for (const t of this.entities.values()) {
-      if (t.owner !== e.owner || t.def.kind !== 'unit' || t.skin > 0 || t.hp <= 0 || this.gap(e, t) > SKIN_RANGE * FP) continue;
-      if (!best || t.hp * best.maxHp < best.hp * t.maxHp) best = t;
-    }
-    if (!best) return;
-    best.skin = ticks(ab.duration);
-    this.shots.push({ x1: e.x, y1: e.y, x2: best.x, y2: best.y, kind: 'heal' });
   } else {
     if (def.ability === 'stimulant') {
       if (e.hp <= STIM_HP) return;
@@ -344,6 +335,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
       t.skin = 0;
       t.reflect = 0;
       t.invuln = 0;
+      t.ferveur = 0;
       if (t.boost > 0) {
         t.boost = 0;
         t.speed = this.baseSpeed(t);
@@ -403,7 +395,8 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     t.reflect = ticks(ab.duration);
     t.reflectLeft = ab.max!;
   } else if (name === 'explosiftoxique') {
-    // A toxic cloud (2010 sheet, mod): its damage every second to every enemy unit in it, for its duration; clouds add up.
+    // A toxic cloud (2010 sheet, mod) on any spot, a unit there or not: its damage every second to every unit in it, allies
+    // too (the balancer, 2026-11-22), for its duration; clouds add up.
     this.clouds.push({ owner: e.owner, x, y, r: toFp(ab.radius!), damage: ab.damage!, hits: ab.duration, next: this.tick });
   } else if (name === 'gazeuphorisants') {
     // Allies of the zone (living ones) walk and strike faster for a while.
@@ -420,7 +413,20 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     // Every living ally of the zone (notice « ses troupes », 2010 sheet and mod: an area).
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
-    for (const t of allies) t.invuln = ticks(ab.duration);
+    for (const t of allies) t.ferveur = ticks(ab.duration);
+  } else if (name === 'peauderoc') {
+    // The ally aimed at (the balancer, 2026-11-22: a unit of one's choice), itself included: the one under the spot.
+    const t = [...this.entities.values()].filter((t) => t.owner === e.owner && t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, x, y) <= t.radius + FP / 2).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id)[0];
+    if (!t) return false;
+    t.skin = ticks(ab.duration);
+    this.shots.push({ x1: e.x, y1: e.y, x2: t.x, y2: t.y, kind: 'heal' });
+  } else if (name === 'festin') {
+    // Allosaure: devours the fresh organic body nearest the spot, ally or enemy: +75 HP, then a moment still.
+    const c = this.corpses.filter((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!)).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.tick - b.tick)[0];
+    if (!c || e.hp >= e.maxHp) return false;
+    this.corpses.splice(this.corpses.indexOf(c), 1);
+    e.hp = Math.min(e.maxHp, e.hp + ab.damage!);
+    e.held = Math.max(e.held, ticks(ab.duration));
   } else if (name === 'reanimation') {
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
     if (i < 0) return false;
@@ -441,11 +447,12 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   return true;
 }
 
-/** The toxic clouds hurt the enemy units in them, once a second; a spent cloud goes. */
+/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. */
 export function poisonClouds(this: World): void {
   for (const c of this.clouds) {
     if (c.next > this.tick) continue;
-    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && this.hostile(t.owner, c.owner) && dist(t.x, t.y, c.x, c.y) <= c.r + t.radius) this.hurt(t, c.damage);
+    // Allies and enemies alike (the balancer, 2026-11-22).
+    for (const t of this.entities.values()) if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, c.x, c.y) <= c.r + t.radius) this.hurt(t, c.damage);
     c.hits--;
     c.next = this.tick + ticks(1);
   }
@@ -461,6 +468,28 @@ export function mineTrigger(this: World, m: Entity): void {
   for (const t of foes) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
   m.hp = 0;
+}
+
+/** A Bourdon's alchemical mine at the end of its fuse: its damage on every enemy walker of the zone. */
+export function mineBlast(this: World, m: Entity): void {
+  const ab = ABILITIES.minealchimique;
+  const r = toFp(ab.radius!);
+  for (const t of [...this.entities.values()]) {
+    if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
+  }
+  this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
+}
+
+/** The Réservoir's Explosion suicidaire, its fuse burnt: every unit on the ground around, friend or foe, and the enemy
+ * buildings take the blast, armour or not. */
+export function cuveBlast(this: World, e: Entity): void {
+  const ab = ABILITIES.explosioncuve;
+  for (const t of [...this.entities.values()]) {
+    if (t === e || t.def.kind === 'resource' || t.hp <= 0 || t.inside || (t.def.kind === 'unit' ? flies(t) : !this.hostile(t.owner, e.owner))) continue;
+    if (this.gap(e, t) <= toFp(ab.radius!)) this.hurt(t, ab.damage!);
+  }
+  this.casts.push({ kind: 'explosioncuve', x: e.x, y: e.y });
+  e.hp = 0;
 }
 
 /** A Canon orbital shot lands: it spares nothing under it. */
@@ -658,6 +687,9 @@ export function turn(this: World, e: Entity, owner: number): void {
  */
 export function manaOf(this: World, e: Entity): Mana | undefined {
   const own = (e.def as UnitDef | BuildingDef).mana;
+  // Scientisme (the balancer, 2026-11-22): more mana for the Soigneur, the Alchimiste and the Réservoir.
+  const more = (BALANCE.rules.upgrades.scientisme as Record<string, number>)[e.type];
+  if (own && more && this.level(e.owner, 'scientisme')) return [own[0] + more, own[1], own[2]];
   if (own) return own;
   // Dieux (XC.doc 2008): every god the same mana by its level, regained at 1 a second (half full at its summoning:
   // shortcut, no source gives a start; the mod's casters start at half).

@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, Mesh, PlaneGeometry, type Scene, ShaderMaterial } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, RingGeometry, type Scene, ShaderMaterial } from 'three';
 import { type GameMap, heightAt } from '../map';
 
 /** Tiles round the cursor the grid can reach (it covers about the screen at the usual zoom; more costs for little). */
@@ -29,7 +29,13 @@ export class PlaceGrid {
   private readonly fade = new Float32Array(N * N * 4);
   private readonly heights = new Float32Array((N + 1) * (N + 1));
 
+  /** An aimed spell's zone under the cursor: a ring its radius (the balancer, 2026-11-22: zones are radii). */
+  private readonly zoneRing = new Mesh(new RingGeometry(0.94, 1, 72).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.85, depthTest: false, depthWrite: false }));
+
   constructor(scene: Scene, private readonly map: GameMap) {
+    this.zoneRing.visible = false;
+    this.zoneRing.renderOrder = 4;
+    scene.add(this.zoneRing);
     const g = new BufferGeometry();
     const uv = new Float32Array(N * N * 4 * 2);
     const index = new Uint32Array(N * N * 6);
@@ -49,6 +55,17 @@ export class PlaceGrid {
     for (const m of this.slotMarks) m.visible = false;
     this.group.visible = false;
     scene.add(this.group);
+  }
+
+  /** The ring of a spell's zone of radius `r` round (x, z), or none. */
+  zone(x: number, z: number, r: number): void {
+    this.zoneRing.visible = true;
+    this.zoneRing.position.set(x, heightAt(this.map, x, z) + 0.1, z);
+    this.zoneRing.scale.set(r, 1, r);
+  }
+
+  noZone(): void {
+    this.zoneRing.visible = false;
   }
 
   hide(): void {

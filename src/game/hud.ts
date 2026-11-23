@@ -226,7 +226,8 @@ export class Hud {
     );
     this.card.addEventListener('pointerdown', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
-      const b = this.buttons.find((x) => x.key === el?.dataset.key);
+      // By its label too: two abilities of a mixed selection may share a key (Peau de roc and Réanimation, R).
+      const b = this.buttons.find((x) => x.key === el?.dataset.key && x.label === el?.getAttribute('aria-label')) ?? this.buttons.find((x) => x.key === el?.dataset.key);
       if (!b || !el) return;
       if (e.pointerType !== 'touch') return pressButton(this, b);
       hold(el, () => pressButton(this, b));

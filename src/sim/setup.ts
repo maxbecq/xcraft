@@ -1,6 +1,6 @@
 import { type BuildingDef, DEFS, FACTIONS, type Faction, START } from '../data';
 import { rotateFootprint } from '../map';
-import { CORNERS, DEFAULT_MAP, buildMap, mapFile, turnsOf } from '../maps';
+import { CORNERS, DEFAULT_MAP, buildMap, hqSlot, mapFile, turnsOf } from '../maps';
 import { FP } from './fixed';
 import { World } from './world';
 
@@ -68,7 +68,8 @@ export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?
     const f = FACTIONS[factions[owner]];
     world.players[owner].faction = factions[owner];
     const hq = DEFS[f.hq] as BuildingDef;
-    world.spawn(f.hq, owner, ...px(at(q, ...start.hq, hq.size)));
+    // In the map's 5x5 slot, the 4x4 at its corner farthest from the minerals (the balancer, 2026-11-22).
+    world.spawn(f.hq, owner, ...px(at(q, ...hqSlot(def, start.hq), hq.size)));
     const [wx, wy] = start.workers ?? [start.hq[0] + 5, start.hq[1] + 2];
     for (let i = 0; i < START.serfs; i++) {
       const [tx, ty] = at(q, wx + (i % 2), wy + Math.floor(i / 2), 1);

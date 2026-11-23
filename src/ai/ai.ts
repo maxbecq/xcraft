@@ -95,7 +95,7 @@ const FORMS: Record<string, string[]> = { elembase: ['elementaire', 'elemeau', '
 /** Human units each due for a share of the army (nextUnit), held back by the tech's energy reserve only. */
 const SHARED = ['phalangiste', 'belluaire'];
 /** Abilities the AI uses with the plain rule above (on engaging); the others go through tactics(). */
-const SIMPLE = ['stimulant', 'charge', 'peauderoc'];
+const SIMPLE = ['stimulant', 'charge'];
 /** Area abilities aimed at enemy crowds: least enemies under the blast. */
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
@@ -1167,7 +1167,8 @@ export class AI {
     const threat = raid && raid.armed.length && raid.armed.every(flies) && !army.some((u) => w.weapon(u) && reaches(w.weapon(u)!, true)) ? undefined : raid;
     this.homeThreat = !!raid;
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
-    const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker);
+    // The Z's Intelligence only: the Humains' Conseil has a Refuge too (the balancer, 2026-11-22), left to the player for now.
+    const shelters = buildings.filter((b) => b.buildLeft === 0 && (b.def as BuildingDef).dropoff && (b.def as BuildingDef).bunker && (b.def as BuildingDef).faction === 'z');
     // The danger gone, the sheltered drones come out (back to work as idle workers).
     // A raid of flyers the army cannot shoot still sends the drones near it into shelter, if its arms hit the ground (a
     // Drake over the mineral line, the drones left outside).
@@ -1285,11 +1286,19 @@ export class AI {
     const casters = army.filter((u) => {
       const ab = (u.def as UnitDef).ability;
       if (!ab || !w.ready(u, ab) || !SIMPLE.includes(ab)) return false;
-      if (ab === 'peauderoc') return u.order?.kind === 'heal' || this.engaged(u) !== undefined;
       const d = this.engaged(u);
       return d !== undefined && (ab === 'stimulant' ? u.hp > 50 : d > 2 * FP);
     });
     if (casters.length && !this.easy) ctx.out.push({ player: this.player, kind: 'ability', ids: casters.map((u) => u.id) });
+    // Peau de roc (aimed at a unit since the balancer, 2026-11-22): on the one the Soigneur heals in a fight, else itself.
+    if (!this.easy) {
+      for (const u of army) {
+        if ((u.def as UnitDef).ability !== 'peauderoc' || !w.ready(u, 'peauderoc')) continue;
+        const healed = u.order?.kind === 'heal' ? w.entities.get(u.order.target) : undefined;
+        const t = healed && healed.skin === 0 ? healed : this.engaged(u) !== undefined && u.skin === 0 ? u : undefined;
+        if (t) ctx.out.push({ player: this.player, kind: 'ability', ids: [u.id], name: 'peauderoc', x: t.x, y: t.y });
+      }
+    }
     // Dieux: an Élémentaire comes « faible et chétive » (notice): it takes its fire form at once (it hits flyers too).
     const weak = army.filter((u) => u.type === 'elembase' && w.ready(u, 'formefeu'));
     if (weak.length) ctx.out.push({ player: this.player, kind: 'ability', ids: weak.map((u) => u.id), name: 'formefeu' });
@@ -1772,7 +1781,9 @@ export class AI {
           const c = w.corpses.filter((c) => dist(c.x, c.y, u.x, u.y) <= reach).sort((a, b) => b.tick - a.tick)[0];
           if (c) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: c.x, y: c.y };
         } else if (name === 'festin') {
-          if (u.hp * 10 < u.maxHp * 7 && w.corpses.some((c) => dist(c.x, c.y, u.x, u.y) <= radius)) cmd = self(u, name);
+          // A fresh body in reach, when hurt: aimed at it.
+          const c = u.hp * 10 < u.maxHp * 7 ? w.corpses.filter((c) => dist(c.x, c.y, u.x, u.y) <= reach).sort((a, b) => dist(a.x, a.y, u.x, u.y) - dist(b.x, b.y, u.x, u.y) || b.tick - a.tick)[0] : undefined;
+          if (c) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: c.x, y: c.y };
         } else if (name === 'posermine') {
           // Pégase on the ground: a mine under it when enemy walkers come close.
           if (!u.airborne && u.charges > 0 && around(near, u.x, u.y, 6 * FP).filter((f) => !flies(f)).length >= 2) cmd = self(u, name);
@@ -2082,15 +2093,15 @@ export class AI {
     if (type === this.faction.hq || type === this.faction.outpost) {
       // Centred on the site, laid out for a headquarters: a smaller outpost (the Dieux' Antre) at its top-left corner
       // stood two tiles off the mirror of the one in the opposite corner.
-      // An odd gap (a 4-wide Antre on a 5-wide site) leaves half a tile over, which goes toward the map's middle: the
-      // base in the opposite corner gets the mirror of the spot.
-      const gap = (DEFS[this.faction.hq] as BuildingDef).size - def.size;
-      const inset = (t: number, mid: number) => (2 * t + gap < mid ? Math.ceil(gap / 2) : Math.floor(gap / 2));
+      // An odd difference (a 3x3 Antre in a 4x4 slot) leaves half a tile: toward the map's middle on each axis, so the
+      // opposite corner's spot is the mirror of this one.
+      const spare = (DEFS[this.faction.hq] as BuildingDef).size - def.size;
+      const inset = (t: number, axis: number) => (spare % 2 === 0 || 2 * t + (DEFS[this.faction.hq] as BuildingDef).size < axis ? Math.ceil(spare / 2) : Math.floor(spare / 2));
       // Its headquarters lost, its start's spot comes first (left out of the expansions, it could not be raised again
       // there once the other sites were taken).
       const lost = type === this.faction.hq && ![...w.entities.values()].some((e) => e.owner === this.player && kin(e, this.faction.hq));
       const start = lost ? startSite(w, this.player) : undefined;
-      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset(tx, w.map.width - (DEFS[this.faction.hq] as BuildingDef).size), ty + inset(ty, w.map.height - (DEFS[this.faction.hq] as BuildingDef).size)]);
+      const site = [...(start ? [start] : []), ...expansions(w, this.player)].map(([tx, ty]): [number, number] => [tx + inset(tx, w.map.width), ty + inset(ty, w.map.height)]);
       // An expansion with a field left round it (a site mined out, its base lost, was taken again for its last 800).
       const mined = (tx: number, ty: number) => {
         const [cx, cy] = [(tx + def.size / 2) * FP, (ty + def.size / 2) * FP];

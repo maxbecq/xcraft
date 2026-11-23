@@ -11,6 +11,11 @@ import * as combat from './combat';
 import * as abilities from './abilities';
 import { Vision } from './vision';
 
+
+/** What each building turned into came from (morphs: Alchimisterie → Grande Alchimisterie…). */
+const MORPHED_FROM: Record<string, string> = Object.fromEntries(
+  Object.entries(DEFS).flatMap(([k, d]) => ((d as BuildingDef).morphs ?? []).map((m) => [m, k])),
+);
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
   /** `skip`: fields this trip gave up on, no way into them, since tick `skipped` (economy.ts gather). */
@@ -151,9 +156,15 @@ export interface Entity {
   lastHitBy: number;
   /** Ticks of poison left (Lames empoisonnées, Explosif toxique). */
   poison: number;
-  /** Ticks left: hidden from enemies without detection (Camouflage), unhurt (Régénérant), alive (Cadavre réanimé). */
+  /** Ticks left: hidden from enemies without detection (Camouflage), unhurt (the Fantômes), alive (Cadavre réanimé). */
   camo: number;
   invuln: number;
+  /** Ticks left of a Régénérant: 5 % of the damage taken, then 1 HP left when it wears off. */
+  ferveur: number;
+  /** Ticks before a Réservoir set to blow up goes off (Explosion suicidaire). */
+  fuse: number;
+  /** Réanimation on its own (the balancer, 2026-11-22): off until switched on. */
+  autoRaise: boolean;
   ttl: number;
   /** Char Pégase in the air (Décollage). */
   airborne: boolean;
@@ -266,6 +277,7 @@ export type Command =
   /** Bac à sable only (a match with one player): one of its options turned on or off. Orders like any other, so a
    * replay plays them back. */
   | { player: number; kind: 'sandbox'; ids: number[]; tool: SandboxTool; on: boolean }
+  /** An ability used on its own or not (Soin, Réanimation), for the units named that have it. */
   /** The player gives up. Only the AI sends it; a network game refuses it (net.ts has no fields for it). */
   | { player: number; kind: 'resign'; ids: number[] };
 
@@ -402,7 +414,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, raising: 0, autoOff: false, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -481,9 +493,14 @@ export class World {
       if (e.camo > 0) e.camo--;
       if (e.phased > 0) e.phased--;
       if (e.reflect > 0) e.reflect--;
-      // Régénérant wears off: the toxins turn on their host.
-      if (e.invuln > 0 && --e.invuln === 0) e.hp = Math.min(e.hp, 1);
-      if (e.ttl > 0 && --e.ttl === 0) e.hp = 0;
+      if (e.invuln > 0) e.invuln--;
+      // Régénérant wears off: the toxins turn on their host, 1 HP left (the balancer, 2026-11-22).
+      if (e.ferveur > 0 && --e.ferveur === 0) e.hp = Math.min(e.hp, 1);
+      if (e.fuse > 0 && --e.fuse === 0) this.cuveBlast(e);
+      if (e.ttl > 0 && --e.ttl === 0) {
+        if (e.type === 'minealchimique') this.mineBlast(e);
+        e.hp = 0;
+      }
       if (e.skin > 0) e.skin--;
       if (e.charged > 0) e.charged--;
       if (e.war > 0) e.war--;
@@ -497,7 +514,7 @@ export class World {
       if ((this.tick + e.id) % ticks(1) === 0) this.pulse(e);
       if (e.type === 'minechimique') this.mineTrigger(e);
       // Minage (mod): every 12 s the crew makes a mine, for 35 minerals and 20 energy, while the stock is not full and the side can pay.
-      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) {
+      if (e.charges < (ABILITIES.posermine.max ?? 0) && e.type === 'pegase' && (e.def as UnitDef).abilities?.includes('posermine') && (this.tick + e.id) % ticks(ABILITIES.posermine.cooldown) === 0) {
         const [p, price] = [this.players[e.owner], BALANCE.rules.upgrades.minePrice];
         if (p && p.minerals >= price.minerals && p.energy >= price.energy) {
           p.minerals -= price.minerals;
@@ -549,7 +566,7 @@ export class World {
     const done = this.vision.map(() => new Set<number>());
     for (const e of this.entities.values()) {
       if (e.owner < 0 || !('sight' in e.def)) continue;
-      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.blind > 0 ? 1 : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
+      const r = e.def.kind === 'building' && e.buildLeft > 0 ? 3 : e.blind > 0 ? 1 : e.airborne && e.type === 'pegase' ? BALANCE.rules.upgrades.pegaseAir.sight : e.def.sight + (e.type === 'espion' && this.level(e.owner, 'omniscience') ? BALANCE.rules.upgrades.omniscience : 0) + (e.type === 'zespion' && this.level(e.owner, 'megaespion') ? BALANCE.rules.z.megaEspion.sight : 0);
       const tx = tileOf(e.x);
       const ty = tileOf(e.y);
       const high = soars(e);
@@ -823,7 +840,12 @@ export class World {
   /** How many finished buildings (and units) of each type a player has: one pass, for many requirement checks. */
   builtCounts(player: number): Map<string, number> {
     const n = new Map<string, number>();
-    for (const e of this.entities.values()) if (e.owner === player && e.buildLeft === 0) n.set(e.type, (n.get(e.type) ?? 0) + 1);
+    for (const e of this.entities.values()) {
+      if (e.owner !== player || e.buildLeft > 0) continue;
+      // A Humains building turned into another (Grande Alchimisterie, Caserne volante, Grand Conseil) still counts as
+      // what it was: « requiert Alchimisterie » stays met once it has grown (the balancer's tree, 2026-11-22).
+      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
+    }
     return n;
   }
 

@@ -33,7 +33,7 @@ describe('queues', () => {
     const w = createMatch(['humains', 'isdaris']);
     const p = w.players[0]; p.minerals = 99999; p.energy = 99999;
     const [conseil] = of(w, 0, 'conseil');
-    for (const t of Object.keys((DEFS.grandconseil as any).requires ?? {})) w.spawn(t, 0, 60 * FP, 60 * FP);
+    for (const t of [...Object.keys((DEFS.grandconseil as any).requires ?? {}), ...((DEFS.grandconseil as any).requiresAny?.of.slice(0, 1) ?? [])]) w.spawn(t, 0, 60 * FP, 60 * FP);
     w.step([{ player: 0, kind: 'train', ids: [conseil.id], type: 'grandconseil' }]);
     w.step([{ player: 0, kind: 'train', ids: [conseil.id], type: 'serf' }]);
     expect(conseil.queue).toEqual(['grandconseil', 'serf']);

@@ -54,7 +54,7 @@ describe('Humans, by the 2010 sheet', () => {
     expect(t.maxHp - t.hp).toBe(29);
   });
 
-  it("the Scie d'assaut adds 5 against heavy machines, nothing against the light biologicals", () => {
+  it("the Scie d'assaut adds 15 against heavy machines, nothing against the light biologicals", () => {
     const w = new World(createMap());
     const l = w.spawn('legionnaire', 0, ...at(40, 60));
     const [tank, serf] = [w.spawn('scarabee', 1, ...at(41, 60)), w.spawn('serf', 1, ...at(39, 60))];
@@ -65,7 +65,7 @@ describe('Humans, by the 2010 sheet', () => {
     };
     const [before, plain] = [lost(tank), lost(serf)];
     w.players[0].upgrades.scieassaut = 1;
-    expect(lost(tank)).toBe(before + 5);
+    expect(lost(tank)).toBe(before + 15); // the balancer, 2026-11-22
     expect(lost(serf)).toBe(plain);
   });
 

@@ -187,8 +187,8 @@ export function apply(this: World, c: Command): void {
           return;
         }
         if (def.morphs?.includes(c.type)) {
-          // Turning into another building (Isdaris): one at a time, nothing else queued.
-          if (b.queue.length) continue;
+          // Turning into another building: one at a time, nothing else queued; the Alchimisterie's behind what it makes.
+          if (b.queue.length && !(def.queuesMorph && !b.queue.includes(c.type) && b.queue.length < 5)) continue;
           const lack = this.lacks(c.player, c.type);
           if (lack) return void this.say(c.player, lack);
           const into = DEFS[c.type] as BuildingDef;
@@ -342,9 +342,16 @@ export function apply(this: World, c: Command): void {
       if (b && c.name === 'envol') return void this.takeOff(b);
       if (b && (c.name === 'deraciner' || c.name === 'redeploiement')) return void this.uproot(b, c.name);
       if (b && c.name === 'refuge') {
-        // Z Refuge: the drones round the Intelligence go in, as many as it holds (the rest are told it is full).
+        // Z Refuge: the workers round the shelter go in, the nearest first, only as many as there are seats free (those
+        // already on their way hold theirs); the others keep to their work.
         const r = toFp(ABILITIES.refuge.radius!);
-        for (const u of this.entities.values()) if (u.owner === b.owner && !u.inside && u.hp > 0 && this.boards(u, b) && this.gap(u, b) <= r) this.setOrder(u, { kind: 'enter', target: b.id });
+        let free = this.room(b) - this.load(b);
+        for (const u of this.entities.values()) if (u.order?.kind === 'enter' && u.order.target === b.id && !u.inside) free--;
+        const near = [...this.entities.values()]
+          .filter((u) => u.owner === b.owner && !u.inside && u.hp > 0 && !(u.order?.kind === 'enter' && u.order.target === b.id) && this.boards(u, b) && this.gap(u, b) <= r)
+          .sort((u, v) => this.gap(u, b) - this.gap(v, b) || u.id - v.id);
+        for (const u of near.slice(0, Math.max(0, free))) this.setOrder(u, { kind: 'enter', target: b.id });
+        if (near.length > free) this.say(c.player, `${b.def.name} : plein.`);
         return;
       }
       if (b && c.name === 'bouclierplasma') {

@@ -10,14 +10,9 @@ const run = (w: World, s: number) => {
 };
 
 describe('Human abilities (notice 1.2-1)', () => {
-  it("the Belluaire's Coup circulaire hits every enemy around; Camouflage hides it from enemies", () => {
+  it("the Belluaire's Camouflage hides it from enemies (its Coup circulaire is gone: the balancer, 2026-11-22)", () => {
     const w = new World(createMap());
-    const b = w.spawn('belluaire', 0, ...at(40, 60));
-    const foes = [w.spawn('archer', 1, ...at(41, 60)), w.spawn('archer', 1, ...at(39, 60))];
-    const far = w.spawn('archer', 1, ...at(46, 60));
-    w.step([{ player: 0, kind: 'ability', ids: [b.id], name: 'coupcirculaire' }]);
-    expect(foes.every((f) => f.shield < f.maxShield)).toBe(true);
-    expect(far.shield).toBe(far.maxShield);
+    for (const x of [41, 39, 46]) w.spawn('archer', 1, ...at(x, 60)); // the enemy's eyes
     const c = w.spawn('belluaire', 0, ...at(44, 66));
     run(w, 0.1);
     expect(w.sees(1, c)).toBe(true);
@@ -41,17 +36,17 @@ describe('Human abilities (notice 1.2-1)', () => {
     expect(foe.poison > 0 || foe.hp < foe.maxHp).toBe(true);
   });
 
-  it('Régénérant: the ally takes no damage, then is left at 1 hp', () => {
+  it('Régénérant: the ally takes 5 % of the damage (the balancer, 2026-11-22), then is left at 1 hp', () => {
     const w = new World(createMap());
     w.players[0].upgrades.regenerant = 1;
     const a = Object.assign(w.spawn('alchimiste', 0, ...at(40, 60)), { mana: 1 << 30 });
     const ally = w.spawn('legionnaire', 0, ...at(41, 60));
     w.step([{ player: 0, kind: 'ability', ids: [a.id], name: 'regenerant', x: ally.x, y: ally.y }]);
     run(w, 0.2);
-    expect(ally.invuln).toBeGreaterThan(0);
+    expect(ally.ferveur).toBeGreaterThan(0);
     w.spawn('archer', 1, ...at(44, 60));
     run(w, ABILITIES.regenerant.duration - 1);
-    expect(ally.hp).toBe(ally.maxHp);
+    expect(ally.hp).toBeGreaterThan(ally.maxHp / 2);
     run(w, 1.5);
     expect(ally.hp).toBe(1);
   });
@@ -89,8 +84,9 @@ describe('Human abilities (notice 1.2-1)', () => {
   it('the Grand Conseil is unique and speeds production up', () => {
     const w = new World(createMap());
     const c = w.spawn('conseil', 0, 20 * FP, 20 * FP);
-    expect(w.lacks(0, 'grandconseil')).toBe('Requiert : Créaturium, Métallurgie, Alchimisterie');
-    for (const [k, type] of ['creaturium', 'metallurgie', 'alchimisterie'].entries()) w.spawn(type, 0, (30 + 5 * k) * FP, 20 * FP);
+    // The balancer (2026-11-22): a Caserne, and the Forge or the Alchimisterie.
+    expect(w.lacks(0, 'grandconseil')).toBe('Requiert : 1 parmi Forge, Alchimisterie');
+    for (const [k, type] of ['caserne', 'forge'].entries()) w.spawn(type, 0, (30 + 5 * k) * FP, 20 * FP);
     w.players[0].minerals = w.players[0].energy = 2000;
     w.step([{ player: 0, kind: 'train', ids: [c.id], type: 'grandconseil' }]);
     expect(w.lacks(0, 'grandconseil')).toBe('Un seul par joueur.');

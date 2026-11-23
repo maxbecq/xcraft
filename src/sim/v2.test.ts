@@ -34,22 +34,14 @@ describe('Forge upgrades', () => {
     expect(w.researchable(0, 'ranged2')).toBe(true);
   });
 
-  it('needs a second Caserne for level 2, and a Tour alchimistique too for level 3', () => {
+  it('level 2 needs nothing more (the balancer, 2026-11-22: no second Caserne), level 3 a Tour alchimistique', () => {
     const w = new World(createMap());
     const forge = w.spawn('forge', 0, 40 * FP, 60 * FP);
     w.spawn('caserne', 0, 30 * FP, 60 * FP);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
     p.upgrades.armor = 1;
-    expect(w.lacks(0, 'armor1')).toBe('');
-    expect(w.lacks(0, 'armor2')).toBe('Requiert : 2 × Caserne');
-    w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
-    expect(forge.queue).toHaveLength(0);
-    expect(w.events[0].text).toBe('Requiert : 2 × Caserne');
-    const site = w.spawn('caserne', 0, 30 * FP, 64 * FP);
-    site.buildLeft = 10; // unfinished buildings do not count
-    expect(w.lacks(0, 'armor2')).not.toBe('');
-    site.buildLeft = 0;
+    expect(w.lacks(0, 'armor2')).toBe('');
     w.step([{ player: 0, kind: 'train', ids: [forge.id], type: 'armor2' }]);
     expect(forge.queue).toEqual(['armor2']);
     p.upgrades.armor = 2;
@@ -72,62 +64,22 @@ describe('Forge upgrades', () => {
     expect(hit('legionnaire', 'serf', () => {})).toBe(20);
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.melee = 2))).toBe(24); // +10 % per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[0].upgrades.ranged = 3))).toBe(20); // wrong line
-    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(17); // fiche 2010: 15 against BL, +10 % per level
+    expect(hit('auxiliaire', 'serf', (w) => (w.players[0].upgrades.ranged = 1))).toBe(16); // fiche 2010: 15 against BL; the balancer, 2026-11-22: +1 per level
     expect(hit('legionnaire', 'serf', (w) => (w.players[1].upgrades.armor = 3))).toBe(17);
   });
 });
 
 describe('abilities', () => {
-  it('stimulant costs 10 hp, makes the auxiliaire faster, then wears off and recharges', () => {
-    const w = new World(createMap());
-    const a = w.spawn('auxiliaire', 0, ...at(40, 60));
-    const speed = a.speed;
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-    expect(a.hp).toBe(70);
-    expect(a.speed).toBeGreaterThan(speed);
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]); // on cooldown
-    expect(a.hp).toBe(70);
-    run(w, 9);
-    expect(a.speed).toBe(speed);
-    run(w, 7);
-    w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-    expect(a.hp).toBe(60);
-  });
-
-  it('stimulated auxiliaires attack faster', () => {
-    const shots = (stim: boolean) => {
-      const w = new World(createMap());
-      const a = w.spawn('auxiliaire', 0, ...at(40, 60));
-      const t = w.spawn('conseil', 1, 43 * FP, 58 * FP);
-      if (stim) w.step([{ player: 0, kind: 'ability', ids: [a.id] }]);
-      w.step([{ player: 0, kind: 'attack', ids: [a.id], x: t.x, y: t.y, target: t.id }]);
-      const hp = t.hp;
-      run(w, 5);
-      return hp - t.hp;
-    };
-    expect(shots(true)).toBeGreaterThan(shots(false) * 1.3);
-  });
-
-  it('charge doubles the légionnaire’s speed for a moment', () => {
-    const w = new World(createMap());
-    const l = w.spawn('legionnaire', 0, ...at(40, 60));
-    const speed = l.speed;
-    w.step([{ player: 0, kind: 'ability', ids: [l.id] }]);
-    expect(l.speed).toBeGreaterThanOrEqual(2 * speed - 1);
-    run(w, 4);
-    expect(l.speed).toBe(speed);
-  });
-
-  it('peau de roc protects the most wounded ally in range', () => {
+  it('peau de roc protects the ally it is aimed at (the balancer, 2026-11-22), +5 armour', () => {
     const w = new World(createMap());
     const medic = w.spawn('soigneur', 0, ...at(40, 60));
     const fine = w.spawn('auxiliaire', 0, ...at(41, 60));
     const hurt = w.spawn('auxiliaire', 0, ...at(40, 61));
     hurt.hp = 30;
-    w.spawn('auxiliaire', 0, ...at(50, 60)).hp = 10; // out of range
-    w.step([{ player: 0, kind: 'ability', ids: [medic.id] }]);
+    w.step([{ player: 0, kind: 'ability', ids: [medic.id], name: 'peauderoc', x: hurt.x, y: hurt.y }]);
     expect(hurt.skin).toBeGreaterThan(0);
     expect(fine.skin).toBe(0);
+    expect(w.armorBonus(hurt) - w.armorBonus(fine)).toBe(5);
     // A légionnaire's 20 damage drops to 15.
     w.remove(medic); // no healing during the measure
     const foe = w.spawn('legionnaire', 1, ...at(39, 61));

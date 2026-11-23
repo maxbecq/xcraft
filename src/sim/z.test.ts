@@ -147,7 +147,8 @@ describe('Z', () => {
     const p = w.players[0];
     p.minerals = 5000;
     p.energy = 5000;
-    const k = w.spawn('centrek', 0, 20 * FP, 20 * FP);
+    // On the Intelligence's creep (4x4 since the balancer, 2026-11-22: its middle half a tile nearer the corner).
+    const k = w.spawn('centrek', 0, 19 * FP, 19 * FP);
     const quad = w.spawn('quadripode', 0, 50 * FP, 50 * FP);
     const ability = (name: string, x: number, y: number) => w.step([{ player: 0, kind: 'ability', ids: [k.id], name, x, y }]);
     ability('kitinvisibilite', quad.x, quad.y);

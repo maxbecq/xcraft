@@ -70,8 +70,11 @@ describe('audit gaps', () => {
     const near = w.spawn('archer', 1, cuve.x + 2 * FP, cuve.y);
     const far = w.spawn('archer', 1, cuve.x + 8 * FP, cuve.y);
     const [nearHp, farHp] = [near.hp + near.shield, far.hp + far.shield];
+    // The 2 s fuse: the guns quiet meanwhile, to count the blast alone.
+    cuve.frozen = near.frozen = far.frozen = ticks(60);
+    far.held = ticks(60);
     w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'explosioncuve' }]);
-    run(w, 1);
+    run(w, 2.2); // 2 s between the order and the blast (the balancer, 2026-11-22)
     expect(w.entities.has(cuve.id)).toBe(false);
     expect(w.entities.has(near.id) ? nearHp - near.hp - near.shield : nearHp).toBeGreaterThanOrEqual(Math.min(nearHp, 356));
     expect(far.hp + far.shield).toBe(farHp);
@@ -85,50 +88,24 @@ describe('audit gaps', () => {
     const b = w.spawn('auxiliaire', 0, 33 * FP, 31 * FP);
     w.step([{ player: 0, kind: 'ability', ids: [alch.id], name: 'regenerant', x: a.x, y: (a.y + b.y) / 2 }]);
     run(w, 1);
-    expect(a.invuln).toBeGreaterThan(0);
-    expect(b.invuln).toBeGreaterThan(0);
+    expect(a.ferveur).toBeGreaterThan(0);
+    expect(b.ferveur).toBeGreaterThan(0);
   });
 
-  it('the Allosaure feasts on a corpse nearby to heal (notice), half its health (mod)', () => {
+  it('the Allosaure feasts on a fresh body it is aimed at (notice): +75 HP, then 1.5 s still (the balancer, 2026-11-22)', () => {
     const w = createMatch(['humains', 'isdaris']);
     const allo = w.spawn('allosaure', 0, 30 * FP, 30 * FP);
     allo.hp = 100;
-    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin', x: allo.x, y: allo.y }]);
     expect(allo.hp).toBe(100); // no corpse
     const prey = w.spawn('archer', 1, 32 * FP, 30 * FP);
     prey.hp = 0;
     w.step([]);
     expect(w.corpses.length).toBeGreaterThan(0);
-    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin' }]);
-    expect(allo.hp).toBe(100 + Math.floor(allo.maxHp / 2));
-    expect(allo.abilityCd).toBeGreaterThan(0);
-  });
-
-  it('the Char Pégase lays invisible chemical mines from a stock of 5 that blow up under enemy walkers', () => {
-    const w = createMatch(['humains', 'isdaris']);
-    const tank = w.spawn('pegase', 0, 30 * FP, 30 * FP);
-    expect(tank.charges).toBe(5);
-    w.step([{ player: 0, kind: 'ability', ids: [tank.id], name: 'posermine' }]);
-    const [mine] = of(w, 0, 'minechimique');
-    expect(mine).toBeDefined();
-    expect(tank.charges).toBe(4);
-    expect(tank.abilityCd).toBe(0); // the take-off stays ready
-    expect(w.sees(1, mine)).toBe(false);
-    // Each new mine costs 35 minerals and 20 energy (mod): none without them, one with them.
-    const p = w.players[0];
-    [p.minerals, p.energy] = [0, 0];
-    run(w, 12);
-    expect(tank.charges).toBe(4);
-    [p.minerals, p.energy] = [100, 100];
-    run(w, 12);
-    expect(tank.charges).toBe(5);
-    expect([p.minerals, p.energy]).toEqual([65, 80]);
-    const foe = w.spawn('creature', 1, mine.x + 4 * FP, mine.y);
-    const hp = foe.hp + foe.shield;
-    w.step([{ player: 1, kind: 'move', ids: [foe.id], x: mine.x - 4 * FP, y: mine.y }]);
-    run(w, 6);
-    expect(w.entities.has(mine.id)).toBe(false);
-    expect(w.entities.has(foe.id) ? hp - foe.hp - foe.shield : hp).toBeGreaterThanOrEqual(Math.min(hp, 100));
+    w.step([{ player: 0, kind: 'ability', ids: [allo.id], name: 'festin', x: prey.x, y: prey.y }]);
+    for (let i = 0; i < 20 && allo.hp === 100; i++) w.step([]);
+    expect(allo.hp).toBe(175);
+    expect(allo.held).toBeGreaterThan(0);
   });
 
   it('the Assassin dodges a third of the attacks, near or far (Danse du soldat, 2010 sheet)', () => {
