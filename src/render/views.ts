@@ -29,6 +29,8 @@ export interface View {
   /** Hit flash: hit points (and shield) last seen, and while flashing, the materials to put back. */
   hp?: number;
   flash?: { left: number; saved: [Mesh, Material | Material[]][] };
+  /** A Z socle under its invisibility kit: drawn see-through; its own materials, to put back. */
+  cloak?: [Mesh, Material | Material[]][];
   /** An enemy building out of sight: drawn grey, frozen as last seen; its own materials, to put back. */
   ghost?: [Mesh, Material | Material[]][];
   /** Its lights and glows, hidden while a ghost. */
@@ -206,6 +208,38 @@ export function fromGhost(v: View): void {
 }
 
 /** Ends a hit flash: the unit's own materials go back on. */
+/** See-through copies of materials, one per material (shared by every cloaked unit of a side). */
+const cloaked = new WeakMap<Material, Material>();
+function cloakOf(m: Material): Material {
+  let c = cloaked.get(m);
+  if (!c) {
+    c = m.clone();
+    c.transparent = true;
+    c.opacity = 0.28;
+    c.depthWrite = false;
+    cloaked.set(m, c);
+  }
+  return c;
+}
+
+/** A unit drawn see-through (invisible to the enemy, still shown to its side and to a detector) or back to itself. */
+export function setCloak(v: View, on: boolean): void {
+  if (on === !!v.cloak) return;
+  if (!on) {
+    for (const [o, m] of v.cloak!) o.material = m;
+    v.cloak = undefined;
+    return;
+  }
+  // Any hit flash first, or it would put back the solid materials over the see-through ones.
+  unflash(v);
+  v.cloak = [];
+  v.model.traverse((o) => {
+    if (!(o instanceof Mesh) || !o.visible) return;
+    v.cloak!.push([o, o.material]);
+    o.material = Array.isArray(o.material) ? o.material.map(cloakOf) : cloakOf(o.material);
+  });
+}
+
 export function unflash(v: View): void {
   for (const [o, m] of v.flash?.saved ?? []) o.material = m;
   v.flash = undefined;

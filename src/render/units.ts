@@ -12,7 +12,7 @@ import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
-import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
+import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
 
@@ -221,6 +221,11 @@ export class EntityRenderer {
   /** Height of the top of a view's model in the world (its full height, measured once, above where it stands);
    * undefined while it has no view yet. The overlay hangs a building's health bar just above it. */
   /** Where a Z Plate-forme's welding torch ends (world), for its sparks; none if its model has no cut-out arm. */
+  /** Where a Déchiqueteur's saw is (world): its sparks spray from there; none if it shows none. */
+  saw(id: number): Vector3 | undefined {
+    return this.views.get(id)?.weapon?.saw?.getWorldPosition(new Vector3());
+  }
+
   /** Where a unit's or building's weapon module has its muzzle (world); none if it shows none. */
   muzzle(id: number): Vector3 | undefined {
     const w = this.views.get(id)?.weapon;
@@ -455,6 +460,7 @@ export class EntityRenderer {
         o.add(strut);
       }
     }
+    o.userData.yaw0 = o.rotation.y;
     v.weapon = { name, o, arm, saw, reach, mod, tip, sawR: sawW };
   }
 
@@ -718,6 +724,8 @@ export class EntityRenderer {
       }
       v.hp = hp;
       if (v.flash && (v.flash.left -= dt) <= 0) unflash(v);
+      // Kit d'invisibilité (the user's pick, 2026-11-23): see-through for its side and for an enemy detecting it.
+      setCloak(v, !!(e.support & KIT.invisibilite));
       if (v.emerge) {
         // Off the deck: a ramp down from where it was built to where the simulation put it.
         v.emerge.age += dt;
@@ -767,10 +775,14 @@ export class EntityRenderer {
       } else if (v.weapon?.pivot) {
         this.ringFight(v, e, world, dt);
       }
+      if (v.weapon && !v.weapon.pivot) this.aimWeapon(v, e, world, foe, dt);
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
       const wanted = weaponModule(e, world);
-      if (wanted !== (v.weapon?.name ?? '')) this.mount(v, e, wanted);
+      if (wanted !== (v.weapon?.name ?? '')) {
+        setCloak(v, false); // the new module is cloaked with the rest next frame
+        this.mount(v, e, wanted);
+      }
       const dock = v.dock;
       if (dock) {
         const addons = hosted.get(e.id) ?? [];
@@ -1101,6 +1113,26 @@ export class EntityRenderer {
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
     body.position.z += (-kick - body.position.z) * 0.5;
     if (v.limbs.insect?.[0]?.ik) walk(v, dt, moving, this.inView(v.root.position.x, v.root.position.z));
+  }
+
+  /**
+   * A Z weapon module turns on its socle's back (or its building's mount) to what it shoots, so the shot leaves its
+   * muzzle in line: towards its last shot's target, or the foe it is fighting; back to the front after a while. Render only.
+   */
+  private aimWeapon(v: View, e: Entity, world: World, foe: Entity | undefined, dt: number): void {
+    const w = v.weapon!;
+    const o = w.o;
+    const now = performance.now();
+    for (const s of world.shots) if (s.id === e.id) [w.aim, o.userData.aimAt] = [[s.x2 / FP, s.y2 / FP], now];
+    if (foe && e.cooldown > 0) [w.aim, o.userData.aimAt] = [[foe.x / FP, foe.y / FP], now];
+    let want = 0;
+    if (w.aim && now - (o.userData.aimAt ?? 0) < 2500 && o.parent) {
+      const p = o.parent.worldToLocal(new Vector3(w.aim[0], o.getWorldPosition(new Vector3()).y, w.aim[1]));
+      want = Math.atan2(p.x - o.position.x, p.z - o.position.z);
+    }
+    const yaw0 = (o.userData.yaw0 as number | undefined) ?? 0;
+    const d = Math.atan2(Math.sin(want - (o.rotation.y - yaw0)), Math.cos(want - (o.rotation.y - yaw0)));
+    o.rotation.y += d * Math.min(1, dt * 8);
   }
 
   /** A building's Déchiqueteur: its ring turns to its last foe, the saw spins and comes down as it strikes. */

@@ -17,8 +17,6 @@ const MAX_ROCKS = 480;
  * badges, is the one kept for the spells with no look of their own yet). */
 const PARAMS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 export const FX_STYLE = PARAMS.get('fx') || 'c';
-/** Proposal stage (Z lasting spells, 2026-11-23): ?sorts=1|2 shows the two ideas of each. */
-const SPELL_IDEA = PARAMS.get('sorts') ?? '';
 /** Who holds a unit where it stands, by its id, as the effects saw it cast (render only): a Napalm burns, an Impulsion
  * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
 export const HELD_BY = new Map<number, 'napalm' | 'impulsion'>();
@@ -45,8 +43,6 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   roquette: { pace: 0.06, arc: 0.04, size: 0.3, smoke: 30, color: 0xffa040 },
   obusz: { pace: 0.09, arc: 0.3, size: 0.4, smoke: 16, color: Z_GREEN_LOB },
 };
-/** Proposal stage (Z, 2026-11-23): ?z=1 shows each Z kit's own shot, until the user picks; the camp tracers otherwise. */
-const Z_STYLE = PARAMS.get('z') === '1';
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
 const SHOT_COLORS: Record<string, number> = { humains: 0xffa040, isdaris: 0x5ae0ff, z: 0x8cff5a, dieux: 0xffe28a };
@@ -192,7 +188,7 @@ export class Effects {
       if (shooter?.kit === 'flammes' && s.kind === 'ranged') {
         let to = this.at(s.x2, s.y2, 0.4 + (s.air2 ? FLY_HEIGHT : 0));
         const from = this.at(s.x1, s.y1, 0.55 + (s.air1 ? FLY_HEIGHT : 0));
-        if (Z_STYLE) {
+        if (FX_STYLE !== 'avant') {
           // The jet runs its whole reach from the shooter's edge, through the target and on (it burns all on the line).
           const reach = shooter.radius / FP + BALANCE.weapons.flammes.range;
           const flat = to.clone().sub(from).setY(0);
@@ -447,7 +443,7 @@ export class Effects {
     }
     this.rocks.count = rocks;
     this.rocks.instanceMatrix.needsUpdate = true;
-    if (SPELL_IDEA === '1' || SPELL_IDEA === '2') this.zLasting(world, sees, alpha, dt, SPELL_IDEA === '1');
+    this.zSpells(world, sees, alpha, dt);
     // Explosif toxique: a low green fog over the whole zone.
     for (const c of world.clouds) {
       if (c.hits <= 0) continue;
@@ -474,114 +470,78 @@ export class Effects {
   }
 
 
-  /** Proposal stage: the Z's lasting spells, two ideas each (one: ?sorts=1, two: ?sorts=2). Render only. */
-  private zLasting(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number, one: boolean): void {
+  /**
+   * The Z's lasting spells drawn their own way (the user's picks, 2026-11-23): Gravité alourdie's rings crushing down
+   * on a slowed enemy, the Nuage de nanites' swarm round the machines it covers, a frozen grid turning round a building
+   * under Gel électronique, sound rings from a Balise de vacarme, magnetic rings orbiting what an Impulsion holds, a link
+   * of light from the Centre K to what its Canon IEM took (its green shell: render/marks.ts), sparkles on an invisible
+   * socle (its see-through body: render/units.ts), welding sparks on a self-repairing one, a radar sweep over a
+   * Balise de révélation. Render only.
+   */
+  private zSpells(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number): void {
     const t = performance.now() / 1000;
-    const chance = (rate: number) => Math.random() < dt * rate;
-    const cones = [...world.entities.values()].filter((c) => c.cone > 0 && c.hp > 0);
+    const chance = (rate: number) => Math.random() < dt * rate * this.density;
+    const cones = world.cones > 0 ? [...world.entities.values()].filter((c) => c.cone > 0 && c.hp > 0) : [];
     const R = BALANCE.abilities.cone.radius * FP;
     for (const e of world.entities.values()) {
-      if (e.inside || e.hp <= 0 || !sees(e)) continue;
+      const z = e.heavy > 0 || e.frozen > 0 || e.type === 'vacarme' || e.seizedLeft > 0 || HELD_BY.get(e.id) === 'impulsion' || (e.support & (KIT.invisibilite | KIT.reparateur)) !== 0 || cones.length > 0;
+      if (!z || e.inside || e.hp <= 0 || !sees(e)) continue;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
-      const z = (e.py + (e.y - e.py) * alpha) / FP;
-      const foot = new Vector3(x, heightAt(this.map, x, z) + (soars(e) ? FLY_HEIGHT : 0), z);
+      const zz = (e.py + (e.y - e.py) * alpha) / FP;
+      const foot = new Vector3(x, heightAt(this.map, x, zz) + (soars(e) ? FLY_HEIGHT : 0), zz);
       const building = e.def.kind === 'building';
       const r = building ? (e.def as { size: number }).size * 0.5 : e.radius / FP;
       const tall = building ? 1.2 + r * 0.6 : 0.9 + r * 0.8;
       const seed = e.id * 7.31;
       const onBody = (a: number, h: number, out = 0.05) => foot.clone().add(new Vector3(Math.cos(a) * (r + out), h * tall, Math.sin(a) * (r + out)));
-      // Gravité alourdie, on a slowed enemy: weights of violet light pressing down (1) or rings crushing down on it (2).
-      if (e.heavy > 0) {
-        if (one) { if (chance(25)) this.spawn(this.tex.glow, 0xa07aff, onBody(Math.random() * 6.28, 1.4, -r * 0.5), new Vector3(0, -2.5, 0), 0.5, 0.24, 0.12, 1, 0, true); }
-        else if (Math.floor(t / 0.35 + seed) !== Math.floor((t - dt) / 0.35 + seed)) for (let i = 0; i < 16; i++) this.spawn(this.tex.glow, 0xb89aff, onBody((i / 16) * 6.28, 1.3, 0.2), new Vector3(0, -2.4, 0), 0.5, 0.16, 0.08, 1, 0, true);
+      // Gravité alourdie: rings of violet light crushing down on a slowed enemy.
+      if (e.heavy > 0 && Math.floor(t / 0.35 + seed) !== Math.floor((t - dt) / 0.35 + seed)) {
+        for (let i = 0; i < 16; i++) this.spawn(this.tex.glow, 0xb89aff, onBody((i / 16) * 6.28, 1.3, 0.2), new Vector3(0, -2.4, 0), 0.5, 0.16, 0.08, 1, 0, true);
       }
-      // Nuage de nanites, on an allied machine near a casting Accumulateur: a swarm of nanites (1) or a cage of light (2).
-      if (e.def.kind === 'unit' && (e.def as { mechanical?: boolean }).mechanical && cones.some((c) => !world.hostile(c.owner, e.owner) && Math.hypot(c.x - e.x, c.y - e.y) <= R)) {
-        if (one) for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0x9affb0, onBody(t * (2 + i * 0.3) + i, 0.2 + ((i * 0.31 + t * 0.2) % 0.8), 0.15), 0.07, 1, dt, true);
-        else for (let h = 0; h < 3; h++) for (let i = 0; i < 10; i++) this.hold(this.tex.glow, 0x5affb0, onBody((i / 10) * 6.28 + h * 0.3 + t * 0.4, 0.15 + h * 0.35, 0.18), 0.06, 0.8, dt, true);
+      // Nuage de nanites: a swarm of nanites round each allied machine it covers.
+      if (cones.length && e.def.kind === 'unit' && (e.def as { mechanical?: boolean }).mechanical && cones.some((c) => !world.hostile(c.owner, e.owner) && Math.hypot(c.x - e.x, c.y - e.y) <= R)) {
+        for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0x9affb0, onBody(t * (2 + i * 0.3) + i, 0.2 + ((i * 0.31 + t * 0.2) % 0.8), 0.15), 0.07, 1, dt, true);
       }
-      // Gel électronique, on a frozen building: ice-blue crackles and frost (1) or a frozen grid turning round it (2).
+      // Gel électronique: a frozen grid turning round the building.
       if (building && e.frozen > 0) {
-        if (one) {
-          if (chance(14)) this.spawn(this.tex.glow, 0x9ad8ff, onBody(Math.random() * 6.28, Math.random(), -0.2), rnd(0.4), 0.25, 0.25, 0.05, 1, 0, true);
-          if (chance(6)) this.spawn(this.tex.glow, 0xffffff, onBody(Math.random() * 6.28, 1, -r * Math.random()), new Vector3(0, -0.6, 0), 1.2, 0.08, 0.05, 1, 0, true);
-        } else for (let k = 0; k < 8; k++) {
+        for (let k = 0; k < 8; k++) {
           const a = t * 0.5 + (k * Math.PI) / 2;
           const h = 0.15 + ((t * 0.3 + (k >> 2) * 0.45) % 0.9);
           this.streaks.spawn(0x7ad0ff, onBody(a, h, 0.25), onBody(a + Math.PI / 2, h, 0.25), 0, dt * 1.5, 0, 0.09, 1);
         }
       }
-      // Balise de vacarme: sound rings from the beacon (1); jagged bars over the deafened (2).
-      if (e.type === 'vacarme') {
+      // Balise de vacarme: rings of sound spreading from the beacon to its reach.
+      if (e.type === 'vacarme' && Math.floor(t / 0.7 + seed) !== Math.floor((t - dt) / 0.7 + seed)) {
         const RV = BALANCE.abilities.vacarme.radius;
-        if (one && Math.floor(t / 0.7 + seed) !== Math.floor((t - dt) / 0.7 + seed)) {
-          for (let i = 0; i < 32; i++) {
-            const a = (i / 32) * 6.28;
-            this.spawn(this.tex.glow, 0xd8ff8a, foot.clone().setY(foot.y + 0.3), new Vector3(Math.cos(a) * RV / 0.9, 0, Math.sin(a) * RV / 0.9), 0.9, 0.14, 0.1, 0.8, 0, true);
-          }
+        for (let i = 0; i < 32; i++) {
+          const a = (i / 32) * 6.28;
+          this.spawn(this.tex.glow, 0xd8ff8a, foot.clone().setY(foot.y + 0.3), new Vector3((Math.cos(a) * RV) / 0.9, 0, (Math.sin(a) * RV) / 0.9), 0.9, 0.14, 0.1, 0.8, 0, true);
         }
       }
-      if (!one && !building && e.frozen > 0 && chance(20)) {
-        const top = foot.clone().setY(foot.y + tall + 0.2);
-        let a = top.clone().add(new Vector3(-0.2, 0, 0));
-        for (let k = 1; k <= 4; k++) {
-          const b = top.clone().add(new Vector3(-0.2 + k * 0.1, (k % 2) * 0.15, 0));
-          this.streaks.spawn(0xd8ff8a, a, b, 0, 0.25, 0, 0.06, 1);
-          a = b;
-        }
-      }
-      // Impulsion magnétique: little electric arcs crackling over it (1), or magnetic rings orbiting it (2).
-      if (HELD_BY.get(e.id) === 'impulsion') {
-        if (one) {
-          if (chance(40)) {
-            let a = onBody(Math.random() * 6.28, Math.random(), 0.05);
-            for (let k = 0; k < 3; k++) {
-              const b = a.clone().add(rnd(0.18));
-              this.streaks.spawn(0x9affe8, a, b, 0, 0.12, 0, 0.06, 1);
-              a = b;
-            }
-          }
-        } else for (let k = 0; k < 2; k++) for (let i = 0; i < 12; i++) {
+      // Impulsion magnétique: two magnetic rings orbiting what it holds.
+      if (HELD_BY.get(e.id) === 'impulsion' && e.held > 0) {
+        for (let k = 0; k < 2; k++) for (let i = 0; i < 12; i++) {
           const a = (i / 12) * 6.28 + t * (k ? -2 : 2);
           this.hold(this.tex.glow, 0x6affd8, foot.clone().add(new Vector3(Math.cos(a) * (r + 0.25), tall * (0.35 + k * 0.35) + Math.sin(a) * 0.15 * (k ? 1 : -1), Math.sin(a) * (r + 0.25))), 0.06, 0.9, dt, true);
         }
       }
-      // Canon IEM, on a seized unit: a link of green light to the Centre K (1), a crown of sparks over it (2).
+      // Canon IEM: a link of green light from the Centre K to what it took.
       if (e.seizedLeft > 0) {
         const k = world.entities.get(e.seizedBy);
-        if (one && k) {
-          if (chance(20)) this.streaks.spawn(0x8cff5a, this.at(k.x, k.y, 2), foot.clone().setY(foot.y + tall), 0, 0.15, 0, 0.05, 0.8);
-        } else if (!one) for (let i = 0; i < 8; i++) this.hold(this.tex.glow, 0x8cff5a, onBody(t * 1.5 + (i * 6.28) / 8, 1.1, -r * 0.4), 0.14, 1, dt, true);
+        if (k && chance(20)) this.streaks.spawn(0x8cff5a, this.at(k.x, k.y, 2), foot.clone().setY(foot.y + tall), 0, 0.15, 0, 0.05, 0.8);
       }
-      // Kit d'invisibilité, seen by its own side: green sparkles (1) or scan lines climbing it (2).
-      if (e.support & KIT.invisibilite) {
-        if (one) { if (chance(40)) this.spawn(this.tex.glow, 0xb8ffc8, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.22, 0.04, 1, 0, true); }
-        else {
-          for (const off of [0, 0.33, 0.66]) {
-            const h = (t * 0.6 + seed + off) % 1;
-            this.streaks.spawn(0x8cff5a, onBody(-0.8, h, 0.05), onBody(0.8, h, 0.05), 0, dt * 1.5, 0, 0.06, 1);
-            this.streaks.spawn(0x8cff5a, onBody(2.3, h, 0.05), onBody(3.9, h, 0.05), 0, dt * 1.5, 0, 0.06, 1);
-          }
-        }
-      }
-      // Kit auto-réparateur: welding sparks now and then (1), green glints rising (2).
-      if (e.support & KIT.reparateur) {
-        if (one) { if (chance(8)) for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, i % 2 ? 0xffffff : 0x9affd0, onBody(seed + t, 0.6), rnd(1.5).setY(1), 0.3, 0.09, 0.02, 1, 9, true); }
-        else if (chance(14)) this.spawn(this.tex.glow, 0x9affd0, onBody(Math.random() * 6.28, 0.2), new Vector3(0, 0.9, 0), 0.8, 0.2, 0.05, 1, 0, true);
-      }
+      // Kit d'invisibilité: green sparkles flickering over the see-through socle's outline.
+      if (e.support & KIT.invisibilite && chance(40)) this.spawn(this.tex.glow, 0xb8ffc8, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.22, 0.04, 1, 0, true);
+      // Kit auto-réparateur: welding sparks now and then.
+      if (e.support & KIT.reparateur && chance(8)) for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, i % 2 ? 0xffffff : 0x9affd0, onBody(seed + t, 0.6), rnd(1.5).setY(1), 0.3, 0.09, 0.02, 1, 9, true);
     }
-    // Balise de révélation (a Z player's scans): a radar sweep (1), a beam and a pulse at its reach (2).
+    // Balise de révélation (a Z player's scans): a radar sweep turning over the zone.
     for (const sc of world.scans) {
       if (sc.left <= 0 || world.players[sc.owner]?.faction !== 'z') continue;
       const p = this.at(sc.x, sc.y, 0.1);
       const Rs = sc.radius ?? 4;
-      if (one) {
-        const a = t * 1.8;
-        this.streaks.spawn(0x8cff5a, p, p.clone().add(new Vector3(Math.cos(a) * Rs, 0, Math.sin(a) * Rs)), 0, 0.35, 0, 0.12, 0.6);
-      } else {
-        if (chance(40)) this.spawn(this.tex.glow, 0x8cff5a, p.clone().add(rnd(0.15)).setY(p.y + Math.random() * 4), new Vector3(0, 1.5, 0), 0.8, 0.7, 0.4, 0.6, 0, true);
-        if (Math.floor(t / 1.2) !== Math.floor((t - dt) / 1.2)) this.ring(p, 0x8cff5a, Rs, 1);
-      }
+      const a = t * 1.8;
+      this.streaks.spawn(0x8cff5a, p, p.clone().add(new Vector3(Math.cos(a) * Rs, 0, Math.sin(a) * Rs)), 0, 0.35, 0, 0.12, 0.6);
     }
   }
 
@@ -652,7 +612,7 @@ export class Effects {
     const ammo = s.type ? AMMO[s.type] : undefined;
     if (ammo && this.munition(ammo, s, from, to, world)) return;
     const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
-    if (z && Z_STYLE && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
+    if (z && FX_STYLE !== 'avant' && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
     if (s.kind === 'melee') {
       // A white flash where the blow lands and a spray of sparks.
       this.spawn(this.tex.glow, 0xfff4d8, to.clone(), new Vector3(), 0.12, 0.25, 0.55, 1, 0, true);
@@ -729,9 +689,8 @@ export class Effects {
       return true;
     }
     if (kit === 'dechiqueteur' || s.kind === 'melee') {
-      // Déchiqueteur: metal torn, white and orange sparks sprayed, a green flash.
+      // Déchiqueteur: a green flash as it bites (the sparks spray from the saw all the while it cuts: grind).
       this.spawn(this.tex.glow, Z_GREEN, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 0.9, 0, true);
-      for (let i = 0; i < 14; i++) this.spawn(this.tex.glow, i % 3 ? 0xffd27a : 0xffffff, to.clone(), rnd(3.5).setY(1 + Math.random() * 2.5), 0.35, 0.12, 0.02, 1, 9, true);
       return true;
     }
     this.flash(muzzle, Z_GREEN, kit === 'canonx04' ? 2 : 1);
@@ -901,6 +860,15 @@ export class Effects {
     mesh.renderOrder = 1;
     this.scene.add(mesh);
     this.decals.push({ mesh, age: 0, life });
+  }
+
+  /** A Z Déchiqueteur biting: white and orange sparks sprayed from where the saw meets its foe, a green glint; call every
+   * frame while it cuts. */
+  grind(p: Vector3, dt: number): void {
+    if (Math.random() < dt * 14) this.spawn(this.tex.glow, Z_GREEN, p.clone(), new Vector3(), 0.1, 0.25, 0.4, 0.8, 0, true);
+    for (let n = Math.floor(dt * 60) + (Math.random() < (dt * 60) % 1 ? 1 : 0); n > 0; n--) {
+      this.spawn(this.tex.glow, Math.random() < 0.6 ? 0xffd27a : 0xffffff, p.clone().add(rnd(0.05)), rnd(3).setY(1 + Math.random() * 2.2), 0.3, 0.1, 0.02, 1, 9, true);
+    }
   }
 
   /** Blue sparks where a jackhammer bites (mining, building); call every frame while it works. */

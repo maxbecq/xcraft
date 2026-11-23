@@ -1,7 +1,6 @@
 import { AdditiveBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, PlaneGeometry, type Scene, ShaderMaterial, Color } from 'three';
 import BALANCE from '../balance.json';
-import { FLY_HEIGHT, KIT } from '../data';
-import { HELD_BY } from './effects';
+import { FLY_HEIGHT } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -21,52 +20,32 @@ const INVULN = M('invuln', 0xfff6c0, true);
 const PHASED = M('dephasage', 0x6ae8ff, true);
 const CHARGED = M('courroux', 0x8ab8ff, true);
 const CAMO = M('camouflage', 0xe8f0ff, true);
-const CONE = M('cone', 0x5affd8, true);
 const STATUE = M('statue', 0xb0a898, true);
 const CHILL = M('gel', 0x9ad8ff, false);
-const HEAVY = M('gravite', 0xa07aff, false);
 const BLIND = M('amonra', 0xffd040, false);
 const CHARM = M('soumission', 0xff4ad0, false);
 const SWARM = M('nuee', 0x9a9a40, false);
-const FROZEN = M('gel', 0x7ad0ff, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
-const SEIZED = M('canoniem', 0x8cff5a, false);
-const IMPULSE = M('impulsion', 0x5ae0ff, false);
-const DEAFENED = M('vacarme', 0xd8ff8a, false);
-const NANITES = M('cone', 0x5affb0, true);
-const HIDDEN = M('kitinvisibilite', 0xb8ffc8, true);
-const MENDING = M('kitreparateur', 0x9affd0, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
  * stands in for it until it does. The Humans' spells drawn their own way (render/effects.ts, Effects.lasting) have none:
  * Peau de roc, Régénérant, Gaz euphorisants, the Belluaire's Camouflage, poison, Napalm, mines, the Réservoir's fuse,
- * the Cadavre réanimé.
+ * the Cadavre réanimé; nor the Z's (Effects.zSpells): Gravité alourdie, Nuage de nanites, Gel électronique, Balise de
+ * vacarme, Impulsion magnétique, Canon IEM, the invisibility and repair kits.
  */
-export function marksOf(e: Entity, world: World): Mark[] {
+export function marksOf(e: Entity): Mark[] {
   const out: Mark[] = [];
   if (e.charm > 0) out.push(CHARM);
-  if (e.frozen > 0) out.push(e.def.kind === 'building' ? FROZEN : DEAFENED);
-  if (e.seizedLeft > 0) out.push(SEIZED);
-  if (HELD_BY.get(e.id) === 'impulsion' && e.held > 0) out.push(IMPULSE);
-  // A machine under an allied Accumulateur's Nuage de nanites (the Accumulateur itself carries `cone`).
-  if (e.cone === 0 && e.def.kind === 'unit' && (e.def as { mechanical?: boolean }).mechanical && world.cones > 0) {
-    const R = BALANCE.abilities.cone.radius * FP;
-    for (const c of world.entities.values()) if (c.cone > 0 && c.hp > 0 && !world.hostile(c.owner, e.owner) && Math.hypot(c.x - e.x, c.y - e.y) <= R) { out.push(NANITES); break; }
-  }
-  if (e.support & KIT.invisibilite) out.push(HIDDEN);
-  if (e.support & KIT.reparateur) out.push(MENDING);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
   if (e.phased > 0 && e.def.kind === 'unit') out.push(PHASED);
   if (e.reflect > 0) out.push(REFLECT);
   if (e.war > 0) out.push(WAR);
   if (e.boost > 0) out.push(BOOST);
   if (e.charged > 0) out.push(CHARGED);
-  if (e.cone > 0) out.push(CONE);
   if (e.statue > 0) out.push(STATUE);
   if (e.pace > 0 && e.paceMove <= 100 && e.paceAtk >= 100) out.push(SLOW);
   if (e.chill > 0) out.push(CHILL);
-  if (e.heavy > 0) out.push(HEAVY);
   if (e.blind > 0) out.push(BLIND);
   if (e.swarm > 0) out.push(SWARM);
   if (e.camo > 0 && e.type !== 'belluaire') out.push(CAMO);
@@ -223,7 +202,17 @@ export class Marks {
     zones(world, seen, (x, z, r, color) => ring(x, heightAt(this.map, x, z) + 0.06, z, r, color, 0.9, Math.min(0.5, 0.18 / r), 0.12, Math.round(r * 3), 0));
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || e.inside || e.hp <= 0) continue;
-      const marks = marksOf(e, world);
+      // Canon IEM: a translucent green shell round what it took, while it holds it (the user's pick, 2026-11-23).
+      if (e.seizedLeft > 0 && shells < MAX_SHELLS && sees(e)) {
+        const x = (e.px + (e.x - e.px) * alpha) / FP;
+        const z = (e.py + (e.y - e.py) * alpha) / FP;
+        const r = (e.radius / FP) * 1.5 + 0.3;
+        this.m.makeScale(r, 0.9 + r * 0.8, r).setPosition(x, heightAt(this.map, x, z) + (soars(e) ? FLY_HEIGHT : 0), z);
+        this.shells.setMatrixAt(shells, this.m);
+        this.c.set(0x8cff5a);
+        this.shellLook.setXYZW(shells++, this.c.r, this.c.g, this.c.b, 0.75);
+      }
+      const marks = marksOf(e);
       if (!marks.length || !sees(e)) continue;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;

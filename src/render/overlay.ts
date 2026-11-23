@@ -46,7 +46,7 @@ export class Overlay {
     const R = 9;
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || e.inside || e.hp <= 0) continue;
-      const marks = marksOf(e, world);
+      const marks = marksOf(e);
       if (!marks.length || !sees(e)) continue;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;

@@ -18,6 +18,12 @@ const VENTS: Record<string, [number, number, number, boolean]> = {
 export function ambientEffects(world: World, units: EntityRenderer, effects: Effects, sees: (e: Entity) => boolean, dt: number, taken: (well: Entity) => boolean): void {
   const map = world.map;
   for (const e of world.entities.values()) {
+    // A Z Déchiqueteur cutting: sparks from its saw all the while it works on its foe.
+    if (e.kit === 'dechiqueteur' && e.cooldown > 0 && e.order?.kind !== undefined && 'target' in e.order && e.order.target && sees(e)) {
+      const foe = world.entities.get(e.order.target);
+      const p = foe && Math.hypot(foe.x - e.x, foe.y - e.y) <= e.radius + foe.radius + 1.5 * FP ? units.saw(e.id) : undefined;
+      if (p) effects.grind(p, dt);
+    }
     // Serfs at work: the jackhammer throws blue sparks where it bites (the field or the building site); a Z drone
     // drilling a crystal throws the same.
     const o = e.order;
