@@ -52,6 +52,8 @@ export interface View {
   aimPose?: [Object3D, Quaternion][];
   /** Toward its foe (yaw, as `heading`) while one is within reach, for a gunner's barrel. */
   aimAt?: number;
+  /** Where that foe is (world, as a shot aims at it), for a lobbing gun's raised barrel. */
+  aimTo?: Vector3;
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */

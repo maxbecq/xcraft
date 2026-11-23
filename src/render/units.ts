@@ -14,7 +14,7 @@ import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP, skinClock } from './models';
 import { findRig, stepRig } from './godrig';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
-import { seeThrough } from './effects';
+import { lobLaunch, seeThrough } from './effects';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, setStone, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
@@ -729,6 +729,7 @@ export class EntityRenderer {
       const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
       // A gunner's barrel points at its foe outright, even while its body is still turning to it (render/units.ts holdAim).
       v.aimAt = foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach ? Math.atan2(foe.x - e.x, foe.y - e.y) : undefined;
+      if (v.aimAt !== undefined && foe) (v.aimTo ??= new Vector3()).set(foe.x / FP, heightAt(this.map, foe.x / FP, foe.y / FP) + 0.5, foe.y / FP);
       if (v.aimAt !== undefined) v.target = v.aimAt;
       else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       else if ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct') {
@@ -1110,8 +1111,11 @@ export class EntityRenderer {
     if (!h || !this.inView(v.root.position.x, v.root.position.z)) return;
     m.updateMatrixWorld(true);
     const r = h.right.getWorldPosition(HAND_R);
-    const yaw = kick > 0 && v.aimAt !== undefined ? v.aimAt : v.heading; // firing: at the foe, not only where it faces yet
-    const ahead = HAND_L.set(Math.sin(yaw), 0.08, Math.cos(yaw)).normalize();
+    const firing = kick > 0 && v.aimAt !== undefined;
+    const yaw = firing ? v.aimAt! : v.heading; // firing: at the foe, not only where it faces yet
+    // Firing a lobbing gun: the barrel raised along the start of the grenade's arc (effects.ts lobLaunch); otherwise
+    // level, a little up.
+    const ahead = (firing && v.aimTo && lobLaunch(v.type, r, v.aimTo, HAND_L)) || HAND_L.set(Math.sin(yaw), 0.08, Math.cos(yaw)).normalize();
     r.addScaledVector(ahead, -0.04 * Math.min(1, kick));
     h.tool.position.copy(h.tool.parent!.worldToLocal(HAND_P.copy(r)));
     h.tool.lookAt(HAND_S.copy(r).add(ahead));

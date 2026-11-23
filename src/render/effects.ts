@@ -66,6 +66,18 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   feu: { pace: 0.08, arc: 0.1, size: 0.65, smoke: 20, color: 0xff7a20 },
   epine: { pace: 0.06, arc: 0.12, size: 0.1, smoke: 0, color: 0x7a8a40 },
 };
+
+/**
+ * Where a lobbed Human round sets off from `from` to `to` (a unit direction into `out`): the start of its arc as
+ * `lobs` draws it (at fraction k of the way, 4·arc·k(1−k) above the straight line), so a gunner can raise its barrel
+ * along it. Undefined for a weapon that does not lob.
+ */
+export function lobLaunch(type: string, from: Vector3, to: Vector3, out: Vector3): Vector3 | undefined {
+  const lob = LOBS[AMMO[type]];
+  if (!lob) return undefined;
+  const arc = Math.max(0.3, from.distanceTo(to) * lob.arc);
+  return out.subVectors(to, from).setY(to.y - from.y + 4 * arc).normalize();
+}
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
 const SHOT_COLORS: Record<string, number> = { humains: 0xffa040, isdaris: 0x5ae0ff, z: 0x8cff5a, dieux: 0xffe28a };
