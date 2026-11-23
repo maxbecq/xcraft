@@ -1184,6 +1184,8 @@ export class EntityRenderer {
       // (+x tips the hammer's head forward), then the rig eases it back on its own (stepRig).
       if (k >= 0 && k < 0.4) arm.rotation.x = -0.25 - 0.45 * (k / 0.4);
       else if (k >= 0.4 && k < 0.7) arm.rotation.x = k < 0.55 ? -0.7 + 1.8 * ((k - 0.4) / 0.15) : 1.1;
+      // The rig's bones are out of the scene (render/godrig.ts): their matrices are only refreshed by hand.
+      v.rig!.root.updateMatrixWorld(true);
       // And the body leans a little into the blow.
       v.model.rotation.order = 'YXZ';
       v.model.rotation.x = k < 0.4 || k > 1 ? 0 : k < 0.55 ? 0.12 * ((k - 0.4) / 0.15) : 0.12 * (1 - (k - 0.55) / 0.45);
