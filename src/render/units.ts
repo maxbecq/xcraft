@@ -12,9 +12,7 @@ import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
-import { seeThrough, SPELL_IDEA } from './effects';
-
-const BURROW_SINK = SPELL_IDEA === 'e1' || SPELL_IDEA === 'e2' ? SPELL_IDEA : '';
+import { seeThrough } from './effects';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
@@ -729,11 +727,11 @@ export class EntityRenderer {
       if (v.flash && (v.flash.left -= dt) <= 0) unflash(v);
       // Kit d'invisibilité (the user's pick, 2026-11-23): see-through for its side and for an enemy detecting it.
       setCloak(v, seeThrough(e));
-      // Enfouissement (proposal, ?sorts=e1|e2): a buried Créature sinks into the ground, and comes back up out of it.
-      if (BURROW_SINK && e.type === 'creature') {
+      // Enfouissement (the user's pick, 2026-11-23): a buried Créature sinks into the ground, and comes back up out of it.
+      if (e.type === 'creature') {
         const k = (v.model.userData.burrow ??= 0) as number;
         v.model.userData.burrow = k + ((e.burrowed ? 1 : 0) - k) * Math.min(1, dt * 4);
-        v.root.position.y -= v.model.userData.burrow * (BURROW_SINK === 'e1' ? 0.6 : 0.4);
+        v.root.position.y -= v.model.userData.burrow * 0.6;
       }
       if (v.emerge) {
         // Off the deck: a ramp down from where it was built to where the simulation put it.

@@ -20,17 +20,13 @@ export const FX_STYLE = PARAMS.get('fx') || 'c';
 /** Who holds a unit where it stands, by its id, as the effects saw it cast (render only): a Napalm burns, an Impulsion
  * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
 export const HELD_BY = new Map<number, 'napalm' | 'impulsion' | 'chocmental'>();
-/** Proposal stage: ?sorts=e1|e2 shows the two ideas of the Créature's Enfouissement, until the user picks. */
-export const SPELL_IDEA = PARAMS.get('sorts') ?? '';
 const CYAN = 0x5ae0ff;
 /** Drawn see-through (render/units.ts), as its side and an enemy detecting it see it: a Z socle under its invisibility
- * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit; in the Enfouissement
- * proposal (e2), a buried Créature. */
+ * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit. */
 export function seeThrough(e: Entity): boolean {
   if (e.support & KIT.invisibilite || e.type === 'assassin' || e.illusion) return true;
   if (e.camo > 0 && e.type !== 'belluaire') return true;
-  if (e.phased > 0 && e.def.kind === 'unit') return true;
-  return SPELL_IDEA === 'e2' && e.burrowed;
+  return e.phased > 0 && e.def.kind === 'unit';
 }
 /** A shot's colour by the shooter's camp: Humans' powder orange, Isdaris' cyan light, Z's green, the Gods' gold. */
 /**
@@ -570,7 +566,7 @@ export class Effects {
    * body, with the Double's, the Manteau's and the Assassin's: render/units.ts), rings of light turning round a building
    * under the Bouclier de plasma, a dome of cold light with a marked edge over a Silence des ions, lines of field along
    * a Mur d'énergie, a red target closing in where the Canon orbital aims, sparkles over an Observatoire's zone.
-   * The Créature's Enfouissement: two ideas still (?sorts=e1|e2). Render only.
+   * A mound of earth over a buried Créature. Render only.
    */
   private isSpells(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number): void {
     const t = performance.now() / 1000;
@@ -604,19 +600,14 @@ export class Effects {
       if (e.phased > 0 && !building && chance(16)) this.spawn(this.tex.glow, 0x9af0ff, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.16, 0.03, 1, 0, true);
       // Bouclier de plasma, a building: rings of light turning round it.
       if (e.phased > 0 && building) for (let k = 0; k < 3; k++) for (let i = 0; i < 20; i++) this.hold(this.tex.glow, 0x6ae8ff, onBody((i / 20) * 6.28 + t * (k % 2 ? -0.8 : 0.8), 0.2 + k * 0.4, r * 0.5), 0.08, 0.8, dt, true);
-      // Enfouissement (proposal): a mound of earth over the buried Créature (e1), cyan ripples (e2).
+      // Enfouissement: a mound of earth over the buried Créature (it sinks under it: render/units.ts), a little dust.
       if (e.burrowed) {
-        if (SPELL_IDEA === 'e1') {
-          for (let i = 0; i < 14; i++) {
-            const a = seed + i * 2.4;
-            const d = (0.15 + ((i * 0.37) % 1) * 0.45) * (r + 0.4);
-            this.hold(this.tex.smoke, i % 3 ? 0xc8a878 : 0x5a3e24, foot.clone().add(new Vector3(Math.cos(a) * d, 0.12 + (0.6 - d) * 0.3, Math.sin(a) * d)), 0.45, 1, dt, false);
-          }
-          if (chance(4)) this.spawn(this.tex.smoke, 0x9a7a58, foot.clone().add(rnd(0.3)).setY(foot.y + 0.2), new Vector3(0, 0.3, 0), 1, 0.2, 0.5, 0.7, 0, false);
-        } else if (SPELL_IDEA === 'e2') {
-          if (Math.floor(t / 0.7 + seed) !== Math.floor((t - dt) / 0.7 + seed)) this.ring(foot.clone().setY(foot.y + 0.06), 0x5ae0ff, 0.5, 0.9);
-          this.hold(this.tex.glow, 0x5ae0ff, foot.clone().setY(foot.y + 0.08), 0.5 + 0.1 * Math.sin(t * 4), 0.5, dt, true);
+        for (let i = 0; i < 14; i++) {
+          const a = seed + i * 2.4;
+          const d = (0.15 + ((i * 0.37) % 1) * 0.45) * (r + 0.4);
+          this.hold(this.tex.smoke, i % 3 ? 0xc8a878 : 0x5a3e24, foot.clone().add(new Vector3(Math.cos(a) * d, 0.12 + (0.6 - d) * 0.3, Math.sin(a) * d)), 0.45, 1, dt, false);
         }
+        if (chance(4)) this.spawn(this.tex.smoke, 0x9a7a58, foot.clone().add(rnd(0.3)).setY(foot.y + 0.2), new Vector3(0, 0.3, 0), 1, 0.2, 0.5, 0.7, 0, false);
       }
     }
     // Silence des ions: a dome of cold light over the zone, a marked edge on the ground, motes drifting inside.

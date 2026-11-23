@@ -23,7 +23,6 @@ const BLIND = M('amonra', 0xffd040, false);
 const CHARM = M('soumission', 0xff4ad0, false);
 const SWARM = M('nuee', 0x9a9a40, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
-const BURROWED = M('enfouissement', 0xb08a60, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
@@ -35,7 +34,6 @@ const BURROWED = M('enfouissement', 0xb08a60, true);
  */
 export function marksOf(e: Entity): Mark[] {
   const out: Mark[] = [];
-  if (e.burrowed) out.push(BURROWED);
   if (e.charm > 0) out.push(CHARM);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
   if (e.war > 0) out.push(WAR);
