@@ -253,9 +253,11 @@ export class EntityRenderer {
     const v = this.views.get(id);
     const w = v?.weapon;
     if (w?.mod && w.tip) return w.mod.localToWorld(w.tip.clone());
-    // A character's hand weapon (models.ts arm): its point, a staff's crystal or orb, a gun's barrel.
+    // A character's hand weapon (models.ts arm): its point, a staff's crystal, a gun's barrel; empty-handed (the
+    // Alchimiste throwing its flasks), its right hand.
     const held = v?.model.getObjectByName('held');
-    return held && typeof held.userData.tip === 'number' ? held.localToWorld(new Vector3(0, 0, held.userData.tip)) : undefined;
+    if (held && typeof held.userData.tip === 'number') return held.localToWorld(new Vector3(0, 0, held.userData.tip));
+    return v?.mixer ? v.model.getObjectByName('RightHand')?.getWorldPosition(new Vector3()) : undefined;
   }
 
   weld(id: number): Vector3 | undefined {

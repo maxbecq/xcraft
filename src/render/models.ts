@@ -201,7 +201,7 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   serf: { height: 0.72, weapon: 'piqueur', grip: 'drill', basket: true }, // puny next to the soldiers; a wicker basket on its back
   legionnaire: { height: 0.95, weapon: 'scie', grip: 'pole', shield: 'scutum' }, // a scutum on the left arm, in the team's colour
   soigneur: { height: 0.86, weapon: 'cristal', grip: 'pole' }, // a monk's staff, its cyan crystal up
-  alchimiste: { height: 0.86, weapon: 'globe', grip: 'pole' }, // a staff with a glass orb of green liquid
+  alchimiste: { height: 0.86 }, // empty-handed: it throws its flasks from the right hand
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
