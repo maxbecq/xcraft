@@ -140,9 +140,10 @@ function fileStore<T>(mode: IDBTransactionMode, act: (s: IDBObjectStore) => IDBR
   });
 }
 
-/** Run first (boot.ts) on a page playing a file: reads it back for `readReplay('file')`. */
+/** Run first (boot.ts) on a page playing a file: reads back the one its address names (`&file=`) for `readReplay('file')`. */
 export async function loadOpenedReplay(): Promise<void> {
-  opened = (await fileStore<string | undefined>('readonly', (s) => s.get('file')).catch(() => undefined)) ?? null;
+  const id = new URLSearchParams(location.search).get('file');
+  if (id) opened = (await fileStore<string | undefined>('readonly', (s) => s.get(id)).catch(() => undefined)) ?? null;
 }
 
 /** Keeps the game as the "last game"; false when it could not be written (storage full or blocked). */
@@ -155,8 +156,9 @@ export function saveReplay(r: Replay): boolean {
   }
 }
 
-export function playReplay(r: Replay | null, source: ReplaySource): void {
-  if (r) location.search = `?replay=${source}&speed=2&biome=${r.biome}`;
+/** `file`: the opened file's key in IndexedDB, kept in the address so a reload plays that file, whatever other tabs opened since. */
+export function playReplay(r: Replay | null, source: ReplaySource, file?: string): void {
+  if (r) location.search = `?replay=${source}${file ? `&file=${file}` : ''}&speed=2&biome=${r.biome}`;
 }
 
 /** A replay as its file was, to save again: whole, with its own map's id (even one this version lacks). */
@@ -205,12 +207,18 @@ export function openReplayFile(): void {
     }
     const r = parseReplay(text);
     if (typeof r === 'string') return alert(r);
+    // Keys by time, so the oldest files go first: the last few stay for the tabs still playing them.
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     try {
-      await fileStore('readwrite', (s) => s.put(JSON.stringify(r), 'file'));
+      await fileStore('readwrite', (s) => {
+        const keys = s.getAllKeys();
+        keys.onsuccess = () => keys.result.slice(0, -3).forEach((k) => s.delete(k));
+        return s.put(JSON.stringify(r), id);
+      });
     } catch {
       return alert('Ce replay n’a pas pu être gardé par le navigateur (stockage bloqué ?).');
     }
-    playReplay(r, 'file');
+    playReplay(r, 'file', id);
   };
   input.click();
 }
