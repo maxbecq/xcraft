@@ -1379,7 +1379,8 @@ export class AI {
     const { w, gods, army, rally } = ctx;
     const foes = this.visibleFoes();
     const back: number[] = [];
-    const sent = new Set<number>();
+    // Units already ordered this turn (a group withdraw() sends back) keep that order: the last command would win.
+    const sent = new Set<number>(ctx.out.flatMap((c) => ('ids' in c ? c.ids : [])));
     for (const g of gods) {
       if (dist(g.x, g.y, rally.x, rally.y) < 10 * FP) continue;
       const near = foes.filter((e) => dist(e.x, e.y, g.x, g.y) < 10 * FP);
