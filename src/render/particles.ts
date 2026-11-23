@@ -25,6 +25,8 @@ export class Particles {
   /** Per particle: r g b (linear), picture, additive. */
   private readonly look: Float32Array;
   private readonly depth: Float32Array;
+  /** Per particle: 1 for a steady one, drawn at full opacity for its whole short life (redrawn every frame by its owner). */
+  private readonly steady: Uint8Array;
   private readonly order: number[] = [];
   private readonly center: InstancedBufferAttribute;
   private readonly color: InstancedBufferAttribute;
@@ -39,6 +41,7 @@ export class Particles {
     this.course = new Float32Array(capacity * 6);
     this.look = new Float32Array(capacity * 5);
     this.depth = new Float32Array(capacity);
+    this.steady = new Uint8Array(capacity);
     const geometry = new InstancedBufferGeometry();
     const quad = new PlaneGeometry(1, 1);
     geometry.setIndex(quad.getIndex());
@@ -94,14 +97,16 @@ export class Particles {
     this.mesh.visible = false;
   }
 
-  /** One more particle, unless `limit` are already flying (a share of the capacity, by the graphics level). */
-  spawn(limit: number, picture: Picture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean): void {
+  /** One more particle, unless `limit` are already flying (a share of the capacity, by the graphics level). `steady`: no
+   * fade in or out, for a sprite its owner lays out again every frame (a mark that stays on a unit). */
+  spawn(limit: number, picture: Picture, color: number, pos: Vector3, vel: Vector3, life: number, size0: number, size1: number, alpha: number, gravity: number, additive: boolean, steady = false): void {
     let i = this.free.pop();
     if (i === undefined) {
       if (this.used >= Math.min(this.capacity, limit)) return;
       i = this.used++;
     }
     this.active[i] = 1;
+    this.steady[i] = steady ? 1 : 0;
     this.live++;
     this.motion.set([pos.x, pos.y, pos.z, vel.x, vel.y, vel.z], i * 6);
     this.course.set([0, life, size0, size1, alpha, gravity], i * 6);
@@ -143,7 +148,7 @@ export class Particles {
       color[n * 4] = look[i * 5];
       color[n * 4 + 1] = look[i * 5 + 1];
       color[n * 4 + 2] = look[i * 5 + 2];
-      color[n * 4 + 3] = c[i * 6 + 4] * (1 - f) * Math.min(1, f * 8 + 0.3);
+      color[n * 4 + 3] = this.steady[i] ? c[i * 6 + 4] : c[i * 6 + 4] * (1 - f) * Math.min(1, f * 8 + 0.3);
       info[n * 3] = c[i * 6 + 2] + (c[i * 6 + 3] - c[i * 6 + 2]) * f;
       info[n * 3 + 1] = look[i * 5 + 3];
       info[n * 3 + 2] = look[i * 5 + 4];

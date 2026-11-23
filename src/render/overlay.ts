@@ -3,6 +3,14 @@ import { type BuildingDef, FLY_HEIGHT, type UnitDef } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type Order, type World, soars } from '../sim/world';
+import { FX_STYLE } from './effects';
+import { marksOf } from './marks';
+import { GLYPHS, Z_GLYPHS } from '../game/glyphs';
+import { DIEUX_GLYPHS, HUMAINS_GLYPHS, ISDARIS_GLYPHS } from '../game/glyphs-camps';
+
+/** Pictograms of the lasting effects (style c), by their mark's key. */
+const MARK_GLYPHS: Record<string, string> = { ...GLYPHS, ...Z_GLYPHS, ...HUMAINS_GLYPHS, ...ISDARIS_GLYPHS, ...DIEUX_GLYPHS, invuln: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z' };
+const paths = new Map<string, Path2D>();
 
 /** 2D layer over the 3D view: health bars of selected and wounded entities, order feedback. */
 /** A rally point's arrows dive this long (ms), then its ring opens and fades for RALLY_RING. */
@@ -32,6 +40,47 @@ export class Overlay {
   /** Where a building's model tops out in the world (set by the game from the entity renderer); undefined: not drawn yet. */
   top: (id: number, built: boolean) => number | undefined = () => undefined;
 
+  /** Style c: a row of round badges above each unit under a lasting effect, its pictogram on its colour. */
+  private badges(world: World, camera: Camera, sees: (e: Entity) => boolean, alpha: number, w: number, h: number): void {
+    const ctx = this.ctx;
+    const R = 9;
+    for (const e of world.entities.values()) {
+      if (e.def.kind === 'resource' || e.inside || e.hp <= 0) continue;
+      const marks = marksOf(e, world);
+      if (!marks.length || !sees(e)) continue;
+      const x = (e.px + (e.x - e.px) * alpha) / FP;
+      const z = (e.py + (e.y - e.py) * alpha) / FP;
+      const size = e.def.kind === 'building' ? (e.def as BuildingDef).size : 0;
+      this.v.set(x, heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (soars(e) ? FLY_HEIGHT : 0), z).project(camera);
+      const sx = ((this.v.x + 1) / 2) * w;
+      const sy = ((1 - this.v.y) / 2) * h - 12;
+      if (sx < -50 || sy < -20 || sx > w + 50 || sy > h + 20) continue;
+      const shown = marks.slice(0, 3);
+      for (const [i, mk] of shown.entries()) {
+        const cx = sx + (i - (shown.length - 1) / 2) * (R * 2 + 3);
+        ctx.beginPath();
+        ctx.arc(cx, sy, R, 0, Math.PI * 2);
+        ctx.fillStyle = `#${mk.color.toString(16).padStart(6, '0')}`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = mk.good ? 'rgba(20,24,30,0.9)' : '#5a0c0c';
+        ctx.stroke();
+        const d = MARK_GLYPHS[mk.key];
+        if (!d) continue;
+        let p = paths.get(d);
+        if (!p) paths.set(d, (p = new Path2D(d)));
+        ctx.save();
+        ctx.translate(cx - R * 0.62, sy - R * 0.62);
+        ctx.scale((R * 1.24) / 24, (R * 1.24) / 24);
+        ctx.lineWidth = 2.6;
+        ctx.lineJoin = ctx.lineCap = 'round';
+        ctx.strokeStyle = '#141820';
+        ctx.stroke(p);
+        ctx.restore();
+      }
+    }
+  }
+
   draw(world: World, camera: Camera, selected: ReadonlySet<number>, sees: (e: Entity) => boolean, alpha: number): void {
     // Never over 2: a phone at 3 had six times the 3D view's pixels to clear and compose for thin bars.
     const dpr = Math.min(2, window.devicePixelRatio);
@@ -48,6 +97,7 @@ export class Overlay {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     this.right.setFromMatrixColumn(camera.matrixWorld, 0); // the screen's horizontal, in the world
+    if (FX_STYLE === 'c') this.badges(world, camera, sees, alpha, w, h);
     for (const e of world.entities.values()) {
       if (e.def.kind === 'resource' || !e.maxHp || e.inside) continue;
       // A Z building stopped off its creep (équilibreur 22/11) says so above its bar, always.

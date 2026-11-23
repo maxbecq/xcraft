@@ -8,7 +8,8 @@ import { Hud } from './game/hud';
 import { freeAsSeen } from './game/hud-place';
 import { Input } from './game/input';
 import { Minimap } from './minimap';
-import { Effects } from './render/effects';
+import { Effects, FX_STYLE } from './render/effects';
+import { Marks } from './render/marks';
 import { Post } from './render/post';
 import { Paving } from './render/paving';
 import { PowerNet } from './render/power';
@@ -322,6 +323,7 @@ effects.density = GFX.particles;
 effects.eye = rig.camera;
 setFxLite(GFX.particles < 1);
 const overlay = new Overlay(map);
+const marks = new Marks(scene, map, FX_STYLE);
 overlay.top = (id, built) => units.top(id, built);
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
@@ -775,7 +777,9 @@ function start(): void {
     hud.update();
     lap('hud');
     ambientEffects(world, units, effects, sees, dt, (w) => !freeAsSeen(hud, w)); // a well's mist: found, and free as last seen
+    effects.lasting(world, sees, acc / TICK, dt);
     effects.update(dt);
+    marks.update(world, sees, seenAt, acc / TICK, dt);
     lap('fx');
     overlay.showAll = keys.has('Alt');
     overlay.showQueue = keys.has('Shift');
