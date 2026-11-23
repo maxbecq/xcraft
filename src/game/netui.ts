@@ -76,6 +76,8 @@ export class NetGame {
       return; // watchNet tells, once the cut lasts
     }
     if (status === 'again' || status === 'go' || (status === 'left' && this.world.winner !== null)) return this.rematch(status, detail);
+    // Gone before any of its orders came (its match did not load, or its page closed): no match was played, so no win.
+    if (status === 'left' && !this.net?.started) return this.endNet('Partie annulée', "Votre ami est parti avant le début de la partie (sa partie n'a pas pu se charger, ou sa page s'est fermée).");
     if (status === 'left') return this.endNet('Victoire par abandon', detail ?? "L'adversaire a quitté la partie.");
     this.banner.hidden = false;
     // The network in the way: a fresh try may go through (another network, the friend's page reloaded).

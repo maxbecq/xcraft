@@ -503,12 +503,15 @@ const ready = ATTRACT
       return new Promise<never>(() => {}); // the match never starts behind it
     });
 function loadFailed(why: string): void {
+  // Online, the match is called off: the other side is told at once (it would wait for orders that never come), and
+  // only the menu is offered (a page reloaded would find the match over).
+  link?.leave();
   document.getElementById('crash')?.remove();
   const d = document.createElement('div');
   d.id = 'crash';
   d.style.cssText = 'position:fixed;inset:0;z-index:99;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:#05070d;color:#dceaff;font:16px system-ui;text-align:center';
-  d.innerHTML = '<b style="font-size:22px">Chargement de la partie impossible</b><div style="opacity:.7;max-width:640px;word-break:break-word"></div><div style="display:flex;gap:12px"><button data-l="retry">Réessayer</button><button data-l="menu">Menu principal</button></div>';
-  d.children[1].textContent = why;
+  d.innerHTML = `<b style="font-size:22px">Chargement de la partie impossible</b><div style="opacity:.7;max-width:640px;word-break:break-word"></div><div style="display:flex;gap:12px">${link ? '' : '<button data-l="retry">Réessayer</button>'}<button data-l="menu">Menu principal</button></div>`;
+  d.children[1].textContent = link ? `${why} La partie en ligne est annulée.` : why;
   for (const b of d.querySelectorAll('button')) b.style.cssText = 'padding:10px 22px;font:600 16px system-ui;cursor:pointer';
   d.addEventListener('click', (e) => {
     const l = (e.target as HTMLElement).closest<HTMLElement>('[data-l]')?.dataset.l;
