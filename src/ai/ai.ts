@@ -2059,8 +2059,12 @@ export class AI {
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
       // Against flying enemies, only what can shoot them.
       // Only what fits in supply: a 4-supply Octopode with 2 left was picked again every turn, and nothing came.
-      const fits = this.armyList.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
-      const affordable = fits.length ? fits : this.armyList.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
+      // A strategy's army with fewer than two types that can come yet (Octopodes and Mastodontes before their buildings):
+      // the camp's usual units too, so the rotation can move on past one whose weapon cannot be paid.
+      const ready = this.armyList.filter(([t]) => !this.world.lacks(this.player, t, undefined, at)).length;
+      const list = ready >= 2 ? this.armyList : [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
+      const fits = list.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
+      const affordable = fits.length ? fits : list.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
       // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.

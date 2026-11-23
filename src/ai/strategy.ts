@@ -64,7 +64,7 @@ export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort
 
 /** Camps whose AI plays its strategies and the doctrine by default, each after a tournament showed a clear gain
  * (23/11, against the AI as it was, 96 games a side: Dieux 71 wins against 51). */
-export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris'];
+export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris', 'z'];
 
 /** The AI before strategies: the usual lists, no doctrine (for comparison and the older tests). */
 export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0, researchHosts: 3, counterRanged: false };
@@ -146,7 +146,37 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       wave: 10,
     },
   ],
-  z: [USUAL],
+  z: [
+    {
+      id: 'artillerie',
+      name: 'Artillerie',
+      // Hexapodes with rockets and Octopodes, held back for big waves from minute 10 (light socles early, Quadripodes and
+      // drones de combat in waves of 12 to 16, won 22 of 48 against the AI as it was: dropped).
+      army: { hexapode: 4, octopode: 2, quadripode: 2 },
+      research: ['lanceroquettes', 'rhexapode', 'rhexapode2', 'zdist1'],
+      attackMinute: 10,
+      wave: 16,
+    },
+    {
+      id: 'blindes',
+      name: 'Blindés',
+      // Hexapodes, Octopodes and Mastodontes behind a few Quadripodes: slower, heavier waves.
+      army: { hexapode: 3, octopode: 2, mastodonte: 2, quadripode: 2 },
+      research: ['rhexapode', 'lanceroquettes', 'zblindage1', 'rhexapode2'],
+      attackMinute: 9,
+      wave: 14,
+    },
+    {
+      id: 'siege',
+      name: 'Siège',
+      // The heavy army of Blindés, armour first, held back for one big late wave (Coléoptères in the air won 20 of 48
+      // against the AI as it was, Mastodontes from minute 7 as many: both dropped).
+      army: { hexapode: 3, octopode: 2, mastodonte: 2, quadripode: 2 },
+      research: ['zblindage1', 'rhexapode', 'lanceroquettes', 'zblindage2'],
+      attackMinute: 11,
+      wave: 18,
+    },
+  ],
   humains: [USUAL],
 };
 
