@@ -321,6 +321,7 @@ const effects = new Effects(fxScene, scene, map, audio);
 effects.muzzle = (id) => units.muzzle(id);
 effects.top = (id) => units.top(id);
 effects.hand = (id, h, side, fwd, radius) => units.handAt(id, h, side, fwd, radius);
+effects.slammed = (id) => units.slammed(id);
 effects.density = GFX.particles;
 effects.eye = rig.camera;
 setFxLite(GFX.particles < 1);

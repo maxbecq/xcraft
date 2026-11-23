@@ -46,7 +46,7 @@ export function seeThrough(e: Entity): boolean {
  * Réservoir); obus: the Pégase's cannon; roquette: the Tour's anti-air rockets; carreau: the Plésiosaure's ballista;
  * rocher: the Ankylosaure's Trébuchet; flamme: the Belluaire's flamethrower, at arm's length.
  */
-type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma' | 'lance';
+type Ammo = 'balle' | 'dard' | 'grenade' | 'fiole' | 'bombe' | 'obus' | 'roquette' | 'carreau' | 'rocher' | 'flamme' | 'obusz' | 'orbepsy' | 'disque' | 'plasma' | 'lance' | 'feu';
 const AMMO: Record<string, Ammo> = {
   auxiliaire: 'balle', scarabee: 'balle', bourdon: 'balle', soigneur: 'dard', phalangiste: 'grenade', alchimiste: 'fiole', cuve: 'bombe',
   pegase: 'obus', tour: 'roquette', plesiosaure: 'carreau', ankylosaure: 'rocher', belluaire: 'flamme',
@@ -65,6 +65,7 @@ const LOBS: Partial<Record<Ammo, { pace: number; arc: number; size: number; smok
   disque: { pace: 0.05, arc: 0.02, size: 0.3, smoke: 0, color: 0x5ae0ff },
   plasma: { pace: 0.09, arc: 0.25, size: 0.42, smoke: 0, color: 0x8ad8ff },
   lance: { pace: 0.05, arc: 0.08, size: 0.1, smoke: 0, color: 0xfff0c0 },
+  feu: { pace: 0.08, arc: 0.1, size: 0.65, smoke: 20, color: 0xff7a20 },
 };
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
@@ -198,10 +199,14 @@ export class Effects {
     g.add(new Mesh(this.shaftGeo, this.shaftMat), new Mesh(this.tipGeo, this.tipMat));
     return g;
   }
+  /** A gust of wind on its way: wisps to blow along its path, now and then a leaf or dust carried off. */
+  private gust: { at: Vector3; left: number; leaf: boolean; way: Vector3; prev?: Vector3 }[] = [];
   /** Frigg's frost bolt on its way: shards and mist to shed along it, and the frost where it lands, in how long. */
   private frost: { at: Vector3; left: number; impact?: boolean }[] = [];
   /** Thor's blows coming down: where, in how long, how many bolts. */
-  private blows: { at: Vector3; left: number; n: number }[] = [];
+  private blows: { at: Vector3; left: number; n: number; id: number; armed?: boolean }[] = [];
+  /** Whether a Thor's hammer has come down yet, by his id (render/units.ts follows his arm); the bolt waits for it. */
+  slammed: (id: number) => boolean = () => true;
   /** Rounds on their way: where they land, in what colour, in how long. */
   private hits: { at: Vector3; color: number; left: number }[] = [];
   private readonly particles = new Particles([blob('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), blob('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 64, true), flame()], MAX_PARTICLES);
@@ -1081,7 +1086,7 @@ export class Effects {
       if (type === 'thor') {
         // The hammer comes down (render/units.ts rocks him over it): at the slam, a bolt from the sky onto the foe (two
         // under his Courroux), gold sparks.
-        this.blows.push({ at: to.clone(), left: 0.55 * 0.6, n: e.charged > 0 ? 2 : 1 });
+        this.blows.push({ at: to.clone(), left: 1, n: e.charged > 0 ? 2 : 1, id: e.id });
       } else if (type === 'fantome') {
         for (let i = 0; i < 6; i++) this.spawn(this.tex.glow, 0xbfe8ff, to.clone().add(rnd(0.2)), rnd(0.8).setY(0.6), 0.6, 0.18, 0.05, 0.8, 0, true);
       } else if (type === 'jormungandr') {
@@ -1105,16 +1110,29 @@ export class Effects {
       case 'drake': // a burst of fire breath
         if (s.id !== undefined) this.jets.set(s.id, { id: s.id, from: from.clone(), to: to.clone(), left: 0.5, spill: 0 });
         return true;
-      case 'elementaire': // a fireball, lobbed low
-        this.lobs.push({ ammo: 'grenade', from: from.clone(), to: to.clone(), age: 0, flight: Math.max(0.2, dist * 0.08), arc: Math.max(0.2, dist * 0.08), chem: false, spill: 0, color: 0xff7a20 });
+      case 'elementaire': // a big fireball, lobbed low, flames streaming behind it
+        this.lobs.push({ ammo: 'feu', from: from.clone(), to: to.clone(), age: 0, flight: Math.max(0.25, dist * 0.08), arc: Math.max(0.25, dist * 0.08), chem: false, spill: 0 });
         return true;
-      case 'elemeau': // an ice shard, frost where it hits
-        this.streaks.spawn(0xb8e8ff, from, to, flight, 0.05, 0.8, 0.12, 1);
-        this.hits.push({ at: to, color: 0xd8f4ff, left: flight });
+      case 'elemeau': { // a great shard of ice, white core, crystals glinting off it; frost where it hits
+        this.streaks.spawn(0x9ad8ff, from, to, flight * 1.2, 0.06, 1.6, 0.34, 1);
+        this.streaks.spawn(0xffffff, from, to, flight * 1.2, 0.04, 1.2, 0.12, 1);
+        const dir = to.clone().sub(from);
+        for (let k = 0; k < 6; k++) this.frost.push({ at: from.clone().addScaledVector(dir, k / 6), left: (k / 6) * flight * 1.2 });
+        this.frost.push({ at: to.clone(), left: flight * 1.2, impact: true });
         return true;
-      case 'elemair': { // a gust: white swirls running along the line
-        const dir = to.clone().sub(from).normalize();
-        for (let k = 0; k < 8; k++) this.spawn(this.tex.glow, 0xf0f8ff, from.clone().addScaledVector(dir, (k / 7) * dist).add(rnd(0.15)), dir.clone().multiplyScalar(4), 0.25, 0.25, 0.5, 0.5, 0, true);
+      }
+      case 'elemair': { // a gust of wind: white wisps curling along the way, dust and leaves carried off with it
+        const dir = to.clone().sub(from);
+        const side = new Vector3(-dir.z, 0, dir.x).normalize();
+        const travel = Math.max(0.3, dist / 12);
+        for (let k = 0; k <= 16; k++) {
+          const u = k / 16;
+          for (const ph of [0, Math.PI]) {
+            const a = u * 4 * Math.PI + ph;
+            const at = from.clone().addScaledVector(dir, u).addScaledVector(side, Math.sin(a) * 0.35 * (0.4 + u)).add(new Vector3(0, Math.cos(a) * 0.3 * (0.4 + u), 0));
+            this.gust.push({ at, left: u * travel, leaf: k % 3 === 0 && ph === 0, way: dir.clone().normalize() });
+          }
+        }
         return true;
       }
       case 'golem': { // a great boulder thrown high, tumbling
@@ -1270,6 +1288,7 @@ export class Effects {
         this.spawn(this.tex.glow, 0xffffff, at, new Vector3(), 0.05, lob.size * 0.6, lob.size * 0.5, 1, 0, true);
       }
       l.prev = at;
+      if (l.ammo === 'feu') for (let i = 0; i < 2; i++) this.spawn(this.tex.flame, i ? 0xff6a10 : 0xffc040, at.clone().add(rnd(0.12)), rnd(0.4).setY(0.6), 0.35, lob.size * 0.8, lob.size * 0.2, 0.95, 0, false);
       for (l.spill += dt * lob.smoke; l.spill >= 1; l.spill--) {
         this.spawn(this.tex.smoke, l.ammo === 'roquette' ? 0xd8d0c4 : 0x6a625a, at.clone().add(rnd(0.05)), new Vector3(0, 0.2, 0), 0.7, lob.size * 0.5, lob.size * 1.8, 0.55, 0, false);
       }
@@ -1277,6 +1296,11 @@ export class Effects {
     }
     const p = l.to;
     switch (l.ammo) {
+      case 'feu': // the fireball bursts in flames
+        this.flash(p, 0xff7a20, 2);
+        for (let i = 0; i < 14; i++) this.spawn(this.tex.flame, i % 2 ? 0xff6a10 : 0xffc040, p.clone().add(rnd(0.3)), rnd(1.5).setY(1.5 + Math.random()), 0.6, 0.4, 0.1, 1, 0, false);
+        for (let i = 0; i < 4; i++) this.spawn(this.tex.smoke, 0x3a3430, p.clone().add(rnd(0.3)), rnd(0.4).setY(0.7), 1.4, 0.3, 1, 0.6, -0.1, false);
+        break;
       case 'lance': // the spear strikes: a gold glint, a few sparks
         this.flash(p, GOLD, 1.2);
         for (let i = 0; i < 8; i++) this.spawn(this.tex.glow, i % 2 ? GOLD : 0xffffff, p.clone(), rnd(2).setY(1 + Math.random()), 0.3, 0.1, 0.02, 1, 9, true);
@@ -1509,6 +1533,14 @@ export class Effects {
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
+    this.gust = this.gust.filter((g) => {
+      if ((g.left -= dt) > 0) return true;
+      // A wisp of air, white and see-through, drifting on with the wind, growing as it fades.
+      this.spawn(this.tex.smoke, 0xf4f8ff, g.at, g.way.clone().multiplyScalar(2.5).add(new Vector3(0, 0.3, 0)), 0.6, 0.25, 0.7, 0.4, 0, false);
+      this.spawn(this.tex.glow, 0xffffff, g.at, g.way.clone().multiplyScalar(3), 0.25, 0.15, 0.3, 0.35, 0, true);
+      if (g.leaf) this.spawn(this.tex.smoke, Math.random() < 0.5 ? 0x8a9a40 : 0x9a7a50, g.at.clone().add(rnd(0.2)), g.way.clone().multiplyScalar(3).add(rnd(1).setY(1)), 0.8, 0.08, 0.08, 1, 2, false);
+      return false;
+    });
     this.stuck = this.stuck.filter((st) => {
       if ((st.left -= dt) > 0) return true;
       this.scene.remove(st.obj);
@@ -1530,7 +1562,10 @@ export class Effects {
       return false;
     });
     this.blows = this.blows.filter((b) => {
-      if ((b.left -= dt) > 0) return true;
+      // Wait for his arm to start this blow (not yet slammed), then for it to come down.
+      const down = this.slammed(b.id);
+      if (!down) b.armed = true;
+      if ((b.left -= dt) > 0 && !(b.armed && down)) return true;
       for (let k = 0; k < b.n; k++) this.bolt(b.at.clone().add(rnd(0.3)).setY(b.at.y + 5), b.at, 0xfff0a0, 0.14, 0.25, 0.35);
       this.flash(b.at, GOLD, 2);
       for (let i = 0; i < 12; i++) this.spawn(this.tex.glow, i % 2 ? GOLD : 0xffffff, b.at.clone(), rnd(3).setY(1 + Math.random() * 2), 0.35, 0.13, 0.02, 1, 9, true);

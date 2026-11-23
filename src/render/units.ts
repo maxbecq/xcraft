@@ -1168,8 +1168,8 @@ export class EntityRenderer {
   }
 
   /**
-   * Thor brings his hammer down (proposal, ?dx=1): his model is one block, so the whole body rocks back then slams
-   * forward over its feet at each blow; the lightning falls at the slam (Effects.godShot). Render only.
+   * Thor brings his hammer down (proposal, ?dx=1): his hammer arm winds back and slams down at each blow (the whole body
+   * rocks instead on a model with no skeleton); the lightning falls at the slam (Effects.godShot). Render only.
    */
   private hammer(v: View, e: Entity, world: World, dt: number): void {
     if (!HAMMER) return;
@@ -1178,9 +1178,26 @@ export class EntityRenderer {
     v.model.userData.blow = since;
     for (const s of world.shots) if (s.id === e.id && s.kind === 'melee') v.model.userData.blow = 0;
     const k = (v.model.userData.blow as number) / HAMMER_MS;
+    const arm = v.rig?.arms[0];
+    if (arm) {
+      // On his skeleton (render/godrig.ts, grig_arm_0 holds the hammer): the arm winds back over 40 %, slams down by 55 %
+      // (+x tips the hammer's head forward), then the rig eases it back on its own (stepRig).
+      if (k >= 0 && k < 0.4) arm.rotation.x = -0.25 - 0.45 * (k / 0.4);
+      else if (k >= 0.4 && k < 0.7) arm.rotation.x = k < 0.55 ? -0.7 + 1.8 * ((k - 0.4) / 0.15) : 1.1;
+      // And the body leans a little into the blow.
+      v.model.rotation.order = 'YXZ';
+      v.model.rotation.x = k < 0.4 || k > 1 ? 0 : k < 0.55 ? 0.12 * ((k - 0.4) / 0.15) : 0.12 * (1 - (k - 0.55) / 0.45);
+      return;
+    }
     v.model.rotation.order = 'YXZ';
-    // Back over 40 %, slam forward by 55 %, then ease back upright.
+    // No skeleton: the whole body rocks back over 40 %, slams forward by 55 %, then eases back upright.
     v.model.rotation.x = k < 0 || k > 1 ? 0 : k < 0.4 ? -0.18 * (k / 0.4) : k < 0.55 ? -0.18 + 0.58 * ((k - 0.4) / 0.15) : 0.4 * (1 - (k - 0.55) / 0.45);
+  }
+
+  /** Whether Thor's hammer is down at his last blow (past the slam, 55 % of HAMMER_MS on his own clock); true with no blow. */
+  slammed(id: number): boolean {
+    const blow = this.views.get(id)?.model.userData.blow as number | undefined;
+    return blow === undefined || blow >= 0.55 * HAMMER_MS;
   }
 
   /** A building's Déchiqueteur: its ring turns to its last foe, the saw spins and comes down as it strikes. */
