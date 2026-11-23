@@ -2,7 +2,7 @@ import { ACESFilmicToneMapping, Clock, Color, DirectionalLight, HemisphereLight,
 import { AI, DIFFICULTY } from './ai/ai';
 import { Audio, type Sfx } from './audio';
 import { holdPointer } from './game/pointerlock';
-import { RECAP_LAYOUT, showRecap } from './game/recap';
+import { showRecap } from './game/recap';
 import { Recorder } from './game/recap-data';
 import { CameraRig, MAX_VIEW } from './camera';
 import { stageAttract } from './game/attract';
@@ -81,8 +81,8 @@ renderer.shadowMap.type = PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
-/** The end-of-game analysis being gathered (a prototype: ?bilan=). */
-const recap = RECAP_LAYOUT && !ATTRACT ? new Recorder(world) : null;
+/** The end-of-game analysis being gathered (none on the title screen). */
+const recap = ATTRACT ? null : new Recorder(world);
 /** `?perf=rec` or the Options box: frame-by-frame telemetry of this game, to send at the end. */
 const rec = new PerfRecorder(renderer, {
   version: typeof __VERSION__ === 'string' ? __VERSION__ : 'dev',
