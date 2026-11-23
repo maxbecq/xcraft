@@ -3,6 +3,7 @@ import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, SKIN_RANGE, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { flies, soars, type Entity, type World } from './world';
+import { healable } from './combat';
 
 /** Rappel: holds the army units around (x, y) for the channel; false if there are none. */
 export function recall(this: World, b: Entity, x: number, y: number): boolean {
@@ -70,7 +71,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   const ab = name && spell(name, e.lvl);
   // Gone since the order (a caster merged into a Golem by another's Fusion earlier in the same command): no cast.
   if (this.entities.get(e.id) !== e) return;
-  if (name === 'autosoin') return void (e.autoOff = !e.autoOff);
+  if (name === 'autosoin') {
+    // Off: the healing under way stops too, else it goes on paying mana for a patient picked before.
+    e.autoOff = !e.autoOff;
+    if (e.autoOff && e.order?.kind === 'heal') this.setOrder(e, null);
+    return;
+  }
   if (!ab || e.illusion || ab.target === 'point' || !this.ready(e, name) || (ab.research && !this.level(e.owner, ab.research)) || this.silenced(e.x, e.y)) return;
   const around = (r: number, test: (t: Entity) => boolean) => [...this.entities.values()].filter((t) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && dist(t.x, t.y, e.x, e.y) <= toFp(r) && test(t));
   if (name === 'cone') {
@@ -125,7 +131,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       t.war = ticks(ab.duration);
     }
   } else if (name === 'soinsdivins') {
-    const hurt = around(ab.radius!, (t) => t.owner === e.owner && !(t.def as UnitDef).mechanical && t.hp < t.maxHp);
+    const hurt = around(ab.radius!, (t) => t.owner === e.owner && healable(t) && t.hp < t.maxHp);
     if (!hurt.length) return;
     for (const t of hurt) {
       t.hp = Math.min(t.maxHp, t.hp + ab.damage!);

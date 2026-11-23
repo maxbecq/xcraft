@@ -729,4 +729,48 @@ describe('the automatic Soin (balance designer, 2026-11-22)', () => {
     isis.lvl = 3;
     expect(w.healPulse(isis)).toBe(35);
   });
+
+  it('switched off, the Prêtresse drops the patient she was walking to and pays no more (Codex review, 2026-11-23)', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 37 * FP, 30 * FP);
+    nain.held = 1 << 20; // stays where it is
+    nain.hp = 10;
+    run(w, 0.5);
+    expect(pretresse.order?.kind).toBe('heal');
+    w.step([{ player: 0, kind: 'ability', ids: [pretresse.id], name: 'autosoin' }]);
+    expect(pretresse.order).toBeNull();
+    const mana = pretresse.mana;
+    run(w, 4);
+    expect(nain.hp).toBe(10);
+    expect(pretresse.mana).toBeGreaterThanOrEqual(mana);
+  });
+
+  it('one rule for every Soin: no machine healed by Soins divins nor the Fontaine, a Sphinx turned to stone dropped', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const isis = Object.assign(w.spawn('isis', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const golem = w.spawn('golem', 0, 32 * FP, 30 * FP);
+    const nain = w.spawn('nain', 0, 30 * FP, 32 * FP);
+    golem.hp = nain.hp = 10;
+    w.step([{ player: 0, kind: 'ability', ids: [isis.id], name: 'soinsdivins' }]);
+    expect(nain.hp).toBeGreaterThan(10);
+    expect(golem.hp).toBe(10);
+    w.spawn('fontaine', 0, 60 * FP, 60 * FP);
+    const g2 = w.spawn('golem', 0, 61 * FP, 60 * FP);
+    g2.hp = 10;
+    run(w, 3);
+    expect(g2.hp).toBe(10);
+    // A Prêtresse healing a Sphinx that turns to stone stops.
+    const pretresse = w.spawn('pretresse', 0, 80 * FP, 80 * FP);
+    const sphinx = Object.assign(w.spawn('sphinx', 0, 81 * FP, 80 * FP), { mana: 1 << 30 });
+    sphinx.hp = 10;
+    w.setOrder(pretresse, { kind: 'heal', target: sphinx.id });
+    w.step([]);
+    expect(pretresse.order?.kind).toBe('heal');
+    sphinx.statue = ticks(15); // Forme de statue
+    const mana = pretresse.mana;
+    run(w, 2);
+    expect(pretresse.order?.kind).not.toBe('heal');
+    expect(pretresse.mana).toBeGreaterThanOrEqual(mana); // its stone mends it, not her
+  });
 });

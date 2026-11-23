@@ -9,6 +9,8 @@ export const clsOf = (t: Entity): DamageClass => (t.statue > 0 ? 'MM' : ((t.def 
 
 /** A machine for healing: mechanical, or of a machine's class (the Golem, the Titan, a Sphinx turned to stone: MM). */
 export const machineLike = (t: Entity): boolean => !!(t.def as UnitDef).mechanical || clsOf(t) === 'M' || clsOf(t) === 'MM';
+/** What a Soin heals (healers, Soins divins, the Fontaine): a living unit that is no machine, checked at each pulse. */
+export const healable = (t: Entity): boolean => t.def.kind === 'unit' && t.hp > 0 && !machineLike(t);
 
 /** Can this attack strike that target: in the air or not, and of a class it may hit. */
 export const hits = (a: Attack, t: Entity): boolean => reaches(a, t.def.kind === 'unit' && flies(t)) && (!a.only || a.only.includes(clsOf(t)));
@@ -206,7 +208,7 @@ export function pulse(this: World, e: Entity): void {
     }
   }
   if (e.type === 'fontaine' && e.buildLeft === 0) {
-    for (const t of this.entities.values()) if (living(t) && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
+    for (const t of this.entities.values()) if (healable(t) && !t.inside && t.owner === e.owner && t.hp < t.maxHp && dist(t.x, t.y, e.x, e.y) <= toFp(U.fontaine.radius)) t.hp = Math.min(t.maxHp, t.hp + U.fontaine.hp);
   }
 }
 
@@ -338,7 +340,7 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
   const def = e.def as UnitDef;
   if (o.kind === 'heal') {
     const t = this.entities.get(o.target);
-    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e)) return this.setOrder(e, null);
+    if (!t || t.hp <= 0 || t.hp >= t.maxHp || !this.healRate(e) || ((e.def as UnitDef).heal && !healable(t))) return this.setOrder(e, null);
     // A god summoning or going up a level heals only what is within reach: it may not walk.
     if (this.gap(e, t) > (def.healRange ?? 2) * FP) return this.busy(e) ? this.setOrder(e, null) : this.chase(e, t);
     e.goal = null;
