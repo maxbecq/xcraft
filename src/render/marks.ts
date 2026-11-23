@@ -1,6 +1,7 @@
 import { AdditiveBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, PlaneGeometry, type Scene, ShaderMaterial, Color } from 'three';
 import BALANCE from '../balance.json';
 import { FLY_HEIGHT } from '../data';
+import { HELD_BY } from './effects';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -26,6 +27,9 @@ const BLIND = M('amonra', 0xffd040, false);
 const CHARM = M('soumission', 0xff4ad0, false);
 const SWARM = M('nuee', 0x9a9a40, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
+const STUNNED = M('chocmental', 0xc08aff, false);
+const BURROWED = M('enfouissement', 0xb08a60, true);
+const ILLUSION = M('double', 0x9af0ff, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
@@ -36,6 +40,9 @@ const SLOW = M('jetdesable', 0xd8b070, false);
  */
 export function marksOf(e: Entity): Mark[] {
   const out: Mark[] = [];
+  if (HELD_BY.get(e.id) === 'chocmental' && e.held > 0) out.push(STUNNED);
+  if (e.burrowed) out.push(BURROWED);
+  if (e.illusion) out.push(ILLUSION);
   if (e.charm > 0) out.push(CHARM);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
   if (e.phased > 0 && e.def.kind === 'unit') out.push(PHASED);

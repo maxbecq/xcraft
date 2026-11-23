@@ -12,6 +12,7 @@ import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP } from './models';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
+import { seeThrough } from './effects';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
 import { scaffoldMaterial, buildingSite, POOLS, PLAZAS, plaza, pool, contactShadow, podDock, bendDock, dockArm } from './sites';
 import { dropTexture, spark, reserveFx, assimFx, forgeFx, thrusterFx, wellFx, rallyFlag, animateRally } from './unitfx';
@@ -725,7 +726,7 @@ export class EntityRenderer {
       v.hp = hp;
       if (v.flash && (v.flash.left -= dt) <= 0) unflash(v);
       // Kit d'invisibilité (the user's pick, 2026-11-23): see-through for its side and for an enemy detecting it.
-      setCloak(v, !!(e.support & KIT.invisibilite));
+      setCloak(v, seeThrough(e));
       if (v.emerge) {
         // Off the deck: a ramp down from where it was built to where the simulation put it.
         v.emerge.age += dt;

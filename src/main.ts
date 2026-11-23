@@ -319,6 +319,7 @@ minimap.intercept = (x, y) => hud.minimapClick(x, y);
 const fxScene = new Scene();
 const effects = new Effects(fxScene, scene, map, audio);
 effects.muzzle = (id) => units.muzzle(id);
+effects.top = (id) => units.top(id);
 effects.density = GFX.particles;
 effects.eye = rig.camera;
 setFxLite(GFX.particles < 1);
