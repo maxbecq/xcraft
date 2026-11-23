@@ -119,7 +119,7 @@ export function spotAt(h: Hud, type: string, ground: Vector3): [number, number] 
 }
 
 /**
- * For a building with add-ons (Z Pod) at `spot`: where its largest add-on would go, or null if no side has room;
+ * For a building with add-ons (Z Pod) at `spot`: where its largest add-on would go, or null if none of its 8 places has room;
  * undefined for any other building.
  */
 function addonRoom(h: Hud, type: string, spot: [number, number]): [number, number] | null | undefined {

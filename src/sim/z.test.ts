@@ -3,6 +3,7 @@ import { AI } from '../ai/ai';
 import { type BuildingDef, DEFS, KIT, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import { FP, ticks, tileOf } from './fixed';
 import { addonSlots } from './buildings';
+import { commandOk } from './validate';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
 
@@ -755,5 +756,75 @@ describe('Z Patte ultramécanique in a crowd at a cliff', () => {
       return all.map((u) => [u.x, u.y]);
     });
     expect(runs[0]).toEqual(runs[1]);
+  });
+});
+
+describe('Z, revue du 23/11', () => {
+  it('off its creep the Centre K fits no kit; back on it, it does', () => {
+    const w = createMatch(['z', 'humains']);
+    const p = w.players[0];
+    p.minerals = p.energy = 5000;
+    const k = w.spawn('centrek', 0, 60 * FP, 60 * FP);
+    const quad = w.spawn('quadripode', 0, 70 * FP, 70 * FP);
+    expect(w.onCreep(k)).toBe(false);
+    const patte = () => w.step([{ player: 0, kind: 'ability', ids: [k.id], name: 'kitpatte', x: quad.x, y: quad.y }]);
+    patte();
+    expect(quad.support & KIT.patte).toBe(0);
+    expect(p.minerals).toBe(5000);
+    w.spawn('pod', 0, 63 * FP, 60 * FP);
+    expect(w.onCreep(k)).toBe(true);
+    patte();
+    expect(quad.support & KIT.patte).toBeTruthy();
+  });
+
+  it('a Pod whose 4 sides are taken raises its add-on in a corner, the same list as the player\'s 8 places', () => {
+    const w = createMatch(['z', 'humains']);
+    w.players[0].minerals = w.players[0].energy = 5000;
+    const pod = w.spawn('pod', 0, 41 * FP, 41 * FP);
+    const slots = addonSlots(pod.tx, pod.ty, 2, 2);
+    for (const i of [1, 3, 4, 6]) w.spawn('pod', 0, (slots[i][0] + 1) * FP, (slots[i][1] + 1) * FP);
+    const spot = w.addonSpot(pod, 'tourelle')!;
+    expect([0, 2, 5, 7].map((i) => slots[i])).toContainEqual(spot);
+    expect(w.addonSpotAt('tourelle', pod.tx, pod.ty, 2, 0)).toEqual(spot);
+    w.step([{ player: 0, kind: 'train', ids: [pod.id], type: 'tourelle' }]);
+    const t = [...w.entities.values()].find((e) => e.type === 'tourelle' && e.host === pod.id)!;
+    expect([t.tx, t.ty]).toEqual(spot);
+  });
+
+  it('an add-on place is one of 8, and for an add-on only', () => {
+    expect(commandOk({ kind: 'train', ids: [1], type: 'tourelle', slot: 7 })).toBe(true);
+    expect(commandOk({ kind: 'train', ids: [1], type: 'tourelle', slot: 8 })).toBe(false);
+    expect(commandOk({ kind: 'train', ids: [1], type: 'tourelle', slot: -1 })).toBe(false);
+    const w = createMatch(['z', 'humains']);
+    const hq = of(w, 0, 'intelligence')[0];
+    w.step([{ player: 0, kind: 'train', ids: [hq.id], type: 'drone', slot: 0 }]);
+    expect(hq.queue).toHaveLength(0);
+    w.step([{ player: 0, kind: 'train', ids: [hq.id], type: 'drone' }]);
+    expect(hq.queue).toHaveLength(1);
+  });
+
+  it('the Nuage de nanites guards a teammate\'s machines too, never an enemy\'s', () => {
+    const w = createMatch(['z', 'z', 'humains']);
+    w.setTeams([0, 0, 1]);
+    const acc = Object.assign(w.spawn('quadripode', 0, 70 * FP, 70 * FP), { kit: 'accumulateur', mana: 1 << 30 });
+    const mate = w.spawn('hexapode', 1, 73 * FP, 70 * FP);
+    const foe = w.spawn('hexapode', 2, 70 * FP, 73 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [acc.id], name: 'cone' }]);
+    expect(w.coned(mate)).toBe(true);
+    expect(w.coned(foe)).toBe(false);
+  });
+
+  it('a Tourelle réparatrice reaches from its edge: a machine 4.2 from its middle, under 3 from its edge, is mended', () => {
+    const w = createMatch(['z', 'humains']);
+    const t = w.spawn('tourelle', 0, 60 * FP, 60 * FP);
+    t.host = w.spawn('pod', 0, 58 * FP, 60 * FP).id;
+    t.kit = 'reparateur';
+    const near = w.spawn('hexapode', 0, t.x + 4.2 * FP, t.y);
+    const far = w.spawn('hexapode', 0, t.x + 6 * FP, t.y);
+    expect(w.gap(t, near)).toBeLessThanOrEqual(w.healReach(t));
+    near.hp = far.hp = 100;
+    run(w, 3);
+    expect(near.hp).toBeGreaterThan(100);
+    expect(far.hp).toBe(100);
   });
 });

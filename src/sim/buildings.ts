@@ -104,13 +104,20 @@ export function onCreep(this: World, b: Entity): boolean {
   return this.powered(b.owner, b.x, b.y);
 }
 
-/** The same for a Pod of size `own` at (tx, ty), placed or not (the placement preview checks its add-on has room). */
+/**
+ * The same for a Pod of size `own` at (tx, ty), placed or not (the placement preview checks its add-on has room): one
+ * of its 8 places (addonSlots, the player's), a side before a corner. On a side, an odd difference of size leaves half
+ * a tile: the place shifted the other way is tried too, so a game turned with the map stays the same game.
+ */
 export function addonSpotAt(this: World, type: string, tx: number, ty: number, own: number, player: number): [number, number] | undefined {
   const size = (DEFS[type] as BuildingDef).size;
-  // Centred on the side; an odd difference of size leaves half a tile, taken either way.
-  const spots: [number, number][] = [];
-  for (const mid of new Set([Math.floor((own - size) / 2), Math.ceil((own - size) / 2)]))
-    spots.push([tx + own, ty + mid], [tx - size, ty + mid], [tx + mid, ty + own], [tx + mid, ty - size]);
+  const slots = addonSlots(tx, ty, own, size);
+  const corners = [0, 2, 5, 7].map((i) => slots[i]);
+  const sides = [1, 3, 4, 6].map((i) => slots[i]);
+  if ((own - size) % 2) {
+    const shift = Math.ceil((own - size) / 2) - Math.floor((own - size) / 2);
+    sides.push([slots[1][0] + shift, slots[1][1]], [slots[3][0], slots[3][1] + shift], [slots[4][0], slots[4][1] + shift], [slots[6][0] + shift, slots[6][1]]);
+  }
   // Seen from every corner alike (a fixed east-first order put a bottom-right base's add-on at its back): spots by
   // distance to the middle, a tie to the one left of the line from the Pod. Doubled tile units, all whole.
   const [mx, my, px, py] = [this.map.width, this.map.height, 2 * tx + own, 2 * ty + own];
@@ -118,7 +125,8 @@ export function addonSpotAt(this: World, type: string, tx: number, ty: number, o
     const [cx, cy] = [2 * x + size, 2 * y + size];
     return (cx - mx) ** 2 + (cy - my) ** 2 + ((mx - px) * (cy - py) - (my - py) * (cx - px) < 0 ? 0 : 0.5);
   };
-  return spots.sort((a, b) => key(a) - key(b)).find(([x, y]) => this.canPlace(type, x, y, player));
+  const best = (list: [number, number][]) => list.sort((a, b) => key(a) - key(b)).find(([x, y]) => this.canPlace(type, x, y, player));
+  return best(sides) ?? best(corners);
 }
 
 /**

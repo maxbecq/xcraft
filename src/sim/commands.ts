@@ -126,6 +126,8 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'train': {
+      // A place (`slot`) is for a Pod's add-on only: on anything else the order is no order.
+      if (c.slot !== undefined && !(DEFS[c.type] as BuildingDef | undefined)?.addon) return;
       if (ARTEFACTS.includes(c.type)) {
         // An improvement from the Artefacterie, bought at a god anywhere; 4 at most per god, queued ones counted.
         const lack = this.lacks(c.player, c.type);
@@ -350,6 +352,8 @@ export function apply(this: World, c: Command): void {
       const ab = ABILITIES[kind];
       if (!ab) return;
       if (b.type === 'centrek') {
+        // Off its creep the Centre K fits no kit, as it produces nothing (proposition 6, provisional).
+        if (!BALANCE.rules.z.offCreep.produces && !this.onCreep(b)) return void this.say(c.player, "Hors creep : à l'arrêt.");
         const need = this.needs(c.player, ab.research);
         if (need) return void this.say(c.player, need);
         return void this.centreK(b, kind, ax, ay);

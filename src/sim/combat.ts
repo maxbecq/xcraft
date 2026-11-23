@@ -290,11 +290,11 @@ function pulseOf(this: World, e: Entity): number {
   return (e.def as UnitDef).healPulse ?? (e.kit === 'reparateur' ? this.healRate(e) : 1);
 }
 
-/** Inside a Nuage de nanites (Z Accumulateur): an ally of a caster within its radius, the caster excepted. */
+/** Inside a Nuage de nanites (Z Accumulateur): a unit of a caster's team within its radius, the caster excepted. */
 export function coned(this: World, t: Entity): boolean {
   if (!this.cones) return false;
   const r = toFp(ABILITIES.cone.radius!);
-  for (const c of this.entities.values()) if (c.cone > 0 && c !== t && c.owner === t.owner && c.hp > 0 && dist(c.x, c.y, t.x, t.y) <= r) return true;
+  for (const c of this.entities.values()) if (c.cone > 0 && c !== t && !this.hostile(c.owner, t.owner) && t.owner >= 0 && c.hp > 0 && dist(c.x, c.y, t.x, t.y) <= r) return true;
   return false;
 }
 
@@ -682,7 +682,8 @@ export function patient(this: World, e: Entity): Entity | undefined {
     if (t === e || t.owner !== e.owner || t.hp >= t.maxHp || t.hp <= 0) continue;
     // The Réparateur mends machines and, as the notice says (« véhicules et bâtiments »), finished buildings.
     if (t.def.kind === 'building' ? !mender || t.buildLeft > 0 : t.def.kind !== 'unit' || (mender && !(t.def as UnitDef).mechanical)) continue;
-    if ((t.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
+    // A Tourelle's reach counts from its edge, as a Réparateur's does (it cannot step closer).
+    if ((t.def.kind === 'building' || e.def.kind === 'building' ? this.gap(e, t) : dist(e.x, e.y, t.x, t.y)) > range) continue;
     const f = t.hp / t.maxHp;
     if (f < worst) [best, worst] = [t, f];
   }

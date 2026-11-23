@@ -43,6 +43,8 @@ export function commandOk(c: unknown, sandbox = false, replay = false): boolean 
   if (!fields) return false;
   if (!Array.isArray(c.ids) || c.ids.length > MAX_IDS || !c.ids.every(int)) return false;
   if (c.kind === 'trade' && c.sell !== 'minerals' && c.sell !== 'energy') return false;
+  // One of a Pod's 8 places (addonSlots), and only for an add-on: the simulation checks that.
+  if (c.kind === 'train' && c.slot !== undefined && !(int(c.slot) && c.slot >= 0 && c.slot < 8)) return false;
   if (c.kind === 'sandbox' && !SANDBOX_TOOLS.includes(c.tool as string)) return false;
   // Both coordinates or neither (an aimed power).
   if ((c.x === undefined) !== (c.y === undefined)) return false;
