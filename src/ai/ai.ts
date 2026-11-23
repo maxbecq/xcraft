@@ -2,6 +2,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSE
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions, startSite } from '../sim/setup';
+import { armyOf, counter, DOCTRINE, type Doctrine, hash, LEGACY, pickStrategy, type Seen, type Strategy, USUAL_GODS } from './strategy';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -103,7 +104,6 @@ const CROWD: Record<string, number> = { explosiftoxique: 3, silence: 2, pluiedef
 /** Spells that take a caster out of a lost fight: the mana for them is never spent on another. */
 const ESCAPE = ['voyage'];
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
-const GODS = BALANCE.ai.gods as [string, number][];
 
 // What one turn of the AI works from, step by step: what it has, what it wants, what it keeps back, what it spends.
 type Survey = ReturnType<AI['survey']>;
@@ -169,6 +169,15 @@ export class AI {
   private danger: { x: number; y: number } | undefined;
 
   private readonly faction: FactionDef;
+  /** The game plan drawn at the start (strategy.ts), the doctrine it plays by, and its lists as this game bends them. */
+  readonly strategy: Strategy;
+  readonly doctrine: Doctrine;
+  private gods: [string, number][];
+  private researchList: string[];
+  /** The army aimed at, bent by what the scouts saw (counter), recomputed each turn. */
+  private armyList: [string, number][];
+  /** Most of each enemy type seen at once. */
+  private seen: Seen = new Map();
 
   private readonly easy: boolean;
   private readonly hard: boolean;
@@ -179,8 +188,22 @@ export class AI {
    * never raids workers, researches, casts, kites nor falls back; the hard AI expands sooner and its
    * soldiers focus their fire on the enemy they can finish.
    */
-  constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal') {
+  /**
+   * Strategies (strategy.ts) only when asked for: `opts.strategies`, or `opts.strategy` naming one. Not yet in the game:
+   * the first tournament (23/11, Dieux) showed no gain over the AI as it is, which stays the default (`legacy`).
+   * `opts.seed`: the game's seed the strategy is drawn with (by default one from the sides and the map).
+   */
+  constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal', opts: { seed?: number; strategy?: string; strategies?: boolean; legacy?: boolean; doctrine?: Doctrine } = {}) {
     this.faction = FACTIONS[world.players[player].faction];
+    const faction = world.players[player].faction;
+    const seed = opts.seed ?? hash(world.players.map((p) => p.faction).join(','), world.map.width, world.map.height);
+    const legacy = opts.legacy ?? !(opts.strategies || opts.strategy);
+    this.strategy = legacy ? { id: 'classique', name: 'Classique' } : pickStrategy(faction, seed, player, opts.strategy);
+    this.doctrine = opts.doctrine ?? (legacy ? LEGACY : DOCTRINE);
+    this.gods = this.strategy.gods ?? USUAL_GODS;
+    this.researchList = [...new Set([...(this.strategy.research ?? []), ...(RESEARCH[faction] ?? [])])];
+    this.armyList = armyOf(faction, this.strategy);
+    if (this.strategy.wave) plan = this.plan = { ...plan, wave: this.strategy.wave, waveGrowth: this.strategy.waveGrowth ?? plan.waveGrowth };
     this.easy = level === 'easy';
     if (this.easy) this.plan = { ...plan, ...(LEVELS.easy.plan as Partial<Plan>) };
     // Z: waves of 12, not 8. Sent eight at a time against a bigger army, its socles died to the last one, and the
@@ -239,6 +262,7 @@ export class AI {
     if (bank > this.lastBank || !this.lastIncome) this.lastIncome = w.tick;
     this.lastBank = bank;
     const s = this.survey(mine, home);
+    this.scout();
     const n = { ...s, ...this.need(s) };
     const ctx: Turn = { ...n, ...this.budget(n), keep: 0, godEnergy: 0, low: 0, queued: 0, mending: 0, urgent: false };
     // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
@@ -313,8 +337,26 @@ export class AI {
     this.muster(ctx);
     this.cast(ctx);
     this.withdraw(ctx);
+    this.guard(ctx);
     this.advance(ctx);
     return ctx.out;
+  }
+
+  /** What the scouts see of the enemy's army, kept at its most of each type, and the army aimed at bent by it. */
+  private scout(): void {
+    if (this.doctrine === LEGACY) return;
+    const w = this.world;
+    const now = new Map<string, number>();
+    for (const e of w.entities.values()) if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.hostile(e.owner, this.player) && w.sees(this.player, e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
+    for (const [t, n] of now) this.seen.set(t, Math.max(n, this.seen.get(t) ?? 0));
+    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy), this.seen);
+    // The enemy's fighters and armed buildings, as last seen, for `sends` (dominates keeps the same memory).
+    const seen = this.visibleFoes();
+    for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+    for (const id of this.foes.keys()) {
+      const e = w.entities.get(id);
+      if (!e || (w.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
+    }
   }
 
   /** What this turn starts from: our units and buildings, the bank (less what builders walking to a site will spend). */
@@ -550,7 +592,7 @@ export class AI {
     if (f.defense && count(f.defense) < defenses && !building(f.defense) && !(f === FACTIONS.z && ctx.minerals < 500)) wants.push(f.defense);
     // Late buildings (Marché, Alchimisterie, Orbe de commandement), one each, once their time has come.
     // One that needs the tech building waits for its first unit (the Orbe de commandement took all the energy of the first Discobole).
-    for (const [type, from] of [...(EXTRA[p.faction] ?? []), ...(MORE_EXTRA[p.faction] ?? [])]) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
+    for (const [type, from] of [...(EXTRA[p.faction] ?? []), ...(MORE_EXTRA[p.faction] ?? []), ...(this.strategy.extra ?? [])]) if (minute >= from && count(type) === 0 && !w.lacks(this.player, type) && !(f.tech && (DEFS[type] as BuildingDef).requires?.[f.tech] && !this.fielded)) wants.push(type);
     // Humans: a Fortin by the rally point, manned by four soldiers kept back from the waves.
     const bunker = f.buildable.find((t) => (DEFS[t] as BuildingDef).bunker && !(DEFS[t] as BuildingDef).dropoff && !(DEFS[t] as BuildingDef).energyRate);
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
@@ -616,7 +658,7 @@ export class AI {
     // research on a production building (Isdaris Portail) waits for spare resources instead.
     // Not for the easy AI, which researches nothing: the minerals kept for it held back its units for good.
     // Nor with no minerals coming in: its price, kept for good, held back the last units.
-    const nextResearch = this.easy || army.length < this.plan.wave || w.tick - this.lastIncome >= ticks(60) ? undefined : (RESEARCH[p.faction] ?? []).find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
+    const nextResearch = this.easy || army.length < this.plan.wave || w.tick - this.lastIncome >= ticks(60) ? undefined : this.researchList.find((t) => w.researchable(this.player, t) && !w.lacks(this.player, t) && buildings.some((b) => b.buildLeft === 0 && !(b.def as BuildingDef).trains?.length && (b.def as BuildingDef).researches?.includes(t)));
     // Research comes before the tech building it would otherwise wait for (Forge upgrades before the Créaturium).
     // Isdaris: the Psycho-assembleur comes first, its Portail upgrades only make the gateway army stronger.
     // Not once the tech building is three minutes late: the Forge's research took every point of energy as it came,
@@ -773,7 +815,7 @@ export class AI {
     }
     // Research in priority order on idle buildings; production buildings only with minerals to spare.
     const researching = new Set<number>();
-    const listed = RESEARCH[p.faction] ?? [];
+    const listed = this.researchList;
     for (const t of this.easy ? [] : [...listed, ...(minute >= 10 ? LATE[p.faction] : [])]) {
       // An extension goes through its own step below (the Totem, in both, was paid for twice in the turn's budget).
       if (saving || !w.researchable(this.player, t) || EXTENSIONS.includes(t)) continue;
@@ -1053,7 +1095,9 @@ export class AI {
   private nextGod(ctx: Turn): string | undefined {
     const { w, f, mine, home, buildings, minute, saving } = ctx;
     if (!f.gods || saving || !kin(home, f.hq) || home.queue.length) return undefined;
-    const next = GODS.find(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
+    // The first one due that can come (one waiting on gods summoned after it in a strategy's order held every god behind it).
+    const due = this.gods.filter(([g, from]) => minute >= from && !mine.some((e) => e.type === g) && !buildings.some((b) => b.queue.includes(g)));
+    const next = this.doctrine === LEGACY ? due[0] : due.find(([g]) => !w.lacks(this.player, g));
     return next && !w.lacks(this.player, next[0]) ? next[0] : undefined;
   }
 
@@ -1076,14 +1120,17 @@ export class AI {
         // summoning one unit at a time 1000 to 5000 minerals lay unspent from minute 6 to 12).
         // Only for a god with room in supply, after what this turn already ordered: one that cannot come keeps nothing.
         else if (gods.length && this.room(ctx) >= def.supply) {
-          ctx.minerals -= def.cost.minerals;
+          // Doctrine: its minerals kept only once most of its energy is there; short of energy, the minerals held for it
+          // starved the troops (Dieux at 500 to 900 minerals, their gods idle, waiting for Seth's 200 energy).
+          if (this.doctrine === LEGACY || ctx.energy * 2 >= def.cost.energy) ctx.minerals -= def.cost.minerals;
           ctx.energy -= def.cost.energy;
         }
       }
       for (const g of gods) {
-        if (g.queue.length > (this.easy ? 0 : 1)) continue;
+        // A god keeps `godQueue` summons ahead once minerals pile up (one ahead held the Dieux' bank at 2000 to 2600).
+        if (g.queue.length > (this.easy ? 0 : ctx.minerals > 400 ? this.doctrine.godQueue : 1)) continue;
         // The god's troop the army lacks most against its share (ai.army.dieux); a type without a share, never.
-        const share = BALANCE.ai.army.dieux as Record<string, number>;
+        const share = Object.fromEntries(this.armyList) as Record<string, number>;
         // A unit counted in the forms it turns into (an Élémentaire takes its fire form at once: never counted, Athéna
         // trained nothing else).
         const kinds = (t: string) => [t, ...(FORMS[t] ?? [])];
@@ -1107,14 +1154,17 @@ export class AI {
       // Not Gaïa: her levels only speed up buildings, and measured, they ate the minerals the next gods were saved with.
       // Only once the first-rank gods are out; the minerals saved for the next god due are already set aside above.
       // (or from minute 12 anyway: short of energy, Apollon may never come).
-      const allGods = GODS.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) || minute >= 12;
+      const allGods = this.gods.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) || minute >= 12;
       // A level that costs no energy (Thor's) comes sooner, from minerals to spare: energy, not minerals, held the next
       // gods back, and Thor's levels were the one place 1000 to 5000 idle minerals could go.
       for (const g of gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau'))) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
-        if (!cost || !(allGods || cost.energy === 0)) continue;
-        if (ctx.minerals - ctx.keep - BALANCE.ai.godLevelMargin < cost.minerals || (cost.energy > 0 && ctx.energy - reserve < cost.energy)) continue;
+        // Doctrine: a god's second level at once, without the margin: it summons twice as fast (base time over its
+        // level), the one way the Dieux' production keeps up with their income.
+        const second = this.doctrine !== LEGACY && g.lvl === 1;
+        if (!cost || !(allGods || cost.energy === 0 || second)) continue;
+        if (ctx.minerals - ctx.keep - (second ? 0 : BALANCE.ai.godLevelMargin) < cost.minerals || (cost.energy > 0 && ctx.energy - reserve < cost.energy)) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: 'niveau' });
         ctx.minerals -= cost.minerals;
         ctx.energy -= cost.energy;
@@ -1218,7 +1268,10 @@ export class AI {
           return o.kind === 'attackMove' && dist(o.x, o.y, threat.x, threat.y) > 12 * FP;
         })
         .map((u) => u.id);
-      if (ids.length) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
+      // Doctrine: too few and too weak against the raid, the defenders gather at the rally point (by the base's
+      // defences) instead of running at it one by one as they come out.
+      const weak = this.doctrine !== LEGACY && atHome.length < this.doctrine.regroup && strength(atHome) * this.doctrine.retreat < threat.strength;
+      if (ids.length && !weak) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
       // No soldiers to speak of against a small raid: the workers next to it fight.
       // Not against flyers their arms cannot reach (drones gathered under a Drake's blasts).
       // Only with workers and defenders together as strong as the raid: three drones sent at four heavy units died.
@@ -1244,7 +1297,7 @@ export class AI {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
-    } else if ((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) {
+    } else if (((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) && this.sends(atHome, ctx)) {
       // No income left: half a wave at least goes, or the last units it can pay for (one at a time, each new Créature
       // joined a wave of three dying under a manned Fortin, for twenty minutes, to a draw).
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
@@ -1277,6 +1330,56 @@ export class AI {
         if (fresh) this.via = this.sharedRoad(home);
       }
     }
+  }
+
+  /**
+   * Doctrine, for the soldiers at home ready to go: no wave before the strategy's minute, a new wave only when its
+   * power is `engage` times the enemy army known, reinforcements for a wave out only `regroup` at a time. Not when
+   * nothing more will come (no income, nothing to pay, supply full): then whatever is left goes.
+   */
+  private sends(atHome: Entity[], ctx: Turn): boolean {
+    const d = this.doctrine;
+    if (d === LEGACY || this.easy) return true;
+    const last = ctx.supply.used >= 190 || (this.starved(ctx.buildings, ctx.p.minerals) && !this.affordable(ctx));
+    if (last || ctx.minute >= 25) return true;
+    if (this.wave.size > 0) return atHome.length >= d.regroup;
+    if (ctx.minute < (this.strategy.attackMinute ?? 0)) return false;
+    const known = this.power([...this.foes.values()]);
+    const armed = atHome.filter((u) => !!this.world.weapon(u));
+    return known === 0 || this.power(armed.map((u) => [u.hp + u.shield, this.dps(u)])) >= d.engage * known;
+  }
+
+  /**
+   * Doctrine: a god near armed enemies with too little of our army round it (`escort` of their power) gets the
+   * soldiers at home not far off sent to it; badly hurt, it falls back to the rally point, out of the wave. Pulling
+   * every god back cost the Dieux their best fighters (tournament of 23/11: 5 wins in 24 against 12 without).
+   */
+  private guard(ctx: Turn): void {
+    const d = this.doctrine;
+    if (d === LEGACY || this.easy || !d.escort) return;
+    const { w, gods, army, rally } = ctx;
+    const foes = this.visibleFoes();
+    const back: number[] = [];
+    const sent = new Set<number>();
+    for (const g of gods) {
+      if (dist(g.x, g.y, rally.x, rally.y) < 10 * FP) continue;
+      const near = foes.filter((e) => dist(e.x, e.y, g.x, g.y) < 10 * FP);
+      if (!near.length) continue;
+      const escort = army.filter((u) => !!w.weapon(u) && dist(u.x, u.y, g.x, g.y) < 8 * FP);
+      const ours = this.power(escort.map((u) => [u.hp + u.shield, this.dps(u)]));
+      const theirs = this.power(near.map((e) => [e.hp + e.shield, this.dps(e)]));
+      if (ours >= d.escort * theirs) continue;
+      if (g.hp * 2 < g.maxHp) {
+        if (g.order?.kind === 'move' && dist(g.order.x, g.order.y, rally.x, rally.y) < 2 * FP) continue;
+        this.wave.delete(g.id);
+        back.push(g.id);
+        continue;
+      }
+      const help = army.filter((u) => !sent.has(u.id) && !this.wave.has(u.id) && !!w.weapon(u) && dist(u.x, u.y, g.x, g.y) < 25 * FP && dist(u.x, u.y, g.x, g.y) >= 8 * FP && u.order?.kind !== 'attack');
+      for (const u of help) sent.add(u.id);
+      if (help.length) ctx.out.push({ player: this.player, kind: 'attack', ids: help.map((u) => u.id), x: g.x, y: g.y });
+    }
+    if (back.length) ctx.out.push({ player: this.player, kind: 'move', ids: back, x: rally.x, y: rally.y });
   }
 
   /** Abilities: the simple ones, tactics, Observation céleste, Rappel. */
@@ -1599,7 +1702,7 @@ export class AI {
       // Flyers only: the enemy's power that reaches them (a Fortin of Phalangistes cannot).
       // And ours by what reaches the flyers when the enemies there all fly (flame throwers under Drakes stayed on).
       // (a ground wave fell back before one Coléoptère whose Déchiqueteur hits flyers only).
-      if (power(ours, side(near)) * 2 < power(near, side(ours))) ours.forEach((o) => out.add(o));
+      if (power(ours, side(near)) * this.doctrine.retreat < power(near, side(ours))) ours.forEach((o) => out.add(o));
     }
     return [...out];
   }
@@ -1935,12 +2038,12 @@ export class AI {
     if (this.faction !== FACTIONS.humains) {
       // Weighted rotation through the faction's army; energy-hungry units only when affordable, a few invisible ones at most.
       const cloaked = own.filter((u) => (u.def as UnitDef).cloaked).length;
-      const sneak = this.faction.army.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals && !this.world.lacks(this.player, t, undefined, at));
+      const sneak = this.armyList.find(([t]) => (DEFS[t] as UnitDef).cloaked && (DEFS[t] as UnitDef).cost.energy <= energy && (DEFS[t] as UnitDef).cost.minerals <= minerals && !this.world.lacks(this.player, t, undefined, at));
       if (sneak && cloaked < MAX_CLOAKED) return sneak[0];
       // Against flying enemies, only what can shoot them.
       // Only what fits in supply: a 4-supply Octopode with 2 left was picked again every turn, and nothing came.
-      const fits = this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
-      const affordable = fits.length ? fits : this.faction.army.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
+      const fits = this.armyList.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
+      const affordable = fits.length ? fits : this.armyList.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
       // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.
