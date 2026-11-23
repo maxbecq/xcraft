@@ -309,8 +309,8 @@ export class Input {
   }
 
   /** A click on `hit`: it alone, or all of its kind on screen (Ctrl/Cmd, or a second click); Shift adds or takes out.
-   * The alternative interface (the user's choice of 2026-11-24): a click on one of our fighters picks the whole army,
-   * on all the map; a second click on it, that one alone. */
+   * The alternative interface (the user's choice of 2026-11-24): a click on one of our fighters picks the whole army
+   * on screen (as Ctrl does for a kind); a second click on it, that one alone. */
   private pick(hit: Entity, ctrl: boolean, shift: boolean): void {
     const now = performance.now();
     if (this.alt && !ctrl && !shift && this.fighter(hit)) {
@@ -318,7 +318,7 @@ export class Input {
       this.lastClick = { time: again ? 0 : now, type: `#${hit.id}` };
       this.selected.clear();
       if (again) this.selected.add(hit.id);
-      else for (const e of this.world.entities.values()) if (this.fighter(e)) this.selected.add(e.id);
+      else for (const e of this.world.entities.values()) if (this.fighter(e) && this.onScreen(e)) this.selected.add(e.id);
       return;
     }
     const kind = hit.owner === this.player ? hit.type : '';
