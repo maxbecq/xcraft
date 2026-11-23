@@ -20,18 +20,17 @@ export const FX_STYLE = PARAMS.get('fx') || 'c';
 /** Who holds a unit where it stands, by its id, as the effects saw it cast (render only): a Napalm burns, an Impulsion
  * magnétique crackles. The sim keeps one `held` count for every hold, so the render remembers which spell set it. */
 export const HELD_BY = new Map<number, 'napalm' | 'impulsion' | 'chocmental'>();
-/** Proposal stage (Isdaris, 2026-11-23): ?is=1 shows each Isdaris weapon's own shot; ?sorts=1|2 the two ideas of each
- * Isdaris lasting spell. Until the user picks. */
-const IS_STYLE = PARAMS.get('is') === '1';
-const SPELL_IDEA = PARAMS.get('sorts') ?? '';
+/** Proposal stage: ?sorts=e1|e2 shows the two ideas of the Créature's Enfouissement, until the user picks. */
+export const SPELL_IDEA = PARAMS.get('sorts') ?? '';
 const CYAN = 0x5ae0ff;
-/** Drawn see-through (render/units.ts): a Z socle under its invisibility kit; in the proposal stage, the Isdaris ideas
- * that make a body see-through (an Assassin, a Double, a unit under the Manteau, a phased one). */
+/** Drawn see-through (render/units.ts), as its side and an enemy detecting it see it: a Z socle under its invisibility
+ * kit, an Assassin, a Double énergétique, a unit under a Manteau (or another veil), a phased unit; in the Enfouissement
+ * proposal (e2), a buried Créature. */
 export function seeThrough(e: Entity): boolean {
-  if (e.support & KIT.invisibilite) return true;
-  if (SPELL_IDEA === '1') return e.type === 'assassin' || (e.phased > 0 && e.def.kind === 'unit');
-  if (SPELL_IDEA === '2') return e.illusion || (e.camo > 0 && e.type !== 'belluaire');
-  return false;
+  if (e.support & KIT.invisibilite || e.type === 'assassin' || e.illusion) return true;
+  if (e.camo > 0 && e.type !== 'belluaire') return true;
+  if (e.phased > 0 && e.def.kind === 'unit') return true;
+  return SPELL_IDEA === 'e2' && e.burrowed;
 }
 /** A shot's colour by the shooter's camp: Humans' powder orange, Isdaris' cyan light, Z's green, the Gods' gold. */
 /**
@@ -241,7 +240,6 @@ export class Effects {
     if (world.tick % 10 === 0) {
       for (const e of world.entities.values()) {
         if (e.gravity > 0 && seen(e.x, e.y)) this.gravityField(this.at(e.x, e.y, 0.05));
-        if (e.phased > 0 && e.def.kind === 'building' && seen(e.x, e.y)) this.bubble(this.at(e.x, e.y, 0), (e.def as { size: number }).size);
       }
     }
     for (const d of world.deaths) {
@@ -463,7 +461,7 @@ export class Effects {
     this.rocks.count = rocks;
     this.rocks.instanceMatrix.needsUpdate = true;
     this.zSpells(world, sees, alpha, dt);
-    if (SPELL_IDEA === '1' || SPELL_IDEA === '2') this.isLasting(world, sees, alpha, dt, SPELL_IDEA === '1');
+    this.isSpells(world, sees, alpha, dt);
     // Explosif toxique: a low green fog over the whole zone.
     for (const c of world.clouds) {
       if (c.hits <= 0) continue;
@@ -566,13 +564,20 @@ export class Effects {
   }
 
 
-  /** Proposal stage: the Isdaris lasting spells, two ideas each (one: ?sorts=1, two: ?sorts=2). Render only. */
-  private isLasting(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number, one: boolean): void {
+  /**
+   * The Isdaris lasting spells drawn their own way (the user's picks, 2026-11-23): a violet spiral round a head the Choc
+   * mental holds, a golden sphere round a unit under the Sphère de renvoi, sparkles on a phased unit (its see-through
+   * body, with the Double's, the Manteau's and the Assassin's: render/units.ts), rings of light turning round a building
+   * under the Bouclier de plasma, a dome of cold light with a marked edge over a Silence des ions, lines of field along
+   * a Mur d'énergie, a red target closing in where the Canon orbital aims, sparkles over an Observatoire's zone.
+   * The Créature's Enfouissement: two ideas still (?sorts=e1|e2). Render only.
+   */
+  private isSpells(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number): void {
     const t = performance.now() / 1000;
-    const chance = (rate: number) => Math.random() < dt * rate;
-    const tick = (period: number, seed: number) => Math.floor(t / period + seed) !== Math.floor((t - dt) / period + seed);
+    const chance = (rate: number) => Math.random() < dt * rate * this.density;
     for (const e of world.entities.values()) {
-      if (e.inside || e.hp <= 0 || !sees(e)) continue;
+      const any = (HELD_BY.get(e.id) === 'chocmental' && e.held > 0) || e.reflect > 0 || e.phased > 0 || e.burrowed;
+      if (!any || e.inside || e.hp <= 0 || !sees(e)) continue;
       const x = (e.px + (e.x - e.px) * alpha) / FP;
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       const foot = new Vector3(x, heightAt(this.map, x, z) + (soars(e) ? FLY_HEIGHT : 0), z);
@@ -581,70 +586,90 @@ export class Effects {
       const tall = building ? 1.2 + r * 0.6 : 0.9 + r * 0.8;
       const seed = e.id * 7.31;
       const onBody = (a: number, h: number, out = 0.05) => foot.clone().add(new Vector3(Math.cos(a) * (r + out), h * tall, Math.sin(a) * (r + out)));
-      // Enfouissement: earth heaving over the buried Créature (1), ripples in the ground (2).
-      if (e.burrowed) {
-        if (one) { if (chance(6)) this.spawn(this.tex.smoke, 0x8a6a48, foot.clone().add(rnd(0.25)).setY(foot.y + 0.05), new Vector3(0, 0.25, 0), 1.2, 0.25, 0.6, 0.8, 0, false); }
-        else if (tick(1.2, seed)) this.ring(foot.clone().setY(foot.y + 0.05), 0x8ad8ff, 0.4, 0.8);
-      }
-      // Choc mental: a violet spiral round its head (1), stars of stun circling over it (2).
-      if (HELD_BY.get(e.id) === 'chocmental' && e.held > 0) {
-        if (one) for (let i = 0; i < 10; i++) this.hold(this.tex.glow, 0xc08aff, onBody(t * 4 + i * 0.6, 0.75 + i * 0.04, -r * 0.4 + i * 0.03), 0.07, 1, dt, true);
-        else for (let i = 0; i < 3; i++) this.hold(this.tex.glow, 0xfff4c0, onBody(t * 3 + (i * 6.28) / 3, 1.15, -r * 0.3), 0.16, 1, dt, true);
-      }
-      // Double énergétique (one: flickering cyan sparkles; two: see-through, render/units.ts).
-      if (e.illusion && one && chance(30)) this.spawn(this.tex.glow, 0x9af0ff, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.25, 0.18, 0.03, 1, 0, true);
-      // Manteau (one: a cyan haze at its legs; two: see-through).
-      if (e.camo > 0 && e.type !== 'belluaire' && one && chance(8)) this.spawn(this.tex.smoke, 0x9ae8ff, onBody(Math.random() * 6.28, 0.15, 0.1), new Vector3(0, 0.15, 0), 1.2, 0.3, 0.6, 0.5, 0, false);
-      // Sphère de renvoi: a golden sphere round the unit (1), a golden ring turning and flashing (2).
+      // Choc mental: a violet spiral round its head.
+      if (HELD_BY.get(e.id) === 'chocmental' && e.held > 0) for (let i = 0; i < 10; i++) this.hold(this.tex.glow, 0xc08aff, onBody(t * 4 + i * 0.6, 0.75 + i * 0.04, -r * 0.4 + i * 0.03), 0.07, 1, dt, true);
+      // Sphère de renvoi: a golden sphere of light round the unit, a glint running over it.
       if (e.reflect > 0) {
-        if (one) for (let i = 0; i < 14; i++) {
+        const R = r + 0.35;
+        for (let i = 0; i < 40; i++) {
           const a = i * 2.4 + t * 0.6;
-          const h = ((i * 0.37) % 1);
-          this.hold(this.tex.glow, 0xffe08a, foot.clone().add(new Vector3(Math.cos(a) * (r + 0.3) * Math.sin(h * Math.PI), tall * 0.5 + Math.cos(h * Math.PI) * tall * 0.6, Math.sin(a) * (r + 0.3) * Math.sin(h * Math.PI))), 0.08, 0.9, dt, true);
+          const h = (i + 0.5) / 40;
+          const ring = Math.sin(h * Math.PI);
+          const p = foot.clone().add(new Vector3(Math.cos(a) * R * ring, tall * 0.5 + Math.cos(h * Math.PI) * (tall * 0.5 + 0.3), Math.sin(a) * R * ring));
+          this.hold(this.tex.glow, i % 5 ? 0xffd860 : 0xfff4c0, p, 0.1, 1, dt, true);
         }
-        else for (let i = 0; i < 16; i++) this.hold(this.tex.glow, 0xffd060, onBody((i / 16) * 6.28 + t * 1.5, 0.55, 0.3), 0.07, 1, dt, true);
+        if (Math.floor(t / 1.5 + seed) !== Math.floor((t - dt) / 1.5 + seed)) this.ring(foot.clone().setY(foot.y + tall * 0.5), 0xffe08a, R, 0.5);
       }
-      // Déphasage, a unit (one: see-through; two: cyan motes streaming up through it).
-      if (e.phased > 0 && !building && !one && chance(25)) this.spawn(this.tex.glow, CYAN, onBody(Math.random() * 6.28, 0, -r * Math.random()), new Vector3(0, 1.6, 0), 0.6, 0.12, 0.04, 1, 0, true);
-      if (e.phased > 0 && !building && one && chance(16)) this.spawn(this.tex.glow, 0x9af0ff, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.16, 0.03, 1, 0, true);
-      // Bouclier de plasma, a building: a dense dome of light (1), rings of light turning round it (2).
-      if (e.phased > 0 && building) {
-        if (one) { if (chance(60)) { const a = Math.random() * 6.28; const f = Math.acos(Math.random()); const R = r * 1.5; this.spawn(this.tex.glow, 0x6ae8ff, foot.clone().add(new Vector3(R * Math.sin(f) * Math.cos(a), R * Math.cos(f) + 0.2, R * Math.sin(f) * Math.sin(a))), new Vector3(), 0.5, 0.35, 0.3, 0.6, 0, true); } }
-        else for (let k = 0; k < 3; k++) for (let i = 0; i < 20; i++) this.hold(this.tex.glow, 0x6ae8ff, onBody((i / 20) * 6.28 + t * (k % 2 ? -0.8 : 0.8), 0.2 + k * 0.4, r * 0.5), 0.08, 0.8, dt, true);
+      // Déphasage, a unit: cyan sparkles over its see-through body.
+      if (e.phased > 0 && !building && chance(16)) this.spawn(this.tex.glow, 0x9af0ff, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.3, 0.16, 0.03, 1, 0, true);
+      // Bouclier de plasma, a building: rings of light turning round it.
+      if (e.phased > 0 && building) for (let k = 0; k < 3; k++) for (let i = 0; i < 20; i++) this.hold(this.tex.glow, 0x6ae8ff, onBody((i / 20) * 6.28 + t * (k % 2 ? -0.8 : 0.8), 0.2 + k * 0.4, r * 0.5), 0.08, 0.8, dt, true);
+      // Enfouissement (proposal): a mound of earth over the buried Créature (e1), cyan ripples (e2).
+      if (e.burrowed) {
+        if (SPELL_IDEA === 'e1') {
+          for (let i = 0; i < 14; i++) {
+            const a = seed + i * 2.4;
+            const d = (0.15 + ((i * 0.37) % 1) * 0.45) * (r + 0.4);
+            this.hold(this.tex.smoke, i % 3 ? 0xc8a878 : 0x5a3e24, foot.clone().add(new Vector3(Math.cos(a) * d, 0.12 + (0.6 - d) * 0.3, Math.sin(a) * d)), 0.45, 1, dt, false);
+          }
+          if (chance(4)) this.spawn(this.tex.smoke, 0x9a7a58, foot.clone().add(rnd(0.3)).setY(foot.y + 0.2), new Vector3(0, 0.3, 0), 1, 0.2, 0.5, 0.7, 0, false);
+        } else if (SPELL_IDEA === 'e2') {
+          if (Math.floor(t / 0.7 + seed) !== Math.floor((t - dt) / 0.7 + seed)) this.ring(foot.clone().setY(foot.y + 0.06), 0x5ae0ff, 0.5, 0.9);
+          this.hold(this.tex.glow, 0x5ae0ff, foot.clone().setY(foot.y + 0.08), 0.5 + 0.1 * Math.sin(t * 4), 0.5, dt, true);
+        }
       }
-      // The Assassin, hidden (one: see-through; two: a faint shimmer only).
-      if (e.type === 'assassin' && !one && chance(20)) this.spawn(this.tex.glow, 0xe8f8ff, onBody(Math.random() * 6.28, Math.random()), new Vector3(), 0.25, 0.14, 0.03, 1, 0, true);
     }
-    // Silence des ions: a dome of cold light over the zone (1), frozen motes falling in it (2).
-    for (const z of world.silences) {
-      if (z.until <= world.tick) continue;
-      const p = this.at(z.x, z.y, 0.05);
-      const R = z.r / FP;
-      if (one) for (let n = 0; n < 4; n++) { if (chance(90)) { const a = Math.random() * 6.28; const f = Math.acos(Math.random() * 0.9); this.spawn(this.tex.glow, 0x8ab8ff, p.clone().add(new Vector3(R * Math.sin(f) * Math.cos(a), R * 0.5 * Math.cos(f), R * Math.sin(f) * Math.sin(a))), new Vector3(), 1.2, 0.55, 0.45, 0.7, 0, true); } }
-      else if (chance(25 * R)) { const a = Math.random() * 6.28; const d = Math.sqrt(Math.random()) * R; this.spawn(this.tex.glow, 0xc8e0ff, p.clone().add(new Vector3(Math.cos(a) * d, 2 + Math.random(), Math.sin(a) * d)), new Vector3(0, -0.8, 0), 2.5, 0.22, 0.14, 1, 0, true); }
+    // Silence des ions: a dome of cold light over the zone, a marked edge on the ground, motes drifting inside.
+    for (const zn of world.silences) {
+      if (zn.until <= world.tick) continue;
+      const p = this.at(zn.x, zn.y, 0.05);
+      const R = zn.r / FP;
+      const edge = Math.round(R * 10);
+      for (let i = 0; i < edge; i++) {
+        const a = (i / edge) * 6.28 + t * 0.15;
+        this.hold(this.tex.glow, 0xa8d0ff, p.clone().add(new Vector3(Math.cos(a) * R, 0.1, Math.sin(a) * R)), 0.32, 1, dt, true);
+      }
+      for (const [lat, n] of [[0.3, 0.8], [0.6, 0.55], [0.85, 0.3]] as const) {
+        const m = Math.round(edge * n);
+        for (let i = 0; i < m; i++) {
+          const a = (i / m) * 6.28 - t * 0.2 * (lat * 2);
+          const rr = R * Math.cos(lat * 1.4);
+          this.hold(this.tex.glow, 0x7aa8ff, p.clone().add(new Vector3(Math.cos(a) * rr, R * 0.45 * Math.sin(lat * 1.4), Math.sin(a) * rr)), 0.22, 0.65, dt, true);
+        }
+      }
+      if (chance(10 * R)) {
+        const a = Math.random() * 6.28;
+        const d = Math.sqrt(Math.random()) * R * 0.9;
+        this.spawn(this.tex.glow, 0xd8e8ff, p.clone().add(new Vector3(Math.cos(a) * d, 0.3 + Math.random() * R * 0.3, Math.sin(a) * d)), new Vector3(0, -0.15, 0), 2, 0.18, 0.12, 0.9, 0, true);
+      }
     }
-    // Observatoire (an Isdaris scan): a column of cyan light (1), sparkles over the whole zone (2).
+    // Mur d'énergie: lines of field running along it.
+    for (const m of world.walls) {
+      for (const i of m.tiles) {
+        const p = new Vector3((i % this.map.width) + 0.5, 0, Math.floor(i / this.map.width) + 0.5);
+        p.y = heightAt(this.map, p.x, p.z);
+        for (const h of [0.4, 1, 1.6]) this.hold(this.tex.glow, CYAN, p.clone().setY(p.y + h + 0.1 * Math.sin(t * 4 + i)), 0.3, 0.6, dt, true);
+      }
+    }
+    // Canon orbital, aimed: a red target turning and closing in.
+    for (const st of world.strikes) {
+      const p = this.at(st.x, st.y, 0.1);
+      for (let i = 0; i < 4; i++) {
+        const a = t * 2 + (i * Math.PI) / 2;
+        const R = 1.5 + 0.5 * Math.sin(t * 4);
+        this.streaks.spawn(0xff3050, p.clone().add(new Vector3(Math.cos(a) * R, 0, Math.sin(a) * R)), p.clone().add(new Vector3(Math.cos(a) * R * 0.4, 0, Math.sin(a) * R * 0.4)), 0, 0.06, 0, 0.22, 1);
+      }
+    }
+    // Observatoire (an Isdaris scan): sparkles over the whole zone.
     for (const sc of world.scans) {
       if (sc.left <= 0 || world.players[sc.owner]?.faction !== 'isdaris') continue;
       const p = this.at(sc.x, sc.y, 0.05);
       const R = sc.radius ?? 15;
-      if (one) { if (chance(25)) this.spawn(this.tex.glow, 0x9af0ff, p.clone().add(rnd(0.3)).setY(p.y + Math.random() * 8), new Vector3(0, -2, 0), 0.8, 1.4, 0.9, 0.5, 0, true); }
-      else if (chance(3 * R)) { const a = Math.random() * 6.28; const d = Math.sqrt(Math.random()) * R; this.spawn(this.tex.glow, 0x9af0ff, p.clone().add(new Vector3(Math.cos(a) * d, 0.3, Math.sin(a) * d)), new Vector3(0, 0.3, 0), 1.2, 0.16, 0.04, 0.9, 0, true); }
-    }
-    // Mur d'énergie: a denser curtain with streaks rising (1), lines of field running along it (2).
-    for (const m of world.walls) {
-      for (const i of m.tiles) {
-        const p = new Vector3(((i % this.map.width) + 0.5), 0, (Math.floor(i / this.map.width) + 0.5));
-        p.y = heightAt(this.map, p.x, p.z);
-        if (one) { if (chance(6)) this.streaks.spawn(CYAN, p.clone().add(new Vector3((Math.random() - 0.5) * 0.8, 0, (Math.random() - 0.5) * 0.8)), p.clone().setY(p.y + 1.8), 0.3, 0.2, 0.8, 0.06, 1); }
-        else for (const h of [0.4, 1, 1.6]) this.hold(this.tex.glow, CYAN, p.clone().setY(p.y + h + 0.1 * Math.sin(t * 4 + i)), 0.3, 0.6, dt, true);
+      if (chance(3 * R)) {
+        const a = Math.random() * 6.28;
+        const d = Math.sqrt(Math.random()) * R;
+        this.spawn(this.tex.glow, 0x9af0ff, p.clone().add(new Vector3(Math.cos(a) * d, 0.3, Math.sin(a) * d)), new Vector3(0, 0.3, 0), 1.2, 0.16, 0.04, 0.9, 0, true);
       }
-    }
-    // Canon orbital, aimed: a red target turning and closing in (1), a flickering beam of aim from the sky (2).
-    for (const st of world.strikes) {
-      const p = this.at(st.x, st.y, 0.1);
-      if (one) for (let i = 0; i < 4; i++) { const a = t * 2 + (i * Math.PI) / 2; const R = 1.5 + 0.5 * Math.sin(t * 4); this.streaks.spawn(0xff3050, p.clone().add(new Vector3(Math.cos(a) * R, 0, Math.sin(a) * R)), p.clone().add(new Vector3(Math.cos(a) * R * 0.4, 0, Math.sin(a) * R * 0.4)), 0, 0.06, 0, 0.22, 1); }
-      else if (chance(30)) this.streaks.spawn(0xff7080, p.clone().setY(p.y + 12), p, 0, 0.1, 0, 0.18, 1);
     }
   }
 
@@ -668,17 +693,6 @@ export class Effects {
     // Round the socle, motes pressed down to the ground, and a faint ring at its feet.
     for (let i = 0; i < 14; i++) this.spawn(this.tex.glow, 0xc8aaff, p.clone().add(rnd(3)).setY(p.y + 2 + Math.random()), new Vector3(0, -2.5, 0), 0.8, 0.45, 0.15, 0.85, 0, true);
     this.ring(p, 0x9a6aff, 2, 0.6);
-  }
-
-  /** A Bouclier de plasma: a shimmering dome of cyan glows over a building of this size. */
-  private bubble(p: Vector3, size: number): void {
-    const r = size * 0.75;
-    for (let i = 0; i < 50; i++) {
-      const t = Math.random() * Math.PI * 2;
-      const f = Math.acos(Math.random()); // upper half
-      const at = p.clone().add(new Vector3(r * Math.sin(f) * Math.cos(t), r * Math.cos(f) + 0.2, r * Math.sin(f) * Math.sin(t)));
-      this.spawn(this.tex.glow, 0x6ae8ff, at, new Vector3(), 0.7, 0.8, 0.7, 0.5, 0, true);
-    }
   }
 
   /** Art Deco beam: stacked gold-white glows rising from a bright disc. */
@@ -715,7 +729,7 @@ export class Effects {
     const ammo = s.type ? AMMO[s.type] : undefined;
     if (ammo && this.munition(ammo, s, from, to, world)) return;
     const z = s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'z' && s.id !== undefined ? world?.entities.get(s.id) : undefined;
-    const isd = IS_STYLE && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'isdaris';
+    const isd = FX_STYLE !== 'avant' && s.type && (DEFS[s.type] as { faction?: string } | undefined)?.faction === 'isdaris';
     if (isd && this.isShot(s.type!, s, from, to)) return;
     if (z && FX_STYLE !== 'avant' && this.zShot(z.kit || 'mitrailleuse', s, from, to)) return;
     if (s.kind === 'melee') {

@@ -1,7 +1,6 @@
 import { AdditiveBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, PlaneGeometry, type Scene, ShaderMaterial, Color } from 'three';
 import BALANCE from '../balance.json';
 import { FLY_HEIGHT } from '../data';
-import { HELD_BY } from './effects';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -16,37 +15,29 @@ export interface Mark {
 const M = (key: string, color: number, good: boolean): Mark => ({ key, color, good });
 const BOOST = M('stimulant', 0xff5a3a, true);
 const WAR = M('cridegueurre', 0xffb830, true);
-const REFLECT = M('renvoi', 0xffe08a, true);
 const INVULN = M('invuln', 0xfff6c0, true);
-const PHASED = M('dephasage', 0x6ae8ff, true);
 const CHARGED = M('courroux', 0x8ab8ff, true);
-const CAMO = M('camouflage', 0xe8f0ff, true);
 const STATUE = M('statue', 0xb0a898, true);
 const CHILL = M('gel', 0x9ad8ff, false);
 const BLIND = M('amonra', 0xffd040, false);
 const CHARM = M('soumission', 0xff4ad0, false);
 const SWARM = M('nuee', 0x9a9a40, false);
 const SLOW = M('jetdesable', 0xd8b070, false);
-const STUNNED = M('chocmental', 0xc08aff, false);
 const BURROWED = M('enfouissement', 0xb08a60, true);
-const ILLUSION = M('double', 0x9af0ff, true);
 
 /**
  * What lasts on this entity now and has no look of its own yet, the strongest first (at most a few are drawn): a badge
  * stands in for it until it does. The Humans' spells drawn their own way (render/effects.ts, Effects.lasting) have none:
  * Peau de roc, Régénérant, Gaz euphorisants, the Belluaire's Camouflage, poison, Napalm, mines, the Réservoir's fuse,
- * the Cadavre réanimé; nor the Z's (Effects.zSpells): Gravité alourdie, Nuage de nanites, Gel électronique, Balise de
+ * the Cadavre réanimé; nor the Isdaris' (Effects.isSpells, see-through bodies: units.ts): Choc mental, Double, Manteau,
+ * Sphère de renvoi, Déphasage; nor the Z's (Effects.zSpells): Gravité alourdie, Nuage de nanites, Gel électronique, Balise de
  * vacarme, Impulsion magnétique, Canon IEM, the invisibility and repair kits.
  */
 export function marksOf(e: Entity): Mark[] {
   const out: Mark[] = [];
-  if (HELD_BY.get(e.id) === 'chocmental' && e.held > 0) out.push(STUNNED);
   if (e.burrowed) out.push(BURROWED);
-  if (e.illusion) out.push(ILLUSION);
   if (e.charm > 0) out.push(CHARM);
   if (e.invuln > 0 && e.def.kind === 'unit') out.push(INVULN);
-  if (e.phased > 0 && e.def.kind === 'unit') out.push(PHASED);
-  if (e.reflect > 0) out.push(REFLECT);
   if (e.war > 0) out.push(WAR);
   if (e.boost > 0) out.push(BOOST);
   if (e.charged > 0) out.push(CHARGED);
@@ -55,18 +46,16 @@ export function marksOf(e: Entity): Mark[] {
   if (e.chill > 0) out.push(CHILL);
   if (e.blind > 0) out.push(BLIND);
   if (e.swarm > 0) out.push(SWARM);
-  if (e.camo > 0 && e.type !== 'belluaire') out.push(CAMO);
   return out;
 }
 
 /** Zones that last on the ground: their centre, reach (tiles) and colour. */
 function zones(world: World, seen: (x: number, y: number) => boolean, put: (x: number, z: number, r: number, color: number) => void): void {
   const now = world.tick;
-  for (const z of world.silences) if (z.until > now && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.r / FP, 0x6ab8ff);
   for (const z of world.storms) if (z.until > now && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.r / FP, 0xe0b870);
   for (const z of world.clouds) if (z.hits > 0 && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.r / FP, 0x8aff4a);
   // Zones revealed for a while (Observation céleste, balises, Observatoire…): their reach in tiles, the Forge's by default.
-  for (const z of world.scans) if (z.left > 0 && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.radius ?? BALANCE.rules.observation.radius, 0xfff0c0);
+  for (const z of world.scans) if (z.left > 0 && world.players[z.owner]?.faction !== 'isdaris' && seen(z.x, z.y)) put(z.x / FP, z.y / FP, z.radius ?? BALANCE.rules.observation.radius, 0xfff0c0);
   for (const e of world.entities.values()) {
     if (e.hp <= 0 || !seen(e.x, e.y)) continue;
     if (e.gravity > 0) put(e.x / FP, e.y / FP, BALANCE.abilities.gravite.radius, 0xa07aff);
