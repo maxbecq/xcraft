@@ -46,7 +46,7 @@ const LISTED = BALANCE.ai.research as Record<string, string[]>;
  * ai.research, with the Z Accumulateur first: it waits for the Intelligence suprême and the Centre d'optimisation,
  * then comes before everything else (in the late list, it came at minute 30, once the army was full: no socle got it).
  */
-const RESEARCH: Record<string, string[]> = { ...LISTED, z: ['raccumulateur', ...(LISTED.z ?? []).filter((t) => t !== 'raccumulateur')] };
+export const RESEARCH: Record<string, string[]> = { ...LISTED, z: ['raccumulateur', ...(LISTED.z ?? []).filter((t) => t !== 'raccumulateur')] };
 /** Late buildings, by faction: [type, from minute], one of each. */
 const EXTRA = BALANCE.ai.extra as unknown as Record<string, [string, number][]>;
 const MAX_CLOAKED = BALANCE.ai.maxCloaked;
@@ -73,7 +73,7 @@ const GANG_UP = (30 * FP) / 20;
 // The Totem too (Voyageurs, the vehicles' research, the Couloir temporel). Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
 // each once its host stands: off this list, among the late researches, they never came, nor the units and powers
 // behind them.
-const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
+export const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
 /** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
 const SPARE_EXTENSION = 400;
 /**
@@ -174,6 +174,8 @@ export class AI {
   readonly doctrine: Doctrine;
   private gods: [string, number][];
   private researchList: string[];
+  /** When a raid on the base was last beaten off. */
+  private repelled = -Infinity;
   /** The army aimed at, bent by what the scouts saw (counter), recomputed each turn. */
   private armyList: [string, number][];
   /** Most of each enemy type seen at once. */
@@ -355,7 +357,7 @@ export class AI {
     const now = new Map<string, number>();
     for (const e of w.entities.values()) if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.hostile(e.owner, this.player) && w.sees(this.player, e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
     for (const [t, n] of now) this.seen.set(t, Math.max(n, this.seen.get(t) ?? 0));
-    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy), this.seen, this.doctrine.counterRanged);
+    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.seen, this.doctrine.counterRanged);
     // The enemy's fighters and armed buildings, as last seen, for `sends` (dominates keeps the same memory).
     const seen = this.visibleFoes();
     for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
@@ -1228,6 +1230,9 @@ export class AI {
     // A raid of flyers none of the army can shoot holds no wave home (a flyer watching a Pod kept a full wave of
     // ground socles there).
     const threat = raid && raid.armed.length && raid.armed.every(flies) && !army.some((u) => w.weapon(u) && reaches(w.weapon(u)!, true)) ? undefined : raid;
+    // A raid on the base just beaten off (the threat gone, soldiers left at home): the strategy's minute no longer holds
+    // the next wave back (sends).
+    if (this.homeThreat && !raid && atHome.length) this.repelled = w.tick;
     this.homeThreat = !!raid;
     this.danger = threat && army.filter((u) => !this.wave.has(u.id)).reduce((s, u) => s + u.hp + u.shield, 0) < threat.strength ? threat : undefined;
     // The Z's Intelligence only: the Humains' Conseil has a Refuge too (the balancer, 2026-11-22), left to the player for now.
@@ -1362,7 +1367,9 @@ export class AI {
     const last = ctx.supply.used >= 190 || (this.starved(ctx.buildings, ctx.p.minerals) && !this.affordable(ctx));
     if (last || ctx.minute >= 25) return true;
     if (this.wave.size > 0) return atHome.length >= d.regroup;
-    if (ctx.minute < (this.strategy.attackMinute ?? 0)) return false;
+    // Before the strategy's minute, only to strike back at a raid just beaten off (« Siège » waited for minute 11 while
+    // the Humans' raids wore its army down one socle at a time, and the wave never left).
+    if (ctx.minute < (this.strategy.attackMinute ?? 0) && this.world.tick - this.repelled >= ticks(60)) return false;
     const known = this.power([...this.foes.values()]);
     const armed = atHome.filter((u) => !!this.world.weapon(u));
     return known === 0 || this.power(armed.map((u) => [u.hp + u.shield, this.dps(u)])) >= d.engage * known;
@@ -2066,8 +2073,9 @@ export class AI {
       // the camp's usual units too, so the rotation can move on past one whose weapon cannot be paid.
       const ready = this.armyList.filter(([t]) => !this.world.lacks(this.player, t, undefined, at)).length;
       const list = ready >= 2 ? this.armyList : [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
-      const fits = list.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
-      const affordable = fits.length ? fits : list.filter(([t]) => (DEFS[t] as UnitDef).cost.energy <= energy && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
+      const has = (t: string) => (DEFS[t] as UnitDef).cost.energy <= energy;
+      const fits = list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
+      const affordable = fits.length ? fits : list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
       const antiAir = affordable.filter(([t]) => reaches((DEFS[t] as UnitDef).attack!, true));
       // Each weighed by the damage it does to the enemy's army, by class (fiches 2010): an Isdaris Créature does 18
       // to infantry, 6 to Z socles, so against the Z the Archers (29 to machines) take its share.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFS, type Faction, FACTIONS, type UnitDef } from '../data';
 import { TICK_RATE } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
-import { AI } from './ai';
+import { AI, EXTENSIONS, RESEARCH } from './ai';
 import { counter, LEGACY, pickStrategy, STRATEGIES, USUAL_GODS } from './strategy';
 
 describe('stratégies', () => {
@@ -28,6 +28,26 @@ describe('stratégies', () => {
         }
         // Every unit of the army has a god in the order that summons it.
         for (const t of Object.keys(s.army ?? {})) if (f === 'dieux') expect((s.gods ?? USUAL_GODS).some(([g]) => (DEFS[g] as UnitDef).trains?.includes(t)), `${s.id} ${t}`).toBe(true);
+      }
+    }
+  });
+
+  it('ne visent que des unités dont tous les prérequis viendront, recherches comprises', () => {
+    // The Z's late tech: an army unit behind it never came in the games of 23/11 (no Centre d'optimisation in 11 min).
+    const late: Partial<Record<Faction, string[]>> = { z: ['supreme', 'optimisation', 'centrek'] };
+    const chain = (t: string, seen = new Set<string>()): Set<string> => {
+      const d = DEFS[t] as UnitDef;
+      for (const r of [...Object.keys(d?.requires ?? {}), ...(d?.requiresAny?.of ?? [])]) if (!seen.has(r)) chain(r, seen.add(r));
+      return seen;
+    };
+    for (const [f, list] of Object.entries(STRATEGIES) as [Faction, (typeof STRATEGIES)['dieux']][]) {
+      for (const s of list) {
+        const researched = new Set([...(s.research ?? []), ...(RESEARCH[f] ?? []), ...EXTENSIONS]);
+        for (const [t, later] of [...Object.keys(s.army ?? {}).map((t) => [t, false] as const), ...Object.keys(s.later ?? {}).map((t) => [t, true] as const)]) {
+          const needs = chain(t);
+          for (const r of needs) if (DEFS[r]?.kind === 'upgrade') expect(researched.has(r), `${s.id} ${t}: ${r}`).toBe(true);
+          if (!later) for (const r of late[f] ?? []) expect(needs.has(r), `${s.id} ${t} derrière ${r}: à mettre dans later`).toBe(false);
+        }
       }
     }
   });

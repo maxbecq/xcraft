@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { AI } from '../src/ai/ai';
-import { DOCTRINE, STRATEGIES } from '../src/ai/strategy';
+import { DOCTRINE, ON_BY_DEFAULT, STRATEGIES } from '../src/ai/strategy';
 import { type Analysis, Analyzer, clock, FAULTS, type FaultKind } from '../src/analysis/analyze';
 import { FACTIONS, type Faction } from '../src/data';
 import { TICK_RATE } from '../src/sim/fixed';
@@ -13,8 +13,11 @@ import { createMatch } from '../src/sim/setup';
 // TOURNEY_DOCTRINE='{"engage":0}' changes the doctrine of « après », TOURNEY_STRATEGIES=marteau,sables plays only those,
 // TOURNEY_AFTER=1 plays « après » only (to try settings against an « avant » already known).
 // Run: TOURNEY=1 TOURNEY_CAMPS=dieux TOURNEY_OUT=report.md npx vitest run scripts/tournament.test.ts
-it.skipIf(!process.env.TOURNEY)('tournament', () => {
-  const all: Faction[] = ['z', 'dieux', 'isdaris', 'humains'];
+it.skipIf(!process.env.TOURNEY)('tournament', async () => {
+  // TOURNEY_BASE=1: the opponents, and the camp « avant », play a frozen copy of an earlier AI (src/ai/v143, not in git)
+  // instead of the legacy doctrine.
+  const Base: typeof AI = process.env.TOURNEY_BASE ? ((await import(/* @vite-ignore */ process.env.TOURNEY_BASE_PATH ?? '../src/ai/v143/ai')).AI as typeof AI) : AI;
+    const all: Faction[] = ['z', 'dieux', 'isdaris', 'humains'];
   const camps = (process.env.TOURNEY_CAMPS ?? all.join(',')).split(',') as Faction[];
   const n = Number(process.env.TOURNEY_N ?? 3);
   const minutes = Number(process.env.TOURNEY_MINUTES ?? 30);
@@ -38,7 +41,16 @@ it.skipIf(!process.env.TOURNEY)('tournament', () => {
             const only = process.env.TOURNEY_STRATEGIES ? process.env.TOURNEY_STRATEGIES.split(',') : undefined;
             const list = only?.includes('classique') ? [{ id: 'classique' }] : STRATEGIES[camp].filter((s) => !only || only.includes(s.id));
             const strategy = list[k % list.length].id;
-            const ais = [0, 1].map((p) => new AI(w, p, undefined, 'normal', p === seat && mode === 'apres' ? { strategy, doctrine } : { legacy: true }));
+            // With TOURNEY_BASE, each side plays its default (the Humans their old AI), the strategies of the camps that
+            // have them taken in turn, on both sides.
+            const turn = (f: Faction) => (ON_BY_DEFAULT.includes(f) ? { strategy: STRATEGIES[f][k % STRATEGIES[f].length].id } : {});
+            const ais = [0, 1].map((p) =>
+              process.env.TOURNEY_BASE
+                ? p === seat
+                  ? new (mode === 'apres' ? AI : Base)(w, p, undefined, 'normal', process.env.TOURNEY_STRATEGIES ? { strategy } : turn(camp))
+                  : new Base(w, p, undefined, 'normal', turn(foe))
+                : new AI(w, p, undefined, 'normal', p === seat && mode === 'apres' ? { strategy, doctrine } : { legacy: true }),
+            );
             const delay = [k * 10, ((k * 3) % 5) * 10];
             const a = new Analyzer(w);
             while (w.winner === null && w.tick < minutes * 60 * TICK_RATE) {
@@ -54,7 +66,7 @@ it.skipIf(!process.env.TOURNEY)('tournament', () => {
             const vs = (r.foes[foe] ??= [0, 0]);
             vs[0]++;
             vs[1] += won;
-            const s = (r.strategies[mode === 'apres' ? strategy : 'classique'] ??= [0, 0]);
+            const s = (r.strategies[process.env.TOURNEY_BASE ? (ais[seat] as AI).strategy.id : mode === 'apres' ? strategy : 'classique'] ??= [0, 0]);
             s[0]++;
             s[1] += won;
             console.log('TOURNEY', camp, foe, seat, k, mode, clock(g.ticks), g.winner === seat ? 'gagne' : g.winner === null ? 'nul' : 'perd');

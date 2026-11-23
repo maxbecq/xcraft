@@ -14,6 +14,11 @@ export interface Strategy {
   name: string;
   /** Army aimed at: unit type and weight (the faction's usual list, ai.army, when absent). */
   army?: Record<string, number>;
+  /**
+   * Units joining the army only once they can be trained (their buildings and research there): the heavy end of a
+   * strategy, out of reach for most of a game. Kept out of `army`, they held a Z strategy's rotation for good.
+   */
+  later?: Record<string, number>;
   /** Dieux: gods the Porte summons, and from which minute, in order (ai.gods when absent). Each god due keeps its
    * price from the troops until it comes: the strategy's few gods early, the others late (every god early held the
    * troops' minerals, 400 to 700 unspent with the gods idle). */
@@ -156,8 +161,10 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       name: 'Artillerie',
       // Hexapodes with rockets and Octopodes, held back for big waves from minute 10 (light socles early, Quadripodes and
       // drones de combat in waves of 12 to 16, won 22 of 48 against the AI as it was: dropped).
-      army: { hexapode: 4, octopode: 2, quadripode: 2 },
-      research: ['lanceroquettes', 'rhexapode', 'rhexapode2', 'zdist1'],
+      // Octopodes (Intelligence suprême, Centre d'optimisation, then their research) only once they can come.
+      army: { hexapode: 4, quadripode: 2 },
+      later: { octopode: 2 },
+      research: ['lanceroquettes', 'rhexapode', 'rhexapode2', 'zdist1', 'roctopode'],
       attackMinute: 10,
       wave: 16,
     },
@@ -165,8 +172,11 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       id: 'blindes',
       name: 'Blindés',
       // Hexapodes, Octopodes and Mastodontes behind a few Quadripodes: slower, heavier waves.
-      army: { hexapode: 3, octopode: 2, mastodonte: 2, quadripode: 2 },
-      research: ['rhexapode', 'lanceroquettes', 'zblindage1', 'rhexapode2'],
+      // Octopodes and Mastodontes only once they can come: in the games of 23/11 they never did (no Centre
+      // d'optimisation in 11 minutes), and the waves left with Quadripodes alone.
+      army: { hexapode: 3, quadripode: 2 },
+      later: { octopode: 2, mastodonte: 2 },
+      research: ['rhexapode', 'lanceroquettes', 'zblindage1', 'rhexapode2', 'rmastodonte', 'roctopode'],
       attackMinute: 9,
       wave: 14,
     },
@@ -175,8 +185,9 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       name: 'Siège',
       // The heavy army of Blindés, armour first, held back for one big late wave (Coléoptères in the air won 20 of 48
       // against the AI as it was, Mastodontes from minute 7 as many: both dropped).
-      army: { hexapode: 3, octopode: 2, mastodonte: 2, quadripode: 2 },
-      research: ['zblindage1', 'rhexapode', 'lanceroquettes', 'zblindage2'],
+      army: { hexapode: 3, quadripode: 2 },
+      later: { octopode: 2, mastodonte: 2 },
+      research: ['zblindage1', 'rhexapode', 'lanceroquettes', 'zblindage2', 'rmastodonte', 'roctopode'],
       attackMinute: 11,
       wave: 18,
     },
@@ -226,8 +237,9 @@ export function pickStrategy(faction: Faction, seed: number, player: number, nam
 }
 
 /** Units of the strategy's army, as [type, weight]; the faction's usual list when it names none. */
-export function armyOf(faction: Faction, s: Strategy): [string, number][] {
-  return s.army ? Object.entries(s.army) : FACTIONS[faction].army;
+export function armyOf(faction: Faction, s: Strategy, unlocked?: (t: string) => boolean): [string, number][] {
+  if (!s.army) return FACTIONS[faction].army;
+  return [...Object.entries(s.army), ...Object.entries(s.later ?? {}).filter(([t]) => unlocked?.(t))];
 }
 
 /** What the scouts have seen of the enemy's army: types and how many. */
