@@ -52,7 +52,7 @@ export function updateProd(h: Hud): void {
       ? producers
           .map((e) => {
             const queue = e.queue.map((t, i) => `<span class="cancel${i ? '' : ' now'}" data-of="${e.id}" data-slot="${i}" title="${DEFS[t].name}. Clic : annuler">${img(t, DEFS[t].name)}${i > 1 ? '' : '<i></i>'}</span>`).join('');
-            return `<button class="prod-row${e.queue.length ? '' : ' idle'}" data-id="${e.id}" title="${e.def.name}${e.queue.length ? '' : ' : à l’arrêt'}"><span class="who">${img(e.type, e.def.name)}</span>${queue || '<em>à l’arrêt</em>'}</button>`;
+            return `<button class="prod-row${e.queue.length ? '' : ' idle'}" data-id="${e.id}" title="${e.def.name}${e.queue.length ? '' : ' : à l’arrêt'}"><span class="who">${img(e.type, e.def.name)}</span>${queue || '<em>à l’arrêt</em>'}${e.queue.length ? '<b class="left"></b>' : ''}</button>`;
           })
           .join('')
       : '<em>Aucun bâtiment de production</em>';
@@ -63,6 +63,9 @@ export function updateProd(h: Hud): void {
     if (!e || !fill || !e.queue.length) continue;
     // The world's time for it: a god's level shortens it.
     fill.style.width = `${Math.round(100 * (1 - e.trainLeft / h.world.trainTime(e, e.queue[0])))}%`;
+    // Seconds left on the one under way (shown by the alternative interface's column).
+    const left = bar.querySelector<HTMLElement>('.left');
+    if (left) left.textContent = `${Math.ceil(e.trainLeft / ticks(1))} s`;
     // Miniportail: the second line's progress, on the second slot.
     if (second) second.style.width = e.trainLeft2 ? `${Math.round(100 * (1 - e.trainLeft2 / h.world.trainTime(e, e.queue[1])))}%` : '0';
   }

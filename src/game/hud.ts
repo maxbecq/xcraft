@@ -12,6 +12,7 @@ import { showEnd, showEvents } from './hud-toasts';
 import { updatePanel } from './hud-panel';
 import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
+import { updateAlt } from './hud-alt';
 import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
@@ -105,6 +106,11 @@ export class Hud {
   readonly pose: PoseConfirm;
   /** The end banner offers the game's analysis. */
   bilan = false;
+  /** The alternative desktop interface (game/hud-alt.ts), and the selection it last opened the build tree for. */
+  alt = false;
+  altSel = '';
+  /** Set by the game: a building model's top (world units), for the bubble above it. */
+  top: (id: number, built: boolean) => number | undefined = () => undefined;
   readonly grid: PlaceGrid;
   /** What the grid's tiles were last drawn for: they are redrawn only when the cursor changes tile (or each second). */
   gridKey = '';
@@ -459,6 +465,8 @@ export class Hud {
       updateGroups(this);
     }
     updateCard(this);
+    if (this.alt) updateAlt(this);
+    else this.card.classList.remove('bubble');
     updateGhost(this);
     showEnd(this);
     this.tuck();

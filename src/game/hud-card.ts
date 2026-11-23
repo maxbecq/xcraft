@@ -331,9 +331,9 @@ function onlyOwn(h: Hud): boolean {
   return h.workers().every((w) => (w.def as UnitDef).builds && !(w.def as UnitDef).builder);
 }
 
-/** The Machines' LCD console (option) draws its build list as a tech tree. */
+/** The Machines' LCD console (option) draws its build list as a tech tree; so does the alternative interface, any side. */
 function lcdTree(h: Hud): boolean {
-  return SCROLL.lcd && h.world.players[h.player].faction === 'z';
+  return (SCROLL.lcd && h.world.players[h.player].faction === 'z') || h.alt;
 }
 
 /** One command button; `extra` goes inside it, after the cost, and `style` on it (a tree node's place). */

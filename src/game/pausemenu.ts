@@ -48,7 +48,7 @@ export function skinField(faction: string): string {
 export function controlFields(inMatch: boolean): string {
   const range = (k: keyof typeof SCROLL_RANGE, label: string, step: number, unit = '') =>
     `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${SCROLL_RANGE[k][0]}" max="${SCROLL_RANGE[k][1]}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
-  const check = (k: 'lock' | 'grid' | 'halo' | 'mute', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
+  const check = (k: 'lock' | 'grid' | 'halo' | 'mute' | 'alt', label: string) => `<label><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
   const sound = `<fieldset class="options"><legend>Son</legend>${range('volume', 'Volume', 0.05, '%')}${check('mute', 'Couper le son')}</fieldset>`;
   // A touch screen: the sound and the trial touch controls only (off by default, the usual ones untouched then).
   if (TOUCH) return `${sound}<fieldset class="options"><legend>Commandes tactiles</legend>
@@ -67,6 +67,7 @@ export function controlFields(inMatch: boolean): string {
     </fieldset>
     <fieldset class="options"><legend>Interface</legend>
       ${check('halo', 'Halo sur le bâtiment survolé')}
+      ${check('alt', 'Interface alternative : sans console, commandes au-dessus du bâtiment, files de production à gauche')}
     </fieldset>
     <fieldset class="options"><legend>Raccourcis</legend>
       ${check('grid', `Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom`)}
