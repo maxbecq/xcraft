@@ -22,6 +22,15 @@ bpy.context.view_layer.objects.active = mesh
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 mesh.parent = None
 
+if kind == "ankylo":
+    # Its driver, modelled tiny in his howdah: drawn at a soldier's size, grown from his seat.
+    zs0 = [v.co.z for v in mesh.data.vertices]
+    top = max(zs0)
+    seat = Vector((0, -0.05 * (top / 1.01), 0.6 * top))
+    for v in mesh.data.vertices:
+        c = v.co
+        if c.z > seat.z + 0.02 * top and abs(c.y - seat.y) < 0.2 * top and abs(c.x) < 0.22 * top:
+            v.co = seat + (c - seat) * 1.5
 vs = [v.co.copy() for v in mesh.data.vertices]
 lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs)))
 hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
