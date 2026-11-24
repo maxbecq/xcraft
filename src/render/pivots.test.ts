@@ -76,7 +76,7 @@ describe('moving parts keep their pivots through compression (tools/meshy/pivots
   });
 
   for (const name of ['dronecombat', 'quadripode', 'hexapode', 'octopode']) {
-    it(`${name}: each shin turns at its knee, at its top, not its middle (tools/meshy/zknees.py)`, () => {
+    it(`${name}: each shin turns at its knee, above its middle, not on it (tools/meshy/zknees.py)`, () => {
       const root = load(name);
       const legs: Object3D[] = [];
       root.traverse((o) => /^zleg_\d+_[lr]$/.test(o.name) && legs.push(o));
@@ -87,7 +87,8 @@ describe('moving parts keep their pivots through compression (tools/meshy/pivots
         // Its pivot high on the shin, where it meets the femur: compression had left it at the shin's middle.
         const box = boxInParent(shin).applyMatrix4(leg.matrixWorld);
         const knee = shin.getWorldPosition(new Vector3());
-        expect((knee.y - box.min.y) / (box.max.y - box.min.y), shin.name).toBeGreaterThan(0.75);
+        expect(knee.y, shin.name).toBeGreaterThan(box.getCenter(new Vector3()).y);
+        expect(knee.distanceTo(box.getCenter(new Vector3())), shin.name).toBeGreaterThan(0.1 * box.getSize(new Vector3()).length());
       }
     });
   }

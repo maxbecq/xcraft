@@ -5,18 +5,23 @@ zleg_<pair>_<l|r> it hangs from, and the shin), the cut telling which of its two
 - cut across the reach (a spider leg): the knee is the middle of the vertices round the leg's highest point;
 - cut across the height (a leg hanging under its hip): the middle of the vertices at the cut's height.
 Given the uncompressed source (`source.glb`, its legs as they are now), its knees are taken as they are instead.
+`seam=<shin>,...`: those shins' knees on their joint, at the vertex they share with their femur nearest the joint's middle (the
+Octopode's zshin_2_l: its femur, cut shorter at the hip later, no longer reaches the knee the source gives it).
 Run on the model written back without meshopt (its quantised positions kept, which Blender reads); then pivots.py
 and compress.sh as for any model.
-Usage: Blender -b --factory-startup -P tools/meshy/zknees.py -- in.glb out.glb [source.glb]
+Usage: Blender -b --factory-startup -P tools/meshy/zknees.py -- in.glb out.glb [source.glb] [seam=<shin>,...]
 """
 import re
 import sys
 
 import bpy
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 
 args = sys.argv[sys.argv.index("--") + 1:]
 src, dst = args[:2]
+seams = {n for a in args[2:] if a.startswith("seam=") for n in a[5:].split(",")}
+args = [a for a in args if not a.startswith("seam=")]
 SHIN = re.compile(r"^zshin_\d+_[lr]$")
 bpy.ops.wm.read_factory_settings(use_empty=True)
 known = {}
@@ -35,7 +40,20 @@ def unique(points):
 for shin in [o for o in bpy.context.scene.objects if o.type == "MESH" and SHIN.match(o.name)]:
     leg = bpy.data.objects[shin.name.replace("zshin_", "zleg_")]
     femur = [c for c in [leg, *leg.children_recursive] if c.type == "MESH" and not SHIN.match(c.name)]
-    if shin.name in known:
+    if shin.name in seams:
+        pts = [c.matrix_world @ v.co for c in femur for v in c.data.vertices]
+        tree = KDTree(len(pts))
+        for i, p in enumerate(pts):
+            tree.insert(p, i)
+        tree.balance()
+        ws = [shin.matrix_world @ v.co for v in shin.data.vertices]
+        span = max((a - ws[0]).length for a in ws)
+        seam = [w for w in ws if tree.find(w)[2] < 1e-3 * span]
+        assert len(seam) >= 3, f"{shin.name}: no joint with its femur ({len(seam)} vertices)"
+        # The shared vertex nearest their middle: the shin turns on a point of the joint itself, which stays shut.
+        mid = sum(seam, Vector()) / len(seam)
+        knee, how = min(seam, key=lambda w: (w - mid).length), f"seam {len(seam)}"
+    elif shin.name in known:
         knee, how = known[shin.name], "source"
     else:
         H = leg.matrix_world.translation.copy()
