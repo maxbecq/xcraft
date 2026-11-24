@@ -14,11 +14,14 @@ const LIFE = 14;
 const HEAVY = 0.6;
 /** Machines on tracks: two notched bands behind them instead of feet (none from a Char Pégase in flight). */
 const TRACKED = new Set(['scarabee', 'pegase']);
-/** Where a machine's tracks run, if not about its radius: [middle of each track out from its own, track width], world
- * units, measured on its drawn track links once they are first laid round their loop (render/units.ts). */
-export const GAUGE = new Map<string, [number, number]>();
-/** Notches across each band's piece: whole ones, so they run on unbroken from one piece to the next. */
-const NOTCHES = 4;
+/** Where a machine's tracks run, if not about its radius: [middle of each track out from its own, track width, how far
+ * behind its own middle the tracks end], world units, measured on its drawn track links once they are first laid
+ * round their loop (render/units.ts). */
+export const GAUGE = new Map<string, [number, number, number]>();
+/** The Char Pégase's tracks are its Rodin mesh's own: where they leave the ground, measured on it as drawn. */
+const BACK: Record<string, number> = { pegase: 1.25 };
+/** Ground between two notches across a track's band, world units (laid out along the ground, so unbroken from piece to piece). */
+const NOTCH = 0.13;
 
 /**
  * Footprints behind heavy units on snow, sand and the Moon: one instanced quad per print, the print itself drawn in
@@ -58,9 +61,14 @@ export class Footprints {
           varying vec2 vUv;
           varying float vFade;
           varying float vTread;
+          varying float vAlong;
           void main() {
             vUv = uv;
             vTread = aTread;
+            // How far along its way a track's piece lies, on the ground itself: notches line up across pieces.
+            vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+            vec3 way = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz;
+            vAlong = dot(wp.xz, normalize(way.xz));
             vFade = clamp(1.0 - (now - aBorn) / ${LIFE.toFixed(1)}, 0.0, 1.0);
             gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
           }`,
@@ -69,11 +77,12 @@ export class Footprints {
           varying vec2 vUv;
           varying float vFade;
           varying float vTread;
+          varying float vAlong;
           void main() {
             if (vTread > 0.5) {
               // A track's piece: a band soft at its edges, its notches across it pressed in deeper.
               float band = 1.0 - smoothstep(0.42, 0.5, abs(vUv.x - 0.5)); // full width, a soft rim only
-              float notch = smoothstep(0.25, 0.4, abs(fract(vUv.y * ${NOTCHES}.0) - 0.5));
+              float notch = smoothstep(0.25, 0.4, abs(fract(vAlong / ${NOTCH}) - 0.5));
               float a = band * (0.35 + 0.45 * notch) * vFade;
               if (a < 0.01) discard;
               gl_FragColor = vec4(color, a);
@@ -131,7 +140,8 @@ export class Footprints {
       const dx = x - was.x;
       const dz = z - was.z;
       const d = Math.hypot(dx, dz);
-      const stride = (tracked ? 0.45 : 0.55) * r;
+      // Tracks: short pieces, laid from the first move on, so the bands grow on smoothly from behind the tracks.
+      const stride = (tracked ? 0.12 : 0.55) * r;
       if (d < stride) continue;
       // A teleport (Gaïa, a drop) or a long jump between frames: start afresh there.
       if (d > 4) {
@@ -140,13 +150,14 @@ export class Footprints {
       }
       const [ux, uz] = [dx / d, dz / d];
       if (tracked) {
-        // Both tracks at once, each a piece from its last one to here, so the bands run on unbroken.
+        // Both tracks at once, each a piece from its last one to here, so the bands run on unbroken; laid where the
+        // tracks' back ends just left the ground, half a track behind the machine's middle, so they show at once.
         this.q.setFromAxisAngle(this.up, Math.atan2(ux, uz));
+        const [mid, wide, back] = GAUGE.get(e.type) ?? [0.62 * r, 0.3 * r, BACK[e.type] ?? 0.7 * r];
         for (const s of [-1, 1]) {
-          const [mid, wide] = GAUGE.get(e.type) ?? [0.62 * r, 0.3 * r];
           const gauge = s * mid;
-          const px = (x + was.x) / 2 - uz * gauge;
-          const pz = (z + was.z) / 2 + ux * gauge;
+          const px = (x + was.x) / 2 - ux * back - uz * gauge;
+          const pz = (z + was.z) / 2 - uz * back + ux * gauge;
           this.m.compose(new Vector3(px, heightAt(this.map, px, pz) + 0.1, pz), this.q, new Vector3(wide, 1, d));
           this.put(t, 1);
         }

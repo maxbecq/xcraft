@@ -1488,7 +1488,7 @@ export class EntityRenderer {
         for (const o of tracks.links[1]) box.union(boxInParent(o));
         const holder = tracks.links[1][0]?.parent;
         const k = holder ? holder.getWorldScale(new Vector3()).x / v.model.getWorldScale(new Vector3()).x : 1;
-        if (!box.isEmpty()) GAUGE.set(e.type, [((box.min.x + box.max.x) / 2) * k, (box.max.x - box.min.x) * k]);
+        if (!box.isEmpty()) GAUGE.set(e.type, [((box.min.x + box.max.x) / 2) * k, (box.max.x - box.min.x) * k, -box.min.z * k]);
       }
     }
     if (v.cart) {
