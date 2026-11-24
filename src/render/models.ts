@@ -232,7 +232,7 @@ const FIXED_TEAM: Record<string, number> = { assimilateur: 0x2cff50 };
 // The Alchimisterie redone from its chosen board (Rodin) carries its own cyan lines: its old dress no longer fits it.
 const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'metallurgie'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
-const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI };
+const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2 };
 export const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[]; shields?: MeshStandardMaterial[] }>();
 /** Team-coloured materials of the static Meshy models, by type. */
 const meshySkins = new Map<string, MeshStandardMaterial[]>();
