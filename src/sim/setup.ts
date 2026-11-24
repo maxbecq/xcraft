@@ -1,6 +1,6 @@
 import { type BuildingDef, DEFS, FACTIONS, type Faction, START } from '../data';
 import { rotateFootprint } from '../map';
-import { CORNERS, DEFAULT_MAP, buildMap, hqSlot, mapFile, turnsOf } from '../maps';
+import { CORNERS, DEFAULT_MAP, type MapFile, buildMap, hqSlot, mapFile, turnsOf } from '../maps';
 import { FP } from './fixed';
 import { World } from './world';
 
@@ -43,8 +43,8 @@ export function expansion(world: World, owner: number): [number, number] {
  * workers on its start; `teams[i]` puts player i in a team (default: everyone alone). `biome` picks the shapes
  * meant for that planet only.
  */
-export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[], mapId = DEFAULT_MAP, biome = ''): World {
-  const def = mapFile(mapId);
+export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[], mapId: string | MapFile = DEFAULT_MAP, biome = ''): World {
+  const def = typeof mapId === 'string' ? mapFile(mapId) : mapId; // a map not listed (yet): an imported one being checked
   const world = new World(buildMap(def, factions.length, biome), factions.length);
   const w = world.map.width;
   const at = (q: number, tx: number, ty: number, size: number): [number, number] => rotateFootprint(w, tx, ty, size, q);

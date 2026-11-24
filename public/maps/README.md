@@ -93,7 +93,9 @@ Le bouton « Importer une carte », sous les cartes de l'écran « Nouvelle part
 | `bases` | 1 à 16 bases, une seule de départ ; 32 minerais et 4 puits au plus par base |
 | Coordonnées | toutes sur la carte : une tuile de 0 à `size - 1`, un QG de 0 à `size - 5`, un puits de 0 à `size - 3` ; les points (polygones, centres, rues) de 0 à `size` |
 
+Le jeu vérifie ensuite qu'elle se joue, à chaque nombre de joueurs qu'elle propose : chaque départ a son QG, rejoint les autres départs et chaque base à pied ; chaque base libre a la place pour un QG ; chaque minerai et chaque puits est sur un sol plat, au-dessus d'aucun gouffre, sans chevaucher autre chose, à moins de 12 cases d'une base, et s'atteint à pied. Sinon la carte est refusée avec la raison (par exemple « À 2 joueurs : la base en (24, 24) n'est pas reliée aux départs. »).
+
 Une carte acceptée prend l'id `import-<id>` (jamais celui d'une carte du jeu) et reste dans ce navigateur (20 au plus). Elle apparaît dans la liste, marquée « importée », et le bouton « Supprimer cette carte » l'efface quand elle est choisie.
 
-- **Partie entre amis** : quand l'hôte choisit une carte importée, son fichier part vers l'invité avant la partie, qui le vérifie de la même façon et le garde. Les deux comparent ensuite une empreinte de la carte ; si elles diffèrent, la partie ne démarre pas.
+- **Partie entre amis** : quand l'hôte choisit une carte importée, son fichier part vers l'invité avant la partie, qui le vérifie de la même façon et le garde. Si l'invité a déjà une autre carte du même id, la sienne reste telle quelle et celle de l'hôte est gardée à côté, sous l'id suivi de six lettres de son empreinte. Les deux comparent ensuite l'empreinte de la carte (son contenu, pas son id) ; si elles diffèrent, la partie ne démarre pas.
 - **Replays** : le replay d'une partie sur une carte importée emporte la carte entière (`carte`), vérifiée de nouveau à la lecture. Il se rejoue donc dans un navigateur qui ne l'a jamais eue.

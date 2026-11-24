@@ -2,6 +2,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, receiveMap, removeMap } from '../maps';
 import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
+import { unplayable } from '../mapplay';
 import { mapCards, seatsOf } from '../mappicker';
 import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
@@ -186,6 +187,8 @@ function importMap(file: File | undefined, s: Setup, done: () => void): void {
     (json) => {
       const def = parseMap(json);
       if (typeof def === 'string') return say(`Carte refusée : ${def}`);
+      const why = unplayable(def);
+      if (why) return say(`Carte refusée, elle ne se joue pas : ${why}`);
       if (!MAPS[def.id] && Object.values(MAPS).filter(isImported).length >= MAX_IMPORTED) return say(`Carte refusée : ${MAX_IMPORTED} cartes importées au plus ; supprimez-en une d'abord.`);
       if (!addMap(def, true)) return say('Carte refusée : le navigateur ne veut pas la garder (stockage plein ou désactivé).');
       s.map = def.id;
@@ -431,7 +434,9 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     message: (m) => {
       if ('carte' in m && !host) {
         // A map from outside the game: checked like a file the player imports, kept for the match's page.
-        const def = parseMap(m.carte);
+        const checked = parseMap(m.carte);
+        const why = typeof checked === 'string' ? checked : unplayable(checked);
+        const def = why ?? checked;
         const kept = typeof def === 'string' ? null : receiveMap(def);
         if (kept && typeof def !== 'string') received[def.id] = kept;
         mapRefused = typeof def === 'string' ? `La carte importée par votre ami est refusée : ${def}`.replace(/[<>&]/g, '')

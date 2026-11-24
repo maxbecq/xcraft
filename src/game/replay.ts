@@ -2,6 +2,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { addMap, DEFAULT_MAP, MAPS, type MapFile } from '../maps';
 import { checkMap } from '../mapcheck';
+import { unplayable } from '../mapplay';
 import { commandOk } from '../net';
 import type { Command } from '../sim/world';
 
@@ -77,7 +78,8 @@ export function parseReplay(text: string): Replay | string {
   if (r.end !== undefined && !ENDS.includes(r.end)) delete r.end;
   if (r.carte !== undefined) {
     const def = checkMap(r.carte);
-    if (typeof def === 'string' || def.id !== r.map) return `${bad} (carte jointe : ${typeof def === 'string' ? def : 'elle ne porte pas le nom de la partie'}).`;
+    const why = typeof def === 'string' ? def : def.id !== r.map ? 'elle ne porte pas le nom de la partie' : unplayable(def);
+    if (why || typeof def === 'string') return `${bad} (carte jointe : ${why}).`;
     r.carte = def;
     addMap(def); // for this page only: the player's own maps are kept apart from those that come with a replay
   }
