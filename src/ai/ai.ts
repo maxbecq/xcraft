@@ -618,10 +618,15 @@ export class AI {
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
-    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    // Any camp sitting on 800 minerals takes its natural then, not at minute 7 (the Isdaris kept 1500 at 4:00 in the
+    // games of 23/11, 16 workers on one base).
+    const floating = !this.easy && p.minerals > 800;
+    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) || floating : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
     // the last fields were at the expansion).
-    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
+    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich || (floating && councils < 2) || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
+    // Humans with energy unspent (up to 966 in the games of 23/11, no Soigneur): the Alchimisterie now, for them.
+    if (f === FACTIONS.humains && !this.easy && p.energy >= 400 && count('alchimisterie') === 0 && !building('alchimisterie') && !w.lacks(this.player, 'alchimisterie')) wants.push('alchimisterie');
     if (expand) wants.push(outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
