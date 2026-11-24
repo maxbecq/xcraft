@@ -217,7 +217,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // and with Meshy (smart topology t2.5 for units, t2 for buildings, 3000 faces, n1 texture)
   'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation',
   // and with Rodin (fal) or Tripo: the last Blender sketches
-  'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere'];
+  'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere',
+  // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
+  'grandconseil'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
  * wide band only (a coloured outline round it read as a border). */
 const NO_TEAM_RIM = new Set(['mastodonte']);
@@ -302,6 +304,30 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
   return m;
 }
 
+/**
+ * The Grand Conseil's belfry, from its chosen board (light science-fiction touch, the discreet dose): its few cyan
+ * windows lit from inside, and the cyan LED points up its spire blinking each at its own pace. Heights are fractions
+ * of the model's (the windows from 0.43 up, the LEDs from 0.73), above the cyan energy lines round its base.
+ */
+function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
+  const compile = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, r) => {
+    compile.call(m, shader, r);
+    // veinTime is already declared and bound by teamSkin's living Human skin.
+    shader.vertexShader = `varying vec3 vBelfry;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vBelfry = vec3(position.xz, (position.y - ${low.toFixed(4)}) / ${(high - low).toFixed(4)});`);
+    shader.fragmentShader = `varying vec3 vBelfry;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float belfryCyan = smoothstep(0.05, 0.2, paint.g - paint.r) * smoothstep(0.05, 0.2, paint.b - paint.r) * smoothstep(0.4, 0.55, paint.g);
+      float belfryWindow = belfryCyan * step(0.43, vBelfry.z) * (1.0 - step(0.73, vBelfry.z));
+      float belfryCell = fract(sin(dot(floor(vec3(vBelfry.xy * 24.0, vBelfry.z * 60.0)), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      float belfryBlink = step(0.45, fract(veinTime * (0.5 + belfryCell) + belfryCell * 7.0));
+      float belfryLed = belfryCyan * step(0.73, vBelfry.z) * belfryBlink;
+      totalEmissiveRadiance += vec3(0.25, 0.95, 1.0) * (belfryWindow * 0.9 + belfryLed * 2.2);`);
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => `belfry-${key()}`;
+}
+
 // Pale plates take the team colour on Isdaris armour only: the Dieux keep their marble white, and on the Z's
 // rusted steel it blurred into a blue sheen.
 const isIsdaris = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'isdaris';
@@ -326,6 +352,10 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             // From the model's own textured material, not whichever part comes first (a plain added part, the
             // Drone's bin floor, made it the whole model's skin).
             if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, FIXED_TEAM[type] ?? c, DEFS[type]?.kind === 'building' || NO_TEAM_RIM.has(type) ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit' && !NO_TEAM_RIM.has(type), DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
+            if (type === 'grandconseil' && o instanceof Mesh && o.material.name === 'meshy') {
+              o.geometry.computeBoundingBox();
+              meshySkins.get(type)!.forEach((m) => belfryGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y));
+            }
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {

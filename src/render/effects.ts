@@ -84,7 +84,7 @@ const SHOT_COLORS: Record<string, number> = { humains: 0xffa040, isdaris: 0x5ae0
 /** The Lance-flammes' cooldown (seconds, a shot keeps its jet going that long), and the flame sprites it throws a second. */
 const FLAME_COOLDOWN = BALANCE.weapons.flammes.cooldown;
 const FLAME_RATE = 220;
-const BUILDING_SIZES: Record<string, number> = { conseil: 5, caserne: 3, grenier: 2, mine: 3 };
+const BUILDING_SIZES: Record<string, number> = { conseil: 5, grandconseil: 5, caserne: 3, grenier: 2, mine: 3 };
 
 /** Soft round sprite textures, drawn once. */
 function blob(inner: string, outer: string, size = 64, noisy = false): HTMLCanvasElement {

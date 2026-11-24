@@ -2,7 +2,9 @@
 import { LOOKS } from '../data';
 import { DIEUX_GLYPHS, HUMAINS_GLYPHS, ISDARIS_GLYPHS } from './glyphs-camps';
 
-const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${LOOKS[type] ?? type}.png`;
+/** Types drawn with another's model in some places (LOOKS) but with an icon of their own. */
+const OWN_ICON = new Set(['grandconseil']);
+const icon = (type: string) => `${import.meta.env.BASE_URL}icons/${OWN_ICON.has(type) ? type : (LOOKS[type] ?? type)}.png`;
 export const noIcon = new Set<string>();
 export const img = (type: string, alt: string) => (noIcon.has(type) ? '' : `<img src="${icon(type)}" alt="${alt}" data-icon="${type}">`);
 
