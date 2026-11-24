@@ -230,7 +230,7 @@ const NO_TEAM_RIM = new Set(['mastodonte']);
 const FIXED_TEAM: Record<string, number> = { assimilateur: 0x2cff50 };
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 // The Alchimisterie redone from its chosen board (Rodin) carries its own cyan lines: its old dress no longer fits it.
-const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'tour', 'metallurgie', 'creaturium'];
+const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'metallurgie', 'creaturium'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
 const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, pegase: Math.PI / 2 };
 export const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[]; shields?: MeshStandardMaterial[] }>();
