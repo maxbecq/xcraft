@@ -209,7 +209,7 @@ describe('AI resignation', () => {
     return w;
   };
 
-  it('gives up a minute after the game is lost, and the other side wins', () => {
+  it('gives up 20 seconds after the game is lost, and the other side wins', () => {
     const w = ruined(0);
     const ai = new AI(w, 1);
     let warned = false;
@@ -220,7 +220,7 @@ describe('AI resignation', () => {
     expect(w.players[1].resigned).toBe(true);
     expect(w.winner).toBe(0);
     expect(warned).toBe(true);
-    expect(w.tick).toBeGreaterThanOrEqual(ticks(60));
+    expect(w.tick).toBeGreaterThanOrEqual(ticks(20));
   }, 60_000);
 
   it('never gives up while it can still pay for a worker', () => {

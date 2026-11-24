@@ -2203,7 +2203,7 @@ export class AI {
 
   /** No council left: throw everything at the enemy. */
   /**
-   * The game is lost and we give up rather than wait for the enemy to raze a dead town: for a full minute, no unit
+   * The game is lost and we give up rather than wait for the enemy to raze a dead town: for 20 seconds, no unit
    * but workers (and Gaïa, who comes back), nothing being trained, not enough to pay for any of our units, a worker
    * included, and no income (minerals, or energy a Marché could sell, never went up).
    */
@@ -2233,7 +2233,7 @@ export class AI {
     const h = this.hopeless;
     if (!beaten) this.hopeless = null;
     else if (!h || p.minerals > h.minerals || (market && p.energy > h.energy)) this.hopeless = { since: w.tick, minerals: p.minerals, energy: p.energy };
-    else if (w.tick - h.since >= ticks(60)) return true;
+    else if (w.tick - h.since >= ticks(20)) return true;
     return false;
   }
 
