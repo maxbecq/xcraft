@@ -1295,12 +1295,15 @@ body.alt .console { position: fixed !important; inset: 0 !important; height: aut
 body.alt .console::before, body.alt .console::after { display: none !important; }
 body.alt .console > * { pointer-events: auto; }
 body.alt .console > .map-slot { position: absolute !important; left: 16px !important; right: auto !important; top: auto !important; bottom: 16px !important; width: 220px !important; height: 220px !important; margin: 0 !important; border-radius: 50% !important; translate: none !important; }
-body.alt .console > .hud-panel { position: absolute !important; left: auto !important; right: 16px !important; top: 50% !important; bottom: auto !important; translate: 0 -50% !important; width: 290px !important; height: auto !important; max-height: 70vh; overflow: auto; margin: 0 !important; }
+body.alt .console > .hud-panel { position: absolute !important; left: auto !important; right: 16px !important; top: 50% !important; bottom: auto !important; translate: 0 -50% !important; width: 200px !important; height: auto !important; max-height: calc(100vh - 128px); overflow: auto; margin: 0 !important; }
+/* Tall and narrow (the user's choice of 2026-11-24): the portrait on top, all the rest stacked under it. */
+body.alt .hud-panel .portrait { float: none; display: block; width: 128px !important; height: 128px !important; margin: 0 auto 8px !important; }
+body.alt .hud-panel .stats { flex-direction: column; gap: 1px; }
 body.alt .console > .hud-panel:not(:has(.details > *)) { display: none; }
 body.alt .hud-panel .details > :not(.prod) { margin-right: 0 !important; }
 body.alt .hud-panel .details > .prod { display: none; }
 body.alt .hud-panel .name { font-size: 19px; white-space: normal; }
-body.alt .console > .hud-card { position: absolute !important; left: 50% !important; right: auto !important; top: auto !important; bottom: 16px !important; translate: -50% 0 !important; width: auto !important; height: auto !important; max-width: calc(100vw - 620px) !important; max-height: none !important; margin: 0 !important; display: flex !important; flex-wrap: wrap; justify-content: center; gap: 5px; padding: 7px; border-radius: 10px; }
+body.alt .console > .hud-card { position: absolute !important; left: 50% !important; right: auto !important; top: auto !important; bottom: 16px !important; translate: -50% 0 !important; width: auto !important; height: auto !important; max-width: calc(100vw - 520px) !important; max-height: none !important; margin: 0 !important; display: flex !important; flex-wrap: wrap; justify-content: center; gap: 5px; padding: 7px; border-radius: 10px; }
 body.alt .console > .hud-card:empty { display: none !important; }
 body.alt .console > .hud-card > .cmd { flex: none; width: 56px; height: 52px; }
 body.alt .console > .hud-card.bubble { left: var(--bx) !important; top: var(--by) !important; bottom: auto !important; translate: -50% -100% !important; max-width: none !important; flex-wrap: nowrap; overflow: visible; border-radius: 14px; }

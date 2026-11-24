@@ -13,10 +13,10 @@ import type { Hud } from './hud';
 import { bubbleOf } from './hud-card';
 
 /** Room kept clear around the bubble: the top bar above, the queues' column at the left, the sheet at the right
- * (style.css: 16 px from the edges, 230 and 290 px wide), the bottom edge. */
+ * (style.css: 16 px from the edges, 230 and 200 px wide), the bottom edge. */
 const TOP = 64;
 const LEFT = 254;
-const RIGHT = 314;
+const RIGHT = 224;
 const EDGE = 8;
 const at = new Vector3();
 /** The bubble's point, made on first use. */
