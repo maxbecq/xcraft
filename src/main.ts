@@ -458,6 +458,13 @@ document.addEventListener('click', (e) => {
   // user's choices of 2026-11-24).
   else if (p === 'quit' && recap && button?.closest('.hud-banner, .pause') && !analysed) {
     analysed = true;
+    // Online, quitting from the pause menu leaves first, at once: the other side wins by it rather than waiting on us
+    // while we read. The match stops here; the analysis shows what was recorded so far.
+    if (link && button.closest('.pause') && !netGame.netOver) {
+      netGame.netOver = true;
+      netGame.stopNetClock?.();
+      link.leave();
+    }
     showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name), () => button.click());
   }
   else if (p === 'quit' || p === 'restart') {
