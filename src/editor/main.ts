@@ -858,7 +858,7 @@ addEventListener('resize', () => {
 });
 reframe();
 requestAnimationFrame(frame);
-if (import.meta.env.DEV) Object.assign(window, { editor: { get file() { return f; }, get rig() { return rig; }, get state() { return { building, dirty, groundDirty, buildMs, times, chunks: chunks.length }; }, screenOf: (x: number, y: number) => {
+if (import.meta.env.DEV) Object.assign(window, { editor: { get file() { return f; }, get rig() { return rig; }, get state() { return { building, dirty, groundDirty, buildMs, times, chunks: chunks.length }; }, gameFile: () => toFormat1(f), screenOf: (x: number, y: number) => {
   const v = new Vector3(x + 0.5, heightAt(map, x + 0.5, y + 0.5), y + 0.5).project(rig.camera);
   return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight];
 }, set: (next: MapFile2) => { f = next; reframe(); } } });
