@@ -21,10 +21,12 @@ export interface RigSpec {
   arms?: [number, number, number?];
   /** How far arms swing, against the legs' swing (default 0.6): less for a long weapon held low. */
   armSwing?: number;
-  /** Wings: beyond |x| > [0], their root at height [1]. */
-  wings?: [number, number];
+  /** Wings: beyond |x| > [0], their root at height [1], up to [2] (default just above). */
+  wings?: [number, number, number?];
   /** quad: shoulders and hips at |x| = [0], fore legs at z = [1], hind legs at z = [2] (a tail behind stays on the hips). */
   paws?: [number, number, number];
+  /** fly: a big flyer's wingbeat, wide and fast as it sets off, slow with glides on the way, steady in a hover. */
+  glide?: boolean;
   /** Ground covered in one full cycle (two steps), at most. */
   stride?: number;
   /** A ponderous walker (Golem, Titan): slower, heavier steps, a deeper sway. */
@@ -72,6 +74,8 @@ export const RIGS: Record<string, RigSpec> = {
   walkyrie: { kind: 'fly', hip: 0.3, wings: [0.17, 0.68], swing: 0.3 },
   drake: { kind: 'fly', hip: 0.55, wings: [0.32, 0.85] },
   corbeau: { kind: 'fly', hip: 0.7, wings: [0.04, 0.75] },
+  // The Humains' Plésiosaure (its Rodin model): wings from its shoulders out, weighted softly into its flanks.
+  plesiosaure: { kind: 'fly', hip: 0.1, wings: [0.15, 0.25, 0.5], glide: true },
   jormungandr: { kind: 'serpent', hip: 0.2 },
 };
 
@@ -99,6 +103,8 @@ export interface Rig {
   speed: number;
   scale: number;
   seed: number;
+  /** A glide flyer's wingbeat: its phase, amplitude and pace, its burst on setting off, and whether it was moving. */
+  flap?: { ph: number; amp: number; rate: number; boost: number; was: boolean };
 }
 
 /**
@@ -357,6 +363,23 @@ function pose(r: Rig, x: number, z: number, dt: number, t: number, moving: boole
       ease(a, 'x', 0.35 * k + Math.sin(t * 2 + r.seed + i * 1.4) * 0.1 + (fighting ? -0.4 : 0), 5);
       ease(a, 'z', (i ? -1 : 1) * (0.08 + Math.sin(t * 1.3 + i) * 0.04), 5);
     });
+    return;
+  }
+  if (s.kind === 'fly' && s.glide) {
+    // Setting off, a burst of wide fast beats (1.4 s); then slow beats with glides between, wings held a little up.
+    const f = (r.flap ??= { ph: r.seed, amp: 0.35, rate: 5, boost: 1, was: false });
+    if (moving && !f.was) f.boost = 1;
+    f.was = moving;
+    f.boost = Math.max(0, f.boost - dt / 1.4);
+    const glide = moving ? Math.max(0, Math.min(1, Math.sin(t * 0.7 + r.seed) * 1.6 + 0.4)) : 1;
+    const [amp, rate] = f.boost > 0 ? [0.32 + f.boost * 0.33, 5 + f.boost * 5] : moving ? [0.28 * glide, 3.2] : [0.34, 5];
+    const e = Math.min(1, dt * 3);
+    f.amp += (amp - f.amp) * e;
+    f.rate += (rate - f.rate) * e;
+    f.ph += f.rate * dt;
+    const flap = f.amp * Math.sin(f.ph) + 0.1;
+    r.wings.forEach((wg, i) => (wg.rotation.z = (i ? -1 : 1) * flap));
+    lift(hips, r.rest[0], -Math.cos(f.ph) * s.hip * 0.3 * f.amp);
     return;
   }
   if (s.kind === 'fly') {
