@@ -6,6 +6,7 @@ import { type Analysis, Analyzer, clock, FAULTS, type FaultKind } from '../src/a
 import { FACTIONS, type Faction } from '../src/data';
 import { TICK_RATE } from '../src/sim/fixed';
 import { createMatch } from '../src/sim/setup';
+import BALANCE from '../src/balance.json';
 // Before and after the strategies, on the same games: each camp of TOURNEY_CAMPS against each other camp played by
 // the AI as it was (legacy), both seats, TOURNEY_N games each (start delays and harvest handicaps as in faults.test.ts;
 // the strategies taken in turn). « Avant »: the camp plays legacy too; « après »: strategies and doctrine. The analyser
@@ -23,6 +24,9 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
   const camps = (process.env.TOURNEY_CAMPS ?? all.join(',')).split(',') as Faction[];
   const n = Number(process.env.TOURNEY_N ?? 3);
   const minutes = Number(process.env.TOURNEY_MINUTES ?? 30);
+  // Both sides at this level (TOURNEY_LEVEL: easy, normal, hard), their income its handicap's share as in a game.
+  const level = process.env.TOURNEY_LEVEL ?? 'normal';
+  const income = (BALANCE.ai.difficulty as Record<string, number>)[level] ?? 100;
   const doctrine = { ...DOCTRINE, ...JSON.parse(process.env.TOURNEY_DOCTRINE ?? '{}') };
   const out = ['# Tournoi avant/après les stratégies', '', 'Chaque camp contre l’IA actuelle (avant les stratégies) de chaque autre camp, aux deux places. Avant : le camp joue aussi l’IA actuelle. Après : stratégies et doctrine commune. Juge : l’analyseur. Ce n’est pas une mesure d’équilibre.', '', `Doctrine après : ${JSON.stringify(doctrine)}.`, ''];
   for (const camp of camps) {
@@ -38,8 +42,8 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
             const order = (seat === 0 ? [camp, foe] : [foe, camp]) as [Faction, Faction];
             const w = createMatch(order, undefined, process.env.TOURNEY_MAP);
             const hs = [100, 90, 110];
-            w.players[0].handicap = hs[k % 3];
-            w.players[1].handicap = hs[(k + 1) % 3];
+            w.players[0].handicap = Math.round((hs[k % 3] * income) / 100);
+            w.players[1].handicap = Math.round((hs[(k + 1) % 3] * income) / 100);
             const only = process.env.TOURNEY_STRATEGIES ? process.env.TOURNEY_STRATEGIES.split(',') : undefined;
             const list = only?.includes('classique') ? [{ id: 'classique' }] : STRATEGIES[camp].filter((s) => !only || only.includes(s.id));
             const strategy = list[k % list.length].id;
@@ -49,8 +53,8 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
             const ais = [0, 1].map((p) =>
               process.env.TOURNEY_BASE
                 ? p === seat
-                  ? new (mode === 'apres' ? After : Base)(w, p, undefined, 'normal', process.env.TOURNEY_STRATEGIES ? { strategy } : turn(camp))
-                  : new Base(w, p, undefined, 'normal', turn(foe))
+                  ? new (mode === 'apres' ? After : Base)(w, p, undefined, level, process.env.TOURNEY_STRATEGIES ? { strategy } : turn(camp))
+                  : new Base(w, p, undefined, level, turn(foe))
                 : new AI(w, p, undefined, 'normal', p === seat && mode === 'apres' ? { strategy, doctrine } : { legacy: true }),
             );
             const delay = [k * 10, ((k * 3) % 5) * 10];
