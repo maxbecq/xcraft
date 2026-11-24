@@ -2,7 +2,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSE
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions, startSite } from '../sim/setup';
-import { adapt, armyOf, confidence, DOCTRINE, EXPAND_MINUTE, ON_BY_DEFAULT, type Doctrine, fitSeen, hash, LEGACY, pickStrategy, remember, type Seen, type Strategy, USUAL_GODS } from './strategy';
+import { adapt, armyOf, confidence, COUNTER_MIN, DOCTRINE, EXPAND_MINUTE, ON_BY_DEFAULT, type Doctrine, fitSeen, hash, LEGACY, type Family, pickStrategy, remember, type Seen, STRATEGIES, type Strategy, USUAL_GODS } from './strategy';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -61,6 +61,14 @@ const MAX_TRIES = 3;
 const FIELDS_WEIGHED = 6;
 /** Minutes (game clock) the natural is saved for with the army out, from the strategy's minute (need). */
 const NATURAL_SAVING = 2;
+/** Workers the natural comes at, by opening family (none for a rush: its minute only), after SC2's melee AI. */
+const OPENING_WORKERS: Record<Family, number> = { macro: 13, power: 16, timing: 19, rush: Infinity };
+/** Minerals left by our bases below which the next base is due, and below which it comes first: SC2's late-game
+ *  thresholds (15 000 normal, 3 000 desperate, for a base of 10 800) scaled to ours (8 fields of 3 000). */
+const RESERVE_NORMAL = 33000;
+const RESERVE_LOW = 6600;
+/** Minerals the bank keeps while the natural rises, but for supply (SC2 saves to 500 during it). */
+const NATURAL_RESERVE = 400;
 /**
  * The scout (scouting): who tours the enemy's bases, 'none', 'worker' (a worker first, then the fastest soldier at
  * home) or 'spy' (the camp's spy, the Z Espion trained early for it; else as 'worker'). Its first tour at SCOUT_FIRST
@@ -68,6 +76,16 @@ const NATURAL_SAVING = 2;
  */
 const SCOUT: 'none' | 'worker' | 'spy' = 'worker';
 const SCOUT_FIRST = 1.5;
+/** The wave's power against its peak: it holds below WAVE_SCARED, fights on again above WAVE_BRAVE; from minute WAVE_TO_THE_END it fights to the end. */
+const WAVE_SCARED = 0.75;
+const WAVE_BRAVE = 0.9;
+const WAVE_TO_THE_END = 15;
+/** After a wave beaten (result below 0.8): the next one only 1.33 times as strong, for twice WAVE_REST seconds. */
+const WAVE_REST = 120;
+/** Minutes the read the army's shares follow is kept (scout). */
+const COUNTER_LOCK = 8;
+/** Research costs at most half the bank, or this much (research). */
+const TECH_FLOOR = 600;
 const SCOUT_EVERY = 2.5;
 const SCOUT_STOP = 60;
 /** Spies that tour in the 'spy' variant. */
@@ -167,6 +185,24 @@ export class AI {
    * and the side whose base was hit first called its wave back, to be beaten piecemeal at home.
    */
   private via: { x: number; y: number; until: number } | null = null;
+  /** The strategy changed already (rethink), and braced for a rush: natural later, a defence first. */
+  private switched = false;
+  private braced = false;
+  /**
+   * The wave out, as a whole (watch): its peak power, scared (holding, below WAVE_SCARED of it until back above
+   * WAVE_BRAVE), what it killed and lost (minerals and energy), the members and the enemies near it known by their worth.
+   * The last wave's result (killed over lost) and power, and the tick it ended, rule the next one (sends).
+   */
+  private peak = 0;
+  private scared = false;
+  private inflicted = 0;
+  private suffered = 0;
+  private members = new Map<number, number>();
+  private waveFoes = new Map<number, number>();
+  private lastResult = 1;
+  private lastPower = 0;
+  private waveOver = -Infinity;
+  private scaredAt = 0;
   /**
    * Build orders given per spot, by its middle in half tiles (by its top-left tile, a building of another size there
    * cleared it in one corner and not in the mirror); a spot tried MAX_TRIES times with nothing built there is given up.
@@ -193,7 +229,8 @@ export class AI {
 
   private readonly faction: FactionDef;
   /** The game plan drawn at the start (strategy.ts), the doctrine it plays by, and its lists as this game bends them. */
-  readonly strategy: Strategy;
+  /** Drawn at the start; changed once at most, on early signs (rethink). */
+  strategy: Strategy;
   readonly doctrine: Doctrine;
   private gods: [string, number][];
   private researchList: string[];
@@ -210,6 +247,9 @@ export class AI {
   /** When the read of the enemy and the army's shares were last brought up to date. */
   private readAt = -Infinity;
   private listAt = -Infinity;
+  /** The read the shares follow, kept COUNTER_LOCK minutes from lockAt (scout). */
+  private locked: Seen = new Map();
+  private lockAt = -Infinity;
 
   private readonly easy: boolean;
   private readonly hard: boolean;
@@ -226,12 +266,17 @@ export class AI {
    * `opts.strategies` or `opts.strategy` turns them on, `opts.legacy` off.
    * `opts.seed`: the game's seed the strategy is drawn with (by default one from the sides and the map).
    */
-  constructor(private readonly world: World, readonly player: number, private readonly plan: Plan = BIOBALL, level = 'normal', opts: { seed?: number; strategy?: string; strategies?: boolean; legacy?: boolean; doctrine?: Doctrine } = {}) {
+  constructor(private readonly world: World, readonly player: number, private plan: Plan = BIOBALL, level = 'normal', opts: { seed?: number; strategy?: string; strategies?: boolean; legacy?: boolean; doctrine?: Doctrine } = {}) {
     this.faction = FACTIONS[world.players[player].faction];
     const faction = world.players[player].faction;
     const seed = opts.seed ?? hash(world.players.map((p) => p.faction).join(','), world.map.width, world.map.height);
     const legacy = opts.legacy ?? !(opts.strategies || opts.strategy || ON_BY_DEFAULT.includes(faction));
-    this.strategy = legacy ? { id: 'classique', name: 'Classique' } : pickStrategy(faction, seed, player, opts.strategy);
+    // The draw weighed by the setting (pickStrategy): a duel, a free natural near (an expansion site within 40 tiles of
+    // the start). The enemy's start is never uncertain here: the seats are known (expansions).
+    const start = startSite(world, player);
+    const near = expansions(world, player).some(([x, y]) => !!start && Math.abs(x - start[0]) + Math.abs(y - start[1]) <= 40);
+    const enemies = world.players.filter((p) => world.hostile(p.id, player)).length;
+    this.strategy = legacy ? { id: 'classique', name: 'Classique' } : pickStrategy(faction, seed, player, opts.strategy, { duel: enemies === 1, natural: near, uncertain: false, level });
     this.doctrine = opts.doctrine ?? (legacy ? LEGACY : DOCTRINE);
     this.gods = this.strategy.gods ?? USUAL_GODS;
     this.researchList = [...new Set([...(this.strategy.research ?? []), ...(RESEARCH[faction] ?? [])])];
@@ -299,6 +344,7 @@ export class AI {
     const s = this.survey(mine, home);
     this.scouting(s);
     this.scout();
+    this.rethink(s);
     const n = { ...s, ...this.need(s) };
     const ctx: Turn = { ...n, ...this.budget(n), keep: 0, godEnergy: 0, low: 0, queued: 0, mending: 0, urgent: false };
     // Down to fewer than half the workers it wants: the next worker's price is kept from the buildings and the soldiers
@@ -373,12 +419,57 @@ export class AI {
     this.machines(ctx);
     this.barge(ctx);
     this.summon(ctx);
+    this.watch(ctx);
     this.muster(ctx);
     this.cast(ctx);
     this.withdraw(ctx);
     this.guard(ctx);
     this.advance(ctx);
     return ctx.out;
+  }
+
+  /**
+   * A change of plan on early signs, after StarCraft II's melee AI (likely rushing, don't rush), once a game:
+   * - the enemy likely rushing (three production buildings before minute 4, or its army known over
+   *   twice ours, four of them at least): the strategy that strikes latest, its natural two minutes later and a defence first (braced);
+   * - an early strike of ours (minute 6 or sooner) against three production buildings or an armed building before
+   *   minute 5: the strategy that strikes next after it (a timing attack instead of a rush).
+   * The Dieux' production is their Porte and gods: only the army counts for them.
+   */
+  private rethink(s: ReturnType<AI['survey']>): void {
+    if (this.switched || this.easy || this.doctrine === LEGACY) return;
+    const w = this.world;
+    const minute = s.minute;
+    if (minute >= 5) return;
+    const faction = w.players[this.player].faction;
+    const list = STRATEGIES[faction] ?? [];
+    let producers = 0;
+    let armed = false;
+    for (const e of w.entities.values()) {
+      if (e.def.kind !== 'building' || !w.hostile(e.owner, this.player)) continue;
+      const of = FACTIONS[w.players[e.owner].faction];
+      if (!of.gods && e.type === of.barracks) producers++;
+      // A defence, not a headquarters nor a supply building (the Dieux' Porte and Branches shoot).
+      if (e.buildLeft === 0 && !!w.weapon(e) && !kin(e, of.hq) && e.type !== of.outpost && !kin(e, of.supply)) armed = true;
+    }
+    const ours = this.power(s.army.map((u) => [u.hp + u.shield, this.dps(u)]));
+    const theirs = this.power([...this.foes.values()]);
+    // Not two before 2:20 as in SC2: that is the Humains' usual opening here.
+    const rushing = (minute < 4 && producers >= 3) || (this.foes.size >= 4 && theirs > 2 * ours);
+    const attack = this.strategy.attackMinute ?? 0;
+    let next: Strategy | undefined;
+    if (rushing) {
+      next = [...list].sort((a, b) => (b.attackMinute ?? 0) - (a.attackMinute ?? 0) || (a.id < b.id ? -1 : 1))[0];
+      this.braced = true;
+    } else if (attack && attack <= 6 && (producers >= 3 || armed)) next = list.filter((x) => (x.attackMinute ?? 0) > attack).sort((a, b) => (a.attackMinute ?? 0) - (b.attackMinute ?? 0) || (a.id < b.id ? -1 : 1))[0];
+    if (!rushing && !next) return;
+    this.switched = true;
+    if (!next || next.id === this.strategy.id) return;
+    this.strategy = next;
+    this.armyList = armyOf(faction, next, (t) => !w.lacks(this.player, t));
+    this.researchList = [...new Set([...(next.research ?? []), ...(RESEARCH[faction] ?? [])])];
+    if (next.wave) this.plan = { ...this.plan, wave: next.wave, waveGrowth: next.waveGrowth ?? this.plan.waveGrowth };
+    if (next.gods) this.gods = [...next.gods];
   }
 
   /** What the scouts see of the enemy's army, kept at its most of each type, and the army aimed at bent by it. */
@@ -394,13 +485,20 @@ export class AI {
         if (e.def.kind === 'unit' && !(e.def as UnitDef).worker) now.set(e.type, (now.get(e.type) ?? 0) + 1);
         // A building that trains flyers, seen: a few of them guessed before they come.
         const flyer = e.def.kind === 'building' && e.buildLeft === 0 ? (e.def as BuildingDef).trains?.find((t) => (DEFS[t] as UnitDef | undefined)?.flying && (DEFS[t] as UnitDef).attack) : undefined;
-        if (flyer) now.set(flyer, Math.max(now.get(flyer) ?? 0, 2));
+        if (flyer) now.set(flyer, Math.max(now.get(flyer) ?? 0, this.doctrine === LEGACY ? 2 : COUNTER_MIN));
       }
       remember(this.seen, now);
       // The army's shares follow the read, every ten seconds (blended by how sure it is: no turn at one unit seen).
+      // The read the shares follow is kept COUNTER_LOCK minutes (SC2's late game keeps a composition 10 min), unless
+      // flyers came to a third of what is seen (a must-switch: anti-air); new units unlocked join every ten seconds.
+      const flyers = (m: Seen) => { let a = 0, t = 0; for (const [k, n] of m) { const d = DEFS[k] as UnitDef | undefined; if (!d || d.worker || n < COUNTER_MIN) continue; t += n; if (d.flying) a += n; } return a * 3 >= t && t > 0; };
+      if (w.tick - this.lockAt >= ticks(COUNTER_LOCK * 60) || (flyers(this.seen) && !flyers(this.locked)) || !confidence(this.locked)) {
+        this.locked = new Map(this.seen);
+        if (confidence(this.locked)) this.lockAt = w.tick;
+      }
       if (this.doctrine !== LEGACY && w.tick - this.listAt >= ticks(10)) {
         this.listAt = w.tick;
-        this.armyList = adapt(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.seen, this.doctrine.counterRanged);
+        this.armyList = adapt(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.locked, this.doctrine.counterRanged);
       }
     }
     if (this.doctrine === LEGACY) return;
@@ -423,7 +521,9 @@ export class AI {
    * fills the memory the production reads (scout): with the army alone, nothing before the first fight.
    */
   private scouting(s: ReturnType<AI['survey']>): void {
-    if (SCOUT === 'none' || this.easy) return;
+    // Not the Isdaris: with a worker less mining early, their second Récepteur came at 21 minutes, not 12, and their
+    // supply was full before their tech (the Psycho-assembleur test).
+    if (SCOUT === 'none' || this.easy || this.faction === FACTIONS.isdaris) return;
     const w = this.world;
     let u = this.scoutId ? w.entities.get(this.scoutId) : undefined;
     if (this.scoutId && (!u || u.hp <= 0 || u.owner !== this.player)) {
@@ -536,7 +636,8 @@ export class AI {
     this.enemyAir = Math.max(this.enemyAir, flyersSeen);
     const antiAir = Math.min(BALANCE.ai.antiAir.max, Math.ceil(this.enemyAir / BALANCE.ai.antiAir.per));
     const minute = w.tick / ticks(60);
-    const enemyCloaks = w.players.some((o) => w.hostile(o.id, this.player) && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked));
+    // An enemy building that trains invisible units (SC2's detection dangers), or one of them seen: not the faction alone.
+    const enemyCloaks = this.doctrine === LEGACY ? w.players.some((o) => w.hostile(o.id, this.player) && FACTIONS[o.faction].army.some(([t]) => (DEFS[t] as UnitDef).cloaked)) : [...w.entities.values()].some((e) => w.hostile(e.owner, this.player) && ((e.def.kind === 'building' && e.buildLeft === 0 && !!(e.def as BuildingDef).trains?.some((t) => (DEFS[t] as UnitDef | undefined)?.cloaked)) || ((e.def as UnitDef).cloaked && w.sees(this.player, e))));
     const free = supply.max - supply.used;
     const rally = this.rallyPoint(home);
     const out: Command[] = [];
@@ -577,6 +678,30 @@ export class AI {
       if (s.order) continue;
       const f = this.closestField(s, bases, (e) => !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
+    }
+
+    // Workers over two a field at one base go to a finished base with fewer (SC2's balancing across bases): one a turn,
+    // an empty-handed one on its way out to its field.
+    if (!this.easy && this.doctrine !== LEGACY && bases.length > 1) {
+      const fieldsBy = new Map<number, number>();
+      const workersBy = new Map<number, number>();
+      // A field belongs to its nearest base only (one between two counted at both sent workers to and fro).
+      const baseOf = (f: Entity) => bases.filter((b) => dist(b.x, b.y, f.x, f.y) < 12 * FP).sort((a, b) => dist(a.x, a.y, f.x, f.y) - dist(b.x, b.y, f.x, f.y) || a.id - b.id)[0];
+      for (const e of w0.listed().fields) {
+        const b = baseOf(e);
+        if (b) fieldsBy.set(b.id, (fieldsBy.get(b.id) ?? 0) + 1);
+      }
+      for (const s of serfs) {
+        const t = s.order?.kind === 'gather' ? w0.entities.get(s.order.target) : undefined;
+        const b = t && baseOf(t);
+        if (b) workersBy.set(b.id, (workersBy.get(b.id) ?? 0) + 1);
+      }
+      const room = (b: Entity) => 2 * (fieldsBy.get(b.id) ?? 0) - (workersBy.get(b.id) ?? 0);
+      const from = bases.find((b) => room(b) < 0);
+      const to = bases.filter((b) => room(b) > 1 && !this.underFire(b)).sort((a, b) => room(b) - room(a) || a.id - b.id)[0];
+      const mover = from && to && serfs.find((s) => s.order?.kind === 'gather' && s.order.phase === 'go' && s.carry === 0 && (() => { const f = w0.entities.get((s.order as { target: number }).target); return !!f && baseOf(f) === from; })() && !ctx.out.some((c) => c.ids.includes(s.id)));
+      const field = mover && this.closestField(mover, [to], (e) => !guarded(e, mover));
+      if (mover && field) ctx.out.push({ player: this.player, kind: 'smart', ids: [mover.id], x: field.x, y: field.y, target: field.id });
     }
 
     // A worker that has not moved for STUCK_SECONDS on its way to a field (it can stand on the field's corner, out of
@@ -711,7 +836,7 @@ export class AI {
     // Dieux: their gods summon one unit at a time, minerals pile up: spare ones go into more Branches (turned into
     // Yggdrasill protecteurs) and into bases, sooner.
     const rich = !!f.gods && p.minerals > 800;
-    const defenses = f.defense ? (minute > 6 ? 1 : 0) + (minute > 11 ? 1 : 0) + antiAir + (rich ? Math.min(3, Math.floor(minute / 4) + Math.floor(p.minerals / 800)) : 0) : 0;
+    const defenses = f.defense ? (minute > 6 || this.braced ? 1 : 0) + (minute > 11 ? 1 : 0) + antiAir + (rich ? Math.min(3, Math.floor(minute / 4) + Math.floor(p.minerals / 800)) : 0) : 0;
     if (f.detector && count(f.detector) < detectors && !building(f.detector)) wants.push(f.detector);
     // The second production building, for heavier units, only with resources to spare: its units cost
     // more for their strength than the gateway's (an early one cost the Isdaris AI most of its games).
@@ -746,7 +871,8 @@ export class AI {
     // The natural at the strategy's minute, an opening as in StarCraft (strategy.ts): the easy AI late, the hard one a
     // minute sooner.
     const opening = this.strategy.expandMinute ?? EXPAND_MINUTE;
-    const firstAt = this.easy ? LEVELS.easy.expandMinute : this.hard ? Math.max(2, opening - 1) : opening;
+    // Braced for a rush (rethink): two minutes later.
+    const firstAt = (this.easy ? LEVELS.easy.expandMinute : this.hard ? Math.max(2, opening - 1) : opening) + (this.braced ? 2 : 0);
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
@@ -760,7 +886,23 @@ export class AI {
     // and kept training: raised to 1 500, they saved at 2:30 with three units for their opening and the Humains' first
     // raid at 4:40 razed them, evening replays of 24/11).
     const floating = !this.easy && p.minerals > 800;
-    const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) || floating : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
+    // After StarCraft II's melee AI: the natural at the plan's workers (its strategy's minute the latest), none while
+    // the base is under attack; the bases after it sooner with the stronger army (×0.8 the interval, ours over 1.5 times
+    // the enemy known), later with the weaker (×1.25).
+    const ours = this.power(army.map((u) => [u.hp + u.shield, this.dps(u)]));
+    const theirs = this.power([...this.foes.values()]);
+    // Reserves' thresholds ×1.25 with the stronger army (ours over 1.5 times the enemy known), ×0.8 with the weaker.
+    const pace = this.easy || !theirs ? 1 : ours > 1.5 * theirs ? 1.25 : ours < theirs ? 0.8 : 1;
+    // The natural at its family's workers (OPENING_WORKERS: a rush takes none but at its minute), the plan's for a
+    // strategy with no family; the bases after it by the minerals left at ours, as SC2's late game: due below
+    // RESERVE_NORMAL, first of the buildings below RESERVE_LOW (an early minute as before for the easy AI).
+    const workersFor = this.strategy.family ? OPENING_WORKERS[this.strategy.family] : Infinity;
+    const left = this.mineralsLeft(buildings);
+    const low = councils >= 2 && !this.easy && this.doctrine !== LEGACY && left < RESERVE_LOW * pace;
+    // The Humains' old AI (LEGACY) keeps its ways here and in the rules below (flyers guessed, detection, workers moved,
+    // research cap, reserves, natural's reserve and workers): with them it won 39 to 42 games in 96 against the 0.9.147
+    // AI, 47 without.
+    const due = (!this.homeThreat || this.easy || this.doctrine === LEGACY) && (councils < 2 ? w.tick > ticks(firstAt * 60) || (!this.easy && serfs.length >= workersFor) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) || floating : (this.easy || this.doctrine === LEGACY ? minute >= firstAt + EXPAND_EVERY * (councils - 1) : left < RESERVE_NORMAL * pace) || this.fieldsNear(buildings) < 6);
     // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
     // the last fields were at the expansion).
     // The natural at its minute whatever the workers (an opening); the bases after it with the plan's workers.
@@ -769,7 +911,7 @@ export class AI {
     if (f === FACTIONS.humains && !this.easy && p.energy >= 400 && count('alchimisterie') === 0 && !building('alchimisterie') && !w.lacks(this.player, 'alchimisterie')) wants.push('alchimisterie');
     // In its opening's window, the natural comes before the other buildings, supply short aside (the Humains' casernes
     // and Greniers took the bank first: their Conseil came at 7:01, the window's end).
-    if (expand) wants.splice(councils < 2 && minute < firstAt + NATURAL_SAVING ? (supplyShort ? wants.indexOf(f.supply) + 1 : 0) : wants.length, 0, outpost);
+    if (expand) wants.splice((councils < 2 && minute < firstAt + NATURAL_SAVING) || low ? (supplyShort ? wants.indexOf(f.supply) + 1 : 0) : wants.length, 0, outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
     // No base at all, a worker to raise it or a site rising by itself (a Conseil's site with its last serf killed never
@@ -891,9 +1033,12 @@ export class AI {
       } else if (!host && !building(f.supply) && !wants.includes(f.supply)) wants.splice(i + 1, 0, f.supply);
     }
     const beamed = new Set<number>();
+    // The natural rising (our second base): NATURAL_RESERVE kept in the bank from the other buildings but supply.
+    const rising = !this.easy && this.doctrine !== LEGACY && buildings.filter((b) => this.isBase(b)).length === 2 && buildings.some((b) => this.isBase(b) && b.buildLeft > 0);
     for (const type of wants) {
       const def = DEFS[type] as BuildingDef;
       if (def.addon) continue;
+      if (rising && type !== f.supply && type !== outpost && ctx.minerals - def.cost.minerals < NATURAL_RESERVE) break;
       if (ctx.minerals < def.cost.minerals) {
         // The natural in its opening's window is saved for: nothing after it takes the bank.
         if (type === outpost && !opening) continue;
@@ -1014,7 +1159,8 @@ export class AI {
       const cost = (DEFS[t] as UpgradeDef).cost;
       // The researches off the list only with resources to spare, after the units' energy.
       const spare = listed.includes(t) ? 0 : 200;
-      if (!host || ctx.minerals < cost.minerals + spare + ((host.def as BuildingDef).trains?.length && !many ? 300 : 0) || ctx.energy - (spare ? ctx.unitReserve + 100 : researchReserve) < cost.energy) continue;
+      // No research worth more than half the bank (above TECH_FLOOR): SC2's melee AI keeps its upgrades to 50 %.
+      if (!host || (this.doctrine !== LEGACY && cost.minerals > Math.max(TECH_FLOOR, ctx.p.minerals / 2)) || ctx.minerals < cost.minerals + spare + ((host.def as BuildingDef).trains?.length && !many ? 300 : 0) || ctx.energy - (spare ? ctx.unitReserve + 100 : researchReserve) < cost.energy) continue;
       ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: t });
       researching.add(host.id);
       ctx.minerals -= cost.minerals;
@@ -1521,7 +1667,7 @@ export class AI {
         if (danger && near(b)) ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'refuge' });
         else if (mine.some((u) => u.inside === b.id)) ctx.out.push({ player: this.player, kind: 'unload', ids: [b.id] });
       }
-    } else if (((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) && this.sends(atHome, ctx)) {
+    } else if (((!this.easy || minute >= LEVELS.easy.attackMinute) && (atHome.length >= Math.ceil(Math.min(this.easy ? LEVELS.easy.maxWave : MAX_WAVE, this.plan.wave + this.waves * this.plan.waveGrowth) / (this.lastResult >= 1.3 && !this.easy ? 2 : 1)) || (atHome.length >= 6 && supply.used >= 190) || ((atHome.length > 0 || gods.length > 0) && this.starved(buildings, ctx.p.minerals) && (gods.length > 0 || atHome.length * 2 >= this.plan.wave || !this.affordable(ctx))) || (minute >= 10 && (atHome.length >= this.plan.wave || this.waves > 0) && this.dominates(atHome)))) && this.sends(atHome, ctx)) {
       // No income left: half a wave at least goes, or the last units it can pay for (one at a time, each new Créature
       // joined a wave of three dying under a manned Fortin, for twenty minutes, to a draw).
       // Reinforcements for a wave already out join it: the shared road's middle is for a new wave only (set again for
@@ -1571,6 +1717,9 @@ export class AI {
     const last = ctx.supply.used >= 190 || (this.starved(ctx.buildings, ctx.p.minerals) && !this.affordable(ctx));
     if (last || ctx.minute >= 25) return true;
     if (this.wave.size > 0) return atHome.length >= d.regroup;
+    // Beaten (watch): 1.33 times its power, for twice the rest (then whatever the army is: it may never get there).
+    const ready = atHome.filter((u) => !!this.world.weapon(u));
+    if (this.lastResult < 0.8 && this.lastPower > 0 && this.world.tick - this.waveOver < ticks(2 * WAVE_REST) && this.power(ready.map((u) => [u.hp + u.shield, this.dps(u)])) < 1.33 * this.lastPower) return false;
     // Before the strategy's minute, only to strike back at a raid just beaten off (« Siège » waited for minute 11 while
     // the Humans' raids wore its army down one socle at a time, and the wave never left).
     if (ctx.minute < (this.strategy.attackMinute ?? 0) && this.world.tick - this.repelled >= ticks(60)) return false;
@@ -1800,8 +1949,85 @@ export class AI {
     if (this.hard) ctx.out.push(...this.focus([...this.wave].map((id) => w.entities.get(id)!)));
   }
 
+  /**
+   * The wave as a whole (SC2's melee AI, by its idea): below WAVE_SCARED of its peak power it falls back a few tiles
+   * and holds, for the reinforcements; back above WAVE_BRAVE it goes on. What it
+   * killed and lost, by the worth of the units (minerals and energy), is its result, kept for the next wave (sends).
+   */
+  private watch(ctx: Turn): void {
+    // Not the Humains' old AI (22 wins in 96 with it, 29 without), nor the easy one.
+    if (this.easy || this.doctrine === LEGACY) return;
+    const w = this.world;
+    const worth = (e: Entity) => ((e.def as UnitDef | BuildingDef).cost?.minerals ?? 0) + ((e.def as UnitDef | BuildingDef).cost?.energy ?? 0);
+    const units = [...this.wave].map((id) => w.entities.get(id)).filter((u): u is Entity => !!u && u.def.kind === 'unit');
+    for (const u of units) this.members.set(u.id, worth(u));
+    for (const [id, v] of this.members) {
+      if (!w.entities.get(id)) this.suffered += v;
+      if (!w.entities.get(id) || !this.wave.has(id)) this.members.delete(id);
+    }
+    if (units.length) {
+      const cx = units.reduce((a, u) => a + u.x, 0) / units.length;
+      const cy = units.reduce((a, u) => a + u.y, 0) / units.length;
+      // Units and buildings: a wave that razes a base wins.
+      for (const e of w.entities.values()) if (e.def.kind !== 'resource' && w.hostile(e.owner, this.player) && w.sees(this.player, e) && dist(e.x, e.y, cx, cy) < 14 * FP) this.waveFoes.set(e.id, worth(e));
+    }
+    for (const [id, v] of this.waveFoes) if (!w.entities.get(id)) {
+      this.inflicted += v;
+      this.waveFoes.delete(id);
+    }
+    if (!units.length) {
+      if (this.peak > 0) this.endWave();
+      return;
+    }
+    const now = this.power(units.map((u) => [u.hp + u.shield, this.dps(u)]));
+    this.peak = Math.max(this.peak, now);
+    // Late (minute WAVE_TO_THE_END, or supply full): the waves fight to the end (called back at 70 %, four AIs went to
+    // and fro for 50 minutes).
+    if (ctx.minute >= WAVE_TO_THE_END || ctx.supply.used >= 190) {
+      this.scared = false;
+      return;
+    }
+    const ratio = now / (this.peak || 1);
+    const ids = units.map((u) => u.id);
+    // No call-back of the whole wave below 70 % (the groups badly outmatched fall back on their own, withdraw): the
+    // games of the slow tests went from 210 to 243 minutes in all, AIs going to and fro.
+    if (!this.scared && ratio < WAVE_SCARED) {
+      // A few tiles back toward home, fighting what follows.
+      this.scared = true;
+      this.scaredAt = w.tick;
+      // Rounded toward the map's middle, the same point from the other corners.
+      const [hx, hy] = [(w.map.width * FP) / 2, (w.map.height * FP) / 2];
+      const cx = Math.trunc(units.reduce((a, u) => a + u.x, 0) / units.length - hx) + hx;
+      const cy = Math.trunc(units.reduce((a, u) => a + u.y, 0) / units.length - hy) + hy;
+      const d = dist(cx, cy, ctx.home.x, ctx.home.y) || 1;
+      ctx.out.push({ player: this.player, kind: 'attack', ids, x: Math.trunc(cx - hx + ((ctx.home.x - cx) * 5 * FP) / d) + hx, y: Math.trunc(cy - hy + ((ctx.home.y - cy) * 5 * FP) / d) + hy });
+    } else if (this.scared && ratio > WAVE_BRAVE) this.scared = false;
+    // Scared for WAVE_REST / 4 seconds with no reinforcement to lift it: on again, at what it has (held for good, the
+    // game never ended).
+    else if (this.scared && w.tick - this.scaredAt >= ticks(WAVE_REST / 4)) {
+      this.scared = false;
+      this.peak = now;
+    }
+  }
+
+  /** The wave over: its result kept for the next. */
+  private endWave(): void {
+    // Nothing killed nor lost: even.
+    this.lastResult = (this.inflicted + 1) / (this.suffered + 1);
+    this.lastPower = this.peak;
+    this.waveOver = this.world.tick;
+    this.peak = 0;
+    this.scared = false;
+    this.inflicted = 0;
+    this.suffered = 0;
+    this.members.clear();
+    this.waveFoes.clear();
+  }
+
   /** The wave moves: kiting, supports behind the front, by the shared road, on to the target. */
   private advance(ctx: Turn): void {
+    // A scared wave holds where it fell back to (watch).
+    if (this.scared) return;
     const { w, home } = ctx;
     const target = this.enemyTarget(home);
     const waveUnits = [...this.wave].map((id) => w.entities.get(id)!);
@@ -2847,6 +3073,14 @@ export class AI {
       this.guns = { tick: w.tick, list };
     }
     return this.guns.list.some(([g, r]) => dist(g.x, g.y, e.x, e.y) < (r + 3) * FP);
+  }
+
+  /** Minerals left in the fields by our finished bases (the reserves SC2's late game expands by). */
+  private mineralsLeft(buildings: Entity[]): number {
+    const hqs = buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
+    let n = 0;
+    for (const e of this.world.listed().fields) if (hqs.some((b) => dist(b.x, b.y, e.x, e.y) < 12 * FP)) n += e.amount;
+    return n;
   }
 
   /** Mineral fields left within reach of the council. */

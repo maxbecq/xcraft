@@ -27,6 +27,8 @@ export interface Strategy {
   research?: string[];
   /** Buildings wanted on top of the usual ones: [type, from minute]. */
   extra?: [string, number][];
+  /** Its opening's family, as StarCraft II's melee AI draws them (OPENING_WORKERS, pickStrategy); 'timing' when absent. */
+  family?: Family;
   /**
    * The minute (game clock) the natural is taken and saved for, as an opening in StarCraft: early for the strategies
    * that strike late, late for those that strike early (EXPAND_MINUTE when absent).
@@ -91,6 +93,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
   dieux: [
     {
       id: 'marteau',
+      family: 'rush',
       name: 'Marteau nordique',
       // Odin early for the Drakes and Corbeaux, Frigg for the Walkyries: a fast, hard-hitting army.
       gods: [['thor', 0], ['seth', 3], ['odin', 6], ['athena', 9], ['frigg', 12], ['isis', 18], ['hades', 20], ['osiris', 22], ['apollon', 24]],
@@ -103,6 +106,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'phalange',
+      family: 'timing',
       name: 'Phalange grecque',
       // Apollon and Athéna: Minotaures and Élémentaires, then Hadès for the Titans; a heavy army, later.
       gods: [['thor', 0], ['apollon', 3], ['seth', 5], ['athena', 7], ['odin', 10], ['hades', 12], ['isis', 18], ['osiris', 20], ['frigg', 22]],
@@ -115,6 +119,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'sables',
+      family: 'power',
       name: 'Sables d’Égypte',
       // Seth, Isis, Osiris: Sphinx at range, Prêtresses, Immortels; strikes late with a big army.
       gods: [['thor', 0], ['seth', 2], ['apollon', 5], ['isis', 7], ['odin', 9], ['osiris', 11], ['athena', 18], ['hades', 20], ['frigg', 22]],
@@ -127,6 +132,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'pantheon',
+      family: 'timing',
       name: 'Panthéon',
       // The usual gods' order, the whole arsenal in the army.
       army: { nain: 3, minotaure: 2, sphinx: 2, elembase: 2, drake: 1, pretresse: 1, corbeau: 1, walkyrie: 1, titan: 1, immortel: 1 },
@@ -137,6 +143,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
   isdaris: [
     {
       id: 'tir',
+      family: 'timing',
       name: 'Tir psychique',
       // Archers first, the Laboratoire early for the Druides and the Portail's attack: at range, against the infantry.
       army: { archer: 5, creature: 2, druide: 2 },
@@ -147,6 +154,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'essaim',
+      family: 'rush',
       name: 'Essaim',
       // Créatures in numbers with Enfouissement and Archers behind them, an early strike (the Psycho-assembleur and the
       // Orbe de commandement sooner for the Assassins cost it every second game: 21 wins in 48).
@@ -159,6 +167,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'mages',
+      family: 'power',
       name: 'Mages',
       // Druides and Archers behind a few Créatures, Déflagration early; a later, harder strike.
       army: { druide: 3, archer: 3, creature: 2 },
@@ -172,6 +181,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
   z: [
     {
       id: 'artillerie',
+      family: 'power',
       name: 'Artillerie',
       // Hexapodes with rockets and Octopodes, held back for big waves from minute 10 (light socles early, Quadripodes and
       // drones de combat in waves of 12 to 16, won 22 of 48 against the AI as it was: dropped).
@@ -185,6 +195,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'blindes',
+      family: 'power',
       name: 'Blindés',
       // Hexapodes, Octopodes and Mastodontes behind a few Quadripodes: slower, heavier waves.
       // Octopodes and Mastodontes only once they can come: in the games of 23/11 they never did (no Centre
@@ -198,6 +209,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'siege',
+      family: 'macro',
       name: 'Siège',
       // The heavy army of Blindés, armour first, held back for one big late wave (Coléoptères in the air won 20 of 48
       // against the AI as it was, Mastodontes from minute 7 as many: both dropped).
@@ -212,6 +224,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
   humains: [
     {
       id: 'legion',
+      family: 'rush',
       name: 'Légion',
       // Légionnaires for half the infantry, melee research first, an early strike.
       legionShare: 0.5,
@@ -221,6 +234,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'bastion',
+      family: 'power',
       name: 'Bastion',
       // The Auxiliaires' line with more Soigneurs, armour and range researched first, one bigger wave later.
       healerEvery: 3,
@@ -231,6 +245,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
     },
     {
       id: 'creaturium',
+      family: 'timing',
       name: 'Créaturium',
       // The Créaturium early for its saurians and Belluaires, behind the usual infantry.
       techMinute: 5,
@@ -249,11 +264,47 @@ export function hash(...parts: (string | number)[]): number {
   return h >>> 0;
 }
 
-/** The strategy a player draws: by the game's seed and its seat, or the one named. */
-export function pickStrategy(faction: Faction, seed: number, player: number, named?: string): Strategy {
+/** Opening families, after StarCraft II's melee AI: an early strike, a timing attack, a strong economy, a fast expansion. */
+export type Family = 'rush' | 'timing' | 'power' | 'macro';
+/** What the draw weighs (pickStrategy): one enemy or more, a free natural near, more starts than players, the level. */
+export interface Setting {
+  duel: boolean;
+  natural: boolean;
+  uncertain: boolean;
+  level: string;
+}
+/** Each family's weight in the draw, by level (no rush for the easy AI). */
+const FAMILY_WEIGHTS: Record<string, Record<Family, number>> = {
+  easy: { rush: 0, timing: 2, power: 1, macro: 1 },
+  normal: { rush: 1, timing: 2, power: 2, macro: 1 },
+  hard: { rush: 2, timing: 2, power: 2, macro: 2 },
+};
+
+/**
+ * The strategy a player draws: by the game's seed and its seat, or the one named. With a setting, weighed by family
+ * as StarCraft II's melee AI does: no rush but in a duel, a rush as a timing where the enemy's start is uncertain, no
+ * power nor macro opening without a free natural near, the families' weights by level.
+ */
+export function pickStrategy(faction: Faction, seed: number, player: number, named?: string, setting?: Setting): Strategy {
   const list = STRATEGIES[faction] ?? [USUAL];
   if (named === USUAL.id) return USUAL;
-  return list.find((s) => s.id === named) ?? list[hash(seed, player, faction) % list.length];
+  const chosen = list.find((s) => s.id === named);
+  if (chosen) return chosen;
+  const draw = hash(seed, player, faction);
+  if (!setting) return list[draw % list.length];
+  const table = FAMILY_WEIGHTS[setting.level] ?? FAMILY_WEIGHTS.normal;
+  const weight = (s: Strategy) => {
+    let f = s.family ?? 'timing';
+    if (f === 'rush' && !setting.duel) return 0;
+    if (f === 'rush' && setting.uncertain) f = 'timing';
+    if ((f === 'power' || f === 'macro') && !setting.natural) return 0;
+    return table[f];
+  };
+  const total = list.reduce((n, s) => n + weight(s), 0);
+  if (!total) return list[draw % list.length];
+  let r = draw % total;
+  for (const s of list) if ((r -= weight(s)) < 0) return s;
+  return list[0];
 }
 
 /** Units of the strategy's army, as [type, weight]; the faction's usual list when it names none. */
@@ -276,7 +327,8 @@ export function counter(army: [string, number][], seen: Seen, ranged = true): [s
   const cls = new Map<number, number>();
   for (const [t, n] of seen) {
     const d = DEFS[t] as UnitDef | undefined;
-    if (!d || d.kind !== 'unit' || d.worker) continue;
+    // Fewer than COUNTER_MIN of a type seen: not worth a counter (SC2's melee AI ignores those).
+    if (!d || d.kind !== 'unit' || d.worker || n < COUNTER_MIN) continue;
     total += n;
     if (d.flying) air += n;
     const i = CLASSES.indexOf(d.cls ?? 'BL');
@@ -287,7 +339,7 @@ export function counter(army: [string, number][], seen: Seen, ranged = true): [s
   // Mostly shooters seen (Auxiliaires, Archers): our own shooters count twice, melee half (Créatures charging a line of
   // Auxiliaires lost the Isdaris their games against the Humans).
   let shooting = 0;
-  for (const [t, n] of seen) if ((DEFS[t] as UnitDef | undefined)?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && ((DEFS[t] as UnitDef).attack?.range ?? 0) >= 3) shooting += n;
+  for (const [t, n] of seen) if (n >= COUNTER_MIN && (DEFS[t] as UnitDef | undefined)?.kind === 'unit' && !(DEFS[t] as UnitDef).worker && ((DEFS[t] as UnitDef).attack?.range ?? 0) >= 3) shooting += n;
   const shooters = ranged && shooting * 2 >= total;
   return army.map(([t, wgt]) => {
     const a = (DEFS[t] as UnitDef).attack;
@@ -312,6 +364,9 @@ export function remember(seen: Seen, now: Seen): void {
 
 /** How sure the AI is of its read: none with nothing seen, half at CONFIDENT units, nearly all with many more. */
 export const CONFIDENT = 8;
+/** Counters (counter, adapt): an enemy type seen fewer than COUNTER_MIN times is ignored; no type is bent past COUNTER_CAP. */
+export const COUNTER_MIN = 3;
+export const COUNTER_CAP = 0.25;
 export function confidence(seen: Seen): number {
   let total = 0;
   for (const [t, n] of seen) if ((DEFS[t] as UnitDef | undefined)?.kind === 'unit' && !(DEFS[t] as UnitDef).worker) total += n;
@@ -328,7 +383,10 @@ export function adapt(army: [string, number][], seen: Seen, ranged = true): [str
   const bent = counter(army, seen, ranged);
   const sum = (l: [string, number][]) => l.reduce((n, [, wgt]) => n + wgt, 0) || 1;
   const [a, b] = [sum(army), sum(bent)];
-  return army.map(([t, wgt], i) => [t, (1 - c) * wgt + (c * bent[i][1] * a) / b]);
+  const mixed = army.map(([t, wgt], i): [string, number] => [t, (1 - c) * wgt + (c * bent[i][1] * a) / b]);
+  // No type pushed by the counters past COUNTER_CAP of the army, unless the plan gave it more (SC2: 48 supply of 200).
+  const m = sum(mixed);
+  return mixed.map(([t, wgt], i) => [t, Math.min(wgt, m * Math.max(COUNTER_CAP, army[i][1] / a))]);
 }
 
 /**
