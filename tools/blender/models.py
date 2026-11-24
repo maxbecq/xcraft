@@ -1522,7 +1522,7 @@ def dress_creaturium(p, glow):
 #: little brass mechanism. Only the parts are exported (`<type>-dress.glb`); the game adds them to the model.
 DRESS = {
     "conseil": dress_conseil, "caserne": dress_caserne, "grenier": dress_grenier, "mine": dress_mine, "forge": dress_forge,
-    "fortin": dress_fortin, "tour": dress_tour, "metallurgie": dress_metallurgie, "alchimisterie": dress_alchimisterie,
+    "fortin": dress_fortin, "tour": dress_tour, "metallurgie": dress_metallurgie,
     "creaturium": dress_creaturium,
 }
 
