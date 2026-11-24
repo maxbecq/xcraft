@@ -756,8 +756,12 @@ export class EntityRenderer {
       const v = this.views.get(e.id) ?? this.create(e, player);
       // A Caserne volante taking off or landing is a new view: its rotors keep the pace they had, to spin up or down.
       if (old && old !== v && old.rotors && v.rotors) v.rotors.spin = old.rotors.spin;
-      if (old && old !== v && old.type === 'casernevolante' && e.type === 'casernevol') v.flight = { kind: 'up', age: 0, from: 0 };
-      if (old && old !== v && old.type === 'casernevol' && e.type === 'casernevolante') v.flight = { kind: 'down', age: 0, from: old.model.position.y };
+      // It keeps the way it faced: taking off, as the building stood; setting down, as it flew, turned back as it sinks.
+      if (old && old !== v && old.type === 'casernevolante' && e.type === 'casernevol') {
+        v.flight = { kind: 'up', age: 0, from: 0 };
+        v.heading = v.target = old.model.rotation.y;
+      }
+      if (old && old !== v && old.type === 'casernevol' && e.type === 'casernevolante') v.flight = { kind: 'down', age: 0, from: old.model.position.y, yaw: old.heading };
       // Setting down: it sinks fast then slower and slower near the ground, floats a moment just above it, touches
       // and settles a little on its feet; only then do the rotors wind down to a stop.
       if (v.flight?.kind === 'down') {
@@ -767,6 +771,12 @@ export class EntityRenderer {
         const sink = 1 - (1 - k) ** 3;
         const float = k < 1 ? Math.sin(k * Math.PI) * 0.06 * (1 - k) : 0;
         v.model.position.y = f.from * (1 - sink) + float;
+        if (f.yaw !== undefined) {
+          // The shorter way round, eased like the sinking, to the building's own yaw.
+          const rest = (v.model.userData.restYaw ??= v.model.rotation.y) as number;
+          const d = Math.atan2(Math.sin(f.yaw - rest), Math.cos(f.yaw - rest));
+          v.model.rotation.y = rest + d * (1 - sink);
+        }
         const after = f.age - LAND_S;
         v.model.scale.y = (v.model.userData.sy ??= v.model.scale.y) * (after > 0 && after < 0.35 ? 1 - 0.035 * Math.sin((after / 0.35) * Math.PI) : 1);
         if (after > 2.5) {

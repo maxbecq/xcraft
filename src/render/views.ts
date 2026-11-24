@@ -69,7 +69,8 @@ export interface View {
   cart?: { legs: { o: Object3D; phase: number }[]; vat?: Object3D; pumper?: Object3D; lever?: Object3D; roll: number; x: number; z: number };
   /** A Caserne volante lifting off (`up`) or setting down (`down`): seconds since, and the height it came down from.
    * The simulation switches it at once; the render plays the climb and the descent in that time. */
-  flight?: { kind: 'up' | 'down'; age: number; from: number };
+  /** A Caserne volante taking off or setting down; `yaw`: landing, the way it faced in flight, turned back to its rest. */
+  flight?: { kind: 'up' | 'down'; age: number; from: number; yaw?: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
   wheels?: { o: Object3D; r: number }[];
   root: Object3D;
