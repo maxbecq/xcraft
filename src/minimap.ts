@@ -142,7 +142,8 @@ export class Minimap {
       }
       if (e.owner < 0 || !sees(e)) continue;
       ctx.fillStyle = `#${TEAM_COLORS[e.owner].toString(16).padStart(6, '0')}`;
-      const s = Math.max(1.5, (e.radius * 2) / FP);
+      // At least 3 pixels across, whatever the map's size: small units were lost (the user's request, 2026-11-24).
+      const s = Math.max(3 / this.scale, (e.radius * 2) / FP);
       ctx.fillRect(e.x / FP - s / 2, e.y / FP - s / 2, s, s);
     }
 
