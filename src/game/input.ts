@@ -368,6 +368,15 @@ export class Input {
           navigator.vibrate?.(15);
           return;
         }
+        // Producers alone: a long press moves their rally point there (a mere tap lets go of them).
+        const ground = this.groundAt(t.sx, t.sy);
+        const own = this.own();
+        if (ground && own.length && own.every((b) => b.def.kind === 'building') && own.some((b) => (b.def as BuildingDef).trains?.length)) {
+          this.rallyAt(ground.x, ground.z, hit);
+          this.touchMode = null;
+          navigator.vibrate?.(15);
+          return;
+        }
         this.touchMode = 'box';
         this.dragStart = { x: t.sx, y: t.sy };
         // From nothing at the new start: the last box's size would show until the finger moves.
@@ -482,7 +491,8 @@ export class Input {
       this.lastTap = { time: now, type: target.type };
       return;
     }
-    if (this.own().length && ground) {
+    // Buildings alone: a tap elsewhere lets go of them (their rally point takes a long press).
+    if (this.own().length && ground && !this.own().every((e) => e.def.kind === 'building')) {
       this.orderAt(ground.x, ground.z, target);
       return;
     }

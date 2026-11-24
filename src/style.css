@@ -1251,7 +1251,7 @@ body.tactile .hud-panel .hp + .info { display: none; }
 .console > :is(.hud-panel, .hud-card, .map-slot) { transition: translate 0.3s ease, opacity 0.3s ease; }
 body[class] .console.tucked { background: none; border-color: transparent; box-shadow: none; pointer-events: none; }
 body[class] .console.tucked::before, body[class] .console.tucked::after { display: none; }
-.console.tucked > :is(.hud-panel, .hud-card) { translate: 0 60vh; opacity: 0; pointer-events: none; }
+:is(.console.tucked, .console.ringed) > :is(.hud-panel, .hud-card) { translate: 0 60vh; opacity: 0; pointer-events: none; }
 .console.tucked > .map-slot { translate: 0 var(--drop, 0px); pointer-events: auto; }
 .console-tab {
   position: fixed; z-index: 3; left: 50%; bottom: calc(4px + env(safe-area-inset-bottom)); translate: -50% 0;

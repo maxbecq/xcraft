@@ -17,7 +17,8 @@ import { altProdClick, altProdTip, altProdUndo } from './hud-altprod';
 import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
-const TUCK_MS = 1200;
+/** The sheet and the commands stay this long after the last touch, press or new selection (the user's choice, 2026-11-24). */
+const TUCK_MS = 2800;
 /** Two taps this close in time are one double tap (as for units). */
 const DOUBLE_TAP_MS = 350;
 
@@ -492,6 +493,8 @@ export class Hud {
     const sel = this.selKey;
     if (sel !== this.tuckSel || this.input.pickedAt > this.touchedAt || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
     this.tuckSel = sel;
+    // The commands round the finger (long press): not the sheet and the card at the bottom as well.
+    this.console.classList.toggle('ringed', this.ringOpen);
     const tucked = document.body.classList.contains('tuck') && now - this.touchedAt > TUCK_MS;
     if (tucked === this.console.classList.contains('tucked')) return;
     // The minimap drops to the bottom too, where the commands were (upright phones: they sit below it).
