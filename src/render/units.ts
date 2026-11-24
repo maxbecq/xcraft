@@ -283,6 +283,9 @@ export class EntityRenderer {
     if (w?.mod && w.tip) return w.mod.localToWorld(w.tip.clone());
     // A character's hand weapon (models.ts arm): its point, a staff's crystal, a gun's barrel; empty-handed (the
     // Alchimiste throwing its flasks), its right hand.
+    // A turret (the Char Pégase's, tools/meshy/pegaseparts.py): its cannon's mouth.
+    const turret = v?.model.getObjectByName('zturret');
+    if (turret && Array.isArray(turret.userData.tip)) return turret.localToWorld(new Vector3().fromArray(turret.userData.tip as number[]));
     const held = v?.model.getObjectByName('held');
     if (held && typeof held.userData.tip === 'number') return held.localToWorld(new Vector3(0, 0, held.userData.tip));
     return v?.mixer ? v.model.getObjectByName('RightHand')?.getWorldPosition(new Vector3()) : undefined;
@@ -1350,8 +1353,10 @@ export class EntityRenderer {
     if (v.rotors) {
       // Fans race while flying somewhere and idle down when it hovers in place.
       // The Caserne volante keeps its rotors racing: it holds a whole building up.
-      v.rotors.spin += ((moving ? 28 : e.type === 'casernevol' ? 24 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
-      for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
+      // The Char Pégase's side fans: still on the ground, spinning once it has taken off, on axles across it.
+      const pegase = e.type === 'pegase';
+      v.rotors.spin += ((pegase ? (e.airborne ? 26 : 0) : moving ? 28 : e.type === 'casernevol' ? 24 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
+      for (const r of v.rotors.list) r.rotation[pegase ? 'x' : 'y'] += v.rotors.spin * dt;
     }
     if (e.type === 'casernevol') {
       // A flying building pitches and rolls a little on its rotors, more as it speeds along.
@@ -1366,6 +1371,13 @@ export class EntityRenderer {
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
     const melee = !!a && a.range < 1;
+    // A turret turns to its foe while it fights, and back to the front after.
+    const turret: Object3D | null = (v.model.userData.turret ??= v.model.getObjectByName('zturret') ?? null);
+    if (turret) {
+      const aim = v.aimAt !== undefined ? Math.atan2(Math.sin(v.aimAt - v.heading), Math.cos(v.aimAt - v.heading)) : 0;
+      const d = Math.atan2(Math.sin(aim - turret.rotation.y), Math.cos(aim - turret.rotation.y));
+      turret.rotation.y += Math.max(-dt * 2.5, Math.min(dt * 2.5, d));
+    }
     if (v.cart) {
       // The Réservoir hauled along: its wheels roll the ground covered, its pullers' legs stride with it, the vat
       // rocks on the cart; throwing, the alchemist pumps his lever down as the bomb leaves.
