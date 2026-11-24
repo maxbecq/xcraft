@@ -4,6 +4,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 import { fogMaterial } from '../terrain';
+import { LAND_S } from './units';
 
 /** Texture size in pixels, and the world tiles one repeat covers. */
 const S = 512;
@@ -103,9 +104,8 @@ function cobbles(relief: boolean): [CanvasTexture, CanvasTexture | null] {
  * neighbour, like a town growing out of the ground. Decoration only. One draped mesh per player, rebuilt
  * when their buildings change.
  */
-/** A Caserne volante's paving spreads from its middle to its rim once it is down (it lands in the render this long
- * after the simulation sets it down: units.ts LAND_S), and shrinks away as it takes off, in GROW_S. */
-const LANDING_S = 1.8;
+/** A Caserne volante's paving spreads from its middle to its rim once it is down (LAND_S after the simulation sets
+ * it down), and shrinks away as it takes off, in GROW_S. */
 const GROW_S = 0.8;
 
 export class Paving {
@@ -125,7 +125,7 @@ export class Paving {
     const now = performance.now() / 1000;
     for (const e of world.entities.values()) {
       const before = this.was.get(e.id);
-      if (before === 'casernevol' && e.type === 'casernevolante') this.grow.set(e.id, { kind: 'in', t0: now + LANDING_S, e });
+      if (before === 'casernevol' && e.type === 'casernevolante') this.grow.set(e.id, { kind: 'in', t0: now + LAND_S, e });
       if (before === 'casernevolante' && e.type === 'casernevol') this.grow.set(e.id, { kind: 'out', t0: now, e: { ...e, type: 'casernevolante', def: DEFS.casernevolante } as Entity });
       if (e.type === 'casernevol' || e.type === 'casernevolante') this.was.set(e.id, e.type);
     }

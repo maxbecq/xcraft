@@ -158,8 +158,8 @@ const RING_CLIFF = 0.6;
 /** A Caserne volante's take-off in the render (s): its rotors spool up on the spot, then it climbs. */
 const SPOOL_S = 1;
 const CLIMB_S = 2;
-/** Its descent to the ground when it lands (s); it then settles a moment. */
-const LAND_S = 1.8;
+/** Its descent to the ground when it lands (s); it then settles a moment. Its paving spreads after it (paving.ts). */
+export const LAND_S = 1.8;
 /** Human machines on tracks: they jolt and rock as they roll, instead of bouncing like walkers. */
 const TRACKED = new Set(['scarabee', 'pegase']);
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
