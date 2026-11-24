@@ -209,12 +209,13 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
   // The saurians rigged in Blender from their Rodin models (tools/meshy/saurian.py): their riders ride their spines.
   ankylosaure: { height: 1.01 },
+  allosaure: { height: 1.21 },
   belluaire: { height: 0.95, weapon: 'trident', grip: 'hast' }, // a heavy gladiator: its guard is its aim clip, its thrust its attack
   discobole: { height: 1.0 },
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'creaturium', 'plesiosaure', 'allosaure',
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'creaturium', 'plesiosaure',
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
   'minotaure', 'temple', 'gaia',
   // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches
