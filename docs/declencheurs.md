@@ -145,7 +145,7 @@ Le prototype ne touche ni `src/sim`, ni `balance.json`, ni les règles. Voici ce
 
 | Où | Changement | Pour |
 |---|---|---|
-| `src/maps.ts` | Accepter `format: 2` dans `MAPS` et dans l'import de carte locale (session map-design) ; `buildMap` appelle `toGameMap` pour un format 2 | Relief, rampes, gouffres, bases |
+| `src/maps.ts` | (Le pont format 1 existe déjà, voir section 7.) Accepter `format: 2` dans `MAPS` et dans l'import de carte locale (session map-design) ; `buildMap` appelle `toGameMap` pour un format 2 | Relief, rampes, gouffres, bases |
 | `src/sim/setup.ts` (`createMatch`) | Pour un format 2 : départs par joueur (sans rotation), minerai et puits du fichier, `players[i].minerals/energy`, unités et bâtiments préexistants (`spawn`, neutres en `-1`), race imposée par la carte si elle en fixe une | Réglages des joueurs, unités placées |
 | `src/sim/world.ts` (`Player`, `lacks`) | `forbid: Set<string>` par joueur ; `lacks` renvoie « Interdit sur cette carte. » ; le HUD et l'IA lisent déjà `lacks` | Limites techno |
 | `src/sim/world.ts` (`step`, `judge`) | `runTriggers()` avant `judge` ; option de victoire par déclencheurs | Déclencheurs |
@@ -156,7 +156,7 @@ Le prototype ne touche ni `src/sim`, ni `balance.json`, ni les règles. Voici ce
 
 ## 7. Ce que le jeu lit aujourd'hui du format 2
 
-**Rien.** Le jeu ne lit que le format 1. L'éditeur exporte et importe le format 2, et ouvre aussi les cartes du jeu (format 1 converti). Dans l'éditeur, la vue est le rendu du jeu sur la structure de carte du jeu : terrain, falaises, rampes, gouffres, biome, minerai, puits, QG, ouvriers, unités et bâtiments placés, décor semé. Les réglages des joueurs (race, ressources), les unités placées, le décor posé à la main et les limites techno n'existent que dans le fichier jusqu'à l'étape 0.
+**Rien directement.** Le jeu ne lit que le format 1. Mais le bouton « Exporter pour le jeu » de l'éditeur produit un fichier format 1 que « Importer une carte » accepte (vérifié par `mapcheck` avant le téléchargement). Ce fichier porte le relief, les rampes, les gouffres, les bases, le minerai et les puits ; une carte asymétrique sort symétrisée depuis la part du joueur 1. L'éditeur exporte et importe le format 2, et ouvre aussi les cartes du jeu (format 1 converti). Dans l'éditeur, la vue est le rendu du jeu sur la structure de carte du jeu : terrain, falaises, rampes, gouffres, biome, minerai, puits, QG, ouvriers, unités et bâtiments placés, décor semé. Les réglages des joueurs (race, ressources), les unités placées, le décor posé à la main et les limites techno n'existent que dans le fichier jusqu'à l'étape 0.
 
 ## Sources et réserves
 
