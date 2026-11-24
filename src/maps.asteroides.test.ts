@@ -36,8 +36,7 @@ describe('Astéroïdes', () => {
     const m = buildMap(DEF, 2, 'asteroides');
     const n = m.width;
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) expect(m.chasm![y * n + x]).toBe(m.chasm![(n - 1 - y) * n + n - 1 - x]);
-    expect(DEF.biomes).toEqual(['asteroides']);
-    expect(DEF.biomesOnly).toBe(true);
+    expect(DEF.biome).toBe('asteroides');
   });
 
   it('has natural arches (drawn as such, walked like any ground)', () => {

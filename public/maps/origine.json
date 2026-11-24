@@ -6,6 +6,7 @@
   "size": 96,
   "players": [2, 3, 4],
   "symmetry": "auto",
+  "biome": "desert",
   "calm": [[24, 14], [29, 14], [20, 37], [20, 42], [37, 20], [42, 20], [47, 40], [47, 45]],
   "terrain": [
     { "shape": "octagon", "at": [20, 20], "half": 17, "cut": 8, "ragged": 1, "level": 1 },

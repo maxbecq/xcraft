@@ -13,7 +13,7 @@ import type { MapFile } from '../maps';
 export interface Biome {
   id: string;
   name: string;
-  /** Only on the maps drawn for it (MapFile.biomes); the others are offered on every map. */
+  /** Only on the map drawn for it: never put on another map by an old `?biome=` link, nor another planet on its map. */
   special?: boolean;
   /** Ground colour per cliff level (low, mid, high). */
   levels: [Color, Color, Color];
@@ -220,27 +220,19 @@ export const BIOMES: Record<string, Biome> = {
   },
 };
 
-/** The planets offered on this map: every common one, plus the special ones it was drawn for (only those, with `biomesOnly`). */
-export function biomesFor(map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome[] {
-  return Object.values(BIOMES).filter((b) => (b.special || map.biomesOnly ? !!map.biomes?.includes(b.id) : true));
-}
+/** The map's own planet (MapFile.biome), the desert if this build lacks it. */
+export const biomeOf = (map: Pick<MapFile, 'biome'>): Biome => (Object.hasOwn(BIOMES, map.biome) ? BIOMES[map.biome] : BIOMES.desert);
 
-/** This planet if the map takes it, else the map's first one (the desert on a common map): an unknown id, or a planet from an old link, setting or replay. */
-export function fitBiome(id: string | null | undefined, map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome {
-  const b = id && Object.hasOwn(BIOMES, id) ? BIOMES[id] : null; // own ids only: `constructor` is not a planet
-  const offered = biomesFor(map);
-  return b && offered.includes(b) ? b : offered.includes(BIOMES.desert) ? BIOMES.desert : offered[0] ?? BIOMES.desert;
-}
-
-/** Biome from `?biome=`, else the last one chosen in the menu, else the desert; one the map does not take falls back too. */
-export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biomes' | 'biomesOnly'>): Biome {
-  let stored: string | null = null;
-  try {
-    stored = localStorage.getItem('xcraft.biome');
-  } catch {
-    // storage unavailable: fine
-  }
-  return fitBiome(params.get('biome') ?? stored, map);
+/**
+ * The planet of this game: the map's own, or `?biome=` from an older link or replay (the planet was chosen apart
+ * then, and the map's shapes for a planet depend on it), so it plays again the same. Never on or onto a special
+ * planet, which only its own map takes (older builds dropped those the same way).
+ */
+export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biome'>): Biome {
+  const own = biomeOf(map);
+  const id = params.get('biome');
+  const asked = id && Object.hasOwn(BIOMES, id) ? BIOMES[id] : null; // own ids only: `constructor` is not a planet
+  return asked && !asked.special && !own.special ? asked : own;
 }
 
 /**

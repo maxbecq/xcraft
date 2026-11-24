@@ -5,7 +5,7 @@ import { mapCards, seatsOf } from '../mappicker';
 import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
-import { BIOMES, type Biome, biomesFor, fitBiome } from '../render/biome';
+import { BIOMES } from '../render/biome';
 import { TEAM_COLORS } from '../render/models';
 import { SKIPPED } from '../stats';
 import { openReplayFile, playReplay, readReplay, REPLAY_KEY } from './replay';
@@ -13,7 +13,7 @@ import { encodeSeats } from './seats';
 import { asFaction, FULLSCREEN_KEY, rememberSandbox, SANDBOX_TOOLS, sandboxRemembered, stored, toggleFullscreen, wantsFullscreen } from './settings';
 
 /** What the menus take from the page (main.ts), given once by initMenus. */
-let myFaction: Faction, foeFaction: Faction, biome: Biome, MAP: MapFile, perf: PerfHud, DETECTED: Quality;
+let myFaction: Faction, foeFaction: Faction, MAP: MapFile, perf: PerfHud, DETECTED: Quality;
 let controlFields: (inMatch: boolean) => string;
 let controlChange: (field: HTMLInputElement | HTMLSelectElement) => boolean;
 /** The measures' setting (« Enregistrer les performances »), kept for this browser like the other options. */
@@ -21,7 +21,6 @@ let recField: () => string;
 export function initMenus(page: {
   myFaction: Faction;
   foeFaction: Faction;
-  biome: Biome;
   MAP: MapFile;
   perf: PerfHud;
   DETECTED: Quality;
@@ -29,15 +28,14 @@ export function initMenus(page: {
   controlChange: typeof controlChange;
   recField: typeof recField;
 }): void {
-  ({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange, recField } = page);
+  ({ myFaction, foeFaction, MAP, perf, DETECTED, controlFields, controlChange, recField } = page);
 }
 
 /** A match to set up: each side's faction and who plays it, the planet, and the speed when only AIs play. */
 export interface Setup {
   /** Four seats; `control` 'none' leaves a seat empty (the third and fourth by default). */
   sides: { faction: Faction; control: string; team: number }[];
-  biome: string;
-  /** Map id (public/maps/). */
+  /** Map id (public/maps/); it gives the planet. */
   map: string;
   speed: number;
 }
@@ -51,13 +49,12 @@ function readSetup(): Setup {
       { faction: 'humains', control: 'none', team: 2 },
       { faction: 'isdaris', control: 'none', team: 3 },
     ],
-    biome: biome.id,
     map: MAP.id,
     speed: 2,
   };
   try {
     const s = JSON.parse(stored('xcraft.setup') ?? 'null') as Setup | null;
-    if (s && Array.isArray(s.sides) && s.sides.length >= 2 && Object.hasOwn(BIOMES, s.biome)) {
+    if (s && Array.isArray(s.sides) && s.sides.length >= 2) {
       // Older saves had two seats and no teams.
       const old = s.sides;
       s.sides = [0, 1, 2, 3].map((i) => ({ ...fallback.sides[i], ...old[i], team: old[i]?.team ?? i }));
@@ -201,14 +198,13 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   };
   if (sandbox) s.sides[0].control = 'you';
   const chosen = mapFile(s.map);
-  s.biome = fitBiome(s.biome, chosen).id; // a planet the newly chosen map does not take
   const watching = s.sides[0].control !== 'you';
   const title = sandbox ? 'Bac à sable' : 'Nouvelle partie';
   const seats = sandbox
     ? `<fieldset class="seats"><legend>Votre camp</legend><div class="seat"><span class="chip" style="background:#${TEAM_COLORS[0].toString(16).padStart(6, '0')}"></span><span class="who">Joueur 1</span><span class="seat-fixed"></span>${select('f0', factions, s.sides[0].faction)}</div></fieldset>`
     : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}${oneTeam ? '<p class="seat-note">Tous dans la même équipe : chaque joueur jouera pour lui seul.</p>' : ''}</fieldset>`;
   const compact = COMPACT.matches;
-  const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id, s.biome)}</fieldset>
+  const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id)}</fieldset>
     <p class="map-about">${chosen.description ?? ''}</p>`;
   menu.className = `menu setup${compact ? ' compact' : ''}`;
   if (compact && step === 'map') {
@@ -220,7 +216,6 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     ${seats}
     <fieldset class="options"><legend>Partie</legend>
       ${compact ? `<label>Carte <button type="button" data-m="maps" class="map-change">${chosen.name}</button></label>` : ''}
-      <label>Planète ${select('biome', Object.fromEntries(biomesFor(chosen).map((b) => [b.id, b.name])), s.biome)}</label>
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
     ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}
@@ -237,8 +232,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     const k = el.dataset.k;
     if (!k) return;
     const v = el.value;
-    if (k === 'biome') s.biome = v;
-    else if (k === 'speed') s.speed = Number(v);
+    if (k === 'speed') s.speed = Number(v);
     else if (k.startsWith('on')) s.sides[Number(k[2])].control = (el as HTMLInputElement).checked ? 'normal' : 'none';
     else if (k[0] === 'f') s.sides[Number(k[1])].faction = asFaction(v);
     else if (k[0] === 't') s.sides[Number(k[1])].team = Number(v);
@@ -289,11 +283,11 @@ function showJoin(menu: HTMLElement): void {
 
 /**
  * The waiting room of a match between two friends: the host gets a link to send; the friend opening it lands here
- * too. Each picks its own faction, the host the map and the planet; the host starts, and both pages load the match.
+ * too. Each picks its own faction, the host the map (it gives the planet); the host starts, and both pages load the match.
  */
 export function showLobby(menu: HTMLElement, room: string, host: boolean): void {
   history.replaceState(null, '', `${location.pathname}?ami=${room}${host ? '&hote' : ''}`); // a reload comes back to the room, on the same side
-  const setup: LobbySetup = { camps: [asFaction(stored('xcraft.camp')), 'humains'], map: MAP.id, biome: biome.id };
+  const setup: LobbySetup = { camps: [asFaction(stored('xcraft.camp')), 'humains'], map: MAP.id, biome: MAP.biome };
   if (!host) setup.camps = [setup.camps[1], setup.camps[0]];
   const me = host ? 0 : 1;
   let status = host ? 'Ouverture du salon…' : 'Connexion au salon…';
@@ -318,9 +312,6 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     <p class="lobby-note lobby-status"></p>
     <fieldset class="seats"><legend>Joueurs</legend>${seat(0)}${seat(1)}</fieldset>
     <fieldset class="maps${host ? '' : ' fixed'}"></fieldset>
-    <fieldset class="options"><legend>Partie</legend><label>Planète ${
-      host ? '<select data-k="biome"></select>' : '<span class="lobby-other lobby-biome"></span>'
-    }</label></fieldset>
     <div class="row"><button data-m="back">Retour</button><button data-m="retry" hidden>Réessayer</button>${host ? '<button data-m="go" class="go" disabled>Lancer la partie</button>' : ''}</div>`;
   const $ = <T extends HTMLElement>(q: string) => menu.querySelector<T>(q);
   /** The guest has answered « Lancer » and waits for the host's go-ahead (this timer: the wait given up). */
@@ -345,15 +336,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     if (invite) invite.hidden = here;
     $('.lobby-status')!.textContent = status;
     $('.lobby-camp')!.textContent = here ? names[setup.camps[1 - me]] : 'en attente…';
-    const biomeName = $('.lobby-biome');
-    if (biomeName) biomeName.textContent = Object.hasOwn(BIOMES, setup.biome) ? BIOMES[setup.biome].name : '';
-    // The cards' pictures follow the planet: drawn again only when the map or the planet changes.
-    const key = `${setup.map}/${setup.biome}`;
-    if (key !== drawnMaps) {
-      drawnMaps = key;
-      const planets = $<HTMLSelectElement>('select[data-k="biome"]');
-      if (planets) planets.innerHTML = options(Object.fromEntries(biomesFor(mapFile(setup.map)).map((b) => [b.id, b.name])), setup.biome);
-      const cards = mapCards(mapFile(setup.map).id, setup.biome);
+    // The cards drawn again only when the map changes.
+    if (setup.map !== drawnMaps) {
+      drawnMaps = setup.map;
+      const cards = mapCards(mapFile(setup.map).id);
       $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
     }
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
@@ -370,7 +356,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     } catch {
       // the URL carries it all
     }
-    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&biome=${s.biome}&map=${s.map}`;
+    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&map=${s.map}`;
   };
   /** A map or planet not in this build: no match. */
   const unknown = (s: LobbySetup) => !Object.hasOwn(MAPS, s.map) || !Object.hasOwn(BIOMES, s.biome); // own ids only: not `constructor`
@@ -437,7 +423,6 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     if (launching || going) return; // the setup sent is the match
     const el = e.target as HTMLSelectElement;
     if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
-    else if (el.dataset.k === 'biome') setup.biome = el.value;
     if (host) lobby.send({ setup });
     else lobby.send({ camp: setup.camps[me] });
     refresh();
@@ -447,7 +432,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     const m = button?.dataset.m;
     if (button?.dataset.map && host && !launching) {
       setup.map = button.dataset.map;
-      setup.biome = fitBiome(setup.biome, mapFile(setup.map)).id;
+      setup.biome = mapFile(setup.map).biome; // still sent: older builds check it
       lobby.send({ setup });
       refresh();
     } else if (m === 'copy') {
@@ -490,12 +475,11 @@ function launch(s: Setup, sandbox = false): void {
     localStorage.setItem('xcraft.setup', JSON.stringify(s));
     localStorage.setItem('xcraft.camp', a.faction);
     localStorage.setItem('xcraft.adversaire', b.faction);
-    localStorage.setItem('xcraft.biome', s.biome);
     localStorage.setItem('xcraft.map', s.map);
   } catch {
     // the URL carries it all
   }
-  const keep = `biome=${s.biome}&camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
+  const keep = `camp=${a.faction}&adversaire=${b.faction}&map=${s.map}`;
   if (sandbox) return void (location.search = `?sandbox&${keep}${sandboxPicked.size ? `&outils=${[...sandboxPicked].join(',')}` : ''}`);
   const p = encodeSeats(s.sides.filter((x) => x.control !== 'none'));
   location.search = a.control === 'you' ? `?play&p=${p}&${keep}` : `?spectate&speed=${s.speed}&p=${p}&${keep}`;

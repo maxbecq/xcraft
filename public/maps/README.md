@@ -19,6 +19,7 @@ L'id `origine` est la carte d'origine : la carte par défaut, et celle des repla
   "size": 96,
   "players": [2],
   "symmetry": "rot180",
+  "biome": "volcan",
   "terrain": [ … ],
   "bases": [ … ]
 }
@@ -32,8 +33,7 @@ L'id `origine` est la carte d'origine : la carte par défaut, et celle des repla
 | `players` | Nombres de joueurs possibles, par exemple `[2]` ou `[2, 3, 4]`. Le menu n'ouvre pas plus de places que le plus grand. |
 | `symmetry` | On ne décrit que la part du joueur 1, en haut à gauche ; le jeu la recopie par rotation pour les autres. `rot180` : deux parts (le joueur 2 en bas à droite). `rot90` : quatre parts, une par coin (à deux joueurs, ils sont dans les coins opposés et les deux autres coins restent des bases libres). `auto` : deux parts à deux joueurs, quatre au-delà. |
 | `calm` | Facultatif : les points près desquels les bords irréguliers (`ragged`) restent droits. Par défaut, les deux bouts de chaque rampe. |
-| `biomes` | Facultatif : les planètes spéciales (Astéroïdes) que la carte accepte en plus des planètes communes. |
-| `biomesOnly` | Facultatif : `true` pour n'accepter que les planètes de `biomes`. Le menu ne propose alors qu'elles, et toute autre planète retombe sur la première de la liste. |
+| `biome` | La planète de la carte, comme un tileset : le menu ne propose pas d'en changer. Planètes communes : `desert` (Désert), `lune` (Lune), `alien` (Monde étrange), `glace` (Glace), `volcan` (Volcan), `ville` (Ville futuriste). Planètes spéciales, réservées à la carte dessinée pour elles : `asteroides`, `villenuit`. Un lien ou un replay d'avant les planètes par carte (`?biome=`) garde la planète qu'il nomme, sauf une planète spéciale. |
 
 Coordonnées : `[x, y]` en tuiles, x vers l'est (la droite), y vers le sud (le bas), `[0, 0]` en haut à gauche.
 

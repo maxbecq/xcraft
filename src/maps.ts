@@ -18,10 +18,8 @@ export interface MapFile {
   symmetry: 'rot180' | 'rot90' | 'auto';
   /** Points near which ragged edges stay straight (default: both ends of every ramp). */
   calm?: [number, number][];
-  /** Special planets this map was drawn for (render/biome.ts `special`), offered beside the common ones. */
-  biomes?: string[];
-  /** Only the planets in `biomes` (none of the common ones): a map whose ground makes no sense elsewhere. */
-  biomesOnly?: boolean;
+  /** The planet it is played on (render/biome.ts BIOMES id): the map gives it, as a tileset does. */
+  biome: string;
   terrain: Shape[];
   /** Streets painted on the ground (player 1's part, turned like the terrain). For the eye only. */
   streets?: Street[];
@@ -69,7 +67,7 @@ const FILES = import.meta.glob<MapFile>('/public/maps/*.json', { eager: true, im
 export const MAPS: Record<string, MapFile> = Object.fromEntries(
   Object.values(FILES)
     .filter((m) => {
-      const ok = m.format === 1 && !!m.id && m.size > 0 && m.players?.length > 0 && m.bases?.filter((b) => b.start).length === 1;
+      const ok = m.format === 1 && !!m.id && typeof m.biome === 'string' && m.size > 0 && m.players?.length > 0 && m.bases?.filter((b) => b.start).length === 1;
       if (!ok) console.warn(`Carte ignorée (format inconnu ou incomplet) : ${m.id ?? '?'}`);
       return ok;
     })

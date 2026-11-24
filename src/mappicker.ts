@@ -2,7 +2,7 @@ import { CORNERS, MAPS, type MapFile, buildMap, turnsOf } from './maps';
 import { rotateFootprint } from './map';
 import { TEAM_COLORS } from './render/models';
 import { tileColor } from './terrain';
-import { BIOMES, fitBiome } from './render/biome';
+import { biomeOf } from './render/biome';
 import './mappicker.css';
 
 /** Most players a map takes. */
@@ -11,22 +11,22 @@ export const seatsOf = (def: MapFile) => Math.max(...def.players);
 const thumbs = new Map<string, string>();
 
 /**
- * A top view of a map, drawn from its file: relief (in the colours of `biome`, the planet it will be played on), minerals, wells,
- * the players' starts and the other base spots. Returned as an image URL, made once per map and planet.
+ * A top view of a map, drawn from its file: relief (in the colours of its planet), minerals, wells, the players'
+ * starts and the other base spots. Returned as an image URL, made once per map.
  */
-export function mapThumb(def: MapFile, biome: string, px = 192): string {
-  const key = `${def.id}/${biome}`;
-  const done = thumbs.get(key);
+export function mapThumb(def: MapFile, px = 192): string {
+  const done = thumbs.get(def.id);
   if (done) return done;
   const players = seatsOf(def);
-  const map = buildMap(def, players, biome);
+  const planet = biomeOf(def);
+  const map = buildMap(def, players, planet.id);
   const s = px / map.width;
   const c = document.createElement('canvas');
   c.width = c.height = px;
   const g = c.getContext('2d')!;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      const col = tileColor(map, x, y, BIOMES[biome]);
+      const col = tileColor(map, x, y, planet);
       const l = map.level[y * map.width + x];
       const edge = [[1, 0], [0, 1], [-1, 0], [0, -1]].some(([dx, dy]) => map.level[(y + dy) * map.width + x + dx] < l && !map.ramp[(y + dy) * map.width + x + dx]);
       if (edge) col.multiplyScalar(0.45);
@@ -63,20 +63,20 @@ export function mapThumb(def: MapFile, biome: string, px = 192): string {
     }
   }
   const url = c.toDataURL();
-  thumbs.set(key, url);
+  thumbs.set(def.id, url);
   return url;
 }
 
-/** One card per map: its picture, name, players, size and bases; the chosen one highlighted. */
-export function mapCards(chosen: string, biome: string): string {
+/** One card per map: its picture, name, planet, players, size and bases; the chosen one highlighted. */
+export function mapCards(chosen: string): string {
   return Object.values(MAPS)
     .map((m) => {
       const bases = m.bases.length;
       const players = m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)} joueurs` : `${m.players[0]} joueurs`;
       return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${m.description ?? ''}">
-        <img src="${mapThumb(m, fitBiome(biome, m).id)}" alt="">
+        <img src="${mapThumb(m)}" alt="">
         <span class="map-name">${m.name}</span>
-        <span class="map-meta">${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>
+        <span class="map-meta">${biomeOf(m).name} · ${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>
       </button>`;
     })
     .join('');
