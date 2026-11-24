@@ -616,18 +616,35 @@ if (document.fullscreenEnabled) { // phones too (Android; an iPhone has no fulls
     if (on) void keyboard?.lock?.(['Escape']).catch(() => {});
     else keyboard?.unlock?.();
   });
-  // Browsers only go fullscreen on a click or key press, and loading a match reloads the page:
-  // with the option on, the first one on the page (title menus or match) does it.
-  if (wantsFullscreen()) {
-    // Captured, so it runs before the map's own press (which may hold the pointer).
+  // Browsers only go fullscreen on a click or key press, and loading a match reloads the page, which leaves it: with
+  // the option on, or the page left in fullscreen (the pause menu's button, F11 aside), the first press back does it.
+  const WAS_FULL = 'xcraft.wasFullscreen';
+  window.addEventListener('beforeunload', () => {
+    try {
+      sessionStorage.setItem(WAS_FULL, document.fullscreenElement ? '1' : '0');
+    } catch {
+      // storage blocked: only the option brings it back
+    }
+  });
+  let was = false;
+  try {
+    was = sessionStorage.getItem(WAS_FULL) === '1';
+  } catch {
+    // as above
+  }
+  if (wantsFullscreen() || was) {
+    // Captured, so it runs before the map's own press (which may hold the pointer). Every kind of press, until it
+    // works: Firefox (Windows) refused it from the pointer's press alone and never asked again, the bug of 2026-11-24.
+    const presses = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'keydown'] as const;
     const enter = () => {
+      if (document.fullscreenElement) return;
       fullscreenAsked = performance.now();
-      if (!document.fullscreenElement) toggleFullscreen();
-      window.removeEventListener('pointerdown', enter, true);
-      window.removeEventListener('keydown', enter, true);
+      toggleFullscreen();
     };
-    window.addEventListener('pointerdown', enter, true);
-    window.addEventListener('keydown', enter, true);
+    for (const p of presses) window.addEventListener(p, enter, true);
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) for (const p of presses) window.removeEventListener(p, enter, true);
+    });
   }
 }
 
