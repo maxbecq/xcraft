@@ -62,6 +62,9 @@ export interface View {
   leftArm?: { arm: Object3D; fore: Object3D; hand: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
+  /** A Caserne volante lifting off (`up`) or setting down (`down`): seconds since, and the height it came down from.
+   * The simulation switches it at once; the render plays the climb and the descent in that time. */
+  flight?: { kind: 'up' | 'down'; age: number; from: number };
   /** Z wheels (zwheel_<k>), rolling on their hubs; `r` is the tyre radius in world units. */
   wheels?: { o: Object3D; r: number }[];
   root: Object3D;

@@ -1402,6 +1402,23 @@ export class Effects {
     this.spawn(this.tex.glow, 0xeaffb0, to.clone(), new Vector3(), 0.12, 0.15, 0.3, 0.9, 0, true);
   }
 
+  /**
+   * Rotor downwash on the ground under a Caserne volante taking off or landing: dust of the ground's own colour blown
+   * out in a ring from under it; `k` (0..1) how hard, by how near the ground it hangs.
+   */
+  downwash(p: Vector3, radius: number, k: number, color: number, dt: number): void {
+    for (let n = dt * 90 * k; n > 0; n--) {
+      if (n < 1 && Math.random() > n) break;
+      const a = Math.random() * Math.PI * 2;
+      const r = radius * (0.35 + 0.65 * Math.random());
+      const out = new Vector3(Math.cos(a), 0, Math.sin(a));
+      const at = p.clone().addScaledVector(out, r);
+      at.y = p.y + 0.05;
+      const v = out.multiplyScalar(1.6 + 2.2 * Math.random() * k).setY(0.15 + Math.random() * 0.35);
+      this.spawn(this.tex.smoke, color, at, v, 0.9 + Math.random() * 0.8, 0.35, 1.3 + k, 0.55 * (0.4 + 0.6 * k), -0.05, false);
+    }
+  }
+
   private dust(p: Vector3, owner: number): void {
     for (let i = 0; i < 6; i++) {
       this.spawn(this.tex.smoke, 0x8a7a62, p.clone().add(rnd(0.2)), rnd(0.8).setY(0.3 + Math.random() * 0.4), 0.8, 0.3, 0.9, 0.7, 0, false);

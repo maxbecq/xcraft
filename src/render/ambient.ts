@@ -5,6 +5,8 @@ import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 import type { Effects } from './effects';
 import type { EntityRenderer } from './units';
+import { FLY_HEIGHT } from '../data';
+import { currentBiome } from '../terrain';
 
 /** Where buildings give off smoke or steam: [x, y, z offset from the centre, dark smoke?]. */
 const VENTS: Record<string, [number, number, number, boolean]> = {
@@ -18,6 +20,22 @@ const VENTS: Record<string, [number, number, number, boolean]> = {
 export function ambientEffects(world: World, units: EntityRenderer, effects: Effects, sees: (e: Entity) => boolean, dt: number, taken: (well: Entity) => boolean): void {
   const map = world.map;
   for (const e of world.entities.values()) {
+    // A Caserne volante taking off or landing: its rotors blow the ground's dust out from under it, hardest near the
+    // ground (at the touch when it lands); lighter as it lifts off.
+    if ((e.type === 'casernevol' || e.type === 'casernevolante') && sees(e)) {
+      const f = units.liftoff(e.id);
+      if (f) {
+        const near = Math.max(0, 1 - f.height / FLY_HEIGHT);
+        const k = f.kind === 'up' ? (f.age < 1 ? 0.6 * f.age : 0.7 * near) : f.age < 1.8 ? near * near : Math.max(0, 1 - (f.age - 1.8) / 1.6);
+        if (k > 0.02) {
+          const b = currentBiome();
+          const c = b.levels[1].clone().lerp(b.sand, 0.5).multiplyScalar(1.1);
+          const x = e.x / FP;
+          const z = e.y / FP;
+          effects.downwash(new Vector3(x, heightAt(map, x, z), z), 2.2, k, c.getHex(), dt);
+        }
+      }
+    }
     // A Z Déchiqueteur cutting: sparks from its saw all the while it works on its foe.
     if (e.kit === 'dechiqueteur' && e.cooldown > 0 && e.order?.kind !== undefined && 'target' in e.order && e.order.target && sees(e)) {
       const foe = world.entities.get(e.order.target);

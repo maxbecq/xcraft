@@ -10,6 +10,8 @@ import { crackMask, fbm, groundImages, groundTextures, isLite, lavaTexture, nois
 // Wasteland palette per cliff level, plus darker patches blended in by noise.
 /** Current planet look; set before building the terrain. */
 let B: Biome = BIOMES.desert;
+/** The current planet look (render: the colour of dust blown off the ground). */
+export const currentBiome = (): Biome => B;
 export function setBiome(b: Biome): void {
   B = b;
   // Dunes: long asymmetric ridges across the wind, bent by noise, with smaller ripples on top.

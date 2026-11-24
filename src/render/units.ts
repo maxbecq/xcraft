@@ -155,6 +155,11 @@ const RING_RISE = 0.35;
 const RING_CLIFF = 0.6;
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
+/** A Caserne volante's take-off in the render (s): its rotors spool up on the spot, then it climbs. */
+const SPOOL_S = 1;
+const CLIMB_S = 2;
+/** Its descent to the ground when it lands (s); it then settles a moment. */
+const LAND_S = 1.8;
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** A death burst's material: sparks for a machine, dark drops for the living. */
 function burstMaterial(mechanical: boolean): PointsMaterial {
@@ -259,6 +264,12 @@ export class EntityRenderer {
   }
 
   /** Where a Déchiqueteur's saw is (world): its sparks spray from there; none if it shows none. */
+  /** A Caserne volante taking off or landing: what the render plays, and its height above the ground. */
+  liftoff(id: number): { kind: 'up' | 'down'; age: number; height: number } | undefined {
+    const v = this.views.get(id);
+    return v?.flight && { kind: v.flight.kind, age: v.flight.age, height: v.model.position.y };
+  }
+
   saw(id: number): Vector3 | undefined {
     return this.views.get(id)?.weapon?.saw?.getWorldPosition(new Vector3());
   }
@@ -715,9 +726,28 @@ export class EntityRenderer {
       const v = this.views.get(e.id) ?? this.create(e, player);
       // A Caserne volante taking off or landing is a new view: its rotors keep the pace they had, to spin up or down.
       if (old && old !== v && old.rotors && v.rotors) v.rotors.spin = old.rotors.spin;
-      // Landed: the rotors wind down to a stop.
+      if (old && old !== v && old.type === 'casernevolante' && e.type === 'casernevol') v.flight = { kind: 'up', age: 0, from: 0 };
+      if (old && old !== v && old.type === 'casernevol' && e.type === 'casernevolante') v.flight = { kind: 'down', age: 0, from: old.model.position.y };
+      // Setting down: it sinks fast then slower and slower near the ground, floats a moment just above it, touches
+      // and settles a little on its feet; only then do the rotors wind down to a stop.
+      if (v.flight?.kind === 'down') {
+        const f = v.flight;
+        f.age += dt;
+        const k = Math.min(1, f.age / LAND_S);
+        const sink = 1 - (1 - k) ** 3;
+        const float = k < 1 ? Math.sin(k * Math.PI) * 0.06 * (1 - k) : 0;
+        v.model.position.y = f.from * (1 - sink) + float;
+        const after = f.age - LAND_S;
+        v.model.scale.y = (v.model.userData.sy ??= v.model.scale.y) * (after > 0 && after < 0.35 ? 1 - 0.035 * Math.sin((after / 0.35) * Math.PI) : 1);
+        if (after > 2.5) {
+          v.model.position.y = 0;
+          v.model.scale.y = v.model.userData.sy;
+          v.flight = undefined;
+        }
+      }
+      // Landed: the rotors wind down to a stop (racing on while it sets down).
       if (v.rotors && e.def.kind === 'building' && v.rotors.spin > 0) {
-        v.rotors.spin = Math.max(0, v.rotors.spin - dt * 10);
+        if (!(v.flight && v.flight.age < LAND_S)) v.rotors.spin = Math.max(0, v.rotors.spin - dt * 10);
         for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
       }
       if (e.tier !== (v.tier ?? 1)) {
@@ -1361,7 +1391,18 @@ export class EntityRenderer {
     // Body: bounce twice per stride, lean into the walk, sway from side to side, breathe at rest.
     // Hovering robots float; walkers bounce with their stride.
     const flying = soars(e);
-    const hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
+    let hover = flying ? FLY_HEIGHT + Math.sin(t * 1.6 + e.id) * 0.07 : e.type === 'moissonneur' ? 0.12 + Math.sin(t * 2.5 + e.id) * 0.04 : 0;
+    // A Caserne volante lifting off: its rotors spool up on the spot while it shudders, then it tears free and climbs,
+    // slowly at first and faster as it goes.
+    if (v.flight?.kind === 'up') {
+      const f = v.flight;
+      f.age += dt;
+      const rise = Math.max(0, Math.min(1, (f.age - SPOOL_S) / CLIMB_S));
+      hover = FLY_HEIGHT * rise * rise + (rise < 1 ? Math.sin(t * 41 + e.id) * 0.012 * (1 - rise) : 0);
+      v.model.position.y = hover;
+      v.model.rotation.z += Math.sin(rise * Math.PI) * 0.04;
+      if (f.age > SPOOL_S + CLIMB_S) v.flight = undefined;
+    }
     // Wheeled robots rumble over the ground rather than bounce.
     const rolling = !!v.wheels;
     // Walkers with knees crouch as they walk, and rise a little on each step.
