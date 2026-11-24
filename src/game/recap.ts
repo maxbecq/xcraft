@@ -107,7 +107,8 @@ const CSS = `
 `;
 
 /** Opens the analysis over the game. */
-export function showRecap(rec: Recorder, world: World, names: string[]): void {
+/** `onClose`: what follows it (from the end of a match: the main menu, the analysis a step on the way there). */
+export function showRecap(rec: Recorder, world: World, names: string[], onClose?: () => void): void {
   const colors = world.players.map((p) => hex(TEAM_COLORS[p.id % TEAM_COLORS.length]));
   const tl = rec.timeline;
   // Building after building, the first of each kind, is too many to read: the fights, bases and the end.
@@ -119,7 +120,7 @@ export function showRecap(rec: Recorder, world: World, names: string[]): void {
     .map(([label, v]) => `<tr><td>${label}</td>${names.map((_, i) => `<td>${v(i)}</td>`).join('')}</tr>`)
     .join('')}</table></div><p class="note">Récolté : tout ce qui est entré en réserve, remboursements et pillage compris. Tuées, détruits, perdus : au combat seulement (une unité absorbée ou consommée n’y compte pas).</p>`;
   const list = `<ol>${major.map((m) => `<li><b>${clock(m.tick)}</b><span style="color:${colors[m.player] ?? '#fff'}">${MOMENT_ICON[m.kind]}</span> ${esc(names[m.player] ?? '')} — ${esc(m.detail)}</li>`).join('')}</ol>`;
-  box.innerHTML = `<style>${CSS}</style><button class="close" aria-label="Fermer">✕</button><h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
+  box.innerHTML = `<style>${CSS}</style>${onClose ? '<button class="close">Menu principal ›</button>' : '<button class="close" aria-label="Fermer">✕</button>'}<h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
     <div class="tabs">${METRICS.map((m, i) => `<button data-t="${i}" class="${i ? '' : 'on'}">${m.label}</button>`).join('')}</div><div class="card"><canvas></canvas></div>
     <h3>Totaux</h3>${table}<h3>Moments clés</h3>${list}`;
   document.body.append(box);
@@ -138,5 +139,6 @@ export function showRecap(rec: Recorder, world: World, names: string[]): void {
   box.querySelector('.close')!.addEventListener('click', () => {
     removeEventListener('resize', redraw);
     box.remove();
+    onClose?.();
   });
 }

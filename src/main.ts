@@ -284,7 +284,6 @@ function measuresOnce(): void {
   saveMeasures();
 }
 const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
-hud.bilan = !!recap;
 hud.online = !!NET_ROLE;
 const marking = new Marking(hud);
 hud.gridKeys = SCROLL.grid && !TOUCH && !SCROLL.alt;
@@ -417,6 +416,8 @@ tools.addEventListener('click', (e) => {
 });
 // The pause menu and the end-of-game banner share these actions.
 let pressedAt = 0;
+/** The match's analysis shown, on the way from its end to the menu. */
+let analysed = false;
 window.addEventListener('pointerdown', () => (pressedAt = performance.now()), true);
 document.addEventListener('click', (e) => {
   const button = (e.target as HTMLElement).closest<HTMLElement>('.pause [data-p], .hud-banner [data-p], .net-banner [data-p]');
@@ -450,7 +451,11 @@ document.addEventListener('click', (e) => {
   } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : sealed('ongoing')); // watching one: the file itself, whole
   else if (p === 'perfrec') saveMeasures();
-  else if (p === 'bilan' && recap) showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name));
+  // From the end of a match, the way to the menu goes through its analysis (the user's choice of 2026-11-24).
+  else if (p === 'quit' && recap && button?.closest('.hud-banner') && !analysed) {
+    analysed = true;
+    showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name), () => button.click());
+  }
   else if (p === 'quit' || p === 'restart') {
     link?.leave();
     // Left before the end, measuring: the measures saved first, the page left a moment later so the download goes through.
@@ -720,7 +725,7 @@ function start(): void {
         // Won, the victory banner says it; else this one, where the game was left.
         if (!replayEnded && world.winner === null) {
           const why = REPLAY.end === 'network' ? 'La partie a été interrompue : connexion perdue.' : REPLAY.end === 'ongoing' ? 'Le replay a été enregistré pendant la partie.' : 'La partie a été quittée avant sa fin.';
-          hud.banner.innerHTML = `<h1>Fin du replay</h1><p>${why}</p><div class="row"><button data-p="quit">Menu principal</button><button data-p="replay">Enregistrer le replay</button>${recap ? '<button data-p="bilan">Analyse de la partie</button>' : ''}</div>`;
+          hud.banner.innerHTML = `<h1>Fin du replay</h1><p>${why}</p><div class="row"><button data-p="quit">Menu principal</button><button data-p="replay">Enregistrer le replay</button></div>`;
           hud.banner.hidden = false;
           hud.endShownAt = performance.now();
         }

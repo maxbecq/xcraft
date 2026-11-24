@@ -106,8 +106,6 @@ export class Hud {
   readonly ghost: Mesh;
   /** A building just ordered, shown where it will rise. */
   readonly pose: PoseConfirm;
-  /** The end banner offers the game's analysis. */
-  bilan = false;
   /** The alternative desktop interface (game/hud-alt.ts), and the selection it last opened the build tree for. */
   alt = false;
   altSel = '';
