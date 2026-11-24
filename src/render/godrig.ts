@@ -74,8 +74,9 @@ export const RIGS: Record<string, RigSpec> = {
   walkyrie: { kind: 'fly', hip: 0.3, wings: [0.17, 0.68], swing: 0.3 },
   drake: { kind: 'fly', hip: 0.55, wings: [0.32, 0.85] },
   corbeau: { kind: 'fly', hip: 0.7, wings: [0.04, 0.75] },
-  // The Humains' Plésiosaure (its Rodin model): wings from its shoulders out, weighted softly into its flanks.
-  plesiosaure: { kind: 'fly', hip: 0.1, wings: [0.15, 0.25, 0.5], glide: true },
+  // The Humains' Plésiosaure (its Rodin model, made symmetric by tools/meshy/plesiosym.py): its whole wings from its
+  // shoulders out, at any height, weighted softly into its flanks.
+  plesiosaure: { kind: 'fly', hip: 0.1, wings: [0.15, 0.22, 0.8], glide: true },
   jormungandr: { kind: 'serpent', hip: 0.2 },
 };
 
@@ -248,7 +249,9 @@ function weigh(spec: RigSpec, p: Vector3, w: number[], b: Parts): void {
   const limb = (pair: Object3D[], at: [number, number, number?] | undefined, fade: number) => {
     if (!at || !pair.length) return;
     const top = at[2] ?? at[1];
-    const out = smooth(at[0], at[0] + b.half * 0.12, Math.abs(p.x)) * (1 - smooth(top, top + fade, p.y)) * smooth(hip * 0.9, hip * 1.1, p.y);
+    // A glider's wings reach down to their tips, drooping to the ground (the Plésiosaure's): no cut at the hips.
+    const low = spec.glide ? 1 : smooth(hip * 0.9, hip * 1.1, p.y);
+    const out = smooth(at[0], at[0] + b.half * 0.12, Math.abs(p.x)) * (1 - smooth(top, top + fade, p.y)) * low;
     if (out <= 0) return;
     w[b.index(pair[p.x > 0 ? 0 : 1])] = rest * out;
     rest *= 1 - out;
