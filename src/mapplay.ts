@@ -1,7 +1,8 @@
+import { type BuildingDef, FACTIONS } from './data';
 import { CORNERS, type MapFile } from './maps';
 import { FP } from './sim/fixed';
 import { createMatch } from './sim/setup';
-import type { World } from './sim/world';
+import type { Entity, World } from './sim/world';
 
 /**
  * Whether a map from outside the game can be played, as src/maps.test.ts checks the game's own, quickly (no AI, no
@@ -23,8 +24,10 @@ export function unplayable(def: MapFile): string | null {
 
 function check(def: MapFile, players: number): string | null {
   const w = createMatch(Array(players).fill('humains'), undefined, def, def.biome);
-  const hqs = [...w.entities.values()].filter((e) => e.type === 'conseil');
-  if (hqs.length !== players) return "un départ n'a pas la place pour un QG.";
+  // Each player's first headquarters, of its race (a map may impose one), the others placed by the map aside.
+  const first = w.players.map((p) => [...w.entities.values()].find((e) => e.owner === p.id && e.type === FACTIONS[p.faction].hq));
+  if (first.some((h) => !h)) return "un départ n'a pas la place pour un QG.";
+  const hqs = first as Entity[];
   const W = w.map.width;
   // Walking starts from a free tile round the first headquarters.
   const ring: [number, number][] = [];
@@ -34,9 +37,16 @@ function check(def: MapFile, players: number): string | null {
   const from = reach(w, ...out);
   // No two things on one tile: createMatch puts them where the file says, overlapping or not.
   const taken = new Map<number, string>();
-  for (const e of w.entities.values()) {
-    const size = e.def.kind === 'resource' ? (e.type === 'puits' ? 3 : 1) : e.type === 'conseil' ? 4 : 0;
-    const what = e.type === 'puits' ? 'le puits' : e.type === 'minerai' ? 'le minerai' : 'le QG';
+  // Buildings and resources first, then the units against them.
+  for (const e of [...w.entities.values()].sort((a, b) => Number(a.def.kind === 'unit') - Number(b.def.kind === 'unit'))) {
+    const size = e.def.kind === 'resource' ? (e.type === 'puits' ? 3 : 1) : e.def.kind === 'building' ? (e.def as BuildingDef).size : 1;
+    const what = e.type === 'puits' ? 'le puits' : e.type === 'minerai' ? 'le minerai' : hqs.includes(e) ? 'le QG' : e.def.name;
+    // Units may stand together (they step apart), not on a building or a resource, nor over a chasm.
+    if (e.def.kind === 'unit') {
+      const [ux, uy] = [Math.floor(e.x / FP), Math.floor(e.y / FP)]; // a unit's tx, ty are a building's only
+      if (!(e.def as { flying?: boolean }).flying && (w.map.chasm?.[uy * W + ux] || taken.has(uy * W + ux))) return `${what} en (${ux}, ${uy}) est mal placé (gouffre, bâtiment ou ressource).`;
+      continue;
+    }
     for (let y = e.ty; y < e.ty + size; y++) {
       for (let x = e.tx; x < e.tx + size; x++) {
         if (w.map.chasm?.[y * W + x]) return `${what} en (${e.tx}, ${e.ty}) est au-dessus d'un gouffre.`;

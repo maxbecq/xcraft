@@ -76,6 +76,22 @@ La liste des emplacements de base du joueur 1, dans l'ordre où l'IA s'étend. U
 
 L'IA prend d'abord ses propres bases, dans l'ordre du fichier, puis les autres bases libres, les plus proches d'abord. Elle ne prend jamais une base plus proche du départ d'un adversaire que du sien. Une base posée au centre exact d'une carte `rot90` (de taille impaire) n'existe qu'une fois, partagée entre tous les joueurs.
 
+### `seats` et `units` (facultatifs)
+
+Pour un scénario ou une campagne. Les cartes du jeu n'en ont pas : sans ces champs, une partie se joue comme avant.
+
+`seats` : une entrée par joueur, le joueur 1 d'abord (4 au plus). Chaque champ est facultatif.
+
+| Champ | Rôle |
+|---|---|
+| `race` | `humains`, `z`, `isdaris` ou `dieux` : la race que ce joueur joue, quel que soit le choix du menu. |
+| `minerals`, `energy` | Minerai et énergie de départ (0 à 100 000). Par défaut : ceux des règles. |
+| `forbid` | Les unités, bâtiments et recherches interdits à ce joueur (ids du jeu, 300 au plus). Ils sont grisés dans l'interface avec « Interdit sur cette carte. », refusés par la simulation, et l'IA ne les demande pas. |
+
+`units` : les unités et bâtiments présents au départ, 200 au plus. Ils sont donnés **pour toute la carte**, sans rotation : `{ "type": "caserne", "owner": 0, "at": [20, 14] }`. `owner` est un joueur (0 pour le joueur 1) ou `-1` pour un neutre ; les unités d'un joueur absent de la partie ne sont pas posées. `at` est la tuile d'une unité, ou la tuile en haut à gauche d'un bâtiment, qui est posé déjà construit. Les neutres restent passifs.
+
+L'éditeur de cartes (`editor.html`, bouton « Exporter pour le jeu ») écrit ces champs.
+
 ## Importer une carte
 
 Le bouton « Importer une carte », sous les cartes de l'écran « Nouvelle partie » (et du Bac à sable), lit un fichier `.json` de ce format sans passer par le dossier : par exemple une carte faite avec l'éditeur. Le fichier est une donnée venue de l'extérieur : le jeu le vérifie champ par champ (`src/mapcheck.ts`) et refuse, avec la raison, tout ce qui sort de ces bornes :

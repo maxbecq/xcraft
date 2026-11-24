@@ -45,6 +45,7 @@ export function expansion(world: World, owner: number): [number, number] {
  */
 export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?: number[], mapId: string | MapFile = DEFAULT_MAP, biome = ''): World {
   const def = typeof mapId === 'string' ? mapFile(mapId) : mapId; // a map not listed (yet): an imported one being checked
+  factions = seatFactions(def, factions);
   const world = new World(buildMap(def, factions.length, biome), factions.length);
   const w = world.map.width;
   const at = (q: number, tx: number, ty: number, size: number): [number, number] => rotateFootprint(w, tx, ty, size, q);
@@ -80,13 +81,27 @@ export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?
       const [tx, ty] = at(q, wx + 3 + i * 3, wy + 1, 1);
       world.spawn(type, owner, tx * FP + FP / 2, ty * FP + FP / 2);
     }
-    world.players[owner].minerals = START.minerals;
-    world.players[owner].energy = START.energy;
+    const rules = def.seats?.[owner];
+    world.players[owner].minerals = rules?.minerals ?? START.minerals;
+    world.players[owner].energy = rules?.energy ?? START.energy;
+    if (rules?.forbid?.length) world.players[owner].forbid = rules.forbid;
   }
   // Quarters nobody starts in keep their resources: free bases to take.
   for (const q of turnsOf(def, factions.length)) if (!CORNERS.slice(0, factions.length).includes(q)) resources(q);
+  // Units and buildings the map places, after everything else (a map without any keeps its ids as they were).
+  for (const u of def.units ?? []) {
+    if (u.owner >= factions.length) continue;
+    const d = DEFS[u.type];
+    if (d.kind === 'unit') world.spawn(u.type, u.owner, u.at[0] * FP + FP / 2, u.at[1] * FP + FP / 2);
+    else world.spawn(u.type, u.owner, ...px(u.at));
+  }
   if (teams) world.setTeams(teams);
   return world;
+}
+
+/** The factions as the map has them: a seat's imposed race over the one picked. */
+export function seatFactions(def: MapFile, factions: Faction[]): Faction[] {
+  return factions.map((f, i) => def.seats?.[i]?.race ?? f);
 }
 
 const px = ([tx, ty]: [number, number]): [number, number] => [tx * FP, ty * FP];

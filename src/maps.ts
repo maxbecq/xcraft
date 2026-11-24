@@ -1,4 +1,4 @@
-import { HQ_MINERAL_GAP } from './data';
+import { type Faction, HQ_MINERAL_GAP } from './data';
 import { IMPORTED, MAX_MAP_ID, mapPrint, parseMap } from './mapcheck';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
@@ -25,6 +25,28 @@ export interface MapFile {
   /** Streets painted on the ground (player 1's part, turned like the terrain). For the eye only. */
   streets?: Street[];
   bases: BaseSpot[];
+  /** Rules per seat, player 1 first (a scenario, a campaign): unset, a seat plays as the menu says. */
+  seats?: SeatRules[];
+  /** Units and buildings there from the start, where they stand on the whole map (not turned). */
+  units?: PlacedUnit[];
+}
+
+export interface SeatRules {
+  /** The race this seat plays, whatever was picked. */
+  race?: Faction;
+  /** Starting minerals and energy (default: the rules' start). */
+  minerals?: number;
+  energy?: number;
+  /** Units, buildings and research this seat may not have (DEFS ids). */
+  forbid?: string[];
+}
+
+export interface PlacedUnit {
+  type: string;
+  /** A seat (0 is player 1), or -1: neutral. A seat not playing this match leaves its units out. */
+  owner: number;
+  /** A unit's tile, a building's top-left tile. */
+  at: [number, number];
 }
 
 type Area =

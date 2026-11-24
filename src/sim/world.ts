@@ -244,6 +244,8 @@ export interface Player {
   reveal?: boolean;
   /** Gave up (an AI that had lost): out of the match, its buildings standing or not. */
   resigned?: boolean;
+  /** What the map forbids this player (MapFile.seats): units, buildings, research. Set only when some. */
+  forbid?: readonly string[];
 }
 
 export type Command =
@@ -854,6 +856,7 @@ export class World {
    * building that would make it, whose own extensions count (hasExt).
    */
   lacks(player: number, type: string, built?: Map<string, number>, at?: Entity): string {
+    if (this.players[player]?.forbid?.includes(type)) return 'Interdit sur cette carte.';
     if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
     const count = (t: string) => (built ??= this.builtCounts(player)).get(t) ?? 0;
     const any = (DEFS[type] as BuildingDef).requiresAny;

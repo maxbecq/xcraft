@@ -18,7 +18,7 @@ import { addDeposits } from '../render/deposits';
 import { loadModels, MINERAL_VARIANTS, TEAM_COLORS } from '../render/models';
 import { EntityRenderer, WEAPON_MODELS } from '../render/units';
 import { Space } from '../render/space';
-import { DEFS, type Faction, FACTIONS, LOOKS } from '../data';
+import { DEFS, type Faction, FACTIONS, LOOKS, START } from '../data';
 import { checkMap, PLANETS } from '../mapcheck';
 import { MAX_SIZE, type MapFile2, type Ramp2, RACES, type Symmetry, blankMap, fromFormat1, parseMap, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
@@ -96,7 +96,7 @@ const loaded = new Set<string>();
 async function needModels(): Promise<boolean> {
   const types = new Set<string>(['puits', ...MINERAL_VARIANTS]);
   for (const p of f.players) {
-    const r = FACTIONS[p.race];
+    const r = FACTIONS[p.race || 'humains'];
     [r.hq, r.worker, ...(r.start ?? [])].forEach((t) => types.add(t));
     if (p.race === 'z') WEAPON_MODELS.forEach((t) => types.add(t));
   }
@@ -769,7 +769,7 @@ function panel(): void {
     while (f.players.length > n) f.players.pop();
     while (f.players.length < n) {
       const s0 = f.players[0].start;
-      f.players.push({ race: 'humains', start: rotateFootprint(f.size, s0[0], s0[1], 4, CORNERS[f.players.length]), minerals: 200, energy: 0, forbid: [] });
+      f.players.push({ race: '', start: rotateFootprint(f.size, s0[0], s0[1], 4, CORNERS[f.players.length]), minerals: START.minerals, energy: START.energy, forbid: [] });
     }
     f.units = f.units.filter((u) => u.owner < n);
     seat = Math.min(seat, n - 1);
@@ -779,10 +779,10 @@ function panel(): void {
   };
   f.players.forEach((p, i) => {
     const box = add(`<div class="player"><div class="row"><span class="swatch" style="background:${hex(TEAM_COLORS[i])}"></span><b>Joueur ${i + 1}</b>
-      <select>${RACES.map((r) => option(r, RACE_NAMES[r], r === p.race)).join('')}</select></div>
+      <select>${option('', 'Au choix', !p.race)}${RACES.map((r) => option(r, RACE_NAMES[r], r === p.race)).join('')}</select></div>
       <div class="row">Minerai <input type="number" min="0" step="50" value="${p.minerals}"> Énergie <input type="number" min="0" step="50" value="${p.energy}"></div></div>`);
     box.querySelector('select')!.onchange = (e) => {
-      p.race = (e.target as HTMLSelectElement).value as Faction;
+      p.race = (e.target as HTMLSelectElement).value as Faction | '';
       p.forbid = [];
       dirty = 'full';
       panel();
@@ -793,7 +793,7 @@ function panel(): void {
     // Tech limits: what this player may not have.
     const kinds: [string, string][] = [['unit', 'Unités'], ['building', 'Bâtiments'], ['upgrade', 'Recherches']];
     const list = kinds.map(([k, name]) => {
-      const items = Object.entries(DEFS).filter(([, d]) => d.kind === k && 'faction' in d && d.faction === p.race);
+      const items = Object.entries(DEFS).filter(([, d]) => d.kind === k && 'faction' in d && (!p.race || d.faction === p.race));
       return `<b>${name}</b>${items.map(([id, d]) => `<label><input type="checkbox" value="${id}"${p.forbid.includes(id) ? ' checked' : ''}> ${esc(d.name)}</label>`).join('')}`;
     });
     const det = h(`<details><summary>Arbre techno : ${p.forbid.length} interdit${p.forbid.length > 1 ? 's' : ''}</summary><div class="forbid">${list.join('')}</div></details>`);

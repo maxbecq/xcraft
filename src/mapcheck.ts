@@ -1,5 +1,6 @@
 import { RAMP_LENGTH, STEP, type Street } from './map';
-import type { BaseSpot, MapFile, Shape } from './maps';
+import { DEFS, FACTIONS, type Faction } from './data';
+import type { BaseSpot, MapFile, PlacedUnit, SeatRules, Shape } from './maps';
 
 /**
  * A map from outside the game (a file the player imports, a friend's map over the network, the one a replay carries):
@@ -20,6 +21,11 @@ const MAX_MINERALS = 32;
 const MAX_WELLS = 4;
 const MAX_CALM = 64;
 const MAX_STREETS = 64;
+const MAX_SEATS = 4;
+/** Starting minerals or energy a map may give a seat. */
+const MAX_START = 100_000;
+const MAX_FORBID = 300;
+const MAX_UNITS = 200;
 /** Prefix of an imported map's id: never the id of one of the game's own. */
 export const IMPORTED = 'import-';
 /** Longest map id, once kept (imported prefix, a friend's copy's suffix): the one bound the waiting room (net.ts) takes too. */
@@ -151,11 +157,38 @@ function base(v: unknown, size: number, n: number): BaseSpot {
   };
 }
 
+function seat(v: unknown, n: number): SeatRules {
+  const what = `Joueur ${n + 1}`;
+  if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
+  only(v, ['race', 'minerals', 'energy', 'forbid'], what);
+  if (v.race !== undefined && !Object.hasOwn(FACTIONS, v.race as string)) refuse(`${what} : race inconnue (${Object.keys(FACTIONS).join(', ')}).`);
+  const forbid = v.forbid === undefined ? undefined : list(v.forbid, MAX_FORBID, `${what}, forbid`).map((t, i) => {
+    if (typeof t !== 'string' || !Object.hasOwn(DEFS, t) || DEFS[t].kind === 'resource') refuse(`${what}, interdit ${i + 1} : unité, bâtiment ou recherche inconnu.`);
+    return t as string;
+  });
+  if (forbid && new Set(forbid).size !== forbid.length) refuse(`${what} : un interdit en double.`);
+  return {
+    ...(v.race === undefined ? {} : { race: v.race as Faction }),
+    ...(v.minerals === undefined ? {} : { minerals: int(v.minerals, 0, MAX_START, `${what}, minerals`) }),
+    ...(v.energy === undefined ? {} : { energy: int(v.energy, 0, MAX_START, `${what}, energy`) }),
+    ...(forbid?.length ? { forbid } : {}),
+  };
+}
+
+function placed(v: unknown, size: number, n: number): PlacedUnit {
+  const what = `Unité placée ${n + 1}`;
+  if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
+  only(v, ['type', 'owner', 'at'], what);
+  const d = typeof v.type === 'string' && Object.hasOwn(DEFS, v.type) ? DEFS[v.type] : undefined;
+  if (!d || (d.kind !== 'unit' && d.kind !== 'building')) return refuse(`${what} : unité ou bâtiment inconnu.`);
+  return { type: v.type as string, owner: int(v.owner, -1, MAX_SEATS - 1, `${what}, owner`), at: tile(v.at, size, `${what}, at`, d.kind === 'building' ? d.size : 1) };
+}
+
 /** A checked copy of a map, or why it is refused. `id` keeps its own (the game's maps, a replay's) or takes the imported prefix. */
 export function checkMap(v: unknown, prefix = true): MapFile | string {
   try {
     if (!isRecord(v)) return refuse("Ce n'est pas une carte Xcraft (un objet JSON est attendu).");
-    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases'], 'Carte');
+    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases', 'seats', 'units'], 'Carte');
     if (v.format !== 1) refuse('Format de carte inconnu (« format » vaut 1).');
     // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top,
     // within MAX_MAP_ID in all.
@@ -183,6 +216,8 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
       terrain: list(v.terrain, MAX_SHAPES, '« terrain »').map((s, i) => shape(s, size, i)),
       ...(v.streets === undefined ? {} : { streets: list(v.streets, MAX_STREETS, '« streets »').map((s, i) => street(s, size, i)) }),
       bases,
+      ...(v.seats === undefined ? {} : { seats: list(v.seats, MAX_SEATS, '« seats »').map((p, i) => seat(p, i)) }),
+      ...(v.units === undefined ? {} : { units: list(v.units, MAX_UNITS, '« units »').map((u, i) => placed(u, size, i)) }),
     };
   } catch (e) {
     if (e instanceof Refused) return e.message;

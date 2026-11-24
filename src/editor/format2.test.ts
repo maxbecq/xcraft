@@ -78,7 +78,7 @@ describe('export pour le jeu (format 1)', () => {
     f.symmetry = symmetry;
     f.name = 'Essai <éditeur>';
     const qs = turnsOfSymmetry(symmetry);
-    f.players = Array.from({ length: players }, (_, i) => ({ race: 'humains' as const, start: rotateFootprint(72, 10, 10, 4, CORNERS[i]), minerals: 200, energy: 0, forbid: [] }));
+    f.players = Array.from({ length: players }, (_, i) => ({ race: '' as const, start: rotateFootprint(72, 10, 10, 4, CORNERS[i]), minerals: 200, energy: 0, forbid: [] as string[] }));
     paint(f, 2, 2, 22, 22, '1');
     paint(f, 3, 3, 8, 8, '2');
     paint(f, 30, 20, 33, 30, 'x');
@@ -90,6 +90,7 @@ describe('export pour le jeu (format 1)', () => {
       f.minerals.push(rotateTile(72, 44, 5, q), rotateTile(72, 45, 5, q));
     }
     f.units.push({ type: 'caserne', owner: 0, at: [14, 14] });
+    Object.assign(f.players[0], { race: 'z', minerals: 500, forbid: ['tour'] });
     return f;
   };
 
@@ -112,12 +113,19 @@ describe('export pour le jeu (format 1)', () => {
       const minerals = new Set(turnsOf(def, players).flatMap((q) => def.bases.flatMap((b) => b.minerals.map(([x, y]) => rotateTile(72, x, y, q).join(',')))));
       expect(minerals).toEqual(new Set(f.minerals.map((m) => m.join(','))));
       expect(def.biome).toBe('glace');
-      expect(notes.join(' ')).toContain('Pas encore lus par le jeu');
+      expect(notes.join(' ')).not.toContain('Pas encore lu');
+      // The players' settings and the placed units go along, and come back into the editor.
+      expect(def.units).toEqual([{ type: 'caserne', owner: 0, at: [14, 14] }]);
+      expect(def.seats?.[0]).toEqual({ race: 'z', minerals: 500, forbid: ['tour'] });
+      const back = fromFormat1(def, def.biome, players);
+      expect(back.players[0]).toMatchObject({ race: 'z', minerals: 500, energy: 0, forbid: ['tour'] });
+      expect(back.players[1].race).toBe('');
+      expect(back.units).toEqual(f.units);
       // Imported as the game does, a match starts on it: each seat's headquarters on its start, and a minute runs.
       addMap(def);
       const world = createMatch(Array.from({ length: players }, () => 'humains' as const), undefined, def.id, def.biome);
       for (let i = 0; i < players; i++) {
-        const hq = [...world.entities.values()].find((e) => e.owner === i && e.type === 'conseil')!;
+        const hq = [...world.entities.values()].find((e) => e.owner === i && e.type === (i === 0 ? 'intelligence' : 'conseil'))!;
         expect([hq.tx, hq.ty]).toEqual(f.players[i].start);
       }
       for (let t = 0; t < 20 * 60; t++) world.step([]);

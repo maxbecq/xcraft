@@ -27,8 +27,8 @@ export function previewWorld(f: MapFile2, map: GameMap): { world: World; skipped
   for (const m of f.minerals) put('minerai', -1, m);
   for (const w of f.wells) put('puits', -1, w);
   f.players.forEach((p, i) => {
-    const race = FACTIONS[p.race];
-    world.players[i].faction = p.race;
+    const race = FACTIONS[p.race || 'humains']; // a race left to the player: shown as Humains
+    world.players[i].faction = p.race || 'humains';
     world.players[i].minerals = p.minerals;
     world.players[i].energy = p.energy;
     put(race.hq, i, p.start);

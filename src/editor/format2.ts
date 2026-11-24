@@ -1,4 +1,4 @@
-import { type Faction, FACTIONS } from '../data';
+import { type Faction, FACTIONS, START } from '../data';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
 import { PLANETS } from '../mapcheck';
@@ -51,7 +51,8 @@ export interface Ramp2 {
 }
 
 export interface Player2 {
-  race: Faction;
+  /** The race the map imposes on this seat, or '' for the player's pick. */
+  race: Faction | '';
   /** Top-left tile of the starting headquarters (4×4). */
   start: [number, number];
   minerals: number;
@@ -97,7 +98,7 @@ export function turnRamp(size: number, r: Ramp2, q: number): Ramp2 {
 
 /** A blank map: flat low ground, two players facing each other across the diagonal. */
 export function blankMap(size = 96, biome = 'desert'): MapFile2 {
-  const player = (start: [number, number]): Player2 => ({ race: 'humains', start, minerals: 200, energy: 0, forbid: [] });
+  const player = (start: [number, number]): Player2 => ({ race: '', start, minerals: START.minerals, energy: START.energy, forbid: [] });
   return {
     format: 2, id: 'nouvelle-carte', name: 'Nouvelle carte', size, biome, symmetry: 'rot180',
     tiles: Array.from({ length: size }, () => '0'.repeat(size)),
@@ -191,8 +192,11 @@ export function fromFormat1(def: MapFile, biome = def.biome, players = Math.max(
     symmetry: turns.length === 4 ? 'rot90' : 'rot180',
     tiles, ramps, minerals, wells,
     bases: sites.filter((s) => !seats.includes(s.hq)).map((s) => s.hq),
-    players: seats.map((start) => ({ race: 'humains', start, minerals: 200, energy: 0, forbid: [] })),
-    decor: [], units: [],
+    players: seats.map((start, i) => {
+      const s = def.seats?.[i];
+      return { race: s?.race ?? '', start, minerals: s?.minerals ?? START.minerals, energy: s?.energy ?? START.energy, forbid: [...(s?.forbid ?? [])] };
+    }),
+    decor: [], units: (def.units ?? []).filter((u) => u.owner < players).map((u) => ({ ...u, at: [...u.at] as [number, number] })),
   };
 }
 
@@ -221,7 +225,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     throw new Error(`« tiles » : ${size} lignes de ${size} caractères parmi 0, 1, 2, x.`);
   }
   const ramps = list<Ramp2>(f.ramps, (r) => pt(r?.at) && DIRS.includes(r.up) && Number.isInteger(r.width) && r.width >= 1 && r.width <= 12 && [0, 1].includes(r.level), 'ramps');
-  const players = list<Player2>(f.players, (p) => RACES.includes(p?.race) && pt(p.start) && Number.isFinite(p.minerals) && Number.isFinite(p.energy) && Array.isArray(p.forbid) && p.forbid.every((s) => typeof s === 'string'), 'players');
+  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && Number.isFinite(p.minerals) && Number.isFinite(p.energy) && Array.isArray(p.forbid) && p.forbid.every((s) => typeof s === 'string'), 'players');
   if (players.length < 1 || players.length > 4) throw new Error('De 1 à 4 joueurs.');
   return {
     format: 2,
@@ -367,8 +371,15 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
     return { ...b, hq: slot ?? slots[0] };
   });
   if (f.players.length > 1 && symmetry === 'rot180' && f.players.length > 2) notes.push('Symétrie 2 parts : la carte se joue à 2.');
-  if (f.units.length || f.decor.length || f.players.some((p) => p.forbid.length || p.minerals !== 200 || p.energy !== 0 || p.race !== 'humains')) {
-    notes.push('Pas encore lus par le jeu : réglages des joueurs, unités placées, décor posé, limites techno.');
-  }
+  // Per seat: the race imposed, the starting resources and what is forbidden, when not the game's defaults.
+  const seats = f.players.map((p) => ({
+    ...(p.race ? { race: p.race } : {}),
+    ...(p.minerals !== START.minerals ? { minerals: Math.max(0, Math.round(p.minerals)) } : {}),
+    ...(p.energy !== START.energy ? { energy: Math.max(0, Math.round(p.energy)) } : {}),
+    ...(p.forbid.length ? { forbid: [...new Set(p.forbid)] } : {}),
+  }));
+  if (seats.some((s) => Object.keys(s).length)) map.seats = seats;
+  if (f.units.length) map.units = f.units.map((u) => ({ type: u.type, owner: u.owner, at: u.at }));
+  if (f.decor.length) notes.push('Pas encore lu par le jeu : le décor posé à la main.');
   return { map, notes };
 }
