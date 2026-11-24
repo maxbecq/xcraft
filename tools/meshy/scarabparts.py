@@ -46,12 +46,24 @@ bpy.context.scene.collection.objects.link(holder)
 holder["zloop"] = loop
 perim = 2 * (loop[1] - loop[0]) + 2 * math.pi * r
 N = max(8, int(perim / 0.11))
+TREAD = 0.19  # the track's width, its outer face in to the hull
 for s, sx in enumerate((-1, 1)):
     for i in range(N):
         bpy.ops.mesh.primitive_cube_add(size=1, location=(sx * loop[4], 0, 0))
         c = bpy.context.object
         c.scale = (0.02, 0.07, 0.035)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        # Its cleat across the track's tread, just out from it: seen running along the top of the track (below, the
+        # ground hides it).
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(sx * (loop[4] - TREAD / 2), 0, -0.012))
+        cleat = bpy.context.object
+        cleat.scale = (TREAD, 0.06, 0.018)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        bpy.ops.object.select_all(action="DESELECT")
+        cleat.select_set(True)
+        c.select_set(True)
+        bpy.context.view_layer.objects.active = c
+        bpy.ops.object.join()
         c.name = f"ztread_{s}_{i}"
         c.data.materials.append(IRON)
         c.parent = holder
