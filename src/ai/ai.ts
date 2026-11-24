@@ -174,6 +174,8 @@ export class AI {
   readonly doctrine: Doctrine;
   private gods: [string, number][];
   private researchList: string[];
+  /** Types of the enemies in `foes`, for their classes. */
+  private foeTypes = new Map<number, string>();
   /** When a raid on the base was last beaten off. */
   private repelled = -Infinity;
   /** The army aimed at, bent by what the scouts saw (counter), recomputed each turn. */
@@ -360,7 +362,10 @@ export class AI {
     this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.seen, this.doctrine.counterRanged);
     // The enemy's fighters and armed buildings, as last seen, for `sends` (dominates keeps the same memory).
     const seen = this.visibleFoes();
-    for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+    for (const e of seen) {
+      this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+      this.foeTypes.set(e.id, e.type);
+    }
     for (const id of this.foes.keys()) {
       const e = w.entities.get(id);
       if (!e || (w.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
@@ -1379,7 +1384,11 @@ export class AI {
    */
   private sends(atHome: Entity[], ctx: Turn): boolean {
     const d = this.doctrine;
-    if (d === LEGACY || this.easy) return true;
+    // The Humans, who keep the AI as it was, compare a new wave with what they know too (in the games of 23/11 they
+    // went at 15 against 42, and at the Z's base four times at a quarter to half its strength).
+    const humans = d === LEGACY && this.faction === FACTIONS.humains;
+    if ((d === LEGACY && !humans) || this.easy) return true;
+    if (humans) this.knowFoes();
     const last = ctx.supply.used >= 190 || (this.starved(ctx.buildings, ctx.p.minerals) && !this.affordable(ctx));
     if (last || ctx.minute >= 25) return true;
     if (this.wave.size > 0) return atHome.length >= d.regroup;
@@ -1388,7 +1397,36 @@ export class AI {
     if (ctx.minute < (this.strategy.attackMinute ?? 0) && this.world.tick - this.repelled >= ticks(60)) return false;
     const known = this.power([...this.foes.values()]);
     const armed = atHome.filter((u) => !!this.world.weapon(u));
-    return known === 0 || this.power(armed.map((u) => [u.hp + u.shield, this.dps(u)])) >= d.engage * known;
+    // Ours by the damage each does to the classes of the enemies known (a Créature does 6 to a Z socle, not 18): the
+    // Isdaris Créatures went at the Z's drones and Tourelle at half their strength.
+    const them = this.classed() ? this.foeKinds() : [];
+    return known === 0 || this.power(armed.map((u) => [u.hp + u.shield, them.length ? this.dpsVs(u, them) : this.dps(u)])) >= (humans ? 1 : d.engage) * known;
+  }
+
+  /** The enemy fighters and armed buildings known, as last seen (scout and dominates keep the same memory). */
+  private knowFoes(): void {
+    const seen = this.visibleFoes();
+    for (const e of seen) {
+      this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+      this.foeTypes.set(e.id, e.type);
+    }
+    for (const id of this.foes.keys()) {
+      const e = this.world.entities.get(id);
+      if (!e || (this.world.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
+    }
+  }
+
+  /** Humans and Isdaris: their strength weighed by the damage done to each class (the others' tuned without it). */
+  private classed(): boolean {
+    return this.faction === FACTIONS.humains || this.faction === FACTIONS.isdaris;
+  }
+
+  /** The kinds of the enemies known, as stand-ins for dpsVs (only their definitions are read). */
+  private foeKinds(): Entity[] {
+    return [...this.foes.keys()].flatMap((id) => {
+      const t = this.foeTypes.get(id) ?? this.world.entities.get(id)?.type;
+      return t ? [{ def: DEFS[t] } as Entity] : [];
+    });
   }
 
   /**
@@ -1710,7 +1748,10 @@ export class AI {
    */
   private dominates(atHome: Entity[]): boolean {
     const seen = this.visibleFoes();
-    for (const e of seen) this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+    for (const e of seen) {
+      this.foes.set(e.id, [e.hp + e.shield, this.dps(e)]);
+      this.foeTypes.set(e.id, e.type);
+    }
     // Gone, or seen with nothing to fight with any more (a Fortin its crew left).
     for (const id of this.foes.keys()) {
       const e = this.world.entities.get(id);
@@ -1734,7 +1775,9 @@ export class AI {
     const foes = this.visibleFoes();
     // Each side by what reaches the other: flyers, ground units, or both (undefined).
     const side = (group: Entity[]) => (group.length && group.every(flies) ? true : group.every((u) => !flies(u)) ? false : undefined);
-    const power = (group: Entity[], air?: boolean) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e, air)]));
+    // Each by the damage it does to the other side's classes (a Créature does 6 to a Z socle): the Isdaris stayed in
+    // fights they were losing, 80 to 100 % lost in 30 s. A building with a crew by its crew's damage, as before.
+    const power = (group: Entity[], air?: boolean, them?: Entity[]) => this.power(group.map((e) => [e.hp + e.shield, this.dps(e, air) && them?.length && e.def.kind === 'unit' ? this.dpsVs(e, them) : this.dps(e, air)]));
     const out = new Set<Entity>();
     for (const u of wave) {
       if (out.has(u)) continue;
@@ -1745,7 +1788,7 @@ export class AI {
       // Flyers only: the enemy's power that reaches them (a Fortin of Phalangistes cannot).
       // And ours by what reaches the flyers when the enemies there all fly (flame throwers under Drakes stayed on).
       // (a ground wave fell back before one Coléoptère whose Déchiqueteur hits flyers only).
-      if (power(ours, side(near)) * this.doctrine.retreat < power(near, side(ours))) ours.forEach((o) => out.add(o));
+      if (power(ours, side(near), this.classed() ? near : undefined) * this.doctrine.retreat < power(near, side(ours), this.classed() ? ours : undefined)) ours.forEach((o) => out.add(o));
     }
     return [...out];
   }
