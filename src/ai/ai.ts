@@ -1329,7 +1329,10 @@ export class AI {
       // Doctrine: the gods at home fight a raid on the base too (left out of the army, Thor stood by while the first
       // wave killed the Nains one by one); not one badly hurt, nor one already fighting.
       if (this.doctrine.godsDefend) {
-        const godIds = gods.filter((g) => !this.wave.has(g.id) && g.hp * 2 > g.maxHp && dist(g.x, g.y, threat.x, threat.y) < 25 * FP && g.order?.kind !== 'attack' && g.order?.kind !== 'attackMove').map((g) => g.id);
+        const sel = gods.filter((g) => !this.wave.has(g.id) && g.hp * 2 > g.maxHp && dist(g.x, g.y, threat.x, threat.y) < 25 * FP && g.order?.kind !== 'attack' && g.order?.kind !== 'attackMove');
+        // Only with the soldiers, or strong enough with those at home: a god sent alone at a raid the army left alone died
+        // there (the analyser's « Dieu isolé et exposé », 5.6 times a game, most of them with no support at all).
+        const godIds = ctx.out.some((c) => c.kind === 'attack' && c.x === threat.x && c.y === threat.y) || strength([...sel, ...atHome]) >= threat.strength ? sel.map((g) => g.id) : [];
         if (godIds.length) ctx.out.push({ player: this.player, kind: 'attack', ids: godIds, x: threat.x, y: threat.y });
       }
       // No soldiers to speak of against a small raid: the workers next to it fight.
