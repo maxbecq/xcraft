@@ -1,12 +1,16 @@
-import { readFileSync } from 'node:fs';
 import { Box3, Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { boxInParent } from './pivots';
+// Node's file system, reached at run time (the project carries no Node types): the files as served.
+const fs = 'node:fs';
+const { readFileSync } = (await import(/* @vite-ignore */ fs)) as { readFileSync(path: string): Uint8Array };
 
 /** A compressed model's node tree (transforms only), each mesh node holding its mesh's box as the game would read it. */
 function load(name: string): Object3D {
-  const b = readFileSync(`public/models/${name}-meshy.glb`);
-  const j = JSON.parse(b.subarray(20, 20 + b.readUInt32LE(12)).toString());
+  // Its JSON chunk, after the 20-byte header.
+  const bytes = readFileSync(`public/models/${name}-meshy.glb`);
+  const size = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true);
+  const j = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + size)));
   const nodes: Object3D[] = j.nodes.map((n: { name?: string; translation?: number[]; rotation?: number[]; scale?: number[]; mesh?: number; extras?: object }) => {
     const o = new Object3D();
     o.name = n.name ?? '';
