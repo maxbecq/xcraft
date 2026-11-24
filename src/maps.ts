@@ -1,5 +1,5 @@
 import { HQ_MINERAL_GAP } from './data';
-import { IMPORTED, parseMap } from './mapcheck';
+import { IMPORTED, mapPrint, parseMap } from './mapcheck';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -111,6 +111,18 @@ export function addMap(def: MapFile, keep = false): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * A friend's imported map, checked, kept for the match's page: under its own id, or, when this browser already has
+ * another map of that id, beside it under the id with its print added (the player's own is never overwritten). The
+ * id to play it under here, or null if storage refused it.
+ */
+export function receiveMap(def: MapFile): string | null {
+  const mine = MAPS[def.id];
+  if (mine && mapPrint(mine) === mapPrint(def)) return def.id;
+  const id = mine ? `${def.id}-${mapPrint(def).slice(0, 6)}` : def.id;
+  return addMap({ ...def, id }, true) ? id : null;
 }
 
 /** Forgets an imported map, here and in storage. */

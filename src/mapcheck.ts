@@ -146,8 +146,11 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
     if (!isRecord(v)) return refuse("Ce n'est pas une carte Xcraft (un objet JSON est attendu).");
     only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases'], 'Carte');
     if (v.format !== 1) refuse('Format de carte inconnu (« format » vaut 1).');
-    if (typeof v.id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(v.id)) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
-    const id = prefix && !(v.id as string).startsWith(IMPORTED) ? IMPORTED + (v.id as string) : (v.id as string);
+    // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top.
+    if (typeof v.id !== 'string' || !/^[a-z0-9-]{1,48}$/.test(v.id)) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
+    const own = (v.id as string).startsWith(IMPORTED);
+    if (!own && (v.id as string).length > 32) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
+    const id = prefix && !own ? IMPORTED + (v.id as string) : (v.id as string);
     const size = int(v.size, MIN_SIZE, MAX_SIZE, '« size »');
     const players = list(v.players, 3, '« players »', 1).map((p) => int(p, 2, 4, '« players »'));
     if (new Set(players).size !== players.length) refuse('« players » : chaque nombre de joueurs une seule fois.');
@@ -187,9 +190,9 @@ export function parseMap(json: string): MapFile | string {
   return checkMap(v);
 }
 
-/** Eight hex digits that tell two copies of a map apart (FNV-1a over its checked copy): both sides of a network game compare them. */
+/** Eight hex digits that tell two maps apart by what they hold, not their id (FNV-1a over the checked copy): both sides of a network game compare them. */
 export function mapPrint(def: MapFile): string {
-  const s = JSON.stringify(def);
+  const s = JSON.stringify({ ...def, id: '' });
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(16).padStart(8, '0');

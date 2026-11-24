@@ -1,6 +1,6 @@
 /** The title screen's menus: home, options, match setup, joining a friend, the friends' lobby; a match starts by loading its URL. */
 import { type Faction, FACTIONS } from '../data';
-import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, removeMap } from '../maps';
+import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, receiveMap, removeMap } from '../maps';
 import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
 import { mapCards, seatsOf } from '../mappicker';
 import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
@@ -395,16 +395,20 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     } catch {
       // the URL carries it all
     }
-    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&map=${s.map}`;
+    location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&map=${localId(s.map)}`;
   };
   /** Why the match cannot be played here, or null: a map or planet not in this build, or an imported map not the same as the host's. */
   const unknown = (s: LobbySetup): string | null => {
-    if (!Object.hasOwn(MAPS, s.map) || !Object.hasOwn(BIOMES, s.biome)) return Object.hasOwn(MAPS, s.map) || !s.print ? UNKNOWN_TEXT : (mapRefused ?? 'En attente de la carte importée par votre ami…'); // own ids only: not `constructor`
-    return isImported(MAPS[s.map]) && mapPrint(MAPS[s.map]) !== s.print ? "La carte de votre ami ne correspond pas à celle reçue ici : la partie ne peut pas commencer. Votre ami peut la choisir à nouveau." : null;
+    const id = localId(s.map);
+    if (!Object.hasOwn(MAPS, id) || !Object.hasOwn(BIOMES, s.biome)) return Object.hasOwn(MAPS, id) || !s.print ? UNKNOWN_TEXT : (mapRefused ?? 'En attente de la carte importée par votre ami…'); // own ids only: not `constructor`
+    return isImported(MAPS[id]) && mapPrint(MAPS[id]) !== s.print ? "La carte de votre ami ne correspond pas à celle reçue ici : la partie ne peut pas commencer. Votre ami peut la choisir à nouveau." : null;
   };
   const UNKNOWN_TEXT = "Votre ami a choisi une carte ou une planète que votre version du jeu n'a pas : rechargez la page (tous les deux).";
   /** Why the host's imported map was refused here (until another one comes). */
   let mapRefused: string | null = null;
+  /** The guest's id for each map the host imported, when it had to keep it beside one of its own of that id (maps.ts receiveMap). */
+  const received: Record<string, string> = {};
+  const localId = (id: string) => (Object.hasOwn(received, id) ? received[id] : id);
   /** The host's setup, sent whole; an imported map's file goes just before it, with its print in the setup (the channel keeps the order). */
   const sendSetup = (): void => {
     const def = mapFile(setup.map);
@@ -428,8 +432,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       if ('carte' in m && !host) {
         // A map from outside the game: checked like a file the player imports, kept for the match's page.
         const def = parseMap(m.carte);
+        const kept = typeof def === 'string' ? null : receiveMap(def);
+        if (kept && typeof def !== 'string') received[def.id] = kept;
         mapRefused = typeof def === 'string' ? `La carte importée par votre ami est refusée : ${def}`.replace(/[<>&]/g, '')
-          : !addMap(def, true) ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé).'
+          : !kept ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé).'
           : null;
         if (mapRefused) status = mapRefused;
       } else if ('setup' in m && !host) {

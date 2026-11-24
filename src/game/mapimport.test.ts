@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
-import { checkMap, MAP_MAX_CHARS, mapPrint } from '../mapcheck';
-import { addMap, MAPS, type MapFile, removeMap } from '../maps';
+import { checkMap, MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
+import { addMap, MAPS, type MapFile, receiveMap, removeMap } from '../maps';
 import { lobbyOk } from '../net';
 import { ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
@@ -75,4 +75,50 @@ describe('an imported map in a friends\' game', () => {
     expect(mapPrint(b)).toBe(mapPrint(a));
     expect(mapPrint({ ...a, bases: a.bases.slice(0, 1) })).not.toBe(mapPrint(a));
   });
+});
+
+describe('a friend\'s imported map with the id of one of the guest\'s own', () => {
+  const store = new Map<string, string>();
+  const withStorage = (f: () => void) => {
+    Object.assign(globalThis, { localStorage: { setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k), getItem: (k: string) => store.get(k) ?? null } });
+    try {
+      f();
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+      for (const id of Object.keys(MAPS)) if (id.startsWith('import-')) removeMap(id);
+      store.clear();
+    }
+  };
+
+  it('is the guest\'s own when it holds the same: nothing new kept', () =>
+    withStorage(() => {
+      const mine = imported();
+      addMap(mine, true);
+      expect(receiveMap(checkMap(JSON.parse(JSON.stringify(mine))) as MapFile)).toBe(mine.id);
+      expect(store.size).toBe(1);
+    }));
+
+  it('is kept beside the guest\'s own when it differs, which stays as it was', () =>
+    withStorage(() => {
+      const mine = imported();
+      addMap(mine, true);
+      const theirs = { ...mine, name: 'Le col de mon ami', bases: mine.bases.slice(0, 1) };
+      const id = receiveMap(theirs);
+      expect(id).toBe(`${mine.id}-${mapPrint(theirs).slice(0, 6)}`);
+      expect(MAPS[mine.id]).toEqual(mine);
+      expect(parseMap(store.get(`xcraft.carte:${mine.id}`)!)).toEqual(mine);
+      expect(mapPrint(MAPS[id!])).toBe(mapPrint(theirs)); // the print is the content's, whatever the id
+      expect(parseMap(store.get(`xcraft.carte:${id}`)!)).toEqual(MAPS[id!]); // and it reads back on the match's page
+      expect(receiveMap(theirs)).toBe(id); // received again: the same copy
+    }));
+
+  it('keeps an id of 32 letters readable once prefixed, and once suffixed too', () =>
+    withStorage(() => {
+      const long = checkMap({ ...JSON.parse(JSON.stringify(MAPS['le-col'])), id: 'a'.repeat(32) }) as MapFile;
+      expect(long.id).toBe('import-' + 'a'.repeat(32));
+      expect(checkMap({ ...long, id: 'a'.repeat(33) })).toMatch(/id/);
+      addMap(long, true);
+      const other = receiveMap({ ...long, name: 'Autre' })!;
+      for (const id of [long.id, other]) expect(parseMap(store.get(`xcraft.carte:${id}`)!)).toEqual(MAPS[id]);
+    }));
 });
