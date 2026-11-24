@@ -160,7 +160,7 @@ const CLIMB_S = 2;
 /** Its descent to the ground when it lands (s); it then settles a moment. Its paving spreads after it (paving.ts). */
 export const LAND_S = 1.8;
 /** How far the Ankylosaure turns from its foe to swing its tail club onto it (radians). */
-const CLUB_TURN = -Math.PI / 2;
+const CLUB_TURN = -Math.PI * 0.75; // three-eighths round: the club, swept, crosses the foe
 /** The saurians' strides (ground covered by one loop of their walk clip, two steps). */
 const SAURIAN_STRIDE: Record<string, number> = { allosaure: 2.2, ankylosaure: 1.5 };
 /** Human machines on tracks: they jolt and rock as they roll, instead of bouncing like walkers. */

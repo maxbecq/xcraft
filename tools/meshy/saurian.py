@@ -31,6 +31,19 @@ if kind == "ankylo":
         c = v.co
         if c.z > seat.z + 0.02 * top and abs(c.y - seat.y) < 0.2 * top and abs(c.x) < 0.22 * top:
             v.co = seat + (c - seat) * 1.5
+    # Its tail half as long again, and its club a third bigger: swept round, the club reaches the foe it fights.
+    ys0 = [v.co.y for v in mesh.data.vertices]
+    back, end = max(ys0) - 0.42 * (max(ys0) - min(ys0)), max(ys0)
+    club = Vector((0, end - 0.08 * (max(ys0) - min(ys0)), 0))
+    cz = [v.co for v in mesh.data.vertices if v.co.y > club.y]
+    club.z = sum(c.z for c in cz) / len(cz)
+    for v in mesh.data.vertices:
+        c = v.co
+        if c.y > club.y - 0.06:
+            c.x, c.z = club.x + (c.x - club.x) * 1.35, club.z + (c.z - club.z) * 1.35
+            c.y = club.y + (c.y - club.y) * 1.35
+        if c.y > back:
+            c.y = back + (c.y - back) * 1.5
 vs = [v.co.copy() for v in mesh.data.vertices]
 lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs)))
 hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
