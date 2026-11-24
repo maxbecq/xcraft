@@ -160,6 +160,8 @@ const SPOOL_S = 1;
 const CLIMB_S = 2;
 /** Its descent to the ground when it lands (s); it then settles a moment. */
 const LAND_S = 1.8;
+/** Human machines on tracks: they jolt and rock as they roll, instead of bouncing like walkers. */
+const TRACKED = new Set(['scarabee', 'pegase']);
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** A death burst's material: sparks for a machine, dark drops for the living. */
 function burstMaterial(mechanical: boolean): PointsMaterial {
@@ -1423,17 +1425,20 @@ export class EntityRenderer {
       v.model.rotation.z += Math.sin(rise * Math.PI) * 0.04;
       if (f.age > SPOOL_S + CLIMB_S) v.flight = undefined;
     }
-    // Wheeled robots rumble over the ground rather than bounce.
-    const rolling = !!v.wheels;
+    // Wheeled robots rumble over the ground rather than bounce; so do the Humans' tracked machines.
+    const rolling = !!v.wheels || TRACKED.has(e.type);
     // Walkers with knees crouch as they walk, and rise a little on each step.
     const crouch = moving && v.limbs.insect?.[0]?.ik ? -v.gait!.crouch : 0;
     // A made-up skeleton (the Dieux) bobs, sways and leans at its hips, its circle left on the ground.
     const bob = hover + crouch + (hover || v.rig ? 0 : moving ? (rolling ? Math.abs(Math.sin(t * 31 + e.id)) * 0.006 : Math.abs(Math.sin(phase)) * 0.045) : Math.sin(t * 2 + e.id) * 0.008);
-    v.model.position.y += (bob - v.model.position.y) * 0.4;
+    // Tracks jolting over the ground: the hull bucks and rocks as it goes.
+    const jolt = moving && TRACKED.has(e.type) && !flying ? Math.abs(Math.sin(t * 9 + e.id)) * 0.018 + Math.abs(Math.sin(t * 23 + e.id * 3)) * 0.007 : 0;
+    v.model.position.y += (bob + jolt - v.model.position.y) * 0.4;
     // The heavy Mastodonte rolls and pitches a little as it hangs in the air, more slowly than the light flyers.
     const heavy = e.type === 'mastodonte' ? 1 : 0;
     ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving && !v.rig ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
     if (heavy && flying) body.rotation.x += (Math.sin(t * 0.6 + e.id * 2) * 0.035 - (moving ? 0.06 : 0)) * 0.15; // nose down as it flies off
+    if (moving && TRACKED.has(e.type) && !flying) body.rotation.x += Math.sin(t * 4.5 + e.id) * 0.03 * 0.4; // rocking fore and aft
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
     ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling && !v.rig ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
