@@ -61,6 +61,17 @@ const MAX_TRIES = 3;
 const FIELDS_WEIGHED = 6;
 /** Minutes (game clock) the natural is saved for with the army out, from the strategy's minute (need). */
 const NATURAL_SAVING = 2;
+/**
+ * The scout (scouting): who tours the enemy's bases, 'none', 'worker' (a worker first, then the fastest soldier at
+ * home) or 'spy' (the camp's spy, the Z Espion trained early for it; else as 'worker'). Its first tour at SCOUT_FIRST
+ * (game minutes), then one every SCOUT_EVERY.
+ */
+const SCOUT: 'none' | 'worker' | 'spy' = 'worker';
+const SCOUT_FIRST = 1.5;
+const SCOUT_EVERY = 2.5;
+const SCOUT_STOP = 60;
+/** Spies that tour in the 'spy' variant. */
+const SPIES = ['zespion', 'espion', 'corbeau'];
 /** Each team's target base (building id, by team), shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 export const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
@@ -131,6 +142,14 @@ export class AI {
   /** The bank at the last think, and the last tick it grew (minerals brought in), to tell an income from a promise. */
   private lastBank = 0;
   private lastIncome = 0;
+  /** The scout touring the enemy's bases (scouting), its stops left, its hit points last turn, and the next tour's tick. */
+  private scoutId = 0;
+  private stops: { x: number; y: number }[] = [];
+  private scoutHp = 0;
+  private tourAt = -1;
+  /** The tick the scout set out for its current stop (a stop out of reach is given up after SCOUT_STOP seconds). */
+  private stopAt = 0;
+  private toured = 0;
   /** Its workers (alive or queued) have reached their target once. */
   private staffed = false;
   /** Most enemy flying units seen at once: calls for anti-air. */
@@ -278,6 +297,7 @@ export class AI {
     if (bank > this.lastBank || !this.lastIncome) this.lastIncome = w.tick;
     this.lastBank = bank;
     const s = this.survey(mine, home);
+    this.scouting(s);
     this.scout();
     const n = { ...s, ...this.need(s) };
     const ctx: Turn = { ...n, ...this.budget(n), keep: 0, godEnergy: 0, low: 0, queued: 0, mending: 0, urgent: false };
@@ -394,6 +414,83 @@ export class AI {
       const e = w.entities.get(id);
       if (!e || (w.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
     }
+  }
+
+  /**
+   * The scout: a worker (then the fastest soldier at home, or the camp's spy) tours the enemy's start and its
+   * expansions, the nearest first, and comes back; it skips a stop where something that can shoot it is near or once
+   * hit, and goes home below half its hit points. Taken out of the workers and the army while it tours. What it sees
+   * fills the memory the production reads (scout): with the army alone, nothing before the first fight.
+   */
+  private scouting(s: ReturnType<AI['survey']>): void {
+    if (SCOUT === 'none' || this.easy) return;
+    const w = this.world;
+    let u = this.scoutId ? w.entities.get(this.scoutId) : undefined;
+    if (this.scoutId && (!u || u.hp <= 0 || u.owner !== this.player)) {
+      this.scoutId = 0;
+      u = undefined;
+      this.tourAt = w.tick + ticks((SCOUT_EVERY * 60) / 2);
+    }
+    if (!u && this.tourAt < 0) this.tourAt = ticks(SCOUT_FIRST * 60);
+    if (!u && w.tick >= this.tourAt) {
+      const foes = w.players.filter((p) => w.hostile(p.id, this.player));
+      const stops: { x: number; y: number }[] = [];
+      for (const p of foes) {
+        const hq = DEFS[FACTIONS[p.faction].hq] as BuildingDef;
+        for (const [tx, ty] of [startSite(w, p.id), ...expansions(w, p.id).slice(0, 2)].filter((t): t is [number, number] => !!t)) stops.push({ x: (tx + hq.size / 2) * FP, y: (ty + hq.size / 2) * FP });
+      }
+      const first = stops[0];
+      const by = (list: Entity[]) => (first ? [...list].sort((a, b) => dist(a.x, a.y, first.x, first.y) - dist(b.x, b.y, first.x, first.y) || a.id - b.id)[0] : undefined);
+      const spy = SCOUT === 'spy' ? by(s.army.filter((e) => SPIES.includes(e.type))) : undefined;
+      // A soldier only out of four at home at least: never the last ones (a lone soldier waiting for the last units).
+      const atHome = s.army.filter((e) => !this.wave.has(e.id) && !!w.weapon(e) && dist(e.x, e.y, s.home.x, s.home.y) < 20 * FP);
+      const fastest = atHome.length >= 4 ? [...atHome].sort((a, b) => b.speed - a.speed || a.id - b.id)[0] : undefined;
+      const worker = this.toured === 0 ? by(s.serfs.filter((e) => e.order?.kind === 'gather' && e.carry === 0)) : undefined;
+      u = spy ?? worker ?? fastest;
+      if (u && stops.length) {
+        this.scoutId = u.id;
+        this.stops = stops;
+        this.scoutHp = u.hp + u.shield;
+        this.stopAt = w.tick;
+        this.wave.delete(u.id);
+        this.toured++;
+      } else {
+        u = undefined;
+        this.tourAt = w.tick + ticks(30);
+      }
+    }
+    if (!u) return;
+    // Out of the workers and the army while it tours.
+    const id = u.id;
+    s.serfs = s.serfs.filter((e) => e.id !== id);
+    if (s.builders !== s.serfs) s.builders = s.builders.filter((e) => e.id !== id);
+    s.army = s.army.filter((e) => e.id !== id);
+    const hp = u.hp + u.shield;
+    const hit = hp < this.scoutHp;
+    this.scoutHp = hp;
+    const air = flies(u);
+    const danger = [...w.entities.values()].some((e) => {
+      // Not the enemy's workers: they mine on.
+      if (!w.hostile(e.owner, this.player) || !w.sees(this.player, e) || (e.def as UnitDef).worker) return false;
+      const a = w.weapon(e);
+      return !!a && reaches(a, air) && dist(e.x, e.y, u!.x, u!.y) <= (a.range + 4) * FP;
+    });
+    const stop = this.stops[0];
+    if (stop && (hit || danger || dist(u.x, u.y, stop.x, stop.y) < 5 * FP || w.tick - this.stopAt >= ticks(SCOUT_STOP))) {
+      this.stops.shift();
+      this.stopAt = w.tick;
+    }
+    const next = this.stops[0];
+    if (!next || 2 * hp < u.maxHp + u.maxShield) {
+      // Back: a worker to a field by a base, the others to the rally point.
+      const bases = s.buildings.filter((b) => this.isBase(b) && b.buildLeft === 0);
+      const f = (u.def as UnitDef).worker ? this.closestField(u, bases, () => true) : undefined;
+      s.out.push(f ? { player: this.player, kind: 'smart', ids: [id], x: f.x, y: f.y, target: f.id } : { player: this.player, kind: 'move', ids: [id], x: s.rally.x, y: s.rally.y });
+      this.scoutId = 0;
+      this.tourAt = w.tick + ticks(SCOUT_EVERY * 60);
+      return;
+    }
+    if (!(u.order?.kind === 'move' && dist(u.order.x, u.order.y, next.x, next.y) < FP)) s.out.push({ player: this.player, kind: 'move', ids: [id], x: next.x, y: next.y });
   }
 
   /** What this turn starts from: our units and buildings, the bank (less what builders walking to a site will spend). */
@@ -887,7 +984,7 @@ export class AI {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       ctx.minerals += ctx.low - workerCost;
       ctx.low = 0;
-    } else if (f === FACTIONS.z && minute > 8 && workerHome && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !ctx.holdSupreme) {
+    } else if (f === FACTIONS.z && minute > (SCOUT === 'spy' ? 3 : 8) && workerHome && ctx.minerals >= 150 && ctx.energy >= 75 + reserve && !mine.some((u) => u.type === 'zespion') && !w.lacks(this.player, 'zespion') && !ctx.holdSupreme) {
       // One Espion (Z.doc): it detects, and goes along with the waves.
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: 'zespion' });
       ctx.minerals -= 150;
