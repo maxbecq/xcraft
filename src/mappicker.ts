@@ -1,4 +1,4 @@
-import { CORNERS, MAPS, type MapFile, buildMap, turnsOf } from './maps';
+import { CORNERS, MAPS, type MapFile, buildMap, isImported, turnsOf } from './maps';
 import { rotateFootprint } from './map';
 import { TEAM_COLORS } from './render/models';
 import { tileColor } from './terrain';
@@ -75,7 +75,7 @@ export function mapCards(chosen: string): string {
       const players = m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)} joueurs` : `${m.players[0]} joueurs`;
       return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${m.description ?? ''}">
         <img src="${mapThumb(m)}" alt="">
-        <span class="map-name">${m.name}</span>
+        <span class="map-name">${m.name}${isImported(m) ? ' <span class="map-imported">importée</span>' : ''}</span>
         <span class="map-meta">${biomeOf(m).name} · ${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>
       </button>`;
     })

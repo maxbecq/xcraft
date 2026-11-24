@@ -1,4 +1,5 @@
 import { HQ_MINERAL_GAP } from './data';
+import { IMPORTED, parseMap } from './mapcheck';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -75,6 +76,53 @@ export const MAPS: Record<string, MapFile> = Object.fromEntries(
     .map((m) => [m.id, m]),
 );
 export const DEFAULT_MAP = 'origine';
+
+/** Where an imported map is kept in this browser: one entry per map, its checked JSON. */
+const STORE = 'xcraft.carte:';
+/** Most imported maps kept. */
+export const MAX_IMPORTED = 20;
+
+/** Whether a map came from outside the game (an import, a friend's, a replay's). */
+export const isImported = (def: MapFile) => def.id.startsWith(IMPORTED);
+
+/** Maps imported earlier in this browser, checked again (storage can be edited) and listed after the game's own. */
+function loadImported(): void {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)!;
+      if (!key.startsWith(STORE)) continue;
+      const def = parseMap(localStorage.getItem(key) ?? '');
+      if (typeof def === 'string' || !isImported(def)) console.warn(`Carte importée illisible, ignorée : ${key}`);
+      else MAPS[def.id] = def;
+    }
+  } catch {
+    // no storage (private window, node): none imported
+  }
+}
+loadImported();
+
+/** A checked map made playable for this page (a replay's, a friend's on its way); `keep` also stores it for later pages. False if storage refused it. */
+export function addMap(def: MapFile, keep = false): boolean {
+  MAPS[def.id] = def;
+  if (!keep) return true;
+  try {
+    localStorage.setItem(STORE + def.id, JSON.stringify(def));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Forgets an imported map, here and in storage. */
+export function removeMap(id: string): void {
+  if (!id.startsWith(IMPORTED)) return;
+  delete MAPS[id];
+  try {
+    localStorage.removeItem(STORE + id);
+  } catch {
+    // nothing kept
+  }
+}
 
 /** The map with this id, or the original map (said in the console when an id was given: a network game checks it first). */
 /** The main buildings' size (the balancer, 2026-11-22: 4x4, in the 5x5 slots the map files keep). */

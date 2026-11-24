@@ -75,3 +75,25 @@ La liste des emplacements de base du joueur 1, dans l'ordre où l'IA s'étend. U
 | `wells` | La tuile en haut à gauche de chaque puits d'énergie (3 × 3 tuiles). |
 
 L'IA prend d'abord ses propres bases, dans l'ordre du fichier, puis les autres bases libres, les plus proches d'abord. Elle ne prend jamais une base plus proche du départ d'un adversaire que du sien. Une base posée au centre exact d'une carte `rot90` (de taille impaire) n'existe qu'une fois, partagée entre tous les joueurs.
+
+## Importer une carte
+
+Le bouton « Importer une carte », sous les cartes de l'écran « Nouvelle partie » (et du Bac à sable), lit un fichier `.json` de ce format sans passer par le dossier : par exemple une carte faite avec l'éditeur. Le fichier est une donnée venue de l'extérieur : le jeu le vérifie champ par champ (`src/mapcheck.ts`) et refuse, avec la raison, tout ce qui sort de ces bornes :
+
+| Quoi | Borne |
+|---|---|
+| Fichier | 64 Ko au plus, du JSON |
+| Champs | seulement ceux décrits ici, nulle part un champ inconnu |
+| `id` | 1 à 32 lettres minuscules, chiffres ou tirets |
+| `name`, `description` | 40 et 200 caractères au plus, sans `<`, `>`, `"` ni `&` |
+| `size` | entier de 32 à 160 |
+| `players` | 1 à 3 nombres de joueurs, de 2 à 4, sans doublon |
+| `biome` | une planète connue (voir plus haut) |
+| `terrain` | 300 formes au plus ; un `polygon` ou une rue, 256 points au plus ; chaque forme fait exactement une chose (`level` de 0 à 2, `chasm` ou `fill`) |
+| `bases` | 1 à 16 bases, une seule de départ ; 32 minerais et 4 puits au plus par base |
+| Coordonnées | toutes sur la carte : une tuile de 0 à `size - 1`, un QG de 0 à `size - 5`, un puits de 0 à `size - 3` ; les points (polygones, centres, rues) de 0 à `size` |
+
+Une carte acceptée prend l'id `import-<id>` (jamais celui d'une carte du jeu) et reste dans ce navigateur (20 au plus). Elle apparaît dans la liste, marquée « importée », et le bouton « Supprimer cette carte » l'efface quand elle est choisie.
+
+- **Partie entre amis** : quand l'hôte choisit une carte importée, son fichier part vers l'invité avant la partie, qui le vérifie de la même façon et le garde. Les deux comparent ensuite une empreinte de la carte ; si elles diffèrent, la partie ne démarre pas.
+- **Replays** : le replay d'une partie sur une carte importée emporte la carte entière (`carte`), vérifiée de nouveau à la lecture. Il se rejoue donc dans un navigateur qui ne l'a jamais eue.

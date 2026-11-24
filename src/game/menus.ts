@@ -1,6 +1,7 @@
 /** The title screen's menus: home, options, match setup, joining a friend, the friends' lobby; a match starts by loading its URL. */
 import { type Faction, FACTIONS } from '../data';
-import { MAPS, type MapFile, mapFile } from '../maps';
+import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, removeMap } from '../maps';
+import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
 import { mapCards, seatsOf } from '../mappicker';
 import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
@@ -167,6 +168,34 @@ const COMPACT = matchMedia('(max-width: 820px), (max-height: 600px)');
 /** Bac à sable: the options picked before the match (the last ones picked, kept on this browser). */
 const sandboxPicked = sandboxRemembered();
 
+/** Why the last map file was refused (or that it was taken), shown once under the maps. Plain text only. */
+let importNote = '';
+
+/**
+ * A map file the player picked: checked (untrusted data, src/mapcheck.ts), kept in this browser under an imported
+ * id and chosen; or the reason it is refused. `done` redraws the screen.
+ */
+function importMap(file: File | undefined, s: Setup, done: () => void): void {
+  if (!file) return;
+  const say = (why: string) => {
+    importNote = why.replace(/[<>&]/g, '');
+    done();
+  };
+  if (file.size > MAP_MAX_CHARS * 4) return say(`Fichier trop gros pour une carte (${Math.ceil(MAP_MAX_CHARS / 1024)} Ko au plus).`);
+  file.text().then(
+    (json) => {
+      const def = parseMap(json);
+      if (typeof def === 'string') return say(`Carte refusée : ${def}`);
+      if (!MAPS[def.id] && Object.values(MAPS).filter(isImported).length >= MAX_IMPORTED) return say(`Carte refusée : ${MAX_IMPORTED} cartes importées au plus ; supprimez-en une d'abord.`);
+      if (!addMap(def, true)) return say('Carte refusée : le navigateur ne veut pas la garder (stockage plein ou désactivé).');
+      s.map = def.id;
+      for (let i = seatsOf(def); i < 4; i++) s.sides[i].control = 'none';
+      say(`Carte « ${def.name} » importée.`);
+    },
+    () => say('Ce fichier ne se lit pas.'),
+  );
+}
+
 function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map', sandbox = false): void {
   const select = (key: string, options: Record<string, string>, now: string) =>
     `<select data-k="${key}">${Object.entries(options)
@@ -205,7 +234,10 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}${oneTeam ? '<p class="seat-note">Tous dans la même équipe : chaque joueur jouera pour lui seul.</p>' : ''}</fieldset>`;
   const compact = COMPACT.matches;
   const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id)}</fieldset>
-    <p class="map-about">${chosen.description ?? ''}</p>`;
+    <p class="map-about">${chosen.description ?? ''}</p>
+    <div class="row map-tools"><button type="button" data-m="import-map">Importer une carte</button>${isImported(chosen) ? '<button type="button" data-m="drop-map">Supprimer cette carte</button>' : ''}<input type="file" class="map-file" accept=".json,application/json" hidden></div>
+    <p class="map-import-note"${importNote ? '' : ' hidden'}>${importNote}</p>`;
+  importNote = '';
   menu.className = `menu setup${compact ? ' compact' : ''}`;
   if (compact && step === 'map') {
     menu.innerHTML = `<h2>${title}</h2>${maps}
@@ -223,6 +255,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement | HTMLInputElement;
     const tool = el.dataset.sandbox;
+    if (el.classList.contains('map-file')) return void importMap((el as HTMLInputElement).files?.[0], s, () => showSetup(menu, s, step, sandbox));
     if (tool) {
       const on = (el as HTMLInputElement).checked;
       if (on) sandboxPicked.add(tool);
@@ -242,6 +275,12 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
     const m = button?.dataset.m;
+    if (m === 'import-map') return void menu.querySelector<HTMLInputElement>('.map-file')!.click();
+    if (m === 'drop-map') {
+      removeMap(s.map);
+      s.map = DEFAULT_MAP;
+      return void showSetup(menu, s, step, sandbox);
+    }
     if (button?.dataset.map) {
       s.map = button.dataset.map;
       // Seats the map has no start for close.
@@ -358,9 +397,21 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     }
     location.search = `?net=${host ? 'host' : 'join'}&room=${room}&camp=${s.camps[0]}&adversaire=${s.camps[1]}&map=${s.map}`;
   };
-  /** A map or planet not in this build: no match. */
-  const unknown = (s: LobbySetup) => !Object.hasOwn(MAPS, s.map) || !Object.hasOwn(BIOMES, s.biome); // own ids only: not `constructor`
+  /** Why the match cannot be played here, or null: a map or planet not in this build, or an imported map not the same as the host's. */
+  const unknown = (s: LobbySetup): string | null => {
+    if (!Object.hasOwn(MAPS, s.map) || !Object.hasOwn(BIOMES, s.biome)) return Object.hasOwn(MAPS, s.map) || !s.print ? UNKNOWN_TEXT : (mapRefused ?? 'En attente de la carte importée par votre ami…'); // own ids only: not `constructor`
+    return isImported(MAPS[s.map]) && mapPrint(MAPS[s.map]) !== s.print ? "La carte de votre ami ne correspond pas à celle reçue ici : la partie ne peut pas commencer. Votre ami peut la choisir à nouveau." : null;
+  };
   const UNKNOWN_TEXT = "Votre ami a choisi une carte ou une planète que votre version du jeu n'a pas : rechargez la page (tous les deux).";
+  /** Why the host's imported map was refused here (until another one comes). */
+  let mapRefused: string | null = null;
+  /** The host's setup, sent whole; an imported map's file goes just before it, with its print in the setup (the channel keeps the order). */
+  const sendSetup = (): void => {
+    const def = mapFile(setup.map);
+    setup.print = isImported(def) ? mapPrint(def) : undefined;
+    if (setup.print) lobby.send({ carte: JSON.stringify(def) });
+    lobby.send({ setup });
+  };
   const lobby = openLobby(room, host, {
     status: (s, detail) => {
       here = s === 'here';
@@ -369,25 +420,36 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
         : s === 'waiting' ? 'En attente de votre ami…'
         : s === 'gone' ? 'Votre ami est parti, reconnexion…'
         : (detail ?? 'Connexion impossible.');
-      if (here && host) lobby.send({ setup });
+      if (here && host) sendSetup();
       if (here && !host) lobby.send({ camp: setup.camps[me] });
       refresh();
     },
     message: (m) => {
-      if ('setup' in m && !host) {
+      if ('carte' in m && !host) {
+        // A map from outside the game: checked like a file the player imports, kept for the match's page.
+        const def = parseMap(m.carte);
+        mapRefused = typeof def === 'string' ? `La carte importée par votre ami est refusée : ${def}`.replace(/[<>&]/g, '')
+          : !addMap(def, true) ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé).'
+          : null;
+        if (mapRefused) status = mapRefused;
+      } else if ('setup' in m && !host) {
         // The host gave up a launch we answered too late (it sends the setup again then): we stay in the room.
         if (going) {
           unlaunch();
           status = "Le lancement n'a pas abouti : votre ami peut relancer.";
         }
         // The guest's own pick stays as it is here: the host's copy may be older, and the start brings the final one.
-        Object.assign(setup, { ...m.setup, camps: [m.setup.camps[0], setup.camps[1]] });
-        if (unknown(setup)) status = UNKNOWN_TEXT;
+        Object.assign(setup, { print: undefined, ...m.setup, camps: [m.setup.camps[0], setup.camps[1]] });
+        // A map problem said until it is solved; then back to the usual word.
+        const why = unknown(setup);
+        if (why) status = why;
+        else if (/carte (importée par|de) votre ami/.test(status)) status = 'Vous êtes dans le salon. Votre ami lance la partie.';
       } else if ('camp' in m && host) {
         setup.camps[1] = asFaction(m.camp);
-        if (!launching) lobby.send({ setup }); // during a launch, a setup would call off the guest's departure
+        if (!launching) sendSetup(); // during a launch, a setup would call off the guest's departure
       } else if ('go' in m && !host) {
-        if (unknown(m.go)) status = UNKNOWN_TEXT;
+        const why = unknown(m.go);
+        if (why) status = why;
         else {
           // Said back, again for each one resent (an answer may be lost); the page goes on the host's go-ahead only,
           // never on silence (a cut would leave the host in the room and us in the match).
@@ -423,7 +485,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     if (launching || going) return; // the setup sent is the match
     const el = e.target as HTMLSelectElement;
     if (el.dataset.k === 'camp') setup.camps[me] = asFaction(el.value);
-    if (host) lobby.send({ setup });
+    if (host) sendSetup();
     else lobby.send({ camp: setup.camps[me] });
     refresh();
   };
@@ -433,7 +495,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     if (button?.dataset.map && host && !launching) {
       setup.map = button.dataset.map;
       setup.biome = mapFile(setup.map).biome; // still sent: older builds check it
-      lobby.send({ setup });
+      sendSetup();
       refresh();
     } else if (m === 'copy') {
       const field = $<HTMLInputElement>('.net-link')!;
@@ -451,7 +513,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       launchWatch = window.setInterval(() => {
         if (launching?.poll() !== 'expired') return;
         unlaunch();
-        lobby.send({ setup }); // a guest answering late stays in the room
+        sendSetup(); // a guest answering late stays in the room
         status = "Votre ami n'a pas répondu au lancement : vérifiez sa connexion, puis relancez.";
         refresh();
       }, 100);

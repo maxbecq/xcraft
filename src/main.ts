@@ -37,6 +37,7 @@ import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, lavaTime, setBiome, UNDER_DECK } from './terrain';
+import { isImported } from './maps';
 import { cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
@@ -115,6 +116,7 @@ if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = D
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
 const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+if (isImported(MAP)) record.carte = MAP; // the replay carries the imported map: it plays on another browser too
 const replayed = new Map(REPLAY?.ticks ?? []);
 let replayEnded = false;
 /** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,

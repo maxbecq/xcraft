@@ -1,6 +1,7 @@
 /** Replays: a game kept as the commands the simulation took, saved, opened from a file and played back. */
 import { type Faction, FACTIONS } from '../data';
-import { DEFAULT_MAP, MAPS } from '../maps';
+import { addMap, DEFAULT_MAP, MAPS, type MapFile } from '../maps';
+import { checkMap } from '../mapcheck';
 import { commandOk } from '../net';
 import type { Command } from '../sim/world';
 
@@ -13,6 +14,8 @@ export interface Replay {
   version?: string;
   /** Map id; missing in replays from before map files (the original map). */
   map?: string;
+  /** An imported map, carried whole so the replay plays anywhere (checked again on reading, as any outside map). */
+  carte?: MapFile;
   /** A map this version does not have, replaced by the original one (said to the viewer: the game may differ). */
   lostMap?: string;
   factions: Faction[];
@@ -72,6 +75,12 @@ export function parseReplay(text: string): Replay | string {
   // An end before the last order (or no number) is not one: played as an older replay.
   if (r.endTick !== undefined && (!Number.isInteger(r.endTick) || r.endTick <= last)) delete r.endTick;
   if (r.end !== undefined && !ENDS.includes(r.end)) delete r.end;
+  if (r.carte !== undefined) {
+    const def = checkMap(r.carte);
+    if (typeof def === 'string' || def.id !== r.map) return `${bad} (carte jointe : ${typeof def === 'string' ? def : 'elle ne porte pas le nom de la partie'}).`;
+    r.carte = def;
+    addMap(def); // for this page only: the player's own maps are kept apart from those that come with a replay
+  }
   if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
