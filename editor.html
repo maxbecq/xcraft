@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Xcraft : éditeur de cartes (prototype)</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font: 13px system-ui, sans-serif; color: #e8e2d4; }
+    canvas#view { display: block; position: fixed; inset: 0; }
+    #panel { position: fixed; left: 0; top: 0; bottom: 0; width: 290px; overflow-y: auto; background: #15120ee8; border-right: 1px solid #4a3f2c; padding: 8px 10px; box-sizing: border-box; }
+    #panel h1 { font-size: 15px; margin: 2px 0 8px; color: #f0c060; }
+    #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #b09a70; margin: 12px 0 4px; border-top: 1px solid #3a3226; padding-top: 8px; }
+    #panel label { display: block; margin: 3px 0; }
+    #panel input[type=text], #panel input[type=number], #panel select { background: #2a241b; color: #eee; border: 1px solid #5a4c34; border-radius: 3px; padding: 2px 4px; }
+    #panel input[type=number] { width: 64px; }
+    .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+    button { background: #3a3120; color: #f2e6c8; border: 1px solid #6a5838; border-radius: 3px; padding: 4px 6px; cursor: pointer; font: inherit; }
+    button:hover { background: #4c3f28; }
+    button.on { background: #c08a2c; color: #1a1208; border-color: #f0c060; }
+    .row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 3px 0; }
+    .opts { margin-top: 6px; }
+    .player { border: 1px solid #3a3226; border-radius: 4px; padding: 4px 6px; margin: 4px 0; }
+    .player .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+    details { margin-top: 3px; }
+    details .forbid { max-height: 220px; overflow-y: auto; font-size: 12px; }
+    details .forbid label { margin: 0; }
+    #status { position: fixed; left: 300px; bottom: 8px; background: #000a; padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+    #msg { position: fixed; left: 300px; top: 8px; background: #000c; padding: 4px 8px; border-radius: 4px; pointer-events: none; color: #f0c060; }
+    #top { position: fixed; right: 8px; bottom: 8px; width: 220px; height: 220px; border: 1px solid #6a5838; background: #000; cursor: crosshair; image-rendering: pixelated; }
+    .note { color: #998a6c; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="panel"></div>
+  <canvas id="top" width="220" height="220" title="Vue de dessus : un clic y déplace la caméra"></canvas>
+  <div id="status"></div>
+  <div id="msg"></div>
+  <script type="module" src="/src/editor/main.ts"></script>
+</body>
+</html>
