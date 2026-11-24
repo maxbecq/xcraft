@@ -1523,7 +1523,6 @@ def dress_creaturium(p, glow):
 DRESS = {
     "conseil": dress_conseil, "caserne": dress_caserne, "grenier": dress_grenier, "mine": dress_mine, "forge": dress_forge,
     "metallurgie": dress_metallurgie,
-    "creaturium": dress_creaturium,
 }
 
 
