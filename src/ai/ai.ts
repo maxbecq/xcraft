@@ -750,14 +750,16 @@ export class AI {
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
-    // Any camp sitting on a bank half as much again as the natural's price takes it then (the Isdaris kept 1500 at 4:00
-    // in the games of 23/11, 16 workers on one base).
+    // Any camp sitting on 800 minerals takes its natural then (the Isdaris kept 1500 at 4:00 in the games of 23/11, 16
+    // workers on one base).
     // Its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the bank never
     // reached it).
     const outpostDef = DEFS[outpost] as BuildingDef;
     const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
-    // A safety net only, the opening's minute being the rule: half as much again as the natural's price in the bank.
-    const floating = !this.easy && p.minerals > (outpostPrice * 3) / 2;
+    // Any camp with 800 minerals in the bank takes its natural then, before its opening's minute (the Z did so at 2:00
+    // and kept training: raised to 1 500, they saved at 2:30 with three units for their opening and the Humains' first
+    // raid at 4:40 razed them, evening replays of 24/11).
+    const floating = !this.easy && p.minerals > 800;
     const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) || floating : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
     // the last fields were at the expansion).
@@ -776,17 +778,19 @@ export class AI {
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
     // Up to its price as its builder pays it.
-    // The natural is saved for even with the army out, for NATURAL_SAVING minutes from its minute (an opening: the
-    // Humains' waves left, the eight soldiers at home it waited for never were, and their Conseil came in 15 games of
-    // 24), not with the base under attack; after that, and for the bases after it, with eight soldiers at home.
-    const opened = councils < 2 && minute < firstAt + NATURAL_SAVING && !this.homeThreat;
-    const saving = (expand && (opened || army.filter((u) => !this.wave.has(u.id)).length >= 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    // For NATURAL_SAVING minutes from its opening's minute, the natural comes before every other building, the units
+    // still trained (the Humains' waves left, the eight soldiers at home the saving waited for never were, and their
+    // Conseil came in 15 games of 24; the units held too, the Z saved with three for 70 s and the Humains' first raid
+    // razed them, evening replays of 24/11). Saving, which holds the units, as before: eight soldiers at home.
+    const opened = councils < 2 && minute < firstAt + NATURAL_SAVING;
+    // In the opening's window, from six soldiers at home (out of a raid).
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= (opened && !this.homeThreat ? 6 : 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     // Saving for the expansion: no production building for floating minerals (the Isdaris spent 1 150 on a fifth Portail
     // at 7:17, their natural, 1 330 by robot, never came and their main ran dry at 8:00, the game lost).
     // Not the Z: their third Plate-forme so held, they fell from 53 to 45 wins in 96 against the 0.9.147 AI.
     if (saving && expand && floatBarracks && f !== FACTIONS.z && wants.includes(f.barracks)) wants.splice(wants.indexOf(f.barracks), 1);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
-    return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving, opening: expand && opened && saving };
+    return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving, opening: expand && opened };
   }
 
   /** Energy (and minerals) kept back from cheaper spending for the tech, its units and the next research. */
