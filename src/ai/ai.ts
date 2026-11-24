@@ -574,7 +574,8 @@ export class AI {
     if ((serfs.length === 0 || !this.settled(home)) && !f.gods && !building(f.hq)) casernesWanted = Math.max(casernesWanted, 1);
     // Floating minerals while every caserne is busy: add production.
     const casernes = buildings.filter((b) => b.type === f.barracks);
-    if (ctx.minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks)) casernesWanted = Math.min(8, casernes.length + 1);
+    const floatBarracks = ctx.minerals > 450 && casernes.length >= casernesWanted && casernes.every((c) => c.queue.length > 0) && !building(f.barracks);
+    if (floatBarracks) casernesWanted = Math.min(8, casernes.length + 1);
     if (!f.gods && count(f.barracks) < casernesWanted) wants.push(f.barracks);
     // Mid-game: a Forge, detection against an enemy that has invisible units, a defence or two.
     if (f.forge && count(f.forge) === 0 && producers >= 2 && count(f.extractor) > 0 && !w.lacks(this.player, f.forge)) wants.push(f.forge);
@@ -642,6 +643,10 @@ export class AI {
     const outpostDef = DEFS[outpost] as BuildingDef;
     const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
     const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    // Saving for the expansion: no production building for floating minerals (the Isdaris spent 1 150 on a fifth Portail
+    // at 7:17, their natural, 1 330 by robot, never came and their main ran dry at 8:00, the game lost).
+    // Not the Z: their third Plate-forme so held, they fell from 53 to 45 wins in 96 against the 0.9.147 AI.
+    if (saving && expand && floatBarracks && f !== FACTIONS.z && wants.includes(f.barracks)) wants.splice(wants.indexOf(f.barracks), 1);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
     return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
   }
@@ -767,6 +772,14 @@ export class AI {
         ctx.minerals -= def.cost.minerals;
         ctx.energy -= def.cost.energy;
         continue;
+      }
+      // Isdaris: an expansion out of sight gets a soldier sent to see it, so an Obélisque at rest materialises it for
+      // 1 000 (a robot beams it down for 1 330, a bank they seldom reached before their main ran dry at 8:00).
+      if (obelisk && spot && type === outpost && !this.easy) {
+        const [cx, cy] = [(spot[0] + def.size / 2) * FP, (spot[1] + def.size / 2) * FP];
+        const scout = ctx.army.filter((u) => !this.wave.has(u.id)).sort((a, b) => dist(a.x, a.y, cx, cy) - dist(b.x, b.y, cx, cy) || a.id - b.id)[0];
+        if (scout && !(scout.order?.kind === 'move' && dist(scout.order.x, scout.order.y, cx, cy) < 2 * FP)) ctx.out.push({ player: this.player, kind: 'move', ids: [scout.id], x: cx, y: cy });
+        if (scout) continue;
       }
       const crew = builders.filter((b) => raises(b.def as UnitDef, type));
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
@@ -2759,3 +2772,4 @@ export class AI {
     return pick;
   }
 }
+
