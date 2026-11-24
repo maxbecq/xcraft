@@ -297,7 +297,7 @@ function showJoin(menu: HTMLElement): void {
   };
   menu.onclick = (e) => {
     const m = (e.target as HTMLElement).closest('button')?.dataset.m;
-    if (m === 'back') showHome();
+    if (m === 'back') showNetwork(menu); // back where it was picked
     else if (m === 'go') go();
   };
 }
@@ -495,7 +495,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       unlaunch();
       lobby.close();
       history.replaceState(null, '', location.pathname);
-      showHome();
+      showNetwork(menu); // back where it was picked (the Partie réseau submenu)
     }
   };
 }
