@@ -2,7 +2,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSE
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions, startSite } from '../sim/setup';
-import { armyOf, counter, DOCTRINE, ON_BY_DEFAULT, type Doctrine, hash, LEGACY, pickStrategy, type Seen, type Strategy, USUAL_GODS } from './strategy';
+import { adapt, armyOf, confidence, DOCTRINE, ON_BY_DEFAULT, type Doctrine, fitSeen, hash, LEGACY, pickStrategy, remember, type Seen, type Strategy, USUAL_GODS } from './strategy';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -184,6 +184,9 @@ export class AI {
   private armyList: [string, number][];
   /** Most of each enemy type seen at once. */
   private seen: Seen = new Map();
+  /** When the read of the enemy and the army's shares were last brought up to date. */
+  private readAt = -Infinity;
+  private listAt = -Infinity;
 
   private readonly easy: boolean;
   private readonly hard: boolean;
@@ -356,12 +359,27 @@ export class AI {
 
   /** What the scouts see of the enemy's army, kept at its most of each type, and the army aimed at bent by it. */
   private scout(): void {
-    if (this.doctrine === LEGACY) return;
     const w = this.world;
-    const now = new Map<string, number>();
-    for (const e of w.entities.values()) if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.hostile(e.owner, this.player) && w.sees(this.player, e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
-    for (const [t, n] of now) this.seen.set(t, Math.max(n, this.seen.get(t) ?? 0));
-    this.armyList = counter(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.seen, this.doctrine.counterRanged);
+    // The read of the enemy (strategy.ts, remember), every five seconds: the Humans too, whose AI is otherwise the old one.
+    const humans = this.faction === FACTIONS.humains;
+    if ((this.doctrine !== LEGACY || humans) && w.tick - this.readAt >= ticks(5)) {
+      this.readAt = w.tick;
+      const now = new Map<string, number>();
+      for (const e of w.entities.values()) {
+        if (!w.hostile(e.owner, this.player) || !w.sees(this.player, e)) continue;
+        if (e.def.kind === 'unit' && !(e.def as UnitDef).worker) now.set(e.type, (now.get(e.type) ?? 0) + 1);
+        // A building that trains flyers, seen: a few of them guessed before they come.
+        const flyer = e.def.kind === 'building' && e.buildLeft === 0 ? (e.def as BuildingDef).trains?.find((t) => (DEFS[t] as UnitDef | undefined)?.flying && (DEFS[t] as UnitDef).attack) : undefined;
+        if (flyer) now.set(flyer, Math.max(now.get(flyer) ?? 0, 2));
+      }
+      remember(this.seen, now);
+      // The army's shares follow the read, every ten seconds (blended by how sure it is: no turn at one unit seen).
+      if (this.doctrine !== LEGACY && w.tick - this.listAt >= ticks(10)) {
+        this.listAt = w.tick;
+        this.armyList = adapt(armyOf(w.players[this.player].faction, this.strategy, (t) => !w.lacks(this.player, t)), this.seen, this.doctrine.counterRanged);
+      }
+    }
+    if (this.doctrine === LEGACY) return;
     // The enemy's fighters and armed buildings, as last seen, for `sends` (dominates keeps the same memory).
     const seen = this.visibleFoes();
     for (const e of seen) {
@@ -2168,8 +2186,9 @@ export class AI {
       if (a?.vs) fit += n * (a.vs[CLASSES.indexOf(d.cls ?? 'BL')] ?? a.damage);
     }
     if (!total || !a) return 1;
-    if (air * 3 >= total) return reaches(a, true) ? 3 : 1 / 3;
-    return a.vs ? (2 * fit) / total / Math.max(1, ...a.vs) : 1;
+    if (air * 3 >= total) return 1 + confidence(this.seen) * ((reaches(a, true) ? 3 : 1 / 3) - 1);
+    // Bent as far as the read is sure (strategy.ts, confidence): a socle or two seen do not turn every weapon.
+    return 1 + confidence(this.seen) * ((a.vs ? (2 * fit) / total / Math.max(1, ...a.vs) : 1) - 1);
   }
 
   /** `at`: the building that will train it, whose own Isdaris extensions count (a Druide needs the Laboratoire there). */
@@ -2211,7 +2230,13 @@ export class AI {
     }
     // Phalangistes (grenades, long range) once a Forge stands, one in five.
     // (One in five trained, they never came: the energy was seldom there on that turn. Now a sixth of the army each.)
-    const share = (t: string) => own.filter((u) => u.type === t).length * 6 < own.length;
+    // Each share bent by the read of the enemy (strategy.ts, fitSeen), as far as it is sure, against the Auxiliaire's:
+    // Phalangistes against machines, Belluaires against infantry, more Légionnaires against infantry (up to twice).
+    // Never fewer than usual: shares bent down too (½ to 2) cost the Humans 7 wins in 96 against the 0.9.147 AI.
+    const c = confidence(this.seen);
+    const base = Math.max(0.05, fitSeen('auxiliaire', this.seen));
+    const bend = (t: string) => Math.min(2, Math.max(1, 1 + c * (fitSeen(t, this.seen) / base - 1)));
+    const share = (t: string) => own.filter((u) => u.type === t).length * 6 < own.length * bend(t);
     if (shareEnergy >= 150 && minerals >= 225 && share('phalangiste') && !this.enemyAir && !this.world.lacks(this.player, 'phalangiste', undefined, at)) return 'phalangiste';
     // Belluaires (halberd riders, against infantry) once a Créaturium stands.
     if (shareEnergy >= 175 && minerals >= 200 && share('belluaire') && !this.enemyAir && !this.world.lacks(this.player, 'belluaire', undefined, at)) return 'belluaire';
@@ -2220,7 +2245,8 @@ export class AI {
     // With its minerals there: chosen for the energy alone, it held the last Caserne for good.
     if (energy >= 100 && minerals >= (DEFS.soigneur as UnitDef).cost.minerals && healers * 3 < own.length + 1 && (energy >= 300 || this.trained % this.plan.healerEvery === this.plan.healerEvery - 1)) return 'soigneur';
     // Deterministic mix of légionnaires among auxiliaires.
-    return !this.enemyAir && (this.trained * this.plan.legionShare) % 1 >= 1 - this.plan.legionShare ? 'legionnaire' : 'auxiliaire';
+    const legion = Math.min(0.6, this.plan.legionShare * bend('legionnaire'));
+    return !this.enemyAir && (this.trained * legion) % 1 >= 1 - legion ? 'legionnaire' : 'auxiliaire';
   }
 
   /**

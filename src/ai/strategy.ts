@@ -280,5 +280,55 @@ export function counter(army: [string, number][], seen: Seen, ranged = true): [s
   });
 }
 
+/**
+ * The enemy as the AI believes it (an SC2-like read of the scouting): every few seconds each type seen now is raised to
+ * its count, and kept at its most once out of sight. Fading what is out of sight (half in 3 min) cost the Isdaris 4
+ * wins in 96 against the 0.9.147 AI, half in 11 min one: an army seen once is still there.
+ * `now` may hold units guessed from the buildings seen (one that trains flyers: a few of them).
+ */
+export function remember(seen: Seen, now: Seen): void {
+  for (const [t, n] of now) seen.set(t, Math.max(n, seen.get(t) ?? 0));
+}
+
+/** How sure the AI is of its read: none with nothing seen, half at CONFIDENT units, nearly all with many more. */
+export const CONFIDENT = 8;
+export function confidence(seen: Seen): number {
+  let total = 0;
+  for (const [t, n] of seen) if ((DEFS[t] as UnitDef | undefined)?.kind === 'unit' && !(DEFS[t] as UnitDef).worker) total += n;
+  return total / (total + CONFIDENT);
+}
+
+/**
+ * The army's weights turned towards the counters as far as the read is sure: the plan's own weights blended with the
+ * counter table's (both at the plan's total), by the confidence. A strategy keeps its units; only their shares move.
+ */
+export function adapt(army: [string, number][], seen: Seen, ranged = true): [string, number][] {
+  const c = confidence(seen);
+  if (!c) return army;
+  const bent = counter(army, seen, ranged);
+  const sum = (l: [string, number][]) => l.reduce((n, [, wgt]) => n + wgt, 0) || 1;
+  const [a, b] = [sum(army), sum(bent)];
+  return army.map(([t, wgt], i) => [t, (1 - c) * wgt + (c * bent[i][1] * a) / b]);
+}
+
+/**
+ * How well a unit's weapon fits the enemy as read: its mean damage over the units seen against its best, 0 against a
+ * flyer it cannot hit; 1 with nothing seen or no weapon.
+ */
+export function fitSeen(type: string, seen: Seen): number {
+  const a = (DEFS[type] as UnitDef | undefined)?.attack;
+  if (!a) return 1;
+  let total = 0;
+  let fit = 0;
+  for (const [t, n] of seen) {
+    const d = DEFS[t] as UnitDef | undefined;
+    if (!d || d.kind !== 'unit' || d.worker) continue;
+    total += n;
+    if (!reaches(a, !!d.flying)) continue;
+    fit += a.vs?.length ? (n * (a.vs[Math.max(0, CLASSES.indexOf(d.cls ?? 'BL'))] ?? 0)) / Math.max(1, ...a.vs) : n;
+  }
+  return total ? fit / total : 1;
+}
+
 /** The usual gods' order (ai.gods). */
 export const USUAL_GODS = BALANCE.ai.gods as [string, number][];
