@@ -1289,7 +1289,23 @@ export class AI {
       // Doctrine: too few and too weak against the raid, the defenders gather at the rally point (by the base's
       // defences) instead of running at it one by one as they come out.
       const weak = this.doctrine !== LEGACY && atHome.length < this.doctrine.regroup && strength(atHome) * this.doctrine.retreat < threat.strength;
-      if (ids.length && !weak) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
+      // Humans and Z: those coming from afar join a fight already lost (with them or not) only as a group: in the games
+      // of 23/11, each soldier or socle out of production went alone to the fight at the base and died there (36 Humans,
+      // 13 Z). The others wait at the rally point until they are enough (the Humans' Fortin and Tours stand there).
+      // The Humans, who keep the AI as it was, take the doctrine's numbers for this alone.
+      const grouped = !this.easy && (this.faction === FACTIONS.humains || this.faction === FACTIONS.z);
+      const [regroup, retreat] = this.doctrine === LEGACY ? [DOCTRINE.regroup, DOCTRINE.retreat] : [this.doctrine.regroup, this.doctrine.retreat];
+      const fighting = atHome.filter((u) => near(u));
+      const coming = atHome.filter((u) => ids.includes(u.id) && !near(u));
+      const hold = grouped && coming.length < regroup && (strength(fighting) + strength(coming)) * retreat < threat.strength;
+      // Humans, badly outmatched away from the rally point: everyone falls back to it, behind the Fortin and the Tours.
+      const fallBack = grouped && this.faction === FACTIONS.humains && strength(atHome) * 2 < threat.strength && dist(threat.x, threat.y, ctx.rally.x, ctx.rally.y) > 10 * FP;
+      if (fallBack || hold) {
+        const back = (fallBack ? atHome : coming).filter((u) => dist(u.x, u.y, ctx.rally.x, ctx.rally.y) > 4 * FP && !(u.order?.kind === 'move' && dist(u.order.x, u.order.y, ctx.rally.x, ctx.rally.y) < 2 * FP));
+        if (back.length) ctx.out.push({ player: this.player, kind: 'move', ids: back.map((u) => u.id), x: ctx.rally.x, y: ctx.rally.y });
+        const stay = fallBack ? [] : ids.filter((id) => !coming.some((u) => u.id === id));
+        if (stay.length) ctx.out.push({ player: this.player, kind: 'attack', ids: stay, x: threat.x, y: threat.y });
+      } else if (ids.length && !weak) ctx.out.push({ player: this.player, kind: 'attack', ids, x: threat.x, y: threat.y });
       // Doctrine: the gods at home fight a raid on the base too (left out of the army, Thor stood by while the first
       // wave killed the Nains one by one); not one badly hurt, nor one already fighting.
       if (this.doctrine.godsDefend) {
