@@ -195,7 +195,9 @@ export function owned<T extends { userData: Record<string, unknown> }>(x: T): T 
  * (jackhammer) points down and forward.
  * Static ones (robots, beasts) are plain textured meshes, already sized by normalize.py.
  */
-type Grip = 'rifle' | 'pole' | 'drill';
+/** How a held prop sits: a gun at the hip (rifle), a staff upright (pole), a jackhammer (drill), or a pole arm held in
+ * both hands, the right one back on the shaft and the left one forward (hast: the Belluaire's trident). */
+type Grip = 'rifle' | 'pole' | 'drill' | 'hast';
 export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?: Grip; basket?: boolean; shield?: string }> = {
   auxiliaire: { height: 0.86, weapon: 'fusil', grip: 'rifle' },
   serf: { height: 0.72, weapon: 'piqueur', grip: 'drill', basket: true }, // puny next to the soldiers; a wicker basket on its back
@@ -205,7 +207,7 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
-  belluaire: { height: 0.9, weapon: 'trident', grip: 'rifle' }, // its fire trident held at the hip like the launcher (aim clip)
+  belluaire: { height: 0.95, weapon: 'trident', grip: 'hast' }, // a heavy gladiator: its guard is its aim clip, its thrust its attack
   discobole: { height: 1.0 },
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
@@ -609,7 +611,7 @@ export function arm(character: Group, clips: AnimationClip[], weapon: Group, gri
   character.updateMatrixWorld(true);
   weapon.position.copy(right.getWorldPosition(new Vector3()));
   weapon.scale.setScalar(character.scale.x);
-  const aim = { rifle: left.getWorldPosition(new Vector3()), pole: weapon.position.clone().add(new Vector3(0, 1, 0.45)), drill: weapon.position.clone().add(new Vector3(0, -1, 0.35)) };
+  const aim = { rifle: left.getWorldPosition(new Vector3()), hast: left.getWorldPosition(new Vector3()), pole: weapon.position.clone().add(new Vector3(0, 1, 0.45)), drill: weapon.position.clone().add(new Vector3(0, -1, 0.35)) };
   // Its point along +Z (prop.py), in its own units, measured while it is only moved and scaled: a drilling Serf puts it
   // on the ground (units.ts, holdBit).
   weapon.updateMatrixWorld(true);

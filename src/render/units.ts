@@ -1148,6 +1148,26 @@ export class EntityRenderer {
     h.moved = true;
   }
 
+  /** A pole arm held in both hands: its shaft along the line from the right hand (back) through the left one (forward),
+   * as the guard and the thrust put them, so the points lead. */
+  private holdHast(v: View): void {
+    const m = v.model;
+    v.held ??= (() => {
+      const tool = m.getObjectByName('held');
+      const right = m.getObjectByName('RightHand');
+      return tool && right ? { tool, right, moved: false } : undefined;
+    })();
+    const h = v.held;
+    const left = m.getObjectByName('LeftHand');
+    if (!h || !left || !this.inView(v.root.position.x, v.root.position.z)) return;
+    m.updateMatrixWorld(true);
+    const r = h.right.getWorldPosition(HAND_R);
+    const ahead = left.getWorldPosition(HAND_L).sub(r).normalize();
+    h.tool.position.copy(h.tool.parent!.worldToLocal(HAND_P.copy(r)));
+    h.tool.lookAt(HAND_S.copy(r).add(ahead));
+    h.moved = true;
+  }
+
   /**
    * The left hand onto a two-handed gun's front grip, under its barrels, wherever the gun points (raised to fire, swung
    * by the walk): two-bone IK on the left arm (shoulder, elbow, wrist), the elbow kept on the side it bends to.
@@ -1235,15 +1255,24 @@ export class EntityRenderer {
         // between shots; it stands to walk.
         if (attacking) v.crouchUntil = t + 1.5;
         const down = !moving && has(CLIP.crouch) && (v.crouchUntil ?? 0) > t;
+        const hast = CHARACTERS[e.type]?.grip === 'hast';
+        // A pole arm (the Belluaire's trident): its thrust is driven by the attack's cooldown, so the lunge starts with
+        // the blow (and its flame) and it is back in guard before the next.
+        const thrust = !moving && attacking && hast && has(CLIP.attack);
         if (moving) play(v, CLIP.walk, (def.speed * GAME_SPEED) / WALK_STRIDE);
-        else play(v, down ? CLIP.crouch : CLIP.aim, 1);
+        else if (thrust) {
+          const act = v.clips!.get(CLIP.attack)!;
+          play(v, CLIP.attack, 0);
+          act.time = Math.max(0, 1 - e.cooldown / ticks(def.attack?.cooldown ?? 1)) * act.getClip().duration;
+        } else play(v, down ? CLIP.crouch : CLIP.aim, 1);
         v.model.position.y = 0;
         v.model.children[0].rotation.x = 0;
         this.pose(v, dt);
         if (moving) this.aimArms(v);
         // Crouched (or getting there), the pose's feet may hang a little: lower the body until its toes touch the ground.
         if (down || v.playing === v.clips!.get(CLIP.crouch)) this.plantFeet(v);
-        this.holdAim(v, attacking ? Math.max(0.001, (e.cooldown / ticks(def.attack?.cooldown ?? 1) - 0.8) * 5) : 0);
+        if (hast) this.holdHast(v);
+        else this.holdAim(v, attacking ? Math.max(0.001, (e.cooldown / ticks(def.attack?.cooldown ?? 1) - 0.8) * 5) : 0);
         this.leftGrip(v);
         return;
       }
