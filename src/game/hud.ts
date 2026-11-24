@@ -13,7 +13,7 @@ import { updatePanel } from './hud-panel';
 import { cancelSlot, toggleProd, updateBar, updateGroups, updateIdle, updateIdleProd, updateProd } from './hud-bar';
 import { makePinUi, place, spotAt, updateGhost } from './hud-place';
 import { leaveAlt, updateAlt } from './hud-alt';
-import { altProdClick, altProdUndo } from './hud-altprod';
+import { altProdClick, altProdTip, altProdUndo } from './hud-altprod';
 import { PoseConfirm } from './hud-pose';
 import { type Button, GRID_CODES, pressButton, pressMenu, showTip, updateCard } from './hud-card';
 
@@ -201,17 +201,20 @@ export class Hud {
     this.tip.hidden = true;
     document.body.append(this.tip);
     let tipTimer = 0;
-    this.card.addEventListener('pointerover', (e) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('.cmd');
-      if (!el || e.pointerType === 'touch') return;
-      clearTimeout(tipTimer);
-      tipTimer = window.setTimeout(() => showTip(this, el), 80);
-    });
-    this.card.addEventListener('pointerout', (e) => {
-      if ((e.relatedTarget as HTMLElement | null)?.closest('.cmd') === (e.target as HTMLElement).closest('.cmd')) return;
-      clearTimeout(tipTimer);
-      this.tip.hidden = true;
-    });
+    // The same over a unit to make in the alternative interface's production column (the user's choice of 2026-11-24).
+    for (const [root, sel] of [[this.card, '.cmd'], [this.prodList, '.make']] as const) {
+      root.addEventListener('pointerover', (e) => {
+        const el = (e.target as HTMLElement).closest<HTMLElement>(sel);
+        if (!el || e.pointerType === 'touch') return;
+        clearTimeout(tipTimer);
+        tipTimer = window.setTimeout(() => (root === this.card ? showTip(this, el) : altProdTip(this, el)), 80);
+      });
+      root.addEventListener('pointerout', (e) => {
+        if ((e.relatedTarget as HTMLElement | null)?.closest(sel) === (e.target as HTMLElement).closest(sel)) return;
+        clearTimeout(tipTimer);
+        this.tip.hidden = true;
+      });
+    }
     this.menu.hidden = true;
     document.body.append(this.menu);
     // A finger has no hover: a long press shows the tooltip (and presses nothing); a short one presses on release.

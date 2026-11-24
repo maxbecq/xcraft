@@ -11,10 +11,10 @@ import { FP, ticks } from '../sim/fixed';
 import type { Entity } from '../sim/world';
 import { img } from './glyphs';
 import type { Hud } from './hud';
+import { showTip } from './hud-card';
 
 const KEY = 'alt:';
 const afford = (p: { minerals: number; energy: number }, c: Cost) => p.minerals >= c.minerals && p.energy >= c.energy;
-const price = (c: Cost) => `${c.minerals ? `◆ ${c.minerals}` : ''}${c.minerals && c.energy ? ' ' : ''}${c.energy ? `⚡ ${c.energy}` : ''}`;
 
 /** Our producers, finished, by kind (in a fixed order). */
 function kinds(h: Hud): [string, Entity[]][] {
@@ -37,6 +37,7 @@ export function updateAltProd(h: Hud): void {
   const key = KEY + list.map(({ type, es, can }) => `${type}:${es.map((e) => `${e.id}=${e.queue.join(',')}`).join(';')}:${can.map((t) => t + afford(p, (DEFS[t] as UnitDef).cost)).join(',')}`).join('|');
   if (key !== h.prodKey) {
     h.prodKey = key;
+    h.tip.hidden = true; // its button may be gone
     h.prodList.innerHTML = list.length
       ? list
           .map(({ type, es, can }) => {
@@ -45,7 +46,7 @@ export function updateAltProd(h: Hud): void {
               .map((t) => {
                 const d = DEFS[t] as UnitDef;
                 const off = afford(p, d.cost) ? '' : ' off';
-                return `<button class="make${off}" data-train="${t}" data-ids="${ids}" title="${d.name} · ${price(d.cost)} · ${d.buildTime} s. Clic : en produire un ; clic droit : retirer le dernier en file">${img(t, d.name)}</button>`;
+                return `<button class="make${off}" data-train="${t}" data-ids="${ids}">${img(t, d.name)}</button>`;
               })
               .join('');
             const queue = es
@@ -70,6 +71,13 @@ export function updateAltProd(h: Hud): void {
     const busy = ids.map((id) => h.world.entities.get(id)).filter((e): e is Entity => !!e?.queue.length);
     if (busy.length) left.textContent = `${Math.ceil(Math.min(...busy.map((e) => e.trainLeft)) / ticks(1))} s`;
   }
+}
+
+/** The pointer over a unit to make: the command card's tooltip for it (name, cost, what it is). */
+export function altProdTip(h: Hud, make: HTMLElement): void {
+  const t = make.dataset.train!;
+  const d = DEFS[t] as UnitDef;
+  showTip(h, make, { label: d.name, key: '', type: t, cost: d.cost, action: () => {} });
 }
 
 const idsOf = (el: HTMLElement) => (el.dataset.ids ?? '').split(',').map(Number).filter(Boolean);

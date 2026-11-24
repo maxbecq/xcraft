@@ -521,14 +521,14 @@ export function pressMenu(h: Hud, b: Button): void {
   b.action();
 }
 
-/** Fills and places the tooltip above a command button. */
-export function showTip(h: Hud, button: HTMLElement): void {
+/** Fills and places the tooltip above a command button (or another button, `given` saying what it does). */
+export function showTip(h: Hud, button: HTMLElement, given?: Button): void {
   // A command, or a weapon in the socle's menu.
-  const b = button.dataset.wkey ? h.menuItems.find((x) => x.key === button.dataset.wkey) : h.buttons.find((x) => x.key === button.dataset.key);
+  const b = given ?? (button.dataset.wkey ? h.menuItems.find((x) => x.key === button.dataset.wkey) : h.buttons.find((x) => x.key === button.dataset.key));
   if (!b) return;
   const d = DEFS[b.type ?? b.icon ?? ''] as UnitDef | BuildingDef | UpgradeDef | undefined;
   const p = h.world.players[h.player];
-  const lines: string[] = [`${b.weapon ? weaponIcon(b.weapon) : ''}<b>${b.label}</b> <kbd>${keyLabel(h, b)}</kbd>`];
+  const lines: string[] = [`${b.weapon ? weaponIcon(b.weapon) : ''}<b>${b.label}</b>${b.key ? ` <kbd>${keyLabel(h, b)}</kbd>` : ''}`];
   if (b.cost) {
     const parts = [b.cost.minerals ? `◆ ${b.cost.minerals} minerai` : '', b.cost.energy ? `⚡ ${b.cost.energy} énergie` : ''];
     if (d?.kind === 'unit') parts.push(`⌂ ${d.supply} logistique`);
@@ -555,7 +555,8 @@ export function showTip(h: Hud, button: HTMLElement): void {
   const r = button.getBoundingClientRect();
   const w = h.tip.offsetWidth;
   h.tip.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
-  h.tip.style.top = `${r.top - h.tip.offsetHeight - 8}px`;
+  const top = r.top - h.tip.offsetHeight - 8;
+  h.tip.style.top = `${top < 6 ? r.bottom + 8 : top}px`; // under it when there is no room above (the queues' column)
 }
 
 function afford(p: { minerals: number; energy: number }, c: Cost): boolean {
