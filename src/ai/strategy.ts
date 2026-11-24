@@ -27,6 +27,11 @@ export interface Strategy {
   research?: string[];
   /** Buildings wanted on top of the usual ones: [type, from minute]. */
   extra?: [string, number][];
+  /**
+   * The minute (game clock) the natural is taken and saved for, as an opening in StarCraft: early for the strategies
+   * that strike late, late for those that strike early (EXPAND_MINUTE when absent).
+   */
+  expandMinute?: number;
   /** No wave before this minute (defence aside), its size and growth per wave (the plan's when absent). */
   attackMinute?: number;
   wave?: number;
@@ -79,6 +84,8 @@ export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris', 'z'];
 export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0, researchHosts: 3, counterRanged: false };
 
 const USUAL: Strategy = { id: 'classique', name: 'Classique' };
+/** The natural's minute (game clock) of a strategy that names none, the usual one included. */
+export const EXPAND_MINUTE = 5;
 
 export const STRATEGIES: Record<Faction, Strategy[]> = {
   dieux: [
@@ -89,6 +96,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       gods: [['thor', 0], ['seth', 3], ['odin', 6], ['athena', 9], ['frigg', 12], ['isis', 18], ['hades', 20], ['osiris', 22], ['apollon', 24]],
       army: { nain: 4, drake: 2, corbeau: 1, walkyrie: 2, sphinx: 1 },
       research: ['dmelee1', 'darmor1', 'offrandes', 'dranged1', 'dmelee2'],
+      expandMinute: 5,
       attackMinute: 6,
       wave: 8,
       waveGrowth: 4,
@@ -100,6 +108,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       gods: [['thor', 0], ['apollon', 3], ['seth', 5], ['athena', 7], ['odin', 10], ['hades', 12], ['isis', 18], ['osiris', 20], ['frigg', 22]],
       army: { minotaure: 3, elembase: 3, titan: 2, nain: 2 },
       research: ['dmelee1', 'darmor1', 'celerite', 'dmelee2', 'darmor2'],
+      expandMinute: 4,
       attackMinute: 8,
       wave: 10,
       waveGrowth: 4,
@@ -111,6 +120,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       gods: [['thor', 0], ['seth', 2], ['apollon', 5], ['isis', 7], ['odin', 9], ['osiris', 11], ['athena', 18], ['hades', 20], ['frigg', 22]],
       army: { sphinx: 3, pretresse: 2, immortel: 2, nain: 2, minotaure: 1 },
       research: ['dranged1', 'darmor1', 'offrandes', 'dranged2', 'darmor2'],
+      expandMinute: 3,
       attackMinute: 9,
       wave: 12,
       waveGrowth: 4,
@@ -120,6 +130,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       name: 'Panthéon',
       // The usual gods' order, the whole arsenal in the army.
       army: { nain: 3, minotaure: 2, sphinx: 2, elembase: 2, drake: 1, pretresse: 1, corbeau: 1, walkyrie: 1, titan: 1, immortel: 1 },
+      expandMinute: 4,
       attackMinute: 7,
     },
   ],
@@ -131,6 +142,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { archer: 5, creature: 2, druide: 2 },
       research: ['portailatk1', 'portailarmor1', 'portailatk2', 'deflagration'],
       extensionMinute: 3,
+      expandMinute: 4,
       attackMinute: 7,
     },
     {
@@ -141,6 +153,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { creature: 4, archer: 3, druide: 1 },
       research: ['portailatk1', 'enfouissement', 'portailarmor1', 'portailatk2'],
       extensionMinute: 4,
+      expandMinute: 5,
       attackMinute: 6,
       wave: 10,
     },
@@ -151,6 +164,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { druide: 3, archer: 3, creature: 2 },
       research: ['deflagration', 'portailatk1', 'portailarmor1', 'silence', 'portailatk2'],
       extensionMinute: 3,
+      expandMinute: 3,
       attackMinute: 8,
       wave: 10,
     },
@@ -165,6 +179,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { hexapode: 4, quadripode: 2 },
       later: { octopode: 2 },
       research: ['lanceroquettes', 'rhexapode', 'rhexapode2', 'zdist1', 'roctopode'],
+      expandMinute: 3,
       attackMinute: 10,
       wave: 16,
     },
@@ -177,6 +192,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { hexapode: 3, quadripode: 2 },
       later: { octopode: 2, mastodonte: 2 },
       research: ['rhexapode', 'lanceroquettes', 'zblindage1', 'rhexapode2', 'rmastodonte', 'roctopode'],
+      expandMinute: 3.5,
       attackMinute: 9,
       wave: 14,
     },
@@ -188,6 +204,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       army: { hexapode: 3, quadripode: 2 },
       later: { octopode: 2, mastodonte: 2 },
       research: ['zblindage1', 'rhexapode', 'lanceroquettes', 'zblindage2', 'rmastodonte', 'roctopode'],
+      expandMinute: 2.5,
       attackMinute: 11,
       wave: 18,
     },
@@ -199,6 +216,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       // Légionnaires for half the infantry, melee research first, an early strike.
       legionShare: 0.5,
       research: ['melee1', 'armor1', 'ranged1', 'melee2'],
+      expandMinute: 6,
       attackMinute: 5,
     },
     {
@@ -207,6 +225,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       // The Auxiliaires' line with more Soigneurs, armour and range researched first, one bigger wave later.
       healerEvery: 3,
       research: ['armor1', 'ranged1', 'armor2', 'ranged2'],
+      expandMinute: 3.5,
       attackMinute: 8,
       wave: 14,
     },
@@ -216,6 +235,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       // The Créaturium early for its saurians and Belluaires, behind the usual infantry.
       techMinute: 5,
       research: ['ranged1', 'armor1', 'croissance', 'melee1'],
+      expandMinute: 4.5,
       attackMinute: 7,
       wave: 12,
     },

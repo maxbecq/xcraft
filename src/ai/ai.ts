@@ -2,7 +2,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, spell, KIT, type BuildingDef, CLASSE
 import BALANCE from '../balance.json';
 import { FP, dist, ticks, toFp } from '../sim/fixed';
 import { expansions, startSite } from '../sim/setup';
-import { adapt, armyOf, confidence, DOCTRINE, ON_BY_DEFAULT, type Doctrine, fitSeen, hash, LEGACY, pickStrategy, remember, type Seen, type Strategy, USUAL_GODS } from './strategy';
+import { adapt, armyOf, confidence, DOCTRINE, EXPAND_MINUTE, ON_BY_DEFAULT, type Doctrine, fitSeen, hash, LEGACY, pickStrategy, remember, type Seen, type Strategy, USUAL_GODS } from './strategy';
 import { type Command, type Entity, type World, REPAIR, flies } from '../sim/world';
 
 /** How the AI plays; numbers are counts unless noted. */
@@ -57,6 +57,10 @@ const MAX_BASES = 4;
 const EXPAND_EVERY = 5;
 /** Build orders on one spot before the AI gives it up (its workers never got there). */
 const MAX_TRIES = 3;
+/** Fields, the nearest by the straight line, whose road from an idle worker is weighed (closestField). */
+const FIELDS_WEIGHED = 6;
+/** Minutes (game clock) the natural is saved for with the army out, from the strategy's minute (need). */
+const NATURAL_SAVING = 2;
 /** Each team's target base (building id, by team), shared by its AIs (by world). */
 const focuses = new WeakMap<World, Map<number, number>>();
 export const teamFocus = (w: World) => focuses.get(w) ?? focuses.set(w, new Map()).get(w)!;
@@ -461,13 +465,20 @@ export class AI {
       // safe one, if any.
       const target = s.order?.kind === 'gather' ? w0.entities.get(s.order.target) : undefined;
       if (target && guarded(target, s) && s.carry === 0) {
-        const safe = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
+        const safe = this.closestField(s, bases, (e) => !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
         // None safe left: it stops rather than walk under the guns.
         ctx.out.push(safe ? { player: this.player, kind: 'smart', ids: [s.id], x: safe.x, y: safe.y, target: safe.id } : { player: this.player, kind: 'stop', ids: [s.id] });
         continue;
       }
+      // One going to a field far from every finished base (the simulation's own pick when its field ran out, by the
+      // straight line: over the main's cliff to the expansion's minerals, no Conseil there) mines by a base instead.
+      if (target && s.order?.kind === 'gather' && s.order.phase === 'go' && s.carry === 0 && bases.length && !this.byBase(target, bases)) {
+        const by = this.closestField(s, bases, (e) => !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
+        if (by) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: by.x, y: by.y, target: by.id });
+        continue;
+      }
       if (s.order) continue;
-      const f = this.nearest(s, (e) => e.type === 'minerai' && !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
+      const f = this.closestField(s, bases, (e) => !this.failed.get(s.id)?.has(e.id) && !guarded(e, s));
       if (f) ctx.out.push({ player: this.player, kind: 'smart', ids: [s.id], x: f.x, y: f.y, target: f.id });
     }
 
@@ -635,20 +646,31 @@ export class AI {
     const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
     // Every base, a headquarters turned into another included (the Z Intelligence suprême was not counted).
     const councils = buildings.filter((b) => this.isBase(b)).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
-    const firstAt = this.hard ? LEVELS.hard.expandMinute : this.easy ? LEVELS.easy.expandMinute : f.gods && this.doctrine.dieuxExpand ? this.doctrine.dieuxExpand : 7;
+    // The natural at the strategy's minute, an opening as in StarCraft (strategy.ts): the easy AI late, the hard one a
+    // minute sooner.
+    const opening = this.strategy.expandMinute ?? EXPAND_MINUTE;
+    const firstAt = this.easy ? LEVELS.easy.expandMinute : this.hard ? Math.max(2, opening - 1) : opening;
     // Rich Dieux go for their natural early; the bases after it come at the usual pace (taking every free base as soon
     // as the bank passed 800 spread them thin: on Origine with a third base they lost 31 of 32 games to the Isdaris).
     // Dieux sitting on 1200 minerals take their natural at once: their energy, one Puits a base, held back their gods.
-    // Any camp sitting on 800 minerals takes its natural then, not at minute 7 (the Isdaris kept 1500 at 4:00 in the
-    // games of 23/11, 16 workers on one base).
-    const floating = !this.easy && p.minerals > 800;
+    // Any camp sitting on a bank half as much again as the natural's price takes it then (the Isdaris kept 1500 at 4:00
+    // in the games of 23/11, 16 workers on one base).
+    // Its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the bank never
+    // reached it).
+    const outpostDef = DEFS[outpost] as BuildingDef;
+    const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
+    // A safety net only, the opening's minute being the rule: half as much again as the natural's price in the bank.
+    const floating = !this.easy && p.minerals > (outpostPrice * 3) / 2;
     const due = councils < 2 ? w.tick > ticks(firstAt * 60) || this.fieldsLeft(home) < 5 || (rich && p.minerals > 1200) || floating : minute >= firstAt + EXPAND_EVERY * (councils - 1) || this.fieldsNear(buildings) < 6;
     // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
     // the last fields were at the expansion).
-    const expand = councils < MAX_BASES && (serfs.length >= this.plan.serfs || rich || (floating && councils < 2) || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
+    // The natural at its minute whatever the workers (an opening); the bases after it with the plan's workers.
+    const expand = councils < MAX_BASES && (councils < 2 || serfs.length >= this.plan.serfs || rich || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
     // Humans with energy unspent (up to 966 in the games of 23/11, no Soigneur): the Alchimisterie now, for them.
     if (f === FACTIONS.humains && !this.easy && p.energy >= 400 && count('alchimisterie') === 0 && !building('alchimisterie') && !w.lacks(this.player, 'alchimisterie')) wants.push('alchimisterie');
-    if (expand) wants.push(outpost);
+    // In its opening's window, the natural comes before the other buildings, supply short aside (the Humains' casernes
+    // and Greniers took the bank first: their Conseil came at 7:01, the window's end).
+    if (expand) wants.splice(councils < 2 && minute < firstAt + NATURAL_SAVING ? (supplyShort ? wants.indexOf(f.supply) + 1 : 0) : wants.length, 0, outpost);
     // Save up for the expansion once the base is defended.
     // Only while minerals come in: with none, the units stayed home for an expansion it could never pay.
     // No base at all, a worker to raise it or a site rising by itself (a Conseil's site with its last serf killed never
@@ -656,17 +678,18 @@ export class AI {
     // spot for it or its site begun (its last minerals, the next worker's price, went into research
     // while it rose): its price is kept from everything (spent while its builder came out of an Assimilateur, the
     // headquarters could not be paid any more).
-    // Up to its price as its builder pays it (an Isdaris robot 1330, a third more: saving stopped at 1000, and the
-    // bank never reached it).
-    const outpostDef = DEFS[outpost] as BuildingDef;
-    const outpostPrice = Math.max(1000, (outpostDef.faction === 'isdaris' ? w.beaconCost(outpostDef) : outpostDef.cost).minerals);
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= 8 && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    // Up to its price as its builder pays it.
+    // The natural is saved for even with the army out, for NATURAL_SAVING minutes from its minute (an opening: the
+    // Humains' waves left, the eight soldiers at home it waited for never were, and their Conseil came in 15 games of
+    // 24), not with the base under attack; after that, and for the bases after it, with eight soldiers at home.
+    const opened = councils < 2 && minute < firstAt + NATURAL_SAVING && !this.homeThreat;
+    const saving = (expand && (opened || army.filter((u) => !this.wave.has(u.id)).length >= 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     // Saving for the expansion: no production building for floating minerals (the Isdaris spent 1 150 on a fifth Portail
     // at 7:17, their natural, 1 330 by robot, never came and their main ran dry at 8:00, the game lost).
     // Not the Z: their third Plate-forme so held, they fell from 53 to 45 wins in 96 against the 0.9.147 AI.
     if (saving && expand && floatBarracks && f !== FACTIONS.z && wants.includes(f.barracks)) wants.splice(wants.indexOf(f.barracks), 1);
     if (moreEnergy && f !== FACTIONS.isdaris && ctx.minerals >= (DEFS[f.extractor] as BuildingDef).cost.minerals + 200) wants.push(f.extractor);
-    return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving };
+    return { wants, supplyShort, building, moreEnergy, techWanted, techDef, techUp, unlocked, firstTech, nextExtension, outpost, saving, opening: expand && opened && saving };
   }
 
   /** Energy (and minerals) kept back from cheaper spending for the tech, its units and the next research. */
@@ -738,7 +761,7 @@ export class AI {
 
   /** Wanted buildings: add-ons on their hosts, the rest by a builder, while the bank allows. */
   private place(ctx: Turn): void {
-    const { w, f, home, builders, buildings, wants, building, outpost } = ctx;
+    const { w, f, home, builders, buildings, wants, building, outpost, opening } = ctx;
     // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
     for (const b of buildings) this.tried.delete(spotKey(b.tx, b.ty, (b.def as BuildingDef).size));
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
@@ -771,7 +794,8 @@ export class AI {
       const def = DEFS[type] as BuildingDef;
       if (def.addon) continue;
       if (ctx.minerals < def.cost.minerals) {
-        if (type === outpost) continue;
+        // The natural in its opening's window is saved for: nothing after it takes the bank.
+        if (type === outpost && !opening) continue;
         // Supply short: its price is saved from the units and research too (the Z Plates-formes spent every mineral as
         // it came, and the next Pod, at 300, came four minutes late, supply full).
         // Only while minerals come in: with none left, what is in the bank goes into units that fit.
@@ -784,7 +808,12 @@ export class AI {
       // Isdaris (fiche 2010, mod): an Obélisque at rest materialises it, on a spot its side sees; the robots only beam
       // down Obélisques and Récepteurs, for a third more, where no Obélisque can.
       const obelisk = buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id));
-      if (obelisk && spot && w.vision[this.player].visible(spot[0] + (def.size >> 1), spot[1] + (def.size >> 1))) {
+      // Its middle seen: any of its middle tiles (one tile, or four for an even size: the one below and right of the
+      // middle alone was another tile from the other corners, and the same game went otherwise there).
+      const lo = (def.size - 1) >> 1;
+      const hi = def.size >> 1;
+      const seen = !!spot && [lo, hi].some((dx) => [lo, hi].some((dy) => w.vision[this.player].visible(spot[0] + dx, spot[1] + dy)));
+      if (obelisk && spot && seen) {
         ctx.out.push({ player: this.player, kind: 'build', ids: [obelisk.id], type, tx: spot[0], ty: spot[1] });
         beamed.add(obelisk.id); // one per Obélisque and think
         ctx.minerals -= def.cost.minerals;
@@ -2300,6 +2329,39 @@ export class AI {
   /** Workers wanted: the plan's number per base, up to three. */
   private serfTarget(ctx: Survey): number {
     return this.plan.serfs * Math.min(3, ctx.buildings.filter((b) => this.isBase(b) && b.buildLeft === 0).length);
+  }
+
+  /** A field within the simulation's reach (12 tiles) of a finished base of ours. */
+  private byBase(field: Entity, bases: Entity[]): boolean {
+    return bases.some((b) => dist(b.x, b.y, field.x, field.y) < 12 * FP);
+  }
+
+  /**
+   * The field a worker goes to mine: by a finished base only, the shortest by the road from the worker, not by the
+   * straight line (a serf done with a Forge below the main's cliff went to the expansion's minerals, 14 tiles as the crow
+   * flies against 15 for the main's, 23 by the road from its Conseil, none built there; replay of 24/11, tick 3820). The
+   * road weighed for the few nearest by the straight line. No finished base: the nearest by the straight line, as before.
+   */
+  private closestField(s: Entity, bases: Entity[], ok: (e: Entity) => boolean): Entity | undefined {
+    if (!bases.length) return this.nearest(s, (e) => e.type === 'minerai' && ok(e));
+    const w = this.world;
+    const g = w.grid;
+    const near = [...w.entities.values()]
+      .filter((e) => e.type === 'minerai' && e.amount > 0 && this.byBase(e, bases) && ok(e))
+      .sort((a, b) => dist(s.x, s.y, a.x, a.y) - dist(s.x, s.y, b.x, b.y) || a.id - b.id)
+      .slice(0, FIELDS_WEIGHED);
+    if (near.length < 2) return near[0];
+    const [sx, sy] = g.nearestOpen(Math.floor(s.x / FP), Math.floor(s.y / FP), -1, [(g.width - 1) / 2, (g.height - 1) / 2]);
+    let best = near[0];
+    let bestD = Infinity;
+    for (const e of near) {
+      const [fx, fy] = g.nearestOpen(Math.floor(e.x / FP), Math.floor(e.y / FP), -1, [sx, sy]);
+      const path = sx === fx && sy === fy ? [] : g.findPath(sx, sy, fx, fy);
+      // A road that ends short of the field (no way there) counts as none.
+      const d = sx === fx && sy === fy ? 0 : path.length && path[path.length - 1] === fy * g.width + fx ? path.length : Infinity;
+      if (d < bestD) [best, bestD] = [e, d];
+    }
+    return best;
   }
 
   private nearest(from: Entity, test: (e: Entity) => boolean): Entity | undefined {
