@@ -4,7 +4,7 @@ import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
 import { fogMaterial } from '../terrain';
-import { LAND_S } from './units';
+import { LAND_S, SPOOL_S } from './units';
 
 /** Texture size in pixels, and the world tiles one repeat covers. */
 const S = 512;
@@ -105,8 +105,8 @@ function cobbles(relief: boolean): [CanvasTexture, CanvasTexture | null] {
  * when their buildings change.
  */
 /** A Caserne volante's paving spreads from its middle to its rim once it is down (LAND_S after the simulation sets
- * it down), and shrinks away as it takes off, in GROW_S. */
-const GROW_S = 0.8;
+ * it down), and shrinks away once it leaves the ground (after its rotors spool up, SPOOL_S), slowly, in GROW_S. */
+const GROW_S = 2;
 
 export class Paving {
   private readonly root = new Group();
@@ -126,14 +126,15 @@ export class Paving {
     for (const e of world.entities.values()) {
       const before = this.was.get(e.id);
       if (before === 'casernevol' && e.type === 'casernevolante') this.grow.set(e.id, { kind: 'in', t0: now + LAND_S, e });
-      if (before === 'casernevolante' && e.type === 'casernevol') this.grow.set(e.id, { kind: 'out', t0: now, e: { ...e, type: 'casernevolante', def: DEFS.casernevolante } as Entity });
+      if (before === 'casernevolante' && e.type === 'casernevol') this.grow.set(e.id, { kind: 'out', t0: now + SPOOL_S, e: { ...e, type: 'casernevolante', def: DEFS.casernevolante } as Entity });
       if (e.type === 'casernevol' || e.type === 'casernevolante') this.was.set(e.id, e.type);
     }
     // How much of each paving shows: 0 none, 1 all of it.
     const share = new Map<number, number>();
     for (const [id, g] of this.grow) {
       const k = Math.max(0, Math.min(1, (now - g.t0) / GROW_S));
-      share.set(id, g.kind === 'in' ? k * (2 - k) : 1 - k * k);
+      const soft = k * k * (3 - 2 * k); // eased at both ends
+      share.set(id, g.kind === 'in' ? soft : 1 - soft);
       if (k >= 1) this.grow.delete(id);
     }
     const built = [...world.entities.values()].filter((e) => e.def.kind === 'building' && e.buildLeft <= 0 && (e.def as BuildingDef).faction === 'humains' && sees(e));

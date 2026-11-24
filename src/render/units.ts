@@ -156,7 +156,7 @@ const RING_CLIFF = 0.6;
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
 /** A Caserne volante's take-off in the render (s): its rotors spool up on the spot, then it climbs. */
-const SPOOL_S = 1;
+export const SPOOL_S = 1;
 const CLIMB_S = 2;
 /** Its descent to the ground when it lands (s); it then settles a moment. Its paving spreads after it (paving.ts). */
 export const LAND_S = 1.8;
