@@ -3,14 +3,30 @@ import { type BuildingDef, DEFS, FACTIONS } from '../data';
 import { ticks } from '../sim/fixed';
 import { img } from './glyphs';
 import { updateAltProd } from './hud-altprod';
+import { TEAM_COLORS } from '../render/models';
 import type { Hud } from './hud';
+import { followed } from './hud-side';
 
-/** The resource bar: the clock, both resources and the supply. */
+/** The resource bar: the clock, both resources and the supply; a spectator's says whose. */
 export function updateBar(h: Hud): void {
-  const p = h.world.players[h.player];
-  const s = h.world.supply(h.player);
+  const o = followed(h);
+  if (o !== h.shown) {
+    h.shown = o;
+    // The chips' icons are the side's own: drawn again.
+    for (const chip of [h.idle, h.idleProd, h.prodToggle]) chip.innerHTML = '';
+    h.idleCount = h.idleProdCount = Infinity; // redrawn, without a flash
+    h.bar.innerHTML = '';
+  }
+  const p = h.world.players[o];
+  const s = h.world.supply(o);
   const secs = Math.floor((h.world.tick / ticks(60)) * 60);
-  if (!h.bar.children.length) h.bar.innerHTML = '<span class="res clock">-</span><span class="res min"><i></i>-</span><span class="res nrg"><i></i>-</span><span class="res sup"><i></i>-</span>';
+  if (!h.bar.children.length) {
+    h.bar.innerHTML = '<span class="res clock">-</span><span class="res min"><i></i>-</span><span class="res nrg"><i></i>-</span><span class="res sup"><i></i>-</span>';
+    const color = h.spectator ? `#${(TEAM_COLORS[o] ?? 0xffffff).toString(16).padStart(6, '0')}` : '';
+    h.bar.classList.toggle('watched', !!color);
+    h.bar.style.setProperty('--side', color);
+    if (color) h.bar.insertAdjacentHTML('beforeend', `<span class="res side"><i></i>${FACTIONS[p.faction].name} · ${o + 1}</span>`);
+  }
   const [clock, min, nrg, sup] = h.bar.children as HTMLCollectionOf<HTMLElement>;
   // Written only when it changes: the clock once a second, not at every call.
   write(clock.lastChild!, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
@@ -41,7 +57,7 @@ export function toggleProd(h: Hud): void {
 
 /** The production panel: rows rebuilt when a queue changes, progress bars moved every frame. */
 export function updateProd(h: Hud): void {
-  if (!h.prodToggle.firstChild) h.prodToggle.innerHTML = `${img(FACTIONS[h.world.players[h.player].faction].barracks, '')}<b>≡</b>`;
+  if (!h.prodToggle.firstChild) h.prodToggle.innerHTML = `${img(FACTIONS[h.world.players[h.shown].faction].barracks, '')}<b>≡</b>`;
   if (h.alt) return updateAltProd(h);
   if (h.prod.hidden) return;
   const producers = [...h.world.entities.values()]
@@ -91,9 +107,9 @@ export function updateGroups(h: Hud): void {
 }
 
 export function updateIdle(h: Hud): void {
-  const n = h.input.idleWorkers().length;
+  const n = h.input.idleWorkers(h.shown).length;
   if (n === h.idleCount) return;
-  if (!h.idle.firstChild) h.idle.innerHTML = `${img(FACTIONS[h.world.players[h.player].faction].worker, '')}<b></b>`;
+  if (!h.idle.firstChild) h.idle.innerHTML = `${img(FACTIONS[h.world.players[h.shown].faction].worker, '')}<b></b>`;
   h.idle.lastChild!.textContent = String(n);
   h.idle.hidden = n === 0;
   if (n > h.idleCount) {
@@ -106,9 +122,9 @@ export function updateIdle(h: Hud): void {
 
 /** The idle-production chip: how many production buildings stand with an empty queue. */
 export function updateIdleProd(h: Hud): void {
-  const p = h.input.idleProducers().length;
+  const p = h.input.idleProducers(h.shown).length;
   if (p !== h.idleProdCount) {
-    if (!h.idleProd.firstChild) h.idleProd.innerHTML = `${img(FACTIONS[h.world.players[h.player].faction].barracks, '')}<b></b>`;
+    if (!h.idleProd.firstChild) h.idleProd.innerHTML = `${img(FACTIONS[h.world.players[h.shown].faction].barracks, '')}<b></b>`;
     h.idleProd.lastChild!.textContent = String(p);
     h.idleProd.hidden = p === 0;
     if (p > h.idleProdCount) {

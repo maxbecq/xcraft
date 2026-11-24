@@ -48,6 +48,8 @@ export class Hud {
   /** Idle workers: their count on a button in the top bar (hidden at none); it flashes as one more stops. */
   readonly idle = el('button', 'chip idle-workers');
   idleCount = 0;
+  /** The side the top bar shows: ours; a spectator's follows the selection (hud-bar.ts, followed). */
+  shown = 0;
   /** Production buildings with an empty queue: a click goes through them one by one. */
   readonly idleProd = el('button', 'chip idle-prod');
   idleProdCount = 0;
@@ -140,10 +142,10 @@ export class Hud {
     this.banner.hidden = true;
     this.idle.hidden = true;
     this.idle.title = 'Ouvriers inactifs : les sélectionner';
-    this.idle.addEventListener('click', () => this.input.selectIdleWorkers());
+    this.idle.addEventListener('click', () => this.input.selectIdleWorkers(this.shown));
     this.idleProd.title = 'Production à l’arrêt : passer les bâtiments en revue';
     this.idleProd.hidden = true;
-    this.idleProd.addEventListener('click', () => this.input.selectIdleProducer());
+    this.idleProd.addEventListener('click', () => this.input.selectIdleProducer(this.shown));
     this.prodToggle.title = 'Production (F3) : toutes les files d’un coup d’œil';
     this.prodToggle.hidden = spectator;
     this.prodToggle.addEventListener('click', () => toggleProd(this));
@@ -465,8 +467,11 @@ export class Hud {
   update(): void {
     const fresh = this.world.tick !== this.shownTick;
     this.shownTick = this.world.tick;
-    this.selKey = [...this.input.selected].join();
-    if (fresh) {
+    const sel = [...this.input.selected].join();
+    const picked = sel !== this.selKey;
+    this.selKey = sel;
+    // A spectator's bar follows the side picked, at once (a paused replay has no tick to wait for).
+    if (fresh || (picked && this.spectator)) {
       updateBar(this);
       updateIdle(this);
       updateIdleProd(this);

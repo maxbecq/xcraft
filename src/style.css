@@ -113,6 +113,10 @@ body[class] .cmd:not(.has-icon) small { white-space: nowrap; font-size: 10px; le
 .res.sup { color: #ffe3a6; }
 .res.sup.full { color: #ff7a6a; }
 .res.clock { color: #cfc6b0; }
+/* A spectator's bar: whose resources, in that side's colour (hud-bar.ts). */
+.hud-bar.watched { border-color: var(--side); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), inset 0 -3px 0 var(--side); }
+.res.side { color: var(--side); }
+.res.side i { border-radius: 50%; background: var(--side); }
 
 /* Messages stack over the command card, at the right, newest at the bottom, each with a sign of its kind:
    refused (amber), done (green), under attack (red, a click goes there). The centre stays on the fight. */

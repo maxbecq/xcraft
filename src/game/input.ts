@@ -527,23 +527,23 @@ export class Input {
     }
   }
 
-  /** Own workers with nothing to do (those sheltering in a bunker are busy). */
-  idleWorkers(): Entity[] {
-    return [...this.world.entities.values()].filter((e) => e.owner === this.player && (e.def as { worker?: boolean }).worker && !e.order && !e.inside);
+  /** Workers with nothing to do, ours (or the watched side's) (those sheltering in a bunker are busy). */
+  idleWorkers(owner = this.player): Entity[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === owner && (e.def as { worker?: boolean }).worker && !e.order && !e.inside);
   }
 
   private idleTurn = 0;
 
   /** Own finished buildings that train units and have nothing in their queue. */
-  idleProducers(): Entity[] {
-    return [...this.world.entities.values()].filter((e) => e.owner === this.player && e.def.kind === 'building' && e.buildLeft === 0 && !!(e.def as BuildingDef).trains?.length && !e.queue.length);
+  idleProducers(owner = this.player): Entity[] {
+    return [...this.world.entities.values()].filter((e) => e.owner === owner && e.def.kind === 'building' && e.buildLeft === 0 && !!(e.def as BuildingDef).trains?.length && !e.queue.length);
   }
 
   private idleProdTurn = 0;
 
   /** Selects the next idle production building in turn and centres the view on it. */
-  selectIdleProducer(): void {
-    const idle = this.idleProducers();
+  selectIdleProducer(owner = this.player): void {
+    const idle = this.idleProducers(owner);
     if (!idle.length) return;
     const e = idle[this.idleProdTurn++ % idle.length];
     this.selected.clear();
@@ -552,8 +552,8 @@ export class Input {
   }
 
   /** Selects every idle worker and centres the view on the next one in turn (the idle-workers button). */
-  selectIdleWorkers(): void {
-    const idle = this.idleWorkers();
+  selectIdleWorkers(owner = this.player): void {
+    const idle = this.idleWorkers(owner);
     if (!idle.length) return;
     this.selected.clear();
     for (const e of idle) this.selected.add(e.id);
