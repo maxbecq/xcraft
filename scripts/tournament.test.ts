@@ -16,6 +16,8 @@ import { createMatch } from '../src/sim/setup';
 it.skipIf(!process.env.TOURNEY)('tournament', async () => {
   // TOURNEY_BASE=1: the opponents, and the camp « avant », play a frozen copy of an earlier AI (src/ai/v143, not in git)
   // instead of the legacy doctrine.
+  // TOURNEY_AFTER_PATH: « après » plays that copy of the AI instead (several candidates side by side).
+  const After: typeof AI = process.env.TOURNEY_AFTER_PATH ? ((await import(/* @vite-ignore */ process.env.TOURNEY_AFTER_PATH)).AI as typeof AI) : AI;
   const Base: typeof AI = process.env.TOURNEY_BASE ? ((await import(/* @vite-ignore */ process.env.TOURNEY_BASE_PATH ?? '../src/ai/v143/ai')).AI as typeof AI) : AI;
     const all: Faction[] = ['z', 'dieux', 'isdaris', 'humains'];
   const camps = (process.env.TOURNEY_CAMPS ?? all.join(',')).split(',') as Faction[];
@@ -47,7 +49,7 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
             const ais = [0, 1].map((p) =>
               process.env.TOURNEY_BASE
                 ? p === seat
-                  ? new (mode === 'apres' ? AI : Base)(w, p, undefined, 'normal', process.env.TOURNEY_STRATEGIES ? { strategy } : turn(camp))
+                  ? new (mode === 'apres' ? After : Base)(w, p, undefined, 'normal', process.env.TOURNEY_STRATEGIES ? { strategy } : turn(camp))
                   : new Base(w, p, undefined, 'normal', turn(foe))
                 : new AI(w, p, undefined, 'normal', p === seat && mode === 'apres' ? { strategy, doctrine } : { legacy: true }),
             );
