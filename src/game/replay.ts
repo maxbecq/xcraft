@@ -25,6 +25,9 @@ export interface Replay {
    * their last order, then on). */
   endTick?: number;
   end?: ReplayEnd;
+  /** The game's seed the AIs drew their strategies with (they are not replayed: for the analysis); missing in older
+   * replays, whose AIs drew from the sides and the map. */
+  seed?: number;
 }
 
 /** Why a kept game stopped: won, left (page closed, Quitter), cut on the network, or saved while it went on. */
@@ -72,6 +75,7 @@ export function parseReplay(text: string): Replay | string {
   // An end before the last order (or no number) is not one: played as an older replay.
   if (r.endTick !== undefined && (!Number.isInteger(r.endTick) || r.endTick <= last)) delete r.endTick;
   if (r.end !== undefined && !ENDS.includes(r.end)) delete r.end;
+  if (r.seed !== undefined && (!Number.isInteger(r.seed) || r.seed < 0 || r.seed > 0xffffffff)) delete r.seed;
   if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;

@@ -17,6 +17,10 @@ describe('replays read from storage or a file', () => {
   it('keeps a stop tick and reason after the last order, and reads older replays without them', () => {
     expect(parseReplay(text({ ...good, endTick: 40, end: 'left' }))).toEqual({ ...good, endTick: 40, end: 'left' });
     expect(parseReplay(text({ ...good, endTick: 9, end: 'nope' }))).toEqual(good);
+    // The AIs' seed: kept when it is one, dropped otherwise (older replays have none and stay readable).
+    expect(parseReplay(text({ ...good, seed: 123456 }))).toEqual({ ...good, seed: 123456 });
+    expect(parseReplay(text({ ...good, seed: -1 }))).toEqual(good);
+    expect(parseReplay(text({ ...good, seed: 'x' }))).toEqual(good);
     expect(parseReplay(text({ ...good, endTick: 2.5 }))).toEqual(good);
   });
 

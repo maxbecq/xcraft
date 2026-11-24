@@ -110,11 +110,14 @@ const revealed = () => SPECTATE || !!world.players[PLAYER].reveal;
 const sees = (e: Entity) => revealed() || world.sees(PLAYER, e);
 const seenAt = (x: number, y: number) => revealed() || world.vision[PLAYER].visible(Math.floor(x / FP), Math.floor(y / FP));
 // Every player not played by someone is an AI, its difficulty a harvesting handicap.
-const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i, undefined, s.control)]));
+// The AIs' strategies are drawn from a seed of the game's own (kept in the replay), not from the sides and the map alone:
+// every game of the same sides on the same map played the same strategies.
+const AI_SEED = REPLAY?.seed ?? crypto.getRandomValues(new Uint32Array(1))[0];
+const ais = REPLAY || NET_ROLE || ATTRACT ? [] : slots.flatMap((s, i) => (s.control === 'you' && !SPECTATE ? [] : [new AI(world, i, undefined, s.control, { seed: AI_SEED })]));
 if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = DIFFICULTY[s.control] ?? 100));
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
-const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [] };
+const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [], seed: AI_SEED };
 const replayed = new Map(REPLAY?.ticks ?? []);
 let replayEnded = false;
 /** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,
