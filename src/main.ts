@@ -454,8 +454,9 @@ document.addEventListener('click', (e) => {
   } else if (p === 'restart' && link) return;
   else if (p === 'replay') downloadReplay(REPLAY ? replaySource(REPLAY) : sealed('ongoing')); // watching one: the file itself, whole
   else if (p === 'perfrec') saveMeasures();
-  // From the end of a match, the way to the menu goes through its analysis (the user's choice of 2026-11-24).
-  else if (p === 'quit' && recap && button?.closest('.hud-banner') && !analysed) {
+  // From the end of a match, or quitting it from the pause menu, the way to the menu goes through its analysis (the
+  // user's choices of 2026-11-24).
+  else if (p === 'quit' && recap && button?.closest('.hud-banner, .pause') && !analysed) {
     analysed = true;
     showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name), () => button.click());
   }
