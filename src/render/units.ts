@@ -1400,9 +1400,11 @@ export class EntityRenderer {
       // Fans race while flying somewhere and idle down when it hovers in place.
       // The Caserne volante keeps its rotors racing: it holds a whole building up.
       // The Char Pégase's side fans: still on the ground, spinning once it has taken off, on axles across it.
+      // The Bourdon's and Dirigeable's propellers, on the balloon's long axis: driving it along, idling slow once it stops.
       const pegase = e.type === 'pegase';
-      v.rotors.spin += ((pegase ? (e.airborne ? 26 : 0) : moving ? 28 : e.type === 'casernevol' ? 24 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
-      for (const r of v.rotors.list) r.rotation[pegase ? 'x' : 'y'] += v.rotors.spin * dt;
+      const airship = e.type === 'bourdon' || e.type === 'dirigeable';
+      v.rotors.spin += ((pegase ? (e.airborne ? 26 : 0) : moving ? 28 : e.type === 'casernevol' ? 24 : airship ? 2.5 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
+      for (const r of v.rotors.list) r.rotation[pegase || airship ? 'x' : 'y'] += v.rotors.spin * dt;
     }
     const wings: Object3D[] = (v.model.userData.wings ??= ['zwing_0', 'zwing_1'].map((n) => v.model.getObjectByName(n)).filter((o): o is Object3D => !!o));
     if (wings.length === 2) {
