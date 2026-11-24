@@ -20,7 +20,7 @@ import { EntityRenderer, WEAPON_MODELS } from '../render/units';
 import { Space } from '../render/space';
 import { DEFS, type Faction, FACTIONS, LOOKS, START } from '../data';
 import { checkMap, PLANETS } from '../mapcheck';
-import { MAX_SIZE, type MapFile2, type Ramp2, RACES, type Symmetry, blankMap, fromFormat1, parseMap, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { DECOR, MAX_SIZE, type MapFile2, type Ramp2, RACES, type Symmetry, blankMap, fromFormat1, parseMap, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 Cache.enabled = true; // the doodads file, read again at each rebuild
@@ -86,7 +86,7 @@ let doodads: Object3D | null = null;
 const doodadNames: string[] = [];
 new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/doodads.glb`).then((g) => {
   doodads = g.scene;
-  doodadNames.push(...g.scene.children.map((c) => c.name).sort());
+  doodadNames.push(...g.scene.children.map((c) => c.name).filter((n) => DECOR.includes(n)).sort());
   panel();
   dirty = 'full';
 });

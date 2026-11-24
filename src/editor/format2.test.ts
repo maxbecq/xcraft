@@ -3,7 +3,7 @@ import { rotateFootprint, rotateTile } from '../map';
 import { parseMap as parseMap1 } from '../mapcheck';
 import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
 import { createMatch } from '../sim/setup';
-import { blankMap, fromFormat1, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { blankMap, DECOR, fromFormat1, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 describe('format 2', () => {
@@ -58,6 +58,34 @@ describe('format 2', () => {
     expect(() => parseMap({ ...blankMap(32), size: 100000 })).toThrow();
     expect(() => parseMap({ ...blankMap(32), players: [] })).toThrow();
     expect(parseMap(JSON.parse(JSON.stringify(blankMap(32)))).size).toBe(32);
+  });
+
+  it('refuse un type, un décor, un angle, un interdit ou des déclencheurs inconnus', () => {
+    const with_ = (patch: (f: MapFile2) => void) => {
+      const f = JSON.parse(JSON.stringify(blankMap(32))) as MapFile2;
+      patch(f);
+      return () => parseMap(f);
+    };
+    expect(with_((f) => f.units.push({ type: 'dragonrouge', owner: 0, at: [5, 5] }))).toThrow(/units/);
+    expect(with_((f) => f.units.push({ type: 'constructor', owner: 0, at: [5, 5] }))).toThrow(/units/);
+    expect(with_((f) => f.units.push({ type: 'minerai', owner: 0, at: [5, 5] }))).toThrow(/units/);
+    expect(with_((f) => f.decor.push({ type: 'licorne', at: [5, 5] }))).toThrow(/decor/);
+    expect(with_((f) => f.decor.push({ type: 'rocks_a', at: [5, 5], yaw: 1e9 }))).toThrow(/decor/);
+    expect(with_((f) => f.decor.push({ type: 'rocks_a', at: [5, 5], yaw: '1' as unknown as number }))).toThrow(/decor/);
+    expect(with_((f) => (f.players[0].forbid = ['nimporte']))).toThrow(/players/);
+    expect(with_((f) => (f.players[0].minerals = 1e12))).toThrow(/players/);
+    expect(with_((f) => Object.assign(f, { triggers: [] }))).toThrow(/déclencheurs/);
+    expect(with_((f) => {
+      f.units.push({ type: 'caserne', owner: -1, at: [5, 5] });
+      f.decor.push({ type: 'rocks_a', at: [8, 8], yaw: 1.5 });
+      f.players[0].forbid = ['tour', 'boostgenetique'];
+    })()).toMatchObject({ units: [{ type: 'caserne' }], decor: [{ type: 'rocks_a', yaw: 1.5 }] });
+  });
+
+  it('le catalogue de décor est celui du fichier de modèles', async () => {
+    const { NodeIO } = await import('@gltf-transform/core');
+    const doc = await new NodeIO().read('public/models/doodads.glb');
+    expect([...DECOR].sort()).toEqual(doc.getRoot().getDefaultScene()!.listChildren().map((n) => n.getName()).sort());
   });
 });
 

@@ -1,4 +1,4 @@
-import { type Faction, FACTIONS, START } from '../data';
+import { DEFS, type Faction, FACTIONS, START } from '../data';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
 import { PLANETS } from '../mapcheck';
@@ -36,8 +36,6 @@ export interface MapFile2 {
   decor: { type: string; at: [number, number]; yaw?: number }[];
   /** Units and buildings there from the start: owner a seat (0…) or -1 (neutral). Units: tile; buildings: top-left tile. */
   units: { type: string; owner: number; at: [number, number] }[];
-  /** Reserved for the triggers (docs/declencheurs.md): not read yet. */
-  triggers?: unknown[];
 }
 
 export type Symmetry = 'none' | 'rot180' | 'rot90';
@@ -62,6 +60,11 @@ export interface Player2 {
 }
 
 export const RACES = Object.keys(FACTIONS) as Faction[];
+/** The scenery one may place: the pieces of public/models/doodads.glb (a test keeps the two lists the same). */
+export const DECOR = ['barrels', 'barrier', 'billboard', 'bones', 'cables', 'crates', 'dead_tree', 'dry_bush', 'hovercar', 'pebbles', 'rocks_a', 'rocks_b', 'rubble', 'scrap_pile', 'shopfront', 'streetlamp', 'techbox', 'terminal', 'tire_pile', 'trash', 'vending', 'vent', 'walldoor', 'wallpanel', 'wallpipe', 'wreck'];
+/** Starting minerals or energy, as the game takes (mapcheck.ts). */
+const MAX_START = 100_000;
+const known = (t: unknown, kinds: string[]) => typeof t === 'string' && Object.hasOwn(DEFS, t) && kinds.includes(DEFS[t].kind);
 /** As the game's own map files (mapcheck.ts), so every map made here can be exported for the game. */
 export const MAX_SIZE = 160;
 const DIRS: Dir[] = ['N', 'E', 'S', 'W'];
@@ -212,6 +215,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     return maps1(json as MapFile);
   }
   if (f.format !== 2) throw new Error(`Format inconnu : ${String(f.format)}.`);
+  if ('triggers' in f) throw new Error('Les déclencheurs ne sont pas encore pris en charge.');
   const n = f.size;
   if (!Number.isInteger(n) || n! < 32 || n! > MAX_SIZE) throw new Error(`Taille invalide (32 à ${MAX_SIZE}).`);
   const size = n!;
@@ -225,7 +229,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     throw new Error(`« tiles » : ${size} lignes de ${size} caractères parmi 0, 1, 2, x.`);
   }
   const ramps = list<Ramp2>(f.ramps, (r) => pt(r?.at) && DIRS.includes(r.up) && Number.isInteger(r.width) && r.width >= 1 && r.width <= 12 && [0, 1].includes(r.level), 'ramps');
-  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && Number.isFinite(p.minerals) && Number.isFinite(p.energy) && Array.isArray(p.forbid) && p.forbid.every((s) => typeof s === 'string'), 'players');
+  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && [p.minerals, p.energy].every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_START) && Array.isArray(p.forbid) && p.forbid.length <= 300 && p.forbid.every((t) => known(t, ['unit', 'building', 'upgrade'])), 'players');
   if (players.length < 1 || players.length > 4) throw new Error('De 1 à 4 joueurs.');
   return {
     format: 2,
@@ -241,9 +245,8 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     wells: list<[number, number]>(f.wells, pt, 'wells'),
     bases: list<[number, number]>(f.bases, pt, 'bases'),
     players,
-    decor: list<MapFile2['decor'][number]>(f.decor, (d) => typeof d?.type === 'string' && pt(d.at), 'decor'),
-    units: list<MapFile2['units'][number]>(f.units, (u) => typeof u?.type === 'string' && Number.isInteger(u.owner) && u.owner >= -1 && u.owner < players.length && pt(u.at), 'units'),
-    triggers: Array.isArray(f.triggers) ? f.triggers : undefined,
+    decor: list<MapFile2['decor'][number]>(f.decor, (d) => DECOR.includes(d?.type) && pt(d.at) && (d.yaw === undefined || (typeof d.yaw === 'number' && Number.isFinite(d.yaw) && Math.abs(d.yaw) <= 7)), 'decor'),
+    units: list<MapFile2['units'][number]>(f.units, (u) => known(u?.type, ['unit', 'building']) && Number.isInteger(u.owner) && u.owner >= -1 && u.owner < players.length && pt(u.at), 'units'),
   };
 }
 
