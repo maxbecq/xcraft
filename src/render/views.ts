@@ -62,6 +62,8 @@ export interface View {
   leftArm?: { arm: Object3D; fore: Object3D; hand: Object3D };
   /** Z flyers' lift fans (zrotor_<k>), spinning on their own axes; `spin` is their current rate, rad/s. */
   rotors?: { list: Object3D[]; spin: number };
+  /** The radius of the foe it fights (world units), to keep a saurian's head out of it. */
+  foeRadius?: number;
   /** A hauled cart (the Réservoir, tools/meshy/cartparts.py): its pullers' legs, its vat, the alchemist and his pump
    * lever, and the ground its wheels have rolled (render/units.ts moves them). */
   cart?: { legs: { o: Object3D; phase: number }[]; vat?: Object3D; pumper?: Object3D; lever?: Object3D; roll: number; x: number; z: number };

@@ -66,6 +66,8 @@ chest = Vector((cx, front_y, hip_z + 0.06 * h))
 neck_top = Vector((cx, snout.y + 0.22 * (front_y - snout.y), max(snout.z, hip_z) + (0.02 if quad else 0.12) * h))
 bone("neck", chest, neck_top, "spine", True)
 bone("head", neck_top, Vector((cx, snout.y, snout.z)), "neck", True)
+# The tip of its jaw, carrying no skin: the game keeps it out of the foe it bites (render/units.ts keepHeadOut).
+bone("snout", Vector((cx, snout.y, snout.z)), Vector((cx, snout.y - 0.02 * L, snout.z)), "head", True)
 t0 = Vector((cx, back_y + 0.04 * L, hip_z))
 for i in range(3):  # the tail in three, down to its tip (the Ankylosaure's club)
     a = t0.lerp(tail_end, i / 3)
@@ -82,7 +84,7 @@ if not quad:
         bone(name, a, a + Vector((0, -0.08 * L, -0.12 * h)), "spine")
 bpy.ops.object.mode_set(mode="OBJECT")
 
-segs = {b.name: (b.head_local.copy(), b.tail_local.copy()) for b in arm.data.bones if b.name != "root"}
+segs = {b.name: (b.head_local.copy(), b.tail_local.copy()) for b in arm.data.bones if b.name not in ("root", "snout")}
 for n in segs:
     mesh.vertex_groups.new(name=n)
 legs = {n for n in segs if n.endswith(("_up", "_low"))}
@@ -152,7 +154,7 @@ def walk(t):
             ph = TAU * (t + off)
             P[f"{name}_up"].rotation_euler.x = 0.55 * math.sin(ph)
             P[f"{name}_low"].rotation_euler.x = -0.7 * max(0, math.cos(ph))
-        P["root"].location.y = 0.04 * h * abs(math.sin(TAU * t))
+        P["root"].location.y = 0.008 * h * abs(math.sin(TAU * t))  # a stride, not a hop
         P["spine"].rotation_euler.y = 0.06 * math.sin(TAU * t)
         P["neck"].rotation_euler.x = 0.08 * math.sin(2 * TAU * t)
         tail(-0.28 * math.sin(TAU * t), 0.05 * math.sin(2 * TAU * t))

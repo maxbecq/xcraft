@@ -160,6 +160,10 @@ export const SPOOL_S = 1;
 const CLIMB_S = 2;
 /** Its descent to the ground when it lands (s); it then settles a moment. Its paving spreads after it (paving.ts). */
 export const LAND_S = 1.8;
+/** How far the Ankylosaure turns from its foe to swing its tail club onto it (radians). */
+const CLUB_TURN = -Math.PI / 2;
+/** The saurians' strides (ground covered by one loop of their walk clip, two steps). */
+const SAURIAN_STRIDE: Record<string, number> = { allosaure: 2.2, ankylosaure: 1.5 };
 /** Human machines on tracks: they jolt and rock as they roll, instead of bouncing like walkers. */
 const TRACKED = new Set(['scarabee', 'pegase']);
 const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
@@ -266,6 +270,26 @@ export class EntityRenderer {
   }
 
   /** Where a Déchiqueteur's saw is (world): its sparks spray from there; none if it shows none. */
+  /**
+   * A saurian biting or striking: its head stops at its foe's edge, never inside it. The model is held back along
+   * its facing by however far its head (the `head` bone's tip, the snout) would reach past that edge.
+   */
+  private keepHeadOut(v: View): void {
+    v.model.position.x = 0;
+    v.model.position.z = 0;
+    if (v.aimAt === undefined || !v.aimTo) return;
+    const head = v.model.getObjectByName('snout');
+    if (!head) return;
+    v.model.updateMatrixWorld(true);
+    const tip = head.getWorldPosition(HAND_P);
+    const dx = tip.x - v.aimTo.x;
+    const dz = tip.z - v.aimTo.z;
+    const into = (v.foeRadius ?? 0.4) + 0.15 - Math.hypot(dx, dz);
+    if (into <= 0) return;
+    v.model.position.x = -Math.sin(v.heading) * into;
+    v.model.position.z = -Math.cos(v.heading) * into;
+  }
+
   /** A Caserne volante taking off or landing: what the render plays, and its height above the ground. */
   liftoff(id: number): { kind: 'up' | 'down'; age: number; height: number } | undefined {
     const v = this.views.get(id);
@@ -785,8 +809,15 @@ export class EntityRenderer {
       const reach = foe && ((world.weapon(e)?.range ?? 2) + 1.5) * FP + foe.radius + e.radius;
       // A gunner's barrel points at its foe outright, even while its body is still turning to it (render/units.ts holdAim).
       v.aimAt = foe && reach && Math.hypot(foe.x - e.x, foe.y - e.y) <= reach ? Math.atan2(foe.x - e.x, foe.y - e.y) : undefined;
+      v.foeRadius = foe ? foe.radius / FP : undefined;
       if (v.aimAt !== undefined && foe) (v.aimTo ??= new Vector3()).set(foe.x / FP, heightAt(this.map, foe.x / FP, foe.y / FP) + 0.5, foe.y / FP);
       if (v.aimAt !== undefined) v.target = v.aimAt;
+      // The Ankylosaure strikes with its tail club: a quarter turn to bring the club round on its foe before each
+      // blow, and back to face it after.
+      if (e.type === 'ankylosaure' && v.aimAt !== undefined && e.cooldown > 0) {
+        const p = 1 - e.cooldown / ticks((e.def as UnitDef).attack?.cooldown ?? 1); // 0 at the blow, up to 1 before the next
+        if (p > 0.5 || p < 0.15) v.target = v.aimAt + CLUB_TURN;
+      }
       else if (e.x !== e.px || e.y !== e.py) v.target = Math.atan2(e.x - e.px, e.y - e.py);
       else if ((o?.kind === 'gather' && o.phase === 'mine') || o?.kind === 'construct') {
         const field = world.entities.get(o.target);
@@ -1319,10 +1350,18 @@ export class EntityRenderer {
         return;
       }
       if (moving) {
-        const pace = (def.speed * GAME_SPEED) / WALK_STRIDE;
+        // A saurian's walk clip is one full stride of its own length: played so its feet keep pace with the ground.
+        const stride = SAURIAN_STRIDE[e.type];
+        const pace = stride ? (def.speed * GAME_SPEED * v.clips!.get(CLIP.walk)!.getClip().duration) / stride : (def.speed * GAME_SPEED) / WALK_STRIDE;
         // Serfs keep walking with their jackhammer when loaded (their carry clip has no legs moving).
         if (e.carry > 0 && has(CLIP.carry) && CHARACTERS[e.type]?.grip !== 'drill') play(v, CLIP.carry, pace);
         else play(v, attacking && has(CLIP.fire) ? CLIP.fire : CLIP.walk, pace);
+      } else if (attacking && has(CLIP.attack) && e.type === 'ankylosaure') {
+        // Its club swept round in time with its blows: the sweep comes across as the blow lands.
+        const act = v.clips!.get(CLIP.attack)!;
+        play(v, CLIP.attack, 0);
+        const p = 1 - e.cooldown / ticks(def.attack?.cooldown ?? 1);
+        act.time = ((p + 0.4) % 1) * act.getClip().duration;
       } else if (attacking && has(CLIP.attack)) {
         // One swing or cast per attack.
         const clip = v.clips!.get(CLIP.attack)!.getClip();
@@ -1343,6 +1382,7 @@ export class EntityRenderer {
       v.model.position.y = 0;
       v.model.children[0].rotation.x = 0;
       this.pose(v, dt);
+      if (SAURIAN_STRIDE[e.type]) this.keepHeadOut(v);
       return;
     }
     const speed = (e.def as UnitDef).speed;
