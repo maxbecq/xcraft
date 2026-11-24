@@ -65,7 +65,12 @@ export async function compileScene(m: Prewarm, catalog: [string, number][]): Pro
   }
   if (m.stop?.()) return;
   const shapes = new EntityRenderer(scene, map);
-  shapes.sync(spare, 0, new Set(), m.player, () => true, () => true);
+  try {
+    shapes.sync(spare, 0, new Set(), m.player, () => true, () => true);
+  } catch (e) {
+    shapes.clear(); // a view that failed to build must not leave the catalogue standing in the middle of the map
+    throw e;
+  }
   if (m.stop?.()) return shapes.clear();
   // The death bursts' points too: the first death of a match compiled their two programs.
   const bursts = burstSamples(new Vector3(map.width / 2, 1, map.height / 2));

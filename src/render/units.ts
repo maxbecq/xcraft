@@ -475,10 +475,8 @@ export class EntityRenderer {
         saw.scale.multiplyScalar(RING_SAW_GROWTH);
         sawR = SAW_RADIUS * RING_SAW_GROWTH * s;
         // Level with the ring, raised only if the blade would touch the ground (the Assimilateur's ring is low for
-        // its saw): the blade's own size, measured, in the body's frame.
-        const g = (saw as Mesh).geometry;
-        g.computeBoundingBox();
-        const blade = ((g.boundingBox!.max.y - g.boundingBox!.min.y) / 2) * saw.scale.y * s;
+        // its saw): the blade's own size, measured, in the body's frame (read through its pivot: its mesh is a child).
+        const blade = (boxInParent(saw).getSize(new Vector3()).y / 2) * s;
         // Above the ground (y 0 in the body's frame; some models are sunk below it), with a margin.
         const lift = Math.max(0, blade + 0.04 * size.y - midY);
         const target = new Vector3(0, lift, R + sawR * 1.05).sub(mod.position).divideScalar(s).sub(arm.position);
