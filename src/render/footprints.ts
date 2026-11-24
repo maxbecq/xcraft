@@ -15,8 +15,8 @@ const HEAVY = 0.6;
 /** Machines on tracks: two notched bands behind them instead of feet (none from a Char Pégase in flight). */
 const TRACKED = new Set(['scarabee', 'pegase']);
 /** Where a machine's tracks run, if not about its radius: [middle of each track out from its own, track width], world
- * units. The Scarabée's, measured on its drawn model: each track from 0.435 to 0.747 out, ×1.59 as drawn. */
-const GAUGE: Record<string, [number, number]> = { scarabee: [0.94, 0.5] };
+ * units, measured on its drawn track links once they are first laid round their loop (render/units.ts). */
+export const GAUGE = new Map<string, [number, number]>();
 /** Notches across each band's piece: whole ones, so they run on unbroken from one piece to the next. */
 const NOTCHES = 4;
 
@@ -72,7 +72,7 @@ export class Footprints {
           void main() {
             if (vTread > 0.5) {
               // A track's piece: a band soft at its edges, its notches across it pressed in deeper.
-              float band = 1.0 - smoothstep(0.32, 0.5, abs(vUv.x - 0.5));
+              float band = 1.0 - smoothstep(0.42, 0.5, abs(vUv.x - 0.5)); // full width, a soft rim only
               float notch = smoothstep(0.25, 0.4, abs(fract(vUv.y * ${NOTCHES}.0) - 0.5));
               float a = band * (0.35 + 0.45 * notch) * vFade;
               if (a < 0.01) discard;
@@ -143,7 +143,7 @@ export class Footprints {
         // Both tracks at once, each a piece from its last one to here, so the bands run on unbroken.
         this.q.setFromAxisAngle(this.up, Math.atan2(ux, uz));
         for (const s of [-1, 1]) {
-          const [mid, wide] = GAUGE[e.type] ?? [0.62 * r, 0.3 * r];
+          const [mid, wide] = GAUGE.get(e.type) ?? [0.62 * r, 0.3 * r];
           const gauge = s * mid;
           const px = (x + was.x) / 2 - uz * gauge;
           const pz = (z + was.z) / 2 + ux * gauge;
