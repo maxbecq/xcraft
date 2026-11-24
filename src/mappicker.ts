@@ -81,3 +81,25 @@ export function mapCards(chosen: string, biome: string): string {
     })
     .join('');
 }
+
+/** Computers: the row of maps shows it scrolls (the user's request, 2026-11-24), a big arrow at its right end (a click
+ * scrolls on) until the last map is in view, besides its scrollbar kept visible (mappicker.css). Again after each redraw. */
+export function moreMaps(row: HTMLElement | null): void {
+  if (!row || row.closest('.compact')) return;
+  const arrow = document.createElement('button');
+  arrow.type = 'button';
+  arrow.className = 'maps-more';
+  arrow.textContent = '›';
+  arrow.setAttribute('aria-label', 'Autres cartes');
+  arrow.onclick = () => row.scrollBy({ left: row.clientWidth * 0.8, behavior: 'smooth' });
+  row.append(arrow);
+  const update = () => {
+    const a = row.querySelector<HTMLElement>('.maps-more');
+    if (a) a.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 4;
+  };
+  if (!row.dataset.more) {
+    row.dataset.more = '1';
+    row.addEventListener('scroll', update, { passive: true });
+  }
+  requestAnimationFrame(update);
+}

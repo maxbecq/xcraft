@@ -1,7 +1,7 @@
 /** The title screen's menus: home, options, match setup, joining a friend, the friends' lobby; a match starts by loading its URL. */
 import { type Faction, FACTIONS } from '../data';
 import { MAPS, type MapFile, mapFile } from '../maps';
-import { mapCards, seatsOf } from '../mappicker';
+import { mapCards, moreMaps, seatsOf } from '../mappicker';
 import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
@@ -239,6 +239,7 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     </fieldset>
     ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}
     <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
+  moreMaps(menu.querySelector<HTMLElement>('.maps'));
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement | HTMLInputElement;
     const tool = el.dataset.sandbox;
@@ -369,6 +370,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
       if (planets) planets.innerHTML = options(Object.fromEntries(biomesFor(mapFile(setup.map)).map((b) => [b.id, b.name])), setup.biome);
       const cards = mapCards(mapFile(setup.map).id, setup.biome);
       $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
+      moreMaps($<HTMLElement>('.maps'));
     }
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
     const go = $<HTMLButtonElement>('[data-m="go"]');

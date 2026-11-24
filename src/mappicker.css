@@ -32,3 +32,14 @@
   .menu.compact .maps .map-card { width: 128px; padding: 6px; }
   .menu.compact .maps .map-card .map-meta { font-size: 10px; }
 }
+/* Computers: the row shows that it scrolls, its scrollbar always drawn, a big arrow at its right end (mappicker.ts moreMaps). */
+.menu:not(.compact) .maps { padding-bottom: 8px; scrollbar-width: auto; scrollbar-color: var(--amber, #e0b34f) rgba(0, 0, 0, 0.45); }
+.menu:not(.compact) .maps::-webkit-scrollbar { height: 10px; }
+.menu:not(.compact) .maps::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.45); border-radius: 5px; }
+.menu:not(.compact) .maps::-webkit-scrollbar-thumb { background: var(--amber, #e0b34f); border-radius: 5px; }
+.menu .maps .maps-more {
+  position: sticky; right: 0; z-index: 1; flex: 0 0 52px; align-self: stretch; min-width: 0; margin: 0 0 0 -52px; padding: 0;
+  font: 700 46px/1 var(--ui); color: #ffd58a; text-shadow: 0 0 8px #000; background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.85) 60%);
+  border: 0; border-radius: 0; box-shadow: none; cursor: pointer;
+}
+.menu .maps .maps-more:is(:hover, .vhover) { color: #fff; background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.95) 60%); }
