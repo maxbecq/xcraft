@@ -23,6 +23,9 @@ const at = new Vector3();
 let tail: HTMLElement | null = null;
 /** Shown last frame: turning the option off has things to put back. */
 let on = false;
+/** The input's counts last frame: a new click on the worker, a worker sent to a resource. */
+let altPicks = 0;
+let altHarvests = 0;
 
 /** Once a frame, before the card is drawn. */
 export function updateAlt(h: Hud): void {
@@ -34,7 +37,11 @@ export function updateAlt(h: Hud): void {
   if (h.selKey !== h.altSel) {
     h.altSel = h.selKey;
     if (!h.placing) h.buildMenu = own.length === 1 && own[0].def.kind === 'unit' && h.workers().length === 1 ? 'basic' : false;
-  }
+  } else if (h.input.picks !== altPicks && !h.placing && own.length === 1 && own[0].def.kind === 'unit' && h.workers().length === 1) h.buildMenu = 'basic';
+  // The worker sent to a resource (Shift too): the tree shut, till it is clicked again (the user's choice of 2026-11-24).
+  if (h.input.harvests !== altHarvests && h.buildMenu === 'basic' && !h.placing && own.every((e) => e.def.kind === 'unit') && h.workers().length === own.length) h.buildMenu = false;
+  altPicks = h.input.picks;
+  altHarvests = h.input.harvests;
   const b = bubbleOf(h);
   h.card.classList.toggle('bubble', !!b);
   if (!tail) (tail = document.createElement('div')), (tail.className = 'bubble-tail'), document.body.append(tail);

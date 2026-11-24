@@ -296,6 +296,9 @@ export class Input {
   private longPress = 0;
   private lastTap = { time: 0, type: '' };
   private lastClick = { time: 0, type: '' };
+  /** Counted for the alternative interface: clicks on things, and our workers sent to a resource (hud-alt.ts). */
+  picks = 0;
+  harvests = 0;
   /** The last left press picked something (so its release, if it stays a click, has nothing more to do). */
   private pressPicked = false;
 
@@ -313,6 +316,7 @@ export class Input {
    * on screen (as Ctrl does for a kind); a second click on it, that one alone. */
   private pick(hit: Entity, ctrl: boolean, shift: boolean): void {
     const now = performance.now();
+    this.picks++;
     if (this.alt && !ctrl && !shift && this.fighter(hit)) {
       const again = this.lastClick.type === `#${hit.id}` && now - this.lastClick.time < DOUBLE_TAP_MS;
       this.lastClick = { time: again ? 0 : now, type: `#${hit.id}` };
@@ -545,6 +549,9 @@ export class Input {
     const own = this.own();
     if (!own.length) return;
     this.hooks.issue({ player: this.player, kind: 'smart', ids: own.map((e) => e.id), x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
+    // To a resource: a field, a well, a building where workers make energy, or cargo taken home (as sim smart() does).
+    const b = target?.def as BuildingDef | undefined;
+    if (target && own.some((e) => (e.def as UnitDef).worker) && (target.def.kind === 'resource' || (target.owner === this.player && (b?.energyRate || (b?.dropoff && own.some((e) => e.carry > 0)))))) this.harvests++;
     // Buildings alone: only those that train something take a rally point; the others take no order at all.
     if (!own.every((e) => e.def.kind === 'building')) return this.hooks.ordered?.(x, z, target);
     if (own.some((e) => (e.def as BuildingDef).trains?.length)) this.hooks.ordered?.(x, z, target, true);
