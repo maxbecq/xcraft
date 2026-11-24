@@ -2117,10 +2117,33 @@ export class AI {
     if (def.weapons.includes('accumulateur') && this.world.level(this.player, acc.research!) && accCost.energy <= energy && accCost.minerals <= minerals && !ordered && ![...this.world.entities.values()].some((e) => e.owner === this.player && (e.kit === 'accumulateur' || e.kits.includes('accumulateur')))) return 'accumulateur';
     const kits = Object.entries(KITS).filter(([k]) => this.kitAllowed(def, k));
     // Energy piling up: the weapons that spend it weigh three times as much.
-    const weighted = kits.map(([k, wgt]): [string, number] => [k, energy >= 300 && WEAPONS[k].cost.energy > 0 ? wgt * 3 : wgt]);
+    // And by how it fits the enemy's army as seen (strategy's doctrine): the Z socles all share their weapons, so the
+    // table of counters, which weighs unit types, never bent the Z army at all; it weighs their weapons instead.
+    const weighted = kits.map(([k, wgt]): [string, number] => [k, Math.max(1, Math.round((energy >= 300 && WEAPONS[k].cost.energy > 0 ? wgt * 3 : wgt) * (this.doctrine === LEGACY ? 1 : this.kitFit(k))))]);
     const total = weighted.reduce((n, [, wgt]) => n + wgt, 0);
     let k = this.trained % Math.max(1, total);
     return weighted.find(([, wgt]) => (k -= wgt) < 0)?.[0];
+  }
+
+  /**
+   * How a Z weapon fits the enemy's army seen (scout): its damage to the classes seen over its best, doubled at most;
+   * three times as much against an army mostly of flyers if it reaches them, a third if not. 1 with nothing seen.
+   */
+  private kitFit(k: string): number {
+    const a = WEAPONS[k].attack;
+    let total = 0;
+    let air = 0;
+    let fit = 0;
+    for (const [t, n] of this.seen) {
+      const d = DEFS[t] as UnitDef | undefined;
+      if (!d || d.kind !== 'unit' || d.worker) continue;
+      total += n;
+      if (d.flying) air += n;
+      if (a?.vs) fit += n * (a.vs[CLASSES.indexOf(d.cls ?? 'BL')] ?? a.damage);
+    }
+    if (!total || !a) return 1;
+    if (air * 3 >= total) return reaches(a, true) ? 3 : 1 / 3;
+    return a.vs ? (2 * fit) / total / Math.max(1, ...a.vs) : 1;
   }
 
   /** `at`: the building that will train it, whose own Isdaris extensions count (a Druide needs the Laboratoire there). */
