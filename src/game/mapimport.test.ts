@@ -52,6 +52,13 @@ describe('an imported map in a replay', () => {
     expect(parseReplay(JSON.stringify({ ...base, map: def.id, carte: { ...def, name: '<b>' } }))).toMatch(/carte jointe/);
     expect(MAPS[def.id]).toBeUndefined();
   });
+
+  it('leaves no map on the page when the replay is refused after its map checked out', () => {
+    const def = imported(); // Le Col: two places
+    const three = { v: 1, map: def.id, carte: def, factions: ['humains', 'z', 'dieux'], teams: [0, 1, 2], biome: 'volcan', handicap: [100, 100, 100], ticks: [] };
+    expect(parseReplay(JSON.stringify(three))).toMatch(/plus de camps/);
+    expect(MAPS[def.id]).toBeUndefined();
+  });
 });
 
 describe('an imported map in a friends\' game', () => {

@@ -81,17 +81,18 @@ export function parseReplay(text: string): Replay | string {
     const why = typeof def === 'string' ? def : def.id !== r.map ? 'elle ne porte pas le nom de la partie' : unplayable(def);
     if (why || typeof def === 'string') return `${bad} (carte jointe : ${why}).`;
     r.carte = def;
-    addMap(def); // for this page only: the player's own maps are kept apart from those that come with a replay
   }
-  if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
+  if (!r.carte && r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
   }
   // Every side needs a start on the map it plays on (the original one for a map this version lacks).
-  if (n > Math.max(...MAPS[r.map ?? DEFAULT_MAP].players)) return `${bad} (plus de camps que la carte n’a de places).`;
+  if (n > Math.max(...(r.carte ?? MAPS[r.map ?? DEFAULT_MAP]).players)) return `${bad} (plus de camps que la carte n’a de places).`;
   if (r.version !== undefined && (typeof r.version !== 'string' || !/^[\w.-]{1,24}$/.test(r.version))) delete r.version;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   delete (r as { perf?: unknown }).perf; // a measures file (measuresFile) carries its telemetry beside the replay
+  // Only a replay taken: one refused leaves no map on the page (a lobby opened next would send it).
+  if (r.carte) addMap(r.carte); // for this page only: the player's own maps are kept apart from those that come with a replay
   return r;
 }
 
