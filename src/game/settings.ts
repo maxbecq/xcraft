@@ -9,9 +9,10 @@ export const SCROLL_KEY = 'xcraft.scroll';
  * `tactile`: the trial touch controls (phones and tablets): a marking menu on a long press, quick actions at the bottom.
  * `tuck`: touch screens, the selection sheet and the commands slide away a moment after the last touch (on unless unticked).
  * `alt`: the alternative desktop interface (game/hud-alt.ts), « Gameplay expérimental »: no console; off on touch screens.
+ * `army` (computers, experimental gameplay), `armytap` (touch screens): a click on a fighter picks the army on screen.
  * `rattack`: a right click sends our fighters (not the workers) to attack rather than move (game/input.ts orderAt).
  * `volume`, `mute`: the sound's level (0 to 1) and whether it is cut. */
-export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, lcd: false, tactile: false, tuck: true, alt: false, rattack: false, game: 1, volume: 0.5, mute: false };
+export const SCROLL_BASE = { speed: 1, band: 1, ramp: 1, coast: 0.4, mouse: 1, lock: false, grid: false, lcd: false, tactile: false, tuck: true, alt: false, rattack: false, army: true, armytap: false, game: 1, volume: 0.5, mute: false };
 export type Controls = typeof SCROLL_BASE;
 /** The sliders' ends (pause menu, Options): a stored value outside them (an old or edited one) is brought back in,
  * so a game speed of 0 cannot freeze a match, nor a huge one hang the page catching up. */
@@ -23,7 +24,7 @@ export const SCROLL: Controls = (() => {
     const stored = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}');
     for (const k of Object.keys(SCROLL_RANGE) as (keyof typeof SCROLL_RANGE)[])
       if (typeof stored[k] === 'number' && Number.isFinite(stored[k])) base[k] = Math.min(SCROLL_RANGE[k][1], Math.max(SCROLL_RANGE[k][0], stored[k]));
-    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, lcd: stored.lcd === true, tactile: stored.tactile === true, tuck: stored.tuck !== false, alt: stored.alt === true, rattack: stored.rattack === true, mute: stored.mute === true };
+    return { ...base, lock: stored.lock2 === true, grid: stored.grid === true, lcd: stored.lcd === true, tactile: stored.tactile === true, tuck: stored.tuck !== false, alt: stored.alt === true, rattack: stored.rattack === true, army: stored.army !== false, armytap: stored.armytap === true, mute: stored.mute === true };
   } catch {
     return base;
   }

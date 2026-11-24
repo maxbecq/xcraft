@@ -338,6 +338,7 @@ overlay.top = (id, built) => units.top(id, built);
 hud.top = overlay.top;
 hud.alt = input.alt = SCROLL.alt && !TOUCH;
 input.rattack = SCROLL.rattack;
+input.army = TOUCH ? SCROLL.armytap : SCROLL.alt && SCROLL.army;
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
@@ -656,14 +657,16 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'alt' || k === 'rattack' || k === 'mute') {
+  if (k === 'lock' || k === 'grid' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'alt' || k === 'rattack' || k === 'army' || k === 'armytap' || k === 'mute') {
     SCROLL[k] = (field as HTMLInputElement).checked;
     document.body.classList.toggle('lcd', SCROLL.lcd && !(SCROLL.alt && !TOUCH));
     document.body.classList.toggle('alt', SCROLL.alt && !TOUCH);
     hud.alt = input.alt = SCROLL.alt && !TOUCH;
     input.rattack = SCROLL.rattack;
-    // The grid hotkeys belong to the classic gameplay: their choice hidden with the experimental one.
+    input.army = TOUCH ? SCROLL.armytap : SCROLL.alt && SCROLL.army;
+    // The grid hotkeys belong to the classic gameplay, the army click to the experimental one: each offered with its own.
     for (const g of document.querySelectorAll<HTMLElement>('[data-classic]')) g.hidden = SCROLL.alt;
+    for (const g of document.querySelectorAll<HTMLElement>('[data-experimental]')) g.hidden = !SCROLL.alt;
     document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
     document.body.classList.toggle('tuck', TOUCH && SCROLL.tuck);
     hud.buttonsKey = ''; // the card redrawn in its new form

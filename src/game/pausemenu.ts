@@ -48,10 +48,11 @@ export function skinField(faction: string): string {
 export function controlFields(inMatch: boolean): string {
   const range = (k: keyof typeof SCROLL_RANGE, label: string, step: number, unit = '') =>
     `<label>${label} <input type="range" data-k="${k}" data-unit="${unit}" min="${SCROLL_RANGE[k][0]}" max="${SCROLL_RANGE[k][1]}" step="${step}" value="${SCROLL[k]}"><output>${fmt(Number(SCROLL[k]), unit)}</output></label>`;
-  const check = (k: 'lock' | 'grid' | 'mute' | 'rattack', label: string, attr = '') => `<label${attr}><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
+  const check = (k: 'lock' | 'grid' | 'mute' | 'rattack' | 'army', label: string, attr = '') => `<label${attr}><input type="checkbox" data-k="${k}"${SCROLL[k] ? ' checked' : ''}> ${label}</label>`;
   const sound = `<fieldset class="options"><legend>Son</legend>${range('volume', 'Volume', 0.05, '%')}${check('mute', 'Couper le son')}</fieldset>`;
   // A touch screen: the sound and the trial touch controls only (off by default, the usual ones untouched then).
-  if (TOUCH) return `${sound}<fieldset class="options"><legend>Commandes tactiles</legend>
+  if (TOUCH) return `${sound}<fieldset class="options"><legend>Interface</legend>
+      <label><input type="checkbox" data-k="armytap"${SCROLL.armytap ? ' checked' : ''}> Tap sur une unité de combat : toute l’armée à l’écran ; double tap : cette unité seule</label>
       <label><input type="checkbox" data-k="tactile"${SCROLL.tactile ? ' checked' : ''}> Essai : menu en étoile à l'appui long sur une unité ou un bâtiment, actions rapides en bas</label>
       <label><input type="checkbox" data-k="tuck"${SCROLL.tuck ? ' checked' : ''}> Replier les panneaux : la fiche et les commandes glissent vers le bas après quelques secondes, la languette ▲ les rappelle</label>
     </fieldset>`;
@@ -68,6 +69,7 @@ export function controlFields(inMatch: boolean): string {
     <fieldset class="options"><legend>Interface</legend>
       <label><span class="switch"><input type="checkbox" data-k="alt"${SCROLL.alt ? ' checked' : ''}><span></span></span> Gameplay expérimental : sans console, commandes au-dessus du bâtiment, files de production à gauche</label>
       ${check('grid', `Raccourcis en grille : la place du bouton (${navigator.language?.startsWith('fr') ? 'A Z E R / Q S D F / W X C V' : 'Q W E R / A S D F / Z X C V'}) plutôt que la lettre de son nom`, ` data-classic${SCROLL.alt ? ' hidden' : ''}`)}
+      ${check('army', 'Clic sur une unité de combat : toute l’armée à l’écran ; double clic : cette unité seule', ` data-experimental${SCROLL.alt ? '' : ' hidden'}`)}
       ${check('rattack', 'Clic droit = attaque : les unités de combat (pas les ouvriers) attaquent en chemin, ou attaquent l’unité visée')}
     </fieldset>
     ${inMatch && SOLO ? `<fieldset class="options"><legend>Partie contre l'IA</legend>${range('game', 'Vitesse du jeu', 0.25, '×')}</fieldset>` : ''}`;

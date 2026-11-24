@@ -302,8 +302,10 @@ export class Input {
   /** The last left press picked something (so its release, if it stays a click, has nothing more to do). */
   private pressPicked = false;
 
-  /** The alternative interface (game/hud-alt.ts), set by the game: a click on a fighter picks the whole army. */
+  /** The alternative interface (game/hud-alt.ts), set by the game. */
   alt = false;
+  /** Set by the game from the options: a click (tap) on a fighter picks the whole army on screen, a second that one. */
+  army = false;
   /** Option « Clic droit = attaque »: our fighters (not the workers) attack-move to the point, or attack what is hit. */
   rattack = false;
 
@@ -314,17 +316,13 @@ export class Input {
   }
 
   /** A click on `hit`: it alone, or all of its kind on screen (Ctrl/Cmd, or a second click); Shift adds or takes out.
-   * The alternative interface (the user's choice of 2026-11-24): a click on one of our fighters picks the whole army
-   * on screen (as Ctrl does for a kind); a second click on it, that one alone. */
+   * Option `army` (the user's choice of 2026-11-24): a click on one of our fighters picks the whole army on screen (as
+   * Ctrl does for a kind); a second click on it, that one alone. */
   private pick(hit: Entity, ctrl: boolean, shift: boolean): void {
     const now = performance.now();
     this.picks++;
-    if (this.alt && !ctrl && !shift && this.fighter(hit)) {
-      const again = this.lastClick.type === `#${hit.id}` && now - this.lastClick.time < DOUBLE_TAP_MS;
-      this.lastClick = { time: again ? 0 : now, type: `#${hit.id}` };
-      this.selected.clear();
-      if (again) this.selected.add(hit.id);
-      else for (const e of this.world.entities.values()) if (this.fighter(e) && this.onScreen(e)) this.selected.add(e.id);
+    if (this.army && !ctrl && !shift && this.fighter(hit)) {
+      this.lastClick = this.armyPick(hit, this.lastClick, now);
       return;
     }
     const kind = hit.owner === this.player ? hit.type : '';
@@ -468,6 +466,11 @@ export class Input {
       for (const e of this.own()) if ((e.def as UnitDef).worker) this.selected.delete(e.id);
       return;
     }
+    if (target && this.army && this.fighter(target)) {
+      this.pickedAt = now;
+      this.lastTap = this.armyPick(target, this.lastTap, now);
+      return;
+    }
     if (target && target.owner === this.player) {
       this.pickedAt = now;
       if (this.lastTap.type === target.type && now - this.lastTap.time < DOUBLE_TAP_MS) {
@@ -485,6 +488,15 @@ export class Input {
     }
     this.selected.clear();
     if (target) this.selected.add(target.id); // inspect an enemy or a resource
+  }
+
+  /** A click or tap on a fighter (option `army`): the army on screen, or that one alone when it is the second on it. */
+  private armyPick(hit: Entity, last: { time: number; type: string }, now: number): { time: number; type: string } {
+    const again = last.type === `#${hit.id}` && now - last.time < DOUBLE_TAP_MS;
+    this.selected.clear();
+    if (again) this.selected.add(hit.id);
+    else for (const e of this.world.entities.values()) if (this.fighter(e) && this.onScreen(e)) this.selected.add(e.id);
+    return { time: again ? 0 : now, type: `#${hit.id}` };
   }
 
   /** Our things of a kind in view. */
