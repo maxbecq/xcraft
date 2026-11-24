@@ -713,6 +713,13 @@ export class EntityRenderer {
         this.views.delete(e.id);
       }
       const v = this.views.get(e.id) ?? this.create(e, player);
+      // A Caserne volante taking off or landing is a new view: its rotors keep the pace they had, to spin up or down.
+      if (old && old !== v && old.rotors && v.rotors) v.rotors.spin = old.rotors.spin;
+      // Landed: the rotors wind down to a stop.
+      if (v.rotors && e.def.kind === 'building' && v.rotors.spin > 0) {
+        v.rotors.spin = Math.max(0, v.rotors.spin - dt * 10);
+        for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
+      }
       if (e.tier !== (v.tier ?? 1)) {
         // Z socle evolved: 12 % larger a tier.
         v.model.children[0]?.scale.multiplyScalar((1 + 0.12 * (e.tier - 1)) / (1 + 0.12 * ((v.tier ?? 1) - 1)));
@@ -1310,8 +1317,15 @@ export class EntityRenderer {
     for (const w of v.wheels ?? []) w.o.rotation.x = (gait ?? 0) / w.r;
     if (v.rotors) {
       // Fans race while flying somewhere and idle down when it hovers in place.
-      v.rotors.spin += ((moving ? 28 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
+      // The Caserne volante keeps its rotors racing: it holds a whole building up.
+      v.rotors.spin += ((moving ? 28 : e.type === 'casernevol' ? 24 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
       for (const r of v.rotors.list) r.rotation.y += v.rotors.spin * dt;
+    }
+    if (e.type === 'casernevol') {
+      // A flying building pitches and rolls a little on its rotors, more as it speeds along.
+      const sway = moving ? 1.6 : 1;
+      v.model.rotation.x = sway * 0.04 * Math.sin(t * 0.9 + e.id);
+      v.model.rotation.z = sway * 0.035 * Math.sin(t * 0.67 + e.id * 1.7);
     }
     // A Z socle fights with the weapon module mounted on it, not its default machine gun: its reach and pace.
     const a = (e.kit && WEAPONS[e.kit]?.attack) || (e.def as UnitDef).attack;
@@ -1791,7 +1805,7 @@ export class EntityRenderer {
       if (/^zrotor_\d+$/.test(o.name)) rotors.push(o);
     });
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: 7 } : undefined, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: e.def.kind === 'building' ? 0 : 7 } : undefined, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       rig: findRig(body, body.getWorldScale(new Vector3()).x, e.id),
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
