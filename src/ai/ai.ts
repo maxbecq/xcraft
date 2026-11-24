@@ -178,6 +178,8 @@ export class AI {
   private foeTypes = new Map<number, string>();
   /** When a raid on the base was last beaten off. */
   private repelled = -Infinity;
+  /** Since when every barracks has stood idle (soldiers). */
+  private stalledSince: number | undefined;
   /** The army aimed at, bent by what the scouts saw (counter), recomputed each turn. */
   private armyList: [string, number][];
   /** Most of each enemy type seen at once. */
@@ -988,11 +990,19 @@ export class AI {
     }
     this.advancedHeld = advancedKeep;
     if (!advancedKeep) this.advancedEnergyShort = false;
-    for (const c of buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0)) {
+    // Every barracks idle for 20 s with minerals kept for the tech, the research or an advanced unit: one round of units
+    // anyway (the analyser's most frequent fault, « Production arrêtée »: Humans' Casernes idle a minute and more with
+    // 500 to 1 700 in the bank, 2.1 times a game; 1.4 for the Isdaris). Not the Z, whose tech waits on those minerals
+    // (50 wins in 96 with it, 53 without).
+    const barracks = buildings.filter((b) => !f.gods && kin(b, f.barracks) && b.buildLeft === 0);
+    if (barracks.length && barracks.every((b) => b.queue.length === 0)) this.stalledSince ??= w.tick;
+    else this.stalledSince = undefined;
+    const held = !this.easy && f !== FACTIONS.z && this.stalledSince !== undefined && w.tick - this.stalledSince >= ticks(20) ? 0 : ctx.keep + gatewaysKeep + zKeep + advancedKeep;
+    for (const c of barracks) {
       if (!c.rally) ctx.out.push({ player: this.player, kind: 'smart', ids: [c.id], x: rally.x, y: rally.y });
       if (saving || c.queue.length > (this.easy ? 0 : 1) || this.room(ctx) <= 0) continue;
       // The invisible raiders counted too (out of the army, their cap was never reached).
-      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), [...army, ...ctx.raiders], ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep, c, this.room(ctx), Math.max(0, ctx.energy - reserve));
+      const type = this.nextUnit(Math.max(0, ctx.energy - unitReserve), [...army, ...ctx.raiders], ctx.minerals - held, c, this.room(ctx), Math.max(0, ctx.energy - reserve));
       const def = DEFS[type] as UnitDef;
       // Z: the minerals of the next step of its tech are kept once its energy is there (zKeep); its energy, kept from
       // the energy-hungry socles only, never holds back one that costs none.
@@ -1001,18 +1011,18 @@ export class AI {
       // A Phalangiste or Belluaire due for its share of the army: above the tech's reserve only, not the next
       // research's too (625 to 1075 energy were wanted, never there).
       const shared = SHARED.includes(type);
-      if (ctx.minerals - ctx.keep - gatewaysKeep - zKeep - advancedKeep < def.cost.minerals || ctx.energy - (def.cost.energy ? (shared ? reserve : unitReserve) : 0) < def.cost.energy) {
+      if (ctx.minerals - held < def.cost.minerals || ctx.energy - (def.cost.energy ? (shared ? reserve : unitReserve) : 0) < def.cost.energy) {
         // No minerals coming in: waiting for it is for ever, the rotation moves on to what the bank can pay.
         if (w.tick - this.lastIncome >= ticks(60)) this.trained++;
         continue;
       }
       // Z: a socle waits until its weapon is affordable too, rather than leave with the machine gun.
       const accOrdered = ctx.out.some((o) => o.kind === 'train' && o.weapon === 'accumulateur');
-      const weapon = this.weaponFor(def, ctx.energy - unitReserve, ctx.minerals - ctx.keep - gatewaysKeep - zKeep, accOrdered);
+      const weapon = this.weaponFor(def, ctx.energy - unitReserve, ctx.minerals - Math.min(held, ctx.keep + gatewaysKeep + zKeep), accOrdered);
       const cost = withKit(def, weapon);
       // The weapon's price above the same reserves as the socle's. Waiting for it moves the rotation on: the same socle
       // and weapon came back every turn, and nothing else did.
-      if (ctx.minerals - ctx.keep - gatewaysKeep - (weapon ? zKeep : 0) < cost.minerals || ctx.energy - (weapon && cost.energy ? unitReserve : 0) < cost.energy) {
+      if (ctx.minerals - Math.min(held, ctx.keep + gatewaysKeep + (weapon ? zKeep : 0)) < cost.minerals || ctx.energy - (weapon && cost.energy ? unitReserve : 0) < cost.energy) {
         if (weapon) this.trained++;
         continue;
       }
