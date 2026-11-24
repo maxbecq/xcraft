@@ -7,11 +7,15 @@ import { soars, type Entity, type World } from '../sim/world';
 /** Grounds that keep a print, and its colour (darker than the ground, drawn see-through). */
 const GROUNDS: Record<string, number> = { glace: 0x2e3f52, desert: 0x4a2e16, lune: 0x161618, asteroides: 0x2e2620 };
 /** Prints at most on the ground at once: the oldest is reused when a new one is needed. */
-const MAX = 512;
+const MAX = 1024;
 /** Seconds a print takes to fade out. */
 const LIFE = 14;
 /** Only heavy walkers leave them (a Serf's would be a flicker). */
 const HEAVY = 0.6;
+/** Machines on tracks: two notched bands behind them instead of feet (none from a Char Pégase in flight). */
+const TRACKED = new Set(['scarabee', 'pegase']);
+/** Notches across each band's piece: whole ones, so they run on unbroken from one piece to the next. */
+const NOTCHES = 4;
 
 /**
  * Footprints behind heavy units on snow, sand and the Moon: one instanced quad per print, the print itself drawn in
@@ -21,6 +25,8 @@ const HEAVY = 0.6;
 export class Footprints {
   private readonly mesh: InstancedMesh<PlaneGeometry, ShaderMaterial> | null = null;
   private readonly born: InstancedBufferAttribute | null = null;
+  /** 1 for a track's piece, 0 for a foot. */
+  private readonly tread: InstancedBufferAttribute | null = null;
   private next = 0;
   /** Each walker's last print: where, and which foot. */
   private readonly last = new Map<number, { x: number; z: number; left: boolean }>();
@@ -35,17 +41,23 @@ export class Footprints {
     born.setUsage(DynamicDrawUsage);
     const geo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     geo.setAttribute('aBorn', born);
+    const tread = (this.tread = new InstancedBufferAttribute(new Float32Array(MAX), 1));
+    tread.setUsage(DynamicDrawUsage);
+    geo.setAttribute('aTread', tread);
     const mesh = (this.mesh = new InstancedMesh(
       geo,
       new ShaderMaterial({
         uniforms: { color: { value: new Color(color) }, now: { value: 0 } },
         vertexShader: `
           attribute float aBorn;
+          attribute float aTread;
           uniform float now;
           varying vec2 vUv;
           varying float vFade;
+          varying float vTread;
           void main() {
             vUv = uv;
+            vTread = aTread;
             vFade = clamp(1.0 - (now - aBorn) / ${LIFE.toFixed(1)}, 0.0, 1.0);
             gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
           }`,
@@ -53,7 +65,17 @@ export class Footprints {
           uniform vec3 color;
           varying vec2 vUv;
           varying float vFade;
+          varying float vTread;
           void main() {
+            if (vTread > 0.5) {
+              // A track's piece: a band soft at its edges, its notches across it pressed in deeper.
+              float band = 1.0 - smoothstep(0.32, 0.5, abs(vUv.x - 0.5));
+              float notch = smoothstep(0.25, 0.4, abs(fract(vUv.y * ${NOTCHES}.0) - 0.5));
+              float a = band * (0.35 + 0.45 * notch) * vFade;
+              if (a < 0.01) discard;
+              gl_FragColor = vec4(color, a);
+              return;
+            }
             // A sole (an oval, wider at the front) and a heel, soft-edged.
             vec2 p = vUv - 0.5;
             float sole = length(vec2(p.x / (0.36 - 0.08 * p.y), (p.y - 0.12) / 0.3));
@@ -78,6 +100,14 @@ export class Footprints {
     scene.add(mesh);
   }
 
+  /** The next print (the oldest, reused) set to this.m, born at t. */
+  private put(t: number, tread: number): void {
+    this.mesh!.setMatrixAt(this.next, this.m);
+    this.born!.setX(this.next, t);
+    this.tread!.setX(this.next, tread);
+    this.next = (this.next + 1) % MAX;
+  }
+
   /** Each frame: a print wherever a heavy walker in sight has gone a stride since its last. */
   update(world: World, sees: (e: Entity) => boolean, now: number): void {
     if (!this.mesh || !this.born) return;
@@ -89,6 +119,7 @@ export class Footprints {
       if (r < HEAVY || soars(e) || e.inside || !sees(e)) continue;
       const x = e.x / FP;
       const z = e.y / FP;
+      const tracked = TRACKED.has(e.type);
       const was = this.last.get(e.id);
       if (!was) {
         this.last.set(e.id, { x, z, left: false });
@@ -97,30 +128,43 @@ export class Footprints {
       const dx = x - was.x;
       const dz = z - was.z;
       const d = Math.hypot(dx, dz);
-      const stride = 0.55 * r;
+      const stride = (tracked ? 0.45 : 0.55) * r;
       if (d < stride) continue;
       // A teleport (Gaïa, a drop) or a long jump between frames: start afresh there.
       if (d > 4) {
         this.last.set(e.id, { x, z, left: false });
         continue;
       }
-      // One foot then the other, either side of the way it walks.
       const [ux, uz] = [dx / d, dz / d];
+      if (tracked) {
+        // Both tracks at once, each a piece from its last one to here, so the bands run on unbroken.
+        this.q.setFromAxisAngle(this.up, Math.atan2(ux, uz));
+        for (const s of [-1, 1]) {
+          const gauge = s * 0.62 * r;
+          const px = (x + was.x) / 2 - uz * gauge;
+          const pz = (z + was.z) / 2 + ux * gauge;
+          this.m.compose(new Vector3(px, heightAt(this.map, px, pz) + 0.1, pz), this.q, new Vector3(0.3 * r, 1, d));
+          this.put(t, 1);
+        }
+        this.last.set(e.id, { x, z, left: false });
+        changed = true;
+        continue;
+      }
+      // One foot then the other, either side of the way it walks.
       const side = (was.left ? -1 : 1) * 0.28 * r;
       const px = x - uz * side;
       const pz = z + ux * side;
       const size = 0.42 * r;
       this.q.setFromAxisAngle(this.up, Math.atan2(ux, uz));
       this.m.compose(new Vector3(px, heightAt(this.map, px, pz) + 0.1, pz), this.q, new Vector3(size * 0.8, 1, size * 1.2));
-      this.mesh.setMatrixAt(this.next, this.m);
-      this.born.setX(this.next, t);
-      this.next = (this.next + 1) % MAX;
+      this.put(t, 0);
       this.last.set(e.id, { x, z, left: !was.left });
       changed = true;
     }
     if (changed) {
       this.mesh.instanceMatrix.needsUpdate = true;
       this.born.needsUpdate = true;
+      this.tread!.needsUpdate = true;
     }
     // Forget those gone (now and then: the map is small).
     if (this.last.size > world.entities.size) for (const id of this.last.keys()) if (!world.entities.has(id)) this.last.delete(id);
