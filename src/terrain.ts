@@ -66,8 +66,28 @@ function drawnEdge(map: GameMap, x: number, y: number, edge: number): [number, n
   return [h[a], h[b]];
 }
 
+/**
+ * A part of the terrain (the map editor rebuilds only what a stroke touched): `area` the tiles [x0, y0, x1, y1)
+ * drawn, each exactly as in a whole build (every tile reads the whole map), so parts meet without a seam;
+ * `outskirts` the land beyond the edges (default: with a whole build only).
+ */
+export interface TerrainPart {
+  area?: [number, number, number, number];
+  outskirts?: boolean;
+}
+
+/** The planet's ground and rock pictures, made once per planet (they take a while to draw). */
+const pictures = new Map<string, Texture[]>();
+function terrainPictures(): Texture[] {
+  const key = `${B.id}:${B.style ?? ''}:${B.ground ?? ''}`;
+  let p = pictures.get(key);
+  if (!p) pictures.set(key, (p = [...(B.ground ? groundImages(B.ground) : groundTextures(B.style)), ...rockTextures(B.style), ...(B.veins ? [crackMask(B.style)] : [])]));
+  return p;
+}
+
 /** `roads`: streets to paint on the ground, a texture over the whole map (see cityRoads). */
-export function buildTerrain(map: GameMap, roads?: Texture): Group {
+export function buildTerrain(map: GameMap, roads?: Texture, part: TerrainPart = {}): Group {
+  const [x0, y0, x1, y1] = part.area ?? [0, 0, map.width, map.height];
   leanMap = map;
   rimCache.clear();
   under = B.space ? undersides(map) : null;
@@ -100,8 +120,8 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   const pit = B.style !== 'city';
   const floorY = -B.chasm.depth * LEVEL_HEIGHT;
   const floor = new Builder();
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
       if (chasm(x, y)) {
         if (!pit || B.space) continue; // open onto the void (the city's lower levels, space under the asteroids)
         const v = CORNER_POS.map(([cx, cy]): [Vector3, Color] => {
@@ -145,8 +165,8 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
 
   // Straight cliff walls along tile edges, from each tile down to any lower neighbour (or off the map).
   const skirt = B.space ? B.chasm.depth * LEVEL_HEIGHT : 2.5;
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
       if (chasm(x, y) && (!pit || under)) continue;
       for (let e = 0; e < 4; e++) {
         const { dx, dy, c } = EDGES[e];
@@ -169,12 +189,11 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
     }
   }
 
-  const [gMap, gNormal] = B.ground ? groundImages(B.ground) : groundTextures(B.style);
-  const [rMap, rNormal] = rockTextures(B.style);
+  const [gMap, gNormal, rMap, rNormal, cracks] = terrainPictures();
   const groundMat = new MeshStandardMaterial({ vertexColors: true, map: gMap, normalMap: gNormal, normalScale: new Vector2(B.ground ? 1.5 : 0.8, B.ground ? 1.5 : 0.8), roughness: 0.95 });
   if (B.veins) {
     // Strange worlds: light glows up through the cracks.
-    groundMat.emissiveMap = crackMask(B.style);
+    groundMat.emissiveMap = cracks;
     groundMat.emissive = B.veins;
     groundMat.emissiveIntensity = B.style === 'city' ? 1.2 : B.ground === 'volcan' ? 1.6 : 2.2;
   }
@@ -190,7 +209,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
   cliffMesh.castShadow = true;
   const g = new Group();
   g.add(groundMesh, cliffMesh);
-  if (pit && !B.space) g.add(outskirts(map, gMap, gNormal, rMap));
+  if (pit && !B.space && (part.outskirts ?? !part.area)) g.add(outskirts(map, gMap, gNormal, rMap));
   if (pit && map.chasm && B.chasm.glossy) {
     const { glow, glossy, lava } = B.chasm;
     // Lava gives its own light: drawn as it is, bright where molten, dark where crusted over.

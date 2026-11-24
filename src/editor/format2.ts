@@ -1,6 +1,7 @@
 import { type Faction, FACTIONS } from '../data';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
-import { CORNERS, type MapFile, buildMap, turnsOf } from '../maps';
+import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
+import { PLANETS } from '../mapcheck';
 
 /**
  * Map file format 2: a tile grid, made for the editor (format 1, src/maps.ts, is made to be written by hand).
@@ -60,7 +61,8 @@ export interface Player2 {
 }
 
 export const RACES = Object.keys(FACTIONS) as Faction[];
-export const MAX_SIZE = 256;
+/** As the game's own map files (mapcheck.ts), so every map made here can be exported for the game. */
+export const MAX_SIZE = 160;
 const DIRS: Dir[] = ['N', 'E', 'S', 'W'];
 const TURN: Record<Dir, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' };
 
@@ -151,7 +153,7 @@ const dist = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0])
  * A format 1 map as a format 2 file, for `players` seats (default: the most it takes) on planet `biome`: the game's
  * own reader turns it, then the grid is read back. Free corners' starts become free bases.
  */
-export function fromFormat1(def: MapFile, biome = def.biomes?.[0] ?? 'desert', players = Math.max(...def.players)): MapFile2 {
+export function fromFormat1(def: MapFile, biome = def.biome, players = Math.max(...def.players)): MapFile2 {
   const map = buildMap(def, players, biome);
   const n = def.size;
   const tiles = Array.from({ length: n }, (_, y) =>
@@ -207,7 +209,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
   }
   if (f.format !== 2) throw new Error(`Format inconnu : ${String(f.format)}.`);
   const n = f.size;
-  if (!Number.isInteger(n) || n! < 16 || n! > MAX_SIZE) throw new Error(`Taille invalide (16 à ${MAX_SIZE}).`);
+  if (!Number.isInteger(n) || n! < 32 || n! > MAX_SIZE) throw new Error(`Taille invalide (32 à ${MAX_SIZE}).`);
   const size = n!;
   const pt = (p: unknown): p is [number, number] => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isInteger(v) && v >= 0 && v < size);
   const list = <T>(v: unknown, ok: (x: T) => boolean, what: string): T[] => {
@@ -227,7 +229,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     name: typeof f.name === 'string' ? f.name.slice(0, 60) : 'Carte importée',
     description: typeof f.description === 'string' ? f.description.slice(0, 400) : undefined,
     size,
-    biome: typeof f.biome === 'string' ? f.biome : 'desert',
+    biome: PLANETS.includes(f.biome as string) ? f.biome! : 'desert',
     symmetry: f.symmetry === 'rot90' || f.symmetry === 'rot180' ? f.symmetry : 'none',
     tiles: f.tiles,
     ramps,
@@ -239,4 +241,134 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     units: list<MapFile2['units'][number]>(f.units, (u) => typeof u?.type === 'string' && Number.isInteger(u.owner) && u.owner >= -1 && u.owner < players.length && pt(u.at), 'units'),
     triggers: Array.isArray(f.triggers) ? f.triggers : undefined,
   };
+}
+
+/** The format 1 bounds the game checks (mapcheck.ts). */
+const MAX_SHAPES = 300;
+const MAX_BASES = 16;
+const MAX_MINERALS = 32;
+const MAX_WELLS = 4;
+
+/**
+ * A format 2 map as a format 1 file the game imports (mapcheck.ts): relief, ramps, chasms, bases, minerals and wells.
+ * Format 1 describes player 1's part and turns it for the others, so the part kept is one tile of each turned group
+ * (the first in reading order): a symmetric map comes out the same, a lopsided one comes out symmetric (said in
+ * `notes`, with what format 1 cannot hold). Throws, in French, when the map does not fit format 1's bounds.
+ */
+export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
+  const notes: string[] = [];
+  const n = f.size;
+  if (n < 32 || n > MAX_SIZE) throw new Error(`Taille ${n} : le jeu prend de 32 à ${MAX_SIZE} tuiles.`);
+  const symmetry = f.symmetry === 'none' ? 'rot180' : f.symmetry;
+  if (f.symmetry === 'none') notes.push('Sans symétrie : la carte est rendue symétrique à 180° depuis la part du joueur 1.');
+  const turns = turnsOfSymmetry(symmetry);
+  const gm = toGameMap(f);
+  const key = ([x, y]: [number, number]) => y * n + x;
+  /** The first of a group of turned copies, in reading order: the one kept. */
+  const first = (orbit: [number, number][]) => orbit.reduce((a, p) => (key(p) < key(a) ? p : a));
+  const tileOrbit = (x: number, y: number) => turns.map((q) => rotateTile(n, x, y, q));
+  const footOrbit = ([x, y]: [number, number], s: number) => turns.map((q) => rotateFootprint(n, x, y, s, q));
+  const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+
+  // Relief: rectangles over the kept tiles of each kind (ramps are drawn by their own shapes, after).
+  const kind = (i: number) => (gm.ramp[i] ? -1 : gm.chasm?.[i] ? 3 : gm.level[i]);
+  const terrain: Shape[] = [];
+  let lopsided = false;
+  for (const k of [1, 2, 3]) {
+    const todo = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const orbit = tileOrbit(x, y);
+        if (!same(first(orbit), [x, y])) continue;
+        if (orbit.some((p) => kind(key(p)) !== kind(y * n + x))) lopsided = true;
+        if (kind(y * n + x) === k) todo[y * n + x] = 1;
+      }
+    }
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        if (!todo[y * n + x]) continue;
+        let w = 1;
+        while (x + w < n && todo[y * n + x + w]) w++;
+        let h = 1;
+        while (y + h < n && Array.from({ length: w }, (_, d) => todo[(y + h) * n + x + d]).every(Boolean)) h++;
+        for (let yy = y; yy < y + h; yy++) todo.fill(0, yy * n + x, yy * n + x + w);
+        const rect = { shape: 'rect' as const, from: [x, y] as [number, number], to: [x + w - 1, y + h - 1] as [number, number] };
+        terrain.push(k === 3 ? { ...rect, chasm: true } : { ...rect, level: k });
+      }
+    }
+  }
+  // Ramps: one of each turned group.
+  const kept: Ramp2[] = [];
+  const sameRamp = (a: Ramp2, b: Ramp2) => same(a.at, b.at) && a.up === b.up && a.width === b.width && a.level === b.level;
+  for (const r of f.ramps) {
+    if (kept.some((k) => turns.some((q) => sameRamp(turnRamp(n, k, q), r)))) continue;
+    kept.push(r);
+    if (!turns.every((q) => f.ramps.some((o) => sameRamp(o, turnRamp(n, r, q))))) lopsided = true;
+  }
+  terrain.push(...kept.map((r) => ({ shape: 'ramp' as const, at: r.at, up: r.up, width: r.width, level: r.level })));
+  if (terrain.length > MAX_SHAPES) throw new Error(`Relief trop morcelé pour le jeu : ${terrain.length} formes (${MAX_SHAPES} au plus).`);
+  if (lopsided && f.symmetry !== 'none') notes.push('Relief ou rampes pas tout à fait symétriques : la part du joueur 1 fait foi.');
+
+  // Bases: player 1's start, then one free base of each turned group (other seats' starts come from turning the first).
+  const start = f.players[0].start;
+  const starts = footOrbit(start, 4);
+  f.players.forEach((p, i) => {
+    if (i && turns.includes(CORNERS[i]) && !same(p.start, rotateFootprint(n, start[0], start[1], 4, CORNERS[i]))) notes.push(`Départ du joueur ${i + 1} : placé par symétrie depuis celui du joueur 1.`);
+  });
+  const free: [number, number][] = [];
+  for (const b of f.bases) {
+    const orbit = footOrbit(b, 4);
+    if (starts.some((s) => orbit.some((o) => same(o, s))) || free.some((k) => orbit.some((o) => same(o, k)))) continue;
+    free.push(first(orbit));
+  }
+  const spots = [start, ...free];
+  if (spots.length > MAX_BASES) throw new Error(`Trop de bases pour le jeu : ${spots.length} (${MAX_BASES} au plus).`);
+  const bases = spots.map((hq, i) => ({ ...(i === 0 ? { start: true } : {}), hq, minerals: [] as [number, number][], wells: [] as [number, number][] }));
+  // Each kept mineral and well to the nearest base with room (the game reads them all alike: the grouping only bounds a base's share).
+  const centre = (hq: [number, number]) => [hq[0] + 2, hq[1] + 2];
+  const give = (p: [number, number], list: 'minerals' | 'wells', max: number, what: string) => {
+    const byDistance = [...bases].sort((a, b) => {
+      const [ax, ay] = centre(a.hq);
+      const [bx, by] = centre(b.hq);
+      return Math.abs(ax - p[0]) + Math.abs(ay - p[1]) - (Math.abs(bx - p[0]) + Math.abs(by - p[1]));
+    });
+    const room = byDistance.find((b) => b[list].length < max);
+    if (!room) throw new Error(`Trop de ${what} pour le jeu (${max} par base au plus).`);
+    room[list].push(p);
+  };
+  const seen = new Set<number>();
+  for (const m of f.minerals) {
+    const p = first(tileOrbit(...m));
+    if (!seen.has(key(p)) && seen.add(key(p))) give(p, 'minerals', MAX_MINERALS, 'minerai');
+  }
+  seen.clear();
+  for (const w of f.wells) {
+    const p = first(footOrbit(w, 3));
+    if (!seen.has(key(p)) && seen.add(key(p))) give(p, 'wells', MAX_WELLS, 'puits');
+  }
+  const map: MapFile = {
+    format: 1,
+    id: f.id.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32) || 'carte-editeur',
+    name: f.name.replace(/[<>"&]/g, '').slice(0, 40) || 'Carte de l\'éditeur',
+    ...(f.description ? { description: f.description.replace(/[<>"&]/g, '').slice(0, 200) } : {}),
+    size: n,
+    players: symmetry === 'rot90' ? [2, 3, 4] : [2],
+    symmetry,
+    biome: PLANETS.includes(f.biome) ? f.biome : 'desert',
+    terrain,
+    bases: [],
+  };
+  // The game puts a 4×4 headquarters in a 5×5 slot, at the slot's corner nearest the minerals (maps.ts hqSlot): the
+  // slot is the one whose pick is this map's headquarters, when there is one.
+  map.bases = bases.map((b) => {
+    const slots = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([ox, oy]) => [Math.min(n - 5, Math.max(0, b.hq[0] - ox)), Math.min(n - 5, Math.max(0, b.hq[1] - oy))] as [number, number]);
+    const slot = slots.find((s) => same(hqSlot({ ...map, bases }, s), b.hq));
+    if (!slot) notes.push(`QG en ${b.hq[0]}, ${b.hq[1]} : décalé d'une tuile par le jeu.`);
+    return { ...b, hq: slot ?? slots[0] };
+  });
+  if (f.players.length > 1 && symmetry === 'rot180' && f.players.length > 2) notes.push('Symétrie 2 parts : la carte se joue à 2.');
+  if (f.units.length || f.decor.length || f.players.some((p) => p.forbid.length || p.minerals !== 200 || p.energy !== 0 || p.race !== 'humains')) {
+    notes.push('Pas encore lus par le jeu : réglages des joueurs, unités placées, décor posé, limites techno.');
+  }
+  return { map, notes };
 }

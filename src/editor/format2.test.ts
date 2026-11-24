@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { buildMap, MAPS, turnsOf } from '../maps';
-import { blankMap, fromFormat1, parseMap, rampTiles, toGameMap, turnRamp } from './format2';
+import { rotateFootprint, rotateTile } from '../map';
+import { parseMap as parseMap1 } from '../mapcheck';
+import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
+import { createMatch } from '../sim/setup';
+import { blankMap, fromFormat1, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 describe('format 2', () => {
   // Every map file read through format 2 gives the game's own map, tile for tile.
   for (const def of Object.values(MAPS)) {
     it(`${def.id} : format 1 → format 2 → carte du jeu identique`, () => {
-      const biome = def.biomes?.[0] ?? '';
+      const biome = def.biome;
       const players = Math.max(...def.players);
       const f = fromFormat1(def, biome, players);
       const a = buildMap(def, players, biome);
@@ -56,4 +59,93 @@ describe('format 2', () => {
     expect(() => parseMap({ ...blankMap(32), players: [] })).toThrow();
     expect(parseMap(JSON.parse(JSON.stringify(blankMap(32)))).size).toBe(32);
   });
+});
+
+describe('export pour le jeu (format 1)', () => {
+  /** Paints a tile and its turned copies, as the editor's brush does. */
+  const paint = (f: MapFile2, x0: number, y0: number, x1: number, y1: number, c: string) => {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        for (const q of turnsOfSymmetry(f.symmetry)) {
+          const [tx, ty] = rotateTile(f.size, x, y, q);
+          f.tiles[ty] = f.tiles[ty].slice(0, tx) + c + f.tiles[ty].slice(tx + 1);
+        }
+      }
+    }
+  };
+  const editorMap = (symmetry: 'rot180' | 'rot90', players: number) => {
+    const f = blankMap(72, 'glace');
+    f.symmetry = symmetry;
+    f.name = 'Essai <éditeur>';
+    const qs = turnsOfSymmetry(symmetry);
+    f.players = Array.from({ length: players }, (_, i) => ({ race: 'humains' as const, start: rotateFootprint(72, 10, 10, 4, CORNERS[i]), minerals: 200, energy: 0, forbid: [] }));
+    paint(f, 2, 2, 22, 22, '1');
+    paint(f, 3, 3, 8, 8, '2');
+    paint(f, 30, 20, 33, 30, 'x');
+    for (const q of qs) f.ramps.push(turnRamp(72, { at: [12, 23], up: 'N', width: 4, level: 0 }, q));
+    for (const q of qs) {
+      for (const m of [[6, 12], [6, 13], [6, 14], [7, 15]] as [number, number][]) f.minerals.push(rotateTile(72, ...m, q));
+      f.wells.push(rotateFootprint(72, 16, 5, 3, q));
+      f.bases.push(rotateFootprint(72, 40, 8, 4, q));
+      f.minerals.push(rotateTile(72, 44, 5, q), rotateTile(72, 45, 5, q));
+    }
+    f.units.push({ type: 'caserne', owner: 0, at: [14, 14] });
+    return f;
+  };
+
+  for (const [symmetry, players] of [['rot180', 2], ['rot90', 4], ['rot90', 2]] as const) {
+    it(`une carte de l'éditeur (${symmetry}, ${players} joueurs) passe par l'export, mapcheck et buildMap`, () => {
+      const f = editorMap(symmetry, players);
+      const { map, notes } = toFormat1(f);
+      const checked = parseMap1(JSON.stringify(map));
+      expect(typeof checked, String(checked)).toBe('object');
+      const def = checked as MapFile;
+      const built = buildMap(def, players, def.biome);
+      const want = toGameMap(f);
+      expect([...built.level]).toEqual([...want.level]);
+      expect(built.ramp).toEqual(want.ramp);
+      expect([...built.rampStep]).toEqual([...want.rampStep]);
+      expect([...(built.chasm ?? [])]).toEqual([...(want.chasm ?? [])]);
+      // Each seat starts where the editor put it; the free bases are there too.
+      for (let i = 0; i < players; i++) expect(built.sites!.find((s) => s.start && s.turn === CORNERS[i])!.hq).toEqual(f.players[i].start);
+      for (const b of f.bases) expect(built.sites!.some((s) => s.hq[0] === b[0] && s.hq[1] === b[1])).toBe(true);
+      const minerals = new Set(turnsOf(def, players).flatMap((q) => def.bases.flatMap((b) => b.minerals.map(([x, y]) => rotateTile(72, x, y, q).join(',')))));
+      expect(minerals).toEqual(new Set(f.minerals.map((m) => m.join(','))));
+      expect(def.biome).toBe('glace');
+      expect(notes.join(' ')).toContain('Pas encore lus par le jeu');
+      // Imported as the game does, a match starts on it: each seat's headquarters on its start, and a minute runs.
+      addMap(def);
+      const world = createMatch(Array.from({ length: players }, () => 'humains' as const), undefined, def.id, def.biome);
+      for (let i = 0; i < players; i++) {
+        const hq = [...world.entities.values()].find((e) => e.owner === i && e.type === 'conseil')!;
+        expect([hq.tx, hq.ty]).toEqual(f.players[i].start);
+      }
+      for (let t = 0; t < 20 * 60; t++) world.step([]);
+      removeMap(def.id);
+    });
+  }
+
+  it('une carte sans symétrie sort symétrique, et le dit', () => {
+    const f = editorMap('rot180', 2);
+    f.symmetry = 'none';
+    f.tiles[60] = '2'.repeat(72);
+    const { map, notes } = toFormat1(f);
+    expect(typeof parseMap1(JSON.stringify(map))).toBe('object');
+    expect(notes.join(' ')).toContain('symétrique');
+  });
+
+  // The game's own maps, opened in the editor and exported again, give the same terrain.
+  for (const def of Object.values(MAPS)) {
+    it(`${def.id} : format 1 → éditeur → format 1 → mapcheck → même terrain`, () => {
+      const players = Math.max(...def.players);
+      const f = fromFormat1(def, def.biome, players);
+      const out = parseMap1(JSON.stringify(toFormat1(f).map));
+      expect(typeof out, String(out)).toBe('object');
+      const a = buildMap(def, players, def.biome);
+      const b = buildMap(out as MapFile, players, def.biome);
+      expect([...b.level]).toEqual([...a.level]);
+      expect(b.ramp).toEqual(a.ramp);
+      expect([...(b.chasm ?? new Uint8Array(a.level.length))]).toEqual([...(a.chasm ?? new Uint8Array(a.level.length))]);
+    });
+  }
 });
