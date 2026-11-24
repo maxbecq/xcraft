@@ -117,15 +117,32 @@ export class Grid {
    * A body of radius `r` (fixed point) at (x, y), moved inside its own tile so it stays clear of the cliffs: at a cliff's
    * foot it keeps out of the band CLIFF_FOOT wide where the rock's slope is drawn (équilibreur 22/11, units sunk in the
    * cliffs), and off any other side no ground unit crosses (a cliff's top, a chasm, the map's edge) and a plateau's
-   * corner across the diagonal. Only the centre is tested against the terrain when moving. `r` counts up to just under
+   * corner across the diagonal; on a diagonal cliff's tile, off its cut corner. Only the centre is tested against the terrain when moving. `r` counts up to just under
    * half a tile (gods included), so a pass three tiles wide stays open to every unit. Buildings are not counted.
    */
   keepOff(x: number, y: number, r: number): [number, number] {
     const tx = tileOf(x);
     const ty = tileOf(y);
-    if (r <= 0 || !this.inside(tx, ty) || this.cut[ty * this.width + tx]) return [x, y];
+    if (r <= 0 || !this.inside(tx, ty)) return [x, y];
     const c = Math.min(r, KEEP_OFF);
     const i = ty * this.width + tx;
+    if (this.cut[i]) {
+      // A diagonal cliff's cut corner is drawn as low ground, at the cliff's foot, though it is the plateau's tile
+      // (the user, 2026-11-24: a unit walked down there and stood stuck, with no way on but back up): the body
+      // keeps to the plateau's side of the diagonal, as off any cliff's top. Measured from the cut corner along
+      // each axis (a, b): the diagonal is a + b = FP, and c off it is c * sqrt(2) more.
+      const [dx, dy] = CORNERS[this.cut[i] - 1];
+      let a = dx < 0 ? x - tx * FP : (tx + 1) * FP - x;
+      let b = dy < 0 ? y - ty * FP : (ty + 1) * FP - y;
+      const t = FP + Math.trunc((c * 1449) / 1024) - a - b;
+      if (t <= 0) return [x, y];
+      // Straight away from the diagonal; what would leave the tile on one axis goes to the other.
+      a += (t + 1) >> 1;
+      b += (t + 1) >> 1;
+      if (a > FP - 1) [a, b] = [FP - 1, b + a - (FP - 1)];
+      if (b > FP - 1) [a, b] = [a + b - (FP - 1), FP - 1];
+      return [dx < 0 ? tx * FP + a : (tx + 1) * FP - a, dy < 0 ? ty * FP + b : (ty + 1) * FP - b];
+    }
     const s = this.sides[i];
     const f = this.feet[i];
     const x0 = tx * FP;

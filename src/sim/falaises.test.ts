@@ -135,4 +135,46 @@ describe('cliffs', () => {
     expect(a.order).toBeNull();
     expect(Math.hypot(a.x / FP - gx - 0.5, a.y / FP - gy - 0.5)).toBeLessThan(2.5);
   });
+
+  // The user, 2026-11-24: "a unit can go down the cliff, but stays stuck at the bottom". A diagonal cliff's cut corner
+  // is drawn as low ground, yet it is part of the plateau's tile: a unit walked onto it stood at the cliff's foot,
+  // with no way on but back up.
+  it('no unit stands on a diagonal cliff\'s cut corner, drawn as low ground: ordered there it stops on the plateau, standing there it walks out', () => {
+    let seen = 0;
+    for (const map of ['origine', 'le-col']) {
+      const w0 = createMatch(['humains', 'humains'], undefined, map);
+      const cuts: [number, number, number][] = [];
+      for (let ty = 2; ty < w0.map.height - 2; ty++) for (let tx = 2; tx < w0.map.width - 2; tx++) if (cutCorner(w0.map, tx, ty) >= 0 && w0.grid.open(tx, ty)) cuts.push([tx, ty, cutCorner(w0.map, tx, ty)]);
+      for (const [tx, ty, c] of cuts.slice(0, 6)) {
+        const [dx, dy] = [[-1, -1], [1, -1], [1, 1], [-1, 1]][c];
+        if (!w0.grid.open(tx - dx, ty - dy) || !w0.grid.canStep(tx, ty, tx - dx, ty - dy)) continue;
+        seen++;
+        // How far past the diagonal, on the plateau's side (tiles, along the tile's axes: 1 on the diagonal).
+        const past = (e: { x: number; y: number }) => {
+          const [u, v] = [e.x / FP - tx, e.y / FP - ty];
+          return (dx < 0 ? u : 1 - u) + (dy < 0 ? v : 1 - v) - 1;
+        };
+        const inTile = (e: { x: number; y: number }) => Math.floor(e.x / FP) === tx && Math.floor(e.y / FP) === ty;
+        const [cx, cy] = [Math.round((tx + 0.5 + dx * 0.3) * FP), Math.round((ty + 0.5 + dy * 0.3) * FP)];
+        // Ordered from the plateau onto the cut corner.
+        let w = createMatch(['humains', 'humains'], undefined, map);
+        let a = w.spawn(big, 0, (tx - dx) * FP + FP / 2, (ty - dy) * FP + FP / 2);
+        w.step([{ player: 0, kind: 'move', ids: [a.id], x: cx, y: cy }]);
+        for (let i = 0; i < 300; i++) {
+          w.step([]);
+          if (inTile(a)) expect(past(a), `${map} ${tx},${ty} walking`).toBeGreaterThanOrEqual(0.6);
+        }
+        expect(a.order, `${map} ${tx},${ty}`).toBeNull();
+        // Standing on it (an old replay, a saved game), ordered back to the plateau, then to the low ground beyond.
+        for (const [gx, gy] of [[tx - dx, ty - dy], [tx + 2 * dx, ty + 2 * dy]]) {
+          w = createMatch(['humains', 'humains'], undefined, map);
+          a = w.spawn(big, 0, cx, cy);
+          w.step([{ player: 0, kind: 'move', ids: [a.id], x: gx * FP + FP / 2, y: gy * FP + FP / 2 }]);
+          for (let i = 0; i < 100; i++) w.step([]);
+          expect(!inTile(a) || past(a) >= 0.6, `${map} ${tx},${ty} out to ${gx},${gy}`).toBe(true);
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(3);
+  });
 });
