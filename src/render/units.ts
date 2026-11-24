@@ -1364,6 +1364,26 @@ export class EntityRenderer {
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
     const melee = !!a && a.range < 1;
+    if (v.cart) {
+      // The Réservoir hauled along: its wheels roll the ground covered, its pullers' legs stride with it, the vat
+      // rocks on the cart; throwing, the alchemist pumps his lever down as the bomb leaves.
+      const c = v.cart;
+      const { x, z } = v.root.position;
+      const d = Number.isNaN(c.x) ? 0 : Math.hypot(x - c.x, z - c.z);
+      c.x = x;
+      c.z = z;
+      if (d < 1) c.roll += d;
+      for (const w of v.wheels ?? []) w.o.rotation.x = c.roll / w.r;
+      for (const l of c.legs) l.o.rotation.x += ((moving ? Math.sin(c.roll * 9 + l.phase) * 0.6 : 0) - l.o.rotation.x) * 0.35;
+      if (c.vat) {
+        c.vat.rotation.z += ((moving ? Math.sin(c.roll * 4.5) * 0.035 : 0) - c.vat.rotation.z) * 0.2;
+        c.vat.rotation.x += ((moving ? Math.sin(c.roll * 9) * 0.015 : 0) - c.vat.rotation.x) * 0.2;
+      }
+      // fired: 1 as it throws, then down to 0 before the next; the stroke: down hard, back up slowly.
+      const stroke = fighting ? (fired > 0.85 ? 1 : fired > 0.5 ? (fired - 0.5) / 0.35 : 0) : 0;
+      if (c.lever) c.lever.rotation.x = -0.75 * stroke;
+      if (c.pumper) c.pumper.rotation.x = 0.22 * stroke;
+    }
     const ease = (o: Object3D | undefined, axis: 'x' | 'y' | 'z', target: number, rate = 0.25) => {
       if (o) o.rotation[axis] += (target - o.rotation[axis]) * rate;
     };
@@ -1845,8 +1865,15 @@ export class EntityRenderer {
     body.traverse((o) => {
       if (/^zrotor_\d+$/.test(o.name)) rotors.push(o);
     });
+    const legs: { o: Object3D; phase: number }[] = [];
+    body.traverse((o) => {
+      // A puller's two legs half a stride apart, the second puller a little out of step with the first.
+      const m = /^zstep_(\d)(\d)$/.exec(o.name);
+      if (m) legs.push({ o, phase: Number(m[2]) * Math.PI + Number(m[1]) * 0.9 });
+    });
+    const cart = legs.length ? { legs, vat: body.getObjectByName('zvat'), pumper: body.getObjectByName('zpumper'), lever: body.getObjectByName('zlever'), roll: 0, x: NaN, z: NaN } : undefined;
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: e.def.kind === 'building' ? 0 : 7 } : undefined, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: e.def.kind === 'building' ? 0 : 7 } : undefined, cart, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       rig: findRig(body, body.getWorldScale(new Vector3()).x, e.id),
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
