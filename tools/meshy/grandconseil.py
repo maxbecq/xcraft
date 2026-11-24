@@ -1,13 +1,13 @@
-"""The Grand Conseil built from the Conseil des échevins itself: its model and dress as they are, its corner tower's
-slate pyramid taken off and, raised on it, the openwork Brussels belfry of the first Grand Conseil (Rodin, from its
-chosen board): cut out above its roofs, cleaned of stray splinters, and moved into the Conseil's texture.
-The Conseil's texture uses only its left half: it is doubled to 1024 (nothing lost) and the belfry's own texture
-baked into the free right half, on UVs of its own, then tinted to the Conseil's pale stone (its cyan lights and blue
-glass kept). One mesh, one material: it takes the team colour and the living Human skin like the rest, and
-render/models.ts belfryGlow lights its cyan, its door window steady and the lights high on its spire blinking.
-Usage: git show 1e23133:public/models/grandconseil-meshy.glb > old.glb
-       Blender -b --factory-startup -P tools/meshy/grandconseil.py -- conseil-meshy.glb conseil-dress.glb old.glb out.glb
-then compress with SIZE=1024.
+"""The Grand Conseil built from the Conseil des échevins itself: its model and dress as they are, its whole corner
+tower replaced, from the ground up, by a Brussels belfry tower (Rodin, from the tower alone cut out of the chosen
+board: stepped buttresses, a blue band and banner, a cyan clock, storeys of gothic lancets lit cyan, pinnacles and an
+openwork spire with its lights and gilt finial).
+The Conseil's texture uses only its left half: it is doubled to 1024 (nothing lost) and the tower's own texture baked
+into the free right half, on UVs of its own, then tinted to the Conseil's pale stone (its cyan lights and blue kept).
+One mesh, one material: it takes the team colour and the living Human skin like the rest, and render/models.ts
+belfryGlow lights its cyan, its lancets steady and the lights high on its spire blinking.
+Usage: Blender -b --factory-startup -P tools/meshy/grandconseil.py -- conseil-meshy.glb conseil-dress.glb tower.glb out.glb
+(tower.glb: the Rodin tower, its texture moved to base colour by rewire.py), then compress with SIZE=1024.
 """
 import sys
 
@@ -20,7 +20,9 @@ body_src, dress_src, old_src, dst = sys.argv[sys.argv.index("--") + 1:][:4]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=body_src)
 body = next(o for o in bpy.context.scene.objects if o.type == "MESH")
+before = set(bpy.context.scene.objects)
 bpy.ops.import_scene.gltf(filepath=dress_src)
+dress = [o for o in bpy.context.scene.objects if o not in before and o.type == "MESH" and not o.name.startswith("armillary")]
 before = set(bpy.context.scene.objects)
 bpy.ops.import_scene.gltf(filepath=old_src)
 old = next(o for o in bpy.context.scene.objects if o not in before and o.type == "MESH")
@@ -40,14 +42,15 @@ def keep_only(o, test):
     bm.free()
 
 
-# --- The Conseil's corner tower: its slate pyramid off (every face above its eaves inside its walls).
-keep_only(body, lambda c: not (-1.75 < c.x < -0.35 and -1.5 < c.y < -0.1 and c.z > 3.58))
-TX, TY, TZ = -1.04, -0.82, 3.55  # the tower's middle and the top of its eaves (world)
-
-# --- The old belfry: what stands above its roofs at its corner, less the splinters of pinnacles below its walls.
-AX, AY, CUT = -0.62, -1.61, 3.4  # its axis and where it is cut, on the old model (world)
-keep_only(old, lambda c: c.z > CUT and c.x < -0.25 and c.y < -1.25 and (c.z > 3.75 or Vector((c.x - AX, c.y - AY)).length < 0.3))
-print("BELFRY", len(old.data.polygons), "faces")
+# --- The Conseil's whole corner off, its old tower with it: the new tower stands there from the ground, its foot flush
+# with the Conseil's plinth (x -2.03, y -1.8 at the ground) and a little proud of it.
+TX, TY, WIDE = -1.32, -1.09, 1.5  # the new tower's middle and its width at the foot (world)
+H = WIDE / 2 - 0.08
+keep_only(body, lambda c: not (abs(c.x - TX) < H and abs(c.y - TY) < H))
+keep_only(body, lambda c: not (-1.75 < c.x < -0.35 and -1.5 < c.y < -0.1 and c.z > 2.45))  # the old tower above the roof
+for d in dress:  # the dress's pipes that ran round that corner too
+    keep_only(d, lambda c: not (abs(c.x - TX) < WIDE / 2 + 0.05 and abs(c.y - TY) < WIDE / 2 + 0.05))
+print("TOWER", len(old.data.polygons), "faces")
 
 # Its texture baked into the right half of the Conseil's, on UVs of its own.
 src_uv = old.data.uv_layers.active.name
@@ -113,16 +116,20 @@ old.data.uv_layers["bake"].name = name
 old.data.materials.clear()
 old.data.materials.append(body.data.materials[0])
 
-# Onto the tower, a little larger (the tower is wider than the old belfry was).
-K = 1.15
+# Onto the corner, standing on the ground, its foot as wide as WIDE; its clock and banner to the front (-y) as made.
 old.data.transform(old.matrix_world)
 old.matrix_world.identity()
+vs = [v.co for v in old.data.vertices]
+lo = Vector([min(v[i] for v in vs) for i in range(3)])
+hi = Vector([max(v[i] for v in vs) for i in range(3)])
+K = WIDE / max(hi.x - lo.x, hi.y - lo.y)
+mx, my = (lo.x + hi.x) / 2, (lo.y + hi.y) / 2
 for v in old.data.vertices:
-    v.co = Vector((TX + (v.co.x - AX) * K, TY + (v.co.y - AY) * K, TZ + (v.co.z - CUT) * K))
+    v.co = Vector((TX + (v.co.x - mx) * K, TY + (v.co.y - my) * K, (v.co.z - lo.z) * K))
 bpy.ops.object.select_all(action="DESELECT")
 old.select_set(True)
 body.select_set(True)
 bpy.context.view_layer.objects.active = body
 bpy.ops.object.join()
-print("TOP", round(TZ + (6.19 - CUT) * K, 2))
+print("TOP", round((hi.z - lo.z) * K, 2))
 bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_extras=True)
