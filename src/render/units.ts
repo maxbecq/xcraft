@@ -14,6 +14,7 @@ import { type Entity, type World, soars } from '../sim/world';
 import { TEAM_COLORS, MINERAL_VARIANTS, teamMaterials, veinTime, neutral, ore, templates, SHARED, free, owned, CHARACTERS, model, CLIP, skinClock } from './models';
 import { findRig, stepRig } from './godrig';
 import { GAUGE } from './footprints';
+import { boxInParent } from './pivots';
 import { smoothstep, GAIT_SWING, gaitCycle, insectLegs, legRig, WALK_STRIDE, play, stepGait, walk, walkCrouch } from './gait';
 import { lobLaunch, seeThrough } from './effects';
 import { ghost, type View, FLASH_S, hitTint, toCorpse, toGhost, fromGhost, unflash, setCloak, setStone, dropCorpse, HALO_FADE, smooth, type Halo, makeHalo, dropHalo } from './views';
@@ -1439,7 +1440,7 @@ export class EntityRenderer {
     }
     // Track links running round their loop as the machine rolls: the bottom run still on the ground, the top one going
     // forward twice as fast as the body (tools/meshy/scarabparts.py).
-    const tracks: { loop: number[]; links: Object3D[][]; shift: Vector3[][]; gauged: boolean } | null = (v.model.userData.tracks ??= (() => {
+    const tracks: { loop: number[]; links: Object3D[][]; gauged: boolean } | null = (v.model.userData.tracks ??= (() => {
       const holder = v.model.getObjectByName('ztracks');
       const loop = holder?.userData.zloop as number[] | undefined;
       if (!holder || !loop) return null;
@@ -1448,10 +1449,7 @@ export class EntityRenderer {
         const m = /^ztread_(\d)_(\d+)$/.exec(o.name);
         if (m) links[Number(m[1])][Number(m[2])] = o;
       });
-      // Each link's node is offset from where it was built (the meshopt quantisation moves its origin): kept, and turned
-      // with the link, or the cleats stood out past the track like a rake.
-      const shift = links.map((list, side) => list.map((o) => o.position.clone().sub(new Vector3(side ? loop[4] : -loop[4], 0, 0))));
-      return { loop, links, shift, gauged: false };
+      return { loop, links, gauged: false };
     })());
     if (tracks) {
       const [fy, by, az, r, ox] = tracks.loop;
@@ -1476,8 +1474,8 @@ export class EntityRenderer {
             s -= run;
             [py, pz, a] = [fy - r * Math.sin(s / r), az + r * Math.cos(s / r), Math.PI + s / r];
           }
+          o.position.set(side ? ox : -ox, pz, -py);
           o.rotation.x = a;
-          o.position.set(side ? ox : -ox, pz, -py).add(tracks.shift[side][i].clone().applyEuler(o.rotation));
         });
       }
       if (!tracks.gauged && !GAUGE.has(e.type)) {
@@ -1486,18 +1484,11 @@ export class EntityRenderer {
         tracks.gauged = true;
         // In the links' holder's frame (sideways is x there, as in the unit's), then to world size: the holder's scale
         // over the unit's own (its heading turns, it does not scale).
-        let lo = Infinity;
-        let hi = -Infinity;
-        for (const o of tracks.links[1]) {
-          const g = (o as Mesh).geometry;
-          if (!g) continue;
-          g.computeBoundingBox();
-          lo = Math.min(lo, o.position.x + g.boundingBox!.min.x * o.scale.x);
-          hi = Math.max(hi, o.position.x + g.boundingBox!.max.x * o.scale.x);
-        }
+        const box = new Box3();
+        for (const o of tracks.links[1]) box.union(boxInParent(o));
         const holder = tracks.links[1][0]?.parent;
         const k = holder ? holder.getWorldScale(new Vector3()).x / v.model.getWorldScale(new Vector3()).x : 1;
-        if (hi > lo) GAUGE.set(e.type, [((lo + hi) / 2) * k, (hi - lo) * k]);
+        if (!box.isEmpty()) GAUGE.set(e.type, [((box.min.x + box.max.x) / 2) * k, (box.max.x - box.min.x) * k]);
       }
     }
     if (v.cart) {
