@@ -490,7 +490,7 @@ const shown = ATTRACT
 /** Bumped as files arrive: a loading that stops moving for STALL_MS is given up. */
 let stirred = 0;
 const loaded = Promise.all([
-  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : factions.includes('humains') ? ['zw_mitrailleuse'] : [])], (done, total) => {
+  loadModels([...shown, ...shown.flatMap((t) => LOOKS[t] ?? []), ...MINERAL_VARIANTS, ...(factions.includes('z') ? WEAPON_MODELS : [])], (done, total) => {
     stirred++;
     loading?.style.setProperty('--p', String(0.9 * (done / total)));
   }),
