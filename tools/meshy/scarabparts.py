@@ -46,7 +46,7 @@ bpy.context.scene.collection.objects.link(holder)
 holder["zloop"] = loop
 perim = 2 * (loop[1] - loop[0]) + 2 * math.pi * r
 N = max(8, int(perim / 0.11))
-TREAD = 0.19  # the track's width, its outer face in to the hull
+TREAD = 0.31  # the track's whole width, its outer face in to its inner one (it reads as two tracks a side if half)
 for s, sx in enumerate((-1, 1)):
     for i in range(N):
         bpy.ops.mesh.primitive_cube_add(size=1, location=(sx * loop[4], 0, 0))

@@ -15,8 +15,8 @@ const HEAVY = 0.6;
 /** Machines on tracks: two notched bands behind them instead of feet (none from a Char Pégase in flight). */
 const TRACKED = new Set(['scarabee', 'pegase']);
 /** Where a machine's tracks run, if not about its radius: [middle of each track out from its own, track width], world
- * units. The Scarabée's, measured on its drawn model: tracks 0.19 wide, their outer faces 0.747 out, ×1.65. */
-const GAUGE: Record<string, [number, number]> = { scarabee: [1.07, 0.31] };
+ * units. The Scarabée's, measured on its drawn model: each track from 0.435 to 0.747 out, ×1.59 as drawn. */
+const GAUGE: Record<string, [number, number]> = { scarabee: [0.94, 0.5] };
 /** Notches across each band's piece: whole ones, so they run on unbroken from one piece to the next. */
 const NOTCHES = 4;
 
