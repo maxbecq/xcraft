@@ -93,7 +93,7 @@ function rows(tl: RecapSample[], totals: Totals[]): [string, (p: number) => stri
 const CSS = `
 .recap{position:fixed;inset:0;z-index:60;overflow:auto;background:#0b0d12;color:#e8e4da;font:14px system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 24px}
 .recap h2{margin:0 0 4px;font-size:20px}.recap h3{margin:16px 0 6px;font-size:15px}.recap .sub{opacity:.7;margin-bottom:10px}
-.recap .close{position:sticky;top:0;float:right;font-size:22px;background:#333;color:#fff;border:0;border-radius:6px;padding:2px 12px}
+.recap .close:not(.end){position:sticky;top:0;float:right;font-size:22px;background:#333;color:#fff;border:0;border-radius:6px;padding:2px 12px}
 .recap .card{background:rgba(255,255,255,.05);border-radius:8px;padding:8px}
 .recap canvas{width:100%;height:min(48vh,360px);display:block}
 .recap .legend span{margin-right:14px}.recap .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
@@ -102,6 +102,7 @@ const CSS = `
 .recap .wrap{overflow-x:auto}.recap table{border-collapse:collapse;width:100%;max-width:760px}
 .recap td,.recap th{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;white-space:nowrap}
 .recap td:first-child,.recap th:first-child{text-align:left;white-space:normal;opacity:.85}
+.recap .end-row{display:flex;justify-content:center;margin:24px 0 8px}
 .recap .note{opacity:.55;font-size:12px;margin-top:6px}
 .recap ol{list-style:none;padding:0;margin:4px 0;columns:2 280px}.recap li{padding:2px 0;break-inside:avoid}.recap li b{display:inline-block;width:44px;opacity:.6;font-weight:400}
 `;
@@ -120,9 +121,9 @@ export function showRecap(rec: Recorder, world: World, names: string[], onClose?
     .map(([label, v]) => `<tr><td>${label}</td>${names.map((_, i) => `<td>${v(i)}</td>`).join('')}</tr>`)
     .join('')}</table></div><p class="note">Récolté : tout ce qui est entré en réserve, remboursements et pillage compris. Tuées, détruits, perdus : au combat seulement (une unité absorbée ou consommée n’y compte pas).</p>`;
   const list = `<ol>${major.map((m) => `<li><b>${clock(m.tick)}</b><span style="color:${colors[m.player] ?? '#fff'}">${MOMENT_ICON[m.kind]}</span> ${esc(names[m.player] ?? '')} — ${esc(m.detail)}</li>`).join('')}</ol>`;
-  box.innerHTML = `<style>${CSS}</style>${onClose ? '<button class="close">Menu principal ›</button>' : '<button class="close" aria-label="Fermer">✕</button>'}<h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
+  box.innerHTML = `<style>${CSS}</style>${onClose ? '' : '<button class="close" aria-label="Fermer">✕</button>'}<h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
     <div class="tabs">${METRICS.map((m, i) => `<button data-t="${i}" class="${i ? '' : 'on'}">${m.label}</button>`).join('')}</div><div class="card"><canvas></canvas></div>
-    <h3>Totaux</h3>${table}<h3>Moments clés</h3>${list}`;
+    <h3>Totaux</h3>${table}<h3>Moments clés</h3>${list}${onClose ? '<div class="end-row"><button class="close end">Revenir au menu principal</button></div>' : ''}`;
   document.body.append(box);
   let at = 0;
   const cv = box.querySelector('canvas')!;

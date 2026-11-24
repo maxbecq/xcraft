@@ -103,7 +103,7 @@ export function showEnd(h: Hud): void {
     // Won because the other side gave up (an AI that had lost), not by razing its last building.
     const quit = !draw && h.world.players.some((p) => p.resigned && p.team !== team[0].team);
     const note = !quit ? '' : `<p>${h.spectator ? 'Le camp vaincu abandonne.' : won ? "L'adversaire abandonne." : 'Votre équipe abandonne.'}</p>`;
-    h.banner.innerHTML = `<h1>${title}</h1>${note}<div class="row"><button data-p="quit">Menu principal</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
+    h.banner.innerHTML = `<h1>${title}</h1>${note}<div class="row"><button data-p="quit">Terminer la partie</button><button data-p="restart">${h.online ? 'Revanche' : 'Rejouer'}</button><button data-p="replay">Enregistrer le replay</button>${h.endButtons}</div>`;
     h.banner.classList.toggle('won', won || h.spectator);
     h.banner.hidden = false;
     h.endShownAt = performance.now();
