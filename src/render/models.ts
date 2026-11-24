@@ -205,11 +205,12 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   archer: { height: 0.92, weapon: 'rayon', grip: 'rifle' },
   druide: { height: 0.95, weapon: 'baton', grip: 'pole' },
   phalangiste: { height: 0.9, weapon: 'lancegrenades', grip: 'rifle' },
+  belluaire: { height: 0.9, weapon: 'trident', grip: 'rifle' }, // its fire trident held at the hip like the launcher (aim clip)
   discobole: { height: 1.0 },
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
-const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure', 'belluaire',
+const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'obelisque', 'portail', 'recepteur', 'forge', 'tour', 'orbe', 'nanoassembleur', 'fortin', 'recepteurarme', 'chimere', 'metallurgie', 'bourdon', 'pegase', 'alchimisterie', 'creaturium', 'plesiosaure', 'ankylosaure', 'allosaure',
   // the Dieux redone from their concept boards (recherches-visuelles, TRELLIS.2 on this Mac)
   'minotaure', 'temple', 'gaia',
   // Z redone from their chosen boards (concepts-z, TRELLIS.2 on this Mac), sized like the Blender sketches

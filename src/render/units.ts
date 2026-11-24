@@ -155,7 +155,7 @@ const RING_RISE = 0.35;
 const RING_CLIFF = 0.6;
 
 /** Soldiers whose death clip ends kneeling or hunched: they are tipped onto their back as they fall. */
-const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['belluaire', -1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
+const FALL_FLAT = new Map([['soigneur', 1], ['alchimiste', 1], ['discobole', 1], ['assassin', 1]]); // which way: +1 face down, -1 on the back
 /** A death burst's material: sparks for a machine, dark drops for the living. */
 function burstMaterial(mechanical: boolean): PointsMaterial {
   return mechanical
