@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, type DataTexture, Group, Mesh, MeshStandardMaterial, type Object3D, PlaneGeometry, RepeatWrapping, SRGBColorSpace } from 'three';
-import type { BuildingDef } from '../data';
+import { type BuildingDef, DEFS } from '../data';
 import { type GameMap, heightAt } from '../map';
 import { FP } from '../sim/fixed';
 import type { Entity, World } from '../sim/world';
@@ -103,23 +103,47 @@ function cobbles(relief: boolean): [CanvasTexture, CanvasTexture | null] {
  * neighbour, like a town growing out of the ground. Decoration only. One draped mesh per player, rebuilt
  * when their buildings change.
  */
+/** A Caserne volante's paving spreads from its middle to its rim once it is down (it lands in the render this long
+ * after the simulation sets it down: units.ts LAND_S), and shrinks away as it takes off, in GROW_S. */
+const LANDING_S = 1.8;
+const GROW_S = 0.8;
+
 export class Paving {
   private readonly root = new Group();
   private material: MeshStandardMaterial | null = null;
   private key = '';
+  /** Each building's type last time: a Caserne volante landing or lifting off shows as a change of type. */
+  private readonly was = new Map<number, string>();
+  /** Pavings spreading (in) or shrinking (out), from when (s); a shrinking one keeps where it was. */
+  private readonly grow = new Map<number, { kind: 'in' | 'out'; t0: number; e: Entity }>();
 
   constructor(scene: Object3D, private readonly map: GameMap, private readonly fog: DataTexture, private readonly relief: boolean) {
     scene.add(this.root);
   }
 
   update(world: World, sees: (e: Entity) => boolean): void {
+    const now = performance.now() / 1000;
+    for (const e of world.entities.values()) {
+      const before = this.was.get(e.id);
+      if (before === 'casernevol' && e.type === 'casernevolante') this.grow.set(e.id, { kind: 'in', t0: now + LANDING_S, e });
+      if (before === 'casernevolante' && e.type === 'casernevol') this.grow.set(e.id, { kind: 'out', t0: now, e: { ...e, type: 'casernevolante', def: DEFS.casernevolante } as Entity });
+      if (e.type === 'casernevol' || e.type === 'casernevolante') this.was.set(e.id, e.type);
+    }
+    // How much of each paving shows: 0 none, 1 all of it.
+    const share = new Map<number, number>();
+    for (const [id, g] of this.grow) {
+      const k = Math.max(0, Math.min(1, (now - g.t0) / GROW_S));
+      share.set(id, g.kind === 'in' ? k * (2 - k) : 1 - k * k);
+      if (k >= 1) this.grow.delete(id);
+    }
     const built = [...world.entities.values()].filter((e) => e.def.kind === 'building' && e.buildLeft <= 0 && (e.def as BuildingDef).faction === 'humains' && sees(e));
-    const key = built.map((e) => e.id).join(',');
+    for (const [id, g] of this.grow) if (g.kind === 'out' && !built.some((e) => e.id === id)) built.push(g.e);
+    const key = built.map((e) => `${e.id}:${(share.get(e.id) ?? 1).toFixed(2)}`).join(',');
     if (key === this.key) return;
     this.key = key;
     for (const m of this.root.children) (m as Mesh).geometry.dispose();
     this.root.clear();
-    for (const owner of new Set(built.map((e) => e.owner))) this.build(built.filter((e) => e.owner === owner));
+    for (const owner of new Set(built.map((e) => e.owner))) this.build(built.filter((e) => e.owner === owner), share);
   }
 
   /** With Humans in the match: the cobbles' texture drawn now, behind the loading screen (its 512 x 512 stones took
@@ -150,9 +174,9 @@ export class Paving {
     return (this.material = m);
   }
 
-  private build(own: Entity[]): void {
+  private build(own: Entity[], share: Map<number, number>): void {
     const pos = (e: Entity) => [e.x / FP, e.y / FP] as const;
-    const reach = (e: Entity) => (e.def as BuildingDef).size / 2 + PLAZA;
+    const reach = (e: Entity) => ((e.def as BuildingDef).size / 2 + PLAZA) * (share.get(e.id) ?? 1);
     // Streets: each building to the nearest one already linked, starting from the town hall.
     const hall = own.find((e) => (e.def as BuildingDef).dropoff) ?? own[0];
     const linked = [hall, ...own.filter((e) => e !== hall)];
@@ -160,7 +184,8 @@ export class Paving {
     for (let i = 1; i < linked.length; i++) {
       const e = linked[i];
       const n = linked.slice(0, i).reduce((a, b) => (Math.hypot(b.x - e.x, b.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y) ? b : a));
-      if (Math.hypot(n.x - e.x, n.y - e.y) / FP < 22) streets.push([...pos(e), ...pos(n)]);
+      // A paving still spreading or shrinking has no street yet, or no longer.
+      if (Math.hypot(n.x - e.x, n.y - e.y) / FP < 22 && (share.get(e.id) ?? 1) >= 1 && (share.get(n.id) ?? 1) >= 1) streets.push([...pos(e), ...pos(n)]);
     }
     let [x0, z0, x1, z1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const e of own) {
