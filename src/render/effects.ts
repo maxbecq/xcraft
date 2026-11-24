@@ -328,7 +328,9 @@ export class Effects {
       if (c.kind === 'napalm' || c.kind === 'impulsion' || c.kind === 'chocmental' || c.kind === 'foudre') this.holds(world, c.kind, c.x, c.y);
       if (!seen(c.x, c.y)) continue;
       if (c.kind !== 'rappel') this.audio.play(c.kind as Sfx, 0.9); // the recall sounds with its teleport
-      this.ability(c.kind, this.at(c.x, c.y, 0.1));
+      // Both mines send the same blast: the Bourdon's alchemical one is the mine that died there this very tick.
+      const alch = c.kind === 'minechimique' && world.deaths.some((d) => d.type === 'minealchimique' && d.x === c.x && d.y === c.y);
+      this.ability(c.kind, this.at(c.x, c.y, 0.1), alch);
     }
     // Murs d'énergie: a shimmering curtain of cyan sparks over each tile while it stands.
     for (const m of world.walls) {
@@ -397,8 +399,8 @@ export class Effects {
     }
   }
 
-  /** What each ability looks like where it is used. */
-  private ability(kind: string, p: Vector3): void {
+  /** What each ability looks like where it is used; `alch`: a mine blast that is the Bourdon's alchemical mine. */
+  private ability(kind: string, p: Vector3, alch = false): void {
     switch (kind) {
       case 'explosiftoxique': // a sickly green cloud spreading over the zone
         this.explosion(p, 0.5);
@@ -493,9 +495,10 @@ export class Effects {
       case 'posermine': // the mine dug in under the tank
         this.cloud(p, 0x8a7a62, 8, 0.4, 0.3, 0.8, 0.4);
         break;
-      case 'minechimique': // it goes off: a blast and a green cloud
+      case 'minechimique': // it goes off: a blast and a cloud, green for the Bourdon's alchemical mine, orange-amber
+        // for the Char Pégase's chemical one, like its glow (the user, 2026-11-24)
         this.explosion(p, 0.6);
-        this.cloud(p, 0x8aff4a, 24, 1.5, 0.3, 2.5, 0.9);
+        this.cloud(p, alch ? 0x8aff4a : 0xff6a08, 24, 1.5, 0.3, 2.5, 0.9);
         break;
     }
   }
