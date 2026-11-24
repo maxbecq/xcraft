@@ -754,12 +754,12 @@ body.spectate .hud-card > * { visibility: hidden; } /* the empty screen stays, n
 :is(.options, .pause-options) input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #ffd58a; border: 1px solid #000; box-shadow: 0 0 4px rgba(0, 0, 0, 0.8); }
 :is(.options, .pause-options) input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #ffd58a; border: 1px solid #000; box-shadow: 0 0 4px rgba(0, 0, 0, 0.8); }
 :is(.options, .pause-options) input[type='range']:focus-visible { outline: 1px solid #ffd58a; outline-offset: 2px; }
-.menu .switch { position: relative; width: 40px; height: 22px; }
-.menu .switch input { opacity: 0; width: 0; height: 0; }
-.menu .switch span { position: absolute; inset: 0; border-radius: 11px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(217, 164, 32, 0.45); cursor: pointer; transition: background 0.15s; }
-.menu .switch span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #c9b896; transition: transform 0.15s; }
-.menu .switch input:checked + span { background: rgba(217, 164, 32, 0.5); }
-.menu .switch input:checked + span::after { transform: translateX(18px); background: var(--amber); }
+:is(.menu, .pause-options) .switch { display: inline-block; flex: none; position: relative; width: 40px; height: 22px; }
+:is(.menu, .pause-options) .switch input { opacity: 0; width: 0; height: 0; }
+:is(.menu, .pause-options) .switch span { position: absolute; inset: 0; border-radius: 11px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(217, 164, 32, 0.45); cursor: pointer; transition: background 0.15s; }
+:is(.menu, .pause-options) .switch span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #c9b896; transition: transform 0.15s; }
+:is(.menu, .pause-options) .switch input:checked + span { background: rgba(217, 164, 32, 0.5); }
+:is(.menu, .pause-options) .switch input:checked + span::after { transform: translateX(18px); background: var(--amber); }
 @media (max-width: 600px) {
   .menu .seat { grid-template-columns: 14px 1fr 44px; }
   .menu .seat select, .menu .seat .closed { grid-column: span 3; }

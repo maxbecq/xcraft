@@ -287,7 +287,7 @@ const hud = new Hud(world, map, PLAYER, input, scene, issue, audio, SPECTATE);
 hud.bilan = !!recap;
 hud.online = !!NET_ROLE;
 const marking = new Marking(hud);
-hud.gridKeys = SCROLL.grid && !TOUCH;
+hud.gridKeys = SCROLL.grid && !TOUCH && !SCROLL.alt;
 hud.mapSlot.append(minimap.canvas);
 minimap.onOrder = (x, y) => input.orderAt(x, y);
 /** The big minimap (² on AZERTY, ` on QWERTY): a larger target to move the view or send units, over the middle of
@@ -337,6 +337,7 @@ const marks = new Marks(scene, map, FX_STYLE);
 overlay.top = (id, built) => units.top(id, built);
 hud.top = overlay.top;
 hud.alt = input.alt = SCROLL.alt && !TOUCH;
+input.rattack = SCROLL.rattack;
 overlay.hostile = (a, b) => world.hostile(a, b);
 const power = new PowerNet(scene, map, fog);
 const paving = new Paving(scene, map, fog, QUALITY_LEVEL !== 'basse');
@@ -655,15 +656,18 @@ function controlChange(field: HTMLInputElement | HTMLSelectElement): boolean {
   }
   const k = field.dataset.k as keyof Controls | undefined;
   if (!k || !(k in SCROLL_BASE)) return false;
-  if (k === 'lock' || k === 'grid' || k === 'halo' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'alt' || k === 'mute') {
+  if (k === 'lock' || k === 'grid' || k === 'lcd' || k === 'tactile' || k === 'tuck' || k === 'alt' || k === 'rattack' || k === 'mute') {
     SCROLL[k] = (field as HTMLInputElement).checked;
     document.body.classList.toggle('lcd', SCROLL.lcd && !(SCROLL.alt && !TOUCH));
     document.body.classList.toggle('alt', SCROLL.alt && !TOUCH);
     hud.alt = input.alt = SCROLL.alt && !TOUCH;
+    input.rattack = SCROLL.rattack;
+    // The grid hotkeys belong to the classic gameplay: their choice hidden with the experimental one.
+    for (const g of document.querySelectorAll<HTMLElement>('[data-classic]')) g.hidden = SCROLL.alt;
     document.body.classList.toggle('tactile', TOUCH && SCROLL.tactile);
     document.body.classList.toggle('tuck', TOUCH && SCROLL.tuck);
     hud.buttonsKey = ''; // the card redrawn in its new form
-    hud.gridKeys = SCROLL.grid && !TOUCH;
+    hud.gridKeys = SCROLL.grid && !TOUCH && !SCROLL.alt;
     if (!SCROLL.lock) pointer.release();
   } else {
     SCROLL[k] = Number(field.value);
@@ -792,7 +796,7 @@ function start(): void {
     footprints.update(world, sees, performance.now());
     // The hover halo: a building in sight under the mouse, not already selected (none on a touch screen, which has no hover).
     const hovered = input.hovered;
-    units.glow(SCROLL.halo && !TOUCH && !ATTRACT && hovered?.def.kind === 'building' && !input.selected.has(hovered.id) && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
+    units.glow(!TOUCH && !ATTRACT && hovered?.def.kind === 'building' && !input.selected.has(hovered.id) && world.entities.has(hovered.id) && sees(hovered) ? hovered.id : null, performance.now());
     lap('footprints');
     hud.update();
     lap('hud');

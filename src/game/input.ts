@@ -304,6 +304,8 @@ export class Input {
 
   /** The alternative interface (game/hud-alt.ts), set by the game: a click on a fighter picks the whole army. */
   alt = false;
+  /** Option « Clic droit = attaque »: our fighters (not the workers) attack-move to the point, or attack what is hit. */
+  rattack = false;
 
   /** Ours that fight or cast: not workers or builders, nor what can do neither (transports, unarmed scouts). */
   private fighter(e: Entity): boolean {
@@ -548,7 +550,15 @@ export class Input {
   orderAt(x: number, z: number, target?: Entity, queue = false): void {
     const own = this.own();
     if (!own.length) return;
-    this.hooks.issue({ player: this.player, kind: 'smart', ids: own.map((e) => e.id), x: Math.round(x * FP), y: Math.round(z * FP), target: target?.id, queue });
+    const fx = Math.round(x * FP);
+    const fy = Math.round(z * FP);
+    // Option: the fighters attack instead of a plain move (on the ground, a resource or a foe; not on our own things).
+    const armed = (e: Entity) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !!this.world.weapon(e);
+    const foe = !!target && this.world.hostile(this.player, target.owner);
+    const attack = this.rattack && (!target || target.def.kind === 'resource' || foe) ? own.filter(armed) : [];
+    if (attack.length) this.hooks.issue({ player: this.player, kind: 'attack', ids: attack.map((e) => e.id), x: fx, y: fy, target: foe ? target!.id : undefined, queue });
+    const rest = own.filter((e) => !attack.includes(e));
+    if (rest.length) this.hooks.issue({ player: this.player, kind: 'smart', ids: rest.map((e) => e.id), x: fx, y: fy, target: target?.id, queue });
     // To a resource: a field, a well, a building where workers make energy, or cargo taken home (as sim smart() does).
     const b = target?.def as BuildingDef | undefined;
     if (target && own.some((e) => (e.def as UnitDef).worker) && (target.def.kind === 'resource' || (target.owner === this.player && (b?.energyRate || (b?.dropoff && own.some((e) => e.carry > 0)))))) this.harvests++;
