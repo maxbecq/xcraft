@@ -25,6 +25,7 @@ describe('end-of-game analysis data', () => {
     step(5 * TICK_RATE);
     expect(rec.timeline.length).toBe(1);
     expect(rec.timeline[0].players[0].produced).toBe(0);
+    expect(rec.timeline[0].players[0].gathered).toBe(rec.totals[0].gotMinerals + rec.totals[0].gotEnergy);
     spawn();
     step(5 * TICK_RATE);
     expect(rec.timeline.at(-1)!.players[0].produced).toBe(value);

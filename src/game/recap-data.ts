@@ -22,6 +22,8 @@ export interface RecapPlayer {
   /** Price of all it raised and trained since the start, and of all it lost to its enemies. */
   produced: number;
   lost: number;
+  /** All that went into its bank since the start (the totals' « récolté »: harvest, refunds and pillage). */
+  gathered: number;
   /** Orders given a minute, over the last sample's span. */
   apm: number;
 }
@@ -221,7 +223,7 @@ export class Recorder {
         const s = w.supply(p.id);
         const apm = Math.round((this.orders[p.id] * 60) / span);
         this.orders[p.id] = 0;
-        return { army: Math.round(army), workers, minerals: p.minerals, energy: p.energy, supply: s.used, supplyMax: s.max, produced: this.produced[p.id], lost: this.lost[p.id], apm };
+        return { army: Math.round(army), workers, minerals: p.minerals, energy: p.energy, supply: s.used, supplyMax: s.max, produced: this.produced[p.id], lost: this.lost[p.id], gathered: this.totals[p.id].gotMinerals + this.totals[p.id].gotEnergy, apm };
       }),
     });
   }

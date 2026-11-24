@@ -14,6 +14,7 @@ interface Metric {
 }
 const METRICS: Metric[] = [
   { label: 'Armée (valeur)', get: (p) => p.army },
+  { label: 'Ressources récoltées', get: (p) => p.gathered },
   { label: 'Ressources en réserve', get: (p) => p.minerals + p.energy },
   { label: 'Production cumulée', get: (p) => p.produced },
   { label: 'Pertes cumulées', get: (p) => p.lost },
