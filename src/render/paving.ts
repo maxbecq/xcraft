@@ -105,8 +105,8 @@ function cobbles(relief: boolean): [CanvasTexture, CanvasTexture | null] {
  * when their buildings change.
  */
 /** A Caserne volante's paving spreads from its middle to its rim once it is down (LAND_S after the simulation sets
- * it down), and shrinks away once it leaves the ground (after its rotors spool up, SPOOL_S), slowly, in GROW_S. */
-const GROW_S = 2;
+ * it down), and shrinks away once it leaves the ground (after its rotors spool up, SPOOL_S), slowly, in GROW_S (4 s, the user). */
+const GROW_S = 4;
 
 export class Paving {
   private readonly root = new Group();
