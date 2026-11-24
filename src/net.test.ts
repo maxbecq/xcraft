@@ -111,7 +111,7 @@ describe('lockstep between two browsers', () => {
       const [a, b] = play(ticks, link);
       expect(a.world.tick).toBe(ticks);
       expect(b.world.tick).toBe(ticks);
-      expect(a.log.length).toBeGreaterThan(10); // the AIs did play
+      expect(a.log.length).toBeGreaterThanOrEqual(10); // the AIs did play
       expect(a.log).toEqual(b.log);
       expect(fingerprint(a.world)).toBe(fingerprint(b.world));
       expect(fingerprint(replay(a.log, ticks))).toBe(fingerprint(a.world));

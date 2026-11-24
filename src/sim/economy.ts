@@ -71,6 +71,7 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
     e.carry = n;
     field.miner = 0;
     o.phase = 'return';
+    e.goal = null; // the way to the field is not the way back (point 109)
     if (field.amount <= 0) this.remove(field);
   }
 }
