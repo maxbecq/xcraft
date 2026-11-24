@@ -75,8 +75,7 @@ export function showHome(): void {
   menu.className = 'menu';
   menu.innerHTML = `<h1>XCRAFT</h1><p>Humains · Isdaris · Z · Dieux</p>
     <button data-m="new">Nouvelle partie</button>
-    <button data-m="friend">Jouer avec un ami</button>
-    <button data-m="join">Rejoindre un ami</button>
+    <button data-m="network">Partie réseau</button>
     <button data-m="sandbox">Bac à sable</button>
     <button data-m="options">Options</button>
     <div class="row">
@@ -88,8 +87,7 @@ export function showHome(): void {
     const m = (e.target as HTMLElement).dataset.m;
     if (m === 'new') showSetup(menu as HTMLElement, readSetup());
     else if (m === 'sandbox') showSetup(menu as HTMLElement, readSetup(), 'map', true);
-    else if (m === 'friend') showLobby(menu as HTMLElement, newRoom(), true);
-    else if (m === 'join') showJoin(menu as HTMLElement);
+    else if (m === 'network') showNetwork(menu as HTMLElement);
     else if (m === 'options') showOptions(menu as HTMLElement);
     else if (m === 'last-replay') {
       const r = readReplay('last');
@@ -101,6 +99,22 @@ export function showHome(): void {
       }
     }
     else if (m === 'open-replay') openReplayFile();
+  };
+}
+
+/** Partie réseau: every way to play with others over the network; a server for more than two to come. */
+function showNetwork(menu: HTMLElement): void {
+  menu.className = 'menu';
+  menu.innerHTML = `<h2>Partie réseau</h2>
+    <button data-m="friend">Héberger : jouer avec un ami</button>
+    <button data-m="join">Rejoindre un ami</button>
+    <button disabled title="Bientôt">Serveur de parties à plus de deux joueurs (bientôt)</button>
+    <div class="row"><button data-m="back">Retour</button></div>`;
+  menu.onclick = (e) => {
+    const m = (e.target as HTMLElement).dataset.m;
+    if (m === 'friend') showLobby(menu, newRoom(), true);
+    else if (m === 'join') showJoin(menu);
+    else if (m === 'back') showHome();
   };
 }
 
