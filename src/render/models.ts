@@ -220,7 +220,7 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // and with Meshy (smart topology t2.5 for units, t2 for buildings, 3000 faces, n1 texture)
   'octopode', 'mastodonte', 'centrek', 'supreme', 'centresocles', 'optimisation',
   // and with Rodin (fal) or Tripo: the last Blender sketches
-  'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'minechimique', 'grandealchimisterie', 'casernevolante', 'scarabee',
+  'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'minechimique', 'grandealchimisterie', 'casernevolante', 'scarabee', 'cuve',
   // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
   'grandconseil'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
