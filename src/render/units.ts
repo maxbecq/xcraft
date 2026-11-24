@@ -130,11 +130,10 @@ const RING_SAW_GROWTH = 3.4;
 /** Per module, after import: a turn about the vertical (radians) and a scale, for a model that is not to the convention. */
 const WEAPON_TUNE: Record<string, { yaw?: number; scale?: number }> = {};
 /** The weapon module an entity shows: its kit, the default gun for an unarmed socle, none for an unarmed building. */
-function weaponModule(e: Entity, world?: World): string {
+function weaponModule(e: Entity, _world?: World): string {
   if (e.type === 'dronecombat') return 'zw_mitrailleuse'; // its one gun, a module like the others: no socle keeps a built-in one
-  // The Scarabée armed (Scarabée d'assaut): a machine gun on its hull, like a Z socle's (the balancer, 2026-11-22;
-  // shortcut: the Z module, until a gun of its own).
-  if (e.type === 'scarabee') return world && e.owner >= 0 && world.level(e.owner, 'scarabeassaut') ? 'zw_mitrailleuse' : '';
+  // The Scarabée armed (Scarabée d'assaut) shows the turret of its own model instead (render/units.ts, scarabparts.py).
+  if (e.type === 'scarabee') return '';
   if (!(e.def as { weapons?: string[] }).weapons) return '';
   if (e.kit) return `zw_${e.kit}`;
   return e.def.kind === 'unit' ? 'zw_mitrailleuse' : '';
@@ -908,6 +907,11 @@ export class EntityRenderer {
       if (v.cargo) v.cargo.visible = e.carry > 0;
       v.fx?.update(dt, now / 1000);
       const wanted = weaponModule(e, world);
+      // The Scarabée's own assault turret, sunk in its roof: shown once Scarabée d'assaut is researched.
+      if (e.type === 'scarabee') {
+        const gun: Object3D | null = (v.model.userData.turret ??= v.model.getObjectByName('zturret') ?? null);
+        if (gun) gun.visible = e.owner >= 0 && world.level(e.owner, 'scarabeassaut') > 0;
+      }
       if (wanted !== (v.weapon?.name ?? '')) {
         setCloak(v, false); // the new module is cloaked with the rest next frame
         setStone(v, false);
@@ -1417,6 +1421,47 @@ export class EntityRenderer {
       const aim = v.aimAt !== undefined ? Math.atan2(Math.sin(v.aimAt - v.heading), Math.cos(v.aimAt - v.heading)) : 0;
       const d = Math.atan2(Math.sin(aim - turret.rotation.y), Math.cos(aim - turret.rotation.y));
       turret.rotation.y += Math.max(-dt * 2.5, Math.min(dt * 2.5, d));
+    }
+    // Track links running round their loop as the machine rolls: the bottom run still on the ground, the top one going
+    // forward twice as fast as the body (tools/meshy/scarabparts.py).
+    const tracks: { loop: number[]; links: Object3D[][] } | null = (v.model.userData.tracks ??= (() => {
+      const holder = v.model.getObjectByName('ztracks');
+      const loop = holder?.userData.zloop as number[] | undefined;
+      if (!holder || !loop) return null;
+      const links: Object3D[][] = [[], []];
+      holder.traverse((o) => {
+        const m = /^ztread_(\d)_(\d+)$/.exec(o.name);
+        if (m) links[Number(m[1])][Number(m[2])] = o;
+      });
+      return { loop, links };
+    })());
+    if (tracks) {
+      const [fy, by, az, r, ox] = tracks.loop;
+      const run = by - fy;
+      const perim = 2 * run + 2 * Math.PI * r;
+      const g: { x: number; z: number; d: number } = (v.model.userData.treadAt ??= { x: NaN, z: NaN, d: 0 });
+      const { x, z } = v.root.position;
+      const step = Number.isNaN(g.x) ? 0 : Math.hypot(x - g.x, z - g.z);
+      if (step < 1) g.d += step / ((v.model.children[0]?.scale.x || 1) * (v.root.scale.x || 1));
+      g.x = x;
+      g.z = z;
+      for (const [side, list] of tracks.links.entries()) {
+        list.forEach((o, i) => {
+          let s = (((i / list.length) * perim + g.d) % perim + perim) % perim;
+          let py: number;
+          let pz: number;
+          let a: number;
+          if (s < run) [py, pz, a] = [fy + s, az - r, 0];
+          else if ((s -= run) < Math.PI * r) [py, pz, a] = [by + r * Math.sin(s / r), az - r * Math.cos(s / r), s / r];
+          else if ((s -= Math.PI * r) < run) [py, pz, a] = [by - s, az + r, Math.PI];
+          else {
+            s -= run;
+            [py, pz, a] = [fy - r * Math.sin(s / r), az + r * Math.cos(s / r), Math.PI + s / r];
+          }
+          o.position.set(side ? ox : -ox, pz, -py);
+          o.rotation.x = a;
+        });
+      }
     }
     if (v.cart) {
       // The Réservoir hauled along: its wheels roll the ground covered, its pullers' legs stride with it, the vat
