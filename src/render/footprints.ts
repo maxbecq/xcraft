@@ -14,6 +14,9 @@ const LIFE = 14;
 const HEAVY = 0.6;
 /** Machines on tracks: two notched bands behind them instead of feet (none from a Char Pégase in flight). */
 const TRACKED = new Set(['scarabee', 'pegase']);
+/** Where a machine's tracks run, if not about its radius: [middle of each track out from its own, track width], world
+ * units. The Scarabée's, measured on its drawn model: tracks 0.19 wide, their outer faces 0.747 out, ×1.65. */
+const GAUGE: Record<string, [number, number]> = { scarabee: [1.07, 0.31] };
 /** Notches across each band's piece: whole ones, so they run on unbroken from one piece to the next. */
 const NOTCHES = 4;
 
@@ -140,10 +143,11 @@ export class Footprints {
         // Both tracks at once, each a piece from its last one to here, so the bands run on unbroken.
         this.q.setFromAxisAngle(this.up, Math.atan2(ux, uz));
         for (const s of [-1, 1]) {
-          const gauge = s * 0.62 * r;
+          const [mid, wide] = GAUGE[e.type] ?? [0.62 * r, 0.3 * r];
+          const gauge = s * mid;
           const px = (x + was.x) / 2 - uz * gauge;
           const pz = (z + was.z) / 2 + ux * gauge;
-          this.m.compose(new Vector3(px, heightAt(this.map, px, pz) + 0.1, pz), this.q, new Vector3(0.3 * r, 1, d));
+          this.m.compose(new Vector3(px, heightAt(this.map, px, pz) + 0.1, pz), this.q, new Vector3(wide, 1, d));
           this.put(t, 1);
         }
         this.last.set(e.id, { x, z, left: false });
