@@ -7,8 +7,8 @@ const { readFileSync } = (await import(/* @vite-ignore */ fs)) as { readFileSync
 
 /** A compressed model's node tree (transforms only), each mesh node holding its mesh's box as the game would read it. */
 function load(name: string): Object3D {
-  // Its JSON chunk, after the 20-byte header.
-  const bytes = readFileSync(`public/models/${name}-meshy.glb`);
+  // Its JSON chunk, after the 20-byte header. A name with its extension is a file of its own (a weapon module).
+  const bytes = readFileSync(`public/models/${name.endsWith('.glb') ? name : `${name}-meshy.glb`}`);
   const size = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true);
   const j = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + size)));
   const nodes: Object3D[] = j.nodes.map((n: { name?: string; translation?: number[]; rotation?: number[]; scale?: number[]; mesh?: number; extras?: object }) => {
@@ -36,10 +36,10 @@ function load(name: string): Object3D {
   return root;
 }
 
-const MOVING = /^(zrotor|zduct|zmast|zturret|ztread|zwheel|zstep|zvat|zpumper|zlever|zwing|armillaryb?)(_\d+)*$/;
+const MOVING = /^(zrotor|zduct|zmast|zturret|ztread|zwheel|zstep|zvat|zpumper|zlever|zwing|armillaryb?|zshin_\d+_[lr]|zw_saw|cargo)(_\d+)*$/;
 
 describe('moving parts keep their pivots through compression (tools/meshy/pivots.py)', () => {
-  for (const name of ['bourdon', 'scarabee', 'casernevolante', 'grandconseil', 'pegase', 'cuve']) {
+  for (const name of ['bourdon', 'scarabee', 'casernevolante', 'grandconseil', 'pegase', 'cuve', 'barge', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'octopode', 'zw_dechiqueteur.glb']) {
     it(`${name}: every moving part is a pivot node, its mesh in a child`, () => {
       const parts: Object3D[] = [];
       load(name).traverse((o) => MOVING.test(o.name) && parts.push(o));
@@ -74,4 +74,21 @@ describe('moving parts keep their pivots through compression (tools/meshy/pivots
     expect(turret.position.x).toBeCloseTo(0, 3);
     expect(turret.position.z).toBeCloseTo(0.15, 2); // where tools/meshy/scarabparts.py sank it, a little ahead
   });
+
+  for (const name of ['dronecombat', 'quadripode', 'hexapode', 'octopode']) {
+    it(`${name}: each shin turns at its knee, at its top, not its middle (tools/meshy/zknees.py)`, () => {
+      const root = load(name);
+      const legs: Object3D[] = [];
+      root.traverse((o) => /^zleg_\d+_[lr]$/.test(o.name) && legs.push(o));
+      expect(legs.length).toBeGreaterThanOrEqual(4);
+      root.updateMatrixWorld(true);
+      for (const leg of legs) {
+        const shin = leg.getObjectByName(leg.name.replace('zleg_', 'zshin_'))!;
+        // Its pivot high on the shin, where it meets the femur: compression had left it at the shin's middle.
+        const box = boxInParent(shin).applyMatrix4(leg.matrixWorld);
+        const knee = shin.getWorldPosition(new Vector3());
+        expect((knee.y - box.min.y) / (box.max.y - box.min.y), shin.name).toBeGreaterThan(0.75);
+      }
+    });
+  }
 });

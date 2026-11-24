@@ -1,7 +1,7 @@
 """Keeps the pivots of a model's moving parts through compression. compress.sh quantises positions with meshopt, which
 moves each mesh node's origin to the middle of its mesh (it folds the dequantising offset and scale into the node):
 a part render/units.ts or life.ts turns or moves by its node (a rotor, a turret, a track link, the Réservoir's wheels,
-legs, vat, pump and lever, an armillary) then turned about the wrong point, or was put in the wrong place.
+legs, vat, pump and lever, an armillary; a Z walker's shins, the Barge's fans, the Déchiqueteur's saw, the Drone's load) then turned about the wrong point, or was put in the wrong place.
 Each such part becomes an empty node under its own name, holding its transform, its parent and its extras, with its
 mesh moved into a child `<name>_geo` at no offset: compression then shifts only that child.
 Run on the built model, before compress.sh.
@@ -13,7 +13,7 @@ import sys
 import bpy
 
 src, dst = sys.argv[sys.argv.index("--") + 1:][:2]
-MOVING = re.compile(r"^(zrotor|zduct|zmast|zturret|ztread|zwheel|zstep|zvat|zpumper|zlever|zwing|armillaryb?)(_\d+)*$")
+MOVING = re.compile(r"^(zrotor|zduct|zmast|zturret|ztread|zwheel|zstep|zvat|zpumper|zlever|zwing|armillaryb?|zshin_\d+_[lr]|zw_saw|cargo)(_\d+)*$")
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 done = 0
