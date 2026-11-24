@@ -1404,6 +1404,24 @@ export class EntityRenderer {
       v.rotors.spin += ((pegase ? (e.airborne ? 26 : 0) : moving ? 28 : e.type === 'casernevol' ? 24 : 7) - v.rotors.spin) * Math.min(1, dt * 1.5);
       for (const r of v.rotors.list) r.rotation[pegase ? 'x' : 'y'] += v.rotors.spin * dt;
     }
+    const wings: Object3D[] = (v.model.userData.wings ??= ['zwing_0', 'zwing_1'].map((n) => v.model.getObjectByName(n)).filter((o): o is Object3D => !!o));
+    if (wings.length === 2) {
+      // The Plésiosaure's wingbeat (tools/meshy/plesioparts.py): wide and fast as it sets off, slow on the move with
+      // glides between, wings held up a little; steady while it hovers in place.
+      const f: { ph: number; amp: number; rate: number; boost: number; was: boolean } = (v.model.userData.flap ??= { ph: e.id, amp: 0.35, rate: 5, boost: 1, was: false });
+      if (moving && !f.was) f.boost = 1;
+      f.was = moving;
+      f.boost = Math.max(0, f.boost - dt / 1.4);
+      const glide = moving ? Math.max(0, Math.min(1, Math.sin(t * 0.7 + e.id) * 1.6 + 0.4)) : 1;
+      const [amp, rate] = f.boost > 0 ? [0.32 + f.boost * 0.33, 5 + f.boost * 5] : moving ? [0.28 * glide, 3.2] : [0.34, 5];
+      const k = Math.min(1, dt * 3);
+      f.amp += (amp - f.amp) * k;
+      f.rate += (rate - f.rate) * k;
+      f.ph += f.rate * dt;
+      const flap = f.amp * Math.sin(f.ph) + 0.1;
+      wings[0].rotation.z = -flap;
+      wings[1].rotation.z = flap;
+    }
     if (e.type === 'casernevol') {
       // A flying building pitches and rolls a little on its rotors, more as it speeds along.
       const sway = moving ? 1.6 : 1;
