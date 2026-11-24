@@ -39,8 +39,9 @@ export function ambientEffects(world: World, units: EntityRenderer, effects: Eff
     // A Z Déchiqueteur cutting: sparks from its saw all the while it works on its foe.
     if (e.kit === 'dechiqueteur' && e.cooldown > 0 && e.order?.kind !== undefined && 'target' in e.order && e.order.target && sees(e)) {
       const foe = world.entities.get(e.order.target);
-      const p = foe && Math.hypot(foe.x - e.x, foe.y - e.y) <= e.radius + foe.radius + 1.5 * FP ? units.saw(e.id) : undefined;
-      if (p) effects.grind(p, dt);
+      const near = foe && Math.hypot(foe.x - e.x, foe.y - e.y) <= e.radius + foe.radius + 1.5 * FP;
+      const bite = near ? units.sawBite(e.id, new Vector3(foe.x / FP, heightAt(map, foe.x / FP, foe.y / FP) + 0.3, foe.y / FP)) : undefined;
+      if (bite) effects.grind(bite.at, bite.dir, heightAt(map, bite.at.x, bite.at.z), dt);
     }
     // Serfs at work: the jackhammer bites the field or the building site; a Z drone drilling a crystal too.
     const o = e.order;

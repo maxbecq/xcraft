@@ -80,6 +80,7 @@ export function lobLaunch(type: string, from: Vector3, to: Vector3, out: Vector3
 }
 /** The Z's green, and its hot core. */
 const Z_GREEN = 0x8cff5a;
+const UP = new Vector3(0, 1, 0);
 const SHOT_COLORS: Record<string, number> = { humains: 0xffa040, isdaris: 0x5ae0ff, z: 0x8cff5a, dieux: 0xffe28a };
 /** The Lance-flammes' cooldown (seconds, a shot keeps its jet going that long), and the flame sprites it throws a second. */
 const FLAME_COOLDOWN = BALANCE.weapons.flammes.cooldown;
@@ -214,6 +215,8 @@ export class Effects {
   private gust: { at: Vector3; left: number; leaf: boolean; way: Vector3; prev?: Vector3 }[] = [];
   /** The Sphinx's streams of sand pouring: from, to, time left, grains owed. */
   private sands: { from: Vector3; to: Vector3; left: number; spill: number }[] = [];
+  /** Grinding sparks about to skip off the ground where they land (grind). */
+  private skips: { at: Vector3; way: Vector3; left: number }[] = [];
   /** The Yggdrasill furieux's roots on their way under the ground, and those bursting out (a mesh rising then sinking). */
   private burrows: { from: Vector3; to: Vector3; age: number; flight: number; mark: number }[] = [];
   private roots: { obj: Object3D; age: number }[] = [];
@@ -1023,8 +1026,8 @@ export class Effects {
       return true;
     }
     if (kit === 'dechiqueteur' || s.kind === 'melee') {
-      // Déchiqueteur: a green flash as it bites (the sparks spray from the saw all the while it cuts: grind).
-      this.spawn(this.tex.glow, Z_GREEN, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 0.9, 0, true);
+      // A bite: a green flash; none for the Déchiqueteur, whose saw throws its sparks all the while it cuts (grind).
+      if (kit !== 'dechiqueteur') this.spawn(this.tex.glow, Z_GREEN, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 0.9, 0, true);
       return true;
     }
     this.flash(muzzle, Z_GREEN, kit === 'canonx04' ? 2 : 1);
@@ -1458,12 +1461,28 @@ export class Effects {
     this.decals.push({ mesh, age: 0, life });
   }
 
-  /** A Z Déchiqueteur biting: white and orange sparks sprayed from where the saw meets its foe, a green glint; call every
-   * frame while it cuts. */
-  grind(p: Vector3, dt: number): void {
-    if (Math.random() < dt * 14) this.spawn(this.tex.glow, Z_GREEN, p.clone(), new Vector3(), 0.1, 0.25, 0.4, 0.8, 0, true);
-    for (let n = Math.floor(dt * 60) + (Math.random() < (dt * 60) % 1 ? 1 : 0); n > 0; n--) {
-      this.spawn(this.tex.glow, Math.random() < 0.6 ? 0xffd27a : 0xffffff, p.clone().add(rnd(0.05)), rnd(3).setY(1 + Math.random() * 2.2), 0.3, 0.1, 0.02, 1, 9, true);
+  /**
+   * A Z Déchiqueteur biting: grinding sparks as for a Serf's jackhammer (drill), thin bright strokes, white-yellow
+   * cooling to orange, thrown off the blade's rim at `p` along `dir`, the way the rim runs there; very brief, they fall
+   * to the ground at height `ground` and skip a little once. Streaks only, no halo. Call every frame while it cuts.
+   */
+  grind(p: Vector3, dir: Vector3, ground: number, dt: number): void {
+    const flat = new Vector3(dir.x, 0, dir.z);
+    if (flat.lengthSq() < 1e-4) flat.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+    flat.normalize();
+    const n = Math.floor(dt * 70 * this.density) + (Math.random() < (dt * 70 * this.density) % 1 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      // A narrow fan round the rim's way, thrown further the more the rim runs level.
+      const a = (Math.random() - 0.5) * 0.7;
+      const way = flat.clone().applyAxisAngle(UP, a);
+      const reach = (0.25 + Math.random() * 0.55) * (0.5 + 0.5 * Math.sqrt(Math.max(0, 1 - dir.y * dir.y)));
+      const to = p.clone().addScaledVector(way, reach).setY(ground + 0.01);
+      const hot = Math.random();
+      const color = hot < 0.35 ? 0xfff6d8 : hot < 0.75 ? 0xffc85a : 0xff8a2a;
+      const flight = 0.1 + Math.random() * 0.12;
+      this.streaks.spawn(color, p, to, flight, 0.03, 0.06 + Math.random() * 0.06, 0.01 + Math.random() * 0.007, 1, Math.max(0, dir.y) * 0.12 + Math.random() * 0.08);
+      // Some skip once off the ground, shorter and cooler.
+      if (Math.random() < 0.4) this.skips.push({ at: to, way, left: flight });
     }
   }
 
@@ -1596,6 +1615,12 @@ export class Effects {
     }
     if (this.eye) this.particles.update(dt, this.eye);
     this.streaks.update(dt);
+    this.skips = this.skips.filter((k) => {
+      if ((k.left -= dt) > 0) return true;
+      const to = k.at.clone().addScaledVector(k.way, 0.06 + Math.random() * 0.12);
+      this.streaks.spawn(Math.random() < 0.5 ? 0xffb040 : 0xff7a20, k.at, to, 0.06 + Math.random() * 0.05, 0.02, 0.04, 0.008, 0.9, 0.03 + Math.random() * 0.03);
+      return false;
+    });
     this.lobs = this.lobs.filter((l) => this.flyLob(l, dt));
     this.sands = this.sands.filter((sd) => {
       if ((sd.left -= dt) <= 0) return false;

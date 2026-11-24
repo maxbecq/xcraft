@@ -303,6 +303,24 @@ export class EntityRenderer {
     return this.views.get(id)?.weapon?.saw?.getWorldPosition(new Vector3());
   }
 
+  /** Where a Déchiqueteur's blade bites `toward` (world): the point of its rim on that side, and the way the rim runs
+   * there as it spins (world, unit); none if it shows no saw. */
+  sawBite(id: number, toward: Vector3): { at: Vector3; dir: Vector3 } | undefined {
+    const saw = this.views.get(id)?.weapon?.saw;
+    if (!saw) return undefined;
+    const hub = saw.getWorldPosition(new Vector3());
+    // It spins about its own x (render: rotation.x grows); its rim is as far out as its box reaches in its plane.
+    const axis = new Vector3(1, 0, 0).transformDirection(saw.matrixWorld);
+    const box = new Box3().setFromObject(saw);
+    const size = box.getSize(new Vector3());
+    const r = Math.max(size.x, size.y, size.z) / 2;
+    const out = toward.clone().sub(hub);
+    out.addScaledVector(axis, -out.dot(axis));
+    if (out.lengthSq() < 1e-8) out.set(0, -1, 0);
+    out.normalize();
+    return { at: hub.addScaledVector(out, r), dir: axis.cross(out).normalize() };
+  }
+
   /** Where a unit's or building's weapon module has its muzzle (world); none if it shows none. */
   muzzle(id: number): Vector3 | undefined {
     const v = this.views.get(id);
@@ -1561,12 +1579,14 @@ export class EntityRenderer {
     v.model.position.y += (bob + jolt - v.model.position.y) * 0.4;
     // The heavy Mastodonte rolls and pitches a little as it hangs in the air, more slowly than the light flyers.
     const heavy = e.type === 'mastodonte' ? 1 : 0;
-    ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving && !v.rig ? (rolling ? 0.04 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
+    // A walker on knees rides its legs: a slight nose-down, rocking with each step the legs take, not a set lean.
+    const legged = !!v.limbs.insect?.[0]?.ik;
+    ease(body, 'x', mining ? 0.22 + Math.sin(t * 53 + e.id) * 0.02 : moving && !v.rig ? (rolling ? 0.04 : legged ? 0.035 + Math.sin(phase * 2) * 0.025 : 0.14) : fighting && !melee ? 0.06 : 0, mining ? 0.5 : 0.15);
     if (heavy && flying) body.rotation.x += (Math.sin(t * 0.6 + e.id * 2) * 0.035 - (moving ? 0.06 : 0)) * 0.15; // nose down as it flies off
     if (moving && TRACKED.has(e.type) && !flying) body.rotation.x += Math.sin(t * 4.5 + e.id) * 0.03 * 0.4; // rocking fore and aft
     // Flyers bank into their turns instead of swaying.
     const turn = Math.atan2(Math.sin(v.target - v.heading), Math.cos(v.target - v.heading));
-    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling && !v.rig ? Math.sin(phase) * 0.05 : 0, flying ? 0.08 : 0.2);
+    ease(body, 'z', flying ? Math.max(-0.5, Math.min(0.5, -turn * 0.8)) + heavy * Math.sin(t * 0.8 + e.id) * 0.035 : moving && !rolling && !v.rig ? Math.sin(phase) * (legged ? 0.035 : 0.05) : 0, flying ? 0.08 : 0.2);
     ease(body, 'y', melee && fighting && !v.weapon ? (fired - 0.5) * 0.8 : 0, 0.3);
     // Recoil on each shot; none for a blade (a socle's Déchiqueteur keeps its body still as it cuts).
     const kick = fighting && !melee && fired > 0.8 ? (fired - 0.8) * 0.3 : 0;
