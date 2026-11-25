@@ -23,5 +23,7 @@ export default defineConfig({
   },
   // Many tests play whole minutes of game: CI machines are slower than a desktop.
   // .claude/worktrees: other sessions' checkouts, with their own tests.
+  // The map editor: a second page at /xcraft/editeur/, reached by its address only (no link from the game).
+  build: { rollupOptions: { input: { main: 'index.html', editeur: 'editeur/index.html' } } },
   test: { testTimeout: 30_000, exclude: ['**/node_modules/**', '.claude/**'] },
 });

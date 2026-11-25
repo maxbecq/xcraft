@@ -1,5 +1,5 @@
 /**
- * Map editor (prototype, dev only): /editor.html. The view is the game's own renderer (terrain, cliffs, planet,
+ * Map editor: /xcraft/editeur/ (editeur/index.html), a second page of the build, reached by its address only. The view is the game's own renderer (terrain, cliffs, planet,
  * models) under the game's camera, on a format 2 file (format2.ts). A top view in the corner helps find one's way.
  */
 import {

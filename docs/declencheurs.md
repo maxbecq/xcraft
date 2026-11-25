@@ -1,6 +1,6 @@
 # Déclencheurs dans les cartes : étude de faisabilité
 
-24 novembre 2026. Étude écrite avec le prototype d'éditeur de cartes (`editor.html`, `src/editor/`). Rien de la simulation n'a été modifié ; les changements nécessaires sont listés en fin de document.
+24 novembre 2026. Étude écrite avec le prototype d'éditeur de cartes (alors `editor.html`, aujourd'hui `/xcraft/editeur/` ; code dans `src/editor/`). Rien de la simulation n'a été modifié ; les changements nécessaires sont listés en fin de document.
 
 ## En bref
 
