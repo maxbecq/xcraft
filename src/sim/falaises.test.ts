@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { CLIFF_FOOT, cutCorner } from '../map';
 import { FP, ticks } from './fixed';
 import { fingerprint } from './fingerprint';
+import { MAPS } from '../maps';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
 
@@ -227,5 +228,108 @@ describe('cliffs', () => {
     }
     expect(most).toBeLessThanOrEqual(3 * a.speed + 2);
     expect(a.y - ty * FP).toBeGreaterThanOrEqual(BAND + Math.min(a.radius, KEEP));
+  });
+
+  // The goal of a path is moved out of the band: orders that need the unit at a place must still be carried out.
+  describe('orders aimed into the band at a cliff\'s foot', () => {
+    it('attack-move: the order ends beside the point', () => {
+      const w = createMatch(['humains', 'humains']);
+      const [tx, ty] = foot(w);
+      const a = w.spawn('legionnaire', 0, (tx + 3) * FP + FP / 2, (ty + 1) * FP + FP / 2);
+      const [x, y] = [tx * FP + FP / 2, ty * FP + 50];
+      w.step([{ player: 0, kind: 'attack', ids: [a.id], x, y }]);
+      for (let i = 0; i < 300 && a.order; i++) w.step([]);
+      expect(a.order).toBeNull();
+      expect(Math.hypot(a.x - x, a.y - y)).toBeLessThan(FP);
+    });
+
+    it('patrol: the unit still walks back and forth', () => {
+      const w = createMatch(['humains', 'humains']);
+      const [tx, ty] = foot(w);
+      const a = w.spawn('legionnaire', 0, (tx + 3) * FP + FP / 2, (ty + 1) * FP + FP / 2);
+      w.step([{ player: 0, kind: 'patrol', ids: [a.id], x: tx * FP + FP / 2, y: ty * FP + 50 }]);
+      let far = 0;
+      let back = 0;
+      for (let i = 0; i < ticks(40); i++) {
+        w.step([]);
+        if (a.x < (tx + 1) * FP) far++;
+        if (far && a.x > (tx + 3) * FP) back++;
+      }
+      expect(far).toBeGreaterThan(0);
+      expect(back).toBeGreaterThan(0);
+      expect(a.order?.kind).toBe('attackMove');
+    });
+
+    it('no building is placed on a tile at a cliff\'s foot, so no site to raise or to take root on lies in the band; one tile off it, a worker raises it', () => {
+      const w = createMatch(['humains', 'humains']);
+      const g = w.grid;
+      const size = (DEFS.grenier as BuildingDef).size;
+      const under = (tx: number, ty: number) => {
+        for (let i = 0; i < size; i++) if (g.flatLevel(tx + i, ty) < 0 || g.level(tx + i, ty - 1) <= g.level(tx + i, ty)) return false;
+        return true;
+      };
+      let feet = 0;
+      let site: [number, number] | null = null;
+      for (let ty = 3; ty < w.map.height - size - 3; ty++) {
+        for (let tx = 2; tx < w.map.width - size - 2; tx++) {
+          if (under(tx, ty)) {
+            feet++;
+            for (const type of ['grenier', 'branche']) expect(w.canPlace(type, tx, ty, 0), `${type} ${tx},${ty}`).toBe(false);
+          }
+          if (!site && under(tx, ty - 1) && w.canPlace('grenier', tx, ty, 0) && g.open(tx, ty + size)) site = [tx, ty];
+        }
+      }
+      expect(feet).toBeGreaterThan(0);
+      const [tx, ty] = site!;
+      // From the strip between the site and the cliff: the side of the building nearest the band.
+      const serf = w.spawn('serf', 0, (tx - 2) * FP + FP / 2, (ty - 1) * FP + FP / 2 + 200);
+      w.players[0].minerals = 1000;
+      w.step([{ player: 0, kind: 'build', ids: [serf.id], type: 'grenier', tx, ty }]);
+      const raised = () => [...w.entities.values()].find((e) => e.type === 'grenier' && e.tx === tx && e.ty === ty);
+      for (let i = 0; i < ticks(90) && !raised() && serf.order; i++) w.step([]);
+      expect(raised()).toBeDefined();
+    });
+  });
+
+  // Between two feet two tiles apart, a wide body has about a tenth of a tile to walk in: single file, and jams.
+  // Alcoves in a cliff's edge are that wide here and there; no way a unit must take is.
+  it('no map of the game needs a pass two tiles wide between two cliff feet: every field is reached without one', () => {
+    for (const id of Object.keys(MAPS)) {
+      const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biomesOnly ? MAPS[id].biomes![0] : '');
+      const g = w.grid;
+      const { feet, sides } = g as unknown as { feet: Uint8Array; sides: Uint8Array };
+      const W = w.map.width;
+      const tight = new Uint8Array(W * w.map.height);
+      for (let y = 0; y < w.map.height - 1; y++) {
+        for (let x = 0; x < W - 1; x++) {
+          const i = y * W + x;
+          // West foot here and east foot on the next tile, the side between them open; the same north to south.
+          if (feet[i] & 8 && !(feet[i] & 2) && sides[i] & 2 && feet[i + 1] & 2 && !(feet[i + 1] & 8)) tight[i] = tight[i + 1] = 1;
+          if (feet[i] & 1 && !(feet[i] & 4) && sides[i] & 4 && feet[i + W] & 4 && !(feet[i + W] & 1)) tight[i] = tight[i + W] = 1;
+        }
+      }
+      // Every tile walked to from the first player's base (through buildings and fields), those passes shut.
+      const from = [...w.entities.values()].find((e) => e.owner === 0 && e.def.kind === 'unit')!;
+      const seen = new Uint8Array(W * w.map.height);
+      const todo = [Math.floor(from.y / FP) * W + Math.floor(from.x / FP)];
+      seen[todo[0]] = 1;
+      while (todo.length) {
+        const t = todo.pop()!;
+        const [x, y] = [t % W, Math.floor(t / W)];
+        for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+          const n = (y + dy) * W + x + dx;
+          if (!g.inside(x + dx, y + dy) || seen[n] || tight[n] || !g.canStep(x, y, x + dx, y + dy, true)) continue;
+          seen[n] = 1;
+          todo.push(n);
+        }
+      }
+      let fields = 0;
+      for (const e of w.entities.values()) {
+        if (e.owner !== -1) continue;
+        fields++;
+        expect(seen[Math.floor(e.y / FP) * W + Math.floor(e.x / FP)], `${id}: ${e.type} at ${Math.floor(e.x / FP)},${Math.floor(e.y / FP)}`).toBe(1);
+      }
+      expect(fields, id).toBeGreaterThan(0);
+    }
   });
 });
