@@ -1,11 +1,11 @@
 /**
  * Map editor: /xcraft/editeur/ (editeur/index.html), a second page of the build, reached by its address only. The view
  * is the game's own renderer (terrain, cliffs, planet, models) under the game's camera, on a format 2 file
- * (format2.ts); a button turns it into a flat view from above. Around it, panels (shell.ts, panels.ts) docked with
+ * (format2.ts); a button (or Tab) turns the camera to look straight down, the same scene, to paint precisely. Around it, panels (shell.ts, panels.ts) docked with
  * dockview: palettes, players, minimap, properties, layers.
  */
 import {
-  ACESFilmicToneMapping, BufferGeometry, Cache, CanvasTexture, Color, DirectionalLight, DoubleSide, Float32BufferAttribute, Group, HemisphereLight, LineBasicMaterial,
+  ACESFilmicToneMapping, BufferGeometry, OrthographicCamera, Cache, CanvasTexture, Color, DirectionalLight, DoubleSide, Float32BufferAttribute, Group, HemisphereLight, LineBasicMaterial,
   LineSegments, type Material, Mesh, MeshBasicMaterial, type Object3D, PCFShadowMap, Plane, PlaneGeometry, Raycaster, Scene, Sprite, SpriteMaterial, Vector2,
   Vector3, WebGLRenderer,
 } from 'three';
@@ -422,7 +422,7 @@ function removeSelected(): void {
   changed();
 }
 
-// ---- top view (the minimap's picture, and the flat view) ----
+// ---- the map from above, one pixel per tile (the minimap's picture) ----
 const topImage = document.createElement('canvas');
 function drawTop(): void {
   const n = f.size;
@@ -463,85 +463,32 @@ function drawTop(): void {
   }
 }
 
-/** Where the flat view draws the map in its canvas: offset and pixels per tile. */
-function flatFrame(c: HTMLCanvasElement): { ox: number; oy: number; k: number } {
-  const k = Math.min(c.width, c.height) / f.size;
-  return { ox: (c.width - k * f.size) / 2, oy: (c.height - k * f.size) / 2, k };
+/** The view from above: the same scene, under a camera looking straight down (north up), to paint precisely. */
+const topCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+topCam.up.set(0, 0, -1);
+/** Its centre (tiles) and the height it shows (tiles). */
+const above = { x: 0, z: 0, h: 40 };
+/** The camera of the view shown. */
+const cam = () => (ed.view === '3d' ? rig.camera : topCam);
+function updateAbove(): void {
+  const n = f.size;
+  above.h = Math.max(6, Math.min(n * 1.3, above.h));
+  above.x = Math.max(0, Math.min(n, above.x));
+  above.z = Math.max(0, Math.min(n, above.z));
+  const [a, hh] = [aspect(), above.h / 2];
+  Object.assign(topCam, { left: -hh * a, right: hh * a, top: hh, bottom: -hh });
+  topCam.position.set(above.x, 300, above.z);
+  topCam.lookAt(above.x, 0, above.z);
+  topCam.updateProjectionMatrix();
 }
-function paintFlat(c: HTMLCanvasElement): void {
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#0b0d10';
-  g.fillRect(0, 0, c.width, c.height);
-  const { ox, oy, k } = flatFrame(c);
-  g.imageSmoothingEnabled = false;
-  g.drawImage(topImage, ox, oy, k * f.size, k * f.size);
-  const dpr = c.width / Math.max(1, c.clientWidth);
-  if (!ed.hidden.has('grid') && k >= 6) {
-    g.strokeStyle = '#ffffff1c';
-    g.lineWidth = 1;
-    g.beginPath();
-    for (let i = 0; i <= f.size; i++) {
-      g.moveTo(ox + i * k, oy);
-      g.lineTo(ox + i * k, oy + f.size * k);
-      g.moveTo(ox, oy + i * k);
-      g.lineTo(ox + f.size * k, oy + i * k);
-    }
-    g.stroke();
-  }
-  if (!ed.hidden.has('starts')) {
-    const num = startNumbers(f);
-    f.players.forEach((p, i) => {
-      const on = i === ed.seat;
-      const [cx, cy] = [ox + (p.start[0] + 2) * k, oy + (p.start[1] + 2) * k];
-      g.beginPath();
-      g.arc(cx, cy, (on ? 15 : 11) * dpr, 0, Math.PI * 2);
-      g.fillStyle = on ? '#e3a33b' : '#0b0d10dd';
-      g.fill();
-      g.lineWidth = 2.5 * dpr;
-      g.strokeStyle = on ? '#fff' : hex(TEAM_COLORS[i]);
-      g.stroke();
-      g.font = `bold ${(on ? 15 : 12) * dpr}px system-ui`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillStyle = on ? '#111' : '#fff';
-      g.fillText(String(num[i]), cx, cy + dpr);
-    });
-  }
-  if (!ed.hidden.has('regions')) {
-    (f.triggers?.regions ?? []).forEach((r, i) => {
-      const c = hex(REGION_COLORS[i % REGION_COLORS.length]);
-      const [x, y, w, hh] = r.rect;
-      g.fillStyle = `${c}33`;
-      g.fillRect(ox + x * k, oy + y * k, w * k, hh * k);
-      g.strokeStyle = c;
-      g.lineWidth = 1.5 * dpr;
-      g.strokeRect(ox + x * k, oy + y * k, w * k, hh * k);
-      g.font = `${11 * dpr}px system-ui`;
-      g.textAlign = 'left';
-      g.textBaseline = 'top';
-      g.fillStyle = c;
-      g.fillText(r.id, ox + x * k + 3 * dpr, oy + y * k + 3 * dpr);
-    });
-  }
-  if (regionDrag) {
-    const [x, y, w, hh] = dragRect(regionDrag);
-    g.strokeStyle = '#e3a33b';
-    g.lineWidth = 2 * dpr;
-    g.strokeRect(ox + x * k, oy + y * k, w * k, hh * k);
-  }
-  const s = ed.selection && footprintOf(ed.selection);
-  if (s) {
-    g.strokeStyle = '#5fbf6a';
-    g.lineWidth = 2 * dpr;
-    g.strokeRect(ox + s[0] * k, oy + s[1] * k, s[2] * k, s[3] * k);
-  }
-  if (hoverTile && ed.tool !== 'select') {
-    const [x, y, w, h] = cursorRect(hoverTile);
-    g.fillStyle = '#ffe08055';
-    g.fillRect(ox + x * k, oy + y * k, w * k, h * k);
-  }
+/** The view switched: the other camera takes over where this one looked. */
+let shownView = ed.view;
+function followView(): void {
+  if (shownView === ed.view) return;
+  if (ed.view === 'top') Object.assign(above, { x: rig.target.x, z: rig.target.z, h: rig.viewHeight * 1.2 });
+  else rig.lookAt(above.x, above.z);
+  shownView = ed.view;
 }
-
 let shell: Shell;
 function paintMinimap(): void {
   const top = shell.minimap;
@@ -553,9 +500,9 @@ function paintMinimap(): void {
   const s = Math.min(top.width, top.height);
   const [ox, oy] = [(top.width - s) / 2, (top.height - s) / 2];
   c.drawImage(topImage, ox, oy, s, s);
-  if (ed.view !== '3d') return;
   const k = s / f.size;
-  const pts = rig.footprint();
+  const hw = (above.h * aspect()) / 2;
+  const pts = ed.view === '3d' ? rig.footprint() : [[-hw, -above.h / 2], [hw, -above.h / 2], [hw, above.h / 2], [-hw, above.h / 2]].map(([dx, dz]) => ({ x: above.x + dx, z: above.z + dz }));
   c.strokeStyle = '#fff';
   c.lineWidth = 1.5;
   c.beginPath();
@@ -739,17 +686,8 @@ function place(x: number, y: number, erase: boolean): void {
 const raycaster = new Raycaster();
 const ground = new Plane(new Vector3(0, 1, 0), 0);
 function tileUnder(e: { clientX: number; clientY: number }): [number, number] | null {
-  if (ed.view === 'top') {
-    const c = shell.flat;
-    const r = c.getBoundingClientRect();
-    const { ox, oy, k } = flatFrame(c);
-    const dpr = c.width / Math.max(1, r.width);
-    const x = Math.floor(((e.clientX - r.left) * dpr - ox) / k);
-    const y = Math.floor(((e.clientY - r.top) * dpr - oy) / k);
-    return x >= 0 && y >= 0 && x < f.size && y < f.size ? [x, y] : null;
-  }
   const r = canvas.getBoundingClientRect();
-  raycaster.setFromCamera(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), rig.camera);
+  raycaster.setFromCamera(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam());
   const hit = raycaster.intersectObject(terrainRoot, true)[0]?.point;
   const p = hit ?? raycaster.ray.intersectPlane(ground, new Vector3());
   if (!p) return null;
@@ -782,13 +720,11 @@ function cursorRect(t: [number, number]): [number, number, number, number] {
   }
   return [t[0] - off, t[1] - off, s, s];
 }
-let hoverTile: [number, number] | null = null;
 /** A region being drawn: the tile where the drag began and the one under the pointer. */
 let regionDrag: [number, number, number, number] | null = null;
 const dragRect = ([x0, y0, x1, y1]: [number, number, number, number]): [number, number, number, number] => [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, Math.abs(y1 - y0) + 1];
 function moveCursor(t: [number, number] | null): void {
-  hoverTile = t;
-  cursor.visible = !!t && ed.view === '3d' && ed.tool !== 'select';
+  cursor.visible = !!t && ed.tool !== 'select';
   if (t) {
     const [x, y, w, h] = cursorRect(t);
     cursor.scale.set(w, 1, h);
@@ -812,7 +748,7 @@ function down(e: PointerEvent): void {
     // a pointer the browser does not know (a scripted one): no capture
   }
   if (e.button === 1 || held.has(' ')) {
-    panning = ed.view === '3d';
+    panning = true;
     return;
   }
   const t = tileUnder(e);
@@ -844,7 +780,11 @@ function down(e: PointerEvent): void {
 function move(e: PointerEvent): void {
   if (panning) {
     const r = canvas.getBoundingClientRect();
-    rig.panPixels((e.movementX * innerHeight) / r.height, (e.movementY * innerHeight) / r.height);
+    if (ed.view === '3d') rig.panPixels((e.movementX * innerHeight) / r.height, (e.movementY * innerHeight) / r.height);
+    else {
+      above.x -= (e.movementX * above.h) / r.height;
+      above.z -= (e.movementY * above.h) / r.height;
+    }
     return;
   }
   const t = tileUnder(e);
@@ -877,8 +817,16 @@ function up(): void {
 }
 function wheel(e: WheelEvent): void {
   e.preventDefault();
-  if (ed.view !== '3d') return;
   const r = canvas.getBoundingClientRect();
+  if (ed.view === 'top') {
+    // The ground under the pointer stays put.
+    const [dx, dz] = [e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2];
+    const [wx, wz] = [above.x + (dx * above.h) / r.height, above.z + (dz * above.h) / r.height];
+    above.h = Math.max(6, Math.min(f.size * 1.3, above.h * (e.deltaY > 0 ? 1.12 : 1 / 1.12)));
+    above.x = wx - (dx * above.h) / r.height;
+    above.z = wz - (dz * above.h) / r.height;
+    return;
+  }
   const px = innerWidth / 2 + ((e.clientX - r.left - r.width / 2) * innerHeight) / r.height;
   const py = ((e.clientY - r.top) / r.height) * innerHeight;
   rig.zoomBy(e.deltaY > 0 ? 1.12 : 1 / 1.12, px, py);
@@ -930,11 +878,19 @@ const frame = (now: number) => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const k = (a: string, b: string, c: string) => (held.has(a) || held.has(b) || held.has(c) ? 1 : 0);
-  if (shell.viewFocused()) rig.pan(k('ArrowRight', 'd', 'D') - k('ArrowLeft', 'q', 'Q'), k('ArrowUp', 'z', 'Z') - k('ArrowDown', 's', 'S'), dt);
+  followView();
+  const [px, py] = [k('ArrowRight', 'd', 'D') - k('ArrowLeft', 'q', 'Q'), k('ArrowUp', 'z', 'Z') - k('ArrowDown', 's', 'S')];
+  if (shell.viewFocused() && ed.view === '3d') rig.pan(px, py, dt);
+  if (shell.viewFocused() && ed.view === 'top') {
+    above.x += px * above.h * 0.8 * dt;
+    above.z -= py * above.h * 0.8 * dt;
+  }
   rig.update(aspect());
-  sun.position.copy(rig.target).add(SUN_OFFSET);
-  sun.target.position.copy(rig.target);
-  space?.update(rig.target);
+  updateAbove();
+  const centre = ed.view === '3d' ? rig.target : new Vector3(above.x, 0, above.z);
+  sun.position.copy(centre).add(SUN_OFFSET);
+  sun.target.position.copy(centre);
+  space?.update(centre);
   // While a stroke goes on: the terrain it touched, often; what stands on it (heights, units) once it ends, except for
   // the tools that place things.
   if (!building && (groundDirty || (dirty && (painting < 0 || ed.tool !== 'relief'))) && (painting < 0 || now - lastBuild > 60)) {
@@ -947,12 +903,10 @@ const frame = (now: number) => {
     checkAt = now + 1500;
     if (now - lastBuild > 400) checkPlayable();
   }
-  if (ed.view === '3d') {
-    const ts = performance.now();
-    if (world && units) units.sync(world, 1, new Set(), 0, () => true, () => true);
-    times.sync = Math.max(times.sync * 0.9, performance.now() - ts);
-    renderer.render(scene, rig.camera);
-  } else paintFlat(shell.flat);
+  const ts = performance.now();
+  if (world && units) units.sync(world, 1, new Set(), 0, () => true, () => true);
+  times.sync = Math.max(times.sync * 0.9, performance.now() - ts);
+  renderer.render(scene, cam());
   paintMinimap();
   requestAnimationFrame(frame);
 };
@@ -978,7 +932,7 @@ Object.assign(act, {
     ed.undo.length = ed.redo.length = 0;
     reframe();
   },
-  lookAt: (x: number, y: number) => rig.lookAt(x, y),
+  lookAt: (x: number, y: number) => (ed.view === '3d' ? rig.lookAt(x, y) : Object.assign(above, { x, z: y })),
   removeSelected,
   picture: () => topImage,
   say,
@@ -989,7 +943,7 @@ shell = buildShell({
   pointer: { down, move, up, wheel, leave: () => moveCursor(null) },
   minimapLook: (e: PointerEvent) => {
     const [x, y] = minimapTile(e);
-    rig.lookAt(x, y);
+    act.lookAt(x, y);
   },
   resize: (w: number, h: number) => {
     renderer.setSize(w, h, false);

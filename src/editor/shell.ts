@@ -20,8 +20,6 @@ import './editor.css';
 export interface Shell {
   /** The minimap's canvas. */
   minimap: HTMLCanvasElement;
-  /** The flat view's canvas (the view from above). */
-  flat: HTMLCanvasElement;
   say(text: string): void;
   /** The status bar drawn again (cursor moved). */
   status(): void;
@@ -444,8 +442,6 @@ function toolbar(): HTMLElement {
 const PANELS: [string, string][] = [['vue', 'Vue'], ['palette', 'Palette'], ['minicarte', 'Minicarte'], ['proprietes', 'Propriétés'], ['calques', 'Calques'], ['joueurs', 'Joueurs']];
 const LAYOUT_KEY = 'xcraft.editeur.disposition';
 const viewRoot = h('<div class="viewroot" tabindex="0"></div>');
-const flat = document.createElement('canvas');
-flat.className = 'flat';
 const minimap = document.createElement('canvas');
 minimap.className = 'minimap';
 const bodies: Record<string, () => HTMLElement> = {
@@ -519,13 +515,13 @@ export function buildShell(v: ViewHooks): Shell {
   const host = h('<div class="dock"></div>');
   app.append(menubar(), toolbar(), host, statusBar);
   document.body.append(app, msg);
-  // The view: the 3D canvas or the flat one, a bar with the switch, a hint.
+  // The view: the 3D canvas (the game's camera, or straight down), a bar with the switch, a hint.
   const bar = h('<div class="viewbar"><button class="switch"><b>Vue 3D du jeu</b><em>⇄</em><span>Vue de dessus</span></button><span class="hint">Tab pour basculer</span><button class="again">⟲ Recentrer</button></div>');
   bar.querySelector<HTMLButtonElement>('.switch')!.onclick = toggleView;
   bar.querySelector<HTMLButtonElement>('.again')!.onclick = () => act.lookAt(ed.f.players[ed.seat].start[0] + 2, ed.f.players[ed.seat].start[1] + 2);
   const help = h('<div class="toolhelp"></div>');
-  viewRoot.append(v.canvas, flat, bar, help);
-  for (const c of [v.canvas, flat]) {
+  viewRoot.append(v.canvas, bar, help);
+  for (const c of [v.canvas]) {
     c.addEventListener('pointerdown', v.pointer.down);
     c.addEventListener('pointermove', v.pointer.move);
     c.addEventListener('pointerup', v.pointer.up);
@@ -537,9 +533,6 @@ export function buildShell(v: ViewHooks): Shell {
     const r = viewRoot.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
     v.resize(r.width, r.height);
-    const dpr = Math.min(2, devicePixelRatio);
-    flat.width = Math.round(r.width * dpr);
-    flat.height = Math.round(r.height * dpr);
   }).observe(viewRoot);
   minimap.addEventListener('pointerdown', (e) => {
     v.minimapLook(e);
@@ -581,8 +574,6 @@ export function buildShell(v: ViewHooks): Shell {
   });
 
   onChanged(() => {
-    v.canvas.hidden = ed.view !== '3d';
-    flat.hidden = ed.view !== 'top';
     bar.querySelector('.switch')!.innerHTML = ed.view === '3d' ? '<b>Vue 3D du jeu</b><em>⇄</em><span>Vue de dessus</span>' : '<span>Vue 3D du jeu</span><em>⇄</em><b>Vue de dessus</b>';
     help.textContent = TOOL_HELP[ed.tool];
     menubarFile();
@@ -626,7 +617,6 @@ export function buildShell(v: ViewHooks): Shell {
   addEventListener('blur', () => v.keys.clear());
   return {
     minimap,
-    flat,
     say,
     status,
     viewFocused: () => {
