@@ -211,14 +211,14 @@ describe('format 2 : équipes', () => {
 });
 
 describe('format 2 : déclencheurs', () => {
-  it("garde les déclencheurs dans le fichier de l'éditeur, les signale à l'export pour le jeu", () => {
+  it("garde les déclencheurs dans le fichier de l'éditeur et les passe au jeu par l'export", () => {
     const f = JSON.parse(JSON.stringify(fromFormat1(MAPS.origine, MAPS.origine.biome, 2)));
     f.triggers = { regions: [{ id: 'nid', rect: [10, 10, 4, 4] }], vars: [{ id: 'vague', value: 0 }], triggers: [{ id: 'Vague', folder: '', enabled: true, once: false, when: { every: 45 }, do: [{ spawn: 'auxiliaire', count: '2 + vague', owner: 1, in: 'nid' }] }] };
     const back = parseMap(JSON.parse(JSON.stringify(f)));
     expect(back.triggers).toEqual(f.triggers);
     const { map, notes } = toFormat1(back);
-    expect('triggers' in map).toBe(false);
-    expect(notes.join(' ')).toMatch(/déclencheurs \(1\)/);
-    expect(typeof checkMap(JSON.parse(JSON.stringify(map)))).toBe('object');
+    expect(map.triggers).toEqual(f.triggers);
+    expect(notes.join(' ')).not.toMatch(/déclencheurs/);
+    expect((checkMap(JSON.parse(JSON.stringify(map))) as MapFile).triggers).toEqual(f.triggers);
   });
 });

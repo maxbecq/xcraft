@@ -290,7 +290,7 @@ export function triggersWindow(): void {
     } else {
       content = h(`<div class="checklist">${faults.length ? faults.map((x) => `<div class="x">✕ ${esc(x)}</div>`).join('') : `<div class="ok">✔ ${t.triggers.length} déclencheur${t.triggers.length > 1 ? 's' : ''}, aucune erreur.</div>`}
         ${t.triggers.filter((x) => !x.enabled).map((x) => `<div class="w">! « ${esc(x.id)} » est désactivé.</div>`).join('')}
-        <p class="note">Le jeu ne lit pas encore les déclencheurs : ils sont gardés dans le fichier de l'éditeur, en attendant leur moteur dans la simulation.</p></div>`);
+        <p class="note">Le jeu exécute les déclencheurs de la carte exportée : chaque événement est regardé à chaque tick, dans l'ordre de la liste.</p></div>`);
     }
     box.replaceChildren(tabs, content);
   }

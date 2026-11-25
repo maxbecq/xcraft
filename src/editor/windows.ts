@@ -183,7 +183,7 @@ export function teamsWindow(): void {
       <label>Victoire <span>Détruire tous les bâtiments ennemis : la dernière équipe debout gagne.</span></label>
       <label>Neutres <span>Passifs : ils ne bougent ni n'attaquent.</span></label>
     </div>
-    <p class="note">D'autres conditions de victoire ou de défaite viendront avec les déclencheurs.</p>`;
+    <p class="note">Pour d'autres conditions de victoire ou de défaite : les actions Victoire et Défaite des déclencheurs.</p>`;
   draw();
   dialog('Équipes et victoire', body, [
     { label: 'Annuler' },

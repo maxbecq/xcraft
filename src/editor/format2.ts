@@ -390,6 +390,6 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
   if (seats.some((s) => Object.keys(s).length)) map.seats = seats;
   if (f.units.length) map.units = f.units.map((u) => ({ type: u.type, owner: u.owner, at: u.at }));
   if (f.decor.length) notes.push('Pas encore lu par le jeu : le décor posé à la main.');
-  if (f.triggers?.triggers.length) notes.push(`Pas encore lu par le jeu : les déclencheurs (${f.triggers.triggers.length}), avec leurs régions et variables.`);
+  if (f.triggers?.triggers.length) map.triggers = structuredClone(f.triggers);
   return { map, notes };
 }
