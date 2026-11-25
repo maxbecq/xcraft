@@ -74,7 +74,8 @@ describe('format 2', () => {
     expect(with_((f) => f.decor.push({ type: 'rocks_a', at: [5, 5], yaw: '1' as unknown as number }))).toThrow(/decor/);
     expect(with_((f) => (f.players[0].forbid = ['nimporte']))).toThrow(/players/);
     expect(with_((f) => (f.players[0].minerals = 1e12))).toThrow(/players/);
-    expect(with_((f) => Object.assign(f, { triggers: [] }))).toThrow(/déclencheurs/);
+    expect(with_((f) => Object.assign(f, { triggers: [] }))).toThrow(/Déclencheurs/);
+    expect(with_((f) => Object.assign(f, { triggers: { triggers: [{ id: 'a', when: { boom: 1 }, do: [] }] } }))).toThrow(/événement inconnu/);
     expect(with_((f) => {
       f.units.push({ type: 'caserne', owner: -1, at: [5, 5] });
       f.decor.push({ type: 'rocks_a', at: [8, 8], yaw: 1.5 });
@@ -206,5 +207,18 @@ describe('format 2 : équipes', () => {
     expect(() => parseMap(f)).toThrow(/players/);
     f.players[0].team = 2;
     expect(parseMap(f).players[0].team).toBe(2);
+  });
+});
+
+describe('format 2 : déclencheurs', () => {
+  it("garde les déclencheurs dans le fichier de l'éditeur, les signale à l'export pour le jeu", () => {
+    const f = JSON.parse(JSON.stringify(fromFormat1(MAPS.origine, MAPS.origine.biome, 2)));
+    f.triggers = { regions: [{ id: 'nid', rect: [10, 10, 4, 4] }], vars: [{ id: 'vague', value: 0 }], triggers: [{ id: 'Vague', folder: '', enabled: true, once: false, when: { every: 45 }, do: [{ spawn: 'auxiliaire', count: '2 + vague', owner: 1, in: 'nid' }] }] };
+    const back = parseMap(JSON.parse(JSON.stringify(f)));
+    expect(back.triggers).toEqual(f.triggers);
+    const { map, notes } = toFormat1(back);
+    expect('triggers' in map).toBe(false);
+    expect(notes.join(' ')).toMatch(/déclencheurs \(1\)/);
+    expect(typeof checkMap(JSON.parse(JSON.stringify(map)))).toBe('object');
   });
 });

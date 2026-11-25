@@ -14,6 +14,7 @@ import { fromFormat1, MAX_SIZE, parseMap, type Symmetry, blankMap, toFormat1 } f
 import { act, changed, ed, onChanged, type Tool, TOOL_HELP, TOOL_NAMES } from './state';
 import { layersPanel, minimapPanel, palettePanel, playersPanel, propertiesPanel, setPlayers } from './panels';
 import { dialog, keysHelp, mapProperties, playability, teamsWindow, techTree } from './windows';
+import { triggersWindow } from './trigwin';
 import './editor.css';
 
 export interface Shell {
@@ -253,7 +254,9 @@ function menus(): [string, Item[]][] {
       { label: 'Équipes et victoire…', run: teamsWindow },
     ]],
     ['Déclencheurs', [
-      { label: 'Éditeur de déclencheurs…', key: '⌥T', off: () => true },
+      { label: 'Éditeur de déclencheurs…', key: '⌥T', run: triggersWindow },
+      { label: 'Dessiner une région', run: () => setTool('region') },
+      { label: 'Montrer les régions', on: () => !ed.hidden.has('regions'), run: () => ((ed.hidden.has('regions') ? ed.hidden.delete('regions') : ed.hidden.add('regions')), act.redrawThings()) },
     ]],
     ['Aide', [
       { label: 'Raccourcis clavier', key: 'F1', run: keysHelp },
@@ -379,7 +382,7 @@ function shortcut(e: KeyboardEvent): boolean {
 }
 
 // ---- toolbar ----
-const TOOLBAR: [Tool, string][] = [['select', '⬚'], ['relief', '⛰'], ['ramp', '◢'], ['minerai', '◆'], ['puits', '✺'], ['base', '▢'], ['depart', '⚑'], ['decor', '🌵'], ['unite', '⚔']];
+const TOOLBAR: [Tool, string][] = [['select', '⬚'], ['relief', '⛰'], ['ramp', '◢'], ['minerai', '◆'], ['puits', '✺'], ['base', '▢'], ['depart', '⚑'], ['decor', '🌵'], ['unite', '⚔'], ['region', '▭']];
 function toolbar(): HTMLElement {
   const bar = h('<div class="toolbar"></div>');
   const btn = (icon: string, label: string, run: () => void, cls = '') => {
@@ -411,8 +414,7 @@ function toolbar(): HTMLElement {
   const gridB = btn('▦', 'Grille', () => toggleLayer('grid'));
   const viewB = btn('⇄', 'Vue de dessus', toggleView);
   sep();
-  const trig = btn('⚡', 'Déclencheurs', () => {});
-  trig.disabled = true;
+  btn('⚡', 'Déclencheurs', triggersWindow);
   btn('🌳', 'Arbre techno', () => techTree(ed.seat));
   btn('⚑', 'Équipes', teamsWindow);
   const play = h('<div class="playable" title=""></div>');
@@ -495,7 +497,7 @@ function say(text: string): void {
   msgTimer = window.setTimeout(() => (msg.hidden = true), Math.max(5000, text.length * 70));
 }
 const statusBar = h('<div class="statusbar"></div>');
-const SEL_NAMES = { unit: 'unité', decor: 'décor', base: 'base libre', start: 'départ', well: 'puits', ramp: 'rampe', mineral: 'minerai' };
+const SEL_NAMES = { unit: 'unité', decor: 'décor', base: 'base libre', start: 'départ', well: 'puits', ramp: 'rampe', mineral: 'minerai', region: 'région' };
 function status(): void {
   const f = ed.f;
   const s = hooks.stats();
@@ -594,6 +596,14 @@ export function buildShell(v: ViewHooks): Shell {
     if (document.querySelector('dialog[open]') && !e.metaKey && !e.ctrlKey) return;
     if (typing && !(e.metaKey || e.ctrlKey)) return;
     if (e.key === 'Escape' && openMenu) return closeMenus();
+    if (e.altKey && e.code === 'KeyT') {
+      e.preventDefault();
+      return triggersWindow();
+    }
+    if (e.altKey && e.code === 'KeyN') {
+      e.preventDefault();
+      return (ed.saved || confirmLoss()) && newMap();
+    }
     if (shortcut(e)) return e.preventDefault();
     if (typing) return;
     if (e.key === 'Tab') {

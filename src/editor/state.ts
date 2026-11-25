@@ -6,10 +6,11 @@
 import type { Dir } from '../map';
 import { MAPS } from '../maps';
 import { fromFormat1, type MapFile2 } from './format2';
+import type { Triggers } from './triggers';
 
-export type Tool = 'select' | 'relief' | 'ramp' | 'minerai' | 'puits' | 'base' | 'depart' | 'decor' | 'unite';
+export type Tool = 'select' | 'relief' | 'ramp' | 'minerai' | 'puits' | 'base' | 'depart' | 'decor' | 'unite' | 'region';
 export const TOOL_NAMES: Record<Tool, string> = {
-  select: 'Sélection', relief: 'Relief', ramp: 'Rampe', minerai: 'Minerai', puits: 'Puits', base: 'Base libre', depart: 'Départ', decor: 'Décor', unite: 'Unités',
+  select: 'Sélection', relief: 'Relief', ramp: 'Rampe', minerai: 'Minerai', puits: 'Puits', base: 'Base libre', depart: 'Départ', decor: 'Décor', unite: 'Unités', region: 'Régions',
 };
 export const TOOL_HELP: Record<Tool, string> = {
   select: 'Clic : choisir un objet (unité, décor, départ, base, puits, rampe, minerai). Suppr : l\'enlever.',
@@ -21,10 +22,11 @@ export const TOOL_HELP: Record<Tool, string> = {
   depart: 'Clic : départ du joueur choisi (QG 4×4). Avec une symétrie, le départ du joueur 1 place les autres.',
   decor: 'Clic : poser l\'objet. Clic droit : enlever le plus proche.',
   unite: 'Clic : poser pour le propriétaire choisi. Clic droit : enlever le plus proche.',
+  region: 'Glisser : dessiner une région, pour les déclencheurs. Clic droit : enlever la région sous le curseur.',
 };
 
 /** What can be shown or hidden, locked or not (the « Calques » panel). */
-export type Layer = 'relief' | 'ramps' | 'resources' | 'decorPlaced' | 'decorSeeded' | 'units' | 'starts' | 'grid';
+export type Layer = 'relief' | 'ramps' | 'resources' | 'decorPlaced' | 'decorSeeded' | 'units' | 'starts' | 'regions' | 'grid';
 export const LAYERS: { id: Layer; name: string; hide: boolean; lock: boolean }[] = [
   { id: 'relief', name: 'Relief et gouffres', hide: false, lock: true },
   { id: 'ramps', name: 'Rampes', hide: false, lock: true },
@@ -33,16 +35,17 @@ export const LAYERS: { id: Layer; name: string; hide: boolean; lock: boolean }[]
   { id: 'decorSeeded', name: 'Décor semé par le biome', hide: true, lock: false },
   { id: 'units', name: 'Unités et bâtiments placés', hide: true, lock: true },
   { id: 'starts', name: 'Départs et bases libres', hide: true, lock: true },
+  { id: 'regions', name: 'Régions (déclencheurs)', hide: true, lock: true },
   { id: 'grid', name: 'Grille', hide: true, lock: false },
 ];
 /** The layer a tool writes to. */
 export const TOOL_LAYER: Record<Tool, Layer | null> = {
-  select: null, relief: 'relief', ramp: 'ramps', minerai: 'resources', puits: 'resources', base: 'starts', depart: 'starts', decor: 'decorPlaced', unite: 'units',
+  select: null, relief: 'relief', ramp: 'ramps', minerai: 'resources', puits: 'resources', base: 'starts', depart: 'starts', decor: 'decorPlaced', unite: 'units', region: 'regions',
 };
 
 /** One thing picked with the selection tool, by its place in the file's lists. */
 export type Selection =
-  | { kind: 'unit' | 'decor' | 'base' | 'well' | 'ramp' | 'mineral'; i: number }
+  | { kind: 'unit' | 'decor' | 'base' | 'well' | 'ramp' | 'mineral' | 'region'; i: number }
   | { kind: 'start'; i: number };
 
 export const ed = {
@@ -115,3 +118,11 @@ export function startNumbers(f: MapFile2): number[] {
   order.forEach((player, k) => (num[player] = k + 1));
   return num;
 }
+
+/** The file's triggers table, made when first needed. */
+export function triggersOf(f: MapFile2): Triggers {
+  f.triggers ??= { regions: [], vars: [], triggers: [] };
+  return f.triggers;
+}
+/** Regions' colours, by their place in the list. */
+export const REGION_COLORS = [0x6fb3ff, 0xd9534f, 0x5fbf6a, 0xe3a33b, 0xb05fd6, 0x3fc7c7, 0xd6d65f, 0xd67fa8];

@@ -11,7 +11,8 @@ import { TEAM_COLORS } from '../render/models';
 import { DEFS, type Faction, START } from '../data';
 import { PLANETS } from '../mapcheck';
 import { DECOR, RACES, type Symmetry } from './format2';
-import { act, changed, ed, LAYERS, onChanged, startNumbers, type Tool } from './state';
+import { act, changed, ed, LAYERS, onChanged, startNumbers, type Tool, triggersOf } from './state';
+import { NAME, renameRegion, RESERVED } from './triggers';
 import { teamsWindow, techTree } from './windows';
 
 const h = (html: string) => {
@@ -266,7 +267,7 @@ export function propertiesPanel(): HTMLElement {
   const build = () => {
     const f = ed.f;
     const s = ed.selection;
-    const k = JSON.stringify([s, s && thing(), f.name, f.id, f.description, f.biome, f.symmetry, f.size]);
+    const k = JSON.stringify([s, s && thing(), s?.kind === 'region' ? f.triggers?.regions[s.i] : 0, f.name, f.id, f.description, f.biome, f.symmetry, f.size]);
     if (k === key) return;
     key = k;
     pane?.dispose();
@@ -312,6 +313,10 @@ export function propertiesPanel(): HTMLElement {
         case 'well': return f.wells[s.i] ? { at: f.wells[s.i] } : null;
         case 'mineral': return f.minerals[s.i] ? { at: f.minerals[s.i] } : null;
         case 'ramp': return f.ramps[s.i] ?? null;
+        case 'region': {
+          const g = f.triggers?.regions[s.i];
+          return g ? { at: [g.rect[0], g.rect[1]] } : null;
+        }
       }
     }
     if (!s || !thing()) {
@@ -367,6 +372,37 @@ export function propertiesPanel(): HTMLElement {
         root.prepend(h('<h4>Minerai</h4>'));
         xy(f.minerals[s.i], 1);
         break;
+      case 'region': {
+        const t = triggersOf(f);
+        const g = t.regions[s.i];
+        root.prepend(h('<h4>Région (déclencheurs)</h4>'));
+        const o = { id: g.id };
+        p.addBinding(o, 'id', { label: 'Nom' }).on('change', (ev) => {
+          const to = String(ev.value).trim();
+          if (to === g.id) return;
+          if (!NAME.test(to) || RESERVED.has(to) || t.regions.some((x) => x.id === to)) {
+            act.say('Nom refusé : minuscules, chiffres et _, unique, pas un mot réservé.');
+            return act.redrawThings();
+          }
+          act.snapshot();
+          renameRegion(t, g.id, to);
+          act.redrawThings();
+        });
+        const r = { x: g.rect[0], y: g.rect[1], w: g.rect[2], h: g.rect[3] };
+        for (const [c, name, k] of [['x', 'Colonne', 0], ['y', 'Ligne', 1], ['w', 'Largeur', 2], ['h', 'Hauteur', 3]] as const) {
+          p.addBinding(r, c, { label: name, min: k < 2 ? 0 : 1, max: f.size, step: 1 }).on('change', (ev) => {
+            if (ev.last === false) return;
+            act.snapshot();
+            g.rect[k] = Math.round(ev.value as number);
+            g.rect[2] = Math.max(1, Math.min(f.size - g.rect[0], g.rect[2]));
+            g.rect[3] = Math.max(1, Math.min(f.size - g.rect[1], g.rect[3]));
+            g.rect[0] = Math.min(g.rect[0], f.size - g.rect[2]);
+            g.rect[1] = Math.min(g.rect[1], f.size - g.rect[3]);
+            act.redrawThings();
+          });
+        }
+        break;
+      }
       case 'ramp': {
         const r = f.ramps[s.i];
         root.prepend(h('<h4>Rampe</h4>'));
@@ -413,7 +449,7 @@ export function layersPanel(): HTMLElement {
   };
   const count = (id: string) => {
     const f = ed.f;
-    return { ramps: f.ramps.length, resources: f.minerals.length + f.wells.length, decorPlaced: f.decor.length, units: f.units.length, starts: `${f.players.length} + ${f.bases.length}`, decorSeeded: 'auto' }[id] ?? '';
+    return { ramps: f.ramps.length, resources: f.minerals.length + f.wells.length, decorPlaced: f.decor.length, units: f.units.length, starts: `${f.players.length} + ${f.bases.length}`, regions: f.triggers?.regions.length ?? 0, decorSeeded: 'auto' }[id] ?? '';
   };
   onChanged(draw);
   return root;

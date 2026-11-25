@@ -26,7 +26,7 @@ import { checkMap } from '../mapcheck';
 import { unplayable } from '../mapplay';
 import { DECOR, type MapFile2, type Ramp2, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
-import { act, changed, ed, type Selection, startNumbers, TOOL_LAYER, TOOL_NAMES } from './state';
+import { act, changed, ed, REGION_COLORS, type Selection, startNumbers, TOOL_LAYER, TOOL_NAMES, triggersOf } from './state';
 import { buildShell, type Shell } from './shell';
 
 Cache.enabled = true; // the doodads file, read again at each rebuild
@@ -304,6 +304,16 @@ function rebuildThings(full: boolean): void {
       layer.add(l);
     }
   }
+  if (!shown.has('regions')) {
+    (f.triggers?.regions ?? []).forEach((g, i) => {
+      const c = REGION_COLORS[i % REGION_COLORS.length];
+      const [x, y, w, hh] = g.rect;
+      layer.add(square(x, y, w, hh, markMat(c, 0.22)));
+      const l = label(g.id, c);
+      l.position.set(x + w / 2, heightAt(map, x + w / 2, y + hh / 2) + 2, y + hh / 2);
+      layer.add(l);
+    });
+  }
   if (!shown.has('grid')) layer.add(grid());
   const sel = selectionBox();
   if (sel) layer.add(sel);
@@ -340,6 +350,10 @@ function footprintOf(s: Selection): [number, number, number, number] | null {
     case 'start': return f.players[s.i] ? [...f.players[s.i].start, 4, 4] : null;
     case 'well': return f.wells[s.i] ? [...f.wells[s.i], 3, 3] : null;
     case 'mineral': return f.minerals[s.i] ? [...f.minerals[s.i], 1, 1] : null;
+    case 'region': {
+      const g = f.triggers?.regions[s.i];
+      return g ? [...g.rect] : null;
+    }
     case 'ramp': {
       const r = f.ramps[s.i];
       if (!r) return null;
@@ -357,6 +371,11 @@ function selectionBox(): Object3D | null {
   const box = square(x, y, w, h, markMat(0x5fbf6a, 0.35));
   box.position.y += 0.1;
   return box;
+}
+/** The last item of a list that passes (the one drawn on top). */
+function lastIndex<T>(a: T[], ok: (x: T) => boolean): number {
+  for (let i = a.length - 1; i >= 0; i--) if (ok(a[i])) return i;
+  return -1;
 }
 /** The thing at tile (x, y), the smallest first. */
 function pick(x: number, y: number): Selection | null {
@@ -380,20 +399,24 @@ function pick(x: number, y: number): Selection | null {
   if (i >= 0) return { kind: 'base', i };
   i = f.ramps.findIndex((r) => rampTiles(r).some(([rx, ry]) => rx === x && ry === y));
   if (i >= 0) return { kind: 'ramp', i };
+  if (!ed.hidden.has('regions')) {
+    i = lastIndex(f.triggers?.regions ?? [], (g) => inside(...g.rect));
+    if (i >= 0) return { kind: 'region', i };
+  }
   return null;
 }
 /** Takes the selected thing out of the file. */
 function removeSelected(): void {
   const s = ed.selection;
   if (!s || !footprintOf(s)) return;
-  const layerOf = { unit: 'units', decor: 'decorPlaced', base: 'starts', start: 'starts', well: 'resources', mineral: 'resources', ramp: 'ramps' } as const;
+  const layerOf = { unit: 'units', decor: 'decorPlaced', base: 'starts', start: 'starts', well: 'resources', mineral: 'resources', ramp: 'ramps', region: 'regions' } as const;
   if (ed.locked.has(layerOf[s.kind])) return say('Calque verrouillé.');
   if (s.kind === 'start') return say('Un départ ne s\'enlève pas : baisser le nombre de joueurs.');
   snapshot();
   if (s.kind === 'ramp') {
     const [r] = f.ramps.splice(s.i, 1);
     touchRamp(r);
-  } else ({ unit: f.units, decor: f.decor, base: f.bases, well: f.wells, mineral: f.minerals } as Record<string, unknown[]>)[s.kind].splice(s.i, 1);
+  } else ({ unit: f.units, decor: f.decor, base: f.bases, well: f.wells, mineral: f.minerals, region: triggersOf(f).regions } as Record<string, unknown[]>)[s.kind].splice(s.i, 1);
   ed.selection = null;
   dirty = 'full';
   changed();
@@ -483,6 +506,28 @@ function paintFlat(c: HTMLCanvasElement): void {
       g.fillStyle = on ? '#111' : '#fff';
       g.fillText(String(num[i]), cx, cy + dpr);
     });
+  }
+  if (!ed.hidden.has('regions')) {
+    (f.triggers?.regions ?? []).forEach((r, i) => {
+      const c = hex(REGION_COLORS[i % REGION_COLORS.length]);
+      const [x, y, w, hh] = r.rect;
+      g.fillStyle = `${c}33`;
+      g.fillRect(ox + x * k, oy + y * k, w * k, hh * k);
+      g.strokeStyle = c;
+      g.lineWidth = 1.5 * dpr;
+      g.strokeRect(ox + x * k, oy + y * k, w * k, hh * k);
+      g.font = `${11 * dpr}px system-ui`;
+      g.textAlign = 'left';
+      g.textBaseline = 'top';
+      g.fillStyle = c;
+      g.fillText(r.id, ox + x * k + 3 * dpr, oy + y * k + 3 * dpr);
+    });
+  }
+  if (regionDrag) {
+    const [x, y, w, hh] = dragRect(regionDrag);
+    g.strokeStyle = '#e3a33b';
+    g.lineWidth = 2 * dpr;
+    g.strokeRect(ox + x * k, oy + y * k, w * k, hh * k);
   }
   const s = ed.selection && footprintOf(ed.selection);
   if (s) {
@@ -727,6 +772,7 @@ function footprint(): number {
 }
 /** The tool's footprint under tile t: [x, y, w, h]. */
 function cursorRect(t: [number, number]): [number, number, number, number] {
+  if (ed.tool === 'region' && regionDrag) return dragRect(regionDrag);
   const s = footprint();
   const off = ed.tool === 'puits' ? 1 : ed.tool === 'depart' || ed.tool === 'base' ? 2 : Math.floor((s - 1) / 2);
   if (ed.tool === 'ramp') {
@@ -737,6 +783,9 @@ function cursorRect(t: [number, number]): [number, number, number, number] {
   return [t[0] - off, t[1] - off, s, s];
 }
 let hoverTile: [number, number] | null = null;
+/** A region being drawn: the tile where the drag began and the one under the pointer. */
+let regionDrag: [number, number, number, number] | null = null;
+const dragRect = ([x0, y0, x1, y1]: [number, number, number, number]): [number, number, number, number] => [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, Math.abs(y1 - y0) + 1];
 function moveCursor(t: [number, number] | null): void {
   hoverTile = t;
   cursor.visible = !!t && ed.view === '3d' && ed.tool !== 'select';
@@ -774,6 +823,22 @@ function down(e: PointerEvent): void {
   painting = e.button;
   lastTile = t;
   strokeSeen.clear();
+  if (ed.tool === 'region') {
+    if (e.button === 2) {
+      const regs = triggersOf(f).regions;
+      const i = lastIndex(regs, (g) => t[0] >= g.rect[0] && t[1] >= g.rect[1] && t[0] < g.rect[0] + g.rect[2] && t[1] < g.rect[1] + g.rect[3]);
+      if (i >= 0) {
+        regs.splice(i, 1);
+        ed.selection = null;
+        say('Région enlevée. Les déclencheurs qui la nomment sont signalés dans leur fenêtre.');
+      }
+      dirty = 'full';
+      painting = -1;
+      return;
+    }
+    regionDrag = [t[0], t[1], t[0], t[1]];
+    return;
+  }
   apply(t[0], t[1], e.button === 2, true);
 }
 function move(e: PointerEvent): void {
@@ -783,8 +848,9 @@ function move(e: PointerEvent): void {
     return;
   }
   const t = tileUnder(e);
+  if (regionDrag && t) [regionDrag[2], regionDrag[3]] = t;
   moveCursor(t);
-  if (painting >= 0 && t && ed.tool !== 'select') {
+  if (painting >= 0 && t && ed.tool !== 'select' && ed.tool !== 'region') {
     // Every tile between the last one and this one: a quick stroke leaves no gaps.
     const [lx, ly] = lastTile ?? t;
     const n = Math.max(Math.abs(t[0] - lx), Math.abs(t[1] - ly), 1);
@@ -793,6 +859,15 @@ function move(e: PointerEvent): void {
   }
 }
 function up(): void {
+  if (regionDrag) {
+    const regs = triggersOf(f).regions;
+    let n = regs.length + 1;
+    while (regs.some((g) => g.id === `zone${n}`)) n++;
+    regs.push({ id: `zone${n}`, rect: dragRect(regionDrag) });
+    regionDrag = null;
+    ed.selection = { kind: 'region', i: regs.length - 1 };
+    say(`Région « zone${n} » ajoutée : la renommer dans Propriétés, l'utiliser dans les déclencheurs.`);
+  }
   if (painting >= 0 && ed.tool !== 'select') {
     dirty = 'full';
     changed();

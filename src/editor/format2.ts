@@ -1,4 +1,5 @@
 import { DEFS, type Faction, FACTIONS, START } from '../data';
+import { readTriggers, type Triggers } from './triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
 import { PLANETS } from '../mapcheck';
@@ -36,6 +37,8 @@ export interface MapFile2 {
   decor: { type: string; at: [number, number]; yaw?: number }[];
   /** Units and buildings there from the start: owner a seat (0…) or -1 (neutral). Units: tile; buildings: top-left tile. */
   units: { type: string; owner: number; at: [number, number] }[];
+  /** Regions, variables and triggers (triggers.ts): kept by the editor, not run by the game yet. */
+  triggers?: Triggers;
 }
 
 export type Symmetry = 'none' | 'rot180' | 'rot90';
@@ -217,7 +220,6 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     return maps1(json as MapFile);
   }
   if (f.format !== 2) throw new Error(`Format inconnu : ${String(f.format)}.`);
-  if ('triggers' in f) throw new Error('Les déclencheurs ne sont pas encore pris en charge.');
   const n = f.size;
   if (!Number.isInteger(n) || n! < 32 || n! > MAX_SIZE) throw new Error(`Taille invalide (32 à ${MAX_SIZE}).`);
   const size = n!;
@@ -249,6 +251,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     players,
     decor: list<MapFile2['decor'][number]>(f.decor, (d) => DECOR.includes(d?.type) && pt(d.at) && (d.yaw === undefined || (typeof d.yaw === 'number' && Number.isFinite(d.yaw) && Math.abs(d.yaw) <= 7)), 'decor'),
     units: list<MapFile2['units'][number]>(f.units, (u) => known(u?.type, ['unit', 'building']) && Number.isInteger(u.owner) && u.owner >= -1 && u.owner < players.length && pt(u.at), 'units'),
+    ...(f.triggers === undefined ? {} : { triggers: readTriggers(f.triggers, size, players.length) }),
   };
 }
 
@@ -387,5 +390,6 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
   if (seats.some((s) => Object.keys(s).length)) map.seats = seats;
   if (f.units.length) map.units = f.units.map((u) => ({ type: u.type, owner: u.owner, at: u.at }));
   if (f.decor.length) notes.push('Pas encore lu par le jeu : le décor posé à la main.');
+  if (f.triggers?.triggers.length) notes.push(`Pas encore lu par le jeu : les déclencheurs (${f.triggers.triggers.length}), avec leurs régions et variables.`);
   return { map, notes };
 }

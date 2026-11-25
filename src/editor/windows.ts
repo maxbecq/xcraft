@@ -130,6 +130,7 @@ const KEYS: [string, string][] = [
   ['⌘S, ⌘O, ⌘E', 'Enregistrer, ouvrir, exporter pour le jeu'],
   ['⌘K', 'Arbre technologique'],
   ['F9 / ⇧F9', 'Tester la carte / en spectateur'],
+  ['⌥T', 'Éditeur de déclencheurs'],
   ['⌥N', 'Nouvelle carte (⌘N, ⌘T et ⌘W restent au navigateur)'],
 ];
 export function keysHelp(): void {
