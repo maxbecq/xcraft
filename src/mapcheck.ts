@@ -158,6 +158,17 @@ function base(v: unknown, size: number, n: number): BaseSpot {
   };
 }
 
+/**
+ * Teams a map imposes: every seat the map is played with, or none (one picked in the menu could join any side), and
+ * never all in one team at a players count the map offers (the match would be won at its first judgement).
+ */
+function teams(seats: SeatRules[], players: number[]): void {
+  if (!seats.some((s) => s.team !== undefined)) return;
+  const most = Math.max(...players);
+  for (let i = 0; i < most; i++) if (seats[i]?.team === undefined) refuse(`Joueur ${i + 1} : une équipe pour chaque joueur, ou pour aucun.`);
+  for (const n of players) if (seats.slice(0, n).every((s) => s.team === seats[0].team)) refuse(`À ${n} joueurs, tous dans la même équipe : la partie serait gagnée d'avance.`);
+}
+
 function seat(v: unknown, n: number): SeatRules {
   const what = `Joueur ${n + 1}`;
   if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
@@ -217,6 +228,8 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
     if (!PLANETS.includes(v.biome as string)) refuse(`« biome » : planète inconnue (${PLANETS.join(', ')}).`);
     const bases = list(v.bases, MAX_BASES, '« bases »', 1).map((b, i) => base(b, size, i));
     if (bases.filter((b) => b.start).length !== 1) refuse('Il faut exactement une base de départ (« start »: true).');
+    const seats = v.seats === undefined ? undefined : list(v.seats, MAX_SEATS, '« seats »').map((p, i) => seat(p, i));
+    if (seats) teams(seats, players);
     return {
       format: 1,
       id,
@@ -230,7 +243,7 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
       terrain: list(v.terrain, MAX_SHAPES, '« terrain »').map((s, i) => shape(s, size, i)),
       ...(v.streets === undefined ? {} : { streets: list(v.streets, MAX_STREETS, '« streets »').map((s, i) => street(s, size, i)) }),
       bases,
-      ...(v.seats === undefined ? {} : { seats: list(v.seats, MAX_SEATS, '« seats »').map((p, i) => seat(p, i)) }),
+      ...(seats ? { seats } : {}),
       ...(v.units === undefined ? {} : { units: list(v.units, MAX_UNITS, '« units »').map((u, i) => placed(u, size, i)) }),
       ...(v.triggers === undefined ? {} : { triggers: triggers(v.triggers, size, Math.max(...players)) }),
     };

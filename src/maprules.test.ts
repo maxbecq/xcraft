@@ -150,12 +150,28 @@ describe('règles de carte : partie (createMatch)', () => {
 
 describe('règles de carte : équipes imposées', () => {
   it('prend une équipe de 0 à 3 par joueur et refuse le reste', () => {
-    const seat = (s: unknown) => rules({ seats: [s] });
+    const seat = (s: unknown) => rules({ seats: [s, { team: 1 }] });
     expect((seat({ team: 0 }) as MapFile).seats?.[0]).toEqual({ team: 0 });
     expect((seat({ team: 3 }) as MapFile).seats?.[0]).toEqual({ team: 3 });
     expect(seat({ team: 4 })).toMatch(/team/);
     expect(seat({ team: -1 })).toMatch(/team/);
     expect(seat({ team: 1.5 })).toMatch(/team/);
     expect(seat({ team: '1' })).toMatch(/team/);
+  });
+
+  it('refuse une équipe pour une partie des joueurs seulement, ou tous dans la même', () => {
+    expect(rules({ seats: [{ team: 0 }] })).toMatch(/pour chaque joueur/);
+    expect(rules({ seats: [{ team: 1 }, { team: 1 }] })).toMatch(/même équipe/);
+    // Four seats, played at 2, 3 or 4: the first two together would win at once at 2.
+    const four = { players: [2, 3, 4], symmetry: 'rot90' };
+    expect(rules({ ...four, seats: [{ team: 0 }, { team: 0 }, { team: 1 }, { team: 1 }] })).toMatch(/À 2 joueurs/);
+    expect(typeof rules({ ...four, seats: [{ team: 0 }, { team: 1 }, { team: 0 }, { team: 1 }] })).toBe('object');
+  });
+
+  it('une carte qui impose deux équipes se joue : personne ne gagne au premier jugement', () => {
+    const def = rules({ seats: [{ team: 0 }, { team: 1 }] }) as MapFile;
+    const w = createMatch(['humains', 'humains'], def.seats!.map((s) => s.team!), def);
+    for (let i = 0; i < 25; i++) w.step([]);
+    expect(w.winner).toBeNull();
   });
 });
