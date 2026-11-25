@@ -1,5 +1,5 @@
 import { CLIFF_FOOT, type GameMap, SUB, cornerLevels, cutCorner } from '../map';
-import { FP, isqrt, tileOf } from './fixed';
+import { FP, idiv, isqrt, tileOf } from './fixed';
 
 /** Ground passability: cliffs from the map plus tiles blocked by buildings. */
 export class Grid {
@@ -117,74 +117,92 @@ export class Grid {
    * A body of radius `r` (fixed point) at (x, y), moved inside its own tile so it stays clear of the cliffs: at a cliff's
    * foot it keeps out of the band CLIFF_FOOT wide where the rock's slope is drawn (équilibreur 22/11, units sunk in the
    * cliffs), and off any other side no ground unit crosses (a cliff's top, a chasm, the map's edge) and a plateau's
-   * corner across the diagonal; on a diagonal cliff's tile, off its cut corner. Only the centre is tested against the terrain when moving. `r` counts up to just under
-   * half a tile (gods included), so a pass three tiles wide stays open to every unit. Buildings are not counted.
+   * corner across the diagonal; on a diagonal cliff's tile and beside it, off its cut corner (offCut). Only the centre
+   * is tested against the terrain when moving. `r` counts up to just under half a tile (gods included), so a pass three
+   * tiles wide stays open to every unit. Buildings are not counted.
+   * Returns the same array at every call (it runs at every step of every unit): read it before calling again.
    */
   keepOff(x: number, y: number, r: number): [number, number] {
+    const out = this.kept;
+    out[0] = x;
+    out[1] = y;
     const tx = tileOf(x);
     const ty = tileOf(y);
-    if (r <= 0 || !this.inside(tx, ty)) return [x, y];
+    if (r <= 0 || !this.inside(tx, ty)) return out;
     const c = Math.min(r, KEEP_OFF);
     const i = ty * this.width + tx;
+    const x0 = tx * FP;
+    const y0 = ty * FP;
     if (this.cut[i]) {
-      // A diagonal cliff's cut corner is drawn as low ground, at the cliff's foot, though it is the plateau's tile
-      // (the user, 2026-11-24: a unit walked down there and stood stuck, with no way on but back up): the body
-      // keeps to the plateau's side of the diagonal, as off any cliff's top. Measured from the cut corner along
-      // each axis (a, b): the diagonal is a + b = FP, and c off it is c * sqrt(2) more.
-      const [dx, dy] = CORNERS[this.cut[i] - 1];
-      let a = dx < 0 ? x - tx * FP : (tx + 1) * FP - x;
-      let b = dy < 0 ? y - ty * FP : (ty + 1) * FP - y;
-      const t = FP + Math.trunc((c * 1449) / 1024) - a - b;
-      if (t <= 0) return [x, y];
-      // Straight away from the diagonal; what would leave the tile on one axis goes to the other.
-      a += (t + 1) >> 1;
-      b += (t + 1) >> 1;
-      if (a > FP - 1) [a, b] = [FP - 1, b + a - (FP - 1)];
-      if (b > FP - 1) [a, b] = [a + b - (FP - 1), FP - 1];
-      return [dx < 0 ? tx * FP + a : (tx + 1) * FP - a, dy < 0 ? ty * FP + b : (ty + 1) * FP - b];
+      this.offCut(tx, ty, c, x0, y0);
+      return out;
     }
     const s = this.sides[i];
     const f = this.feet[i];
-    const x0 = tx * FP;
-    const y0 = ty * FP;
-    const off = (bit: number) => (f & bit ? FOOT + c : s & bit ? 0 : c);
-    // Along one axis, between its low side's clearance `lo` and its high side's `hi`. Where both do not fit: off the
-    // foot if only one side is one (the other a cliff's top, a chasm or the map's edge: the body overhangs that, the
-    // rock is not walked into), the middle between two feet (a tile no path takes, see narrow).
-    const axis = (v: number, v0: number, lo: number, hi: number, footLo: boolean, footHi: boolean) => {
-      if (lo + hi < FP) return Math.min(Math.max(v, v0 + lo), v0 + FP - hi);
-      return footLo === footHi ? v0 + FP / 2 : footLo ? v0 + lo : v0 + FP - hi;
-    };
-    const sides = () => {
-      x = axis(x, x0, off(8), off(2), (f & 8) !== 0, (f & 2) !== 0);
-      y = axis(y, y0, off(1), off(4), (f & 1) !== 0, (f & 4) !== 0);
-    };
-    sides();
+    // Open ground (most tiles): every side and diagonal step free, no foot, so nothing to keep off.
+    if (s === 15 && f === 0 && this.steps[i] === 255) return out;
+    x = out[0];
+    y = out[1];
+    const oN = f & 1 ? FOOT + c : s & 1 ? 0 : c;
+    const oE = f & 2 ? FOOT + c : s & 2 ? 0 : c;
+    const oS = f & 4 ? FOOT + c : s & 4 ? 0 : c;
+    const oW = f & 8 ? FOOT + c : s & 8 ? 0 : c;
+    x = axis(x, x0, oW, oE, (f & 8) !== 0, (f & 2) !== 0);
+    y = axis(y, y0, oN, oS, (f & 1) !== 0, (f & 4) !== 0);
     // Corners, once off the sides: under a plateau (its foot's band), or a plateau's corner across the diagonal (both
     // own sides open, the diagonal step not): pushed straight away from it, then kept off the sides again. The one
     // reached deepest first, not in the corners' fixed order: two pushes do not commute, and the map turned round must
     // give the turned point (a scene and its mirror).
-    const pushes: [number, number, number, number][] = [];
+    let pushes: [number, number, number, number][] | null = null;
     for (let k = 0; k < 4; k++) {
-      const [dx, dy] = CORNERS[k];
+      const dx = CORNERS[k][0];
+      const dy = CORNERS[k][1];
       const foot = (f & (16 << k)) !== 0;
       if (!foot && (!(s & (dx < 0 ? 8 : 2)) || !(s & (dy < 0 ? 1 : 4)) || this.steps[i] & (1 << DIR[(dy + 1) * 3 + dx + 1]))) continue;
       const m = foot ? FOOT + c : c;
       const cx = dx < 0 ? x0 : x0 + FP;
       const cy = dy < 0 ? y0 : y0 + FP;
       const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-      if (d < m) pushes.push([m - d, k, cx, cy]);
+      if (d < m) (pushes ??= []).push([m - d, k, cx, cy]);
     }
-    pushes.sort((p, q) => q[0] - p[0] || p[1] - q[1]);
-    for (const [, k, cx, cy] of pushes) {
-      const m = (f & (16 << k)) !== 0 ? FOOT + c : c;
-      const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-      if (d >= m) continue;
-      if (d === 0) [x, y] = [cx - CORNERS[k][0] * m, cy - CORNERS[k][1] * m];
-      else [x, y] = [cx + Math.trunc(((x - cx) * m) / d), cy + Math.trunc(((y - cy) * m) / d)];
+    if (pushes) {
+      pushes.sort((p, q) => q[0] - p[0] || p[1] - q[1]);
+      for (const [, k, cx, cy] of pushes) {
+        const m = (f & (16 << k)) !== 0 ? FOOT + c : c;
+        const d = isqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        if (d >= m) continue;
+        if (d === 0) [x, y] = [cx - CORNERS[k][0] * m, cy - CORNERS[k][1] * m];
+        else [x, y] = [cx + idiv((x - cx) * m, d), cy + idiv((y - cy) * m, d)];
+      }
+      x = axis(x, x0, oW, oE, (f & 8) !== 0, (f & 2) !== 0);
+      y = axis(y, y0, oN, oS, (f & 1) !== 0, (f & 4) !== 0);
     }
-    if (pushes.length) sides();
-    return [x, y];
+    out[0] = x;
+    out[1] = y;
+    return out;
+  }
+  private readonly kept: [number, number] = [0, 0];
+
+  /**
+   * keepOff's point (in `kept`, of the tile at x0, y0) kept `c` off the diagonal of the cut tile (tx, ty), on the
+   * plateau's side. A diagonal cliff's cut corner is drawn as low ground, at the cliff's foot, though it is the
+   * plateau's tile (the user, 2026-11-24: a unit walked down there and stood stuck, with no way on but back up): the
+   * body keeps to the plateau's side, as off any cliff's top. Measured from the cut corner along each axis (a, b): the
+   * diagonal is a + b = FP, and c off it is c * sqrt(2) more. Only beside the diagonal itself: past its ends, in the
+   * tiles next to it, the corner's own push holds the body (keepOff), and the two limits meet.
+   */
+  private offCut(tx: number, ty: number, c: number, x0: number, y0: number): void {
+    const out = this.kept;
+    const dx = CORNERS[this.cut[ty * this.width + tx] - 1][0];
+    const dy = CORNERS[this.cut[ty * this.width + tx] - 1][1];
+    const a = dx < 0 ? out[0] - tx * FP : (tx + 1) * FP - out[0];
+    const b = dy < 0 ? out[1] - ty * FP : (ty + 1) * FP - out[1];
+    const t = FP + idiv(c * SQRT2, 1024) - a - b;
+    if (t <= 0 || a - b < -FP || b - a < -FP) return;
+    // Straight away from the diagonal, within the body's own tile.
+    const h = (t + 1) >> 1;
+    out[0] = Math.min(Math.max(out[0] + (dx < 0 ? h : -h), x0 + 1), x0 + FP - 1);
+    out[1] = Math.min(Math.max(out[1] + (dy < 0 ? h : -h), y0 + 1), y0 + FP - 1);
   }
 
   /** Level of a flat, buildable tile, or -1 for a ramp or a cut cliff corner. */
@@ -464,6 +482,17 @@ export class Grid {
 
 /** Most a body is kept off a cliff (keepOff), just under half a tile. */
 const KEEP_OFF = Math.trunc((FP * 45) / 100);
+/** sqrt(2) in 1/1024: how far along each axis a point lies from a tile's diagonal, for its distance to it. */
+const SQRT2 = 1449;
+/**
+ * keepOff along one axis, between its low side's clearance `lo` and its high side's `hi`. Where both do not fit: off
+ * the foot if only one side is one (the other a cliff's top, a chasm or the map's edge: the body overhangs that, the
+ * rock is not walked into), the middle between two feet (a tile no path takes, see narrow).
+ */
+function axis(v: number, v0: number, lo: number, hi: number, footLo: boolean, footHi: boolean): number {
+  if (lo + hi < FP) return Math.min(Math.max(v, v0 + lo), v0 + FP - hi);
+  return footLo === footHi ? v0 + FP / 2 : footLo ? v0 + lo : v0 + FP - hi;
+}
 /** The band at a cliff's foot (CLIFF_FOOT), in fixed point. */
 const FOOT = Math.round(CLIFF_FOOT * FP);
 /** Corners NW, NE, SE, SW (keepOff's bits 16 << k). */
