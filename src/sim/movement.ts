@@ -321,7 +321,14 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
       if (far > most) [kx, ky] = [nx + idiv((kx - nx) * most, far), ny + idiv((ky - ny) * most, far)];
       // Held back to no headway at all (heading straight into the wall): a blocked step, so a walker stuck there
       // replans (blockedTicks) instead of pressing on in place for good. Along the wall or round a corner, it slides.
-      if ((kx - e.x) * (nx - e.x) + (ky - e.y) * (ny - e.y) <= 0) return false;
+      if ((kx - e.x) * (nx - e.x) + (ky - e.y) * (ny - e.y) <= 0) {
+        // ...unless it stands where no body may itself: then it walks straight out, whatever its heading (held in a
+        // band its path runs along or into, it stood there for good).
+        [kx, ky] = this.grid.keepOff(e.x, e.y, e.radius);
+        const out = dist(e.x, e.y, kx, ky);
+        if (out === 0) return false;
+        if (out > e.speed) [kx, ky] = [e.x + idiv((kx - e.x) * e.speed, out), e.y + idiv((ky - e.y) * e.speed, out)];
+      }
       [nx, ny] = [kx, ky];
     }
   }
