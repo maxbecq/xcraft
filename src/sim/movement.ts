@@ -181,7 +181,18 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
     pts.splice(-2, 2, x, y); // on an empty path too: it then holds just the point
   }
   // Every waypoint, the goal too, where the body may stand: out of a cliff's foot (Grid.keepOff).
-  if (!climbs(e)) for (let k = 0; k < pts.length; k += 2) [pts[k], pts[k + 1]] = g.keepOff(pts[k], pts[k + 1], e.radius);
+  if (!climbs(e)) {
+    for (let k = 0; k < pts.length; k += 2) {
+      // The goal itself on a tile's edge: kept off as a point of its own tile (gx, gy), a unit inside it. As a point
+      // of the tile beyond (floor), it was pushed further into that one, at times across a cliff: a waypoint no step
+      // reached, and the unit pressed at the wall with its order never done.
+      const goal = exact && k === pts.length - 2 && end === gy * g.width + gx;
+      const qx = goal && pts[k] === (gx + 1) * FP ? pts[k] - 1 : pts[k];
+      const qy = goal && pts[k + 1] === (gy + 1) * FP ? pts[k + 1] - 1 : pts[k + 1];
+      const [kx, ky] = g.keepOff(qx, qy, e.radius);
+      if (kx !== qx || ky !== qy) [pts[k], pts[k + 1]] = [kx, ky];
+    }
+  }
   // Nowhere to walk (the goal out of reach and its own tile the nearest to it), yet standing where no body may (an
   // old replay, set there by a trigger): out of there.
   if (!pts.length && !climbs(e)) {
@@ -326,7 +337,8 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
         // band its path runs along or into, it stood there for good).
         [kx, ky] = this.grid.keepOff(e.x, e.y, e.radius);
         const out = dist(e.x, e.y, kx, ky);
-        if (out === 0) return false;
+        // A corner's push rounds by a unit or two: only a body well inside counts, or one on the limit crept for good.
+        if (out <= FP / 64) return false;
         if (out > e.speed) [kx, ky] = [e.x + idiv((kx - e.x) * e.speed, out), e.y + idiv((ky - e.y) * e.speed, out)];
       }
       [nx, ny] = [kx, ky];

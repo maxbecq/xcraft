@@ -215,6 +215,19 @@ describe('cliffs', () => {
     });
   });
 
+  it('a move to a point on the edge between the low ground and a plateau, from below: the order ends, at the cliff\'s foot', () => {
+    const N = 16;
+    const level = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) for (let x = 8; x < N; x++) level[y * N + x] = 1;
+    const w = new World({ width: N, height: N, level, ramp: new Array(N * N).fill(null), rampStep: new Uint8Array(N * N) });
+    const a = w.spawn(big, 0, 4 * FP + FP / 2, 8 * FP + FP / 2);
+    w.step([{ player: 0, kind: 'move', ids: [a.id], x: 8 * FP, y: 8 * FP + FP / 2 }]);
+    for (let i = 0; i < 300 && a.order; i++) w.step([]);
+    expect(a.order).toBeNull();
+    expect(8 * FP - a.x).toBeGreaterThanOrEqual(BAND + Math.min(a.radius, KEEP));
+    expect(8 * FP - a.x).toBeLessThan(BAND + KEEP + FP / 8);
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);
