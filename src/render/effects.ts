@@ -281,25 +281,33 @@ export class Effects {
     scene.add(this.ice);
   }
 
-  /** One particle and one ground stain, as the effects draw them, for the warm-up to compile their programs
+  /** One particle, one streak and the ground stains, as the effects draw them, for the warm-up to compile their programs
    * (render/prewarm.ts): the abilities' clouds, rings and stains then cost no shader compile in play. */
   samples(at: Vector3): Object3D[] {
     // The particles' own geometry and material (kept: the warm-up must not free them).
     const sprite = new Mesh(this.particles.mesh.geometry, this.particles.mesh.material);
     sprite.frustumCulled = false;
     sprite.userData.keep = true;
+    // The shots' streaks (beams, tracers, sparks): drawn in `fx`, their program compiled here with the rest (kept too).
+    const streak = new Mesh(this.streaks.mesh.geometry, this.streaks.mesh.material);
+    streak.frustumCulled = false;
+    streak.userData.keep = true;
+    // The stains' materials are kept: freeing them would free their programs, which the first stain then recompiled.
     const stain = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2c4a0c, transparent: true, opacity: 0.6, depthWrite: false }));
+    stain.userData.keep = true;
     // The mark a unit leaves where it died: its own program (an alpha picture).
     const mark = new Mesh(this.decalGeo, new MeshBasicMaterial({ color: 0x2a1a12, alphaMap: this.stain, transparent: true, opacity: 0.6, depthWrite: false }));
+    mark.userData.keep = true;
     // A wreck's flying bit too (it casts a shadow: the depth program with it).
     const bit = new Mesh(this.debrisGeo, this.debrisMat);
     bit.castShadow = true;
     bit.userData.keep = true;
     sprite.position.copy(at);
+    streak.position.copy(at);
     stain.position.copy(at);
     mark.position.copy(at);
     bit.position.copy(at);
-    return [sprite, stain, mark, bit];
+    return [sprite, streak, stain, mark, bit];
   }
 
   /** Collects the effects of the tick that just ran. */
