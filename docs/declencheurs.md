@@ -164,15 +164,20 @@ Mise à jour du 25 novembre 2026 : le jeu lit désormais, par l'export en format
 
 **Moteur (étape 2, fait le 25 novembre 2026).** La carte du jeu (format 1) porte la même table, champ `triggers` (`public/maps/README.md`) ; `mapcheck` la refuse si elle est mal formée, hors bornes, d'un type inconnu ou si un nom (région, variable, déclencheur) ne renvoie à rien. `createMatch` crée alors un `Scenario` (`src/sim/scenario.ts`) que `World.step` fait tourner à chaque tick, après l'enterrement des morts et avant le jugement de la partie. Règles retenues :
 
-- les déclencheurs sont regardés dans l'ordre de la liste, à chaque tick ; un déclencheur désactivé ou déjà joué (« une seule fois ») suit quand même son événement ;
-- `time` : au tick de N secondes (secondes « normales », comme les données) ; `every` : à chaque multiple de N secondes ;
-- `enter` et `leave` : une fois par tick où au moins une unité du joueur dit (tout joueur si aucun, pas les neutres) entre ou sort ; mourir n'est pas sortir ;
-- `killed` : la mort du type dit (ou de toute unité ou bâtiment) ; `built` : un bâtiment terminé pendant la partie, pas ceux du départ ;
-- `check` : quand la condition **devient** vraie, pas à chaque tick où elle le reste ;
-- `spawn` : sur les tuiles libres de la région, dans l'ordre, 50 au plus par action et 200 par tick ; avec `attack`, un attaque-déplacement vers le centre de l'autre région ;
-- `message` arrive comme une alerte du jeu (la durée est gardée dans le fichier, l'interface ne la lit pas encore) ;
+- toute la table est lue à la création de la partie : une expression illisible, vide ou d'une fonction inconnue fait refuser la carte, jamais planter un tick ;
+- les déclencheurs sont regardés dans l'ordre de la liste, à chaque tick ; `enter` et `leave` suivent leur région même désactivés ;
+- `time` : au tick de N secondes (secondes « normales », comme les données) ; `every` : à chaque multiple de N secondes ; la variable `time` des expressions vaut le nombre de secondes dont le tick est passé, si bien que `time >= 600` devient vrai au même tick que l'événement `time: 600` ;
+- `enter` et `leave` : une fois par tick où au moins une unité du joueur dit (tout joueur si aucun, pas les neutres) entre ou sort ; les unités déjà là au premier tick n'entrent pas ; mourir n'est pas sortir, ni changer de propriétaire sans bouger ;
+- `killed` : la mort du type dit (ou de toute unité ou bâtiment), pas la fin d'une illusion ; ce que le jeu retire sans mort (un camp qui abandonne) ne compte pas ; `built` : un bâtiment terminé pendant la partie, pas ceux du départ ;
+- `check` : quand la condition **devient** vraie, pas à chaque tick où elle le reste ; elle n'est regardée que tant que le déclencheur peut jouer (activé, pas encore joué s'il ne joue qu'une fois) ;
+- expressions : chaque résultat reste un entier entre −10⁹ et 10⁹ ; `units()` ne compte pas les illusions, `buildings()` seulement les bâtiments terminés ; `alive()` comme le jugement de la partie ;
+- `spawn` : sur les tuiles libres de la région, dans l'ordre, 50 au plus par action et 200 par tick, hors plafond de population ; avec `attack`, un attaque-déplacement vers le centre de l'autre région ; des neutres (`owner: -1`) restent passifs ;
+- `message` arrive comme une information (genre `info`), vue aussi des spectateurs et dans un replay ;
 - `victory` désigne le gagnant ; `defeat` sort le joueur de la partie, comme un abandon, et le jugement habituel décide de la suite ;
-- les variables restent entre −10⁹ et 10⁹ ; l'état du moteur compte dans l'empreinte de la partie.
+- les noms, dossiers et messages refusent `< > " &` ; les noms hérités de JavaScript (`__proto__`, `constructor`…) sont réservés ;
+- l'état du moteur compte dans l'empreinte de la partie.
+
+Une carte qui impose des équipes le fait pour chaque joueur, et jamais tous dans la même à un nombre de joueurs qu'elle propose : la partie serait gagnée au premier jugement.
 
 Une partie sans déclencheurs n'a pas de moteur : son déroulement et son empreinte ne changent pas.
 
