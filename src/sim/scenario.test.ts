@@ -4,7 +4,10 @@ import { checkMap } from '../mapcheck';
 import type { MapFile } from '../maps';
 import { fingerprint } from './fingerprint';
 import { FP, ticks } from './fixed';
-import { MAX_SPAWN } from './scenario';
+import { MAX_SPAWN, secondsAt } from './scenario';
+import { evaluate, parseExpr } from './triggers';
+import { parseReplay } from '../game/replay';
+import { removeMap } from '../maps';
 import { createMatch } from './setup';
 import type { Action, Trigger, Triggers, When } from './triggers';
 import type { Command, World } from './world';
@@ -114,7 +117,7 @@ describe('déclencheurs : les événements', () => {
 
 describe('déclencheurs : les actions', () => {
   it('message à un joueur ou à tous', () => {
-    const w = createMatch(['humains', 'humains'], undefined, map({ triggers: [trig({ time: 1 }, { message: 'Pour toi', to: 1, seconds: 5 }, { message: 'Pour tous', to: 'all', seconds: 5 })] }));
+    const w = createMatch(['humains', 'humains'], undefined, map({ triggers: [trig({ time: 1 }, { message: 'Pour toi', to: 1 }, { message: 'Pour tous', to: 'all' })] }));
     const seen: { player: number; text: string }[] = [];
     while (w.tick <= ticks(1)) {
       w.step([]);
@@ -188,7 +191,7 @@ function waves(size: number, guards: boolean): MapFile {
     regions: [{ id: 'nid', rect: [20, 22, 3, 3] }, { id: 'base', rect: [9, 9, 6, 6] }],
     vars: [{ id: 'vague', value: 0 }, { id: 'vies', value: 3 }],
     triggers: [
-      { ...trig({ every: 20 }, { add: 'vague', value: '1' }, { message: 'Vague !', to: 'all', seconds: 5 }, { spawn: 'legionnaire', count: String(size), owner: 1, in: 'nid', attack: 'base' }), id: 'vague', if: 'vague < 3' },
+      { ...trig({ every: 20 }, { add: 'vague', value: '1' }, { message: 'Vague !', to: 'all' }, { spawn: 'legionnaire', count: String(size), owner: 1, in: 'nid', attack: 'base' }), id: 'vague', if: 'vague < 3' },
       { ...trig({ enter: 'base', owner: 1 }, { add: 'vies', value: '-1' }), id: 'fuite' },
       { ...trig({ check: 'vague >= 3 and units(2, \'legionnaire\') == 0' }, { victory: 0 }), id: 'tenu', once: true },
       { ...trig({ check: 'vies <= 0' }, { defeat: 0 }), id: 'perdu', once: true },
@@ -282,4 +285,150 @@ describe('déclencheurs : import par le jeu (mapcheck)', () => {
     expect(with_({ ...ok, regions: [{ id: 'nid', rect: [62, 20, 3, 3] }] })).toMatch(/hors de la carte/);
     expect(with_([])).toMatch(/triggers/);
   });
+});
+
+describe('déclencheurs : ce qu\'une carte hostile ne peut pas faire', () => {
+  const imp = (t: unknown) => {
+    const def = JSON.parse(JSON.stringify(map({})));
+    def.triggers = t;
+    return checkMap(def);
+  };
+  const one = (a: unknown, when: unknown = { time: 1 }) => ({ regions: [{ id: 'nid', rect: [40, 20, 3, 3] }], vars: [{ id: 'a', value: 0 }], triggers: [{ id: 'x', when, do: [a] }] });
+
+  it('refuse une expression vide là où elle est attendue (pas pour « si »)', () => {
+    for (const a of [{ set: 'a', value: '' }, { add: 'a', value: '  ' }, { give: 0, minerals: '', energy: '0' }, { spawn: 'auxiliaire', count: '', owner: 1, in: 'nid' }]) expect(imp(one(a)), JSON.stringify(a)).toMatch(/vide/);
+    expect(imp(one({ set: 'a', value: '1' }, { check: '' }))).toMatch(/vide/);
+    const t = one({ set: 'a', value: '1' });
+    (t.triggers[0] as { if?: string }).if = '';
+    expect(typeof imp(t)).toBe('object');
+  });
+
+  it('refuse les noms hérités comme fonctions ou variables', () => {
+    for (const f of ['toString(1)', '__proto__(1)', 'constructor(1)', 'hasOwnProperty(1)', 'valueOf(1)', '__defineGetter__(1)']) expect(imp(one({ set: 'a', value: f })), f).toMatch(/fonction inconnue/);
+    for (const v of ['__proto__', 'constructor', 'toString']) expect(imp({ vars: [{ id: v, value: 0 }], triggers: [] }), v).toMatch(/réservé/);
+  });
+
+  it("l'évaluateur rend toujours un entier fini, borné, même sur un arbre forgé", () => {
+    const env = { vars: Object.create(null), time: 0, units: () => 0, buildings: () => 0, minerals: () => 0, energy: () => 0, alive: () => 0 };
+    expect(evaluate({ f: 'toString', args: [{ n: 1 }] }, env)).toBe(0);
+    expect(evaluate({ f: '__proto__', args: [] }, env)).toBe(0);
+    expect(evaluate({ v: 'constructor' }, env)).toBe(0);
+    expect(evaluate(parseExpr('1000000 * 1000000 * 1000000'), env)).toBe(1_000_000_000);
+    expect(evaluate(parseExpr('0 - 1000000 * 1000000'), env)).toBe(-1_000_000_000);
+    const weird = { ...env, units: () => Number.NaN, minerals: () => Number.POSITIVE_INFINITY };
+    expect(evaluate(parseExpr('units(1) + 1'), weird)).toBe(1);
+    expect(evaluate(parseExpr('minerals(1)'), weird)).toBe(0);
+  });
+
+  it('refuse les signes < > " & dans les noms, dossiers et messages', () => {
+    expect(imp(one({ message: '<b>gras</b>', to: 'all' }))).toMatch(/signes/);
+    const t = one({ set: 'a', value: '1' });
+    (t.triggers[0] as { id: string }).id = 'a&b';
+    expect(imp(t)).toMatch(/signes/);
+  });
+
+  it('une table qui ne se lit pas fait échouer createMatch, jamais un tick', () => {
+    const def = map({});
+    def.triggers = { regions: [], vars: [{ id: 'a', value: 0 }], triggers: [{ id: 'x', folder: '', enabled: true, once: false, when: { time: 1 }, do: [{ set: 'a', value: '' }] }] };
+    expect(() => createMatch(['humains', 'humains'], undefined, def)).toThrow(/vide/);
+  });
+});
+
+describe('déclencheurs : précisions', () => {
+  it('« time » des expressions suit les ticks de l\'événement « time »', () => {
+    for (const s of [0, 1, 5, 60, 599, 600, 3600]) {
+      expect(secondsAt(ticks(s)), String(s)).toBe(Math.max(s, s === 0 ? 0 : s));
+      expect(secondsAt(ticks(s) - 1) < s || s === 0, String(s)).toBe(true);
+    }
+    const w = createMatch(['humains', 'humains'], undefined, map({ vars: [{ id: 'n', value: 0 }, { id: 'm', value: 0 }], triggers: [trig({ time: 60 }), trig({ check: 'time >= 60' }, { add: 'm', value: '1' })] }));
+    while (n(w) === 0) w.step([]);
+    expect((w.scenario!.state() as { vars: [string, number][] }).vars).toEqual([['m', 1], ['n', 1]]);
+  });
+
+  it('une unité déjà dans la région au départ n\'y « entre » pas ; changer de main sur place n\'est pas sortir', () => {
+    const def = map({ vars: [{ id: 'n', value: 0 }, { id: 'out', value: 0 }], triggers: [trig({ enter: 'centre' }), trig({ leave: 'centre', owner: 0 }, { add: 'out', value: '1' })] });
+    def.units = [{ type: 'legionnaire', owner: 0, at: [31, 41] }];
+    const w = createMatch(['humains', 'humains'], undefined, def);
+    run(w, 2);
+    expect(n(w)).toBe(0);
+    of(w, 0, 'legionnaire')[0].owner = 1; // taken where it stands
+    run(w, 1);
+    expect((w.scenario!.state() as { vars: [string, number][] }).vars).toEqual([['n', 0], ['out', 0]]);
+  });
+
+  it('la fin d\'une illusion n\'est pas une mort ; les chantiers et illusions ne comptent pas', () => {
+    const w = createMatch(['humains', 'humains'], undefined, map({ vars: [{ id: 'n', value: 0 }, { id: 'u', value: 0 }, { id: 'b', value: 0 }], triggers: [trig({ killed: '' }), trig({ every: 1 }, { set: 'u', value: "units(2, 'auxiliaire')" }, { set: 'b', value: "buildings(1, 'caserne')" })] }));
+    const ghost = w.spawn('auxiliaire', 1, 31 * FP, 41 * FP);
+    ghost.illusion = true;
+    w.site('caserne', 0, 20, 20);
+    run(w, 1.5);
+    const v = () => Object.fromEntries((w.scenario!.state() as { vars: [string, number][] }).vars);
+    expect([v().u, v().b]).toEqual([0, 0]);
+    ghost.hp = 0;
+    run(w, 1);
+    expect(v().n).toBe(0);
+  });
+
+  it('les unités neutres d\'une action restent passives', () => {
+    const def = map({ triggers: [trig({ time: 1 }, { spawn: 'legionnaire', count: '4', owner: -1, in: 'nid' })] });
+    def.units = [{ type: 'auxiliaire', owner: 0, at: [41, 18] }];
+    const w = createMatch(['humains', 'humains'], undefined, def);
+    run(w, 20);
+    expect(of(w, -1, 'legionnaire')).toHaveLength(4);
+    expect(of(w, 0, 'auxiliaire')[0].hp).toBe(of(w, 0, 'auxiliaire')[0].maxHp);
+  });
+
+  it('un message de carte est une information, pas une alerte', () => {
+    const w = createMatch(['humains', 'humains'], undefined, map({ triggers: [trig({ time: 1 }, { message: 'Bienvenue', to: 'all' })] }));
+    const kinds = new Set<string>();
+    while (w.tick <= ticks(1)) {
+      w.step([]);
+      for (const e of w.events) if (e.text === 'Bienvenue') kinds.add(e.kind);
+    }
+    expect([...kinds]).toEqual(['info']);
+  });
+});
+
+describe('déclencheurs : aux bornes', () => {
+  it('200 déclencheurs aux expressions longues, 1000 unités : un tick reste court', () => {
+    // As long as an expression may be (200 characters): as many counts as fit.
+    const terms = Array.from({ length: 20 }, (_, k) => (k % 2 ? 'buildings(1)' : `units(${(k % 4) / 2 + 1}, 'legionnaire')`));
+    let long = terms[0];
+    for (const x of terms.slice(1)) if (long.length + x.length + 8 < 190) long += ` + ${x}`;
+    const def = map({
+      regions: [{ id: 'centre', rect: [20, 20, 24, 24] }],
+      vars: [{ id: 'n', value: 0 }],
+      triggers: Array.from({ length: 200 }, (_, i) => ({ ...trig(i % 2 ? { check: `${long} > 0` } : { enter: 'centre' }, { set: 'n', value: long }), id: `t${i}`, if: 'alive(1) and alive(2)' })),
+    });
+    const w = createMatch(['humains', 'humains'], undefined, def);
+    for (let i = 0; i < 1000; i++) w.spawn('legionnaire', i % 2, (20 + (i % 24)) * FP + FP / 2, (20 + Math.floor(i / 42)) * FP + FP / 2);
+    w.step([]);
+    const t = performance.now();
+    for (let i = 0; i < 20; i++) (w.scenario as unknown as { step(w: World): void }).step(w);
+    // Generous for a slow test machine: the old engine took seconds here.
+    expect((performance.now() - t) / 20).toBeLessThan(25);
+  }, 60_000);
+});
+
+describe('déclencheurs : un replay portant sa carte', () => {
+  it('se relit par parseReplay et rejoue à l\'empreinte près', () => {
+    const def = waves(3, true);
+    const w = createMatch(['humains', 'z'], [0, 1], def);
+    const ais = [new AI(w, 0), new AI(w, 1)];
+    const log: [number, Command[]][] = [];
+    while (w.tick < ticks(90)) {
+      const cmds = ais.flatMap((a) => a.think());
+      if (cmds.length) log.push([w.tick, cmds]);
+      w.step(cmds);
+    }
+    const text = JSON.stringify({ v: 1, map: def.id, carte: def, factions: ['humains', 'z'], teams: [0, 1], biome: def.biome, handicap: [100, 100], ticks: log });
+    const r = parseReplay(text);
+    if (typeof r === 'string') throw new Error(r);
+    const again = createMatch(r.factions, r.teams, r.map, r.biome);
+    expect(again.scenario).not.toBeNull();
+    let k = 0;
+    while (again.tick < w.tick) again.step(r.ticks[k]?.[0] === again.tick ? r.ticks[k++][1] : []);
+    expect(fingerprint(again)).toBe(fingerprint(w));
+    removeMap(def.id);
+  }, 60_000);
 });

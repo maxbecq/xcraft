@@ -4,7 +4,7 @@
  * of the table: OK keeps it, Annuler drops it.
  */
 import { DEFS, type Faction } from '../data';
-import { RACES } from './format2';
+import { gamePlayers, RACES } from './format2';
 import { act, ed, REGION_COLORS } from './state';
 import {
   ACTION_KINDS, type Action, blankAction, blankWhen, checkExpr, kindOf, LIMITS, NAME, parseExpr, readTriggers, renameRegion, renameTrigger, renameVar, RESERVED,
@@ -31,7 +31,8 @@ const ACTION_NAMES: Record<(typeof ACTION_KINDS)[number], string> = {
 
 export function triggersWindow(): void {
   const f = ed.f;
-  const players = f.players.length;
+  // As many as the game will take: the export plays at 2, or up to 4 with four parts (format2.ts toFormat1).
+  const players = Math.min(f.players.length, gamePlayers(f));
   const t: Triggers = structuredClone(f.triggers ?? { regions: [], vars: [], triggers: [] });
   let cur = 0;
   let view: 'phrases' | 'json' = 'phrases';
@@ -118,7 +119,7 @@ export function triggersWindow(): void {
     const parts: (string | HTMLElement)[] = [kind, ' : '];
     switch (k) {
       case 'message':
-        parts.push('« ', txt(x.message as string, LIMITS.text, (v) => (x.message = v), 'wide'), ' » à ', sel([['all', 'tous'], ...playerOpts()], String(x.to), (v) => (x.to = v === 'all' ? 'all' : Number(v))), ' pendant ', num(x.seconds as number, 1, 120, (v) => (x.seconds = v)), ' s');
+        parts.push('« ', txt(x.message as string, LIMITS.text, (v) => (x.message = v), 'wide'), ' » à ', sel([['all', 'tous'], ...playerOpts()], String(x.to), (v) => (x.to = v === 'all' ? 'all' : Number(v))));
         break;
       case 'spawn':
         parts.push(expr(x.count as string, (v) => (x.count = v)), ' × ', sel([], x.spawn as string, (v) => (x.spawn = v), typeGroups(['unit'])), ' pour ', pl('owner', true), ' dans ', sel(regionOpts(), x.in as string, (v) => (x.in = v)),
@@ -141,7 +142,8 @@ export function triggersWindow(): void {
     const tools = h('<div class="tools"><button class="small" data-a="new">＋ Nouveau</button><button class="small" data-a="dup">Dupliquer</button><button class="small" data-a="del">Supprimer</button><button class="small" data-a="up">↑</button><button class="small" data-a="down">↓</button></div>');
     tools.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       const tr = t.triggers[cur];
-      const fresh = (base: string) => {
+      const fresh = (name: string) => {
+        const base = name.slice(0, 34); // room for « 99 » within the 40 a name may have
         let n = 1;
         while (t.triggers.some((y) => y.id === `${base}${n > 1 ? ` ${n}` : ''}`)) n++;
         return `${base}${n > 1 ? ` ${n}` : ''}`;
@@ -149,7 +151,7 @@ export function triggersWindow(): void {
       switch (b.dataset.a) {
         case 'new':
           if (t.triggers.length >= LIMITS.triggers) return;
-          t.triggers.splice(cur + 1, 0, { id: fresh('Déclencheur'), folder: tr?.folder ?? '', enabled: true, once: false, when: { time: 0 }, do: [{ message: 'Bonne chance !', to: 'all', seconds: 5 }] });
+          t.triggers.splice(cur + 1, 0, { id: fresh('Déclencheur'), folder: tr?.folder ?? '', enabled: true, once: false, when: { time: 0 }, do: [{ message: 'Bonne chance !', to: 'all' }] });
           cur = Math.min(cur + 1, t.triggers.length - 1);
           break;
         case 'dup':

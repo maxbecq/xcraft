@@ -122,6 +122,7 @@ body[class] .cmd:not(.has-icon) small { white-space: nowrap; font-size: 10px; le
 .hud-toast.error .sign { color: #ffb347; }
 .hud-toast.done .sign { color: #6fe39a; }
 .hud-toast.alert .sign { color: #ff5a3a; }
+.hud-toast.info .sign { color: #8ec8ff; }
 .hud-toast .times { font: inherit; opacity: 0.85; }
 .hud-toast .times:empty { display: none; }
 body .hud-toasts .hud-toast.bump { animation: toast-bump 0.25s ease-out; }

@@ -8,8 +8,9 @@ import { PLANETS } from '../mapcheck';
  * Map file format 2: a tile grid, made for the editor (format 1, src/maps.ts, is made to be written by hand).
  * The whole map is stored as it is: the editor applies the symmetry while painting, so a reader never turns anything.
  *
- * What the game reads today: nothing of it (the game reads format 1). The editor reads all of it; `toGameMap` gives
- * the game's own map structure (relief, ramps, chasms, base spots), so the editor's view is the game's renderer.
+ * The game reads format 1 only: « Exporter pour le jeu » (toFormat1) writes one, with the players' rules, the units
+ * placed and the triggers; the scenery placed by hand stays here. `toGameMap` gives the game's own map structure
+ * (relief, ramps, chasms, base spots), so the editor's view is the game's renderer.
  */
 export interface MapFile2 {
   format: 2;
@@ -37,7 +38,7 @@ export interface MapFile2 {
   decor: { type: string; at: [number, number]; yaw?: number }[];
   /** Units and buildings there from the start: owner a seat (0…) or -1 (neutral). Units: tile; buildings: top-left tile. */
   units: { type: string; owner: number; at: [number, number] }[];
-  /** Regions, variables and triggers (triggers.ts): kept by the editor, not run by the game yet. */
+  /** Regions, variables and triggers (sim/triggers.ts), passed to the game by the export, which runs them (sim/scenario.ts). */
   triggers?: Triggers;
 }
 
@@ -233,7 +234,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     throw new Error(`« tiles » : ${size} lignes de ${size} caractères parmi 0, 1, 2, x.`);
   }
   const ramps = list<Ramp2>(f.ramps, (r) => pt(r?.at) && DIRS.includes(r.up) && Number.isInteger(r.width) && r.width >= 1 && r.width <= 12 && [0, 1].includes(r.level), 'ramps');
-  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && [p.minerals, p.energy].every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_START) && Array.isArray(p.forbid) && p.forbid.length <= 300 && p.forbid.every((t) => known(t, ['unit', 'building', 'upgrade'])) && (p.team === undefined || (Number.isInteger(p.team) && p.team >= 0 && p.team <= 3)), 'players');
+  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && p.start[0] <= size - 4 && p.start[1] <= size - 4 && [p.minerals, p.energy].every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_START) && Array.isArray(p.forbid) && p.forbid.length <= 300 && p.forbid.every((t) => known(t, ['unit', 'building', 'upgrade'])) && (p.team === undefined || (Number.isInteger(p.team) && p.team >= 0 && p.team <= 3)), 'players');
   if (players.length < 1 || players.length > 4) throw new Error('De 1 à 4 joueurs.');
   return {
     format: 2,
@@ -254,6 +255,9 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     ...(f.triggers === undefined ? {} : { triggers: readTriggers(f.triggers, size, players.length) }),
   };
 }
+
+/** The most players the game file made from `f` takes (toFormat1: four parts play up to 4, else 2). */
+export const gamePlayers = (f: Pick<MapFile2, 'symmetry'>) => (f.symmetry === 'rot90' ? 4 : 2);
 
 /** The format 1 bounds the game checks (mapcheck.ts). */
 const MAX_SHAPES = 300;

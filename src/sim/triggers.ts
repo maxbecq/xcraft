@@ -23,7 +23,7 @@ export type When =
   | { built: string; owner?: number }
   | { check: string };
 export type Action =
-  | { message: string; to: 'all' | number; seconds: number }
+  | { message: string; to: 'all' | number }
   | { spawn: string; count: string; owner: number; in: string; attack?: string }
   | { set: string; value: string }
   | { add: string; value: string }
@@ -53,7 +53,9 @@ export const LIMITS = { triggers: 200, actions: 30, regions: 64, vars: 64, text:
 /** Names of regions and variables: they appear in expressions. */
 export const NAME = /^[a-z_][a-z0-9_]{0,23}$/;
 /** Words an expression keeps for itself. */
-export const RESERVED = new Set(['and', 'or', 'not', 'time', ...Object.keys({ units: 0, buildings: 0, minerals: 0, energy: 0, alive: 0 })]);
+export const RESERVED = new Set(['and', 'or', 'not', 'time', 'units', 'buildings', 'minerals', 'energy', 'alive', ...Object.getOwnPropertyNames(Object.prototype)]);
+/** Characters refused in a table's texts (names, folders, messages): they would only ever be shown as text, but stay out. */
+const UNSAFE = /[<>"&]/;
 export const WHEN_KINDS = ['time', 'every', 'enter', 'leave', 'killed', 'built', 'check'] as const;
 export const ACTION_KINDS = ['message', 'spawn', 'set', 'add', 'give', 'forbid', 'allow', 'victory', 'defeat', 'enable', 'disable'] as const;
 export const kindOf = <T extends object>(x: T) => Object.keys(x)[0] as keyof T & string;
@@ -67,6 +69,9 @@ export type Expr =
   | { f: string; args: Expr[] };
 /** Functions an expression may call: their argument counts. Players are numbered from 1 in expressions, as on screen. */
 export const FUNCS: Record<string, [number, number]> = { units: [1, 2], buildings: [1, 2], minerals: [1, 1], energy: [1, 1], alive: [1, 1] };
+/** Every value an expression makes stays within this, either side, after each operation (exact integers, never NaN). */
+export const BOUND = 1_000_000_000;
+const bounded = (v: number) => (Number.isFinite(v) ? Math.max(-BOUND, Math.min(BOUND, Math.trunc(v))) : 0);
 
 /** Reads an expression; throws a message in French. */
 export function parseExpr(src: string): Expr {
@@ -137,7 +142,7 @@ export function checkExpr(e: Expr, vars: Set<string>, players: number): string[]
       if (!arg) out.push(`texte « ${x.s} » hors d'un appel de fonction`);
       else if (!Object.hasOwn(DEFS, x.s) || DEFS[x.s].kind === 'upgrade' || DEFS[x.s].kind === 'resource') out.push(`type inconnu « ${x.s} »`);
     } else if ('f' in x) {
-      const ar = FUNCS[x.f];
+      const ar = Object.hasOwn(FUNCS, x.f) ? FUNCS[x.f] : undefined; // `toString`, `__proto__`… are no functions here
       if (!ar) out.push(`fonction inconnue « ${x.f} » (${Object.keys(FUNCS).join(', ')})`);
       else if (x.args.length < ar[0] || x.args.length > ar[1]) out.push(`« ${x.f} » prend ${ar[0] === ar[1] ? ar[0] : `${ar[0]} ou ${ar[1]}`} argument${ar[1] > 1 ? 's' : ''}`);
       else {
@@ -164,15 +169,27 @@ export interface Env {
   energy(player: number): number;
   alive(player: number): number;
 }
-/** Integer arithmetic only (division towards zero, by zero gives 0); comparisons and logic give 1 or 0. */
+/**
+ * Integer arithmetic only (division towards zero, by zero gives 0), each result within ±BOUND; comparisons and logic
+ * give 1 or 0. An unknown name reads 0, an unknown function 0: whatever the expression, a finite integer.
+ */
 export function evaluate(e: Expr, env: Env): number {
-  const ev = (x: Expr): number => {
+  const ev = (x: Expr): number => bounded(op(x));
+  const op = (x: Expr): number => {
     if ('n' in x) return x.n;
-    if ('v' in x) return x.v === 'time' ? env.time : (env.vars[x.v] ?? 0);
+    if ('v' in x) return x.v === 'time' ? env.time : Object.hasOwn(env.vars, x.v) ? env.vars[x.v] : 0;
     if ('s' in x) return 0;
     if ('f' in x) {
-      const [p, t] = [ev(x.args[0]), x.args[1] && 's' in x.args[1] ? x.args[1].s : undefined];
-      return (env[x.f as 'units'] as (p: number, t?: string) => number)(p, t);
+      const p = x.args[0] ? ev(x.args[0]) : 0;
+      const t = x.args[1] && 's' in x.args[1] ? x.args[1].s : undefined;
+      switch (x.f) {
+        case 'units': return env.units(p, t);
+        case 'buildings': return env.buildings(p, t);
+        case 'minerals': return env.minerals(p);
+        case 'energy': return env.energy(p);
+        case 'alive': return env.alive(p);
+      }
+      return 0;
     }
     const a = ev(x.a);
     if (x.op === 'neg') return -a;
@@ -201,7 +218,7 @@ export function evaluate(e: Expr, env: Env): number {
 // ---- the table, checked ----
 /**
  * Every problem of a triggers table for a map of `size` tiles and `players` seats, in French, one per line (empty:
- * all is well). `strict` (an import) also refuses what is malformed rather than merely wrong.
+ * all is well).
  */
 export function triggerProblems(t: Triggers, size: number, players: number): string[] {
   return problems(t, size, players).all;
@@ -232,8 +249,10 @@ function problems(t: Triggers, size: number, players: number): { all: string[]; 
   const player = (p: number, what: string, neutral = false) => {
     if (!Number.isInteger(p) || p < (neutral ? -1 : 0) || p >= players) out.push(`${what} : joueur inexistant.`);
   };
-  const expr = (src: string | undefined, what: string) => {
-    if (src === undefined || src === '') return;
+  /** An expression: required, but for « si » (`optional`), where an empty one means always. */
+  const expr = (src: string | undefined, what: string, optional = false) => {
+    if (optional && (src === undefined || src.trim() === '')) return;
+    if (typeof src !== 'string') return void out.push(`${what} : expression manquante.`);
     try {
       for (const m of checkExpr(parseExpr(src), vars, players)) (m.startsWith('variable inconnue') ? ref : (s: string) => out.push(s))(`${what} : ${m}.`);
     } catch (e) {
@@ -251,6 +270,7 @@ function problems(t: Triggers, size: number, players: number): { all: string[]; 
   };
   for (const tr of t.triggers) {
     const w = `« ${tr.id} »`;
+    if (UNSAFE.test(tr.id) || UNSAFE.test(tr.folder)) out.push(`${w} : les signes < > " & ne sont pas permis dans un nom ou un dossier.`);
     const when = tr.when as Record<string, unknown>;
     const k = kindOf(tr.when);
     if ('owner' in when && when.owner !== undefined) player(when.owner as number, `${w}, quand`);
@@ -262,13 +282,16 @@ function problems(t: Triggers, size: number, players: number): { all: string[]; 
     if (k === 'killed' && when.killed !== '') type(when.killed as string, ['unit', 'building'], `${w}, quand`);
     if (k === 'built') type(when.built as string, ['building'], `${w}, quand`);
     if (k === 'check') expr(when.check as string, `${w}, quand`);
-    expr(tr.if, `${w}, si`);
+    expr(tr.if, `${w}, si`, true);
     if (!tr.do.length) ref(`${w} : aucune action.`);
     tr.do.forEach((a, n) => {
       const at = `${w}, action ${n + 1}`;
       const x = a as Record<string, unknown>;
       switch (kindOf(a)) {
-        case 'message': if (x.to !== 'all') player(x.to as number, at); break;
+        case 'message':
+          if (x.to !== 'all') player(x.to as number, at);
+          if (typeof x.message !== 'string' || UNSAFE.test(x.message)) out.push(`${at} : les signes < > " & ne sont pas permis dans un message.`);
+          break;
         case 'spawn':
           type(x.spawn as string, ['unit'], at);
           expr(x.count as string, at);
@@ -303,10 +326,12 @@ export function readTriggers(v: unknown, size: number, players: number): Trigger
     throw new Error(`Déclencheurs : ${what}.`);
   };
   const rec = (x: unknown, what: string) => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : bad(`${what} : un objet est attendu`));
-  const only = (x: Record<string, unknown>, keys: string[], what: string) => Object.keys(x).forEach((k) => keys.includes(k) || bad(`${what} : champ inconnu « ${k} »`));
+  const only = (x: Record<string, unknown>, keys: string[], what: string) => Object.keys(x).forEach((k) => keys.includes(k) || bad(`${what} : champ inconnu « ${k.slice(0, 30)} »`));
   const arr = (x: unknown, max: number, what: string) => (Array.isArray(x) && x.length <= max ? x : bad(`${what} : une liste de ${max} au plus est attendue`));
   const int = (x: unknown, lo: number, hi: number, what: string) => (Number.isInteger(x) && (x as number) >= lo && (x as number) <= hi ? (x as number) : bad(`${what} : un entier de ${lo} à ${hi} est attendu`));
   const str = (x: unknown, max: number, what: string) => (typeof x === 'string' && x.length <= max ? x : bad(`${what} : un texte de ${max} caractères au plus est attendu`));
+  /** A text shown to players or in the editor: no < > " &. */
+  const say = (x: unknown, max: number, what: string) => (UNSAFE.test(str(x, max, what)) ? bad(`${what} : les signes < > \" & ne sont pas permis`) : (x as string));
   const name = (x: unknown, what: string) => (typeof x === 'string' && NAME.test(x) && !RESERVED.has(x) ? x : bad(`${what} : un nom en minuscules, chiffres et _ est attendu (pas un mot réservé)`));
   const t = rec(v, 'la table');
   only(t, ['regions', 'vars', 'triggers'], 'la table');
@@ -352,7 +377,7 @@ export function readTriggers(v: unknown, size: number, players: number): Trigger
       const ak = Object.keys(a).find((x) => (ACTION_KINDS as readonly string[]).includes(x)) ?? Object.keys(a)[0];
       const e = (z: unknown) => str(z, LIMITS.expr, at);
       switch (ak) {
-        case 'message': only(a, ['message', 'to', 'seconds'], at); return { message: str(a.message, LIMITS.text, at), to: a.to === 'all' ? 'all' : P(a.to, at), seconds: int(a.seconds, 1, 120, at) };
+        case 'message': only(a, ['message', 'to'], at); return { message: say(a.message, LIMITS.text, at), to: a.to === 'all' ? 'all' : P(a.to, at) };
         case 'spawn': only(a, ['spawn', 'count', 'owner', 'in', 'attack'], at); return { spawn: str(a.spawn, 40, at), count: e(a.count), owner: P(a.owner, at, true), in: name(a.in, at), ...(a.attack === undefined ? {} : { attack: name(a.attack, at) }) };
         case 'set': only(a, ['set', 'value'], at); return { set: name(a.set, at), value: e(a.value) };
         case 'add': only(a, ['add', 'value'], at); return { add: name(a.add, at), value: e(a.value) };
@@ -367,8 +392,8 @@ export function readTriggers(v: unknown, size: number, players: number): Trigger
       }
     });
     return {
-      id: str(o.id, 40, w) || bad(`${w} : nom vide`),
-      folder: o.folder === undefined ? '' : str(o.folder, 40, w),
+      id: say(o.id, 40, w) || bad(`${w} : nom vide`),
+      folder: o.folder === undefined ? '' : say(o.folder, 40, w),
       enabled: o.enabled !== false,
       once: o.once === true,
       when,
@@ -387,7 +412,7 @@ export function blankAction(kind: (typeof ACTION_KINDS)[number], t: Triggers): A
   const reg = t.regions[0]?.id ?? 'zone';
   const v = t.vars[0]?.id ?? 'compteur';
   switch (kind) {
-    case 'message': return { message: 'Message', to: 'all', seconds: 5 };
+    case 'message': return { message: 'Message', to: 'all' };
     case 'spawn': return { spawn: 'auxiliaire', count: '1', owner: 1, in: reg };
     case 'set': return { set: v, value: '0' };
     case 'add': return { add: v, value: '1' };

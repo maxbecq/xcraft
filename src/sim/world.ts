@@ -314,6 +314,8 @@ export interface Death {
   type: string;
   owner: number;
   air?: boolean;
+  /** An illusion's end: not a death for a map's triggers. */
+  illusion?: boolean;
 }
 
 /**
@@ -333,7 +335,8 @@ export interface Teleport {
 export interface GameEvent {
   player: number;
   text: string;
-  kind: 'error' | 'done' | 'alert';
+  /** 'info': a map's message (its triggers), to the players it names, shown to spectators too. */
+  kind: 'error' | 'done' | 'alert' | 'info';
 }
 
 /** How close (tiles) an Isdaris worker must be to beam a building down. */
@@ -640,7 +643,7 @@ export class World {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       // A unit taken for a while (Soumission, Canon IEM) dies its own player's.
       const owner = e.charm ? e.charmOwner : e.seizedLeft ? e.seizedFrom : e.owner;
-      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e) });
+      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e), ...(e.illusion ? { illusion: true } : {}) });
       // Living units leave a body an Alchimiste can raise for a while.
       if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner, type: e.type });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
