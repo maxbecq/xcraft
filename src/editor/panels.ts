@@ -12,7 +12,7 @@ import { DEFS, type Faction, START } from '../data';
 import { PLANETS } from '../mapcheck';
 import { DECOR, RACES, type Symmetry } from './format2';
 import { act, changed, ed, LAYERS, onChanged, startNumbers, type Tool, triggersOf } from './state';
-import { NAME, renameRegion, RESERVED } from './triggers';
+import { NAME, renameRegion, RESERVED } from '../sim/triggers';
 import { teamsWindow, techTree } from './windows';
 
 const h = (html: string) => {

@@ -1,5 +1,5 @@
 import { DEFS, type Faction, FACTIONS, START } from '../data';
-import { readTriggers, type Triggers } from './triggers';
+import { readTriggers, type Triggers } from '../sim/triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
 import { PLANETS } from '../mapcheck';

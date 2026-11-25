@@ -1,7 +1,7 @@
 /**
  * A map's triggers, as docs/declencheurs.md recommends: a declarative table (when, if, do) with integer
- * mini-expressions, kept in the editor's file (format 2). The game does not run them yet: that needs an engine in
- * src/sim (docs/declencheurs.md, step 2). Everything here is pure and bounded, so that engine can reuse it.
+ * mini-expressions. The model, its reader and checks, and the expressions' evaluator: pure and bounded, shared by the
+ * map editor (which writes the table) and the simulation (scenario.ts, which runs it). No rendering here.
  */
 import { DEFS } from '../data';
 

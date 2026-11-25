@@ -9,7 +9,7 @@ import { act, ed, REGION_COLORS } from './state';
 import {
   ACTION_KINDS, type Action, blankAction, blankWhen, checkExpr, kindOf, LIMITS, NAME, parseExpr, readTriggers, renameRegion, renameTrigger, renameVar, RESERVED,
   type Trigger, triggerFaults, triggerProblems, type Triggers, WHEN_KINDS,
-} from './triggers';
+} from '../sim/triggers';
 import { dialog } from './windows';
 
 const h = (html: string) => {

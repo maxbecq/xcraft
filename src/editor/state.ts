@@ -6,7 +6,7 @@
 import type { Dir } from '../map';
 import { MAPS } from '../maps';
 import { fromFormat1, type MapFile2 } from './format2';
-import type { Triggers } from './triggers';
+import type { Triggers } from '../sim/triggers';
 
 export type Tool = 'select' | 'relief' | 'ramp' | 'minerai' | 'puits' | 'base' | 'depart' | 'decor' | 'unite' | 'region';
 export const TOOL_NAMES: Record<Tool, string> = {
