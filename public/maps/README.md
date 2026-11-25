@@ -91,6 +91,8 @@ Pour un scénario ou une campagne. Les cartes du jeu n'en ont pas : sans ces cha
 
 `units` : les unités et bâtiments présents au départ, 200 au plus. Ils sont donnés **pour toute la carte**, sans rotation : `{ "type": "caserne", "owner": 0, "at": [20, 14] }`. `owner` est un joueur (0 pour le joueur 1) ou `-1` pour un neutre ; les unités d'un joueur absent de la partie ne sont pas posées. `at` est la tuile d'une unité, ou la tuile en haut à gauche d'un bâtiment, qui est posé déjà construit. Les neutres restent passifs.
 
+`triggers` : les régions, variables et déclencheurs que la partie exécute (`src/sim/scenario.ts`), sur toute la carte, sans rotation. Le format et les règles sont décrits dans `docs/declencheurs.md` ; l'éditeur de cartes les écrit (menu Déclencheurs). Une table mal formée, hors bornes, d'un type inconnu ou dont un nom ne renvoie à rien est refusée.
+
 L'éditeur de cartes (`/xcraft/editeur/`, menu Fichier › Exporter pour le jeu) écrit ces champs.
 
 ## Importer une carte

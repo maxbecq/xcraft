@@ -1,5 +1,6 @@
 import { type Faction, HQ_MINERAL_GAP } from './data';
 import { IMPORTED, MAX_MAP_ID, mapPrint, parseMap } from './mapcheck';
+import type { Triggers } from './sim/triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -29,6 +30,8 @@ export interface MapFile {
   seats?: SeatRules[];
   /** Units and buildings there from the start, where they stand on the whole map (not turned). */
   units?: PlacedUnit[];
+  /** Regions, variables and triggers the match runs (sim/scenario.ts), on the whole map (not turned). */
+  triggers?: Triggers;
 }
 
 export interface SeatRules {

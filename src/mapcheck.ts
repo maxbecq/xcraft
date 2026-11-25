@@ -1,6 +1,7 @@
 import { RAMP_LENGTH, STEP, type Street } from './map';
 import { DEFS, FACTIONS, type Faction } from './data';
 import type { BaseSpot, MapFile, PlacedUnit, SeatRules, Shape } from './maps';
+import { readTriggers, triggerProblems, type Triggers } from './sim/triggers';
 
 /**
  * A map from outside the game (a file the player imports, a friend's map over the network, the one a replay carries):
@@ -176,6 +177,18 @@ function seat(v: unknown, n: number): SeatRules {
   };
 }
 
+/** A triggers table (sim/triggers.ts): its shape and bounds, then every reference (a region, variable or trigger named must exist). */
+function triggers(v: unknown, size: number, players: number): Triggers {
+  try {
+    const t = readTriggers(v, size, players);
+    const wrong = triggerProblems(t, size, players);
+    if (wrong.length) throw new Error(`Déclencheurs : ${wrong[0].replace(/\.$/, '')}`);
+    return t;
+  } catch (e) {
+    return refuse(`« triggers » : ${(e as Error).message}`);
+  }
+}
+
 function placed(v: unknown, size: number, n: number): PlacedUnit {
   const what = `Unité placée ${n + 1}`;
   if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
@@ -189,7 +202,7 @@ function placed(v: unknown, size: number, n: number): PlacedUnit {
 export function checkMap(v: unknown, prefix = true): MapFile | string {
   try {
     if (!isRecord(v)) return refuse("Ce n'est pas une carte Xcraft (un objet JSON est attendu).");
-    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases', 'seats', 'units'], 'Carte');
+    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases', 'seats', 'units', 'triggers'], 'Carte');
     if (v.format !== 1) refuse('Format de carte inconnu (« format » vaut 1).');
     // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top,
     // within MAX_MAP_ID in all.
@@ -219,6 +232,7 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
       bases,
       ...(v.seats === undefined ? {} : { seats: list(v.seats, MAX_SEATS, '« seats »').map((p, i) => seat(p, i)) }),
       ...(v.units === undefined ? {} : { units: list(v.units, MAX_UNITS, '« units »').map((u, i) => placed(u, size, i)) }),
+      ...(v.triggers === undefined ? {} : { triggers: triggers(v.triggers, size, Math.max(...players)) }),
     };
   } catch (e) {
     if (e instanceof Refused) return e.message;

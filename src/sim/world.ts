@@ -3,6 +3,7 @@ import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, F
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
+import type { Scenario } from './scenario';
 import * as commands from './commands';
 import * as economy from './economy';
 import * as movement from './movement';
@@ -392,6 +393,8 @@ export class World {
   shrouded = new Set<number>();
   /** Winning player once the game is over. */
   winner: number | null = null;
+  /** The map's triggers, if it has some (MapFile.triggers): run each tick before the match is judged. */
+  scenario: Scenario | null = null;
   private nextId = 1;
   readonly lastAlert: Record<number, number> = {};
 
@@ -555,6 +558,7 @@ export class World {
     if (this.tick % TICK_RATE === 0) this.repairOnCreep();
     this.bury();
     this.separate();
+    this.scenario?.step(this);
     if (this.tick % 20 === 0) this.judge();
     this.tick++;
   }

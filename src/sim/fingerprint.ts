@@ -67,5 +67,7 @@ export function fingerprint(world: World): number {
   const inside = world as unknown as { respawns: unknown; nextId: number };
   value(inside.respawns, 3);
   mix(inside.nextId);
+  // A map's triggers: their variables and what they remember (a match without any has none, its print unchanged).
+  if (world.scenario) value(world.scenario.state(), 4);
   return h >>> 0;
 }

@@ -2,6 +2,7 @@ import { type BuildingDef, DEFS, FACTIONS, type Faction, START } from '../data';
 import { rotateFootprint } from '../map';
 import { CORNERS, DEFAULT_MAP, type MapFile, buildMap, hqSlot, mapFile, turnsOf } from '../maps';
 import { FP } from './fixed';
+import { Scenario } from './scenario';
 import { World } from './world';
 
 export { CORNERS };
@@ -96,6 +97,7 @@ export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?
     else world.spawn(u.type, u.owner, ...px(u.at));
   }
   if (teams) world.setTeams(teams);
+  if (def.triggers?.triggers.length) world.scenario = new Scenario(def.triggers);
   return world;
 }
 
