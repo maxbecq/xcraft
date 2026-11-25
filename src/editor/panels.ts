@@ -323,7 +323,7 @@ export function propertiesPanel(): HTMLElement {
       root.prepend(h('<h4>Carte</h4>'));
       const o = { name: f.name, id: f.id, description: f.description ?? '', biome: f.biome, symmetry: f.symmetry };
       field(o, 'name', { label: 'Nom' }, (v) => (f.name = String(v).slice(0, 60)));
-      field(o, 'id', { label: 'Identifiant' }, (v) => (f.id = String(v).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40) || f.id));
+      field(o, 'id', { label: 'Identifiant' }, (v) => (f.id = String(v).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32) || f.id));
       field(o, 'description', { label: 'Description' }, (v) => (f.description = String(v).slice(0, 300)));
       p.addBinding(o, 'biome', { label: 'Biome', options: Object.fromEntries(PLANETS.map((id) => [BIOMES[id]?.name ?? id, id])) }).on('change', (ev) => {
         act.snapshot();

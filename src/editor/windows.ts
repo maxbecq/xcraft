@@ -4,7 +4,7 @@
  */
 import { TEAM_COLORS } from '../render/models';
 import { DEFS, type Faction } from '../data';
-import { RACES } from './format2';
+import { gamePlayers, RACES } from './format2';
 import { act, ed } from './state';
 
 const h = (html: string) => {
@@ -190,8 +190,10 @@ export function teamsWindow(): void {
     {
       label: 'OK', main: true, run: () => {
         const next = f.players.map((_, i) => (mode === 'menu' ? undefined : mode === 'alone' ? i : pick[i]));
-        if (mode === 'map' && new Set(next).size < 2 && n > 1) {
-          act.say('Il faut au moins deux équipes.');
+        // As the game checks it (mapcheck.ts): at each players count the export offers, two teams at least.
+        const counts = gamePlayers(f) === 4 ? [2, 3, 4] : [2];
+        if (mode === 'map' && counts.some((k) => k <= n && new Set(next.slice(0, k)).size < 2)) {
+          act.say(`Les ${Math.min(...counts.filter((k) => k <= n && new Set(next.slice(0, k)).size < 2))} premiers joueurs sont dans la même équipe : la partie serait gagnée d'avance.`);
           return false;
         }
         if (next.every((t, i) => t === f.players[i].team)) return;
@@ -230,7 +232,7 @@ export function mapProperties(picture: HTMLCanvasElement, planets: [string, stri
     { label: 'Annuler' },
     {
       label: 'OK', main: true, run: () => {
-        const id = val('.id').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+        const id = val('.id').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32);
         if (!id) {
           act.say('Identifiant vide.');
           return false;

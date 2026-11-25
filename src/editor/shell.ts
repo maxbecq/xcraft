@@ -66,7 +66,7 @@ function saveAs(): void {
   const body = h(`<div class="form"><label>Identifiant du fichier <input type="text" value="${esc(ed.f.id)}" pattern="[a-z0-9-]+"></label><p class="note">Lettres minuscules, chiffres et tirets. Le navigateur enregistre dans le dossier des téléchargements.</p></div>`);
   dialog('Enregistrer sous', body, [{ label: 'Annuler' }, {
     label: 'Enregistrer', main: true, run: () => {
-      const id = body.querySelector('input')!.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+      const id = body.querySelector('input')!.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32);
       if (!id) return false;
       ed.f.id = id;
       save();
