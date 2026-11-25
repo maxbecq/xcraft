@@ -102,6 +102,8 @@ export interface Actions {
   lookAt(x: number, y: number): void;
   /** Takes the selected thing out of the file. */
   removeSelected(): void;
+  /** The map seen from above, one pixel per tile. */
+  picture(): HTMLCanvasElement;
   say(text: string): void;
 }
 export const act = {} as Actions;

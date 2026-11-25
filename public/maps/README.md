@@ -87,6 +87,7 @@ Pour un scénario ou une campagne. Les cartes du jeu n'en ont pas : sans ces cha
 | `race` | `humains`, `z`, `isdaris` ou `dieux` : la race que ce joueur joue, quel que soit le choix du menu. |
 | `minerals`, `energy` | Minerai et énergie de départ (0 à 100 000). Par défaut : ceux des règles. |
 | `forbid` | Les unités, bâtiments et recherches interdits à ce joueur (ids du jeu, 300 au plus). Ils sont grisés dans l'interface avec « Interdit sur cette carte. », refusés par la simulation, et l'IA ne les demande pas. |
+| `team` | L'équipe de ce joueur, de 0 à 3, quel que soit le choix du menu. Les joueurs d'une même équipe partagent leur vision et ne se combattent pas. |
 
 `units` : les unités et bâtiments présents au départ, 200 au plus. Ils sont donnés **pour toute la carte**, sans rotation : `{ "type": "caserne", "owner": 0, "at": [20, 14] }`. `owner` est un joueur (0 pour le joueur 1) ou `-1` pour un neutre ; les unités d'un joueur absent de la partie ne sont pas posées. `at` est la tuile d'une unité, ou la tuile en haut à gauche d'un bâtiment, qui est posé déjà construit. Les neutres restent passifs.
 

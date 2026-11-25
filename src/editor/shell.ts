@@ -13,7 +13,7 @@ import { unplayable } from '../mapplay';
 import { fromFormat1, MAX_SIZE, parseMap, type Symmetry, blankMap, toFormat1 } from './format2';
 import { act, changed, ed, onChanged, type Tool, TOOL_HELP, TOOL_NAMES } from './state';
 import { layersPanel, minimapPanel, palettePanel, playersPanel, propertiesPanel, setPlayers } from './panels';
-import { dialog, keysHelp, techTree } from './windows';
+import { dialog, keysHelp, mapProperties, playability, teamsWindow, techTree } from './windows';
 import './editor.css';
 
 export interface Shell {
@@ -241,16 +241,16 @@ function menus(): [string, Item[]][] {
       { label: 'Réinitialiser la disposition', run: resetLayout },
     ]],
     ['Carte', [
-      { label: 'Propriétés de la carte…', off: () => true },
+      { label: 'Propriétés de la carte…', run: openProperties },
       { label: 'Biome', sub: () => PLANETS.map((id) => ({ label: BIOMES[id]?.name ?? id, on: () => ed.f.biome === id, run: () => setBiome(id) })) },
       { label: 'Symétrie', sub: () => (['none', 'rot180', 'rot90'] as Symmetry[]).map((s) => ({ label: SYM[s], on: () => ed.f.symmetry === s, run: () => setSymmetry(s) })) },
       SEP,
-      { label: 'Vérifier la jouabilité', off: () => true },
+      { label: 'Vérifier la jouabilité', key: '⇧⌘V', run: () => playability(fullCheck) },
     ]],
     ['Joueurs', [
       { label: 'Nombre de joueurs', sub: () => [1, 2, 3, 4].map((n) => ({ label: String(n), on: () => ed.f.players.length === n, run: () => setPlayers(n) })) },
       { label: 'Arbre technologique…', key: '⌘K', run: () => techTree(ed.seat) },
-      { label: 'Équipes et victoire…', off: () => true },
+      { label: 'Équipes et victoire…', run: teamsWindow },
     ]],
     ['Déclencheurs', [
       { label: 'Éditeur de déclencheurs…', key: '⌥T', off: () => true },
@@ -260,6 +260,20 @@ function menus(): [string, Item[]][] {
       { label: 'À propos de l\'éditeur', run: about },
     ]],
   ];
+}
+function openProperties(): void {
+  mapProperties(act.picture(), PLANETS.map((id) => [id, BIOMES[id]?.name ?? id]), setPlayers);
+}
+/** Everything the game checks on an import, the players counts one by one, and what the export leaves out. */
+function fullCheck(): { format: string | null; counts: [number, string | null][]; notes: string[] } {
+  try {
+    const { map, notes } = toFormat1(ed.f);
+    const c = checkMap(JSON.parse(JSON.stringify(map)));
+    if (typeof c === 'string') return { format: c, counts: [], notes };
+    return { format: null, counts: c.players.map((k) => [k, unplayable({ ...c, players: [k] })?.replace(/^À \d+ joueurs : /, '') ?? null]), notes };
+  } catch (e) {
+    return { format: (e as Error).message, counts: [], notes: [] };
+  }
 }
 export const SYM: Record<Symmetry, string> = { none: 'Aucune', rot180: 'Rotation 180° (2 parts)', rot90: 'Rotation 90° (4 parts)' };
 function setBiome(id: string): void {
@@ -400,9 +414,9 @@ function toolbar(): HTMLElement {
   const trig = btn('⚡', 'Déclencheurs', () => {});
   trig.disabled = true;
   btn('🌳', 'Arbre techno', () => techTree(ed.seat));
-  const teams = btn('⚑', 'Équipes', () => {});
-  teams.disabled = true;
-  const play = h('<div class="playable"></div>');
+  btn('⚑', 'Équipes', teamsWindow);
+  const play = h('<div class="playable" title=""></div>');
+  play.onclick = () => playability(fullCheck);
   bar.appendChild(play);
   const test = h('<button class="test">▶ Tester la carte (F9)</button>');
   test.onclick = () => testMap(false);

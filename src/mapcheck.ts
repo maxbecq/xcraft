@@ -160,7 +160,7 @@ function base(v: unknown, size: number, n: number): BaseSpot {
 function seat(v: unknown, n: number): SeatRules {
   const what = `Joueur ${n + 1}`;
   if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
-  only(v, ['race', 'minerals', 'energy', 'forbid'], what);
+  only(v, ['race', 'minerals', 'energy', 'forbid', 'team'], what);
   if (v.race !== undefined && !Object.hasOwn(FACTIONS, v.race as string)) refuse(`${what} : race inconnue (${Object.keys(FACTIONS).join(', ')}).`);
   const forbid = v.forbid === undefined ? undefined : list(v.forbid, MAX_FORBID, `${what}, forbid`).map((t, i) => {
     if (typeof t !== 'string' || !Object.hasOwn(DEFS, t) || DEFS[t].kind === 'resource') refuse(`${what}, interdit ${i + 1} : unité, bâtiment ou recherche inconnu.`);
@@ -172,6 +172,7 @@ function seat(v: unknown, n: number): SeatRules {
     ...(v.minerals === undefined ? {} : { minerals: int(v.minerals, 0, MAX_START, `${what}, minerals`) }),
     ...(v.energy === undefined ? {} : { energy: int(v.energy, 0, MAX_START, `${what}, energy`) }),
     ...(forbid?.length ? { forbid } : {}),
+    ...(v.team === undefined ? {} : { team: int(v.team, 0, MAX_SEATS - 1, `${what}, team`) }),
   };
 }
 

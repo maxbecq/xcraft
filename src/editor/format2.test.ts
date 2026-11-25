@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rotateFootprint, rotateTile } from '../map';
-import { parseMap as parseMap1 } from '../mapcheck';
+import { checkMap, parseMap as parseMap1 } from '../mapcheck';
 import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
 import { createMatch } from '../sim/setup';
 import { blankMap, DECOR, fromFormat1, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
@@ -184,4 +184,27 @@ describe('export pour le jeu (format 1)', () => {
       expect([...(b.chasm ?? new Uint8Array(a.level.length))]).toEqual([...(a.chasm ?? new Uint8Array(a.level.length))]);
     });
   }
+});
+
+describe('format 2 : équipes', () => {
+  it('passe les équipes au format 1 du jeu et les relit', () => {
+    const f = fromFormat1(MAPS.origine, MAPS.origine.biome, 2);
+    f.players[0].team = 1;
+    f.players[1].team = 0;
+    const { map } = toFormat1(f);
+    const def = checkMap(JSON.parse(JSON.stringify(map))) as MapFile;
+    expect(def.seats?.map((s) => s.team)).toEqual([1, 0]);
+    expect(fromFormat1(def).players.map((p) => p.team)).toEqual([1, 0]);
+    // No team: the menu's, nothing written.
+    const free = fromFormat1(MAPS.origine, MAPS.origine.biome, 2);
+    expect(toFormat1(free).map.seats).toBeUndefined();
+  });
+
+  it('refuse une équipe hors de 0 à 3 dans un fichier de l\'éditeur', () => {
+    const f = JSON.parse(JSON.stringify(fromFormat1(MAPS.origine, MAPS.origine.biome, 2)));
+    f.players[0].team = 4;
+    expect(() => parseMap(f)).toThrow(/players/);
+    f.players[0].team = 2;
+    expect(parseMap(f).players[0].team).toBe(2);
+  });
 });

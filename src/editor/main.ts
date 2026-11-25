@@ -905,6 +905,7 @@ Object.assign(act, {
   },
   lookAt: (x: number, y: number) => rig.lookAt(x, y),
   removeSelected,
+  picture: () => topImage,
   say,
 });
 

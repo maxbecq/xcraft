@@ -137,3 +137,147 @@ export function keysHelp(): void {
   const k = (s: string) => (mac ? s : s.replaceAll('⌘', 'Ctrl+').replaceAll('⇧', 'Maj+').replaceAll('⌥', 'Alt+'));
   dialog('Raccourcis clavier', h(`<table class="keys">${KEYS.map(([a, b]) => `<tr><td><kbd>${esc(k(a))}</kbd></td><td>${esc(b)}</td></tr>`).join('')}</table>`), [{ label: 'Fermer', main: true }]);
 }
+
+/** Teams and victory: who plays with whom (the map's choice, or the menu's), and what the game decides by itself. */
+export function teamsWindow(): void {
+  const f = ed.f;
+  const n = f.players.length;
+  const teams = f.players.map((p) => p.team);
+  let mode: 'menu' | 'map' | 'alone' = teams.every((t) => t === undefined) ? 'menu' : teams.every((t, i) => t === i) ? 'alone' : 'map';
+  const pick: number[] = f.players.map((p, i) => p.team ?? Math.min(i, 1));
+  const body = h('<div class="teams"><div class="row modes"></div><div class="boxes"></div><div class="rules"></div></div>');
+  const draw = () => {
+    const modes = body.querySelector('.modes')!;
+    modes.replaceChildren(h('<span class="lbl">Équipes</span>'), ...([['menu', 'Choisies au menu'], ['map', 'Fixées par la carte'], ['alone', 'Chacun pour soi']] as const).map(([m, name]) => {
+      const b = h(`<button class="chip${mode === m ? ' on' : ''}">${name}</button>`);
+      b.onclick = () => {
+        mode = m;
+        draw();
+      };
+      return b;
+    }));
+    const boxes = body.querySelector('.boxes')!;
+    if (mode !== 'map') {
+      boxes.replaceChildren(h(`<p class="note">${mode === 'menu' ? 'Les joueurs choisissent leurs équipes au menu de la partie, comme sur les cartes du jeu.' : 'Chaque joueur joue seul contre tous, quel que soit le choix du menu.'}</p>`));
+      return;
+    }
+    boxes.replaceChildren(...Array.from({ length: Math.max(2, n) }, (_, t) => {
+      const box = h(`<div class="team"><div class="h">Équipe ${t + 1}</div></div>`);
+      f.players.forEach((p, i) => {
+        if (pick[i] !== t) return;
+        const row = h(`<div class="m"><i class="swatch" style="background:${hex(TEAM_COLORS[i])}"></i>Joueur ${i + 1} · ${p.race ? RACE_NAMES[p.race] : 'au choix'}<select>${Array.from({ length: Math.max(2, n) }, (_, k) => `<option value="${k}"${k === t ? ' selected' : ''}>Équipe ${k + 1}</option>`).join('')}</select></div>`);
+        row.querySelector('select')!.onchange = (e) => {
+          pick[i] = Number((e.target as HTMLSelectElement).value);
+          draw();
+        };
+        box.appendChild(row);
+      });
+      if (!box.querySelector('.m')) box.appendChild(h('<div class="m note">aucun joueur</div>'));
+      return box;
+    }));
+  };
+  body.querySelector('.rules')!.innerHTML = `<h4>Ce que le jeu décide</h4>
+    <div class="form">
+      <label>Alliés <span>Vision partagée ; ils ne se combattent pas.</span></label>
+      <label>Victoire <span>Détruire tous les bâtiments ennemis : la dernière équipe debout gagne.</span></label>
+      <label>Neutres <span>Passifs : ils ne bougent ni n'attaquent.</span></label>
+    </div>
+    <p class="note">D'autres conditions de victoire ou de défaite viendront avec les déclencheurs.</p>`;
+  draw();
+  dialog('Équipes et victoire', body, [
+    { label: 'Annuler' },
+    {
+      label: 'OK', main: true, run: () => {
+        const next = f.players.map((_, i) => (mode === 'menu' ? undefined : mode === 'alone' ? i : pick[i]));
+        if (mode === 'map' && new Set(next).size < 2 && n > 1) {
+          act.say('Il faut au moins deux équipes.');
+          return false;
+        }
+        if (next.every((t, i) => t === f.players[i].team)) return;
+        act.snapshot();
+        f.players.forEach((p, i) => {
+          if (next[i] === undefined) delete p.team;
+          else p.team = next[i];
+        });
+        act.redrawThings();
+      },
+    },
+  ]);
+}
+
+/** The map's name, description, planet, symmetry and players count; its picture. */
+export function mapProperties(picture: HTMLCanvasElement, planets: [string, string][], setPlayers: (n: number) => void): void {
+  const f = ed.f;
+  const body = h(`<div class="mapprops"><div class="form">
+    <label>Nom <input class="name" type="text" maxlength="60" value="${esc(f.name)}"></label>
+    <label>Identifiant <input class="id" type="text" maxlength="40" value="${esc(f.id)}"></label>
+    <label>Description <textarea class="desc" rows="3" maxlength="300">${esc(f.description ?? '')}</textarea></label>
+    <label>Taille <span>${f.size} × ${f.size} tuiles</span></label>
+    <label>Biome <select class="biome">${planets.map(([id, name]) => `<option value="${id}"${id === f.biome ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>
+    <label>Symétrie <select class="sym"><option value="none">Aucune</option><option value="rot180">Rotation 180° (2 parts)</option><option value="rot90">Rotation 90° (4 parts)</option></select></label>
+    <label>Joueurs <select class="count">${[1, 2, 3, 4].map((k) => `<option${k === f.players.length ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+  </div><div class="pic"></div></div>`);
+  (body.querySelector('.sym') as HTMLSelectElement).value = f.symmetry;
+  const pic = document.createElement('canvas');
+  pic.width = pic.height = 200;
+  const g = pic.getContext('2d')!;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(picture, 0, 0, 200, 200);
+  body.querySelector('.pic')!.append(pic, h('<p class="note">Vue de dessus</p>'));
+  const val = (c: string) => (body.querySelector(c) as HTMLInputElement).value;
+  dialog('Propriétés de la carte', body, [
+    { label: 'Annuler' },
+    {
+      label: 'OK', main: true, run: () => {
+        const id = val('.id').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+        if (!id) {
+          act.say('Identifiant vide.');
+          return false;
+        }
+        const biome = val('.biome');
+        const next = { name: val('.name').trim().slice(0, 60) || f.name, id, description: val('.desc').trim().slice(0, 300) || undefined, biome, symmetry: val('.sym') as typeof f.symmetry };
+        const count = Number(val('.count'));
+        if (Object.entries(next).some(([k, v]) => f[k as keyof typeof next] !== v)) {
+          act.snapshot();
+          Object.assign(f, next);
+          if (next.description === undefined) delete f.description;
+        }
+        if (count !== f.players.length) setPlayers(count);
+        act.redrawAll();
+      },
+    },
+  ]);
+}
+
+/**
+ * The game's checks, one line each: the format, each players count, then what the export leaves out. A line naming
+ * a tile has a link that shows it.
+ */
+export function playability(check: () => { format: string | null; counts: [number, string | null][]; notes: string[] }): void {
+  const body = h('<div class="check"></div>');
+  const run = () => {
+    const t = performance.now();
+    const r = check();
+    const ms = Math.round(performance.now() - t);
+    const line = (cls: string, mark: string, text: string, right: string) => {
+      const row = h(`<div class="${cls}"><b>${mark}</b><span>${esc(text)}</span><em>${right}</em></div>`);
+      const at = /\((\d+), (\d+)\)/.exec(text);
+      if (at) {
+        const a = h('<a href="#">aller</a>');
+        a.onclick = (e) => {
+          e.preventDefault();
+          act.lookAt(Number(at[1]) + 2, Number(at[2]) + 2);
+        };
+        row.querySelector('span')!.append(' — ', a);
+      }
+      return row;
+    };
+    body.replaceChildren(
+      r.format ? line('x', '✕', `Format refusé par le jeu : ${r.format}`, 'bloquant') : line('ok', '✔', 'Format accepté par le jeu (mapcheck)', `${ms} ms`),
+      ...r.counts.map(([k, why]) => (why ? line('x', '✕', `À ${k} joueurs : ${why}`, 'bloquant') : line('ok', '✔', `À ${k} joueurs : chaque départ a son QG, rejoint les autres et chaque base`, ''))),
+      ...r.notes.map((nt) => line('w', '!', nt, 'avertissement')),
+    );
+  };
+  run();
+  dialog('Vérifier la jouabilité', body, [{ label: 'Revérifier', run: () => (run(), false) }, { label: 'Fermer', main: true }], 'large');
+}

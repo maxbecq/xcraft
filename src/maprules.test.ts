@@ -147,3 +147,15 @@ describe('règles de carte : partie (createMatch)', () => {
     expect(fingerprint(again)).toBe(fingerprint(live));
   }, 60_000);
 });
+
+describe('règles de carte : équipes imposées', () => {
+  it('prend une équipe de 0 à 3 par joueur et refuse le reste', () => {
+    const seat = (s: unknown) => rules({ seats: [s] });
+    expect((seat({ team: 0 }) as MapFile).seats?.[0]).toEqual({ team: 0 });
+    expect((seat({ team: 3 }) as MapFile).seats?.[0]).toEqual({ team: 3 });
+    expect(seat({ team: 4 })).toMatch(/team/);
+    expect(seat({ team: -1 })).toMatch(/team/);
+    expect(seat({ team: 1.5 })).toMatch(/team/);
+    expect(seat({ team: '1' })).toMatch(/team/);
+  });
+});

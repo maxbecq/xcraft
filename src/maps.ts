@@ -39,6 +39,8 @@ export interface SeatRules {
   energy?: number;
   /** Units, buildings and research this seat may not have (DEFS ids). */
   forbid?: string[];
+  /** The team this seat plays in (0 to 3), whatever was picked: seats of one team share their sight and never fight. */
+  team?: number;
 }
 
 export interface PlacedUnit {

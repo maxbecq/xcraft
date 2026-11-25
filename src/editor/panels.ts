@@ -12,7 +12,7 @@ import { DEFS, type Faction, START } from '../data';
 import { PLANETS } from '../mapcheck';
 import { DECOR, RACES, type Symmetry } from './format2';
 import { act, changed, ed, LAYERS, onChanged, startNumbers, type Tool } from './state';
-import { techTree } from './windows';
+import { teamsWindow, techTree } from './windows';
 
 const h = (html: string) => {
   const t = document.createElement('template');
@@ -194,7 +194,7 @@ export function playersPanel(): HTMLElement {
   const root = h('<div class="players"></div>');
   const head = h('<div class="row"><span class="lbl">Nombre de joueurs</span><select class="count">' + [1, 2, 3, 4].map((n) => `<option>${n}</option>`).join('') + '</select><span class="note">Un clic sur une ligne choisit le joueur (outil Départ, arbre techno, départ mis en évidence).</span></div>');
   head.querySelector('select')!.onchange = (e) => setPlayers(Number((e.target as HTMLSelectElement).value));
-  const table = h('<table><thead><tr><th></th><th>Joueur</th><th>Race</th><th>Minerai</th><th>Énergie</th><th>Départ</th><th>Arbre technologique</th></tr></thead><tbody></tbody></table>');
+  const table = h('<table><thead><tr><th></th><th>Joueur</th><th>Race</th><th>Minerai</th><th>Énergie</th><th>Équipe</th><th>Départ</th><th>Arbre technologique</th></tr></thead><tbody></tbody></table>');
   root.append(head, table);
   const body = table.querySelector('tbody')!;
   let drawn = '';
@@ -211,6 +211,7 @@ export function playersPanel(): HTMLElement {
         <td><select class="race"><option value="">Au choix</option>${RACES.map((r) => `<option value="${r}"${r === p.race ? ' selected' : ''}>${RACE_NAMES[r]}</option>`).join('')}</select>${p.race ? ' <span class="lock" title="Race imposée par la carte">🔒</span>' : ''}</td>
         <td><input class="mi" type="number" min="0" max="100000" step="50" value="${p.minerals}"></td>
         <td><input class="en" type="number" min="0" max="100000" step="50" value="${p.energy}"></td>
+        <td><button class="small team" title="Équipes et victoire">${p.team === undefined ? 'au menu' : `Équipe ${p.team + 1}`}</button></td>
         <td><select class="start">${f.players.map((_, k) => `<option value="${k + 1}"${num[i] === k + 1 ? ' selected' : ''}>Départ ${k + 1}</option>`).join('')}</select></td>
         <td><button class="small tech">🌳 Ouvrir…</button> <span class="note">${p.forbid.length ? `${p.forbid.length} interdit${p.forbid.length > 1 ? 's' : ''}` : 'aucun interdit'}</span></td></tr>`);
       tr.onclick = (e) => {
@@ -242,6 +243,7 @@ export function playersPanel(): HTMLElement {
         act.redrawThings();
       };
       tr.querySelector<HTMLButtonElement>('.tech')!.onclick = () => techTree(i);
+      tr.querySelector<HTMLButtonElement>('.team')!.onclick = () => teamsWindow();
       return tr;
     }));
   };

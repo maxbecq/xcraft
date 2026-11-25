@@ -57,6 +57,8 @@ export interface Player2 {
   energy: number;
   /** Units, buildings and research this player may not have (DEFS ids). */
   forbid: string[];
+  /** The team the map puts this player in (0 to 3); none: picked in the game's menu. */
+  team?: number;
 }
 
 export const RACES = Object.keys(FACTIONS) as Faction[];
@@ -197,7 +199,7 @@ export function fromFormat1(def: MapFile, biome = def.biome, players = Math.max(
     bases: sites.filter((s) => !seats.includes(s.hq)).map((s) => s.hq),
     players: seats.map((start, i) => {
       const s = def.seats?.[i];
-      return { race: s?.race ?? '', start, minerals: s?.minerals ?? START.minerals, energy: s?.energy ?? START.energy, forbid: [...(s?.forbid ?? [])] };
+      return { race: s?.race ?? '', start, minerals: s?.minerals ?? START.minerals, energy: s?.energy ?? START.energy, forbid: [...(s?.forbid ?? [])], ...(s?.team === undefined ? {} : { team: s.team }) };
     }),
     decor: [], units: (def.units ?? []).filter((u) => u.owner < players).map((u) => ({ ...u, at: [...u.at] as [number, number] })),
   };
@@ -229,7 +231,7 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     throw new Error(`« tiles » : ${size} lignes de ${size} caractères parmi 0, 1, 2, x.`);
   }
   const ramps = list<Ramp2>(f.ramps, (r) => pt(r?.at) && DIRS.includes(r.up) && Number.isInteger(r.width) && r.width >= 1 && r.width <= 12 && [0, 1].includes(r.level), 'ramps');
-  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && [p.minerals, p.energy].every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_START) && Array.isArray(p.forbid) && p.forbid.length <= 300 && p.forbid.every((t) => known(t, ['unit', 'building', 'upgrade'])), 'players');
+  const players = list<Player2>(f.players, (p) => (p?.race === '' || RACES.includes(p?.race)) && pt(p.start) && [p.minerals, p.energy].every((v) => Number.isInteger(v) && v >= 0 && v <= MAX_START) && Array.isArray(p.forbid) && p.forbid.length <= 300 && p.forbid.every((t) => known(t, ['unit', 'building', 'upgrade'])) && (p.team === undefined || (Number.isInteger(p.team) && p.team >= 0 && p.team <= 3)), 'players');
   if (players.length < 1 || players.length > 4) throw new Error('De 1 à 4 joueurs.');
   return {
     format: 2,
@@ -380,6 +382,7 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
     ...(p.minerals !== START.minerals ? { minerals: Math.max(0, Math.round(p.minerals)) } : {}),
     ...(p.energy !== START.energy ? { energy: Math.max(0, Math.round(p.energy)) } : {}),
     ...(p.forbid.length ? { forbid: [...new Set(p.forbid)] } : {}),
+    ...(p.team === undefined ? {} : { team: p.team }),
   }));
   if (seats.some((s) => Object.keys(s).length)) map.seats = seats;
   if (f.units.length) map.units = f.units.map((u) => ({ type: u.type, owner: u.owner, at: u.at }));

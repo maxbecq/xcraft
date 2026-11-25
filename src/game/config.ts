@@ -69,8 +69,11 @@ if (!REPLAY && !SANDBOX && !NET_ROLE && !MAP.players.includes(slots.length)) {
   if (up.length) while (slots.length < Math.min(...up)) slots.push({ control: 'normal', faction: 'humains', team: slots.length });
   else slots.length = Math.max(...MAP.players.filter((n) => n < slots.length));
 }
-// A seat whose race the map imposes plays it, whatever was picked (createMatch does the same).
-for (const [i, s] of slots.entries()) s.faction = MAP.seats?.[i]?.race ?? s.faction;
+// A seat whose race or team the map imposes plays it, whatever was picked (createMatch does the same for the race).
+for (const [i, s] of slots.entries()) {
+  s.faction = MAP.seats?.[i]?.race ?? s.faction;
+  s.team = MAP.seats?.[i]?.team ?? s.team;
+}
 /** The local player's seat, among the seats kept (a guest online is player 1). */
 export const PLAYER = seatOf(slots, NET_ROLE === 'join');
 export const factions = slots.map((s) => s.faction);

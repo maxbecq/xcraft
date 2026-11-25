@@ -147,3 +147,24 @@ kbd { background: #11141a; border: 1px solid var(--line); border-radius: 3px; pa
 .ck { display: flex; align-items: center; gap: 7px; padding: 2px 0; }
 .ck img { width: 20px; height: 20px; border-radius: 3px; }
 .ck.no { color: #c98585; text-decoration: line-through; }
+.teams { display: grid; gap: 10px; min-width: 620px; }
+.teams .boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.teams .team { border: 1px solid var(--line); border-radius: 5px; background: #161a20; }
+.teams .team .h { padding: 5px 10px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.teams .team .m { display: flex; align-items: center; gap: 6px; padding: 5px 10px; }
+.teams .team .m select { margin-left: auto; }
+.teams h4, .check h4 { margin: 6px 0; font-size: 11px; color: var(--dim); font-weight: 500; text-transform: uppercase; }
+.teams .rules .form label span { color: var(--txt); }
+.mapprops { display: flex; gap: 18px; }
+.mapprops .form { flex: 1; min-width: 380px; }
+.mapprops .pic canvas { width: 200px; height: 200px; image-rendering: pixelated; border: 1px solid var(--line); }
+.mapprops .pic .note { text-align: center; }
+.check div { display: flex; gap: 9px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid #262b33; }
+.check b { width: 16px; }
+.check .ok b { color: var(--ok); }
+.check .w b { color: var(--acc); }
+.check .x b { color: var(--bad); }
+.check span { flex: 1; }
+.check em { color: var(--dim); font-style: normal; white-space: nowrap; }
+.check a { color: var(--link); }
+.playable { cursor: pointer; }
