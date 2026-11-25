@@ -81,6 +81,16 @@ export const DEFAULT_MAP = 'origine';
 const STORE = 'xcraft.carte:';
 /** Most imported maps kept. */
 export const MAX_IMPORTED = 20;
+/** Friends' maps, kept apart (their own entries, their own list, oldest first): never counted in the player's imports. */
+const FRIEND = 'xcraft.ami:';
+const FRIEND_LIST = 'xcraft.amis';
+/** Most friends' maps kept: a new one past this replaces the oldest. */
+export const MAX_FRIEND_MAPS = 5;
+/** The player's own imports kept (ids), and the friends' maps kept, oldest first. */
+const own = new Set<string>();
+const friends: string[] = [];
+/** The ids of the maps the player imported and keeps (MAX_IMPORTED at most), friends' and replays' left out. */
+export const ownImports = (): string[] => [...own];
 
 /** Whether a map came from outside the game (an import, a friend's, a replay's). */
 export const isImported = (def: MapFile) => def.id.startsWith(IMPORTED);
@@ -93,7 +103,17 @@ function loadImported(): void {
       if (!key.startsWith(STORE)) continue;
       const def = parseMap(localStorage.getItem(key) ?? '');
       if (typeof def === 'string' || !isImported(def)) console.warn(`Carte importée illisible, ignorée : ${key}`);
-      else MAPS[def.id] = def;
+      else {
+        MAPS[def.id] = def;
+        own.add(def.id);
+      }
+    }
+    const list: unknown = JSON.parse(localStorage.getItem(FRIEND_LIST) ?? '[]');
+    for (const id of Array.isArray(list) ? list.slice(-MAX_FRIEND_MAPS) : []) {
+      const def = typeof id === 'string' ? parseMap(localStorage.getItem(FRIEND + id) ?? '') : '';
+      if (typeof def === 'string' || def.id !== id || own.has(id)) continue;
+      MAPS[id] = def;
+      friends.push(id);
     }
   } catch {
     // no storage (private window, node): none imported
@@ -107,6 +127,7 @@ export function addMap(def: MapFile, keep = false): boolean {
   if (!keep) return true;
   try {
     localStorage.setItem(STORE + def.id, JSON.stringify(def));
+    own.add(def.id);
     return true;
   } catch {
     return false;
@@ -122,15 +143,44 @@ export function receiveMap(def: MapFile): string | null {
   const mine = MAPS[def.id];
   if (mine && mapPrint(mine) === mapPrint(def)) return def.id;
   const id = mine ? `${def.id}-${mapPrint(def).slice(0, 6)}` : def.id;
-  return addMap({ ...def, id }, true) ? id : null;
+  // Kept apart from the player's imports, MAX_FRIEND_MAPS at most: the oldest goes (a hostile host cannot fill storage).
+  const at = friends.indexOf(id);
+  if (at >= 0) friends.splice(at, 1);
+  while (friends.length >= MAX_FRIEND_MAPS) forget(friends.shift()!);
+  MAPS[id] = { ...def, id };
+  friends.push(id);
+  try {
+    localStorage.setItem(FRIEND + id, JSON.stringify(MAPS[id]));
+    localStorage.setItem(FRIEND_LIST, JSON.stringify(friends));
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+/** A friend's map gone from the page and from storage (the list is written by the caller). */
+function forget(id: string): void {
+  if (!own.has(id)) delete MAPS[id];
+  try {
+    localStorage.removeItem(FRIEND + id);
+  } catch {
+    // nothing kept
+  }
 }
 
 /** Forgets an imported map, here and in storage. */
 export function removeMap(id: string): void {
   if (!id.startsWith(IMPORTED)) return;
   delete MAPS[id];
+  own.delete(id);
+  const at = friends.indexOf(id);
+  if (at >= 0) friends.splice(at, 1);
   try {
     localStorage.removeItem(STORE + id);
+    if (at >= 0) {
+      localStorage.removeItem(FRIEND + id);
+      localStorage.setItem(FRIEND_LIST, JSON.stringify(friends));
+    }
   } catch {
     // nothing kept
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import { checkMap, MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
-import { addMap, MAPS, type MapFile, receiveMap, removeMap } from '../maps';
+import { addMap, MAPS, MAX_FRIEND_MAPS, type MapFile, ownImports, receiveMap, removeMap } from '../maps';
 import { lobbyOk } from '../net';
 import { ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
@@ -115,7 +115,7 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       expect(MAPS[mine.id]).toEqual(mine);
       expect(parseMap(store.get(`xcraft.carte:${mine.id}`)!)).toEqual(mine);
       expect(mapPrint(MAPS[id!])).toBe(mapPrint(theirs)); // the print is the content's, whatever the id
-      expect(parseMap(store.get(`xcraft.carte:${id}`)!)).toEqual(MAPS[id!]); // and it reads back on the match's page
+      expect(parseMap(store.get(`xcraft.ami:${id}`)!)).toEqual(MAPS[id!]); // and it reads back on the match's page
       expect(receiveMap(theirs)).toBe(id); // received again: the same copy
     }));
 
@@ -126,6 +126,24 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       expect(checkMap({ ...long, id: 'a'.repeat(33) })).toMatch(/id/);
       addMap(long, true);
       const other = receiveMap({ ...long, name: 'Autre' })!;
-      for (const id of [long.id, other]) expect(parseMap(store.get(`xcraft.carte:${id}`)!)).toEqual(MAPS[id]);
+      expect(parseMap(store.get(`xcraft.carte:${long.id}`)!)).toEqual(MAPS[long.id]);
+      expect(parseMap(store.get(`xcraft.ami:${other}`)!)).toEqual(MAPS[other]);
+    }));
+
+  it('keeps friends\' maps apart, the last ones only, never in the player\'s own imports', () =>
+    withStorage(() => {
+      const mine = imported();
+      addMap(mine, true);
+      const sent = Array.from({ length: MAX_FRIEND_MAPS + 2 }, (_, i) => ({ ...imported(), id: `import-ami-${i}`, name: `Carte ${i}` }));
+      const ids = sent.map((m) => receiveMap(m)!);
+      expect(ids).toEqual(sent.map((m) => m.id));
+      for (const id of ids.slice(0, 2)) expect(MAPS[id], id).toBeUndefined(); // the two oldest replaced
+      for (const id of ids.slice(2)) expect(MAPS[id], id).toBeDefined();
+      expect([...store.keys()].filter((k) => k.startsWith('xcraft.ami:')).sort()).toEqual(ids.slice(2).map((id) => `xcraft.ami:${id}`).sort());
+      expect(JSON.parse(store.get('xcraft.amis')!)).toEqual(ids.slice(2));
+      expect(ownImports()).toEqual([mine.id]); // the player's quota untouched
+      expect(MAPS[mine.id]).toEqual(mine);
+      removeMap(ids[6]);
+      expect(JSON.parse(store.get('xcraft.amis')!)).toEqual(ids.slice(2, 6));
     }));
 });

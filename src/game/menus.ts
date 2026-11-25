@@ -1,6 +1,6 @@
 /** The title screen's menus: home, options, match setup, joining a friend, the friends' lobby; a match starts by loading its URL. */
 import { type Faction, FACTIONS } from '../data';
-import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, receiveMap, removeMap } from '../maps';
+import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, ownImports, receiveMap, removeMap } from '../maps';
 import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
 import { unplayable } from '../mapplay';
 import { mapCards, seatsOf } from '../mappicker';
@@ -189,7 +189,7 @@ function importMap(file: File | undefined, s: Setup, done: () => void): void {
       if (typeof def === 'string') return say(`Carte refusée : ${def}`);
       const why = unplayable(def);
       if (why) return say(`Carte refusée, elle ne se joue pas : ${why}`);
-      if (!MAPS[def.id] && Object.values(MAPS).filter(isImported).length >= MAX_IMPORTED) return say(`Carte refusée : ${MAX_IMPORTED} cartes importées au plus ; supprimez-en une d'abord.`);
+      if (!ownImports().includes(def.id) && ownImports().length >= MAX_IMPORTED) return say(`Carte refusée : ${MAX_IMPORTED} cartes importées au plus ; supprimez-en une d'abord.`);
       if (!addMap(def, true)) return say('Carte refusée : le navigateur ne veut pas la garder (stockage plein ou désactivé).');
       s.map = def.id;
       for (let i = seatsOf(def); i < 4; i++) s.sides[i].control = 'none';
@@ -409,6 +409,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   const UNKNOWN_TEXT = "Votre ami a choisi une carte ou une planète que votre version du jeu n'a pas : rechargez la page (tous les deux).";
   /** Why the host's imported map was refused here (until another one comes). */
   let mapRefused: string | null = null;
+  /** The host's last map file, and how many different ones came in this room (MAX_CARTES checked at most). */
+  let lastCarte = '';
+  let cartes = 0;
+  const MAX_CARTES = 10;
   /** The guest's id for each map the host imported, when it had to keep it beside one of its own of that id (maps.ts receiveMap). */
   const received: Record<string, string> = {};
   const localId = (id: string) => (Object.hasOwn(received, id) ? received[id] : id);
@@ -433,6 +437,13 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     },
     message: (m) => {
       if ('carte' in m && !host) {
+        // The same file again (sent before each setup) is not checked again; a host sending map after map is cut off.
+        if (m.carte === lastCarte) return refresh();
+        lastCarte = m.carte;
+        if (++cartes > MAX_CARTES) {
+          status = mapRefused = 'Votre ami envoie trop de cartes différentes : les suivantes sont ignorées.';
+          return refresh();
+        }
         // A map from outside the game: checked like a file the player imports, kept for the match's page.
         const checked = parseMap(m.carte);
         const why = typeof checked === 'string' ? checked : unplayable(checked);
