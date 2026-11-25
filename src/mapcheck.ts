@@ -22,6 +22,8 @@ const MAX_CALM = 64;
 const MAX_STREETS = 64;
 /** Prefix of an imported map's id: never the id of one of the game's own. */
 export const IMPORTED = 'import-';
+/** Longest map id, once kept (imported prefix, a friend's copy's suffix): the one bound the waiting room (net.ts) takes too. */
+export const MAX_MAP_ID = 40;
 
 class Refused extends Error {}
 const refuse = (why: string): never => {
@@ -146,8 +148,9 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
     if (!isRecord(v)) return refuse("Ce n'est pas une carte Xcraft (un objet JSON est attendu).");
     only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases'], 'Carte');
     if (v.format !== 1) refuse('Format de carte inconnu (« format » vaut 1).');
-    // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top.
-    if (typeof v.id !== 'string' || !/^[a-z0-9-]{1,48}$/.test(v.id)) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
+    // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top,
+    // within MAX_MAP_ID in all.
+    if (typeof v.id !== 'string' || v.id.length > MAX_MAP_ID || !/^[a-z0-9-]+$/.test(v.id)) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
     const own = (v.id as string).startsWith(IMPORTED);
     if (!own && (v.id as string).length > 32) refuse('« id » : de 1 à 32 lettres minuscules, chiffres ou tirets.');
     const id = prefix && !own ? IMPORTED + (v.id as string) : (v.id as string);

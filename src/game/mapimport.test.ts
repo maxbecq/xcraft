@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
-import { checkMap, MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
+import { checkMap, MAP_MAX_CHARS, MAX_MAP_ID, mapPrint, parseMap } from '../mapcheck';
 import { addMap, MAPS, MAX_FRIEND_MAPS, type MapFile, ownImports, receiveMap, removeMap } from '../maps';
 import { lobbyOk } from '../net';
 import { ticks } from '../sim/fixed';
@@ -126,6 +126,9 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       expect(checkMap({ ...long, id: 'a'.repeat(33) })).toMatch(/id/);
       addMap(long, true);
       const other = receiveMap({ ...long, name: 'Autre' })!;
+      expect(other.length).toBeLessThanOrEqual(MAX_MAP_ID); // a waiting room takes it (net.ts lobbyOk)
+      expect(lobbyOk({ setup: { camps: ['humains', 'z'], map: other, biome: 'desert' } })).toBe(true);
+      expect(typeof checkMap({ ...MAPS[other] }, false)).toBe('object');
       expect(parseMap(store.get(`xcraft.carte:${long.id}`)!)).toEqual(MAPS[long.id]);
       expect(parseMap(store.get(`xcraft.ami:${other}`)!)).toEqual(MAPS[other]);
     }));
@@ -146,4 +149,20 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       removeMap(ids[6]);
       expect(JSON.parse(store.get('xcraft.amis')!)).toEqual(ids.slice(2, 6));
     }));
+});
+
+describe('a map the browser refuses to keep', () => {
+  it('is not offered either: addMap lists it only once stored', () => {
+    Object.assign(globalThis, { localStorage: { setItem: () => { throw new Error('quota'); }, removeItem: () => {}, getItem: () => null } });
+    try {
+      const def = imported();
+      expect(addMap(def, true)).toBe(false);
+      expect(MAPS[def.id]).toBeUndefined();
+      expect(addMap(def)).toBe(true); // for this page only (a replay's): listed, nothing stored
+      expect(MAPS[def.id]).toEqual(def);
+      removeMap(def.id);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
 });

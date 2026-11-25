@@ -8,6 +8,7 @@ import { Grid } from '../sim/grid';
 import { expansion } from '../sim/setup';
 import type { World } from '../sim/world';
 import type { MapFile } from '../maps';
+import { IMPORTED } from '../mapcheck';
 
 /** Look of a planet: ground and cliff palette, light, sky and glowing ground veins. Rendering only. */
 export interface Biome {
@@ -226,10 +227,12 @@ export const biomeOf = (map: Pick<MapFile, 'biome'>): Biome => (Object.hasOwn(BI
 /**
  * The planet of this game: the map's own, or `?biome=` from an older link or replay (the planet was chosen apart
  * then, and the map's shapes for a planet depend on it), so it plays again the same. Never on or onto a special
- * planet, which only its own map takes (older builds dropped those the same way).
+ * planet, which only its own map takes (older builds dropped those the same way). An imported map: always its own.
  */
-export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biome'>): Biome {
+export function pickBiome(params: URLSearchParams, map: Pick<MapFile, 'biome' | 'id'>): Biome {
   const own = biomeOf(map);
+  // An imported map plays on its own planet only: its shapes were checked for that one (mapplay.ts).
+  if (map.id.startsWith(IMPORTED)) return own;
   const id = params.get('biome');
   const asked = id && Object.hasOwn(BIOMES, id) ? BIOMES[id] : null; // own ids only: `constructor` is not a planet
   return asked && !asked.special && !own.special ? asked : own;

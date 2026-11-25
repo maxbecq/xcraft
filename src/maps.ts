@@ -1,5 +1,5 @@
 import { HQ_MINERAL_GAP } from './data';
-import { IMPORTED, mapPrint, parseMap } from './mapcheck';
+import { IMPORTED, MAX_MAP_ID, mapPrint, parseMap } from './mapcheck';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -123,15 +123,17 @@ loadImported();
 
 /** A checked map made playable for this page (a replay's, a friend's on its way); `keep` also stores it for later pages. False if storage refused it. */
 export function addMap(def: MapFile, keep = false): boolean {
-  MAPS[def.id] = def;
-  if (!keep) return true;
-  try {
-    localStorage.setItem(STORE + def.id, JSON.stringify(def));
+  // Kept first, listed after: a map the storage refused would be offered, then lost at the match's page (Origine instead).
+  if (keep) {
+    try {
+      localStorage.setItem(STORE + def.id, JSON.stringify(def));
+    } catch {
+      return false;
+    }
     own.add(def.id);
-    return true;
-  } catch {
-    return false;
   }
+  MAPS[def.id] = def;
+  return true;
 }
 
 /**
@@ -142,7 +144,8 @@ export function addMap(def: MapFile, keep = false): boolean {
 export function receiveMap(def: MapFile): string | null {
   const mine = MAPS[def.id];
   if (mine && mapPrint(mine) === mapPrint(def)) return def.id;
-  const id = mine ? `${def.id}-${mapPrint(def).slice(0, 6)}` : def.id;
+  // The copy's id within MAX_MAP_ID, as a waiting room takes it (net.ts lobbyOk): the base shortened, never the print.
+  const id = mine ? `${def.id.slice(0, MAX_MAP_ID - 7)}-${mapPrint(def).slice(0, 6)}` : def.id;
   // Kept apart from the player's imports, MAX_FRIEND_MAPS at most: the oldest goes (a hostile host cannot fill storage).
   const at = friends.indexOf(id);
   if (at >= 0) friends.splice(at, 1);

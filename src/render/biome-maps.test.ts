@@ -30,6 +30,8 @@ describe('one planet per map', () => {
 
   it('an unknown planet, in a link or in a map file, gives no error', () => {
     expect(pickBiome(new URLSearchParams('biome=constructor'), MAPS.origine).id).toBe('desert');
+    // An imported map: its own planet, whatever the link says (its shapes were checked for that one).
+    expect(pickBiome(new URLSearchParams('biome=glace'), { ...MAPS.carrefour, id: 'import-carrefour' }).id).toBe(MAPS.carrefour.biome);
     expect(pickBiome(new URLSearchParams('biome=nulle-part'), MAPS['le-col']).id).toBe('volcan');
     expect(biomeOf({ biome: 'nulle-part' }).id).toBe('desert');
   });

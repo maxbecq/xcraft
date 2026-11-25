@@ -1,5 +1,5 @@
 import Peer, { type DataConnection } from 'peerjs';
-import { MAP_MAX_CHARS } from './mapcheck';
+import { MAP_MAX_CHARS, MAX_MAP_ID } from './mapcheck';
 import { commandOk, MAX_IDS } from './sim/validate';
 import type { Command } from './sim/world';
 
@@ -557,7 +557,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const int = (v: unknown): v is number => Number.isSafeInteger(v);
 /** A waiting room's message: factions, maps and planets are plain ids (they go into the match's address). */
 export function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
-  const id = (v: unknown) => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
+  const id = (v: unknown) => typeof v === 'string' && v.length <= MAX_MAP_ID && /^[a-z0-9-]+$/.test(v);
   const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome) && (s.print === undefined || (typeof s.print === 'string' && /^[0-9a-f]{8}$/.test(s.print)));
   // An imported map's file travels as text, checked by the guest like any map from outside (mapcheck.ts).
   if ('carte' in m) return typeof m.carte === 'string' && m.carte.length <= MAP_MAX_CHARS;
