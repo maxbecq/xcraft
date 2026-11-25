@@ -141,6 +141,14 @@ export class Grid {
     const f = this.feet[i];
     // Open ground (most tiles): every side and diagonal step free, no foot, so nothing to keep off.
     if (s === 15 && f === 0 && this.steps[i] === 255) return out;
+    // Beside a diagonal cliff's tile, on its plateau's side: off the same diagonal, so the limit runs on from one
+    // tile into the next and a body entering the cut tile is already where it may stand (no leap at its edge).
+    for (let d = 0; d < 4; d++) {
+      const nx = tx + DX[d];
+      const ny = ty + DY[d];
+      const k = this.inside(nx, ny) ? this.cut[ny * this.width + nx] : 0;
+      if (k && (DX[d] !== 0 ? CORNERS[k - 1][0] === DX[d] : CORNERS[k - 1][1] === DY[d])) this.offCut(nx, ny, c, x0, y0);
+    }
     x = out[0];
     y = out[1];
     const oN = f & 1 ? FOOT + c : s & 1 ? 0 : c;

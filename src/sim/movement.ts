@@ -182,6 +182,12 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   }
   // Every waypoint, the goal too, where the body may stand: out of a cliff's foot (Grid.keepOff).
   if (!climbs(e)) for (let k = 0; k < pts.length; k += 2) [pts[k], pts[k + 1]] = g.keepOff(pts[k], pts[k + 1], e.radius);
+  // Nowhere to walk (the goal out of reach and its own tile the nearest to it), yet standing where no body may (an
+  // old replay, set there by a trigger): out of there.
+  if (!pts.length && !climbs(e)) {
+    const [kx, ky] = g.keepOff(e.x, e.y, e.radius);
+    if (kx !== e.x || ky !== e.y) pts.push(kx, ky);
+  }
   // String-pulling: skip waypoints that can be reached in a straight line.
   const smooth: number[] = [];
   let ax = e.x;
@@ -305,12 +311,19 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
   // The body, not only its centre, kept off the cliffs and out of their foot (équilibreur 22/11). A climber walks
   // over them.
   if (!climbs(e)) {
-    const [kx, ky] = this.grid.keepOff(nx, ny, e.radius);
-    // Held back to no headway at all (heading straight into the wall): a blocked step, so a walker stuck there
-    // replans (blockedTicks) instead of pressing on in place for good. Along the wall or round a corner, it slides.
-    const [dx, dy] = [nx - e.x, ny - e.y];
-    if ((kx !== nx || ky !== ny) && (kx - e.x) * dx + (ky - e.y) * dy <= 0) return false;
-    [nx, ny] = [kx, ky];
+    let [kx, ky] = this.grid.keepOff(nx, ny, e.radius);
+    if (kx !== nx || ky !== ny) {
+      // Moved back no further than the step itself and a tick's walk: a step from free ground is undone in full, and
+      // a body already where none may stand (out of a building against the cliff, called back, set there by a
+      // trigger, an old replay) walks out at its own pace instead of leaping up to a tile in one tick.
+      const most = dist(e.x, e.y, nx, ny) + e.speed;
+      const far = dist(nx, ny, kx, ky);
+      if (far > most) [kx, ky] = [nx + idiv((kx - nx) * most, far), ny + idiv((ky - ny) * most, far)];
+      // Held back to no headway at all (heading straight into the wall): a blocked step, so a walker stuck there
+      // replans (blockedTicks) instead of pressing on in place for good. Along the wall or round a corner, it slides.
+      if ((kx - e.x) * (nx - e.x) + (ky - e.y) * (ny - e.y) <= 0) return false;
+      [nx, ny] = [kx, ky];
+    }
   }
   e.x = nx;
   e.y = ny;

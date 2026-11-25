@@ -4,6 +4,7 @@ import { CLIFF_FOOT, cutCorner } from '../map';
 import { FP, ticks } from './fixed';
 import { fingerprint } from './fingerprint';
 import { createMatch } from './setup';
+import { type Entity, World } from './world';
 
 // Units sunk in the cliffs (équilibreur 22/11): only a unit's centre was tested against the terrain, so its body
 // walked half into the rock at a cliff's foot. Now the body keeps out of the band CLIFF_FOOT wide at the foot, where
@@ -139,42 +140,92 @@ describe('cliffs', () => {
   // The user, 2026-11-24: "a unit can go down the cliff, but stays stuck at the bottom". A diagonal cliff's cut corner
   // is drawn as low ground, yet it is part of the plateau's tile: a unit walked onto it stood at the cliff's foot,
   // with no way on but back up.
-  it('no unit stands on a diagonal cliff\'s cut corner, drawn as low ground: ordered there it stops on the plateau, standing there it walks out', () => {
-    let seen = 0;
-    for (const map of ['origine', 'le-col']) {
-      const w0 = createMatch(['humains', 'humains'], undefined, map);
-      const cuts: [number, number, number][] = [];
-      for (let ty = 2; ty < w0.map.height - 2; ty++) for (let tx = 2; tx < w0.map.width - 2; tx++) if (cutCorner(w0.map, tx, ty) >= 0 && w0.grid.open(tx, ty)) cuts.push([tx, ty, cutCorner(w0.map, tx, ty)]);
-      for (const [tx, ty, c] of cuts.slice(0, 6)) {
-        const [dx, dy] = [[-1, -1], [1, -1], [1, 1], [-1, 1]][c];
-        if (!w0.grid.open(tx - dx, ty - dy) || !w0.grid.canStep(tx, ty, tx - dx, ty - dy)) continue;
-        seen++;
-        // How far past the diagonal, on the plateau's side (tiles, along the tile's axes: 1 on the diagonal).
-        const past = (e: { x: number; y: number }) => {
-          const [u, v] = [e.x / FP - tx, e.y / FP - ty];
-          return (dx < 0 ? u : 1 - u) + (dy < 0 ? v : 1 - v) - 1;
-        };
-        const inTile = (e: { x: number; y: number }) => Math.floor(e.x / FP) === tx && Math.floor(e.y / FP) === ty;
-        const [cx, cy] = [Math.round((tx + 0.5 + dx * 0.3) * FP), Math.round((ty + 0.5 + dy * 0.3) * FP)];
-        // Ordered from the plateau onto the cut corner.
-        let w = createMatch(['humains', 'humains'], undefined, map);
-        let a = w.spawn(big, 0, (tx - dx) * FP + FP / 2, (ty - dy) * FP + FP / 2);
-        w.step([{ player: 0, kind: 'move', ids: [a.id], x: cx, y: cy }]);
-        for (let i = 0; i < 300; i++) {
-          w.step([]);
-          if (inTile(a)) expect(past(a), `${map} ${tx},${ty} walking`).toBeGreaterThanOrEqual(0.6);
-        }
-        expect(a.order, `${map} ${tx},${ty}`).toBeNull();
-        // Standing on it (an old replay, a saved game), ordered back to the plateau, then to the low ground beyond.
-        for (const [gx, gy] of [[tx - dx, ty - dy], [tx + 2 * dx, ty + 2 * dy]]) {
-          w = createMatch(['humains', 'humains'], undefined, map);
-          a = w.spawn(big, 0, cx, cy);
-          w.step([{ player: 0, kind: 'move', ids: [a.id], x: gx * FP + FP / 2, y: gy * FP + FP / 2 }]);
-          for (let i = 0; i < 100; i++) w.step([]);
-          expect(!inTile(a) || past(a) >= 0.6, `${map} ${tx},${ty} out to ${gx},${gy}`).toBe(true);
-        }
+  describe('a diagonal cliff\'s cut corner, drawn as low ground', () => {
+    // A small map made by hand: low ground, and a plateau in a staircase whose corners (8,8) and (9,7) are cut (NW).
+    const N = 16;
+    const stair = () => {
+      const level = new Uint8Array(N * N);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if ((x >= 8 && y >= 8) || (x >= 9 && y === 7)) level[y * N + x] = 1;
+      return new World({ width: N, height: N, level, ramp: new Array(N * N).fill(null), rampStep: new Uint8Array(N * N) });
+    };
+    const [tx, ty] = [8, 8];
+    /** How far past the diagonal of (8,8), on the plateau's side (tiles, along the tile's axes). */
+    const past = (e: { x: number; y: number }) => e.x / FP - tx + e.y / FP - ty - 1;
+    const inTile = (e: { x: number; y: number }) => Math.floor(e.x / FP) === tx && Math.floor(e.y / FP) === ty;
+    const corner: [number, number] = [Math.round((tx + 0.2) * FP), Math.round((ty + 0.2) * FP)];
+    /** Steps the world `n` ticks; the longest move of `a` in one tick. */
+    const walk = (w: World, a: Entity, n: number, each?: () => void) => {
+      let most = 0;
+      for (let i = 0; i < n; i++) {
+        const [x, y] = [a.x, a.y];
+        w.step([]);
+        most = Math.max(most, Math.hypot(a.x - x, a.y - y));
+        each?.();
       }
+      return most;
+    };
+
+    it('the map has the two cut corners', () => {
+      const w = stair();
+      expect(cutCorner(w.map, 8, 8)).toBe(0);
+      expect(cutCorner(w.map, 9, 7)).toBe(0);
+    });
+
+    it('ordered onto it from the plateau, along either side, a unit stops on the plateau, with no leap as it enters the tile', () => {
+      for (const [sx, sy] of [[12, 8], [8, 12], [11, 11]]) {
+        const w = stair();
+        const a = w.spawn(big, 0, sx * FP + FP / 2, sy * FP + FP / 2);
+        w.step([{ player: 0, kind: 'move', ids: [a.id], x: corner[0], y: corner[1] }]);
+        let entered = false;
+        const most = walk(w, a, 300, () => {
+          if (!inTile(a)) return;
+          entered = true;
+          expect(past(a), `from ${sx},${sy}`).toBeGreaterThanOrEqual(0.6);
+        });
+        expect(entered, `from ${sx},${sy}`).toBe(true);
+        expect(a.order, `from ${sx},${sy}`).toBeNull();
+        expect(most, `from ${sx},${sy}`).toBeLessThanOrEqual(a.speed + 2);
+      }
+    });
+
+    it('the limit runs on into the tiles beside it: a point a body may stand at on one side of their shared edge, it may on the other', () => {
+      const w = stair();
+      const free = (x: number, y: number) => {
+        const [kx, ky] = w.grid.keepOff(x, y, KEEP);
+        return Math.abs(kx - x) + Math.abs(ky - y) <= 2;
+      };
+      const edge = FP + Math.trunc((KEEP * 1449) / 1024) - FP; // where the limit crosses the edge, from the diagonal's end
+      for (let k = 2; k < FP - 1; k += 7) {
+        if (Math.abs(k - edge) < 8) continue;
+        expect(free(9 * FP - 1, 8 * FP + k), `east ${k}`).toBe(free(9 * FP + 1, 8 * FP + k));
+        expect(free(8 * FP + k, 9 * FP - 1), `south ${k}`).toBe(free(8 * FP + k, 9 * FP + 1));
+      }
+    });
+
+    it('standing on it (an old replay, a saved game), a unit walks out at its own pace, to the plateau or towards the low ground', () => {
+      for (const [gx, gy] of [[11, 11], [5, 5]]) {
+        const w = stair();
+        const a = w.spawn(big, 0, ...corner);
+        w.step([{ player: 0, kind: 'move', ids: [a.id], x: gx * FP + FP / 2, y: gy * FP + FP / 2 }]);
+        const most = walk(w, a, 100);
+        expect(!inTile(a) || past(a) >= 0.6, `to ${gx},${gy}`).toBe(true);
+        expect(most, `to ${gx},${gy}`).toBeLessThanOrEqual(3 * a.speed + 2);
+      }
+    });
+  });
+
+  it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
+    const w = createMatch(['humains', 'humains']);
+    const [tx, ty] = foot(w);
+    const a = w.spawn(big, 0, tx * FP + FP / 2, ty * FP + 50);
+    w.step([{ player: 0, kind: 'move', ids: [a.id], x: (tx + 3) * FP + FP / 2, y: ty * FP + 50 }]);
+    let most = 0;
+    for (let i = 0; i < 300 && a.order; i++) {
+      const [x, y] = [a.x, a.y];
+      w.step([]);
+      most = Math.max(most, Math.hypot(a.x - x, a.y - y));
     }
-    expect(seen).toBeGreaterThan(3);
+    expect(most).toBeLessThanOrEqual(3 * a.speed + 2);
+    expect(a.y - ty * FP).toBeGreaterThanOrEqual(BAND + Math.min(a.radius, KEEP));
   });
 });
