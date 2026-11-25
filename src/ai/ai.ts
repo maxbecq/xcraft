@@ -1473,17 +1473,26 @@ export class AI {
       // (Thor's Nains, first in line, took every mineral: Apollon's Minotaures and Athéna's Élémentaires never came).
       const order = this.doctrine === LEGACY ? gods : gods.slice().sort((a, b) => ratio(a) - ratio(b) || a.id - b.id);
       const most = order.length ? ratio(order[0]) : Infinity;
+      const wanted = (g: Entity) => (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || (a < b ? -1 : a > b ? 1 : 0));
+      // Doctrine: the troop the army lacks most, short of minerals only, keeps its price from the troops a share or more
+      // ahead of it, while minerals come in (Thor's Nains, 190, took every mineral as it came: in Phalange, Apollon's
+      // Minotaures, 375, never came, 28 Nains to 1 at 14 min).
+      // Only for a god with room in its queue (one with a summons queued already is not waiting on minerals).
+      const lack = this.doctrine !== LEGACY && order.length > 1 && order[0].queue.length <= (this.easy ? 0 : 1) ? wanted(order[0])[0] : undefined;
+      const lackDef = lack ? (DEFS[lack] as UnitDef) : undefined;
+      const hold = lackDef && w.tick - this.lastIncome < ticks(60) && this.room(ctx) >= lackDef.supply && !(lackDef.cost.energy > 0 && ctx.energy - unitReserve < lackDef.cost.energy) && ctx.minerals - ctx.keep < lackDef.cost.minerals ? lackDef.cost.minerals : 0;
       for (const g of order) {
         // A god keeps `godQueue` summons ahead once minerals pile up (one ahead held the Dieux' bank at 2000 to 2600).
         if (g.queue.length > (this.easy ? 0 : ctx.minerals > 400 ? this.doctrine.godQueue : 1)) continue;
         if (this.doctrine !== LEGACY && g.queue.length > 0 && ratio(g) > most + 1) continue;
         const pays = (t: string) => {
           const d = DEFS[t] as UnitDef;
+          const kept = hold && have(t) / share[t] >= have(lack!) / share[lack!] + 1 ? hold : 0;
           // A troop that costs no energy is never held back by the energy kept (for the next god).
-          return this.room(ctx) >= d.supply && ctx.minerals - ctx.keep >= d.cost.minerals && !(d.cost.energy > 0 && ctx.energy - unitReserve < d.cost.energy);
+          return this.room(ctx) >= d.supply && ctx.minerals - ctx.keep - kept >= d.cost.minerals && !(d.cost.energy > 0 && ctx.energy - unitReserve < d.cost.energy);
         };
         // The one the army lacks most that can be paid (the first one out of reach kept the god idle, minerals piling up).
-        const type = (g.def as UnitDef).trains!.filter((t) => !w.lacks(this.player, t) && share[t]).sort((a, b) => have(a) / share[a] - have(b) / share[b] || a.localeCompare(b)).find(pays);
+        const type = wanted(g).find(pays);
         const def = type && (DEFS[type] as UnitDef);
         if (!def) continue;
         ctx.out.push({ player: this.player, kind: 'train', ids: [g.id], type: type! });
