@@ -10,7 +10,6 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
   if (o.skip && this.tick - o.skipped! >= ticks(SKIP_SECONDS)) {
     delete o.skip;
     delete o.skipped;
-    delete o.skipped;
   }
   if (o.phase === 'return' || e.carry > 0) {
     o.phase = 'return';
