@@ -98,6 +98,7 @@ export class Marking {
     const before = `${h.buildMenu}|${h.weaponMenu}`;
     if (this.weapons) pressMenu(h, b);
     else pressButton(h, b);
+    h.ringAt = performance.now(); // given from the ring: the panels at the bottom stay folded (pressButton shows them)
     // It opened a list (the buildings, a socle's weapons): that list in the ring, to tap in.
     // With the Machines' LCD console, Construire draws its tech tree there: the ring steps aside for it.
     const tree = !!h.buildMenu && document.body.classList.contains('lcd') && document.body.classList.contains('z');

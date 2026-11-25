@@ -104,6 +104,8 @@ export class Hud {
   touchedAt = 0;
   /** The marking menu (game/radial.ts) is open: a finger still choosing. */
   ringOpen = false;
+  /** When the ring was last open, or gave its order: the panels stay folded until touched or a new pick after it. */
+  ringAt = -1;
   private tuckSel = '';
   readonly ghost: Mesh;
   /** A building just ordered, shown where it will rise. */
@@ -494,11 +496,16 @@ export class Hud {
   private tuck(): void {
     const now = performance.now();
     const sel = this.selKey;
-    if (sel !== this.tuckSel || this.input.pickedAt > this.touchedAt || this.buildMenu || this.weaponMenu || this.placing || this.targeting || this.ringOpen || !this.tip.hidden) this.touchedAt = now;
+    // Shown, they stay while something is open or the map is tapped; folded, only a new pick or a touch brings them back.
+    const shown = !this.console.classList.contains('tucked');
+    const busy = this.buildMenu || this.weaponMenu || this.placing || this.targeting || !this.tip.hidden || this.input.tappedAt > this.touchedAt;
+    // The commands round the finger (long press) stand for the panels: these fold, and stay folded once it closes.
+    if (this.ringOpen) this.ringAt = now;
+    else if (sel !== this.tuckSel || this.input.pickedAt > this.touchedAt || (shown && busy)) this.touchedAt = now;
     this.tuckSel = sel;
     // The commands round the finger (long press): not the sheet and the card at the bottom as well.
     this.console.classList.toggle('ringed', this.ringOpen);
-    const tucked = document.body.classList.contains('tuck') && now - this.touchedAt > TUCK_MS;
+    const tucked = document.body.classList.contains('tuck') && (now - this.touchedAt > TUCK_MS || this.ringAt >= this.touchedAt);
     if (tucked === this.console.classList.contains('tucked')) return;
     // The minimap drops to the bottom too, where the commands were (upright phones: they sit below it).
     if (tucked) this.console.style.setProperty('--drop', `${Math.max(0, this.card.getBoundingClientRect().bottom - this.mapSlot.getBoundingClientRect().bottom)}px`);

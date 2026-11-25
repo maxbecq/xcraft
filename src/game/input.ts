@@ -177,6 +177,8 @@ export class Input {
   private touchAt: { x: number; y: number } | null = null;
   /** When a tap last picked one of ours (the same again included): the HUD shows its folded panels again. */
   pickedAt = 0;
+  /** When the map was last tapped (an order, a pick): a panel still shown stays its full time from then. */
+  tappedAt = 0;
   private aimed = { key: '', at: null as Vector3 | null };
 
   /**
@@ -466,8 +468,9 @@ export class Input {
   private tap(x: number, y: number): void {
     const ground = this.groundAt(x, y);
     const target = this.entityAt(x, y);
-    if (this.hooks.click?.(0, ground, false, target)) return;
     const now = performance.now();
+    this.tappedAt = now;
+    if (this.hooks.click?.(0, ground, false, target)) return;
     // Our site left half built, tapped with a worker selected: it goes back to finish it (as a right click does).
     if (target && target.owner === this.player && target.buildLeft > 0 && ground && this.own().some((e) => (e.def as UnitDef).worker)) {
       this.orderAt(ground.x, ground.z, target);
