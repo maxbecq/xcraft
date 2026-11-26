@@ -783,7 +783,7 @@ export class Input {
         if (d < bestD) [best, bestD] = [e, d];
       }
       return best;
-    }, occupant);
+    }, occupant, () => this.caughtAt(x, y, occupant, true));
   }
 
   /** The extractor standing on a well, if any and in sight (a well taken is picked as its extractor, never itself). */
@@ -794,13 +794,14 @@ export class Input {
     return (well) => (well.type === 'puits' ? on.get(well.ty * this.map.width + well.tx) : undefined);
   }
 
-  /** The unit or resource whose catch zone holds the point (see nearestCatch). */
-  private caughtAt(x: number, y: number, occupant: (well: Entity) => Entity | undefined = () => undefined): Entity | undefined {
+  /** The unit or resource (`units`: unit only) whose catch zone holds the point (see nearestCatch). */
+  private caughtAt(x: number, y: number, occupant: (well: Entity) => Entity | undefined = () => undefined, units = false): Entity | undefined {
     const roots = new Map<number, Object3D>();
     for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
     const catches: Catch[] = [];
     for (const e of this.world.entities.values()) {
       const resource = e.def.kind === 'resource';
+      if (resource && units) continue;
       if (!resource && (e.def.kind !== 'unit' || e.inside || !this.sees(e))) continue;
       const feet = this.screenOf(e);
       if (Math.abs(feet.x - x) > 400 || Math.abs(feet.y - y) > 400) continue;

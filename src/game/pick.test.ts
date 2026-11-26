@@ -90,6 +90,18 @@ describe('what the ray under the cursor picks', () => {
     expect(pickAt([{ e: extractor, seen: true }, { e: well, seen: true }], none, none, on)).toBe(extractor);
   });
 
+  it('a unit at the edge of a well, the ray meeting only the well, takes the unit by its own catch zone', () => {
+    expect(pickAt([{ e: well, seen: true }], () => well, none, () => undefined, () => drone)).toBe(drone);
+  });
+
+  it('a unit the ray meets behind a resource takes it over the resource', () => {
+    expect(pickAt([{ e: well, seen: true }, { e: drone, seen: true }], none, none)).toBe(drone);
+  });
+
+  it('a unit the fog hides behind a resource does not', () => {
+    expect(pickAt([{ e: well, seen: true }, { e: drone, seen: false }], none, none)).toBe(well);
+  });
+
   it('a free well is still picked', () => {
     expect(pickAt([{ e: well, seen: true }], none, none, () => undefined)).toBe(well);
   });
