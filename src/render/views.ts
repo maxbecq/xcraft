@@ -5,6 +5,7 @@ import {
 } from 'three';
 import { owned, haloShape } from './models';
 import type { InsectLeg } from './gait';
+import type { Materialising } from './materialise';
 
 /** Invisible units are drawn see-through (only their owner, or a detecting enemy, sees them at all). */
 export function ghost(body: Object3D): void {
@@ -92,6 +93,8 @@ export interface View {
   handoff?: { type: string; owner: number; at: Vector3; yaw: number; time: number };
   /** A unit leaving the Plate-forme's deck: it rolls or walks from where it was built to its place outside. */
   emerge?: { from: Vector3; age: number; time: number };
+  /** An Isdaris building materialising (render/materialise.ts). */
+  mat?: Materialising;
   print?: { plane: Plane; frame: Plane; frameMaterial: LineBasicMaterial; lines: LineSegments[]; bottom: number; top: number; originals: [Mesh, Material | Material[]][] };
   /** Light pools on the ground, lit once the building stands. */
   pools?: Object3D;

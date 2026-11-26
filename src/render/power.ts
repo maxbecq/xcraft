@@ -424,7 +424,6 @@ export class PowerNet {
   private readonly warpGlow = softLight(0xffcf6a);
   /** A cone along Y; aimed with lookAt, its top (wide) lands on the building site, its narrow bottom at the Obelisk. */
   private readonly unitBeam = new CylinderGeometry(1, 0.05, 1, 24, 8, true);
-  private readonly unitColumn = new CylinderGeometry(1, 1, 1, 24, 4, true);
 
   constructor(scene: Object3D, private readonly map: GameMap, private readonly fog: DataTexture) {
     scene.add(this.root);
@@ -533,7 +532,8 @@ export class PowerNet {
         const to = at(b, 0.3);
         const length = from.distanceTo(to);
         // A wide soft shaft around a bright core, from the Obelisk's tip down onto the site.
-        for (const [radius, material] of [[0.5, this.warpCore], [1.6, this.warpGlow]] as const) {
+        // Narrower than it was (0.5, 1.6): its wide end washed out the building materialising under it.
+        for (const [radius, material] of [[0.2, this.warpCore], [0.6, this.warpGlow]] as const) {
           const m = new Mesh(this.unitBeam, material);
           m.scale.set(radius, length, radius);
           m.position.copy(from).add(to).multiplyScalar(0.5);
@@ -541,12 +541,7 @@ export class PowerNet {
           m.rotateX(Math.PI / 2);
           g.add(m);
         }
-        // Where it lands: a column of light the size of the building.
-        const size = (b.def as BuildingDef).size;
-        const column = new Mesh(this.unitColumn, this.warpGlow);
-        column.scale.set(size * 0.45, 3, size * 0.45);
-        column.position.copy(at(b, 1.5));
-        g.add(column);
+        // No column of light where it lands any more: the building materialises there itself (render/materialise.ts).
         this.root.parent?.add(g);
         this.warps.set(b.id, g);
       }
