@@ -20,8 +20,8 @@ describe('Grid', () => {
   const grid = new Grid(map);
 
   it('blocks walking straight off a cliff', () => {
-    // Main plateau (level 2) east edge is x=29 at y=16; x=30 is level 1 without ramp.
-    expect(grid.canStep(29, 16, 30, 16)).toBe(false);
+    // Main plateau (level 2) east edge is x=30 at y=16; x=31 is level 1 without ramp.
+    expect(grid.canStep(30, 16, 31, 16)).toBe(false);
   });
 
   it('lets units use a ramp', () => {

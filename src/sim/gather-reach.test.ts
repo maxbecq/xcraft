@@ -11,10 +11,10 @@ import type { Entity } from './world';
 describe('a worker sent to a field it cannot step into from where it stands', () => {
   // Worker tile, field tile, and the point where they were found standing (in tiles).
   const cases: [string, number, number, number, number][] = [
-    ['below the cliff, at its corner', 26.999, 34.001, 27, 33],
+    ['below the cliff, at its corner', 44.001, 6.999, 43, 7],
     ['on the plateau, diagonal to it', 43.001, 16.001, 42, 15],
     ['below the cliff, under it', 52.999, 79.999, 53, 80],
-    ['below the cliff, at its other corner', 69.001, 61.999, 68, 62],
+    ['below the cliff, at its other corner', 51.999, 88.001, 52, 88],
   ];
   for (const [what, x, y, fx, fy] of cases) {
     it(`${what}: mines it, never standing still on its way`, () => {

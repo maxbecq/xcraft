@@ -71,7 +71,7 @@ La liste des emplacements de base du joueur 1, dans l'ordre où l'IA s'étend. U
 |---|---|
 | `hq` | La tuile en haut à gauche du QG (5 × 5 tuiles). |
 | `workers` | Facultatif : la tuile des premiers ouvriers. Par défaut, juste à droite du QG. |
-| `minerals` | Les tuiles de minerai. Laissez 2 ou 3 tuiles entre le minerai et le QG. |
+| `minerals` | Les tuiles de minerai : 10 par base (l'équilibreur, 26/11 : 10 gisements de 2 500). Le QG (4 × 4, placé dans les 5 × 5 de `hq`) doit pouvoir se poser à au moins 2 cases libres de tout minerai : le jeu refuse de le poser plus près, et un test vérifie que chaque base garde cette place. |
 | `wells` | La tuile en haut à gauche de chaque puits d'énergie (3 × 3 tuiles). |
 
 L'IA prend d'abord ses propres bases, dans l'ordre du fichier, puis les autres bases libres, les plus proches d'abord. Elle ne prend jamais une base plus proche du départ d'un adversaire que du sien. Une base posée au centre exact d'une carte `rot90` (de taille impaire) n'existe qu'une fois, partagée entre tous les joueurs.

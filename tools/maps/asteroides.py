@@ -82,6 +82,38 @@ for b in BASES:
 # half turn, and the AI never takes a base nearer the enemy's start than its own).
 bases.append({'name': 'centre', 'hq': [50, 49], 'minerals': [[46, 48], [46, 50], [46, 52], [48, 46], [50, 45]], 'wells': []})
 
+
+def ten(minerals, hq, n=10):
+    """Carries an arc of fields on at both ends, in its own pattern, until it has n (the balancer, 2026-11-26: 10 a base)."""
+    cx, cy = hq[0] + 2.5, hq[1] + 2.5
+    path = sorted((tuple(m) for m in minerals), key=lambda p: math.atan2(p[1] + .5 - cy, p[0] + .5 - cx))
+    gaps = [math.dist(path[i], path[(i + 1) % len(path)]) for i in range(len(path))]
+    k = max(range(len(path)), key=lambda i: gaps[i])
+    path = path[k + 1:] + path[:k + 1]
+    # The scaled arcs have gaps: filled first (the widest), so the fields stay a compact arc.
+    while len(path) < n:
+        i = max(range(len(path) - 1), key=lambda i: math.dist(path[i], path[i + 1]))
+        if math.dist(path[i], path[i + 1]) < 2:
+            break
+        mid = (round((path[i][0] + path[i + 1][0]) / 2), round((path[i][1] + path[i + 1][1]) / 2))
+        if mid in path:
+            break
+        path.insert(i + 1, mid)
+    end = 1
+    while len(path) < n:
+        seq = path if end == 1 else path[::-1]
+        e, p2, p3 = seq[-1], seq[-2], seq[-3]
+        new = (p2[0] + e[0] - p3[0], p2[1] + e[1] - p3[1])
+        if new in path:
+            new = (2 * e[0] - p2[0], 2 * e[1] - p2[1])
+        path = path + [new] if end == 1 else [new] + path
+        end = -end
+    return [list(p) for p in path]
+
+
+for b in bases:
+    b['minerals'] = ten(b['minerals'], b['hq'])
+
 out = {
     'format': 1, 'id': 'asteroides', 'name': 'Astéroïdes',
     'description': 'Des îlots de basalte au-dessus du vide, reliés par des arches de roche : trois routes, un centre riche.',

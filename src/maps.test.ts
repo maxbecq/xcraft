@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createMap } from './map';
-import { CORNERS, MAPS, buildMap } from './maps';
+import { createMap, rotateFootprint } from './map';
+import { CORNERS, MAPS, buildMap, hqSlot, turnsOf } from './maps';
 import { createMatch, expansions } from './sim/setup';
 import type { World } from './sim/world';
 
@@ -32,7 +32,7 @@ describe('map files', () => {
       for (let i = 0; i < m.level.length; i++) h = Math.imul(h ^ (m.level[i] + 4 * m.rampStep[i] + 32 * ' NESW'.indexOf(m.ramp[i] ?? ' ') + 256 * (m.chasm?.[i] ?? 0)), 16777619);
       return h >>> 0;
     };
-    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([633818735, 4081854761, 3151526511]);
+    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([2462163747, 3023734073, 2017821987]);
   });
 
   for (const def of Object.values(MAPS)) {
@@ -67,6 +67,18 @@ describe('map files', () => {
             // From the middle of the 4x4 main building (the balancer, 2026-11-22).
             const near = w.map.sites!.some((s) => Math.hypot(s.hq[0] + 2 - (e.tx + size / 2), s.hq[1] + 2 - (e.ty + size / 2)) < 12);
             expect(near, `${e.type} at ${e.tx},${e.ty}`).toBe(true);
+          }
+        });
+
+        it('gives every base spot 10 mineral fields, and a place for its headquarters two free tiles or more from every field', () => {
+          // The balancer, 2026-11-26: 10 fields of 2,500 a base; the main building never nearer the fields than HQ_MINERAL_GAP.
+          for (const b of def.bases) expect(b.minerals.length, b.name).toBe(10);
+          for (const q of turnsOf(def, players)) {
+            for (const b of def.bases) {
+              const [hx, hy] = rotateFootprint(w.map.width, ...hqSlot(def, b.hq), 4, q);
+              expect(w.nearMinerals(hx, hy, 4), `${b.name}, quarter ${q}`).toBe(false);
+              if (!hqs.some((h) => h.tx === hx && h.ty === hy)) expect(w.canPlace('conseil', hx, hy, 0), `${b.name}, quarter ${q}`).toBe(true);
+            }
           }
         });
 
