@@ -353,6 +353,9 @@ function fableLights(scene: Object3D): void {
       // Pure white marble flared in the bloom, past the other Isdaris buildings (the user's remark, 0.9.173).
       m.userData.dim = true;
       m.color.multiplyScalar(0.72);
+      // Matte as the Meshy buildings (0.8): at Blender's 0.42 the sun's glint on the terraces and stairs, swollen by the
+      // bloom, whitened the Obélisque's whole foot (the user's captures, 0.9.174).
+      m.roughness = 0.85;
       rimLight(m, 0.22);
     } else if (m.name.endsWith('_lueur') && !m.userData.vein) {
       m.userData.vein = true;
