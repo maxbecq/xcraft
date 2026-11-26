@@ -317,7 +317,7 @@ describe('audit gaps', () => {
     expect(w.addonsOf(pod)).toBe(BALANCE.rules.z.podAddons);
   });
 
-  it('the Orbe plasma moves slowly, without shooting, and is set down again in a power field (Redéploiement)', () => {
+  it('Redéploiement (équilibreur 24/11): still and silent 17 s, teleported into the zone, still and silent 17 s more', () => {
     const w = createMatch(['isdaris', 'humains']);
     const p = w.players[0];
     p.minerals = 1000;
@@ -330,21 +330,22 @@ describe('audit gaps', () => {
         if (w.canPlace('orbe', tx, ty, 0) && !spots.some(([x, y]) => Math.abs(x - tx) < 4 && Math.abs(y - ty) < 4)) spots.push([tx, ty]);
       }
     expect(spots).toHaveLength(2);
-    const orbe = w.spawn('orbe', 0, (spots[0][0] + 1) * FP, (spots[0][1] + 1) * FP);
-    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'redeploiement' }]);
-    expect(orbe.type).toBe('orbemob');
-    expect(orbe.speed).toBeGreaterThan(0);
-    expect(w.weapon(orbe)).toBeUndefined();
+    const orbe = w.site('orbe', 0, spots[0][0], spots[0][1]);
+    orbe.buildLeft = 0;
+    // Out of the zone: refused, nothing paid.
+    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'redeploiement', x: orbe.x + 60 * FP, y: orbe.y }]);
+    expect(p.minerals).toBe(1000);
+    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'redeploiement', x: (spots[1][0] + 1) * FP, y: (spots[1][1] + 1) * FP }]);
     expect(p.minerals).toBe(1000 - 50); // sheet
-    // Out of any field: refused.
-    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'ancrer', x: orbe.x + 40 * FP, y: orbe.y }]);
-    run(w, 1);
-    expect(orbe.type).toBe('orbemob');
-    w.step([{ player: 0, kind: 'ability', ids: [orbe.id], name: 'ancrer', x: (spots[1][0] + 1) * FP, y: (spots[1][1] + 1) * FP }]);
-    run(w, 30);
+    expect(orbe.muted).toBeGreaterThan(0);
+    run(w, 16);
+    expect([orbe.tx, orbe.ty]).toEqual(spots[0]);
+    run(w, 2);
     expect(orbe.type).toBe('orbe');
     expect([orbe.tx, orbe.ty]).toEqual(spots[1]);
-    expect(orbe.abilityCd).toBeGreaterThan(0); // 35 s before the next one (sheet)
+    expect(orbe.muted).toBeGreaterThan(ticks(15));
+    run(w, 17);
+    expect(orbe.muted).toBe(0);
   });
 
   it('Jet de sable under Gravité alourdie keeps its own 8 s, then only the Gravité slow is left', () => {

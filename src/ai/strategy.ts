@@ -147,7 +147,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       name: 'Tir psychique',
       // Archers first, the Laboratoire early for the Druides and the Portail's attack: at range, against the infantry.
       army: { archer: 5, creature: 2, druide: 2 },
-      research: ['portailatk1', 'portailarmor1', 'portailatk2', 'deflagration'],
+      research: ['portailatk1', 'portailarmor1', 'portailatk2'],
       extensionMinute: 3,
       expandMinute: 4,
       attackMinute: 7,
@@ -171,7 +171,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       name: 'Mages',
       // Druides and Archers behind a few Créatures, Déflagration early; a later, harder strike.
       army: { druide: 3, archer: 3, creature: 2 },
-      research: ['deflagration', 'portailatk1', 'portailarmor1', 'silence', 'portailatk2'],
+      research: ['portailatk1', 'portailarmor1', 'silence', 'portailatk2'],
       extensionMinute: 3,
       expandMinute: 3,
       attackMinute: 8,

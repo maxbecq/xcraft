@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import BALANCE from '../balance.json';
 import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { kitLevel } from './combat';
-import { FP, ticks } from './fixed';
+import { FP, dist, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
 
@@ -162,5 +162,106 @@ describe('équilibreur 24/11, the Isdaris construction zone', () => {
     run(w, 1);
     expect(w.entities.has(site.id)).toBe(false);
     expect(w.players[0].minerals).toBe(m);
+  });
+});
+
+describe('équilibreur 24/11, Isdaris powers', () => {
+  const isd = () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].minerals = w.players[0].energy = 99999;
+    return w;
+  };
+
+  it('Concentration énergétique: a disc of 3 no one walks through for 15 s, shots go by', () => {
+    const w = isd();
+    const d = Object.assign(w.spawn('druide', 0, 40 * FP, 40 * FP), { mana: 1 << 30 });
+    expect((DEFS.druide as UnitDef).abilities).toEqual(['double', 'concentration', 'silence']);
+    expect(w.castAt(d, 'concentration', 44 * FP, 40 * FP)).not.toBe(false);
+    expect(w.grid.blocked[40 * w.grid.width + 44]).toBeGreaterThan(0);
+    expect(w.grid.blocked[40 * w.grid.width + 46]).toBeGreaterThan(0);
+    expect(w.walled(40 * FP, 40 * FP, 48 * FP, 40 * FP)).toBeUndefined();
+    run(w, 15.1);
+    expect(w.grid.blocked[40 * w.grid.width + 44]).toBe(0);
+  });
+
+  it('Ciblage: the enemies of the zone take 10 % more for 30 s, even once out of it', () => {
+    const w = isd();
+    const spy = Object.assign(w.spawn('espion', 0, 40 * FP, 40 * FP), { mana: 1 << 30 });
+    const foe = w.spawn('legionnaire', 1, 44 * FP, 40 * FP);
+    const away = w.spawn('legionnaire', 1, 50 * FP, 40 * FP);
+    w.castAt(spy, 'ciblage', foe.x, foe.y);
+    expect(foe.marked).toBe(ticks(30));
+    expect(away.marked).toBe(0);
+    foe.shield = 0;
+    const hp = foe.hp;
+    w.hurt(foe, 100);
+    expect(hp - foe.hp).toBe(110 - (DEFS.legionnaire as UnitDef).armor);
+  });
+
+  it('a Drone protecteur takes 2 off every blow to its allies round it, itself too', () => {
+    const w = isd();
+    expect((DEFS.nanoassembleur as BuildingDef).trains).toContain('droneprotecteur');
+    const g = w.spawn('droneprotecteur', 0, 40 * FP, 40 * FP);
+    const ally = w.spawn('archer', 0, 42 * FP, 40 * FP);
+    const far = w.spawn('archer', 0, 50 * FP, 40 * FP);
+    for (const u of [g, ally, far]) u.shield = 0;
+    const [a0, f0] = [ally.hp, far.hp];
+    w.hurt(ally, 10);
+    w.hurt(far, 10);
+    expect(a0 - ally.hp).toBe(8);
+    expect(f0 - far.hp).toBe(10);
+  });
+
+  it('Disque tournoyant: after its research, 15 % of the blow to the enemies round the target', () => {
+    const w = isd();
+    const disc = w.spawn('discobole', 0, 40 * FP, 40 * FP);
+    const t = w.spawn('legionnaire', 1, 45 * FP, 40 * FP);
+    const by = w.spawn('legionnaire', 1, 46 * FP, 40 * FP);
+    w.hit(disc, t, w.weapon(disc)!);
+    expect(by.hp).toBe(by.maxHp);
+    w.players[0].upgrades.disque = 1;
+    const before = t.hp;
+    w.hit(disc, t, w.weapon(disc)!);
+    expect(by.maxHp - by.hp).toBe(Math.max(1, Math.floor(((before - t.hp) * 15) / 100) - (DEFS.legionnaire as UnitDef).armor));
+  });
+
+  it('Attaque de singularité: the Druide drains as much energy as it takes hit points', () => {
+    const w = isd();
+    const d = w.spawn('druide', 0, 40 * FP, 40 * FP);
+    const foe = Object.assign(w.spawn('alchimiste', 1, 44 * FP, 40 * FP), { mana: 200 * FP });
+    const hp = foe.hp;
+    w.hit(d, foe, w.weapon(d)!);
+    expect(200 * FP - foe.mana).toBe((hp - foe.hp) * FP);
+  });
+
+  it('Couloir temporel: Espion to Espion, a right click through, closed after 5 crossings', () => {
+    const w = isd();
+    w.players[0].upgrades.couloir = 1;
+    const a = Object.assign(w.spawn('espion', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const b = w.spawn('espion', 0, 80 * FP, 80 * FP);
+    w.castAt(a, 'couloir', b.x, b.y);
+    expect(w.tunnelOf(a)).toBeDefined();
+    const u = w.spawn('creature', 0, 31 * FP, 30 * FP);
+    for (let k = 0; k < 5; k++) {
+      const [from] = k % 2 ? [b] : [a];
+      w.step([{ player: 0, kind: 'smart', ids: [u.id], x: from.x, y: from.y, target: from.id }]);
+      run(w, 3);
+      expect(dist(u.x, u.y, (k % 2 ? a : b).x, (k % 2 ? a : b).y)).toBeLessThan(3 * FP);
+    }
+    run(w, 0.1);
+    expect(w.tunnelOf(a)).toBeUndefined();
+  });
+
+  it('Recharge de bouclier switches off and on; Laboratoire: a unit and a research at once', () => {
+    const w = isd();
+    const r = w.spawn('reservepsy', 0, 30 * FP, 30 * FP);
+    w.step([{ player: 0, kind: 'ability', ids: [r.id], name: 'autorecharge' }]);
+    expect(r.autoOff).toBe(true);
+    const portail = w.spawn('portail', 0, 40 * FP, 30 * FP);
+    portail.exts.push('laboratoire');
+    portail.queue.push('creature', 'portailatk1');
+    portail.trainLeft = w.trainTime(portail, 'creature');
+    w.step([]);
+    expect(portail.trainLeft2).toBeGreaterThan(0);
   });
 });

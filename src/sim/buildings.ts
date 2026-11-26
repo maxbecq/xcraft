@@ -282,7 +282,8 @@ export function operate(this: World, b: Entity): void {
   // Proposition 6 (provisional): what a Z building off its creep stops doing (all of it), its hp kept.
   const off = def.faction === 'z' && (def.needsPower || def.addon) && !this.onCreep(b) ? BALANCE.rules.z.offCreep : undefined;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
-  const attack = off && !off.shoots ? undefined : this.weapon(b);
+  // An Orbe plasma being redeployed does not shoot (équilibreur 24/11).
+  const attack = (off && !off.shoots) || b.muted > 0 ? undefined : this.weapon(b);
   if (attack && b.cooldown === 0) {
     const t = this.enemyNear(b, toFp(attack.range), true);
     if (t && (!b.kit || reaches(attack, flies(t)))) {
@@ -324,32 +325,42 @@ export function produce(this: World, b: Entity): void {
     }
   }
   // Miniportail (notice: a second production building): the unit second in the queue is made alongside the first.
-  if (!b.trainLeft2 && b.type === 'portail' && b.queue.length > 1 && DEFS[b.queue[1]].kind === 'unit' && b.exts.includes('miniportail'))
-    b.trainLeft2 = this.trainTime(b, b.queue[1]);
+  // Laboratoire on a Portail, Totem on a Psycho-assembleur (équilibreur 24/11): a unit and a research at once.
+  if (!b.trainLeft2 && b.queue.length > 1 && this.twoLines(b)) b.trainLeft2 = this.trainTime(b, b.queue[1]);
   if (b.trainLeft2 && --b.trainLeft2 === 0) {
     const [type] = b.queue.splice(1, 1);
     const [kit] = b.kits.splice(1, 1);
-    this.deliver(b, type, kit ?? '');
+    if (DEFS[type].kind === 'upgrade') this.finish(b, type);
+    else this.deliver(b, type, kit ?? '');
   }
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
-    if (type === 'niveau') {
-      this.ascend(b);
-      this.next(b);
-      return;
-    }
+    this.finish(b, type, kit);
+    this.next(b);
+  }
+}
+
+/** Whether the second of a queue runs alongside the first: two units with a Miniportail; a unit and a research with a
+ * Laboratoire on a Portail or a Totem on a Psycho-assembleur (équilibreur 24/11). */
+export function twoLines(this: World, b: Entity): boolean {
+  const [a, c] = b.queue;
+  const research = (t: string) => DEFS[t].kind === 'upgrade' && !(DEFS[t] as UpgradeDef).host;
+  if (b.type === 'portail' && b.exts.includes('miniportail') && DEFS[c].kind === 'unit') return true;
+  const lab = (b.type === 'portail' && b.exts.includes('laboratoire')) || (b.type === 'nanoassembleur' && b.exts.includes('totem'));
+  return lab && ((DEFS[a].kind === 'unit' && research(c)) || (research(a) && DEFS[c].kind === 'unit'));
+}
+
+/** What a queue's item does once done: a god's level, a morph, an extension, a research, a unit. */
+export function finish(this: World, b: Entity, type: string, kit = ''): void {
+  {
+    if (type === 'niveau') return this.ascend(b);
     const up = DEFS[type];
-    if (up.kind === 'building') {
-      this.morph(b, type);
-      this.next(b);
-      return;
-    }
+    if (up.kind === 'building') return this.morph(b, type);
     if (up.kind === 'upgrade' && up.host) {
       // An Isdaris extension: onto this building, its own.
       b.exts.push(type);
       this.say(b.owner, `${b.def.name} : ${up.name}.`, 'done');
-      this.next(b);
       return;
     }
     if (up.kind === 'upgrade') {
@@ -360,11 +371,9 @@ export function produce(this: World, b: Entity): void {
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && (u.type === 'drone' || u.type === 'dronecombat')) this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
       if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'auraputride'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
-      this.next(b);
       return;
     }
     this.deliver(b, type, kit);
-    this.next(b);
   }
 }
 

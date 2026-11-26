@@ -96,21 +96,10 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   } else if (name === 'feucirculaire') {
     for (const t of around(ab.radius!, (t) => this.hostile(t.owner, e.owner))) this.hit(e, t, { damage: ab.damage!, range: 1, cooldown: 0 });
   } else if (name === 'manteau') {
-    for (const t of around(ab.radius!, (t) => t.owner === e.owner)) t.camo = ticks(ab.duration);
+    // An aura round the Voyageur while it lasts, not the Voyageur itself (équilibreur 24/11): World.shrouded.
+    e.veil = ticks(ab.duration);
   } else if (name === 'dephasage') {
     e.phased = ticks(ab.duration);
-  } else if (name === 'couloir') {
-    // Through the corridor to the nearest other Espion of ours.
-    const other = [...this.entities.values()].filter((o) => o !== e && o.owner === e.owner && o.type === 'espion').sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.id - b.id)[0];
-    if (!other) return void this.say(e.owner, 'Il faut un second Espion.');
-    // As many as 8 supply (2010 sheet).
-    let room = ab.max!;
-    for (const t of around(ab.radius!, (t) => t.owner === e.owner && t !== e && !flies(t))) {
-      const supply = (t.def as UnitDef).supply;
-      if (supply > room) continue;
-      room -= supply;
-      this.place(t, other.x, other.y);
-    }
   } else if (name === 'decollage') {
     // Take off, or land where the ground is open; either takes a moment.
     if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
@@ -282,6 +271,32 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const copy = this.spawn(t.type, e.owner, t.x + (t.x < idiv(this.map.width * FP, 2) ? FP : -FP), t.y);
     copy.ttl = ticks(ab.duration);
     copy.illusion = true;
+  } else if (name === 'concentration') {
+    // Druide (équilibreur 24/11, Isdaris.doc): a block of energy no one walks through, a disc of 3, for 15 s; it does
+    // not stop shots (a Mur d'énergie does).
+    const tiles: number[] = [];
+    const r = toFp(ab.radius!);
+    for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++)
+      for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) if (this.grid.inside(tx, ty) && dist(tx * FP + FP / 2, ty * FP + FP / 2, x, y) <= r) tiles.push(ty * this.grid.width + tx);
+    this.forbid(e.owner, tiles, ticks(ab.duration), true);
+  } else if (name === 'ciblage') {
+    // Espion (équilibreur 24/11): the enemies there now, units and buildings, marked for 30 s wherever they go.
+    let any = false;
+    for (const t of this.entities.values()) {
+      if (t.def.kind === 'resource' || t.hp <= 0 || t.inside || !this.hostile(t.owner, e.owner) || dist(t.x, t.y, x, y) > toFp(ab.radius!) + t.radius) continue;
+      t.marked = ticks(ab.duration);
+      any = true;
+    }
+    if (!any) return false;
+  } else if (name === 'couloir') {
+    // Couloir temporel (équilibreur 24/11): to another Espion of ours, any distance, for 30 s.
+    const other = [...this.entities.values()].find((o) => o !== e && o.owner === e.owner && o.type === 'espion' && o.hp > 0 && dist(o.x, o.y, x, y) <= o.radius + toFp(ab.radius!));
+    if (!other) {
+      this.say(e.owner, 'Visez un autre de vos Espions.');
+      return true;
+    }
+    this.tunnels = this.tunnels.filter((t) => t.a !== e.id && t.b !== e.id && t.a !== other.id && t.b !== other.id);
+    this.tunnels.push({ owner: e.owner, a: e.id, b: other.id, left: ticks(ab.duration), crossed: 0, supply: 0 });
   } else if (name === 'deflagration') {
     const t = [...this.entities.values()]
       .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
@@ -554,20 +569,54 @@ export function wall(this: World, owner: number, from: Entity, x: number, y: num
     const [tx, ty] = [tileOf(x + Math.trunc((ux * k * FP) / 2)), tileOf(y + Math.trunc((uy * k * FP) / 2))];
     if (this.grid.inside(tx, ty)) tiles.add(ty * this.grid.width + tx);
   }
+  this.forbid(owner, [...tiles], left);
+}
+
+/** Tiles no one walks through for a while (Mur d'énergie, Concentration énergétique: `field`, which lets shots by). */
+export function forbid(this: World, owner: number, tiles: number[], left: number, field = false): void {
   for (const i of tiles) this.grid.blocked[i]++;
   this.grid.changes++;
-  this.walls.push({ owner, tiles: [...tiles], left });
-  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+  this.walls.push(field ? { owner, tiles, left, field } : { owner, tiles, left });
+  const on = new Set(tiles);
+  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && on.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+}
+
+/** Redéploiement (équilibreur 24/11): an Orbe plasma bound for a spot of the construction zone, still and silent 17 s,
+ * then there, still and silent 17 s more; paid at once, nothing back if it cannot go. */
+export function redeploy(this: World, b: Entity, x: number, y: number): void {
+  const ab = ABILITIES.redeploiement;
+  if (b.buildLeft > 0 || b.muted > 0) return;
+  const size = (b.def as BuildingDef).size;
+  const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
+  if (!this.canPlace(b.type, tx, ty, b.owner)) return void this.say(b.owner, 'Hors de la zone de construction.');
+  const p = this.players[b.owner];
+  if (p.minerals < (ab.minerals ?? 0)) return void this.say(b.owner, 'Pas assez de minerais.');
+  p.minerals -= ab.minerals ?? 0;
+  b.muted = ticks(ab.duration);
+  this.redeploys.push({ id: b.id, tx, ty, left: ticks(ab.duration) });
+}
+
+/** The first 17 s over: the Orbe goes, if its spot is still in the zone and free; then 17 s more still and silent. */
+export function redeployed(this: World, r: { id: number; tx: number; ty: number }): void {
+  const b = this.entities.get(r.id);
+  if (!b || b.hp <= 0) return;
+  b.muted = 0;
+  this.block(b, -1);
+  const free = this.canPlace(b.type, r.tx, r.ty, b.owner);
+  this.block(b, 1);
+  if (!free) return void this.say(b.owner, 'Redéploiement annulé : zone de construction perdue.');
+  this.transmute(b, b.type, r.tx, r.ty);
+  b.muted = ticks(ABILITIES.redeploiement.duration);
 }
 
 /** Where a shot from (x1, y1) to (x2, y2) meets a Mur d'énergie, if it does. */
 export function walled(this: World, x1: number, y1: number, x2: number, y2: number): { x: number; y: number } | undefined {
-  if (!this.walls.length) return undefined;
+  if (!this.walls.some((m) => !m.field)) return undefined;
   const steps = Math.ceil((dist(x1, y1, x2, y2) * 2) / FP);
   for (let k = 1; k < steps; k++) {
     const [x, y] = [x1 + Math.trunc(((x2 - x1) * k) / steps), y1 + Math.trunc(((y2 - y1) * k) / steps)];
     const i = tileOf(y) * this.grid.width + tileOf(x);
-    if (this.walls.some((m) => m.tiles.includes(i))) return { x, y };
+    if (this.walls.some((m) => !m.field && m.tiles.includes(i))) return { x, y };
   }
   return undefined;
 }

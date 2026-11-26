@@ -170,6 +170,12 @@ export interface Entity {
   airborne: boolean;
   /** Créature under ground (Enfouissement). */
   burrowed: boolean;
+  /** Ticks left: marked by an Espion's Ciblage, it takes 10 % more damage (équilibreur 24/11). */
+  marked: number;
+  /** Ticks left: an Orbe plasma being redeployed, still and silent (équilibreur 24/11). */
+  muted: number;
+  /** Ticks left of a Voyageur's Manteau: an aura hiding its allies round it, not itself (équilibreur 24/11). */
+  veil: number;
   /** Ticks left: phased out, unhurt and unable to fight (Module déphasant, Porte de déphasage); sending damage back (Sphère de renvoi). */
   phased: number;
   reflect: number;
@@ -347,6 +353,8 @@ interface Lists {
   councils: Entity[];
   odins: Entity[];
   athenas: Entity[];
+  /** Drones protecteurs (équilibreur 24/11). */
+  guards: Entity[];
   shielded: Entity[];
 }
 
@@ -369,6 +377,10 @@ export class World {
   phaseGroups: { owner: number; ids: number[]; left: number }[] = [];
   /** Canon orbital shots on their way: they strike when `left` runs out. */
   strikes: { owner: number; x: number; y: number; left: number }[] = [];
+  /** Couloirs temporels between two Espions (équilibreur 24/11): crossings and supply through so far. */
+  tunnels: { owner: number; a: number; b: number; left: number; crossed: number; supply: number }[] = [];
+  /** Orbes plasma on their way (Redéploiement, équilibreur 24/11): the tile they go to, the ticks before they go. */
+  redeploys: { id: number; tx: number; ty: number; left: number }[] = [];
   readonly vision: Vision[];
   /** For each player, the ids of its team (itself included); set with setTeams. */
   private team: number[][];
@@ -377,7 +389,7 @@ export class World {
   /** Zones revealed by a Forge's Observation céleste, with ticks left. */
   scans: { owner: number; x: number; y: number; left: number; radius?: number }[] = [];
   /** Murs d'énergie (Concentrateur): tiles no unit nor shot crosses, with ticks left. */
-  walls: { owner: number; tiles: number[]; left: number }[] = [];
+  walls: { owner: number; tiles: number[]; left: number; field?: boolean }[] = [];
   /** Silence des ions: zones where no ability can be used, until a tick. */
   silences: { x: number; y: number; r: number; until: number }[] = [];
   /** Tempêtes de sable (Seth): zones where the owner's enemies cannot shoot, until a tick. */
@@ -414,7 +426,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, raising: 0, autoOff: false, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, marked: 0, muted: 0, veil: 0, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -469,6 +481,10 @@ export class World {
     for (const r of this.recalls) if (--r.left === 0) this.land(r);
     this.recalls = this.recalls.filter((r) => r.left > 0);
     for (const s of this.strikes) if (--s.left === 0) this.orbitalHit(s);
+    for (const t of this.tunnels) t.left--;
+    this.tunnels = this.tunnels.filter((t) => t.left > 0 && this.entities.has(t.a) && this.entities.has(t.b));
+    for (const r of this.redeploys) if (--r.left === 0) this.redeployed(r);
+    this.redeploys = this.redeploys.filter((r) => r.left > 0);
     this.strikes = this.strikes.filter((s) => s.left > 0);
     this.phaseGroups = this.phaseGroups.filter((g) => --g.left > 0);
     if (this.tick % 4 === 0) this.see();
@@ -492,6 +508,9 @@ export class World {
       if (e.held > 0) e.held--;
       if (e.camo > 0) e.camo--;
       if (e.phased > 0) e.phased--;
+      if (e.marked > 0) e.marked--;
+      if (e.muted > 0) e.muted--;
+      if (e.veil > 0) e.veil--;
       if (e.reflect > 0) e.reflect--;
       if (e.invuln > 0) e.invuln--;
       // Régénérant wears off: the toxins turn on their host, 1 HP left (the balancer, 2026-11-22).
@@ -587,10 +606,19 @@ export class World {
     this.shrouded.clear();
     // The Déflecteurs listed first: the units are then looked through once, and only if there is one.
     const veils: [Entity, number][] = [];
+    // A Voyageur's Manteau (équilibreur 24/11): an aura while it lasts; who walks out of it shows, who walks in hides,
+    // flyers too; the Voyageur itself stays seen.
+    const cloaks: [Entity, number][] = [];
     for (const d of this.entities.values()) {
       const r = (d.def as BuildingDef).cloakAura;
       if (r && d.buildLeft === 0) veils.push([d, toFp(r)]);
+      if (d.veil > 0 && d.hp > 0) cloaks.push([d, toFp(ABILITIES.manteau.radius!)]);
     }
+    if (cloaks.length)
+      for (const u of this.entities.values()) {
+        if (u.def.kind !== 'unit' || u.inside) continue;
+        for (const [d, r] of cloaks) if (u !== d && u.owner === d.owner && dist(u.x, u.y, d.x, d.y) <= r) this.shrouded.add(u.id);
+      }
     if (veils.length)
       for (const u of this.entities.values()) {
         if (u.def.kind !== 'unit' || flies(u)) continue;
@@ -889,17 +917,23 @@ export class World {
   private lists: Lists | null = null;
   listed(): Lists {
     if (this.lists) return this.lists;
-    const l: Lists = { dropoffs: [], fields: [], councils: [], odins: [], athenas: [], shielded: [] };
+    const l: Lists = { dropoffs: [], fields: [], councils: [], odins: [], athenas: [], guards: [], shielded: [] };
     for (const e of this.entities.values()) {
       if ((e.def as BuildingDef).dropoff) l.dropoffs.push(e);
       if (e.type === 'minerai') l.fields.push(e);
       else if (e.type === 'conseil' || e.type === 'grandconseil') l.councils.push(e);
       else if (e.type === 'odin') l.odins.push(e);
       else if (e.type === 'athena') l.athenas.push(e);
+      else if (e.type === 'droneprotecteur') l.guards.push(e);
       if (e.maxShield > 0) l.shielded.push(e);
     }
     return (this.lists = l);
   }
+  /** The Couloir temporel an Espion is an end of, if open. */
+  tunnelOf(e: Entity): World['tunnels'][number] | undefined {
+    return this.tunnels.find((t) => t.left > 0 && (t.a === e.id || t.b === e.id));
+  }
+
   /** The lists are out of date (an entity came, went, changed type or gained a shield). */
   unlist(): void {
     this.lists = null;
@@ -988,6 +1022,19 @@ export class World {
       }
       case 'enter': {
         const b = this.entities.get(o.target);
+        const tunnel = b && b.type === 'espion' ? this.tunnelOf(b) : undefined;
+        if (tunnel) {
+          // Couloir temporel (équilibreur 24/11): at the Espion, out beside the other one; closed after 5 crossings or
+          // 8 of supply.
+          if (this.gap(e, b!) > FP) return this.chase(e, b!);
+          const other = this.entities.get(tunnel.a === b!.id ? tunnel.b : tunnel.a)!;
+          this.place(e, other.x, other.y + other.radius + e.radius);
+          this.teleports.push({ phase: 'end', owner: e.owner, x1: b!.x, y1: b!.y, x2: other.x, y2: other.y, ids: [e.id] });
+          tunnel.crossed++;
+          tunnel.supply += (e.def as UnitDef).supply ?? 0;
+          if (tunnel.crossed >= ABILITIES.couloir.max! || tunnel.supply >= ABILITIES.couloir.supply!) tunnel.left = 0;
+          return;
+        }
         const room = b && this.room(b);
         // Checked again on arrival: a Scarabée may have been lifted into a Bourdon meanwhile, or filled.
         if (!b || !room || b.hp <= 0 || b.owner !== e.owner || !this.boards(e, b)) return this.setOrder(e, null);

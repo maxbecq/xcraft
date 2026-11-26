@@ -49,6 +49,17 @@ export const HUMAINS_GLYPHS: Record<string, string> = {
 /** Isdaris: the Portail, Psycho-assembleur and Orbe researches, and their units' and buildings' powers. */
 export const ISDARIS_GLYPHS: Record<string, string> = {
   canonorbital: 'M9 3h6v4H9zM4 5h5M15 5h5M12 7v10M8 17h8l-4 4z',
+  // Équilibreur 24/11: the Druide's block, the Espion's mark, the shields' switch, and the passives' icons.
+  concentration: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M3 12h2M19 12h2',
+  ciblage: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 1v6M12 17v6M1 12h6M17 12h6M12 11v2',
+  autorecharge: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6zM13 7l-3 5h4l-3 5',
+  singularite: 'M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M12 3c5 0 9 4 9 9M12 21c-5 0-9-4-9-9M5 5l3 3M19 19l-3-3',
+  disquetournoyant: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9M21 12l-2-2M3 12l2 2',
+  disque: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9M21 12l-2-2M3 12l2 2',
+  protection: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6zM9 12h6',
+  dansesoldat: 'M12 4a2 2 0 1 0 0 .01M12 7v6l-4 7M12 13l4 7M7 9l5-2 5 2',
+  voiledeflecteur: 'M3 12c3-5 6-7 9-7s6 2 9 7M3 12c3 5 6 7 9 7s6-2 9-7M4 20L20 4',
+  detecteurorbe: 'M2 12c3-5 6-7 10-7s7 2 10 7c-3 5-6 7-10 7s-7-2-10-7zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
   chocmental: 'M8 21v-4a7 7 0 1 1 8-6l1 3h-2v3h-3v4M14 7l-2 3h3l-2 3',
   couloir: 'M3 19V8a3 3 0 0 1 6 0v11M15 19V8a3 3 0 0 1 6 0v11M8 13h8M13 10l3 3-3 3',
   deflagration: 'M2 20l9-9M5 22l7-7M2 17l7-7M12 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0',

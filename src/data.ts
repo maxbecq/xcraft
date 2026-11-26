@@ -289,6 +289,8 @@ export interface AbilityDef {
   vs?: number[];
   /** Gaz euphorisant: percent of their full health the allies give for it (équilibreur 23/11). */
   drain?: number;
+  /** Couloir temporel: the supply that may cross before it closes. */
+  supply?: number;
   /** Most units it moves at once. */
   max?: number;
   /** Percent of its damage it does to buildings (Pluie de feu: balance designer 2026-11-22). */
@@ -423,6 +425,19 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Assassin (notice): overwhelms the mind of the enemy nearest the point, which cannot move nor fight for a while. */
   chocmental: { name: 'Choc mental', effect: 'L\'ennemi visé ne peut plus bouger ni combattre un moment.', hotkey: 'M', target: 'point', research: 'chocmental', ...BALANCE.abilities.chocmental },
   /** Druide (notice): a perfect energy double of the ally nearest the point, for a while. */
+  /** Druide (équilibreur 24/11, in place of the Déflagration): a block of energy no one walks through, for a while. */
+  concentration: { name: 'Concentration énergétique', effect: 'Crée au sol un bloc d\'énergie infranchissable de rayon 3, un moment.', hotkey: 'G', target: 'point', ...BALANCE.abilities.concentration },
+  /** Espion (équilibreur 24/11): the enemies of a zone take 10 % more damage for 30 s, wherever they go. */
+  ciblage: { name: 'Ciblage', effect: 'Les unités et bâtiments ennemis de la zone encaissent 10 % de dégâts en plus pendant 30 s, même s\'ils en sortent.', hotkey: 'B', target: 'point', ...BALANCE.abilities.ciblage },
+  /** Réserve psy, Voyageur (équilibreur 24/11): their Recharge de bouclier, on by default. */
+  autorecharge: { name: 'Recharge de bouclier automatique', effect: 'Active ou coupe la recharge automatique des boucliers alliés proches.', hotkey: 'W', target: 'self', cooldown: 0, duration: 0 } as AbilityDef,
+  // Passives shown as an icon (équilibreur 24/11).
+  singularite: { name: 'Attaque de singularité', effect: 'Effet permanent : chaque attaque du Druide retire autant d\'énergie que de points de vie à sa cible.', hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  disquetournoyant: { name: 'Disque tournoyant', effect: `Effet permanent, après sa recherche au Totem : chaque attaque inflige ${BALANCE.abilities.disquetournoyant.damage} % de ses dégâts aux ennemis à ${BALANCE.abilities.disquetournoyant.radius} cases autour de la cible.`, hotkey: '', research: 'disque', ...BALANCE.abilities.disquetournoyant } as AbilityDef,
+  protection: { name: 'Bouclier protecteur', effect: `Effet permanent : les unités alliées à ${BALANCE.abilities.protection.radius} cases du drone (lui compris) subissent ${BALANCE.abilities.protection.damage} dégâts de moins par coup.`, hotkey: '', ...BALANCE.abilities.protection } as AbilityDef,
+  dansesoldat: { name: 'Danse du soldat', effect: `Effet permanent : l'Assassin ne subit que ${BALANCE.rules.upgrades.danseDuSoldat} % des dégâts.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  voiledeflecteur: { name: 'Voile', effect: `Effet permanent : rend invisibles les unités alliées au sol à ${BALANCE.units.deflecteur.cloakAura} cases.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
+  detecteurorbe: { name: 'Détecteur', effect: `Effet permanent : révèle les unités invisibles à ${BALANCE.units.orbe.detector} cases.`, hotkey: '', cooldown: 0, duration: 0 } as AbilityDef,
   double: { name: 'Double énergétique', effect: 'Crée un leurre de l\'allié visé : mêmes points de vie, mais il n\'attaque pas.', hotkey: 'O', target: 'point', ...BALANCE.abilities.double },
   /** Druide (notice): a bolt of plasma on the enemy nearest the point. */
   deflagration: { name: 'Déflagration', effect: 'Un trait de plasma sur l\'ennemi visé.', hotkey: 'G', target: 'point', research: 'deflagration', ...BALANCE.abilities.deflagration },
@@ -433,7 +448,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Baliste plasma (notice): the cannon spins, firing at every enemy around. */
   feucirculaire: { name: 'Feu circulaire', effect: 'Le canon tourne sur lui-même et tire sur tous les ennemis autour.', hotkey: 'F', research: 'feucirculaire', ...BALANCE.abilities.feucirculaire },
   /** Espion (notice): with another Espion, a time corridor: the units round this one appear by the other. */
-  couloir: { name: 'Couloir temporel', effect: 'Avec un second Espion : les unités autour de celui-ci apparaissent près de l\'autre.', hotkey: 'C', research: 'couloir', ...BALANCE.abilities.couloir },
+  couloir: { name: 'Couloir temporel', effect: 'Relie cet Espion à un autre des vôtres pendant 30 s : un clic droit sur l\'un fait passer l\'unité près de l\'autre ; le couloir se ferme après 5 passages ou 8 de ravitaillement.', hotkey: 'C', target: 'point', research: 'couloir', ...BALANCE.abilities.couloir },
   /** Voyageur (notice): a cloak of negative energy over itself and the allies round it. */
   manteau: { name: 'Manteau', effect: 'Un manteau d\'énergie négative sur le Voyageur et les alliés autour.', hotkey: 'M', research: 'manteau', ...BALANCE.abilities.manteau },
   /** Voyageur (notice): itself and the allies round it appear by the friendly building nearest the point. */
@@ -488,7 +503,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Isdaris Orbe plasma (notice: « capable de se déplacer lentement » ; fiche: Redéploiement, 50 minerals, every 35 s). */
   /** Intelligence centrale (notice): the drones nearby shelter inside. */
   refuge: { name: 'Refuge', effect: 'Les serfs proches s\'abritent dans le Conseil, six au plus.', hotkey: 'R', target: 'self', ...BALANCE.abilities.refuge },
-  redeploiement: { name: 'Redéploiement', effect: 'L’Orbe se détache et se déplace lentement, sans tirer ; on la repose ensuite dans un champ d’énergie.', hotkey: 'R', target: 'self', ...BALANCE.abilities.redeploiement },
+  redeploiement: { name: 'Redéploiement', effect: 'Vers un point de la zone de construction : l’Orbe reste immobile et ne tire plus 17 s, est téléportée, puis 17 s encore.', hotkey: 'R', target: 'point', ...BALANCE.abilities.redeploiement },
   ancrer: { name: 'Reposer', effect: 'Se repose au point visé, dans un champ d’énergie, et tire de nouveau peu après.', hotkey: 'R', target: 'point', ...BALANCE.abilities.ancrer },
   enraciner: { name: 'Enraciner', effect: 'Reprend racine au point visé.', hotkey: 'E', target: 'point', ...BALANCE.abilities.enraciner },
   /** Minotaure (notice): an enraged trance, its blows much harder for a while. */
@@ -637,32 +652,32 @@ const BASE: Record<string, object> = {
   // Équilibreur 24/11: only from a Portail with its Miniportail.
   archer: { kind: 'unit', name: 'Archer', radius: 0.375, requires: { miniportail: 1 }, faction: 'isdaris', hotkey: 'A' },
   creature: { kind: 'unit', name: 'Créature', radius: 0.3, ability: 'enfouissement', faction: 'isdaris', hotkey: 'C' },
-  druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'deflagration', 'silence'], faction: 'isdaris', hotkey: 'D' },
+  druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'concentration', 'silence'], passives: ['singularite'], faction: 'isdaris', hotkey: 'D' },
   // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
-  assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', faction: 'isdaris', hotkey: 'X' },
+  assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', passives: ['dansesoldat'], faction: 'isdaris', hotkey: 'X' },
   obelisque: { kind: 'building', name: 'Obélisque', size: 4, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], researches: ['cercle1', 'cercle2'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' }, // Cercle d'énergie here (équilibreur 24/11)
   emetteur: { kind: 'building', name: 'Émetteur', size: 2, warp: true, morphs: ['pylonesanglant', 'deflecteur'], faction: 'isdaris', hotkey: 'E' },
   // Notice: an Émetteur turned « Déflecteur »: an aura of invisibility over the allied infantry and vehicles round it.
-  deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'D' },
+  deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, passives: ['voiledeflecteur'], faction: 'isdaris', hotkey: 'D' },
   // Mod: an Émetteur turned into a « Pylône sanglant » (annihilateur de matière: 200 every 6.6 s, range 10, ground only).
   // The mod asks for an Orbe de commandement, not in the game yet: a Nano-assembleur stands in.
   pylonesanglant: { kind: 'building', name: 'Pylône sanglant', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'P' },
-  reservepsy: { kind: 'building', name: 'Réserve psy', size: 2, warp: true, needsPower: true, faction: 'isdaris', hotkey: 'P' },
+  reservepsy: { kind: 'building', name: 'Réserve psy', size: 2, warp: true, needsPower: true, abilities: ['autorecharge'], faction: 'isdaris', hotkey: 'P' },
   portail: {
     kind: 'building', name: 'Portail', size: 3, trains: ['archer', 'creature', 'druide', 'assassin'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'T',
-    researches: ['miniportail', 'cuvegenetique', 'laboratoire', 'portailatk1', 'portailatk2', 'portailatk3', 'portailarmor1', 'portailarmor2', 'portailarmor3', 'enfouissement', 'deflagration', 'silence'],
+    researches: ['miniportail', 'cuvegenetique', 'laboratoire', 'portailatk1', 'portailatk2', 'portailatk3', 'portailarmor1', 'portailarmor2', 'portailarmor3', 'enfouissement', 'silence'],
   },
   recepteur: { kind: 'building', name: 'Récepteur', size: 3, warp: true, morphs: ['recepteurarme'], faction: 'isdaris', hotkey: 'R' },
   // Mod: « Récepteur armé », the Récepteur with a plasma arc (as the Orbe's), still drawing energy.
   recepteurarme: { kind: 'building', name: 'Récepteur armé', size: 3, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'A' },
   // Mod: « Orbe plasmique ».
-  orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, ability: 'redeploiement', faction: 'isdaris', hotkey: 'B' },
+  orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, ability: 'redeploiement', passives: ['detecteurorbe'], faction: 'isdaris', hotkey: 'B' },
   /** Redéploiement: an Orbe plasma on the move; it does not shoot until set down again. */
   orbemob: { kind: 'unit', name: 'Orbe plasma (en mouvement)', radius: 0.9, ability: 'ancrer', faction: 'isdaris', hotkey: 'B' },
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: {
-    kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N',
-    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'manteau', 'feucirculaire', 'couloir'],
+    kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['droneprotecteur', 'discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N',
+    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'disque', 'manteau', 'feucirculaire', 'couloir'],
   },
   // Notice: « Orbe de commandement », the fourth major building, for large battles: shields research, and its extensions.
   orbecommandement: {
@@ -675,18 +690,20 @@ const BASE: Record<string, object> = {
     researches: ['relais', 'porte', 'concentrateur'],
   },
   // Mod: disque de plasma, 40 (30 against massive targets and buildings).
-  discobole: { kind: 'unit', name: 'Chasseur Discobole', radius: 0.5, mechanical: true, requires: { assembleur: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'D' },
+  discobole: { kind: 'unit', name: 'Chasseur Discobole', radius: 0.5, mechanical: true, requires: { assembleur: 1 }, ability: 'teleport', passives: ['disquetournoyant'], faction: 'isdaris', hotkey: 'D' },
   // Notice: « Baliste plasma », a levitating ion cannon, slower but tougher than the Porte-disques (mod « Baliste »).
   baliste: { kind: 'unit', name: 'Baliste plasma', radius: 0.6, mechanical: true, requires: { assembleur: 1 }, ability: 'feucirculaire', faction: 'isdaris', hotkey: 'B' },
   // Notice: « Espion », an unarmed scout that detects hidden units and opens time corridors (mod « Prisme »).
-  espion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'couloir', faction: 'isdaris', hotkey: 'E' },
+  espion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'couloir', abilities: ['ciblage'], faction: 'isdaris', hotkey: 'E' },
   // Notice: « Dragon », the Chimère made for space battles: plasma concentrators against flyers only, long range.
   dragon: { kind: 'unit', name: 'Dragon', radius: 0.5, flying: true, mechanical: true, requires: { balise: 1, pyramide: 1 }, faction: 'isdaris', hotkey: 'G' }, // no Téléportation (équilibreur 24/11)
   // Notice: « Voyageur », an unarmed flying generator: detects, recharges shields, cloaks, teleports, reflects.
-  voyageur: { kind: 'unit', name: 'Voyageur', radius: 0.7, flying: true, mechanical: true, requires: { totem: 1 }, abilities: ['manteau', 'teleportgroupe', 'renvoi'], faction: 'isdaris', hotkey: 'V' },
+  voyageur: { kind: 'unit', name: 'Voyageur', radius: 0.7, flying: true, mechanical: true, requires: { totem: 1 }, abilities: ['manteau', 'teleportgroupe', 'renvoi', 'autorecharge'], faction: 'isdaris', hotkey: 'V' },
   // Notice: « Béhémoth », a flying fortress with a building's shield and unmatched firepower; it can phase out.
   behemoth: { kind: 'unit', name: 'Béhémoth', radius: 1.1, flying: true, mechanical: true, requires: { balise: 1, trone: 1 }, ability: 'dephasage', faction: 'isdaris', hotkey: 'H' },
 
+  // Équilibreur 24/11 (Isdaris.doc): unarmed, it shields the allies round it; drawn as a small Baliste for now.
+  droneprotecteur: { kind: 'unit', name: 'Drone protecteur', radius: 0.4, mechanical: true, passives: ['protection'], faction: 'isdaris', hotkey: 'P' },
   // Mod: « Chimère » (green Nano-assembleur), a flying hunter: ion blaster, 21 a second, air and ground.
   chimere: { kind: 'unit', name: 'Chimère', radius: 0.45, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'C' },
   // Isdaris research (notice). Extensions: built onto one host building each (notice: three per major building).
@@ -697,6 +714,7 @@ const BASE: Record<string, object> = {
   ...upgrades('portailarmor', 'Blindage portail', 'J', { laboratoire: 1 }, 'isdaris'),
   enfouissement: isd('Enfouissement', 'F', "Les Créatures s'enfouissent, invisibles, et jaillissent quand un ennemi approche.", { laboratoire: 1 }),
   deflagration: isd('Déflagration', 'G', 'Les Druides lancent un éclair de plasma dévastateur.', { laboratoire: 1 }),
+  disque: isd('Disque tournoyant', 'Q', 'Chasseurs discoboles : chaque attaque touche aussi les ennemis autour de la cible (15 %).', { totem: 1 }),
   silence: isd('Silence des ions', 'I', "Les Druides empêchent l'usage des capacités dans une zone.", { laboratoire: 1 }),
   assembleur: extension('Assembleur inférieur', 'A', 'Véhicules terrestres : Porte-disques, Baliste plasma.', 'nanoassembleur'),
   balise: extension('Balise', 'L', 'Unités aériennes : Espion, Chimère, Dragon, Béhémoth.', 'nanoassembleur'),
@@ -1053,9 +1071,9 @@ export function withKit(def: { cost: Cost }, weapon?: string): Cost {
 export const HQ_TYPES = ['conseil', 'grandconseil', 'obelisque', 'intelligence', 'supreme', 'asgaard'];
 export const HQ_MINERAL_GAP = 3;
 
-export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', casernevolante: 'caserne', casernevol: 'casernevolante', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', silo: 'grenier', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
+export const LOOKS: Record<string, string> = { elembase: 'elementaire', fantome: 'esprit', furieux: 'protecteur', branchemob: 'branche', protecteurmob: 'protecteur', furieuxmob: 'protecteur', orbemob: 'orbe', droneprotecteur: 'baliste', casernevolante: 'caserne', casernevol: 'casernevolante', dirigeable: 'bourdon', minealchimique: 'minechimique', grandconseil: 'conseil', grandealchimisterie: 'alchimisterie', silo: 'grenier', cadavre: 'serf', supreme: 'intelligence', podsup: 'pod' };
 /** Size of those stand-in models against the original's. */
-export const LOOK_SCALE: Record<string, number> = { dirigeable: 1.3, silo: 1.15, belluaire: 1.3, ankylosaure: 1.35, creaturium: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
+export const LOOK_SCALE: Record<string, number> = { droneprotecteur: 0.6, dirigeable: 1.3, silo: 1.15, belluaire: 1.3, ankylosaure: 1.35, creaturium: 1.3, elembase: 0.7, grandconseil: 1.1, furieux: 1.2, supreme: 1.1, podsup: 1.15 };
 
 /** Altitude of flying units above the ground, in tiles (render only). */
 export const FLY_HEIGHT = 2.2;

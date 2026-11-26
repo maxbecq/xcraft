@@ -239,6 +239,9 @@ export function hurt(this: World, t: Entity, damage: number): number {
   // caster take half the damage; several clouds over the same spot do not add up.
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
   if (t.def.kind === 'unit' && (t.def as UnitDef).mechanical && this.coned(t)) damage = idiv(damage, 2);
+  // Ciblage (équilibreur 24/11): 10 % more on what an Espion marked; a Drone protecteur near: 2 less (one drone counts).
+  if (t.marked > 0) damage += idiv(damage * ABILITIES.ciblage.damage!, 100);
+  if (t.def.kind === 'unit' && this.guarded(t)) damage = Math.max(1, damage - ABILITIES.protection.damage!);
   // Régénérant (the balancer, 2026-11-22): the host takes 5 % of the damage.
   if (t.ferveur > 0) damage = Math.max(1, idiv(damage * BALANCE.rules.upgrades.regenerantTaken, 100));
   // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.
@@ -254,6 +257,13 @@ export function hurt(this: World, t: Entity, damage: number): number {
     return absorbed + Math.min(lost, had);
   }
   return absorbed;
+}
+
+/** A unit within a Drone protecteur's reach, of the drone's side (the drone itself too). */
+export function guarded(this: World, t: Entity): boolean {
+  const r = toFp(ABILITIES.protection.radius!);
+  for (const g of this.listed().guards) if (g.owner === t.owner && g.hp > 0 && !g.inside && dist(g.x, g.y, t.x, t.y) <= r) return true;
+  return false;
 }
 
 /** Shields recharge a few seconds after the last hit (at once, and faster, near a psy reserve); some units heal. */
@@ -278,7 +288,8 @@ export function regenerate(this: World, e: Entity): void {
  */
 export function rechargeShields(this: World, e: Entity): void {
   const ab = ABILITIES.rechargebouclier;
-  if (!(e.def as BuildingDef).shieldCharge || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
+  // Switched off by its button (équilibreur 24/11: on by default).
+  if (!(e.def as BuildingDef).shieldCharge || e.autoOff || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
   let best: Entity | undefined;
   // Outside the units' turn there is no index of who is where (it is made after this): only what carries a shield is
   // gone through, not every entity, once a tick for each Réserve psy and Voyageur ready to give. The pick does not
@@ -574,6 +585,18 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     if ((t.reflectLeft -= back) <= 0) t.reflect = 0;
   }
   const dealt = this.hurt(t, damage);
+  // Attaque de singularité (équilibreur 24/11): the Druide's blow drains as much energy as it takes hit points.
+  if (e.type === 'druide' && t.mana > 0) t.mana = Math.max(0, t.mana - toFp(dealt));
+  // Disque tournoyant (équilibreur 24/11, after its research): 15 % of what the target took to the enemies round it.
+  if (e.type === 'discobole' && e.owner >= 0 && this.level(e.owner, 'disque')) {
+    const D = ABILITIES.disquetournoyant;
+    const share = idiv(dealt * D.damage!, 100);
+    if (share > 0)
+      for (const o of [...this.entities.values()]) {
+        if (o === t || o.def.kind === 'resource' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner) || this.gap(t, o) > toFp(D.radius!)) continue;
+        this.hurt(o, share);
+      }
+  }
   // Armée des enfers (notice): a ghost vanishes once it has dealt its share of damage (or when its time is up).
   if (e.type === 'fantome' && (e.dealt += dealt) >= U.fantomeDamage) e.hp = 0;
   // Z Jet sonique: every ground unit on the line from the shooter to its target is hit too, friend or foe (Z.doc).
