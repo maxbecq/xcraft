@@ -121,7 +121,7 @@ out = {
     'terrain': terrain, 'bases': bases,
 }
 here = os.path.dirname(os.path.abspath(__file__))
-path = os.path.join(here, '..', '..', 'public', 'maps', 'asteroides.json')
+path = os.path.join(here, '..', '..', 'src', 'maps', 'asteroides.json')
 with open(path, 'w') as f:
     json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     f.write('\n')
