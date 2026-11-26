@@ -170,7 +170,6 @@ export const POOLS: Record<string, [number, number, number, number][]> = {
   obelisque: [[0, 0, 2.6, 0x40d8ff]],
   emetteur: [[0, 0, 1.6, 0x40d8ff]],
   reservepsy: [[0, 0, 1.5, 0xb070ff]],
-  portail: [[0, 0.4, 1.8, 0x40d8ff]],
   recepteur: [[0, 0, 1.6, 0xb070ff]],
   minerai: [[0, 0, 1.6, 0xb06020]], // the geodes' halo
   puits: [[0, 0, 2.4, 0xb060ff]],

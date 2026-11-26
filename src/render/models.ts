@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, ShaderChunk, Raycaster, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
+  ShaderMaterial, ShaderChunk, Raycaster, PlaneGeometry, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -367,13 +367,56 @@ function fableLights(scene: Object3D): void {
       o.userData.noShadow = true;
     } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
       m.userData.ripple = true;
-      m.emissiveIntensity = m.name === 'voile' ? 0.75 : 0.5;
+      // Brighter than at first (0.75, 0.5): the user wanted the veil and the glass to shine more (0.9.176), the bloom haloes them.
+      m.emissiveIntensity = m.name === 'voile' ? 1.5 : 1.1;
       ripple(m, m.name === 'voile' ? 1 : 0.5);
     }
   });
   const lintel = scene.getObjectByName('float_linteau');
   if (lintel) lintelBeam(scene, lintel);
   footGlow(scene);
+  for (const name of ['fx_voile', 'fx_verre_g', 'fx_verre_d']) {
+    const o = scene.getObjectByName(name);
+    if (o) glowCard(scene, o, name === 'fx_voile' ? 0.5 : 0.3);
+  }
+}
+
+let cardMaterial: ShaderMaterial | undefined;
+/**
+ * A soft cyan glow round a flat light (the Portail's veil, its spires' glass), so it radiates past its frame (the user's
+ * remark, 0.9.176): a card a little wider and taller than it, standing in its plane, fading to nothing at its edges.
+ */
+function glowCard(scene: Object3D, light: Object3D, pad: number): void {
+  scene.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(light);
+  const size = box.getSize(new Vector3());
+  cardMaterial ??= new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float a = (1.0 - smoothstep(0.25, 1.0, abs(vUv.x - 0.5) * 2.0)) * (1.0 - smoothstep(0.55, 1.0, abs(vUv.y - 0.5) * 2.0));
+        gl_FragColor = vec4(vec3(0.1, 0.6, 1.0) * 1.5, a * 0.4 * vVein);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  const card = new Mesh(new PlaneGeometry(size.x + pad, size.y + pad * 0.6), cardMaterial);
+  card.position.copy(box.getCenter(new Vector3()));
+  card.userData.noPick = true;
+  card.userData.noShadow = true;
+  light.attach(card);
 }
 
 /**
