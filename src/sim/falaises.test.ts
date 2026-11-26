@@ -404,6 +404,21 @@ describe('cliffs', () => {
     expect(seen).toBeGreaterThan(100);
   });
 
+  // Codex, 2026-11-26 (final review): at the map's very middle every way out of a building tied, and evict kept the
+  // first found: player 1's unit stepped the way player 0's did, not the turned way.
+  it('a unit caught under a building at the map\'s very middle walks out the turned way for the other player', () => {
+    const steps = [0, 1].map((owner) => {
+      const w = createMatch(['humains', 'humains']);
+      const C = (w.map.width * FP) / 2;
+      for (let y = C / FP - 2; y < C / FP + 2; y++) for (let x = C / FP - 2; x < C / FP + 2; x++) w.grid.blocked[y * w.grid.width + x]++;
+      const u = w.spawn('serf', owner, C, C);
+      w.evict(u);
+      return [u.x - C, u.y - C];
+    });
+    expect(Math.abs(steps[0][0]) + Math.abs(steps[0][1])).toBeGreaterThan(0);
+    expect(steps[1]).toEqual([-steps[0][0], -steps[0][1]]);
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);

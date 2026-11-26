@@ -1,6 +1,7 @@
 /** Movement: paths, following them, pace, stepping aside, separation. */
 import { KIT, type UnitDef } from '../data';
 import { FP, GAME_SPEED, TICK_RATE, dist, idiv, isqrt, tileOf } from './fixed';
+import { startSite } from './setup';
 import { soars, type Entity, type World } from './world';
 
 const REACH = FP / 4;
@@ -305,11 +306,14 @@ export function evict(this: World, e: Entity): void {
   const from: [number, number] = [(g.width - 1) / 2, (g.height - 1) / 2];
   // On an edge, from each tile it touches: the open tile whose middle is nearest the body, then nearest the map's
   // centre, then on the same turning side of it (all unchanged by the map turned round).
+  // At the map's very middle all of these tie (Codex, 2026-11-26): then nearest its owner's start, which turns too.
   const C = (g.width * FP) / 2;
+  const home = startSite(this, e.owner);
+  const [hx, hy] = home ? [home[0] * FP + 2 * FP, home[1] * FP + 2 * FP] : [C, C];
   const key = ([tx, ty]: [number, number]) => {
     const [px, py] = [tx * FP + FP / 2, ty * FP + FP / 2];
     const cross = (e.x - C) * (py - C) - (e.y - C) * (px - C);
-    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, Math.sign(cross)];
+    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, (px - hx) ** 2 + (py - hy) ** 2, Math.sign(cross)];
   };
   let best: [number, number] | null = null;
   let bk: number[] = [];
