@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, ShaderChunk, Raycaster, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
+  ShaderMaterial, ShaderChunk, Raycaster, PlaneGeometry, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -361,19 +361,72 @@ function fableLights(scene: Object3D): void {
       m.userData.vein = true;
       m.emissiveIntensity = Math.min(m.emissiveIntensity, 1.1); // the Portail's was 4: it whitened the lintel
       veinGlow(m);
+    } else if (m.name === 'orbe_halo') {
+      // The Orbe's pool of light on the ground under it: laid a little higher, so the relief does not swallow it.
+      o.material = orbGround ??= groundGlow();
+      o.position.y += 0.03 / (o.parent?.getWorldScale(new Vector3()).y ?? 1);
+      o.userData.noPick = true;
+      o.userData.noShadow = true;
+    } else if (m.name === 'orbe_coeur' && !m.userData.ripple) {
+      // The Orbe's plasma: its Voronoi cells drift round the sphere and ripple, like currents inside it.
+      m.userData.ripple = true;
+      ripple(m, 1.5, 0.02);
     } else if (m.name.endsWith('_halo')) {
       o.material = halos.get(m) ?? halos.set(m, fableHalo()).get(m)!;
       o.userData.noPick = true;
       o.userData.noShadow = true;
     } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
       m.userData.ripple = true;
-      m.emissiveIntensity = m.name === 'voile' ? 0.75 : 0.5;
+      // Brighter than at first (0.75, 0.5): the user wanted the veil and the glass to shine more (0.9.176), the bloom haloes them.
+      m.emissiveIntensity = m.name === 'voile' ? 1.5 : 1.1;
       ripple(m, m.name === 'voile' ? 1 : 0.5);
     }
   });
   const lintel = scene.getObjectByName('float_linteau');
   if (lintel) lintelBeam(scene, lintel);
   footGlow(scene);
+  for (const name of ['fx_voile', 'fx_verre_g', 'fx_verre_d']) {
+    const o = scene.getObjectByName(name);
+    if (o) glowCard(scene, o, name === 'fx_voile' ? 0.5 : 0.3);
+  }
+}
+
+let cardMaterial: ShaderMaterial | undefined;
+/**
+ * A soft cyan glow round a flat light (the Portail's veil, its spires' glass), so it radiates past its frame (the user's
+ * remark, 0.9.176): a card a little wider and taller than it, standing in its plane, fading to nothing at its edges.
+ */
+function glowCard(scene: Object3D, light: Object3D, pad: number): void {
+  scene.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(light);
+  const size = box.getSize(new Vector3());
+  cardMaterial ??= new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float a = (1.0 - smoothstep(0.25, 1.0, abs(vUv.x - 0.5) * 2.0)) * (1.0 - smoothstep(0.55, 1.0, abs(vUv.y - 0.5) * 2.0));
+        gl_FragColor = vec4(vec3(0.1, 0.6, 1.0) * 1.5, a * 0.4 * vVein);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  const card = new Mesh(new PlaneGeometry(size.x + pad, size.y + pad * 0.6), cardMaterial);
+  card.position.copy(box.getCenter(new Vector3()));
+  card.userData.noPick = true;
+  card.userData.noShadow = true;
+  light.attach(card);
 }
 
 /**
@@ -430,6 +483,32 @@ function glowSquare(): ShaderMaterial {
         float rim = exp(-abs(d - edge) * 50.0) * 0.4;
         // Laid over the marble rather than added to it: added, cyan on white marble only turned white.
         gl_FragColor = vec4(vec3(0.15, 0.95, 1.4) * (0.9 + 0.5 * rim), min(1.0, (glow + rim) * (0.6 + 0.4 * vVein)));
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+}
+
+let orbGround: ShaderMaterial | undefined;
+/** A cyan pool of light on the ground, laid over it (added, it vanished on pale ground): full in the middle, fading out. */
+function groundGlow(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float d = length(vUv - 0.5) * 2.0;
+        gl_FragColor = vec4(vec3(0.15, 0.85, 1.3), pow(max(0.0, 1.0 - d), 1.6) * 0.75 * (0.7 + 0.3 * vVein));
       }`,
     transparent: true,
     depthWrite: false,
@@ -509,19 +588,19 @@ function lintelBeam(scene: Object3D, lintel: Object3D): void {
 }
 
 /** An emissive texture rippling slowly (the lightning bending, the glass shimmering), `amount` 1 for the veil. */
-function ripple(m: MeshStandardMaterial, amount: number): void {
+function ripple(m: MeshStandardMaterial, amount: number, scroll = 0): void {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.veinTime = veinTime;
     shader.vertexShader = `varying float vRipple;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
       vRipple = fract(sin(dot(floor(modelMatrix[3].xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * 6.28;`);
     const sample = ShaderChunk.emissivemap_fragment.replace(
       'texture2D( emissiveMap, vEmissiveMapUv )',
-      `texture2D( emissiveMap, vEmissiveMapUv + ${(0.012 * amount).toFixed(4)} * vec2(sin(veinTime * 1.7 + vEmissiveMapUv.y * 14.0 + vRipple), sin(veinTime * 0.9 + vEmissiveMapUv.x * 6.0 + vRipple)) )`,
+      `texture2D( emissiveMap, vEmissiveMapUv + vec2(veinTime * ${scroll.toFixed(4)}, 0.0) + ${(0.012 * amount).toFixed(4)} * vec2(sin(veinTime * 1.7 + vEmissiveMapUv.y * 14.0 + vRipple), sin(veinTime * 0.9 + vEmissiveMapUv.x * 6.0 + vRipple)) )`,
     );
     shader.fragmentShader = `uniform float veinTime;\nvarying float vRipple;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `${sample}
       totalEmissiveRadiance *= 0.9 + 0.15 * sin(veinTime * 2.3 + vRipple) + 0.05 * sin(veinTime * 11.0 + vRipple * 3.0);`);
   };
-  m.customProgramCacheKey = () => `ripple-${amount}`;
+  m.customProgramCacheKey = () => `ripple-${amount}-${scroll}`;
 }
 
 // Pale plates take the team colour on Isdaris armour only: the Dieux keep their marble white, and on the Z's

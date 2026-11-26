@@ -8,6 +8,7 @@ import { stableShadowDepth } from './shadowdepth';
 import { dressSprite, spriteOf } from './sprites';
 import { type BuildingDef, DEFS, FLY_HEIGHT, KIT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
 import { armillaries, floaters } from './life';
+import { materialise, materialiseEnd, materialiseStep } from './materialise';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -1057,6 +1058,12 @@ export class EntityRenderer {
           v.site.footing.visible = p < 1;
           v.site.storeys.forEach((s, i) => (s.visible = p >= 0.08 + (0.42 * i) / n && p < 0.62 + (0.36 * (n - i)) / n && p < 1));
           v.model.visible = p >= 0.5;
+        } else if (v.mat) {
+          materialiseStep(v.mat, p, v.root.position.y);
+          if (p >= 1) {
+            materialiseEnd(v.mat);
+            v.mat = undefined;
+          }
         } else {
           v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * p : 1;
         }
@@ -1896,6 +1903,7 @@ export class EntityRenderer {
     let site: View['site'];
     let seam: Mesh | undefined;
     let print: View['print'];
+    let mat: View['mat'];
     if (e.def.kind === 'building' && (e.def as BuildingDef).absorbs) {
       // Z: assembled by the drone merged into it, it unfolds by itself (see sync); no site, no frame.
       if (e.buildLeft > 0) {
@@ -1944,8 +1952,11 @@ export class EntityRenderer {
       // The scaffolding (poles, walkways) stands about half a cell outside the model; a little more so its corners stay inside.
       ring.userData.site = Math.max(1, ((Math.max(size.x, size.z) / 2 + 0.5) * 1.15) / r);
       root.add(made.footing, ...made.storeys);
+    } else if (e.def.kind === 'building' && e.buildLeft > 0 && (e.def as { faction?: string }).faction === 'isdaris') {
+      // Isdaris: its skeleton grows, then the marble rises (render/materialise.ts; the user's pick B, 2026-11-26).
+      mat = materialise(body, root);
     } else if (e.def.kind === 'building') {
-      // Warped in (Isdaris): it rises inside a wireframe while it materialises.
+      // Warped in (the Dieux): it rises inside a wireframe while it materialises.
       const size = new Box3().setFromObject(body).getSize(new Vector3());
       scaffold = new LineSegments(new EdgesGeometry(new BoxGeometry(size.x * 1.05, size.y * 1.02, size.z * 1.05, 3, 2, 3)), scaffoldMaterial);
       scaffold.position.y = (size.y * 1.02) / 2;
@@ -2022,7 +2033,7 @@ export class EntityRenderer {
     });
     const cart = legs.length ? { legs, vat: body.getObjectByName('zvat'), pumper: body.getObjectByName('zpumper'), lever: body.getObjectByName('zlever'), roll: 0, x: NaN, z: NaN } : undefined;
     const arms = ['zarm_0', 'zarm_1'].map((n) => body.getObjectByName(n)).filter((o): o is Object3D => !!o).map((upper) => ({ upper, tip: upper.getObjectByName(`${upper.name}_tip`) }));
-    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: e.def.kind === 'building' ? 0 : 7 } : undefined, cart, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
+    const v: View = { type: e.type, owner: e.owner, gait, wheels: wheels.length ? wheels : undefined, arms: arms.length ? arms : undefined, root, model: pivot, ring, scaffold, site, seam, print, mat, pools, fx, dock, rotors: rotors.length ? { list: rotors, spin: e.def.kind === 'building' ? 0 : 7 } : undefined, cart, heading: facing, target: facing, cargo: pivot.getObjectByName('cargo'), seen: false, unit: e.def.kind === 'unit',
       rig: findRig(body, body.getWorldScale(new Vector3()).x, e.id),
       limbs: { legL: body.getObjectByName('leg_l'), legR: body.getObjectByName('leg_r'), armL: body.getObjectByName('arm_l'), armR: body.getObjectByName('arm_r'), insect } };
     const clips = body.userData.clips as AnimationClip[] | undefined;
