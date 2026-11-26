@@ -8,14 +8,15 @@ import './mappicker.css';
 /** Most players a map takes. */
 export const seatsOf = (def: MapFile) => Math.max(...def.players);
 
-const thumbs = new Map<string, string>();
+/** Pictures by map file (not by id: a map imported again under its id gets its new picture). */
+const thumbs = new WeakMap<MapFile, string>();
 
 /**
  * A top view of a map, drawn from its file: relief (in the colours of its planet), minerals, wells, the players'
  * starts and the other base spots. Returned as an image URL, made once per map.
  */
 export function mapThumb(def: MapFile, px = 192): string {
-  const done = thumbs.get(def.id);
+  const done = thumbs.get(def);
   if (done) return done;
   const players = seatsOf(def);
   const planet = biomeOf(def);
@@ -63,17 +64,19 @@ export function mapThumb(def: MapFile, px = 192): string {
     }
   }
   const url = c.toDataURL();
-  thumbs.set(def.id, url);
+  thumbs.set(def, url);
   return url;
 }
 
 /** One card per map: its picture, name, planet, players, size and bases; the chosen one highlighted. */
-export function mapCards(chosen: string): string {
+/** The map cards; with `players`, those that do not play at that count are shown but cannot be picked. */
+export function mapCards(chosen: string, count?: number): string {
   return Object.values(MAPS)
     .map((m) => {
+      const off = count !== undefined && !m.players.includes(count);
       const bases = m.bases.length;
       const players = m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)} joueurs` : `${m.players[0]} joueurs`;
-      return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${m.description ?? ''}">
+      return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${off ? `Ne se joue pas à ${count}` : (m.description ?? '')}"${off ? ' disabled' : ''}>
         <img src="${mapThumb(m)}" alt="">
         <span class="map-name">${m.name}${isImported(m) ? ' <span class="map-imported">importée</span>' : ''}</span>
         <span class="map-meta">${biomeOf(m).name} · ${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>

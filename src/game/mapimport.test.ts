@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
 import { checkMap, MAP_MAX_CHARS, MAX_MAP_ID, mapPrint, parseMap } from '../mapcheck';
 import { addMap, MAPS, MAX_FRIEND_MAPS, type MapFile, ownImports, receiveMap, removeMap } from '../maps';
-import { lobbyOk } from '../net';
+import { CARTE_PART, carteParts, lobbyOk } from '../net';
 import { ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command } from '../sim/world';
@@ -36,8 +36,9 @@ describe('an imported map in a replay', () => {
     const r = parseReplay(text);
     if (typeof r === 'string') throw new Error(r);
     expect(r.lostMap).toBeUndefined();
-    expect(MAPS[def.id]).toEqual(def);
-    const w = createMatch(r.factions, r.teams, r.map, r.biome);
+    expect(MAPS[def.id]).toBeUndefined(); // the page's maps untouched: the replay plays on its own copy
+    expect(r.carte).toEqual(def);
+    const w = createMatch(r.factions, r.teams, r.carte!, r.biome);
     let k = 0;
     while (w.tick < ticks(90)) w.step(r.ticks[k]?.[0] === w.tick ? r.ticks[k++][1] : []);
     expect(w.hash()).toBe(hash);
@@ -64,9 +65,11 @@ describe('an imported map in a replay', () => {
 describe('an imported map in a friends\' game', () => {
   const setup = { camps: ['humains', 'z'], map: 'import-col-perso', biome: 'volcan' };
   it('lets the map file through as text, within the size a map may have', () => {
-    expect(lobbyOk({ carte: JSON.stringify(imported()) })).toBe(true);
-    expect(lobbyOk({ carte: 'x'.repeat(MAP_MAX_CHARS + 1) })).toBe(false);
-    expect(lobbyOk({ carte: { id: 'x' } })).toBe(false);
+    for (const part of carteParts(JSON.stringify(imported()))) expect(lobbyOk(part)).toBe(true);
+    expect(lobbyOk({ carte: 'x'.repeat(CARTE_PART + 1), part: 0, parts: 1 })).toBe(false);
+    expect(lobbyOk({ carte: 'x', part: 1, parts: 1 })).toBe(false);
+    expect(lobbyOk({ carte: JSON.stringify(imported()) })).toBe(false); // whole, as before: no more
+    expect(lobbyOk({ carte: { id: 'x' }, part: 0, parts: 1 })).toBe(false);
   });
 
   it('takes a setup with or without a print, never a malformed one', () => {
@@ -133,6 +136,42 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       expect(parseMap(store.get(`xcraft.ami:${other}`)!)).toEqual(MAPS[other]);
     }));
 
+  it('never takes one of the guest\'s own ids, even the suffixed one it would have picked', () =>
+    withStorage(() => {
+      const mine = imported();
+      addMap(mine, true);
+      const theirs = { ...mine, name: 'Le col de mon ami', bases: mine.bases.slice(0, 1) };
+      // The guest also has a map of its own under the id the copy would have taken.
+      const taken = { ...imported(), id: `${mine.id}-${mapPrint(theirs).slice(0, 6)}`, name: 'Autre col à moi' };
+      addMap(taken, true);
+      const id = receiveMap(theirs)!;
+      expect([mine.id, taken.id]).not.toContain(id);
+      expect(MAPS[taken.id]).toEqual(taken);
+      expect(parseMap(store.get(`xcraft.carte:${taken.id}`)!)).toEqual(taken);
+      expect(mapPrint(MAPS[id])).toBe(mapPrint(theirs));
+      expect(id.length).toBeLessThanOrEqual(MAX_MAP_ID);
+    }));
+
+  it('changes nothing when storage refuses the copy: no map listed, none of the older ones dropped', () =>
+    withStorage(() => {
+      const sent = Array.from({ length: MAX_FRIEND_MAPS }, (_, i) => ({ ...imported(), id: `import-ami-${i}`, name: `Carte ${i}` }));
+      for (const m of sent) receiveMap(m);
+      const before = JSON.parse(store.get('xcraft.amis')!);
+      const set = localStorage.setItem;
+      localStorage.setItem = () => {
+        throw new Error('quota');
+      };
+      try {
+        expect(receiveMap({ ...imported(), id: 'import-nouvelle', name: 'Nouvelle' })).toBeNull();
+      } finally {
+        localStorage.setItem = set;
+      }
+      expect(MAPS['import-nouvelle']).toBeUndefined();
+      for (const m of sent) expect(MAPS[m.id], m.id).toBeDefined();
+      expect(JSON.parse(store.get('xcraft.amis')!)).toEqual(before);
+      expect(store.has('xcraft.ami:import-nouvelle')).toBe(false);
+    }));
+
   it('keeps friends\' maps apart, the last ones only, never in the player\'s own imports', () =>
     withStorage(() => {
       const mine = imported();
@@ -166,3 +205,28 @@ describe('a map the browser refuses to keep', () => {
     }
   });
 });
+
+describe('a map file sent to a friend', () => {
+  it('goes in parts each under PeerJS\'s 16 300 bytes, joined back whole', () => {
+    // As big as a map may be, accents and quotes included (UTF-8 bytes and JSON escapes count).
+    const text = ('{"name":"Éèàç ✓ \\"quote\\" ' + 'x'.repeat(50)).repeat(1000).slice(0, MAP_MAX_CHARS);
+    const parts = carteParts(text);
+    for (const p of parts) expect(new TextEncoder().encode(JSON.stringify(p)).length).toBeLessThan(16_300);
+    expect(parts.map((p) => p.carte).join('')).toBe(text);
+    expect(parts.every((p, i) => p.part === i && p.parts === parts.length)).toBe(true);
+    const emoji = '😀'.repeat(3000);
+    expect(carteParts(emoji).map((p) => p.carte).join('')).toBe(emoji);
+    for (const p of carteParts(emoji)) expect(p.carte.charCodeAt(p.carte.length - 1) >= 0xd800 && p.carte.charCodeAt(p.carte.length - 1) <= 0xdbff).toBe(false);
+  });
+
+  it('is refused when its checked copy, written again, would not read back', () => {
+    const def = JSON.parse(JSON.stringify(imported()));
+    // Numbers that grow when written again (1e-6 → 0.000001): small as sent, too big once kept.
+    def.terrain = Array.from({ length: 15 }, () => ({ shape: 'polygon', points: Array.from({ length: 256 }, () => [1e-6, 1e-6]), level: 1 }));
+    const text = JSON.stringify(def).replace(/0\.000001/g, '1e-6');
+    expect(text.length).toBeLessThan(MAP_MAX_CHARS);
+    expect(JSON.stringify(checkMap(JSON.parse(text))).length).toBeGreaterThan(MAP_MAX_CHARS);
+    expect(parseMap(text)).toMatch(/trop grosse une fois relue/);
+  });
+});
+

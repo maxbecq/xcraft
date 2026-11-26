@@ -553,6 +553,29 @@ const WINDOW = 8 * MAX_DELAY;
 /** Orders in one tick: well above anything a player can give. */
 const MAX_ORDERS = 64;
 
+/**
+ * An imported map's file goes in parts: PeerJS refuses a JSON message of 16 300 bytes or more (and the waiting room
+ * takes that for a lost link). A part is at most CARTE_PART characters, and its message within PART_BYTES as UTF-8.
+ */
+export const CARTE_PART = 4000;
+const PART_BYTES = 15_000;
+const MAX_PARTS = Math.ceil(MAP_MAX_CHARS / 100);
+export function carteParts(text: string): { carte: string; part: number; parts: number }[] {
+  const pieces: string[] = [];
+  const bytes = (p: string) => new TextEncoder().encode(JSON.stringify({ carte: p, part: MAX_PARTS, parts: MAX_PARTS })).length;
+  for (let at = 0; at < text.length; ) {
+    let n = Math.min(CARTE_PART, text.length - at);
+    while (n > 1 && bytes(text.slice(at, at + n)) > PART_BYTES) n >>= 1;
+    // Never between the two halves of a character outside the basic plane.
+    const c = text.charCodeAt(at + n - 1);
+    if (n > 1 && at + n < text.length && c >= 0xd800 && c <= 0xdbff) n--;
+    pieces.push(text.slice(at, at + n));
+    at += n;
+  }
+  if (!pieces.length) pieces.push('');
+  return pieces.map((carte, part) => ({ carte, part, parts: pieces.length }));
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const int = (v: unknown): v is number => Number.isSafeInteger(v);
 /** A waiting room's message: factions, maps and planets are plain ids (they go into the match's address). */
@@ -560,7 +583,7 @@ export function lobbyOk(m: Record<string, unknown>): m is LobbyMessage {
   const id = (v: unknown) => typeof v === 'string' && v.length <= MAX_MAP_ID && /^[a-z0-9-]+$/.test(v);
   const setupOk = (s: unknown) => isRecord(s) && Array.isArray(s.camps) && s.camps.length === 2 && s.camps.every(id) && id(s.map) && id(s.biome) && (s.print === undefined || (typeof s.print === 'string' && /^[0-9a-f]{8}$/.test(s.print)));
   // An imported map's file travels as text, checked by the guest like any map from outside (mapcheck.ts).
-  if ('carte' in m) return typeof m.carte === 'string' && m.carte.length <= MAP_MAX_CHARS;
+  if ('carte' in m) return typeof m.carte === 'string' && m.carte.length <= CARTE_PART && int(m.parts) && m.parts >= 1 && m.parts <= MAX_PARTS && int(m.part) && m.part >= 0 && m.part < m.parts;
   return 'setup' in m ? setupOk(m.setup) : 'go' in m ? setupOk(m.go) && int(m.id) : 'camp' in m ? id(m.camp) : 'went' in m ? int(m.went) : 'goOk' in m ? int(m.goOk) : false;
 }
 
@@ -603,7 +626,7 @@ export interface LobbySetup {
   print?: string;
 }
 /** The host owns the setup and sends it whole on every change; the guest only says its faction; `go` starts the match, with the setup both pages load. */
-type LobbyMessage = { setup: LobbySetup } | { carte: string } | { camp: string } | { go: LobbySetup; id: number } | { went: number } | { goOk: number } | { v: string };
+type LobbyMessage = { setup: LobbySetup } | { carte: string; part: number; parts: number } | { camp: string } | { go: LobbySetup; id: number } | { went: number } | { goOk: number } | { v: string };
 /** 'trouble': not working yet but still trying (the detail says why); 'error': given up. */
 export type LobbyStatus = 'waiting' | 'here' | 'gone' | 'trouble' | 'error';
 /**

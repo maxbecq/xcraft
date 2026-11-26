@@ -4,7 +4,7 @@ import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapF
 import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
 import { unplayable } from '../mapplay';
 import { mapCards, seatsOf } from '../mappicker';
-import { Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
+import { carteParts, Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
 import { BIOMES } from '../render/biome';
@@ -329,7 +329,8 @@ function showJoin(menu: HTMLElement): void {
  */
 export function showLobby(menu: HTMLElement, room: string, host: boolean): void {
   history.replaceState(null, '', `${location.pathname}?ami=${room}${host ? '&hote' : ''}`); // a reload comes back to the room, on the same side
-  const setup: LobbySetup = { camps: [asFaction(stored('xcraft.camp')), 'humains'], map: MAP.id, biome: MAP.biome };
+  const duel = MAP.players.includes(2) ? MAP : mapFile(DEFAULT_MAP); // the last map picked, if it takes two
+  const setup: LobbySetup = { camps: [asFaction(stored('xcraft.camp')), 'humains'], map: duel.id, biome: duel.biome };
   if (!host) setup.camps = [setup.camps[1], setup.camps[0]];
   const me = host ? 0 : 1;
   let status = host ? 'Ouverture du salon…' : 'Connexion au salon…';
@@ -381,7 +382,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     // The cards drawn again only when the map changes.
     if (setup.map !== drawnMaps) {
       drawnMaps = setup.map;
-      const cards = mapCards(mapFile(setup.map).id);
+      const cards = mapCards(mapFile(setup.map).id, 2); // a network match is a duel: maps that take two
       $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
     }
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
@@ -410,8 +411,10 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   /** Why the host's imported map was refused here (until another one comes). */
   let mapRefused: string | null = null;
   /** The host's last map file, and how many different ones came in this room (MAX_CARTES checked at most). */
-  let lastCarte = '';
-  let cartes = 0;
+  /** Each map file the host sent: the id it is kept under here, or null (refused). */
+  const seenCartes = new Map<string, string | null>();
+  /** The parts of the map file on its way. */
+  let pieces: string[] = [];
   const MAX_CARTES = 10;
   /** The guest's id for each map the host imported, when it had to keep it beside one of its own of that id (maps.ts receiveMap). */
   const received: Record<string, string> = {};
@@ -420,7 +423,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   const sendSetup = (): void => {
     const def = mapFile(setup.map);
     setup.print = isImported(def) ? mapPrint(def) : undefined;
-    if (setup.print) lobby.send({ carte: JSON.stringify(def) });
+    if (setup.print) for (const part of carteParts(JSON.stringify(def))) lobby.send(part);
     lobby.send({ setup });
   };
   const lobby = openLobby(room, host, {
@@ -437,19 +440,29 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     },
     message: (m) => {
       if ('carte' in m && !host) {
-        // The same file again (sent before each setup) is not checked again; a host sending map after map is cut off.
-        if (m.carte === lastCarte) return refresh();
-        lastCarte = m.carte;
-        if (++cartes > MAX_CARTES) {
+        // The file comes in parts, in order (the channel keeps it): gathered until the last one.
+        if (m.part === 0) pieces = [];
+        if (m.part !== pieces.length || pieces.reduce((n, p) => n + p.length, 0) + m.carte.length > MAP_MAX_CHARS) return void (pieces = []);
+        pieces.push(m.carte);
+        if (pieces.length < m.parts) return;
+        const carte = pieces.join('');
+        pieces = [];
+        // A file already taken (sent before each setup, or picked again) is not checked again; a host sending map
+        // after map is cut off past MAX_CARTES different ones.
+        const had = seenCartes.get(carte);
+        if (had === null || (had && Object.hasOwn(MAPS, had))) return refresh(); // refused, or still here
+        if (had === undefined) seenCartes.set(carte, null);
+        if (seenCartes.size > MAX_CARTES) {
           status = mapRefused = 'Votre ami envoie trop de cartes différentes : les suivantes sont ignorées.';
           return refresh();
         }
         // A map from outside the game: checked like a file the player imports, kept for the match's page.
-        const checked = parseMap(m.carte);
+        const checked = parseMap(carte);
         const why = typeof checked === 'string' ? checked : unplayable(checked);
         const def = why ?? checked;
         const kept = typeof def === 'string' ? null : receiveMap(def);
         if (kept && typeof def !== 'string') received[def.id] = kept;
+        seenCartes.set(carte, kept);
         mapRefused = typeof def === 'string' ? `La carte importée par votre ami est refusée : ${def}`.replace(/[<>&]/g, '')
           : !kept ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé).'
           : null;
@@ -514,7 +527,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
   menu.onclick = (e) => {
     const button = (e.target as HTMLElement).closest('button');
     const m = button?.dataset.m;
-    if (button?.dataset.map && host && !launching) {
+    if (button?.dataset.map && host && !launching && Object.hasOwn(MAPS, button.dataset.map) && MAPS[button.dataset.map].players.includes(2)) {
       setup.map = button.dataset.map;
       setup.biome = mapFile(setup.map).biome; // still sent: older builds check it
       sendSetup();

@@ -77,3 +77,29 @@ describe('whether an imported map can be played', () => {
     expect(unplayable(m)).toMatch(/^À 4 joueurs : /);
   });
 });
+
+describe('whether an imported map can be played: what stands on it, its units', () => {
+  it('refuses a bridge stopped by a well (headquarters and resources are walked round, not through)', () => {
+    const m = withBase(1, { wells: [[40, 30]] });
+    m.terrain = [{ shape: 'rect', from: [0, 30], to: [63, 33], chasm: true }, { shape: 'rect', from: [40, 30], to: [42, 33], fill: true }];
+    expect(unplayable(m)).toMatch(/ne rejoint pas les autres à pied/);
+    // The same bridge, clear: fine.
+    const clear = open();
+    clear.terrain = m.terrain;
+    expect(unplayable(clear)).toBeNull();
+  });
+
+  it('refuses workers off the map or on ground cut off from the rest', () => {
+    expect(unplayable(withBase(0, { workers: [63, 63] }))).toMatch(/hors de la carte|ne rejoint pas/);
+    const m = withBase(0, { workers: [40, 12] });
+    m.terrain = [{ shape: 'rect', from: [37, 9], to: [44, 15], level: 2 }];
+    expect(unplayable(m)).toMatch(/ne rejoint pas les autres à pied/);
+  });
+
+  it('refuses a ramp that runs off the map, never painting another tile', () => {
+    const m = open() as unknown as Record<string, unknown>;
+    m.terrain = [{ shape: 'ramp', at: [63, 10], up: 'N', width: 2, level: 0 }];
+    expect(checkMap(m)).toMatch(/sort de la carte/);
+  });
+});
+

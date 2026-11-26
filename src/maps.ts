@@ -142,23 +142,41 @@ export function addMap(def: MapFile, keep = false): boolean {
  * id to play it under here, or null if storage refused it.
  */
 export function receiveMap(def: MapFile): string | null {
-  const mine = MAPS[def.id];
-  if (mine && mapPrint(mine) === mapPrint(def)) return def.id;
-  // The copy's id within MAX_MAP_ID, as a waiting room takes it (net.ts lobbyOk): the base shortened, never the print.
-  const id = mine ? `${def.id.slice(0, MAX_MAP_ID - 7)}-${mapPrint(def).slice(0, 6)}` : def.id;
+  const print = mapPrint(def);
+  const same = (id: string) => Object.hasOwn(MAPS, id) && mapPrint(MAPS[id]) === print;
+  if (same(def.id)) return def.id;
+  // An id free for it: none of the player's own, nor of the game, nor another map, unless an older friend's copy of
+  // that id (replaced). Within MAX_MAP_ID, as a waiting room takes it (net.ts lobbyOk): the base shortened, never the print.
+  const free = (id: string) => !own.has(id) && (!Object.hasOwn(MAPS, id) || same(id) || friends.includes(id));
+  const base = def.id.slice(0, MAX_MAP_ID - 9);
+  let id = def.id;
+  for (let k = 0; !free(id); k++) id = `${base}-${print.slice(0, 6)}${k ? k : ''}`;
+  if (same(id)) return id;
   // Kept apart from the player's imports, MAX_FRIEND_MAPS at most: the oldest goes (a hostile host cannot fill storage).
-  const at = friends.indexOf(id);
-  if (at >= 0) friends.splice(at, 1);
-  while (friends.length >= MAX_FRIEND_MAPS) forget(friends.shift()!);
-  MAPS[id] = { ...def, id };
-  friends.push(id);
+  const list = friends.filter((f) => f !== id);
+  const gone: string[] = [];
+  while (list.length >= MAX_FRIEND_MAPS) gone.push(list.shift()!);
+  list.push(id);
+  const copy = { ...def, id };
+  // Written first, then listed: if storage refuses, the page and storage stay as they were (the transfer may be retried).
+  let had: string | null = null;
   try {
-    localStorage.setItem(FRIEND + id, JSON.stringify(MAPS[id]));
-    localStorage.setItem(FRIEND_LIST, JSON.stringify(friends));
-    return id;
+    had = localStorage.getItem(FRIEND + id);
+    localStorage.setItem(FRIEND + id, JSON.stringify(copy));
+    localStorage.setItem(FRIEND_LIST, JSON.stringify(list));
   } catch {
+    try {
+      if (had === null) localStorage.removeItem(FRIEND + id);
+      else localStorage.setItem(FRIEND + id, had);
+    } catch {
+      // nothing more to undo
+    }
     return null;
   }
+  for (const g of gone) forget(g);
+  friends.splice(0, friends.length, ...list);
+  MAPS[id] = copy;
+  return id;
 }
 
 /** A friend's map gone from the page and from storage (the list is written by the caller). */
@@ -273,6 +291,7 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
     });
 
   const each = (x: number, y: number, f: (i: number, q: number) => void) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return; // off the grid: never another tile by its index
     for (const q of turns) {
       const [rx, ry] = rotateTile(width, x, y, q);
       f(ry * width + rx, q);

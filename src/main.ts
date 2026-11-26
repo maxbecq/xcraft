@@ -81,7 +81,7 @@ renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
+const world = createMatch(factions, slots.map((s) => s.team), MAP, biome.id); // the map itself: a replay's own copy
 /** The end-of-game analysis being gathered (none on the title screen). */
 const recap = ATTRACT ? null : new Recorder(world);
 /** `?perf=rec` or the Options box: frame-by-frame telemetry of this game, to send at the end. */

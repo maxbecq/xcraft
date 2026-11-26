@@ -1,4 +1,4 @@
-import type { Street } from './map';
+import { RAMP_LENGTH, STEP, type Street } from './map';
 import type { BaseSpot, MapFile, Shape } from './maps';
 
 /**
@@ -80,7 +80,16 @@ function shape(v: unknown, size: number, n: number): Shape {
   if (v.shape === 'ramp') {
     only(v, ['shape', 'at', 'up', 'width', 'level', 'biome'], what);
     if (!['N', 'E', 'S', 'W'].includes(v.up as string)) refuse(`${what} : « up » vaut N, E, S ou W.`);
-    return { shape: 'ramp', at: tile(v.at, size, `${what}, at`), up: v.up as 'N', width: int(v.width, 1, 12, `${what}, width`), level: int(v.level, 0, 1, `${what}, level`), ...tail };
+    const ramp = { shape: 'ramp' as const, at: tile(v.at, size, `${what}, at`), up: v.up as 'N', width: int(v.width, 1, 12, `${what}, width`), level: int(v.level, 0, 1, `${what}, level`), ...tail };
+    // Every tile it covers on the map (maps.ts buildMap paints them all), not its anchor only.
+    const [dx, dy] = STEP[ramp.up];
+    for (let k = 0; k < RAMP_LENGTH; k++) {
+      for (let w = 0; w < ramp.width; w++) {
+        const [x, y] = [ramp.at[0] - dx * k + (dx === 0 ? w : 0), ramp.at[1] - dy * k + (dy === 0 ? w : 0)];
+        if (x < 0 || y < 0 || x >= size || y >= size) refuse(`${what} : la rampe sort de la carte.`);
+      }
+    }
+    return ramp;
   }
   // Every other shape is an area that raises the ground, digs a chasm or fills one.
   const kinds = ['level', 'chasm', 'fill'].filter((k) => v[k] !== undefined);
@@ -190,7 +199,10 @@ export function parseMap(json: string): MapFile | string {
   } catch {
     return "Ce fichier n'est pas du JSON lisible.";
   }
-  return checkMap(v);
+  const def = checkMap(v);
+  // What is kept and sent is the checked copy written again (numbers may grow: 1e-6 is 0.000001): it must read back.
+  if (typeof def !== 'string' && JSON.stringify(def).length > MAP_MAX_CHARS) return `Carte trop grosse une fois relue (${Math.ceil(MAP_MAX_CHARS / 1024)} Ko au plus).`;
+  return def;
 }
 
 /** Eight hex digits that tell two maps apart by what they hold, not their id (FNV-1a over the checked copy): both sides of a network game compare them. */

@@ -37,7 +37,8 @@ export const gameSpeed = () => (SOLO ? SCROLL.game : SPEED);
 
 /** Factions: the player's and the AI's, from the URL or the last menu choice. */
 /** The map: a replay's, else from the URL, else the last one picked. */
-export const MAP = mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
+// A replay carrying its map plays on that copy, whatever this browser holds under its id.
+export const MAP = REPLAY?.carte ?? mapFile(REPLAY ? (REPLAY.map ?? DEFAULT_MAP) : (params.get('map') ?? stored('xcraft.map')));
 /** One player of the match: who plays it (you, an AI difficulty, the network, a replay), its faction and team. */
 export interface Slot {
   control: string;
@@ -61,6 +62,13 @@ export const slots: Slot[] = REPLAY
 // A Bac à sable (or its replay) has one player.
 if (slots.length < 2 && !SANDBOX && !REPLAY) slots.push({ control: 'normal', faction: 'humains', team: 1 });
 slots.length = Math.min(slots.length, seatsOf(MAP)); // no more players than the map has starts
+// Only at a players count the map offers (the counts its checks were made at): AIs fill up to the next one, or the
+// seats past the last one go. A network match is a duel the waiting room only offers on maps that take two.
+if (!REPLAY && !SANDBOX && !NET_ROLE && !MAP.players.includes(slots.length)) {
+  const up = MAP.players.filter((n) => n > slots.length);
+  if (up.length) while (slots.length < Math.min(...up)) slots.push({ control: 'normal', faction: 'humains', team: slots.length });
+  else slots.length = Math.max(...MAP.players.filter((n) => n < slots.length));
+}
 /** The local player's seat, among the seats kept (a guest online is player 1). */
 export const PLAYER = seatOf(slots, NET_ROLE === 'join');
 export const factions = slots.map((s) => s.faction);
