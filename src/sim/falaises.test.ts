@@ -305,6 +305,28 @@ describe('cliffs', () => {
     });
   });
 
+  // Codex, 2026-11-26: a Char Pégase landed on a tile between two cliff feet, which no unit walks into.
+  it('a Char Pégase does not land on a tile between two cliff feet, and lands beside it', () => {
+    const w = createMatch(['humains', 'humains'], undefined, 'origine');
+    const g = w.grid;
+    const { narrow } = g as unknown as { narrow(x: number, y: number): boolean };
+    let tile: [number, number] | null = null;
+    for (let ty = 1; ty < w.map.height - 1 && !tile; ty++) for (let tx = 1; tx < w.map.width - 1 && !tile; tx++) if (g.open(tx, ty) && narrow.call(g, tx, ty)) tile = [tx, ty];
+    const [tx, ty] = tile!;
+    w.players[0].upgrades.decollage = 1;
+    const p = w.spawn('pegase', 0, tx * FP + FP / 2, ty * FP + FP / 2);
+    p.airborne = true;
+    w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'decollage' }]);
+    expect(p.airborne).toBe(true);
+    // Nor is such a tile the open tile nearest to itself (where a unit under a building is sent).
+    const [ox, oy] = g.nearestOpen(tx, ty);
+    expect(narrow.call(g, ox, oy)).toBe(false);
+    for (let i = 0; i < ticks(5); i++) w.step([]);
+    [p.x, p.y] = [ox * FP + FP / 2, oy * FP + FP / 2];
+    w.step([{ player: 0, kind: 'ability', ids: [p.id], name: 'decollage' }]);
+    expect(p.airborne).toBe(false);
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);

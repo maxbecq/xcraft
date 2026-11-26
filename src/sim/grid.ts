@@ -86,6 +86,11 @@ export class Grid {
     return this.inside(x, y) && this.blocked[y * this.width + x] === 0 && this.chasm[y * this.width + x] === 0;
   }
 
+  /** Open, and a ground unit's body fits there: not between two cliff feet (narrow), which no step enters. */
+  stands(x: number, y: number): boolean {
+    return this.open(x, y) && !this.narrow(x, y);
+  }
+
   /** The cliff feet of a tile (see `feet`): sides and corners where the ground beyond stands higher. */
   private footOf(x: number, y: number): number {
     if (!this.inside(x, y) || this.chasm[y * this.width + x] || this.cut[y * this.width + x]) return 0;
@@ -485,7 +490,7 @@ export class Grid {
     return [];
   }
 
-  /** Nearest open tile to (x, y), searching outward in rings; prefers tiles at `level` (so a target on a cliff is approached from the top). */
+  /** Nearest open tile a body fits on (stands) to (x, y), searching outward in rings; prefers tiles at `level` (so a target on a cliff is approached from the top). */
   /**
    * `from` (a tile, or between tiles): of a ring's tiles, the one nearest it, then on the left of the line from it to
    * (x, y), then furthest along it, rather than the first in the scan's fixed order. A unit and the mirror of its spot
@@ -508,7 +513,7 @@ export class Grid {
     for (let r = 0; r < Math.max(this.width, this.height); r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !this.open(x + dx, y + dy)) continue;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !this.stands(x + dx, y + dy)) continue;
           const t: [number, number] = [x + dx, y + dy];
           if (level < 0 || this.level(x + dx, y + dy) === level) {
             if (!from) return t;
