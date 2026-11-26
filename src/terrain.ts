@@ -475,7 +475,9 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
         const most = Math.max(CLIFF_FOOT, rim * (1 - s) + CLIFF_FOOT * s);
         const over = rim + back;
         const knee = most * 0.6; // as it is up to there, then easing towards the limit
-        if (over > knee) back += (knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - over) * banded;
+        // None on the top row, which hangs from the plateau's edge (the ground's own points, see rimShift): it grows
+        // down the wall's upper third (Codex, 2026-11-26: where the edge is pushed well out, the wall parted from it).
+        if (over > knee) back += (knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - over) * banded * Math.min(1, s * 3);
       }
       row.push(new Vector3(px + dir.x * back, y + lift, pz + dir.y * back));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
