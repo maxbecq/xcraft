@@ -11,6 +11,22 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
+ * Soft image-based light so metal and glass pick up reflections. Without it the models' metal reads near black (the
+ * map editor's view had none: Human buildings and units came out dark, 2026-11-27).
+ */
+export function lightByRoom(renderer: WebGLRenderer, scene: Scene): void {
+  const environment = () => new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = environment();
+  scene.environmentIntensity = 0.35;
+  // It lives in a render target, which comes back empty after a lost GPU context (a heavy job on the same GPU,
+  // a driver reset): without it buildings and units turned flat dark grey. Baked again once the context is back.
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    scene.environment?.dispose();
+    scene.environment = environment();
+  });
+}
+
+/**
  * Rendering pipeline: ambient occlusion for contact shadows, bloom for glowing chemicals and fire,
  * filmic tone mapping and anti-aliasing. `?lowfx` falls back to a plain render.
  */
@@ -25,16 +41,7 @@ export class Post {
   /** `fx` holds particles: drawn after ambient occlusion, which would otherwise shade their quads. */
   /** `light` (phones and tablets): fewer occlusion samples, half-size bloom, no SMAA (the ink line already hides most jaggies). */
   constructor(private readonly renderer: WebGLRenderer, private readonly scene: Scene, private readonly fx: Scene, private readonly camera: Camera, enabled: boolean, light = false, warmShadows = 1) {
-    // Soft image-based light so metal and glass pick up reflections.
-    const environment = () => new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = environment();
-    scene.environmentIntensity = 0.35;
-    // It lives in a render target, which comes back empty after a lost GPU context (a heavy job on the same GPU,
-    // a driver reset): without it buildings and units turned flat dark grey. Baked again once the context is back.
-    renderer.domElement.addEventListener('webglcontextrestored', () => {
-      scene.environment?.dispose();
-      scene.environment = environment();
-    });
+    lightByRoom(renderer, scene);
     // Shadows are drawn once per frame, in render(): the ambient occlusion pass renders the scene again
     // and would otherwise redraw the whole shadow map, every skinned unit included.
     renderer.shadowMap.autoUpdate = false;

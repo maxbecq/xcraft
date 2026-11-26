@@ -16,6 +16,7 @@ import { CameraRig } from '../camera';
 import { type GameMap, heightAt, rotateFootprint, rotateTile } from '../map';
 import { CORNERS } from '../maps';
 import { BIOMES } from '../render/biome';
+import { lightByRoom } from '../render/post';
 import { Decor } from '../render/decor';
 import { addDeposits } from '../render/deposits';
 import { loadModels, MINERAL_VARIANTS, TEAM_COLORS } from '../render/models';
@@ -40,6 +41,7 @@ renderer.toneMapping = ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFShadowMap;
 const scene = new Scene();
+lightByRoom(renderer, scene); // as the game (render/post.ts): metal and the Humans' steel dark without it
 const hemi = new HemisphereLight();
 const sun = new DirectionalLight();
 sun.castShadow = true;
