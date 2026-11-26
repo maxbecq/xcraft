@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { rotateFootprint, rotateTile } from '../map';
-import { checkMap, parseMap as parseMap1 } from '../mapcheck';
+import { checkMap, parseMap as parseMap1, parseMap as parseMapText } from '../mapcheck';
 import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
 import { createMatch } from '../sim/setup';
-import { blankMap, DECOR, fromFormat1, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { blankMap, DECOR, fromFormat1, gameCounts, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 describe('format 2', () => {
@@ -220,5 +220,42 @@ describe('format 2 : déclencheurs', () => {
     expect(map.triggers).toEqual(f.triggers);
     expect(notes.join(' ')).not.toMatch(/déclencheurs/);
     expect((checkMap(JSON.parse(JSON.stringify(map))) as MapFile).triggers).toEqual(f.triggers);
+  });
+});
+
+describe('format 2 : revue Codex', () => {
+  const four = () => {
+    const def = Object.values(MAPS).find((m) => m.players.includes(4))!;
+    return fromFormat1(def, def.biome, 4);
+  };
+
+  it('relit les déclencheurs et les effectifs d\'une carte exportée : format 2 → 1 → 2', () => {
+    const f = four();
+    f.triggers = { regions: [{ id: 'nid', rect: [10, 10, 4, 4] }], vars: [{ id: 'vague', value: 0 }], triggers: [{ id: 'Vague', folder: '', enabled: true, once: false, when: { every: 45 }, do: [{ spawn: 'auxiliaire', count: '2 + vague', owner: 3, in: 'nid' }] }] };
+    f.counts = [4];
+    const def = checkMap(JSON.parse(JSON.stringify(toFormat1(f).map))) as MapFile;
+    const back = fromFormat1(def);
+    expect(back.triggers).toEqual(f.triggers);
+    expect(back.counts).toEqual([4]);
+  });
+
+  it('exporte un 2 contre 2 qui ne se joue qu\'à 4', () => {
+    const f = four();
+    f.players.forEach((p, i) => (p.team = i < 2 ? 0 : 1));
+    expect(checkMap(JSON.parse(JSON.stringify(toFormat1(f).map)))).toMatch(/À 2 joueurs, tous dans la même équipe/);
+    f.counts = [4];
+    const def = checkMap(JSON.parse(JSON.stringify(toFormat1(f).map))) as MapFile;
+    expect(def.players).toEqual([4]);
+    expect(gameCounts(f)).toEqual([4]);
+    const w = createMatch(['humains', 'z', 'isdaris', 'dieux'], undefined, def);
+    expect(w.players.map((p) => p.team)).toEqual([0, 0, 1, 1]);
+  });
+
+  it('refuse à l\'export ce que le jeu refuserait à la relecture : un texte trop gros', () => {
+    const f = four();
+    f.triggers = { regions: [], vars: [], triggers: Array.from({ length: 200 }, (_, i) => ({ id: `t${i}`, folder: '', enabled: true, once: false, when: { time: i }, do: [{ message: 'x'.repeat(200), to: 'all' as const }] })) };
+    const text = JSON.stringify(toFormat1(f).map);
+    expect(typeof checkMap(JSON.parse(text))).toBe('object'); // the object alone passes
+    expect(parseMapText(text)).toMatch(/trop gros/); // the text the game reads does not
   });
 });

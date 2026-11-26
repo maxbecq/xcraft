@@ -7,7 +7,8 @@ import type { DockviewApi } from 'dockview-core';
 import { createDockview, themeDark } from 'dockview-core/dist/dockview-core.js';
 import { MAPS } from '../maps';
 import { BIOMES } from '../render/biome';
-import { checkMap, PLANETS } from '../mapcheck';
+import { checkMap, parseMap as parseMapText, PLANETS } from '../mapcheck';
+import { encodeSeats, type Seat } from '../game/seats';
 import { addMap, isImported, MAX_IMPORTED } from '../maps';
 import { unplayable } from '../mapplay';
 import { fromFormat1, MAX_SIZE, parseMap, type Symmetry, blankMap, toFormat1 } from './format2';
@@ -77,7 +78,8 @@ function saveAs(): void {
 function gameFile(): { def: ReturnType<typeof toFormat1>['map']; notes: string[] } | null {
   try {
     const { map, notes } = toFormat1(ed.f);
-    const checked = checkMap(JSON.parse(JSON.stringify(map)));
+    // The text the game will read (its size bound included), read as the game reads it.
+    const checked = parseMapText(JSON.stringify(map));
     if (typeof checked === 'string') throw new Error(checked);
     return { def: map, notes };
   } catch (err) {
@@ -95,7 +97,7 @@ function exportGame(): void {
 function testMap(spectate: boolean): void {
   const g = gameFile();
   if (!g) return;
-  const def = checkMap(JSON.parse(JSON.stringify(g.def)));
+  const def = parseMapText(JSON.stringify(g.def));
   if (typeof def === 'string') return act.say(def);
   const why = unplayable(def);
   if (why) return act.say(`La carte ne se joue pas : ${why}`);
@@ -103,8 +105,11 @@ function testMap(spectate: boolean): void {
     return act.say(`Le jeu garde ${MAX_IMPORTED} cartes importées au plus : en supprimer une dans son menu d'abord.`);
   }
   if (!addMap(def, true)) return act.say('Le navigateur refuse de garder la carte (stockage plein ou désactivé).');
-  const race = (i: number) => ed.f.players[i]?.race || 'humains';
-  const q = spectate ? `?spectate&map=${def.id}&ai0=normal&ai1=normal` : `?play&map=${def.id}&camp=${race(0)}&adversaire=${race(1)}`;
+  // Every seat of the largest count the map offers: a wave for player 3 has its player 3 (AIs but player 1).
+  const seats: Seat[] = Array.from({ length: Math.max(...def.players) }, (_, i) => ({
+    control: spectate || i ? 'normal' : 'you', faction: ed.f.players[i]?.race || 'humains', team: def.seats?.[i]?.team ?? i,
+  }));
+  const q = `?${spectate ? 'spectate' : 'play'}&map=${def.id}&p=${encodeSeats(seats)}`;
   window.open(`${import.meta.env.BASE_URL}${q}`, '_blank');
   act.say(`Partie lancée dans un nouvel onglet, sur « ${def.name} »${g.notes.length ? ` (${g.notes.join(' ')})` : ''}.`);
 }

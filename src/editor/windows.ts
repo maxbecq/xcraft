@@ -4,7 +4,7 @@
  */
 import { TEAM_COLORS } from '../render/models';
 import { DEFS, type Faction } from '../data';
-import { gamePlayers, RACES } from './format2';
+import { gameCounts, RACES } from './format2';
 import { act, ed } from './state';
 
 const h = (html: string) => {
@@ -191,7 +191,7 @@ export function teamsWindow(): void {
       label: 'OK', main: true, run: () => {
         const next = f.players.map((_, i) => (mode === 'menu' ? undefined : mode === 'alone' ? i : pick[i]));
         // As the game checks it (mapcheck.ts): at each players count the export offers, two teams at least.
-        const counts = gamePlayers(f) === 4 ? [2, 3, 4] : [2];
+        const counts = gameCounts(f);
         if (mode === 'map' && counts.some((k) => k <= n && new Set(next.slice(0, k)).size < 2)) {
           act.say(`Les ${Math.min(...counts.filter((k) => k <= n && new Set(next.slice(0, k)).size < 2))} premiers joueurs sont dans la même équipe : la partie serait gagnée d'avance.`);
           return false;
@@ -219,6 +219,8 @@ export function mapProperties(picture: HTMLCanvasElement, planets: [string, stri
     <label>Biome <select class="biome">${planets.map(([id, name]) => `<option value="${id}"${id === f.biome ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label>
     <label>Symétrie <select class="sym"><option value="none">Aucune</option><option value="rot180">Rotation 180° (2 parts)</option><option value="rot90">Rotation 90° (4 parts)</option></select></label>
     <label>Joueurs <select class="count">${[1, 2, 3, 4].map((k) => `<option${k === f.players.length ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+    <label>Se joue à <span class="counts">${[2, 3, 4].map((k) => `<label class="chip"><input type="checkbox" value="${k}"${gameCounts(f).includes(k) ? ' checked' : ''}> ${k}</label>`).join(' ')}</span></label>
+    <p class="note">À l'export : 2 seulement sans symétrie à quatre parts ; une carte 2 contre 2 se joue à 4 seulement.</p>
   </div><div class="pic"></div></div>`);
   (body.querySelector('.sym') as HTMLSelectElement).value = f.symmetry;
   const pic = document.createElement('canvas');
@@ -240,12 +242,24 @@ export function mapProperties(picture: HTMLCanvasElement, planets: [string, stri
         const biome = val('.biome');
         const next = { name: val('.name').trim().slice(0, 60) || f.name, id, description: val('.desc').trim().slice(0, 300) || undefined, biome, symmetry: val('.sym') as typeof f.symmetry };
         const count = Number(val('.count'));
+        const counts = [...body.querySelectorAll<HTMLInputElement>('.counts input:checked')].map((c) => Number(c.value));
+        const all = gameCounts({ symmetry: val('.sym') as typeof f.symmetry });
+        if (!counts.some((k) => all.includes(k))) {
+          act.say(`Il faut au moins un nombre de joueurs parmi ${all.join(', ')} (selon la symétrie).`);
+          return false;
+        }
         if (Object.entries(next).some(([k, v]) => f[k as keyof typeof next] !== v)) {
           act.snapshot();
           Object.assign(f, next);
           if (next.description === undefined) delete f.description;
         }
         if (count !== f.players.length) setPlayers(count);
+        const kept = counts.filter((k) => all.includes(k));
+        if (kept.join() !== gameCounts(f).join()) {
+          act.snapshot();
+          if (kept.join() === all.join()) delete f.counts;
+          else f.counts = kept;
+        }
         act.redrawAll();
       },
     },

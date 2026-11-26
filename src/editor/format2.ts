@@ -40,6 +40,8 @@ export interface MapFile2 {
   units: { type: string; owner: number; at: [number, number] }[];
   /** Regions, variables and triggers (sim/triggers.ts), passed to the game by the export, which runs them (sim/scenario.ts). */
   triggers?: Triggers;
+  /** The players counts the game file offers (format 1 `players`), when not all those its symmetry allows (gameCounts). */
+  counts?: number[];
 }
 
 export type Symmetry = 'none' | 'rot180' | 'rot90';
@@ -206,6 +208,9 @@ export function fromFormat1(def: MapFile, biome = def.biome, players = Math.max(
       return { race: s?.race ?? '', start, minerals: s?.minerals ?? START.minerals, energy: s?.energy ?? START.energy, forbid: [...(s?.forbid ?? [])], ...(s?.team === undefined ? {} : { team: s.team }) };
     }),
     decor: [], units: (def.units ?? []).filter((u) => u.owner < players).map((u) => ({ ...u, at: [...u.at] as [number, number] })),
+    // What the editor wrote and the game took: its counts (when not all its symmetry allows), its triggers.
+    ...(def.players.join() !== (turns.length === 4 ? [2, 3, 4] : [2]).join() ? { counts: [...def.players] } : {}),
+    ...(def.triggers ? { triggers: structuredClone(def.triggers) } : {}),
   };
 }
 
@@ -213,6 +218,10 @@ export function fromFormat1(def: MapFile, biome = def.biome, players = Math.max(
  * Reads an untrusted file (an import): a format 2 file checked field by field, or a format 1 file converted.
  * Throws a message in French on anything wrong.
  */
+const badCounts = (): never => {
+  throw new Error('« counts » : des nombres de joueurs parmi 2, 3 et 4.');
+};
+
 export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): MapFile2 {
   const f = json as Omit<Partial<MapFile2>, 'format'> & { format?: number };
   if (!f || typeof f !== 'object') throw new Error('Fichier illisible : pas un objet JSON.');
@@ -253,11 +262,21 @@ export function parseMap(json: unknown, maps1?: (def: MapFile) => MapFile2): Map
     decor: list<MapFile2['decor'][number]>(f.decor, (d) => DECOR.includes(d?.type) && pt(d.at) && (d.yaw === undefined || (typeof d.yaw === 'number' && Number.isFinite(d.yaw) && Math.abs(d.yaw) <= 7)), 'decor'),
     units: list<MapFile2['units'][number]>(f.units, (u) => known(u?.type, ['unit', 'building']) && Number.isInteger(u.owner) && u.owner >= -1 && u.owner < players.length && pt(u.at), 'units'),
     ...(f.triggers === undefined ? {} : { triggers: readTriggers(f.triggers, size, players.length) }),
+    ...(f.counts === undefined ? {} : { counts: Array.isArray(f.counts) && f.counts.length >= 1 && f.counts.length <= 3 && f.counts.every((c) => [2, 3, 4].includes(c)) ? [...new Set(f.counts)] : badCounts() }),
   };
 }
 
-/** The most players the game file made from `f` takes (toFormat1: four parts play up to 4, else 2). */
-export const gamePlayers = (f: Pick<MapFile2, 'symmetry'>) => (f.symmetry === 'rot90' ? 4 : 2);
+/**
+ * The players counts the game file made from `f` offers: those its symmetry allows (four parts: 2 to 4; else 2), or
+ * the ones the map keeps (`counts`), say 4 only for a 2 v 2 scenario.
+ */
+export function gameCounts(f: Pick<MapFile2, 'symmetry' | 'counts'>): number[] {
+  const all = f.symmetry === 'rot90' ? [2, 3, 4] : [2];
+  const kept = (f.counts ?? []).filter((n) => all.includes(n)).sort((a, b) => a - b);
+  return kept.length ? [...new Set(kept)] : all;
+}
+/** The most players the game file made from `f` takes. */
+export const gamePlayers = (f: Pick<MapFile2, 'symmetry' | 'counts'>) => Math.max(...gameCounts(f));
 
 /** The format 1 bounds the game checks (mapcheck.ts). */
 const MAX_SHAPES = 300;
@@ -368,7 +387,7 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
     name: f.name.replace(/[<>"&]/g, '').slice(0, 40) || 'Carte de l\'éditeur',
     ...(f.description ? { description: f.description.replace(/[<>"&]/g, '').slice(0, 200) } : {}),
     size: n,
-    players: symmetry === 'rot90' ? [2, 3, 4] : [2],
+    players: gameCounts(f),
     symmetry,
     biome: PLANETS.includes(f.biome) ? f.biome : 'desert',
     terrain,
