@@ -235,7 +235,7 @@ describe('cliffs', () => {
     it('on every map, by any cliff: kept again, it stays where it is', () => {
       const at = [1, 100, 256, 512, 768, 924, FP - 1];
       for (const id of Object.keys(MAPS)) {
-        const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biomesOnly ? MAPS[id].biomes![0] : '');
+        const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biome);
         const g = w.grid;
         const { steps, narrow } = g as unknown as { steps: Uint8Array; narrow(x: number, y: number): boolean };
         let seen = 0;
@@ -407,7 +407,7 @@ describe('cliffs', () => {
   // Alcoves in a cliff's edge are that wide here and there; no way a unit must take is.
   it('no map of the game needs a pass two tiles wide between two cliff feet: every field is reached without one', () => {
     for (const id of Object.keys(MAPS)) {
-      const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biomesOnly ? MAPS[id].biomes![0] : '');
+      const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biome);
       const g = w.grid;
       const { feet, sides } = g as unknown as { feet: Uint8Array; sides: Uint8Array };
       const W = w.map.width;
