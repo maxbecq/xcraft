@@ -1,4 +1,4 @@
-import { Group, type Object3D } from 'three';
+import { Box3, Group, Vector3, type Object3D } from 'three';
 
 /**
  * Human buildings coming alive: their brass armillary spheres turn slowly, the meridians one way and the
@@ -15,6 +15,42 @@ export function armillaries(body: Object3D, seed: number): { group: Group; updat
     group: new Group(),
     update(dt) {
       for (const [o, speed] of rings) o.rotation.y += speed * dt;
+    },
+  };
+}
+
+/**
+ * Isdaris buildings modelled by Fable (tools/meshy/fable.mjs): their floating parts (`float_*`), with the glowing lines laid
+ * on them (`fx_*` inside their box), rise and sink slowly, each building at its own pace. Null when the model has none.
+ */
+export function floaters(body: Object3D, seed: number): { group: Group; update(dt: number, t: number): void } | null {
+  // The named node only, not the meshes the loader splits it into (one per material), which carry its name too.
+  const top = (prefix: string) => {
+    const found = new Set<Object3D>();
+    body.traverse((o) => {
+      if (!o.name.startsWith(prefix)) return;
+      for (let p = o.parent; p; p = p.parent) if (found.has(p)) return;
+      found.add(o);
+    });
+    return [...found];
+  };
+  const floats = top('float_');
+  if (!floats.length) return null;
+  const boxes = floats.map((f) => new Box3().setFromObject(f).expandByScalar(0.1));
+  const riders = top('fx_').filter((o) => {
+    const b = new Box3().setFromObject(o);
+    return boxes.some((f) => f.containsBox(b));
+  });
+  const parts = [...floats, ...riders].map((o) => {
+    const scale = o.parent ? o.parent.getWorldScale(new Vector3()).y : 1;
+    return { o, y: o.position.y, amp: 0.05 / scale }; // 0.05 world units up and down
+  });
+  const phase = ((seed * 0.618) % 1) * Math.PI * 2;
+  return {
+    group: new Group(),
+    update(_dt, t) {
+      const k = Math.sin(t * 0.9 + phase);
+      for (const p of parts) p.o.position.y = p.y + p.amp * k;
     },
   };
 }

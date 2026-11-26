@@ -167,7 +167,7 @@ export const POOLS: Record<string, [number, number, number, number][]> = {
   caserne: [[0, 1.6, 1.3, 0xffb050]],
   grenier: [[0, 1.0, 0.8, 0xffc070]],
   mine: [[1.0, -0.9, 1.0, 0xff8030], [0.3, 0.6, 1.0, 0xb060ff]],
-  obelisque: [[0, 0, 2.6, 0xffd070]],
+  obelisque: [[0, 0, 2.6, 0x40d8ff]],
   emetteur: [[0, 0, 1.6, 0x40d8ff]],
   reservepsy: [[0, 0, 1.5, 0xb070ff]],
   portail: [[0, 0.4, 1.8, 0x40d8ff]],
@@ -177,7 +177,8 @@ export const POOLS: Record<string, [number, number, number, number][]> = {
 };
 let poolTexture: Texture | null = null;
 /** Buildings standing on a paved plaza wider than their model: [plaza width, raised inner step width]. */
-export const PLAZAS: Record<string, [number, number]> = { obelisque: [4.7, 3.1] };
+// The Obélisque stood on one; its Blender model (Fable) has its own terrace and stairs.
+export const PLAZAS: Record<string, [number, number]> = {};
 let plazaMaterials: [MeshStandardMaterial, MeshStandardMaterial] | null = null;
 
 /** An Art Deco forecourt: ivory slabs with gold inlays, a sunburst and blue enamel corners, in two low steps. */

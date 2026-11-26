@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
+  ShaderMaterial, ShaderChunk, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -28,8 +28,9 @@ teamPainted.forEach((m) => {
 });
 
 /** Team-coloured light (veins, cores): `team_glow` in Blender models. */
-const teamGlow = TEAM_COLORS.map((c) => {
-  const m = mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.6 });
+const teamGlow = TEAM_COLORS.map((c) => veinGlow(mat(c, { roughness: 0.35, emissive: c, emissiveIntensity: 1.6 })));
+/** Light breathing along a material's emission (VEIN_PULSE). */
+function veinGlow(m: MeshStandardMaterial): MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.veinTime = veinTime;
     shader.vertexShader = `varying float vVein;\nuniform float veinTime;\n${shader.vertexShader}`.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -39,7 +40,7 @@ const teamGlow = TEAM_COLORS.map((c) => {
   };
   m.customProgramCacheKey = () => 'team-vein';
   return m;
-});
+}
 /** Seconds, shared by every vein so one uniform drives them all. */
 export const veinTime = { value: 0 };
 /**
@@ -225,7 +226,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // and with Rodin (fal) or Tripo: the last Blender sketches
   'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'minechimique', 'grandealchimisterie', 'casernevolante', 'scarabee', 'cuve', 'minealchimique',
   // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
-  'grandconseil'];
+  'grandconseil',
+  // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
+  'trone'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
  * wide band only (a coloured outline round it read as a border). */
 const NO_TEAM_RIM = new Set(['mastodonte']);
@@ -335,6 +338,75 @@ function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
   m.customProgramCacheKey = () => `belfry-${key()}`;
 }
 
+/**
+ * The light of Fable's Blender Isdaris buildings, by material: cyan lines (`*_lueur`) breathing as the veins do, brighter
+ * than their glTF strength so the bloom haloes them; halos (`*_halo`, a disc or square under a floating part) a soft
+ * additive glow fading from the middle; the Portail's veil of lightning and its spires' glass (`voile`, `verre`) rippling.
+ * The marble gets the buildings' faint rim. Their blue bands are `team` (model()); `float_*` levitate (life.ts floaters).
+ */
+function fableLights(scene: Object3D): void {
+  const halos = new Map<Material, ShaderMaterial>();
+  scene.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const m = o.material as MeshStandardMaterial;
+    if (m.name === 'marbre') rimLight(m, 0.22);
+    else if (m.name.endsWith('_lueur') && !m.userData.vein) {
+      m.userData.vein = true;
+      m.emissiveIntensity *= 1.4;
+      veinGlow(m);
+    } else if (m.name.endsWith('_halo')) {
+      o.material = halos.get(m) ?? halos.set(m, fableHalo(m.emissive.clone())).get(m)!;
+      o.userData.noPick = true;
+      o.userData.noShadow = true;
+    } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
+      m.userData.ripple = true;
+      ripple(m, m.name === 'voile' ? 1 : 0.5);
+    }
+  });
+}
+
+function fableHalo(color: Color): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { color: { value: color }, veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `uniform vec3 color;
+      varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float a = pow(max(0.0, 1.0 - length(vUv - 0.5) * 2.0), 2.0) * 0.75 * vVein;
+        gl_FragColor = vec4(color * 1.6, a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+}
+
+/** An emissive texture rippling slowly (the lightning bending, the glass shimmering), `amount` 1 for the veil. */
+function ripple(m: MeshStandardMaterial, amount: number): void {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.veinTime = veinTime;
+    shader.vertexShader = `varying float vRipple;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vRipple = fract(sin(dot(floor(modelMatrix[3].xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * 6.28;`);
+    const sample = ShaderChunk.emissivemap_fragment.replace(
+      'texture2D( emissiveMap, vEmissiveMapUv )',
+      `texture2D( emissiveMap, vEmissiveMapUv + ${(0.012 * amount).toFixed(4)} * vec2(sin(veinTime * 1.7 + vEmissiveMapUv.y * 14.0 + vRipple), sin(veinTime * 0.9 + vEmissiveMapUv.x * 6.0 + vRipple)) )`,
+    );
+    shader.fragmentShader = `uniform float veinTime;\nvarying float vRipple;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `${sample}
+      totalEmissiveRadiance *= 0.9 + 0.15 * sin(veinTime * 2.3 + vRipple) + 0.05 * sin(veinTime * 11.0 + vRipple * 3.0);`);
+  };
+  m.customProgramCacheKey = () => `ripple-${amount}`;
+}
+
 // Pale plates take the team colour on Isdaris armour only: the Dieux keep their marble white, and on the Z's
 // rusted steel it blurred into a blue sheen.
 const isIsdaris = (type: string) => (DEFS[type] as { faction?: string } | undefined)?.faction === 'isdaris';
@@ -373,6 +445,7 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             }
           }
           if (RIGS[type] && DEFS[type]?.kind === 'unit') procRig(gltf.scene, RIGS[type]);
+          fableLights(gltf.scene);
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
           holder.add(gltf.scene);
@@ -872,7 +945,7 @@ export function model(type: string, team: Material, seed = 0): Group {
   const veins: [Mesh, ShaderMaterial][] = [];
   g.traverse((o) => {
     if (!(o instanceof Mesh)) return;
-    o.castShadow = true;
+    o.castShadow = !o.userData.noShadow;
     o.receiveShadow = true;
     const name = (o.material as Material).name;
     if (name === 'meshy') o.material = meshySkins.get(type)?.[teamMaterials.indexOf(team as MeshStandardMaterial)] ?? o.material;
