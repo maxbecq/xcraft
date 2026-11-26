@@ -1,4 +1,4 @@
-import { Box3, Group, Vector3, type Object3D } from 'three';
+import { Box3, Group, Quaternion, Vector3, type Object3D } from 'three';
 
 /**
  * Human buildings coming alive: their brass armillary spheres turn slowly, the meridians one way and the
@@ -35,9 +35,19 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
     return [...found];
   };
   const floats = top('float_');
-  if (!floats.length) return null;
+  // The Orbe's rings (`spin_*`), each turning about one of its own diameters, the two opposite ways at their own
+  // speeds, as a gyroscope (Fable's proposal): modelled flat in their local XZ plane, so X and Z are diameters.
+  const spins = top('spin_').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
+    o, q0: o.quaternion.clone(), axis: new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
+  }));
+  if (!floats.length && !spins.length) return null;
   const boxes = floats.map((f) => new Box3().setFromObject(f).expandByScalar(0.1));
+  const inFloat = (o: Object3D) => {
+    for (let p = o.parent; p; p = p.parent) if (floats.includes(p)) return true;
+    return false;
+  };
   const riders = top('fx_').filter((o) => {
+    if (inFloat(o)) return false; // moves with its float already (the Orbe's core and rings)
     const b = new Box3().setFromObject(o);
     return boxes.some((f) => f.containsBox(b));
   });
@@ -46,11 +56,13 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
     return { o, y: o.position.y, amp: 0.05 / scale }; // 0.05 world units up and down
   });
   const phase = ((seed * 0.618) % 1) * Math.PI * 2;
+  const turn = new Quaternion();
   return {
     group: new Group(),
     update(_dt, t) {
       const k = Math.sin(t * 0.9 + phase);
       for (const p of parts) p.o.position.y = p.y + p.amp * k;
+      for (const s of spins) s.o.quaternion.copy(s.q0).multiply(turn.setFromAxisAngle(s.axis, t * s.speed + phase));
     },
   };
 }

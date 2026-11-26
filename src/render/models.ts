@@ -361,6 +361,16 @@ function fableLights(scene: Object3D): void {
       m.userData.vein = true;
       m.emissiveIntensity = Math.min(m.emissiveIntensity, 1.1); // the Portail's was 4: it whitened the lintel
       veinGlow(m);
+    } else if (m.name === 'orbe_halo') {
+      // The Orbe's pool of light on the ground under it: laid a little higher, so the relief does not swallow it.
+      o.material = orbGround ??= groundGlow();
+      o.position.y += 0.03 / (o.parent?.getWorldScale(new Vector3()).y ?? 1);
+      o.userData.noPick = true;
+      o.userData.noShadow = true;
+    } else if (m.name === 'orbe_coeur' && !m.userData.ripple) {
+      // The Orbe's plasma: its Voronoi cells drift round the sphere and ripple, like currents inside it.
+      m.userData.ripple = true;
+      ripple(m, 1.5, 0.02);
     } else if (m.name.endsWith('_halo')) {
       o.material = halos.get(m) ?? halos.set(m, fableHalo()).get(m)!;
       o.userData.noPick = true;
@@ -480,6 +490,32 @@ function glowSquare(): ShaderMaterial {
   });
 }
 
+let orbGround: ShaderMaterial | undefined;
+/** A cyan pool of light on the ground, laid over it (added, it vanished on pale ground): full in the middle, fading out. */
+function groundGlow(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float d = length(vUv - 0.5) * 2.0;
+        gl_FragColor = vec4(vec3(0.15, 0.85, 1.3), pow(max(0.0, 1.0 - d), 1.6) * 0.75 * (0.7 + 0.3 * vVein));
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+}
+
 /** A thin cyan glow under a floating part (the Obélisque's shaft, the Trône's crown): small, faint, fading from the middle. */
 function fableHalo(): ShaderMaterial {
   return new ShaderMaterial({
@@ -552,19 +588,19 @@ function lintelBeam(scene: Object3D, lintel: Object3D): void {
 }
 
 /** An emissive texture rippling slowly (the lightning bending, the glass shimmering), `amount` 1 for the veil. */
-function ripple(m: MeshStandardMaterial, amount: number): void {
+function ripple(m: MeshStandardMaterial, amount: number, scroll = 0): void {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.veinTime = veinTime;
     shader.vertexShader = `varying float vRipple;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
       vRipple = fract(sin(dot(floor(modelMatrix[3].xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * 6.28;`);
     const sample = ShaderChunk.emissivemap_fragment.replace(
       'texture2D( emissiveMap, vEmissiveMapUv )',
-      `texture2D( emissiveMap, vEmissiveMapUv + ${(0.012 * amount).toFixed(4)} * vec2(sin(veinTime * 1.7 + vEmissiveMapUv.y * 14.0 + vRipple), sin(veinTime * 0.9 + vEmissiveMapUv.x * 6.0 + vRipple)) )`,
+      `texture2D( emissiveMap, vEmissiveMapUv + vec2(veinTime * ${scroll.toFixed(4)}, 0.0) + ${(0.012 * amount).toFixed(4)} * vec2(sin(veinTime * 1.7 + vEmissiveMapUv.y * 14.0 + vRipple), sin(veinTime * 0.9 + vEmissiveMapUv.x * 6.0 + vRipple)) )`,
     );
     shader.fragmentShader = `uniform float veinTime;\nvarying float vRipple;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `${sample}
       totalEmissiveRadiance *= 0.9 + 0.15 * sin(veinTime * 2.3 + vRipple) + 0.05 * sin(veinTime * 11.0 + vRipple * 3.0);`);
   };
-  m.customProgramCacheKey = () => `ripple-${amount}`;
+  m.customProgramCacheKey = () => `ripple-${amount}-${scroll}`;
 }
 
 // Pale plates take the team colour on Isdaris armour only: the Dieux keep their marble white, and on the Z's
