@@ -420,7 +420,8 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     return this.strike(e, t);
   }
   const t = this.entities.get(o.target);
-  if (!t || t.hp <= 0 || t.inside || (!this.sees(e.owner, t) && (o.auto || this.hidden(t)))) return this.setOrder(e, null);
+  // A building under a Bouclier de plasma: its attackers turn to something else (équilibreur 24/11).
+  if (!t || t.hp <= 0 || t.inside || (t.phased > 0 && t.def.kind === 'building') || (!this.sees(e.owner, t) && (o.auto || this.hidden(t)))) return this.setOrder(e, null);
   if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
     // Chased too far: walk back.
     return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
@@ -720,7 +721,7 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
     if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
     if (a && !hits(a, t)) continue;
     if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
-    if (t.inside) continue; // sheltering in a bunker: hit the bunker
+    if (t.inside || (t.phased > 0 && t.def.kind === 'building')) continue; // sheltering in a bunker: hit the bunker; a plasma shield: another
     const d = this.gap(e, t);
     // No rank brings the score under d: past the best already, it cannot win (rank costs a weapon lookup).
     if (d > range || d > bestScore || !this.sees(e.owner, t)) continue;

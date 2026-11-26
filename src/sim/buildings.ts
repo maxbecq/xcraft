@@ -256,6 +256,12 @@ export function trainTime(this: World, b: Entity, type: string): number {
 export function operate(this: World, b: Entity): void {
   if (b.buildLeft > 0) {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
+    // An Isdaris site whose construction zone is lost is gone, nothing paid back (équilibreur 24/11).
+    if ((b.def as BuildingDef).faction === 'isdaris' && (b.def as BuildingDef).needsPower && this.tick % 10 === 0 && !this.powered(b.owner, b.x, b.y)) {
+      this.say(b.owner, `Zone de construction perdue : ${b.def.name} annulé${b.def.name.endsWith('e') ? 'e' : ''}.`);
+      b.hp = 0;
+      return;
+    }
     // Materialising (Isdaris) or assembling (Z): builds itself, hp and shield filling up.
     const total = this.buildTicks(b);
     // Called down by Gaïa at level N: N steps a tick.

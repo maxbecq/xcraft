@@ -47,13 +47,13 @@ describe('Isdaris', () => {
     expect(of(w, 0, 'reservepsy')).toHaveLength(1);
   });
 
-  it('a robot beams down an Obélisque within its sight, for a third more (fiche 2010)', () => {
+  it('a robot beams down an Obélisque within its sight, out of the zone for a third more (fiche 2010, équilibreur 24/11)', () => {
     const w = createMatch(['isdaris', 'humains']);
     const p = w.players[0];
     p.minerals = 5000;
     const robot = of(w, 0, 'moissonneur')[0];
     let spot: [number, number] | undefined;
-    for (let r = 14; r < 40 && !spot; r++) for (let dx = -r; dx <= r && !spot; dx++) for (const dy of [-r, r]) if (!spot && w.canPlace('obelisque', 12 + dx, 12 + dy, 0)) spot = [12 + dx, 12 + dy];
+    for (let r = 14; r < 40 && !spot; r++) for (let dx = -r; dx <= r && !spot; dx++) for (const dy of [-r, r]) if (!spot && w.canPlace('obelisque', 12 + dx, 12 + dy, 0) && !w.powered(0, (14 + dx) * FP, (14 + dy) * FP)) spot = [12 + dx, 12 + dy];
     w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'obelisque', tx: spot![0], ty: spot![1] }]);
     for (let i = 0; i < ticks(60) && of(w, 0, 'obelisque').length < 2; i++) w.step([]);
     expect(of(w, 0, 'obelisque')).toHaveLength(2);
@@ -67,11 +67,11 @@ describe('Isdaris', () => {
     const otx = Math.floor(ob.x / FP);
     const oty = Math.floor(ob.y / FP);
     const far = (dx: number) => w.canPlace('emetteur', otx + dx, oty, 0);
-    // Zones of 9 (obelisk) and 7 (emitter) touch up to 16 tiles apart; further, it cannot be placed.
-    expect(far(19)).toBe(false);
+    // Zones of 15 (obelisk and emitter, équilibreur 24/11) touch up to 30 tiles apart; further, it cannot be placed.
+    expect(far(32)).toBe(false);
     // (The obelisk 4x4 since the balancer, 2026-11-22: its middle on a tile's edge, half a tile nearer than the 5x5's.)
-    const a = w.spawn('emetteur', 0, (otx + 13) * FP + FP, oty * FP + FP);
-    const b = w.spawn('emetteur', 0, (otx + 26) * FP + FP, oty * FP + FP);
+    const a = w.spawn('emetteur', 0, (otx + 24) * FP + FP, oty * FP + FP);
+    const b = w.spawn('emetteur', 0, (otx + 48) * FP + FP, oty * FP + FP);
     expect(w.powerNetwork(0)).toContain(b);
     expect(w.powered(0, b.x + 3 * FP, b.y)).toBe(true);
     w.remove(a); // the link in the middle goes: the far emitter is cut off

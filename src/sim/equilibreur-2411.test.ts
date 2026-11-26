@@ -124,3 +124,43 @@ describe('équilibreur 24/11, Isdaris numbers and tree', () => {
     expect(c.cooldown).toBeLessThanOrEqual(ticks(0.9));
   });
 });
+
+describe('équilibreur 24/11, the Isdaris construction zone', () => {
+  const isd = () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    w.players[0].minerals = w.players[0].energy = 99999;
+    return { w, ob };
+  };
+
+  it('15 round an Obélisque or an Émetteur', () => {
+    expect([(DEFS.obelisque as BuildingDef).power, (DEFS.emetteur as BuildingDef).power]).toEqual([15, 15]);
+  });
+
+  it('only the Obélisque has the Bouclier de plasma, cast on a building of the zone; enemies turn away from it', () => {
+    const { w, ob } = isd();
+    for (const t of ['portail', 'nanoassembleur', 'orbecommandement', 'trone']) expect((DEFS[t] as BuildingDef).abilities ?? []).not.toContain('bouclierplasma');
+    const portail = w.spawn('portail', 0, ob.x + 6 * FP, ob.y);
+    w.step([{ player: 0, kind: 'ability', ids: [ob.id], name: 'bouclierplasma', x: portail.x, y: portail.y }]);
+    expect(portail.phased).toBeGreaterThan(0);
+    expect(ob.phased).toBe(0);
+    expect(ob.plasmaCd).toBeGreaterThan(0);
+    const foe = w.spawn('legionnaire', 1, portail.x + 3 * FP, portail.y);
+    expect(w.enemyNear(foe, 4 * FP)?.id).not.toBe(portail.id);
+  });
+
+  it('a Récepteur draws a quarter with each robot inside', () => {
+    expect((DEFS.recepteur as BuildingDef).bunker).toBe(4);
+    expect((DEFS.recepteurarme as BuildingDef).bunker).toBe(4);
+  });
+
+  it('a site whose zone is lost is gone, nothing paid back', () => {
+    const { w, ob } = isd();
+    const site = w.site('portail', 0, Math.floor(ob.x / FP) + 6, Math.floor(ob.y / FP));
+    w.remove(ob);
+    const m = w.players[0].minerals;
+    run(w, 1);
+    expect(w.entities.has(site.id)).toBe(false);
+    expect(w.players[0].minerals).toBe(m);
+  });
+});

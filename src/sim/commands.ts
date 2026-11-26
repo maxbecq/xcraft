@@ -355,10 +355,14 @@ export function apply(this: World, c: Command): void {
         return;
       }
       if (b && c.name === 'bouclierplasma') {
+        // Équilibreur 24/11: on the building clicked (the Obélisque itself if none), Isdaris, finished, in the zone.
         const ab = ABILITIES.bouclierplasma;
-        b.phased = ticks(ab.duration);
+        const at = c.x === undefined || c.y === undefined ? b : [...this.entities.values()].find((t) => t.owner === b.owner && t.def.kind === 'building' && t.hp > 0 && Math.abs(t.x - c.x!) <= ((t.def as BuildingDef).size * FP) / 2 && Math.abs(t.y - c.y!) <= ((t.def as BuildingDef).size * FP) / 2);
+        if (!at || at.buildLeft > 0 || (at.def as BuildingDef).faction !== 'isdaris') return void this.say(c.player, 'Visez un bâtiment isdaris achevé.');
+        if (!this.powered(c.player, at.x, at.y)) return void this.say(c.player, 'Hors de la zone de construction.');
+        at.phased = ticks(ab.duration);
         b.plasmaCd = ticks(ab.cooldown);
-        this.casts.push({ kind: c.name, x: b.x, y: b.y });
+        this.casts.push({ kind: c.name, x: at.x, y: at.y });
         return;
       }
       if (!b || c.x === undefined || c.y === undefined) return;
@@ -550,6 +554,8 @@ export function materialise(this: World, o: Entity, type: string, tx: number, ty
   const lack = this.lacks(o.owner, type);
   if (lack) return void this.say(o.owner, lack);
   if (!this.canPlace(type, tx, ty, o.owner)) return void this.say(o.owner, this.misplaced(def, tx, ty, o.owner));
+  // An Obélisque raises an Obélisque or a Récepteur inside the zone only; a robot may go beyond (équilibreur 24/11).
+  if (!this.powered(o.owner, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return void this.say(o.owner, 'Hors de la zone de construction.');
   const mid = Math.floor(def.size / 2);
   if (!this.vision[o.owner].visible(tx + mid, ty + mid)) return void this.say(o.owner, 'Il faut voir l’emplacement.');
   if (!this.pay(o.owner, def)) return;

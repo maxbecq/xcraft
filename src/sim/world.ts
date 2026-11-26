@@ -1039,8 +1039,9 @@ export class World {
           this.say(e.owner, lack);
           return this.setOrder(e, null);
         }
-        // Fiche 2010: an Obélisque or a Récepteur beamed down on a robot costs a third more.
-        if (!this.pay(e.owner, def.faction === 'isdaris' ? { cost: this.beaconCost(def) } : def)) return this.setOrder(e, null);
+        // Fiche 2010: an Obélisque or a Récepteur beamed down on a robot costs a third more, out of the construction zone
+        // only (équilibreur 24/11).
+        if (!this.pay(e.owner, def.faction === 'isdaris' && !this.powered(e.owner, cx, cy) ? { cost: this.beaconCost(def) } : def)) return this.setOrder(e, null);
         const b = this.site(o.type, e.owner, o.tx, o.ty, e.lvl);
         if ((e.def as UnitDef).unique) e.raising = b.id;
         if (def.absorbs) {
