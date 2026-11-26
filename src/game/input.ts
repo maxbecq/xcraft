@@ -13,11 +13,6 @@ const PICK_MARGIN_PX = 10;
 const PICK_MIN_PX = 34;
 /** Flesh round a rigged character's bones, in world units: its posed skeleton is what is measured. */
 const BONE_PAD = 0.14;
-/** Mineral fields and wells lie flat and low on screen: a wider catch round their outline, so an order lands on them. */
-const RESOURCE_MARGIN_PX = 18;
-const RESOURCE_MIN_PX = 48;
-/** Last resort for a field with no model drawn: within this distance of its middle. */
-const RESOURCE_PICK_PX = 45;
 const DOUBLE_TAP_MS = 350;
 const scratch = new Box3();
 
@@ -773,18 +768,8 @@ export class Input {
       hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e), xray: silhouetted(hit.object) });
     }
     const occupant = this.wellOccupants();
-    return pickAt(hits, () => this.caughtAt(x, y, occupant), () => {
-      let best: Entity | undefined;
-      let bestD = RESOURCE_PICK_PX;
-      const hidden = new Set(this.hooks.roots().filter((r) => !r.visible).map((r) => r.userData.id));
-      for (const e of this.world.entities.values()) {
-        if (e.def.kind !== 'resource' || hidden.has(e.id) || occupant(e)) continue;
-        const s = this.screenOf(e);
-        const d = Math.hypot(s.x - x, s.y - y);
-        if (d < bestD) [best, bestD] = [e, d];
-      }
-      return best;
-    }, occupant, () => (harvest ? undefined : this.caughtAt(x, y, occupant, true)));
+    // No resource caught off its stones (a well's veins and glow, the ground round a field): see caughtAt.
+    return pickAt(hits, () => this.caughtAt(x, y, occupant), () => undefined, occupant, () => (harvest ? undefined : this.caughtAt(x, y, occupant, true)));
   }
 
   /** Workers among ours: an order on a resource the ray meets is theirs to harvest, never a worker crowding it. */
@@ -805,6 +790,7 @@ export class Input {
     const roots = new Map<number, Object3D>();
     for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
     const catches: Catch[] = [];
+    let ground: Vector3 | false | undefined;
     for (const e of this.world.entities.values()) {
       const resource = e.def.kind === 'resource';
       if (resource && units) continue;
@@ -814,14 +800,26 @@ export class Input {
       const root = roots.get(e.id);
       if (resource && root && !root.visible) continue; // a field the fog still hides
       if (resource && occupant(e)) continue; // a well taken: its extractor is picked by the ray
-      const r = (root && this.modelRect(root)) ?? { x0: feet.x, y0: feet.y, x1: feet.x, y1: feet.y };
-      catches.push(resource ? { e, r, margin: RESOURCE_MARGIN_PX, min: RESOURCE_MIN_PX } : { e, r, margin: PICK_MARGIN_PX, min: PICK_MIN_PX });
+      const box = root && this.modelBox(root);
+      if (resource) {
+        // A resource only within the ring its stones make on the ground (a well's boulders, a field's geodes), never
+        // its screen box's corners nor a margin round it: the veins and glow spread past it (remark, 0.9.174).
+        ground ??= this.groundAt(x, y) ?? false;
+        const cx = e.x / FP;
+        const cz = e.y / FP;
+        const reach = box ? Math.max(cx - box.min.x, box.max.x - cx, cz - box.min.z, box.max.z - cz) : 0;
+        if (!box || !ground || Math.hypot(ground.x - cx, ground.z - cz) > reach) continue;
+        catches.push({ e, r: this.rectOf(box), margin: 0, min: 0 });
+        continue;
+      }
+      const r = box ? this.rectOf(box) : { x0: feet.x, y0: feet.y, x1: feet.x, y1: feet.y };
+      catches.push({ e, r, margin: PICK_MARGIN_PX, min: PICK_MIN_PX });
     }
     return nearestCatch(x, y, catches);
   }
 
-  /** The screen box an entity's drawn model fills (rings, halos and other see-through parts left out), or null. */
-  private modelRect(root: Object3D): { x0: number; y0: number; x1: number; y1: number } | null {
+  /** The world box an entity's drawn model fills (rings, halos and other see-through parts left out), or null. */
+  private modelBox(root: Object3D): Box3 | null {
     const box = new Box3();
     const v = new Vector3();
     const walk = (o: Object3D): void => {
@@ -841,7 +839,12 @@ export class Input {
       for (const c of o.children) walk(c);
     };
     walk(root);
-    if (box.isEmpty()) return null;
+    return box.isEmpty() ? null : box;
+  }
+
+  /** The screen box a world box fills. */
+  private rectOf(box: Box3): { x0: number; y0: number; x1: number; y1: number } {
+    const v = new Vector3();
     const camera = this.hooks.camera();
     const r = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     for (let i = 0; i < 8; i++) {
