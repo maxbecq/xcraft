@@ -339,35 +339,43 @@ function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
 }
 
 /**
- * The light of Fable's Blender Isdaris buildings, by material: cyan lines (`*_lueur`) breathing as the veins do, brighter
- * than their glTF strength so the bloom haloes them; halos (`*_halo`, a disc or square under a floating part) a soft
- * additive glow fading from the middle; the Portail's veil of lightning and its spires' glass (`voile`, `verre`) rippling.
- * The marble gets the buildings' faint rim. Their blue bands are `team` (model()); `float_*` levitate (life.ts floaters).
+ * The light of Fable's Blender Isdaris buildings, by material: cyan lines (`*_lueur`) breathing as the veins do, held to
+ * a strength the bloom haloes without whitening; halos (`*_halo`, a disc or square under a floating part) a faint cyan
+ * glow fading from the middle; the Portail's veil of lightning and its spires' glass (`voile`, `verre`) rippling, and a
+ * blue light hung under its lintel. The marble is toned down from pure white and gets the buildings' faint rim. Their blue bands are `team` (model()); `float_*` levitate (life.ts floaters).
  */
 function fableLights(scene: Object3D): void {
   const halos = new Map<Material, ShaderMaterial>();
   scene.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     const m = o.material as MeshStandardMaterial;
-    if (m.name === 'marbre') rimLight(m, 0.22);
-    else if (m.name.endsWith('_lueur') && !m.userData.vein) {
+    if (m.name === 'marbre' && !m.userData.dim) {
+      // Pure white marble flared in the bloom, past the other Isdaris buildings (the user's remark, 0.9.173).
+      m.userData.dim = true;
+      m.color.multiplyScalar(0.72);
+      rimLight(m, 0.22);
+    } else if (m.name.endsWith('_lueur') && !m.userData.vein) {
       m.userData.vein = true;
-      m.emissiveIntensity *= 1.4;
+      m.emissiveIntensity = Math.min(m.emissiveIntensity, 1.1); // the Portail's was 4: it whitened the lintel
       veinGlow(m);
     } else if (m.name.endsWith('_halo')) {
-      o.material = halos.get(m) ?? halos.set(m, fableHalo(m.emissive.clone())).get(m)!;
+      o.material = halos.get(m) ?? halos.set(m, fableHalo()).get(m)!;
       o.userData.noPick = true;
       o.userData.noShadow = true;
     } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
       m.userData.ripple = true;
+      m.emissiveIntensity = m.name === 'voile' ? 0.75 : 0.5;
       ripple(m, m.name === 'voile' ? 1 : 0.5);
     }
   });
+  const lintel = scene.getObjectByName('float_linteau');
+  if (lintel) lintelBeam(scene, lintel);
 }
 
-function fableHalo(color: Color): ShaderMaterial {
+/** A thin cyan glow under a floating part (the Obélisque's shaft, the Trône's crown): small, faint, fading from the middle. */
+function fableHalo(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { color: { value: color }, veinTime },
+    uniforms: { color: { value: new Color(0.1, 0.65, 1.0) }, veinTime },
     vertexShader: `uniform float veinTime;
       varying vec2 vUv;
       varying float vVein;
@@ -381,14 +389,58 @@ function fableHalo(color: Color): ShaderMaterial {
       varying vec2 vUv;
       varying float vVein;
       void main() {
-        float a = pow(max(0.0, 1.0 - length(vUv - 0.5) * 2.0), 2.0) * 0.75 * vVein;
-        gl_FragColor = vec4(color * 1.6, a);
+        float a = pow(max(0.0, 1.0 - length(vUv - 0.5) * 2.6), 2.0) * 0.3 * vVein;
+        gl_FragColor = vec4(color, a);
       }`,
     transparent: true,
     depthWrite: false,
     blending: AdditiveBlending,
     side: DoubleSide,
   });
+}
+
+/**
+ * The Portail's blue light falling from under its floating lintel onto the arch, as on its board: an open, tapering
+ * sleeve hung under the lintel (so it floats with it), bright at the top and fading down, in faint vertical streaks.
+ */
+function lintelBeam(scene: Object3D, lintel: Object3D): void {
+  scene.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(lintel);
+  const size = box.getSize(new Vector3());
+  const material = new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vEdge;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vEdge = abs(dot(normalize(mat3(modelMatrix) * normal), normalize(cameraPosition - world.xyz)));
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vEdge;
+      varying float vVein;
+      void main() {
+        float streak = 0.55 + 0.45 * sin(vUv.x * 56.5 + veinTime * 0.7);
+        float a = pow(vUv.y, 1.6) * streak * pow(vEdge, 1.2) * 0.5 * vVein;
+        gl_FragColor = vec4(0.25, 0.6, 1.0, a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  const beam = new Mesh(new CylinderGeometry(0.5, 0.3, 1, 20, 1, true).translate(0, -0.5, 0), material);
+  beam.scale.set(size.x * 0.85, size.x * 0.6, size.z * 0.85);
+  beam.position.set((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+  beam.userData.noPick = true;
+  beam.userData.noShadow = true;
+  lintel.attach(beam);
 }
 
 /** An emissive texture rippling slowly (the lightning bending, the glass shimmering), `amount` 1 for the veil. */
