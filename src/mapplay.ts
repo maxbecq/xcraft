@@ -1,3 +1,4 @@
+import { type Faction, FACTIONS } from './data';
 import { CORNERS, type MapFile } from './maps';
 import { FP } from './sim/fixed';
 import { createMatch } from './sim/setup';
@@ -12,13 +13,28 @@ import type { World } from './sim/world';
 export function unplayable(def: MapFile): string | null {
   try {
     for (const players of def.players) {
-      const why = check(def, players);
+      const why = check(def, players) ?? starts(def, players);
       if (why) return `À ${players} joueurs : ${why}`;
     }
     return null;
   } catch {
     return 'la carte ne se construit pas.';
   }
+}
+
+/** Every camp's first units where createMatch puts them: within the map, walkers on open ground (Codex, 2026-11-26:
+ * the Humains' alone were built, and Gaïa came out past the map's edge). */
+function starts(def: MapFile, players: number): string | null {
+  for (const f of Object.keys(FACTIONS) as Faction[]) {
+    const m = createMatch(Array(players).fill(f), undefined, def, def.biome);
+    const [W, H] = [m.map.width * FP, m.map.height * FP];
+    for (const e of m.entities.values()) {
+      if (e.owner < 0 || e.def.kind !== 'unit') continue;
+      const off = e.x < 0 || e.y < 0 || e.x >= W || e.y >= H;
+      if (off || (!('flying' in e.def && e.def.flying) && !m.grid.open(Math.floor(e.x / FP), Math.floor(e.y / FP)))) return `les premières unités des ${FACTIONS[f].name} sont hors de la carte ou sur un sol fermé (${Math.floor(e.x / FP)}, ${Math.floor(e.y / FP)}).`;
+    }
+  }
+  return null;
 }
 
 function check(def: MapFile, players: number): string | null {

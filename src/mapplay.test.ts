@@ -31,6 +31,12 @@ describe('whether an imported map can be played', () => {
     expect(unplayable(open())).toBeNull();
   });
 
+  // Codex, 2026-11-26 (final review): only the Humains' starts were built, so a start whose workers stood at the map's
+  // east edge passed, and Gaïa (a Dieux start) came out past it.
+  it('refuses a start any camp\'s first units would stand off the map at', () => {
+    expect(unplayable(withBase(0, { workers: [61, 32] }))).toMatch(/hors de la carte|enfermé|pas la place/);
+  });
+
   it('refuses a base cut off from the starts', () => {
     const m = open();
     m.terrain = [{ shape: 'rect', from: [18, 18], to: [36, 36], chasm: true }, { shape: 'rect', from: [21, 21], to: [33, 33], fill: true }];
