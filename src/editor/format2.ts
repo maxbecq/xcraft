@@ -2,7 +2,7 @@ import { DEFS, type Faction, FACTIONS, START } from '../data';
 import { readTriggers, type Triggers } from '../sim/triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
-import { PLANETS } from '../mapcheck';
+import { parseMap as parseMapText, PLANETS } from '../mapcheck';
 
 /**
  * Map file format 2: a tile grid, made for the editor (format 1, src/maps.ts, is made to be written by hand).
@@ -415,4 +415,16 @@ export function toFormat1(f: MapFile2): { map: MapFile; notes: string[] } {
   if (f.decor.length) notes.push('Pas encore lu par le jeu : le décor posé à la main.');
   if (f.triggers?.triggers.length) map.triggers = structuredClone(f.triggers);
   return { map, notes };
+}
+
+/**
+ * The exact text of a format 1 file the game imports, read back as the game reads it: written once, the text checked is
+ * the text saved (Codex, 2026-11-26: the compact text was checked, an indented one saved, and refused at the import
+ * when the indentation took it past the size bound). Throws why the game would refuse it.
+ */
+export function gameText(map: MapFile): string {
+  const text = JSON.stringify(map, null, 1);
+  const checked = parseMapText(text);
+  if (typeof checked === 'string') throw new Error(checked);
+  return text;
 }

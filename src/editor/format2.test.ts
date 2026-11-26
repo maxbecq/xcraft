@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { rotateFootprint, rotateTile } from '../map';
-import { checkMap, parseMap as parseMap1, parseMap as parseMapText } from '../mapcheck';
+import { checkMap, MAP_MAX_CHARS, parseMap as parseMap1, parseMap as parseMapText } from '../mapcheck';
 import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
 import { createMatch } from '../sim/setup';
-import { blankMap, DECOR, fromFormat1, gameCounts, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { blankMap, DECOR, fromFormat1, gameCounts, gameText, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 describe('format 2', () => {
@@ -257,5 +257,19 @@ describe('format 2 : revue Codex', () => {
     const text = JSON.stringify(toFormat1(f).map);
     expect(typeof checkMap(JSON.parse(text))).toBe('object'); // the object alone passes
     expect(parseMapText(text)).toMatch(/trop gros/); // the text the game reads does not
+  });
+});
+
+// Codex, 2026-11-26 (third final review): the compact text was checked and an indented one saved, so a map just under
+// the bound was said exported, then refused at the import.
+describe('le texte exporté pour le jeu', () => {
+  it('est celui qui a été contrôlé : refusé s\'il dépasse la limite une fois écrit', () => {
+    const big = { ...MAPS['le-col'], id: 'gros-col', description: '', terrain: [...MAPS['le-col'].terrain] } as MapFile;
+    const poly = MAPS.asteroides.terrain.find((t) => t.shape === 'polygon' && !('arch' in t && t.arch))!;
+    while (JSON.stringify({ ...big, terrain: [...big.terrain, poly] }).length <= MAP_MAX_CHARS - 2000) big.terrain.push(poly);
+    expect(typeof parseMapText(JSON.stringify(big))).toBe('object'); // compact, it passes
+    expect(() => gameText(big)).toThrow(); // as saved, it would not
+    const text = gameText(MAPS['le-col']);
+    expect(typeof parseMapText(text)).toBe('object');
   });
 });

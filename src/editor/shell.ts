@@ -11,7 +11,7 @@ import { checkMap, parseMap as parseMapText, PLANETS } from '../mapcheck';
 import { encodeSeats, type Seat } from '../game/seats';
 import { addMap, isImported, MAX_IMPORTED } from '../maps';
 import { unplayable } from '../mapplay';
-import { fromFormat1, MAX_SIZE, parseMap, type Symmetry, blankMap, toFormat1 } from './format2';
+import { fromFormat1, gameText, MAX_SIZE, parseMap, type Symmetry, blankMap, toFormat1 } from './format2';
 import { act, changed, ed, onChanged, type Tool, TOOL_HELP, TOOL_NAMES } from './state';
 import { layersPanel, minimapPanel, palettePanel, playersPanel, propertiesPanel, setPlayers } from './panels';
 import { dialog, keysHelp, mapProperties, playability, teamsWindow, techTree } from './windows';
@@ -75,13 +75,11 @@ function saveAs(): void {
   }]);
 }
 /** The format 1 file the game imports, checked as the game will check it; null (and why) if it would be refused. */
-function gameFile(): { def: ReturnType<typeof toFormat1>['map']; notes: string[] } | null {
+function gameFile(): { def: ReturnType<typeof toFormat1>['map']; text: string; notes: string[] } | null {
   try {
     const { map, notes } = toFormat1(ed.f);
-    // The text the game will read (its size bound included), read as the game reads it.
-    const checked = parseMapText(JSON.stringify(map));
-    if (typeof checked === 'string') throw new Error(checked);
-    return { def: map, notes };
+    // The text the game will read (its size bound included), read as the game reads it: the one saved too.
+    return { def: map, text: gameText(map), notes };
   } catch (err) {
     act.say(`Export pour le jeu impossible : ${(err as Error).message}`);
     return null;
@@ -90,14 +88,14 @@ function gameFile(): { def: ReturnType<typeof toFormat1>['map']; notes: string[]
 function exportGame(): void {
   const g = gameFile();
   if (!g) return;
-  download(`${g.def.id}.json`, json(g.def));
+  download(`${g.def.id}.json`, new Blob([g.text], { type: 'application/json' }));
   act.say(['Exporté pour le jeu : à importer par « Importer une carte » dans le menu du jeu.', ...g.notes].join(' '));
 }
 /** The map put among this browser's imported maps, and a match on it opened in a new tab. */
 function testMap(spectate: boolean): void {
   const g = gameFile();
   if (!g) return;
-  const def = parseMapText(JSON.stringify(g.def));
+  const def = parseMapText(g.text);
   if (typeof def === 'string') return act.say(def);
   const why = unplayable(def);
   if (why) return act.say(`La carte ne se joue pas : ${why}`);
