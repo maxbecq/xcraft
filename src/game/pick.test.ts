@@ -90,6 +90,24 @@ describe('what the ray under the cursor picks', () => {
     expect(pickAt([{ e: extractor, seen: true }, { e: well, seen: true }], none, none, on)).toBe(extractor);
   });
 
+  it('a unit at the edge of a well, the ray meeting only the well, takes the unit by its own catch zone', () => {
+    expect(pickAt([{ e: well, seen: true }], () => well, none, () => undefined, () => drone)).toBe(drone);
+  });
+
+  it('a harvest order (workers selected: no unit catch given) keeps the well the ray meets, not a worker beside it', () => {
+    const worker = thing(16, 'unit');
+    const harvest = () => undefined; // entityAt passes no unit catch when ours include workers
+    expect(pickAt([{ e: well, seen: true }], () => worker, none, () => undefined, harvest)).toBe(well);
+  });
+
+  it('a unit the ray meets behind a resource takes it over the resource', () => {
+    expect(pickAt([{ e: well, seen: true }, { e: drone, seen: true }], none, none)).toBe(drone);
+  });
+
+  it('a unit the fog hides behind a resource does not', () => {
+    expect(pickAt([{ e: well, seen: true }, { e: drone, seen: false }], none, none)).toBe(well);
+  });
+
   it('a free well is still picked', () => {
     expect(pickAt([{ e: well, seen: true }], none, none, () => undefined)).toBe(well);
   });

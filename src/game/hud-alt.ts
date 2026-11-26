@@ -34,10 +34,13 @@ export function updateAlt(h: Hud): void {
   const own = h.input.own();
   // One worker just picked: its build tree at once (its Retour, or Échap, gives back its usual orders). Several, or
   // with other units: their orders, as for any troop (Construire still opens the tree) (the user's choice of 2026-11-24).
+  // A building that raises others (the Isdaris Obélisque) the same: its tree at the bottom, its robots in the queues'
+  // column at the left, its other orders in its bubble behind Retour (2026-11-26).
+  const builder = own.length === 1 && h.workers().length === 1;
   if (h.selKey !== h.altSel) {
     h.altSel = h.selKey;
-    if (!h.placing) h.buildMenu = own.length === 1 && own[0].def.kind === 'unit' && h.workers().length === 1 ? 'basic' : false;
-  } else if (h.input.picks !== altPicks && !h.placing && own.length === 1 && own[0].def.kind === 'unit' && h.workers().length === 1) h.buildMenu = 'basic';
+    if (!h.placing) h.buildMenu = builder ? 'basic' : false;
+  } else if (h.input.picks !== altPicks && !h.placing && builder) h.buildMenu = 'basic';
   // The worker sent to a resource (Shift too): the tree shut, till it is clicked again (the user's choice of 2026-11-24).
   if (h.input.harvests !== altHarvests && h.buildMenu === 'basic' && !h.placing && own.every((e) => e.def.kind === 'unit') && h.workers().length === own.length) h.buildMenu = false;
   altPicks = h.input.picks;
