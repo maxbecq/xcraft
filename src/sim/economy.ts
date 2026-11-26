@@ -3,7 +3,7 @@ import { type BuildingDef, HARVEST } from '../data';
 import { FP, dist, idiv, ticks } from './fixed';
 import { type Order, type Entity, type World } from './world';
 
-/** Seconds the fields a worker gave up on stay out of its choice: the way may have opened since (a building gone). */
+/** Seconds the fields (and drop-offs) a worker gave up on stay out of its choice: the way may have opened since (a building gone). */
 const SKIP_SECONDS = 20;
 
 export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather' }>): void {
@@ -13,15 +13,26 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
   }
   if (o.phase === 'return' || e.carry > 0) {
     o.phase = 'return';
-    const home = this.nearestDropoff(e);
+    const home = this.nearestDropoff(e, o.skip) ?? this.nearestDropoff(e);
     if (!home) return this.setOrder(e, null);
     // The way planned leads to the drop-off it was planned for: a closer one (just built) needs a way of its own.
     if (o.home !== home.id) {
       o.home = home.id;
       e.goal = null;
+      e.stuck = 0;
     }
     const size = (home.def as BuildingDef).size;
-    if (!this.reachRect(e, home.tx, home.ty, size)) return void this.goNear(e, home.tx, home.ty, size);
+    if (!this.reachRect(e, home.tx, home.ty, size)) {
+      // No way to it (a closer one on a rise with no ramp, Codex 2026-11-26): left out a while, as a field is, so the
+      // worker goes back to one it can reach; the only one left is tried still.
+      if (e.stuck > 2 && this.nearestDropoff(e, [...(o.skip ?? []), home.id])) {
+        e.stuck = 0;
+        o.skipped ??= this.tick;
+        (o.skip ??= []).push(home.id);
+        return;
+      }
+      return void this.goNear(e, home.tx, home.ty, size);
+    }
     const p = this.players[e.owner];
     p.minerals += idiv(e.carry * p.handicap, 100);
     e.carry = 0;
@@ -101,11 +112,11 @@ export function nearestField(this: World, e: Entity, except?: Entity, freeOnly =
   return best;
 }
 
-export function nearestDropoff(this: World, e: Entity): Entity | undefined {
+export function nearestDropoff(this: World, e: Entity, skip?: number[]): Entity | undefined {
   let best: Entity | undefined;
   let bestD = Infinity;
   for (const b of this.listed().dropoffs) {
-    if (b.owner !== e.owner || b.buildLeft > 0) continue;
+    if (b.owner !== e.owner || b.buildLeft > 0 || skip?.includes(b.id)) continue;
     const d = dist(e.x, e.y, b.x, b.y);
     if (d < bestD) [best, bestD] = [b, d];
   }
