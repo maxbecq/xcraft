@@ -106,7 +106,8 @@ const GANG_UP = (30 * FP) / 20;
 // The Totem too (Voyageurs, the vehicles' research, the Couloir temporel). Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
 // each once its host stands: off this list, among the late researches, they never came, nor the units and powers
 // behind them.
-export const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
+// The Miniportail first: the Archer needs one on its Portail (équilibreur 24/11); as research of the list, it never came.
+export const EXTENSIONS = ['assembleur', 'miniportail', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
 /** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
 const SPARE_EXTENSION = 400;
 /**
@@ -1086,6 +1087,9 @@ export class AI {
         if (scout && !(scout.order?.kind === 'move' && dist(scout.order.x, scout.order.y, cx, cy) < 2 * FP)) ctx.out.push({ player: this.player, kind: 'move', ids: [scout.id], x: cx, y: cy });
         if (scout) continue;
       }
+      // In the zone and seen, an Obélisque raises it at its price, a robot for a third more (équilibreur 26/11): the
+      // robot only where no Obélisque can, not to skip an Obélisque's rest.
+      if (zoned && spot && seen && def.faction === 'isdaris' && buildings.some((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0)) continue;
       const crew = builders.filter((b) => raises(b.def as UnitDef, type));
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
       // Centre de socles instead), a site tried for nothing.

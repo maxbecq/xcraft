@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
-import { FACTIONS } from '../data';
+import { type BuildingDef, DEFS, FACTIONS } from '../data';
 import { AI, DIFFICULTY, teamFocus } from './ai';
 import { STRATEGIES } from './strategy';
 
@@ -587,7 +587,7 @@ describe('AI Isdaris blind spots', () => {
     const portails = [-8, 0, 8].map((dx) => w.spawn('portail', 0, ob.x + dx * FP, ob.y + 8 * FP));
     portails.forEach((p, i) => p.queue.push(...(i === 1 ? ['creature'] : ['creature', 'creature'])));
     w.tick = thinkTick(10);
-    w.players[0].minerals = 600;
+    w.players[0].minerals = 700;
     w.players[0].energy = 600;
     const cmds = new AI(w, 0).think();
     // Which extension first is the AI's choice (archers need the Miniportail since the équilibreur's 24/11 mail).
@@ -662,3 +662,42 @@ describe('AI Isdaris blind spots', () => {
   });
 });
 
+
+describe('AI Isdaris, the équilibreur rules', () => {
+  const thinkTick = (min: number) => ticks(min * 60) - (ticks(min * 60) % 10);
+  const base = () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    return { w, ob };
+  };
+
+  it('puts a Miniportail on a Portail before anything else there: the Archer needs it', () => {
+    const { w, ob } = base();
+    const portail = w.spawn('portail', 0, ob.x + 8 * FP, ob.y + 8 * FP);
+    w.tick = thinkTick(4);
+    w.players[0].minerals = 400;
+    w.players[0].energy = 400;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'train', ids: [portail.id], type: 'miniportail' }));
+  });
+
+  it('in the zone, no robot raises what the Obélisque at rest would raise for less', () => {
+    const { w, ob } = base();
+    // Two Portails: a Récepteur is wanted. Every build the AI gives a robot in the zone, with the Obélisque resting.
+    for (const dx of [-8, 8]) w.spawn('portail', 0, ob.x + dx * FP, ob.y + 8 * FP);
+    w.step([]);
+    ob.spellCd.materialisation = w.tick + ticks(60);
+    w.players[0].minerals = 2000;
+    w.players[0].energy = 500;
+    const ai = new AI(w, 0);
+    for (let i = 0; i < ticks(20); i++) {
+      const cmds = ai.think();
+      for (const c of cmds) {
+        if (c.kind !== 'build' || w.entities.get(c.ids[0])?.type !== 'moissonneur') continue;
+        const size = (DEFS[c.type] as BuildingDef).size;
+        expect(w.materialisable(0, c.type, c.tx, c.ty) && w.vision[0].visible(c.tx + (size >> 1), c.ty + (size >> 1)), c.type).toBe(false);
+      }
+      w.step(cmds);
+    }
+  });
+
+});
