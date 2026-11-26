@@ -109,7 +109,7 @@ describe('Isdaris', () => {
     const c = w.spawn('creature', 0, ...at(40, 60));
     c.hp = 20;
     run(w, 10);
-    expect(c.hp).toBeGreaterThan(25); // 0.75 a second (2010 sheet)
+    expect(c.hp).toBeGreaterThanOrEqual(24); // 0.5 a second, as the Humains' living units (équilibreur 24/11)
   });
 
   it('Rappel brings the army units near the target back beside the Obélisque after a channel', () => {

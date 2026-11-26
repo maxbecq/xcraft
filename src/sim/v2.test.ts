@@ -118,7 +118,7 @@ describe('invisibility and detection', () => {
   });
 
   // Danse du soldat (20 Nov 2026): the auxiliaires' shots deal two thirds; it took 5 of them before.
-  it('a detected assassin loses to 6 auxiliaires but beats 5', () => {
+  it('a detected assassin loses to 5 auxiliaires but beats 4', () => {
     const fight = (n: number) => {
       const w = new World(createMap());
       w.players[1].faction = 'isdaris';
@@ -129,8 +129,9 @@ describe('invisibility and detection', () => {
       for (let i = 0; i < ticks(40) && w.entities.has(sin.id) && aux.some((a) => w.entities.has(a.id)); i++) w.step([]);
       return w.entities.has(sin.id);
     };
-    expect(fight(6)).toBe(false);
-    expect(fight(5)).toBe(true);
+    // Équilibreur 24/11: the Assassin strikes every 2.1 s (was 1.25): 5 auxiliaires now beat it.
+    expect(fight(5)).toBe(false);
+    expect(fight(4)).toBe(true);
   });
 
   it('a tower under construction does not detect', () => {

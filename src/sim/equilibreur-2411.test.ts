@@ -96,3 +96,31 @@ describe('équilibreur 23-24/11, Humains', () => {
     expect((DEFS.plesiosaure as UnitDef).detector).toBe(10);
   });
 });
+
+describe('équilibreur 24/11, Isdaris numbers and tree', () => {
+  it('the units as he set them', () => {
+    const u = (t: string) => DEFS[t] as UnitDef;
+    expect([u('creature').attack!.cooldown, u('archer').attack!.cooldown, u('druide').attack!.cooldown, u('assassin').attack!.cooldown, u('chimere').attack!.cooldown]).toEqual([1.1, 1.3, 2.2, 2.1, 1.4]);
+    expect([u('archer').buildTime, u('archer').requires]).toEqual([30, { miniportail: 1 }]);
+    expect([u('discobole').attack!.cooldown, u('discobole').attack!.range, u('discobole').attack!.air]).toEqual([2.5, 7, false]);
+    expect([u('dragon').speed, u('dragon').attack!.cooldown, u('dragon').attack!.range, u('dragon').ability]).toEqual([2.4, 2.7, 10, undefined]);
+    expect([u('behemoth').sight, u('behemoth').attack!.range, u('behemoth').speed, u('behemoth').attack!.cooldown]).toEqual([11, 6, 1.9, 2]);
+    expect(u('voyageur').mana![0]).toBe(250);
+    expect((DEFS.miniportail as UnitDef).cost).toEqual({ minerals: 250, energy: 0 });
+    expect((DEFS.renvoi as UnitDef).requires).toEqual({ pyramide: 1 });
+    expect((DEFS.obelisque as BuildingDef).researches).toEqual(['cercle1', 'cercle2']);
+    expect((DEFS.nanoassembleur as BuildingDef).researches).not.toContain('teleportation');
+  });
+
+  it('a boosted Créature strikes every 0.9 s', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].upgrades.boostgenetique = 1;
+    const c = w.spawn('creature', 0, 30 * FP, 30 * FP);
+    const foe = w.spawn('legionnaire', 1, 30 * FP + FP / 2, 30 * FP);
+    foe.hp = foe.maxHp = 100000;
+    w.hit(c, foe, (DEFS.creature as UnitDef).attack!);
+    w.step([{ player: 0, kind: 'attack', ids: [c.id], x: foe.x, y: foe.y, target: foe.id }]);
+    run(w, 1);
+    expect(c.cooldown).toBeLessThanOrEqual(ticks(0.9));
+  });
+});

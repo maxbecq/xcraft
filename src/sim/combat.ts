@@ -146,7 +146,7 @@ export function baseSpeed(this: World, e: Entity): number {
   const mega = e.type === 'zespion' && this.level(e.owner, 'megaespion');
   // Scarabée amélioré (fiche 2010): +0.1 of speed.
   const assault = e.type === 'scarabee' && e.owner >= 0 && this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeSpeed : 0;
-  // Boost génétique (fiche 2010): +0.25 of speed for the Créature.
+  // Boost génétique: the Créature at 3.1 (équilibreur 24/11).
   const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : e.type === 'immortel' && e.owner >= 0 && this.level(e.owner, 'auraputride') ? BALANCE.rules.upgrades.auraputride.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
@@ -447,7 +447,8 @@ export function strike(this: World, e: Entity, t: Entity): void {
   // Inside an enemy Tempête de sable, ranged weapons are useless.
   if (a.range >= 1 && this.storms.some((z) => this.hostile(z.owner, e.owner) && dist(z.x, z.y, e.x, e.y) <= z.r)) return;
   e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
-  if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = idiv(e.cooldown * (100 - BALANCE.rules.upgrades.boost.rate), 100);
+  // Boost génétique: the Créature strikes every 0.9 s (équilibreur 24/11).
+  if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = ticks(BALANCE.rules.upgrades.boost.cooldown);
   // The Artefacterie's Agilité: each one a share off the time between blows.
   const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));

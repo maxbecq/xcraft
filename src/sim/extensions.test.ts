@@ -27,10 +27,10 @@ describe('Isdaris extensions, one building each', () => {
     expect(a.exts).toEqual(['miniportail']);
     expect(b.exts).toEqual([]);
     expect(w.players[0].upgrades.miniportail).toBeUndefined();
-    const before = of(w, 'archer').length;
-    w.step([{ player: 0, kind: 'train', ids: [b.id], type: 'archer' }, { player: 0, kind: 'train', ids: [b.id], type: 'archer' }]);
-    step(w, w.trainTime(b, 'archer') + 1);
-    expect(of(w, 'archer').length - before).toBe(1);
+    const before = of(w, 'creature').length;
+    w.step([{ player: 0, kind: 'train', ids: [b.id], type: 'creature' }, { player: 0, kind: 'train', ids: [b.id], type: 'creature' }]);
+    step(w, w.trainTime(b, 'creature') + 1);
+    expect(of(w, 'creature').length - before).toBe(1);
     expect(b.queue).toHaveLength(1);
   });
 

@@ -436,7 +436,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Voyageur (notice): a cloak of negative energy over itself and the allies round it. */
   manteau: { name: 'Manteau', effect: 'Un manteau d\'énergie négative sur le Voyageur et les alliés autour.', hotkey: 'M', research: 'manteau', ...BALANCE.abilities.manteau },
   /** Voyageur (notice): itself and the allies round it appear by the friendly building nearest the point. */
-  teleportgroupe: { name: 'Téléportation de groupe', effect: 'Le Voyageur et les alliés autour apparaissent près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', research: 'teleportation', ...BALANCE.abilities.teleportgroupe },
+  teleportgroupe: { name: 'Téléportation de groupe', effect: 'Le Voyageur et les alliés autour apparaissent près de votre bâtiment le plus proche du point.', hotkey: 'T', target: 'point', ...BALANCE.abilities.teleportgroupe },
   /** Voyageur (notice): the ally nearest the point sends back part of the damage it takes. */
   /** Voyageur, Réserve psy (fiche 2010, mod): cast on their own, on an ally nearby whose shield is down. */
   rechargebouclier: { name: 'Recharge des boucliers', effect: 'Rend du bouclier à une unité alliée proche, automatiquement.', hotkey: '', ...BALANCE.abilities.rechargebouclier },
@@ -633,12 +633,13 @@ const BASE: Record<string, object> = {
 
   // ---------------------------------------------------------------- Isdaris
   moissonneur: { kind: 'unit', name: 'Robot moissonneur', radius: 0.375, builds: ['obelisque', 'recepteur'], worker: true, mechanical: true, faction: 'isdaris', hotkey: 'S' },
-  archer: { kind: 'unit', name: 'Archer', radius: 0.375, faction: 'isdaris', hotkey: 'A' },
+  // Équilibreur 24/11: only from a Portail with its Miniportail.
+  archer: { kind: 'unit', name: 'Archer', radius: 0.375, requires: { miniportail: 1 }, faction: 'isdaris', hotkey: 'A' },
   creature: { kind: 'unit', name: 'Créature', radius: 0.3, ability: 'enfouissement', faction: 'isdaris', hotkey: 'C' },
   druide: { kind: 'unit', name: 'Druide', radius: 0.375, requires: { laboratoire: 1 }, abilities: ['double', 'deflagration', 'silence'], faction: 'isdaris', hotkey: 'D' },
   // Mod: « Sombre ». Shield 70 instead of the mod's 210: it still one-shots workers, but 4 auxiliaires win once it is detected.
   assassin: { kind: 'unit', name: 'Assassin', radius: 0.375, cloaked: true, requires: { autel: 1 }, ability: 'chocmental', faction: 'isdaris', hotkey: 'X' },
-  obelisque: { kind: 'building', name: 'Obélisque', size: 4, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' },
+  obelisque: { kind: 'building', name: 'Obélisque', size: 4, builds: Object.keys(BALANCE.rules.materialisation.cooldown), trains: ['moissonneur'], researches: ['cercle1', 'cercle2'], dropoff: true, warp: true, ability: 'rappel', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'O' }, // Cercle d'énergie here (équilibreur 24/11)
   emetteur: { kind: 'building', name: 'Émetteur', size: 2, warp: true, morphs: ['pylonesanglant', 'deflecteur'], faction: 'isdaris', hotkey: 'E' },
   // Notice: an Émetteur turned « Déflecteur »: an aura of invisibility over the allied infantry and vehicles round it.
   deflecteur: { kind: 'building', name: 'Déflecteur', size: 2, requires: { orbecommandement: 1 }, warp: true, morphOnly: true, faction: 'isdaris', hotkey: 'D' },
@@ -660,12 +661,12 @@ const BASE: Record<string, object> = {
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: {
     kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'N',
-    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'teleportation', 'manteau', 'feucirculaire', 'couloir'],
+    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'manteau', 'feucirculaire', 'couloir'],
   },
   // Notice: « Orbe de commandement », the fourth major building, for large battles: shields research, and its extensions.
   orbecommandement: {
     kind: 'building', name: 'Orbe de commandement', size: 3, requires: { nanoassembleur: 1 }, warp: true, needsPower: true, ability: 'observatoire', abilities: ['bouclierplasma'], faction: 'isdaris', hotkey: 'C',
-    researches: ['autel', 'pyramide', 'observatoire', 'bouclier1', 'bouclier2', 'bouclier3', 'robots', 'cercle1', 'cercle2', 'chocmental', 'boostgenetique', 'teleportrapide', 'canonlourd', 'dephasage', 'renvoi', 'omniscience'],
+    researches: ['autel', 'pyramide', 'observatoire', 'bouclier1', 'bouclier2', 'bouclier3', 'robots', 'chocmental', 'boostgenetique', 'teleportrapide', 'canonlourd', 'dephasage', 'renvoi', 'omniscience'],
   },
   // Notice: « Trône d'Altar Sargon », the last major building: Béhémoths, and the ultimate powers of its extensions.
   trone: {
@@ -679,7 +680,7 @@ const BASE: Record<string, object> = {
   // Notice: « Espion », an unarmed scout that detects hidden units and opens time corridors (mod « Prisme »).
   espion: { kind: 'unit', name: 'Espion', radius: 0.4, flying: true, mechanical: true, requires: { balise: 1 }, ability: 'couloir', faction: 'isdaris', hotkey: 'E' },
   // Notice: « Dragon », the Chimère made for space battles: plasma concentrators against flyers only, long range.
-  dragon: { kind: 'unit', name: 'Dragon', radius: 0.5, flying: true, mechanical: true, requires: { balise: 1, pyramide: 1 }, ability: 'teleport', faction: 'isdaris', hotkey: 'G' },
+  dragon: { kind: 'unit', name: 'Dragon', radius: 0.5, flying: true, mechanical: true, requires: { balise: 1, pyramide: 1 }, faction: 'isdaris', hotkey: 'G' }, // no Téléportation (équilibreur 24/11)
   // Notice: « Voyageur », an unarmed flying generator: detects, recharges shields, cloaks, teleports, reflects.
   voyageur: { kind: 'unit', name: 'Voyageur', radius: 0.7, flying: true, mechanical: true, requires: { totem: 1 }, abilities: ['manteau', 'teleportgroupe', 'renvoi'], faction: 'isdaris', hotkey: 'V' },
   // Notice: « Béhémoth », a flying fortress with a building's shield and unmatched firepower; it can phase out.
@@ -716,7 +717,7 @@ const BASE: Record<string, object> = {
   teleportrapide: isd('Téléportation rapide', 'T', 'Porte-disques, Chimères, Dragons : téléportation deux fois plus fréquente.', { autel: 1 }),
   canonlourd: isd('Canon plasma lourd', 'L', 'Baliste plasma : très longue portée.', { autel: 1 }),
   dephasage: isd('Module déphasant', 'D', 'Le Béhémoth se déphase : invulnérable, sans attaquer.', { autel: 1 }),
-  renvoi: isd('Sphère de renvoi', 'S', 'Le Voyageur protège un allié qui renvoie une part des dégâts.', { autel: 1 }),
+  renvoi: isd('Sphère de renvoi', 'S', 'Le Voyageur protège un allié qui renvoie une part des dégâts.', { pyramide: 1 }), // équilibreur 24/11
   omniscience: isd('Omniscience', 'N', 'Espions : vision très étendue.', { autel: 1 }),
   relais: extension('Relais de canon orbital', 'R', "Le Trône frappe depuis l'espace un point visé par un Espion.", 'trone'),
   porte: extension('Porte de déphasage', 'P', "Le Trône déphase un groupe d'unités isdaris.", 'trone'),

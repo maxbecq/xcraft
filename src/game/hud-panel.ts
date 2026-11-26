@@ -130,7 +130,9 @@ function stats(h: Hud, e: Entity): string {
     // With its research (Canons sciés: the balancer, 2026-11-22, wants it shown on the Auxiliaire).
     const reach = e.owner >= 0 ? h.world.rangeBonus(e) : 0;
     parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}${plus(reach)}`}</span>`);
-    parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(a.cooldown)} s</span>`);
+    // Boost génétique shows on the Créature's numbers (équilibreur 24/11): 0.9 s, 3.1.
+    const boosted = e.type === 'creature' && e.owner >= 0 && h.world.level(e.owner, 'boostgenetique') > 0;
+    parts.push(`<span title="Temps entre deux coups">Cadence ${fmt(boosted ? BALANCE.rules.upgrades.boost.cooldown : a.cooldown)} s</span>`);
   }
   if ((e.def as UnitDef).heal) parts.push(`<span>Soin ${(e.def as UnitDef).heal}</span>`);
   if ('armor' in e.def) {
@@ -138,7 +140,8 @@ function stats(h: Hud, e: Entity): string {
     const bonus = e.owner >= 0 && (e.def.kind === 'unit' || (e.def.kind === 'building' && h.world.players[e.owner].faction === 'z')) ? h.world.armorBonus(e) : 0;
     parts.push(`<span title="Retirée de chaque coup reçu">Armure ${e.def.armor}${plus(bonus)}</span>`);
   }
-  if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed)}</span>`);
+  const genetic = e.type === 'creature' && e.owner >= 0 && h.world.level(e.owner, 'boostgenetique') > 0 ? BALANCE.rules.upgrades.boost.speed : 0;
+  if (e.def.kind === 'unit') parts.push(`<span>Vitesse ${fmt((e.def as UnitDef).levels?.speed[e.lvl - 1] ?? (e.def as UnitDef).speed + genetic)}</span>`);
   if ('sight' in e.def) parts.push(`<span>Vue ${e.def.sight}</span>`);
   // Isdaris: the extensions built onto this building, its own.
   if (e.exts.length) parts.push(`<span title="Extensions de ce bâtiment">${e.exts.map((x) => DEFS[x].name.replace('Extension : ', '')).join(', ')}</span>`);
