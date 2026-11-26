@@ -759,6 +759,7 @@ export class World {
       e.hp = e.maxHp;
       e.shield = e.maxShield;
       this.say(e.owner, `Construction terminée : ${e.def.name}.`, 'done');
+      this.completed(e); // an Orbe floats free here too (Codex, 2026-11-26)
     }
     if (e.queue.length && e.trainLeft > 1) e.trainLeft = 1;
     if (e.trainLeft2 > 1) e.trainLeft2 = 1;

@@ -479,6 +479,15 @@ describe('équilibreur, réponses du 26/11', () => {
 
   // Codex, 2026-11-26 (final review): its spot taken meanwhile (a building raised there), the Orbe was put on the
   // nearest open tile, out of the zone at times; now the move is called off.
+  it('an Orbe plasma finished at once in Bac à sable floats free too', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].instant = true;
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    const orbe = w.site('orbe', 0, Math.floor(ob.x / FP) + 6, Math.floor(ob.y / FP) + 6);
+    w.step([]);
+    expect(orbe.type).toBe('orbemob');
+  });
+
   it('an Orbe plasma whose spot is taken during its Redéploiement stays where it was', () => {
     const w = createMatch(['isdaris', 'humains']);
     w.players[0].minerals = 1000;

@@ -261,6 +261,12 @@ export function trainTime(this: World, b: Entity, type: string): number {
   return planned ? idiv(time * 100, 100 + BALANCE.rules.upgrades.grandConseilSpeedup) : time;
 }
 
+/** What a site does once it stands finished, however it got there (built, or at once in Bac à sable: World.hurry). */
+export function completed(this: World, b: Entity): void {
+  // Équilibreur 26/11: the Orbe plasma, once there, floats free (slowly).
+  if (b.type === 'orbe') this.transmute(b, 'orbemob');
+}
+
 export function operate(this: World, b: Entity): void {
   if (b.buildLeft > 0) {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
@@ -281,8 +287,7 @@ export function operate(this: World, b: Entity): void {
     if (b.buildLeft === 0) {
       b.shield = b.maxShield;
       this.say(b.owner, `${(b.def as BuildingDef).absorbs ? 'Assemblage' : 'Matérialisation'} terminé${(b.def as BuildingDef).absorbs ? '' : 'e'} : ${b.def.name}.`, 'done');
-      // Équilibreur 26/11: the Orbe plasma, once there, floats free (slowly).
-      if (b.type === 'orbe') this.transmute(b, 'orbemob');
+      this.completed(b);
     }
     return;
   }
