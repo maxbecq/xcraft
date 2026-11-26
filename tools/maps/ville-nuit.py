@@ -70,12 +70,12 @@ ramp((101, 32), "N", 6, 0)
 street([(47, 16.5), (117, 16.5)], 6)
 
 # Minerals in the shape of the other maps' main bases (relative to the headquarters' top-left tile).
-ARC = [(-5, -3), (-5, -2), (-5, -1), (-5, 0), (-4, -4), (-3, -5), (-2, -5), (-1, -5)]
+ARC = [(-5, 1), (-5, 0), (-5, -1), (-5, -2), (-5, -3), (-4, -4), (-3, -5), (-2, -5), (-1, -5), (0, -5)]  # 10 fields a base (the balancer, 2026-11-26)
 bases = [
     {"name": "départ", "start": True, "hq": [12, 12], "minerals": [[12 + dx, 12 + dy] for dx, dy in ARC], "wells": [[17, 6]]},
-    {"name": "naturelle", "hq": [12, 56], "minerals": [[6, 53 + k] for k in range(8)], "wells": [[19, 64]]},
-    {"name": "troisième", "hq": [58, 14], "minerals": [[56 + k, 8] for k in range(8)], "wells": [[66, 20]]},
-    {"name": "avancée", "hq": [102, 14], "minerals": [[100 + k, 8] for k in range(8)], "wells": [[95, 21]]},
+    {"name": "naturelle", "hq": [12, 56], "minerals": [[6, 53 + k] for k in range(10)], "wells": [[19, 64]]},
+    {"name": "troisième", "hq": [58, 14], "minerals": [[56 + k, 8] for k in range(10)], "wells": [[66, 20]]},
+    {"name": "avancée", "hq": [102, 14], "minerals": [[100 + k, 8] for k in range(10)], "wells": [[95, 21]]},
 ]
 
 out = {

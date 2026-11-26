@@ -604,7 +604,7 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
     p.minerals = p.energy = 5000;
-    const pod = w.spawn('pod', 0, 40.5 * FP, 40.5 * FP);
+    const pod = w.spawn('pod', 0, 54.5 * FP, 40.5 * FP);
     return { w, p, pod };
   };
 
@@ -656,9 +656,9 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
 
   it('a Z building off its creep stops working; a Pod\'s add-on stops when its Pod falls', () => {
     const { w, p, pod } = setup();
-    const t = w.spawn('tourelle', 0, 43 * FP, 41 * FP);
+    const t = w.spawn('tourelle', 0, 57 * FP, 41 * FP);
     t.host = pod.id;
-    const foe = w.spawn('legionnaire', 1, 46 * FP, 41 * FP);
+    const foe = w.spawn('legionnaire', 1, 60 * FP, 41 * FP);
     foe.hp = foe.maxHp = 100000;
     run(w, 3);
     expect(foe.hp).toBeLessThan(100000);
@@ -781,7 +781,7 @@ describe('Z, revue du 23/11', () => {
   it('a Pod whose 4 sides are taken raises its add-on in a corner, the same list as the player\'s 8 places', () => {
     const w = createMatch(['z', 'humains']);
     w.players[0].minerals = w.players[0].energy = 5000;
-    const pod = w.spawn('pod', 0, 41 * FP, 41 * FP);
+    const pod = w.spawn('pod', 0, 55 * FP, 41 * FP);
     const slots = addonSlots(pod.tx, pod.ty, 2, 2);
     for (const i of [1, 3, 4, 6]) w.spawn('pod', 0, (slots[i][0] + 1) * FP, (slots[i][1] + 1) * FP);
     const spot = w.addonSpot(pod, 'tourelle')!;

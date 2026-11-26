@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createMap } from './map';
-import { CORNERS, MAPS, buildMap } from './maps';
+import { createMap, rotateFootprint } from './map';
+import { CORNERS, MAPS, buildMap, hqSlot, turnsOf } from './maps';
 import { createMatch, expansions } from './sim/setup';
 import type { World } from './sim/world';
 
@@ -32,7 +32,7 @@ describe('map files', () => {
       for (let i = 0; i < m.level.length; i++) h = Math.imul(h ^ (m.level[i] + 4 * m.rampStep[i] + 32 * ' NESW'.indexOf(m.ramp[i] ?? ' ') + 256 * (m.chasm?.[i] ?? 0)), 16777619);
       return h >>> 0;
     };
-    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([633818735, 4081854761, 3151526511]);
+    expect([fingerprint(2, false), fingerprint(4, false), fingerprint(2, true)]).toEqual([2462163747, 3023734073, 2017821987]);
   });
 
   for (const def of Object.values(MAPS)) {
@@ -70,6 +70,22 @@ describe('map files', () => {
           }
         });
 
+        it('gives every base spot 10 mineral fields, and a place for its headquarters two free tiles or more from every field', () => {
+          // The balancer, 2026-11-26: 10 fields of 2,500 a base; the main building never nearer the fields than HQ_MINERAL_GAP.
+          for (const b of def.bases) expect(b.minerals.length, b.name).toBe(10);
+          // Every one of them made, none lost on another's tile once the map is turned, each with its 2,500.
+          const fields = [...w.entities.values()].filter((e) => e.type === 'minerai');
+          expect(fields.length).toBe(10 * def.bases.length * turnsOf(def, players).length);
+          for (const f of fields) expect(f.amount, `${f.tx},${f.ty}`).toBe(2500);
+          for (const q of turnsOf(def, players)) {
+            for (const b of def.bases) {
+              const [hx, hy] = rotateFootprint(w.map.width, ...hqSlot(def, b.hq), 4, q);
+              expect(w.nearMinerals(hx, hy, 4), `${b.name}, quarter ${q}`).toBe(false);
+              if (!hqs.some((h) => h.tx === hx && h.ty === hy)) expect(w.canPlace('conseil', hx, hy, 0), `${b.name}, quarter ${q}`).toBe(true);
+            }
+          }
+        });
+
         it('gives every player somewhere to expand', () => {
           for (let p = 0; p < players; p++) expect(expansions(w, p).length).toBeGreaterThan(0);
         });
@@ -89,6 +105,15 @@ describe('map files', () => {
         const [a, b] = [y * n + x, x * n + y];
         expect([m.level[b], m.ramp[b], m.rampStep[b]], `tile ${x},${y}`).toEqual([m.level[a], m.ramp[a] ? swap[m.ramp[a]!] : null, m.rampStep[a]]);
       }
+    }
+    // The main buildings' places too (a 4x4 in each 5x5 slot, hqSlot), at the starts and the naturals: each one's mirror
+    // is one of them. (A 4x4 cannot sit square on the middle of a 111-tile map's edge or centre: the edge and centre
+    // bases are off by a tile, as they always were.)
+    const def = MAPS.carrefour;
+    const slots = new Set(def.bases.filter((b) => b.start || b.name === 'naturelle').flatMap((b) => [0, 1, 2, 3].map((q) => rotateFootprint(n, ...hqSlot(def, b.hq), 4, q).join())));
+    for (const s of slots) {
+      const [x, y] = s.split(',').map(Number);
+      expect(slots.has(`${y},${x}`), `QG ${s}`).toBe(true);
     }
     const resources = [...w.entities.values()].filter((e) => e.def.kind === 'resource');
     const at = new Set(resources.map((e) => `${e.type} ${e.tx},${e.ty}`));

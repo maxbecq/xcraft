@@ -10,11 +10,12 @@
   "calm": [[24, 14], [29, 14], [20, 37], [20, 42], [37, 20], [42, 20], [47, 40], [47, 45]],
   "terrain": [
     { "shape": "octagon", "at": [20, 20], "half": 17, "cut": 8, "ragged": 1, "level": 1 },
-    { "shape": "octagon", "at": [16, 16], "half": 13, "cut": 8, "ragged": 2, "level": 2 },
+    { "shape": "circle", "at": [32.5, 31.5], "r": 12, "level": 1 },
+    { "shape": "octagon", "at": [16, 16], "half": 14, "cut": 8, "ragged": 2, "level": 2 },
     { "shape": "octagon", "at": [47.5, 47.5], "half": 6, "cut": 3, "ragged": 3, "level": 1 },
     { "shape": "octagon", "at": [48, 27], "half": 6, "cut": 3, "ragged": 4, "chasm": true, "biome": "ville" },
     { "shape": "octagon", "at": [27, 48], "half": 6, "cut": 3, "ragged": 5, "chasm": true, "biome": "ville" },
-    { "shape": "ramp", "at": [30, 13], "up": "W", "width": 3, "level": 1 },
+    { "shape": "ramp", "at": [31, 13], "up": "W", "width": 3, "level": 1 },
     { "shape": "ramp", "at": [19, 38], "up": "N", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [38, 19], "up": "W", "width": 3, "level": 0 },
     { "shape": "ramp", "at": [46, 41], "up": "S", "width": 4, "level": 0 }
@@ -25,19 +26,19 @@
       "start": true,
       "hq": [12, 12],
       "workers": [17, 14],
-      "minerals": [[7, 9], [7, 10], [7, 11], [7, 12], [8, 8], [9, 7], [10, 7], [11, 7]],
+      "minerals": [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [8, 8], [9, 7], [10, 7], [11, 7], [12, 7]],
       "wells": [[17, 6]]
     },
     {
       "name": "naturelle",
-      "hq": [27, 26],
-      "minerals": [[33, 25], [34, 26], [35, 27], [35, 28], [35, 29], [34, 30], [33, 31]],
-      "wells": [[26, 33]]
+      "hq": [30, 29],
+      "minerals": [[37, 27], [37, 28], [37, 29], [37, 30], [37, 31], [37, 32], [37, 33], [37, 34], [37, 35], [37, 36]],
+      "wells": [[29, 36]]
     },
     {
       "name": "bord",
       "hq": [38, 7],
-      "minerals": [[38, 4], [39, 4], [40, 4], [41, 4], [42, 4]],
+      "minerals": [[36, 4], [37, 4], [38, 4], [39, 4], [40, 4], [41, 4], [42, 4], [43, 4], [44, 4], [45, 4]],
       "wells": [[45, 8]]
     }
   ]
