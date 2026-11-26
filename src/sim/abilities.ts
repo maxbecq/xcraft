@@ -112,8 +112,8 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
       this.place(t, other.x, other.y);
     }
   } else if (name === 'decollage') {
-    // Take off, or land where the ground is open; either takes a moment.
-    if (e.airborne && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
+    // Take off, or land where the ground is open (and a body fits: not between two cliff feet); either takes a moment.
+    if (e.airborne && !this.grid.stands(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
     e.airborne = !e.airborne;
     e.speed = this.baseSpeed(e); // its speed in the air or on the ground
     e.held = ticks(ab.duration);

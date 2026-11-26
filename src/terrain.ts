@@ -2,7 +2,7 @@ import {
   BufferGeometry, Color, DataTexture, DoubleSide, type Texture, Float32BufferAttribute, Group, LinearFilter, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   type Object3D, RedFormat, Vector2, Vector3,
 } from 'three';
-import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt } from './map';
+import { type GameMap, LEVEL_HEIGHT, cornerHeights, cutCorner, cutLevel, reliefAt, setRelief, tileAt, CLIFF_FOOT } from './map';
 import { type Biome, BIOMES } from './render/biome';
 import { weather } from './render/weathering';
 import { crackMask, fbm, groundImages, groundTextures, isLite, lavaTexture, noiseTexture, rockTextures } from './render/textures';
@@ -141,7 +141,7 @@ export function buildTerrain(map: GameMap, roads?: Texture): Group {
       const pb = new Vector2(x + CORNER_POS[b][0], y + CORNER_POS[b][1]);
       const out = new Vector2(CORNER_POS[cut][0] - 0.5, CORNER_POS[cut][1] - 0.5).normalize();
       // Keep walls clockwise around the plateau (top on the left when looking from outside).
-      cliffWall(cliffs, pb, pa, t.level * LEVEL_HEIGHT, t.level * LEVEL_HEIGHT, low * LEVEL_HEIGHT, low * LEVEL_HEIGHT, out);
+      cliffWall(cliffs, pb, pa, t.level * LEVEL_HEIGHT, t.level * LEVEL_HEIGHT, low * LEVEL_HEIGHT, low * LEVEL_HEIGHT, out, false);
     }
   }
 
@@ -397,11 +397,20 @@ function downhill(vx: number, vz: number, fallback: Vector2): Vector2 {
   return d.lengthSq() > 1e-6 ? d.normalize() : fallback;
 }
 
+/** Whether a diagonal cliff (a cut tile) touches this grid corner. */
+function byCut(c: Vector2): boolean {
+  if (!Number.isInteger(c.x) || !Number.isInteger(c.y)) return true; // a diagonal wall's own middle points
+  for (let y = c.y - 1; y <= c.y; y++) for (let x = c.x - 1; x <= c.x; x++) if (tileAt(leanMap, x, y) && cutCorner(leanMap, x, y) >= 0) return true;
+  return false;
+}
+
 /**
- * A rocky cliff face from top edge p0→p1 (heights t0, t1) down to b0, b1, leaning out along `out`.
+ * A rocky cliff face from top edge p0→p1 (heights t0, t1) down to b0, b1, leaning out along `out`. `strip`: its foot
+ * fills the band no unit walks at a cliff's base (CLIFF_FOOT, see Grid.keepOff) and never reaches past it; a diagonal
+ * cliff has no such band and keeps its plain lean.
  * Shared end points lean along the terrain's downhill direction, so neighbouring faces always meet.
  */
-function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2): void {
+function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number, b0: number, b1: number, out: Vector2, strip = true): void {
   // The top follows the ground's rim, pushed in and out like the plateau's edge (see rimShift).
   const [c0, c1] = [p0, p1];
   const s0 = rimShift(p0.x, p0.y);
@@ -425,22 +434,51 @@ function cliffWall(w: Builder, p0: Vector2, p1: Vector2, t0: number, t1: number,
     const dir = ends && Number.isInteger(corner.x) && Number.isInteger(corner.y) ? downhill(corner.x, corner.y, out) : out;
     const row: Vector3[] = [];
     const crow: Color[] = [];
-    for (let j = 0; j <= WALL_ROWS; j++) {
-      const s = j / WALL_ROWS;
-      const y = top + (bottom - top) * s;
+    // The city's walls are built: straight and plumb, no rock noise.
+    const built = B.style === 'city' ? 0 : 1;
+    // How far out the wall reaches at height s, past the blocked tile's edge (its own lean and its rim's shift).
+    const reach = (s: number, y: number): [number, number, number] => {
       // Position-only noise: two faces sharing a point displace it the same way.
-      // The city's walls are built: straight and plumb, no rock noise.
-      const built = B.style === 'city' ? 0 : 1;
       const n = (noise(px * 2.3 + y * 1.1, pz * 2.3 - y * 1.1, 1, 13) - 0.5 + (noise(px * 5 + y * 3, pz * 5 - y * 3, 1, 29) - 0.5) * 0.6) * built;
-      const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
       // Broad bulges and hollows along the cliff, so its foot meanders instead of following the tile edge.
       const bulge = Math.max(-0.12, (noise(px * 0.55, pz * 0.55, 1, 41) - 0.4) * 1.5 + (noise(px * 1.7, pz * 1.7, 1, 43) - 0.5) * 0.4) * built;
       // Over space the rock narrows downwards (an asteroid's underside, an arch's vault), in proportion to its thickness.
       const flare = under ? -0.1 * (top - bottom) * Math.pow(s, 1.6) : built ? SLANT * Math.pow(s, 0.8) : 0.04 * s;
-      const lean = j === 0 ? 0 : flare + n * 0.6 + bulge * Math.pow(s, 0.6);
-      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
+      const lean = s === 0 ? 0 : flare + n * 0.6 + bulge * Math.pow(s, 0.6);
       // A rim pulled in (rounded corner) slopes back out to the foot, so the foot still meets the lower ground.
-      const back = lean + Math.max(0, -sh.dot(dir)) * s;
+      return [lean + Math.max(0, -sh.dot(dir)) * s, n, sh.dot(dir)];
+    };
+    // Rock walls: the foot ends inside the band no unit walks. Short of this column's share of it (70 to 100 %, by
+    // broad noise), the base flares out to it, as scree does; past the band, the wall is eased back into it.
+    const rock = strip && built && !under;
+    const [footBack, , rim] = reach(1, bottom);
+    const footOver = rim + footBack;
+    const want = CLIFF_FOOT * (0.7 + 0.3 * noise(px * 0.9, pz * 0.9, 1, 53));
+    // Only where the wall stands half a level high or more, growing to its full share at three quarters: the
+    // simulation keeps no band along a lower one (a ramp's side near its top, see Grid.keepOff), units walk to its
+    // edge. And none at an end shared with a diagonal cliff, which has no band either. Both by the column's own
+    // height and place, so two faces sharing a corner still meet there.
+    const tall = Math.min(1, Math.max(0, ((top - bottom) / LEVEL_HEIGHT - 0.5) * 4));
+    const ease = (c: Vector2, d: number) => (byCut(c) ? Math.min(1, d * 2) : 1);
+    const banded = ease(c0, t) * ease(c1, 1 - t) * tall;
+    const scree = rock && footOver < want ? (want - footOver) * banded : 0;
+    for (let j = 0; j <= WALL_ROWS; j++) {
+      const s = j / WALL_ROWS;
+      const y = top + (bottom - top) * s;
+      const [reached, n] = reach(s, y);
+      const m = (noise(px * 1.3 - y, pz * 1.3 + y, 1, 17) - 0.5) * built;
+      const lift = j === 0 || j === WALL_ROWS ? 0 : m * 0.4;
+      // The scree spreads low on the wall (the base flares, the top keeps its line).
+      let back = reached + scree * Math.pow(s, 2.2);
+      if (rock && rim + back > 0) {
+        // Never past the strip: what reaches over the low tile is eased under it (a soft limit, the bulges stay).
+        const most = Math.max(CLIFF_FOOT, rim * (1 - s) + CLIFF_FOOT * s);
+        const over = rim + back;
+        const knee = most * 0.6; // as it is up to there, then easing towards the limit
+        // None on the top row, which hangs from the plateau's edge (the ground's own points, see rimShift): it grows
+        // down the wall's upper third (Codex, 2026-11-26: where the edge is pushed well out, the wall parted from it).
+        if (over > knee) back += (knee + (most - knee) * (1 - Math.exp(-(over - knee) / (most - knee))) - over) * banded * Math.min(1, s * 3);
+      }
       row.push(new Vector3(px + dir.x * back, y + lift, pz + dir.y * back));
       crow.push(B.rock.clone().lerp(B.rockDark, s * 0.7).multiplyScalar(0.85 + (n + m) * 0.35));
     }

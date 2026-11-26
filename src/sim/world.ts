@@ -907,6 +907,8 @@ export class World {
   queueing = false;
   /** Long paths searched this tick (movement.ts pathFor). */
   searched: { sx: number; sy: number; gx: number; gy: number; tiles: number[] }[] = [];
+  /** Set by tryMove: its step was refused by a cliff's limit alone (Grid.keepOff), not by the terrain or a building. Read at once by follow; not part of the game's state. */
+  heldOff = false;
   searchedAt = -1;
   /** Per rectangle (movement.ts doorstep), the regions this tick's searches found no way into it from. */
   shut = new Map<number, Set<number>>(); // every region found shut off, merged
