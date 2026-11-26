@@ -241,7 +241,7 @@ export class Input {
         this.pressPicked = !!hit;
         if (hit) this.pick(hit, e.ctrlKey || e.metaKey, false);
       } else if (e.button === 2 && ground) {
-        this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY), e.shiftKey);
+        this.orderAt(ground.x, ground.z, this.entityAt(e.clientX, e.clientY, this.harvesting()), e.shiftKey);
         this.orderedAt = performance.now();
       }
     });
@@ -467,7 +467,7 @@ export class Input {
   /** A tap: select own things; with a selection, order on anything else; double tap selects all of a kind. */
   private tap(x: number, y: number): void {
     const ground = this.groundAt(x, y);
-    const target = this.entityAt(x, y);
+    const target = this.entityAt(x, y, this.harvesting());
     const now = performance.now();
     this.tappedAt = now;
     if (this.hooks.click?.(0, ground, false, target)) return;
@@ -754,11 +754,12 @@ export class Input {
   }
 
   /**
-   * Entity under the cursor. A unit or a resource the ray meets (its very model) wins. Else units and resources are
+   * Entity under the cursor (`harvest`: an order from workers, a resource the ray meets keeps it from a unit crowding
+   * it; see pickAt). A unit or a resource the ray meets (its very model) wins. Else units and resources are
    * ranked together by how near their drawn outline is to the cursor, each caught a little outside it (resources more
    * generously): see nearestCatch. Only then the building the ray hits, else the closest resource's middle.
    */
-  private entityAt(x: number, y: number): Entity | undefined {
+  private entityAt(x: number, y: number, harvest = false): Entity | undefined {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     const hits: { e: Entity; seen: boolean; xray: boolean }[] = [];
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
@@ -783,7 +784,12 @@ export class Input {
         if (d < bestD) [best, bestD] = [e, d];
       }
       return best;
-    }, occupant, () => this.caughtAt(x, y, occupant, true));
+    }, occupant, () => (harvest ? undefined : this.caughtAt(x, y, occupant, true)));
+  }
+
+  /** Workers among ours: an order on a resource the ray meets is theirs to harvest, never a worker crowding it. */
+  private harvesting(): boolean {
+    return this.own().some((e) => (e.def as UnitDef).worker);
   }
 
   /** The extractor standing on a well, if any and in sight (a well taken is picked as its extractor, never itself). */
