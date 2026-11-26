@@ -9,6 +9,7 @@ import type { Hud } from './hud';
 const SIGNS: Record<GameEvent['kind'], string> = {
   error: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M5.5 14.5l9-9" stroke="currentColor" stroke-width="2.4"/></svg>',
   done: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 10.5l4.2 4.2L16.5 5.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  info: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14v9H8l-4 3.5v-3.5H3z" fill="currentColor"/></svg>',
   alert: '<svg class="sign" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5l7 2.6v5.2c0 4.4-3 7.6-7 9.2-4-1.6-7-4.8-7-9.2V4.1z" fill="currentColor"/><path d="M10 5.5v5.5M10 13.5v1.4" stroke="#1a0604" stroke-width="2.4" stroke-linecap="round"/></svg>',
 };
 
@@ -28,8 +29,13 @@ export function showEvents(h: Hud, events: GameEvent[]): void {
     }
     h.lastHp.set(e.id, e.hp + e.shield);
   }
-  // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none.
-  if (h.spectator) return;
+  // Every message is addressed to one player (a refusal, a building done, an attack): a spectator sees none but the
+  // map's own (its triggers'), once each.
+  if (h.spectator) {
+    const said = new Set<string>();
+    events = events.filter((e) => e.kind === 'info' && !said.has(e.text) && said.add(e.text)).map((e) => ({ ...e, player: h.player }));
+    if (!events.length) return;
+  }
   // A worker that reached its site but could no longer pay drops its build order with a bare "Pas assez de…":
   // say what was lost, as an alert pointing at the worker (it comes long after the order, often off screen).
   const dropped = [...h.sites].filter(([id]) => h.world.entities.get(id)?.order?.kind !== 'build');
@@ -57,7 +63,7 @@ export function showEvents(h: Hud, events: GameEvent[]): void {
       h.toasts.append(same); // newest at the bottom
       expire(same, ev.kind);
       if (performance.now() - Number(same.dataset.sound) > 400) {
-        h.audio.play(ev.kind);
+        h.audio.play(ev.kind === 'info' ? 'done' : ev.kind);
         same.dataset.sound = String(performance.now());
       }
       continue;
@@ -72,7 +78,7 @@ export function showEvents(h: Hud, events: GameEvent[]): void {
       t.title = 'Aller voir (Espace ou Entrée)';
       t.addEventListener('click', () => h.focus(to.x, to.y));
     }
-    h.audio.play(ev.kind);
+    h.audio.play(ev.kind === 'info' ? 'done' : ev.kind);
     t.append(ev.text, el('b', 'times'));
     h.toasts.append(t);
     expire(t, ev.kind);
@@ -82,7 +88,7 @@ export function showEvents(h: Hud, events: GameEvent[]): void {
 
 /** (Re)starts a message's life: it fades after a while, shorter for a refusal, longer for an attack. */
 function expire(t: HTMLElement, kind: GameEvent['kind']): void {
-  const life = kind === 'alert' ? 5000 : kind === 'done' ? 3000 : 2200;
+  const life = kind === 'info' ? 7000 : kind === 'alert' ? 5000 : kind === 'done' ? 3000 : 2200;
   clearTimeout(Number(t.dataset.fade));
   clearTimeout(Number(t.dataset.drop));
   t.dataset.fade = String(setTimeout(() => t.classList.add('gone'), life));

@@ -1,5 +1,7 @@
 import { RAMP_LENGTH, STEP, type Street } from './map';
-import type { BaseSpot, MapFile, Shape } from './maps';
+import { DEFS, FACTIONS, type Faction } from './data';
+import type { BaseSpot, MapFile, PlacedUnit, SeatRules, Shape } from './maps';
+import { readTriggers, triggerProblems, type Triggers } from './sim/triggers';
 
 /**
  * A map from outside the game (a file the player imports, a friend's map over the network, the one a replay carries):
@@ -20,6 +22,11 @@ const MAX_MINERALS = 32;
 const MAX_WELLS = 4;
 const MAX_CALM = 64;
 const MAX_STREETS = 64;
+const MAX_SEATS = 4;
+/** Starting minerals or energy a map may give a seat. */
+const MAX_START = 100_000;
+const MAX_FORBID = 300;
+const MAX_UNITS = 200;
 /** Prefix of an imported map's id: never the id of one of the game's own. */
 export const IMPORTED = 'import-';
 /** Longest map id, once kept (imported prefix, a friend's copy's suffix): the one bound the waiting room (net.ts) takes too. */
@@ -151,11 +158,62 @@ function base(v: unknown, size: number, n: number): BaseSpot {
   };
 }
 
+/**
+ * Teams a map imposes: every seat the map is played with, or none (one picked in the menu could join any side), and
+ * never all in one team at a players count the map offers (the match would be won at its first judgement).
+ */
+function teams(seats: SeatRules[], players: number[]): void {
+  if (!seats.some((s) => s.team !== undefined)) return;
+  const most = Math.max(...players);
+  for (let i = 0; i < most; i++) if (seats[i]?.team === undefined) refuse(`Joueur ${i + 1} : une équipe pour chaque joueur, ou pour aucun.`);
+  for (const n of players) if (seats.slice(0, n).every((s) => s.team === seats[0].team)) refuse(`À ${n} joueurs, tous dans la même équipe : la partie serait gagnée d'avance.`);
+}
+
+function seat(v: unknown, n: number): SeatRules {
+  const what = `Joueur ${n + 1}`;
+  if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
+  only(v, ['race', 'minerals', 'energy', 'forbid', 'team'], what);
+  if (v.race !== undefined && !Object.hasOwn(FACTIONS, v.race as string)) refuse(`${what} : race inconnue (${Object.keys(FACTIONS).join(', ')}).`);
+  const forbid = v.forbid === undefined ? undefined : list(v.forbid, MAX_FORBID, `${what}, forbid`).map((t, i) => {
+    if (typeof t !== 'string' || !Object.hasOwn(DEFS, t) || DEFS[t].kind === 'resource') refuse(`${what}, interdit ${i + 1} : unité, bâtiment ou recherche inconnu.`);
+    return t as string;
+  });
+  if (forbid && new Set(forbid).size !== forbid.length) refuse(`${what} : un interdit en double.`);
+  return {
+    ...(v.race === undefined ? {} : { race: v.race as Faction }),
+    ...(v.minerals === undefined ? {} : { minerals: int(v.minerals, 0, MAX_START, `${what}, minerals`) }),
+    ...(v.energy === undefined ? {} : { energy: int(v.energy, 0, MAX_START, `${what}, energy`) }),
+    ...(forbid?.length ? { forbid } : {}),
+    ...(v.team === undefined ? {} : { team: int(v.team, 0, MAX_SEATS - 1, `${what}, team`) }),
+  };
+}
+
+/** A triggers table (sim/triggers.ts): its shape and bounds, then every reference (a region, variable or trigger named must exist). */
+function triggers(v: unknown, size: number, players: number): Triggers {
+  try {
+    const t = readTriggers(v, size, players);
+    const wrong = triggerProblems(t, size, players);
+    if (wrong.length) throw new Error(`Déclencheurs : ${wrong[0].replace(/\.$/, '')}`);
+    return t;
+  } catch (e) {
+    return refuse(`« triggers » : ${(e as Error).message}`);
+  }
+}
+
+function placed(v: unknown, size: number, n: number): PlacedUnit {
+  const what = `Unité placée ${n + 1}`;
+  if (!isRecord(v)) return refuse(`${what} : un objet est attendu.`);
+  only(v, ['type', 'owner', 'at'], what);
+  const d = typeof v.type === 'string' && Object.hasOwn(DEFS, v.type) ? DEFS[v.type] : undefined;
+  if (!d || (d.kind !== 'unit' && d.kind !== 'building')) return refuse(`${what} : unité ou bâtiment inconnu.`);
+  return { type: v.type as string, owner: int(v.owner, -1, MAX_SEATS - 1, `${what}, owner`), at: tile(v.at, size, `${what}, at`, d.kind === 'building' ? d.size : 1) };
+}
+
 /** A checked copy of a map, or why it is refused. `id` keeps its own (the game's maps, a replay's) or takes the imported prefix. */
 export function checkMap(v: unknown, prefix = true): MapFile | string {
   try {
     if (!isRecord(v)) return refuse("Ce n'est pas une carte Xcraft (un objet JSON est attendu).");
-    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases'], 'Carte');
+    only(v, ['format', 'id', 'name', 'description', 'size', 'players', 'symmetry', 'biome', 'calm', 'terrain', 'streets', 'bases', 'seats', 'units', 'triggers'], 'Carte');
     if (v.format !== 1) refuse('Format de carte inconnu (« format » vaut 1).');
     // A file's own id up to 32; once kept, the prefix and maybe a friend's copy's suffix (maps.ts receiveMap) come on top,
     // within MAX_MAP_ID in all.
@@ -170,6 +228,8 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
     if (!PLANETS.includes(v.biome as string)) refuse(`« biome » : planète inconnue (${PLANETS.join(', ')}).`);
     const bases = list(v.bases, MAX_BASES, '« bases »', 1).map((b, i) => base(b, size, i));
     if (bases.filter((b) => b.start).length !== 1) refuse('Il faut exactement une base de départ (« start »: true).');
+    const seats = v.seats === undefined ? undefined : list(v.seats, MAX_SEATS, '« seats »').map((p, i) => seat(p, i));
+    if (seats) teams(seats, players);
     return {
       format: 1,
       id,
@@ -183,6 +243,9 @@ export function checkMap(v: unknown, prefix = true): MapFile | string {
       terrain: list(v.terrain, MAX_SHAPES, '« terrain »').map((s, i) => shape(s, size, i)),
       ...(v.streets === undefined ? {} : { streets: list(v.streets, MAX_STREETS, '« streets »').map((s, i) => street(s, size, i)) }),
       bases,
+      ...(seats ? { seats } : {}),
+      ...(v.units === undefined ? {} : { units: list(v.units, MAX_UNITS, '« units »').map((u, i) => placed(u, size, i)) }),
+      ...(v.triggers === undefined ? {} : { triggers: triggers(v.triggers, size, Math.max(...players)) }),
     };
   } catch (e) {
     if (e instanceof Refused) return e.message;

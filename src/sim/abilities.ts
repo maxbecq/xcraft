@@ -7,6 +7,9 @@ import { flies, soars, type Entity, type World } from './world';
 import { healable } from './combat';
 
 /** Rappel: holds the army units around (x, y) for the channel; false if there are none. */
+/** What a map forbids this player (MapFile.seats forbid): an ability does not make it either. */
+const banned = (w: World, owner: number, type: string) => !!w.players[owner]?.forbid?.includes(type);
+
 export function recall(this: World, b: Entity, x: number, y: number): boolean {
   const ids = [...this.entities.values()]
     .filter((e) => e.owner === b.owner && e.def.kind === 'unit' && !e.def.worker && e.held === 0 && dist(e.x, e.y, x, y) <= RAPPEL.radius * FP)
@@ -153,10 +156,12 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   } else if (name!.startsWith('forme')) {
     // Mutation: another form, its wounds kept; a flyer only lands on open ground.
     const into = FORMS[name!];
+    if (banned(this, e.owner, into)) return void this.say(e.owner, 'Interdit sur cette carte.');
     if (soars(e) && !(DEFS[into] as UnitDef).flying && !(DEFS[into] as UnitDef).hover && !this.grid.open(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible de se poser ici.');
     this.transmute(e, into);
   } else if (name === 'fusion') {
     // Two Élémentaires, any forms (the base one too), merge into a Golem, which takes a while to set.
+    if (banned(this, e.owner, 'golem')) return void this.say(e.owner, 'Interdit sur cette carte.');
     const other = [...this.entities.values()]
       .filter((t) => t !== e && t.owner === e.owner && t.hp > 0 && (t.type === 'elembase' || Object.values(FORMS).includes(t.type)) && this.gap(e, t) <= toFp(ab.radius!))
       .sort((a, b) => this.gap(e, a) - this.gap(e, b) || a.id - b.id)[0];
@@ -173,6 +178,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     return;
   } else if (name === 'minealchimique') {
     // Bourdon: a mine dropped on the ground under it, paid by its side.
+    if (banned(this, e.owner, 'minealchimique')) return void this.say(e.owner, 'Interdit sur cette carte.');
     if (!this.pay(e.owner, { cost: BALANCE.rules.upgrades.minealchimiquePrice })) return;
     const [ox, oy] = this.grid.nearestOpen(tileOf(e.x), tileOf(e.y));
     this.spawn('minealchimique', e.owner, ox * FP + FP / 2, oy * FP + FP / 2);
@@ -245,6 +251,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     if (!b) return false;
     b.frozen = ticks(ab.duration);
   } else if (name === 'vacarme') {
+    if (banned(this, e.owner, 'vacarme')) return this.say(e.owner, 'Interdit sur cette carte.');
     const v = this.spawn('vacarme', e.owner, x - FP / 2, y - FP / 2);
     v.ttl = ticks(ab.duration);
   } else if (name === 'balisez') {
@@ -331,6 +338,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'silence') {
     this.silences.push({ x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'jormungand') {
+    if (banned(this, e.owner, 'jormungandr')) return this.say(e.owner, 'Interdit sur cette carte.');
     const u = this.spawn('jormungandr', e.owner, x, y);
     this.place(u, x, y);
   } else if (name === 'tempetezeus') {
@@ -469,6 +477,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     e.hp = Math.min(e.maxHp, e.hp + ab.damage!);
     e.held = Math.max(e.held, ticks(ab.duration));
   } else if (name === 'reanimation') {
+    if (banned(this, e.owner, 'cadavre')) return this.say(e.owner, 'Interdit sur cette carte.');
     const i = this.corpses.findIndex((c) => dist(c.x, c.y, x, y) <= toFp(ab.radius!));
     if (i < 0) return false;
     const [c] = this.corpses.splice(i, 1);

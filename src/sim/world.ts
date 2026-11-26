@@ -3,6 +3,7 @@ import { ABILITIES, type BuildingDef, type Cost, DEFS, type Def, type Faction, F
 import type { GameMap } from '../map';
 import { FP, TICK_RATE, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { Grid } from './grid';
+import type { Scenario } from './scenario';
 import * as commands from './commands';
 import * as economy from './economy';
 import * as movement from './movement';
@@ -257,6 +258,8 @@ export interface Player {
   reveal?: boolean;
   /** Gave up (an AI that had lost): out of the match, its buildings standing or not. */
   resigned?: boolean;
+  /** What the map forbids this player (MapFile.seats): units, buildings, research. Set only when some. */
+  forbid?: readonly string[];
 }
 
 export type Command =
@@ -324,6 +327,8 @@ export interface Death {
   type: string;
   owner: number;
   air?: boolean;
+  /** An illusion's end: not a death for a map's triggers. */
+  illusion?: boolean;
 }
 
 /**
@@ -343,7 +348,8 @@ export interface Teleport {
 export interface GameEvent {
   player: number;
   text: string;
-  kind: 'error' | 'done' | 'alert';
+  /** 'info': a map's message (its triggers), to the players it names, shown to spectators too. */
+  kind: 'error' | 'done' | 'alert' | 'info';
 }
 
 /** How close (tiles) an Isdaris worker must be to beam a building down. */
@@ -412,6 +418,8 @@ export class World {
   shrouded = new Set<number>();
   /** Winning player once the game is over. */
   winner: number | null = null;
+  /** The map's triggers, if it has some (MapFile.triggers): run each tick before the match is judged. */
+  scenario: Scenario | null = null;
   private nextId = 1;
   readonly lastAlert: Record<number, number> = {};
 
@@ -576,12 +584,14 @@ export class World {
       if (e.id > last) break;
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
       if (e.def.kind === 'unit') this.think(e);
-      else if (e.def.kind === 'building') this.operate(e);
+      // A neutral building (a map's) is scenery that can be shot: no player of its own to produce, train or pay for.
+      else if (e.def.kind === 'building' && e.owner >= 0) this.operate(e);
     }
     this.cells = null;
     if (this.tick % TICK_RATE === 0) this.repairOnCreep();
     this.bury();
     this.separate();
+    this.scenario?.step(this);
     if (this.tick % 20 === 0) this.judge();
     this.tick++;
   }
@@ -672,7 +682,7 @@ export class World {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       // A unit taken for a while (Soumission, Canon IEM) dies its own player's.
       const owner = e.charm ? e.charmOwner : e.seizedLeft ? e.seizedFrom : e.owner;
-      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e) });
+      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e), ...(e.illusion ? { illusion: true } : {}) });
       // Living units leave a body an Alchimiste can raise for a while.
       if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner, type: e.type });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
@@ -861,7 +871,7 @@ export class World {
   /** Why this upgrade cannot be researched yet (missing buildings), or '' if it can. */
   /** Level researched in an upgrade line (0: none). */
   level(player: number, line: UpgradeLine): number {
-    return this.players[player].upgrades[line] ?? 0;
+    return this.players[player]?.upgrades[line] ?? 0; // a neutral (-1) has researched nothing
   }
 
   /**
@@ -893,6 +903,7 @@ export class World {
    * building that would make it, whose own extensions count (hasExt).
    */
   lacks(player: number, type: string, built?: Map<string, number>, at?: Entity): string {
+    if (this.players[player]?.forbid?.includes(type)) return 'Interdit sur cette carte.';
     if ((DEFS[type] as BuildingDef | UnitDef).unique && [...this.entities.values()].some((b) => b.owner === player && (b.type === type || b.queue.includes(type)))) return 'Un seul par joueur.';
     const count = (t: string) => (built ??= this.builtCounts(player)).get(t) ?? 0;
     const any = (DEFS[type] as BuildingDef).requiresAny;

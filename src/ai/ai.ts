@@ -1008,6 +1008,9 @@ export class AI {
   /** Wanted buildings: add-ons on their hosts, the rest by a builder, while the bank allows. */
   private place(ctx: Turn): void {
     const { w, f, home, builders, buildings, wants, building, outpost, opening } = ctx;
+    // Buildings the map forbids this player (MapFile.seats): never asked for.
+    const banned = w.players[this.player].forbid;
+    if (banned) for (let i = wants.length - 1; i >= 0; i--) if (banned.includes(wants[i])) wants.splice(i, 1);
     // A spot where one of our buildings stands was reached: it may be tried again once that building is gone.
     for (const b of buildings) this.tried.delete(spotKey(b.tx, b.ty, (b.def as BuildingDef).size));
     // Z: add-ons (Plate-forme, Tourelle) come out of a Pod with room for one (the emptiest first); without one, a Pod first.
@@ -1033,7 +1036,7 @@ export class AI {
         ctx.out.push({ player: this.player, kind: 'train', ids: [host.id], type: wants[i] });
         ctx.minerals -= def.cost.minerals;
         ctx.energy -= def.cost.energy;
-      } else if (!host && !building(f.supply) && !wants.includes(f.supply)) wants.splice(i + 1, 0, f.supply);
+      } else if (!host && !building(f.supply) && !wants.includes(f.supply) && !banned?.includes(f.supply)) wants.splice(i + 1, 0, f.supply);
     }
     const beamed = new Set<number>();
     // The natural rising (our second base): NATURAL_RESERVE kept in the bank from the other buildings but supply.
@@ -1135,7 +1138,7 @@ export class AI {
     // At its own price (a Dieux esprit costs 75: with 85 minerals left and no esprit, they never made one again).
     const workerCost = (DEFS[f.worker] as UnitDef).cost.minerals;
     // Low on workers, one comes even while supply is wanted (it costs one).
-    if (workerHome && serfs.length + ctx.queued < serfTarget && ctx.minerals + ctx.low >= workerCost && (ctx.urgent || !wants.includes(f.supply))) {
+    if (workerHome && !w.players[this.player].forbid?.includes(f.worker) && serfs.length + ctx.queued < serfTarget && ctx.minerals + ctx.low >= workerCost && (ctx.urgent || !wants.includes(f.supply))) {
       ctx.out.push({ player: this.player, kind: 'train', ids: [workerHome.id], type: f.worker });
       ctx.minerals += ctx.low - workerCost;
       ctx.low = 0;
