@@ -629,6 +629,8 @@ export function redeployed(this: World, r: { id: number; tx: number; ty: number 
     const [x, y] = [r.tx * FP + FP / 2, r.ty * FP + FP / 2];
     b.held = 0;
     if (!this.powered(b.owner, x, y)) return void this.say(b.owner, 'Redéploiement annulé : zone de construction perdue.');
+    // Its own spot, or not at all: put on the nearest open tile, it could land out of the zone (Codex, 2026-11-26).
+    if (!this.grid.stands(r.tx, r.ty)) return void this.say(b.owner, 'Redéploiement annulé : emplacement occupé.');
     this.place(b, x, y);
     b.muted = b.held = ticks(ABILITIES.redeploiement.duration);
     return;

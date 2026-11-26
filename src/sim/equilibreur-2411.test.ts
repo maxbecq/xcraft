@@ -453,6 +453,24 @@ describe('équilibreur, réponses du 26/11', () => {
     expect(site.muted).toBeGreaterThan(ticks(16));
   });
 
+  // Codex, 2026-11-26 (final review): its spot taken meanwhile (a building raised there), the Orbe was put on the
+  // nearest open tile, out of the zone at times; now the move is called off.
+  it('an Orbe plasma whose spot is taken during its Redéploiement stays where it was', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].minerals = 1000;
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    const orbe = w.site('orbe', 0, Math.floor(ob.x / FP) + 6, Math.floor(ob.y / FP) + 6);
+    orbe.buildLeft = 1;
+    w.step([]);
+    const [x0, y0] = [orbe.x, orbe.y];
+    const [x, y] = [ob.x - 8 * FP + FP / 2, ob.y + FP / 2];
+    expect(w.castAt(orbe, 'redeploiement', x, y)).not.toBe(false);
+    w.grid.blocked[Math.floor(y / FP) * w.grid.width + Math.floor(x / FP)]++; // taken meanwhile
+    run(w, 17.1);
+    expect([orbe.x, orbe.y]).toEqual([x0, y0]);
+    expect(w.powered(0, orbe.x, orbe.y)).toBe(true);
+  });
+
   it('a robot pays a third more, in the zone too; an Obélisque in the zone its price', () => {
     const w = createMatch(['isdaris', 'humains']);
     const p = w.players[0];
