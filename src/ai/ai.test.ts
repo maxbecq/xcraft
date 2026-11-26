@@ -302,6 +302,25 @@ describe('AI Z blind spots', () => {
     expect((ai as unknown as { enemyAir: number }).enemyAir).toBe(1);
   });
 
+  it('unarmed enemy scouts seen, then gone, leave the army\'s shares as they were', () => {
+    const shares = (spies: number) => {
+      const w = createMatch(['isdaris', 'isdaris']);
+      const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === FACTIONS.isdaris.hq)!;
+      const seen = Array.from({ length: spies }, (_, i) => w.spawn('espion', 1, hq.x + (3 + i) * FP, hq.y + 3 * FP));
+      w.step([]);
+      w.tick = thinkTick(6);
+      const ai = new AI(w, 0);
+      const list = () => JSON.stringify((ai as unknown as { armyList: [string, number][] }).armyList);
+      for (let i = 0; i < 200; i++, w.tick += 10) ai.think();
+      const during = list();
+      for (const s of seen) w.remove(s);
+      for (let i = 0; i < 200; i++, w.tick += 10) ai.think();
+      return [during, list()];
+    };
+    const [usual] = shares(0);
+    expect(shares(3)).toEqual([usual, usual]);
+  });
+
   it('never picks a drone sheltered in a building as a builder', () => {
     const w = createMatch(['z', 'humains']);
     const ic = hqOf(w);

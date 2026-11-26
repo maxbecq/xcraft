@@ -482,7 +482,9 @@ export class AI {
       const now = new Map<string, number>();
       for (const e of w.entities.values()) {
         if (!w.hostile(e.owner, this.player) || !w.sees(this.player, e)) continue;
-        if (e.def.kind === 'unit' && !(e.def as UnitDef).worker) now.set(e.type, (now.get(e.type) ?? 0) + 1);
+        // Only units that fight: three unarmed Espions seen turned the Isdaris' shares towards anti-air for the rest of
+        // the game (Codex review, point 4; a read of unarmed scouts counters nothing).
+        if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.weapon(e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
         // A building that trains flyers, seen: a few of them guessed before they come.
         const flyer = e.def.kind === 'building' && e.buildLeft === 0 ? (e.def as BuildingDef).trains?.find((t) => (DEFS[t] as UnitDef | undefined)?.flying && (DEFS[t] as UnitDef).attack) : undefined;
         if (flyer) now.set(flyer, Math.max(now.get(flyer) ?? 0, this.doctrine === LEGACY ? 2 : COUNTER_MIN));
