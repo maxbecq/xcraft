@@ -1,7 +1,7 @@
 import {
   Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
-  ShaderMaterial, ShaderChunk, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
+  ShaderMaterial, ShaderChunk, Raycaster, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -373,6 +373,68 @@ function fableLights(scene: Object3D): void {
   });
   const lintel = scene.getObjectByName('float_linteau');
   if (lintel) lintelBeam(scene, lintel);
+  footGlow(scene);
+}
+
+/**
+ * The Obélisque's halo, the square under its floating shaft: Blender laid it on the terrace, under the plinth the shaft
+ * hangs over (0.55 against 0.69) and narrower than the shaft's foot, so nothing of it showed (the user's remark,
+ * 0.9.175). Laid on the plinth now, widened round the foot, as a crisp cyan glow hugging it, as on the board.
+ */
+function footGlow(scene: Object3D): void {
+  scene.updateMatrixWorld(true);
+  const base = scene.getObjectByName('base');
+  const quads: Mesh[] = [];
+  scene.traverse((o) => o instanceof Mesh && o.name.startsWith('fx_halo') && o.geometry.getAttribute('position').count <= 4 && quads.push(o));
+  for (const o of quads) {
+    const box = new Box3().setFromObject(o);
+    const c = box.getCenter(new Vector3());
+    let foot: Box3 | undefined;
+    scene.traverse((f) => {
+      if (foot || !f.name.startsWith('float_')) return;
+      const b = new Box3().setFromObject(f);
+      if (c.x > b.min.x && c.x < b.max.x && c.z > b.min.z && c.z < b.max.z && b.min.y > c.y) foot = b;
+    });
+    if (!foot || !base) continue;
+    const hit = new Raycaster(new Vector3(c.x, foot.min.y - 0.01, c.z), new Vector3(0, -1, 0)).intersectObject(base, true)[0];
+    const k = ((foot.max.x - foot.min.x) * FOOT_GLOW) / (box.max.x - box.min.x);
+    const move = new Matrix4().makeTranslation(c.x, (hit ? hit.point.y : c.y) + 0.015, c.z)
+      .multiply(new Matrix4().makeScale(k, 1, k))
+      .multiply(new Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+    new Matrix4().copy(o.parent!.matrixWorld).invert().multiply(move).multiply(o.matrixWorld).decompose(o.position, o.quaternion, o.scale);
+    o.material = footMaterial ??= glowSquare();
+  }
+}
+/** How wide the Obélisque's foot glow is against the foot itself. */
+const FOOT_GLOW = 1.8;
+let footMaterial: ShaderMaterial | undefined;
+/** A square of light round a square foot: full under it, a bright rim at its edge, fading fast outside. */
+function glowSquare(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { veinTime },
+    vertexShader: `uniform float veinTime;
+      varying vec2 vUv;
+      varying float vVein;
+      ${VEIN_PULSE}
+      void main() {
+        vUv = uv;
+        vVein = veinPulse(modelMatrix, position, veinTime);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `varying vec2 vUv;
+      varying float vVein;
+      void main() {
+        float d = max(abs(vUv.x - 0.5), abs(vUv.y - 0.5)) * 2.0;
+        float edge = ${(1 / FOOT_GLOW).toFixed(4)};
+        float glow = d < edge ? 0.85 : 0.85 * exp(-(d - edge) * 14.0);
+        float rim = exp(-abs(d - edge) * 50.0) * 0.4;
+        // Laid over the marble rather than added to it: added, cyan on white marble only turned white.
+        gl_FragColor = vec4(vec3(0.15, 0.95, 1.4) * (0.9 + 0.5 * rim), min(1.0, (glow + rim) * (0.6 + 0.4 * vVein)));
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+  });
 }
 
 /** A thin cyan glow under a floating part (the Obélisque's shaft, the Trône's crown): small, faint, fading from the middle. */
