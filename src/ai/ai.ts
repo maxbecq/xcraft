@@ -868,7 +868,10 @@ export class AI {
     if (bunker && minute > 5 && count(bunker) === 0 && count(f.barracks) >= 2 && !building(bunker)) wants.push(bunker);
     // Expand to the natural once the main is running, then to the map's next free base every few minutes, or
     // sooner when the bases run dry (as many as the map offers, up to MAX_BASES).
-    const outpost = f.outpost && !(rich && p.minerals > 1600) ? f.outpost : f.hq;
+    // What the map forbids this player is never saved for nor planned (Codex, 2026-11-26: a Humain AI the map denied the
+    // Conseil kept its minerals and its Casernes idle for an expansion it could not raise).
+    const allowed = (t: string | undefined) => !!t && !p.forbid?.includes(t);
+    const outpost = allowed(f.outpost) && (!(rich && p.minerals > 1600) || !allowed(f.hq)) ? f.outpost! : f.hq;
     // Every base, a headquarters turned into another included (the Z Intelligence suprême was not counted).
     const councils = buildings.filter((b) => this.isBase(b)).length + builders.filter((s) => s.order?.kind === 'build' && (s.order.type === f.hq || s.order.type === f.outpost)).length;
     // The natural at the strategy's minute, an opening as in StarCraft (strategy.ts): the easy AI late, the hard one a
@@ -909,7 +912,7 @@ export class AI {
     // With fewer workers than planned too once the bases are mined out (raided, supply full: none could come, and
     // the last fields were at the expansion).
     // The natural at its minute whatever the workers (an opening); the bases after it with the plan's workers.
-    const expand = councils < MAX_BASES && (councils < 2 || serfs.length >= this.plan.serfs || rich || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
+    const expand = allowed(outpost) && councils < MAX_BASES && (councils < 2 || serfs.length >= this.plan.serfs || rich || this.fieldsNear(buildings) < 3) && due && !!this.spot(outpost, home);
     // Humans with energy unspent (up to 966 in the games of 23/11, no Soigneur): the Alchimisterie now, for them.
     if (f === FACTIONS.humains && !this.easy && p.energy >= 400 && count('alchimisterie') === 0 && !building('alchimisterie') && !w.lacks(this.player, 'alchimisterie')) wants.push('alchimisterie');
     // In its opening's window, the natural comes before the other buildings, supply short aside (the Humains' casernes
@@ -929,7 +932,7 @@ export class AI {
     // razed them, evening replays of 24/11). Saving, which holds the units, as before: eight soldiers at home.
     const opened = councils < 2 && minute < firstAt + NATURAL_SAVING;
     // In the opening's window, from six soldiers at home (out of a raid).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= (opened && !this.homeThreat ? 6 : 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (!this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= (opened && !this.homeThreat ? 6 : 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && allowed(f.hq) && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (allowed(f.hq) && !this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     // Saving for the expansion: no production building for floating minerals (the Isdaris spent 1 150 on a fifth Portail
     // at 7:17, their natural, 1 330 by robot, never came and their main ran dry at 8:00, the game lost).
     // Not the Z: their third Plate-forme so held, they fell from 53 to 45 wins in 96 against the 0.9.147 AI.
