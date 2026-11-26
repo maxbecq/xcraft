@@ -187,6 +187,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     // Char Pégase: a chemical mine from its stock, under it, on the ground only; its own cooldown is the stock.
     if (e.airborne) return void this.say(e.owner, 'Les mines se posent au sol.');
     if (e.charges === 0) return void this.say(e.owner, 'Plus de mine en réserve.');
+    if (banned(this, e.owner, 'minechimique')) return void this.say(e.owner, 'Interdit sur cette carte.'); // its stock kept
     e.charges--;
     this.spawnBeside('minechimique', e);
     this.casts.push({ kind: name, x: e.x, y: e.y });
@@ -204,7 +205,7 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   } else if (name === 'resurrection') {
     // The side's own fallen of the last `duration` seconds round her, nearest first, back at full health.
     const fallen = this.corpses
-      .filter((c) => c.owner === e.owner && this.tick - c.tick < ticks(ab.duration) && dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!) && !(DEFS[c.type] as UnitDef).unique)
+      .filter((c) => c.owner === e.owner && this.tick - c.tick < ticks(ab.duration) && dist(c.x, c.y, e.x, e.y) <= toFp(ab.radius!) && !(DEFS[c.type] as UnitDef).unique && !banned(this, e.owner, c.type))
       .sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.tick - b.tick)
       .slice(0, ab.max);
     if (!fallen.length) return;
@@ -239,6 +240,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
       .sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y) || a.id - b.id);
   if (this.silenced(e.x, e.y) || e.illusion) return false;
   if (ab.ultimate) {
+    // A unit the map forbids is not called, and the charge is kept (Codex, 2026-11-26: emptied for nothing).
+    if (name === 'jormungand' && banned(this, e.owner, 'jormungandr')) {
+      this.say(e.owner, 'Interdit sur cette carte.');
+      return false;
+    }
     if (!this.ultimateReady(e.owner, ab.ultimate)) {
       this.say(e.owner, `${ab.name} : pas encore chargé au Temple primordial.`);
       return true;
