@@ -395,6 +395,8 @@ export function separate(this: World): void {
   }
 }
 
+const fixedInPlace = (e: Entity) => e.burrowed || (!!(e.def as UnitDef).levels && e.queue.length > 0);
+
 export function pushApart(this: World, a: Entity, b: Entity): void {
   let dx = b.x - a.x;
   let dy = b.y - a.y;
@@ -412,7 +414,11 @@ export function pushApart(this: World, a: Entity, b: Entity): void {
     }
     d = isqrt(dx * dx + dy * dy);
   }
-  const pa = a.order && !b.order ? 0 : !a.order && b.order ? overlap : idiv(overlap, 2);
+  // A burrowed Créature, a god summoning or rising a level, is not pushed (équilibreur 24/11).
+  const fa = fixedInPlace(a);
+  const fb = fixedInPlace(b);
+  if (fa && fb) return;
+  const pa = fa ? 0 : fb ? overlap : a.order && !b.order ? 0 : !a.order && b.order ? overlap : idiv(overlap, 2);
   const pb = overlap - pa;
   this.tryMove(a, a.x - idiv(dx * pa, d), a.y - idiv(dy * pa, d));
   this.tryMove(b, b.x + idiv(dx * pb, d), b.y + idiv(dy * pb, d));

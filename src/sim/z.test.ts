@@ -6,6 +6,7 @@ import { addonSlots } from './buildings';
 import { commandOk } from './validate';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
+import { noRegen } from './noregen';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const run = (w: World, seconds: number) => {
@@ -655,6 +656,7 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
   });
 
   it('a Z building off its creep stops working; a Pod\'s add-on stops when its Pod falls', () => {
+    noRegen();
     const { w, p, pod } = setup();
     const t = w.spawn('tourelle', 0, 43 * FP, 41 * FP);
     t.host = pod.id;

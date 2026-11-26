@@ -1021,7 +1021,14 @@ export const DEFS = Object.fromEntries(
 ) as Record<string, Def>;
 // Équilibreur 22/11 (proposition 1, provisional): the Pod's creep of 2, counted from its edge (from its centre then: 2
 // plus half its size) or, `fromEdge` false, from its centre.
-(DEFS.pod as BuildingDef).power = BALANCE.rules.z.podCreep.radius + (BALANCE.rules.z.podCreep.fromEdge ? (DEFS.pod as BuildingDef).size / 2 : 0);
+// Équilibreur 23/11 and 24/11: every living unit heals slowly by itself (Humains and Dieux 0.5 hp a second, the Golem
+// excepted; the Isdaris 1 every 8 s), unless its own rate is set (the Créature: the Humains' rate).
+for (const [type, d] of Object.entries(DEFS)) {
+  const R = BALANCE.rules.bioRegen as Record<string, number | string[]>;
+  const u = d as UnitDef;
+  if (d.kind === 'unit' && !u.mechanical && u.regen === undefined && typeof R[u.faction] === 'number' && !(R.not as string[]).includes(type)) u.regen = R[u.faction] as number;
+}
+(DEFS.pod as BuildingDef).power =BALANCE.rules.z.podCreep.radius + (BALANCE.rules.z.podCreep.fromEdge ? (DEFS.pod as BuildingDef).size / 2 : 0);
 
 /** What a unit costs with its weapon (Z socles), or alone. */
 export function withKit(def: { cost: Cost }, weapon?: string): Cost {

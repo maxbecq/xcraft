@@ -99,7 +99,8 @@ describe('Isdaris', () => {
     w.remove(legion);
     const hp = archer.hp;
     run(w, 20);
-    expect(archer.hp).toBe(hp); // no hp regeneration for archers
+    expect(archer.hp - hp).toBeGreaterThanOrEqual(2); // 1 hp every 8 s (équilibreur 24/11)
+    expect(archer.hp - hp).toBeLessThanOrEqual(3);
     expect(archer.shield).toBeGreaterThan(10); // 1 a second, 7 s after the last hit (2010 sheet)
   });
 

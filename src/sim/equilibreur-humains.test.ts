@@ -3,6 +3,7 @@ import { DEFS, type UnitDef } from '../data';
 import { FP, speedPerTick, ticks } from './fixed';
 import { createMatch } from './setup';
 import type { World } from './world';
+import { noRegen } from './noregen';
 
 // The balancer's answer of 2026-11-22, section « 1. Humains »: followed to the letter.
 const humans = () => {
@@ -207,6 +208,7 @@ describe('the balancer, Humains', () => {
   });
 
   it('Soin: 25 HP for 5 mana, never on a machine, on its own or not (autosoin)', () => {
+    noRegen();
     const w = humans();
     const m = w.spawn('soigneur', 0, 30 * FP, 40 * FP);
     const man = w.spawn('legionnaire', 0, 31 * FP, 40 * FP);

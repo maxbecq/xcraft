@@ -69,7 +69,7 @@ export function empower(this: World, u: Entity, type: string): void {
 export function armorBonus(this: World, t: Entity): number {
   const d = t.def as UnitDef;
   const faction = this.players[t.owner].faction;
-  let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+  let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? (d.levels ? 0 : this.level(t.owner, 'armor')) : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
   if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   // Peau de roc (the balancer, 2026-11-22): +5 armour, shown with the rest.
@@ -260,16 +260,16 @@ export function hurt(this: World, t: Entity, damage: number): number {
 export function regenerate(this: World, e: Entity): void {
   if (e.hp <= 0) return;
   if (e.poison > 0 && --e.poison % ticks(1) === 0) e.hp -= BALANCE.rules.upgrades.poison.damage;
-  const regen = 'regen' in e.def ? e.def.regen : undefined;
+  // A Sphinx in stone heals at its statue's own rate only (équilibreur 24/11).
+  const regen = 'regen' in e.def && !(e.statue > 0) ? e.def.regen : undefined;
+  // Living units heal at their own pace, hit or not, the shield apart (équilibreur 23-24/11: an Isdaris archer has both).
+  if (regen && e.hp < e.maxHp && this.tick % ticks(1 / regen) === 0) e.hp++;
   const shielding = e.shield < e.maxShield && (e.def.kind !== 'building' || e.buildLeft === 0);
-  if (!shielding && !(regen && e.hp < e.maxHp)) return;
-  if (shielding && this.tick - e.lastHit < ticks(7)) return;
+  if (!shielding || this.tick - e.lastHit < ticks(7)) return;
   // Shields come back 1 a second (2010 sheet).
-  const rate = regen && e.hp < e.maxHp ? regen : 1;
-  if (++e.regenTimer < ticks(1 / rate)) return;
+  if (++e.regenTimer < ticks(1)) return;
   e.regenTimer = 0;
-  if (shielding) e.shield++;
-  else e.hp++;
+  e.shield++;
 }
 
 /**
@@ -509,7 +509,8 @@ export function classValue(this: World, e: Entity, a: Attack, cls: number): numb
 
 /** The attack research's share of a blow worth `value` (+10 % a level), for an attacker that gets it. */
 export function researched(this: World, e: Entity, a: Attack, value: number): number {
-  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
+  // The gods grow by their levels, not by the units' weapon research (équilibreur 24/11).
+  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' && !(e.def as UnitDef).levels : this.players[e.owner]?.faction === 'z';
   if (!armed) return 0;
   // The Auxiliaire: +1 a level, not 10 % of its 15 (the balancer, 2026-11-22).
   const step = e.type === 'auxiliaire' ? BALANCE.rules.upgrades.auxiliaireRanged : Math.max(1, Math.round(value / 10));

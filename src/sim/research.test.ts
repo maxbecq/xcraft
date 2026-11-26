@@ -4,6 +4,7 @@ import { DEFS, type UnitDef } from '../data';
 import { createMap } from '../map';
 import { FP, ticks } from './fixed';
 import { World } from './world';
+import { noRegen } from './noregen';
 
 const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
 const run = (w: World, s: number) => {
@@ -17,6 +18,7 @@ const finished = (w: World, type: string, owner: number, tx: number, ty: number)
 
 describe('Human research (notice 1.2-1)', () => {
   it('Croissance économique gives serfs and Caserne soldiers 5 more hp, old and new', () => {
+    noRegen();
     const w = new World(createMap());
     const old = w.spawn('auxiliaire', 0, ...at(40, 60));
     old.hp -= 20;

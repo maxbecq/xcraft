@@ -5,6 +5,7 @@ import { ABILITIES, type BuildingDef, DEFS, type UnitDef } from '../data';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Command, type Entity, World } from './world';
+import { noRegen } from './noregen';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const run = (w: World, seconds: number) => {
@@ -439,6 +440,7 @@ describe('Dieux', () => {
   });
 
   it('Courroux du marteau doubles the next blow (balance designer 2026-11-22); the Tempête de sable silences enemy shooters', () => {
+    noRegen();
     const w = createMatch(['dieux', 'humains']);
     const thor = Object.assign(w.spawn('thor', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     const dummy = w.spawn('conseil', 1, 31 * FP, 28 * FP);
@@ -606,6 +608,7 @@ describe('a busy god (balance designer, 2026-11-22)', () => {
 
 describe('a busy healer god and Gaïa on the move (Codex review, 2026-11-23)', () => {
   it('Isis summoning heals only within reach: she does not walk to a wounded ally, and her queue runs on', () => {
+    noRegen();
     const w = createMatch(['dieux', 'humains']);
     const isis = Object.assign(w.spawn('isis', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
     w.enqueue(isis, 'sphinx');
@@ -702,6 +705,7 @@ describe('Apollon\'s Pluie de feu (balance designer, 2026-11-22)', () => {
 
 describe('the automatic Soin (balance designer, 2026-11-22)', () => {
   it('the Prêtresse heals 25 for 5 mana, by itself or not, never a machine; Isis 25 a second at her first level', () => {
+    noRegen();
     const w = createMatch(['dieux', 'humains']);
     const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
     const nain = w.spawn('nain', 0, 32 * FP, 30 * FP);
@@ -731,6 +735,7 @@ describe('the automatic Soin (balance designer, 2026-11-22)', () => {
   });
 
   it('switched off, the Prêtresse drops the patient she was walking to and pays no more (Codex review, 2026-11-23)', () => {
+    noRegen();
     const w = createMatch(['dieux', 'humains']);
     const pretresse = w.spawn('pretresse', 0, 30 * FP, 30 * FP);
     const nain = w.spawn('nain', 0, 37 * FP, 30 * FP);
