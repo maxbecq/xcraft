@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { it } from 'vitest';
+import { expect, it } from 'vitest';
 import { AI } from '../src/ai/ai';
 import { DOCTRINE, ON_BY_DEFAULT, STRATEGIES } from '../src/ai/strategy';
 import { type Analysis, Analyzer, clock, FAULTS, type FaultKind } from '../src/analysis/analyze';
@@ -7,6 +7,40 @@ import { FACTIONS, type Faction } from '../src/data';
 import { TICK_RATE } from '../src/sim/fixed';
 import { createMatch } from '../src/sim/setup';
 import BALANCE from '../src/balance.json';
+
+type Row = { games: Analysis[]; seats: number[]; wins: number; strategies: Record<string, [number, number]>; foes: Record<string, [number, number]> };
+
+/** A camp's part of the report; with « après » only (TOURNEY_AFTER), no « avant » column (it showed NaN: Codex review, point 8). */
+export function campReport(camp: Faction, rows: Record<'avant' | 'apres', Row>, n: number): string[] {
+  const { avant, apres } = rows;
+  const both = avant.games.length > 0;
+  const per = (r: Row, kind: FaultKind) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i] && f.kind === kind).length, 0) / Math.max(1, r.games.length);
+  const share = (r: Row, kind: FaultKind) => r.games.filter((g, i) => g.faults.some((f) => f.player === r.seats[i] && f.kind === kind)).length / Math.max(1, r.games.length);
+  const total = (r: Row) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i]).length, 0) / Math.max(1, r.games.length);
+  const out = [`## ${FACTIONS[camp].name}`, ''];
+  if (both) out.push(`${avant.games.length} parties par colonne. Victoires contre l’IA actuelle : avant ${avant.wins}, après ${apres.wins}. Fautes par partie : avant ${total(avant).toFixed(1)}, après ${total(apres).toFixed(1)}.`, '');
+  else out.push(`${apres.games.length} parties, après seulement. Victoires contre l’IA actuelle : ${apres.wins}. Fautes par partie : ${total(apres).toFixed(1)}.`, '');
+  out.push(both ? `Victoires par adversaire (avant / après, sur ${2 * n} parties) : ${Object.keys(apres.foes).map((f) => `${FACTIONS[f as Faction].name} ${avant.foes[f]?.[1] ?? '–'} / ${apres.foes[f][1]}`).join(', ')}.` : `Victoires par adversaire (sur ${2 * n} parties) : ${Object.keys(apres.foes).map((f) => `${FACTIONS[f as Faction].name} ${apres.foes[f][1]}`).join(', ')}.`, '');
+  out.push(`Stratégies (parties, victoires) : ${Object.entries(apres.strategies).map(([k, [g, v]]) => `${k} ${g}/${v}`).join(', ')}.`, '');
+  if (both) {
+    out.push('| Faute | Parties avant | Parties après | Par partie avant | Par partie après |', '|---|---|---|---|---|');
+    for (const kind of Object.keys(FAULTS) as FaultKind[]) out.push(`| ${FAULTS[kind].label} | ${Math.round(100 * share(avant, kind))} % | ${Math.round(100 * share(apres, kind))} % | ${per(avant, kind).toFixed(1)} | ${per(apres, kind).toFixed(1)} |`);
+  } else {
+    out.push('| Faute | Parties | Par partie |', '|---|---|---|');
+    for (const kind of Object.keys(FAULTS) as FaultKind[]) out.push(`| ${FAULTS[kind].label} | ${Math.round(100 * share(apres, kind))} % | ${per(apres, kind).toFixed(1)} |`);
+  }
+  out.push('');
+  return out;
+}
+
+it('le rapport d’un tournoi « après » seulement n’a pas de colonne « avant » ni de NaN', () => {
+  const empty = (): Row => ({ games: [], seats: [], wins: 0, strategies: {}, foes: {} });
+  const apres: Row = { games: [{ factions: ['z', 'dieux'], ticks: 100, winner: 0, faults: [], notes: [], timeline: [] }], seats: [0], wins: 1, strategies: { essaim: [1, 1] }, foes: { dieux: [1, 1] } };
+  const md = campReport('z', { avant: empty(), apres }, 1).join('\n');
+  expect(md).not.toContain('NaN');
+  expect(md).not.toContain('avant');
+  expect(md).toContain('Victoires contre l’IA actuelle : 1');
+});
 // Before and after the strategies, on the same games: each camp of TOURNEY_CAMPS against each other camp played by
 // the AI as it was (legacy), both seats, TOURNEY_N games each (start delays and harvest handicaps as in faults.test.ts;
 // the strategies taken in turn). « Avant »: the camp plays legacy too; « après »: strategies and doctrine. The analyser
@@ -30,7 +64,7 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
   const doctrine = { ...DOCTRINE, ...JSON.parse(process.env.TOURNEY_DOCTRINE ?? '{}') };
   const out = ['# Tournoi avant/après les stratégies', '', 'Chaque camp contre l’IA actuelle (avant les stratégies) de chaque autre camp, aux deux places. Avant : le camp joue aussi l’IA actuelle. Après : stratégies et doctrine commune. Juge : l’analyseur. Ce n’est pas une mesure d’équilibre.', '', `Doctrine après : ${JSON.stringify(doctrine)}.`, ''];
   for (const camp of camps) {
-    const rows: Record<'avant' | 'apres', { games: Analysis[]; seats: number[]; wins: number; strategies: Record<string, [number, number]>; foes: Record<string, [number, number]> }> = {
+    const rows: Record<'avant' | 'apres', Row> = {
       avant: { games: [], seats: [], wins: 0, strategies: {}, foes: {} },
       apres: { games: [], seats: [], wins: 0, strategies: {}, foes: {} },
     };
@@ -80,16 +114,7 @@ it.skipIf(!process.env.TOURNEY)('tournament', async () => {
         }
       }
     }
-    const per = (r: (typeof rows)['avant'], kind: FaultKind) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i] && f.kind === kind).length, 0) / r.games.length;
-    const share = (r: (typeof rows)['avant'], kind: FaultKind) => r.games.filter((g, i) => g.faults.some((f) => f.player === r.seats[i] && f.kind === kind)).length / r.games.length;
-    const total = (r: (typeof rows)['avant']) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i]).length, 0) / r.games.length;
-    const { avant, apres } = rows;
-    out.push(`## ${FACTIONS[camp].name}`, '', `${avant.games.length} parties par colonne. Victoires contre l’IA actuelle : avant ${avant.wins}, après ${apres.wins}. Fautes par partie : avant ${total(avant).toFixed(1)}, après ${total(apres).toFixed(1)}.`, '');
-    out.push(`Victoires par adversaire (avant / après, sur ${2 * n} parties) : ${Object.keys(apres.foes).map((f) => `${FACTIONS[f as Faction].name} ${avant.foes[f]?.[1] ?? '–'} / ${apres.foes[f][1]}`).join(', ')}.`, '');
-    out.push(`Stratégies (parties, victoires) : ${Object.entries(apres.strategies).map(([k, [g, v]]) => `${k} ${g}/${v}`).join(', ')}.`, '');
-    out.push('| Faute | Parties avant | Parties après | Par partie avant | Par partie après |', '|---|---|---|---|---|');
-    for (const kind of Object.keys(FAULTS) as FaultKind[]) out.push(`| ${FAULTS[kind].label} | ${Math.round(100 * share(avant, kind))} % | ${Math.round(100 * share(apres, kind))} % | ${per(avant, kind).toFixed(1)} | ${per(apres, kind).toFixed(1)} |`);
-    out.push('');
+    out.push(...campReport(camp, rows, n));
   }
   if (process.env.TOURNEY_OUT) writeFileSync(process.env.TOURNEY_OUT, out.join('\n'));
 }, 8 * 3600_000);

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
+import { FACTIONS } from '../data';
 import { AI, DIFFICULTY, teamFocus } from './ai';
+import { STRATEGIES } from './strategy';
 
 /** Plays until someone wins or the time runs out; returns the winner and the game time in minutes. */
 function play(world: World, ais: AI[], minutes: number): { winner: number | null; minutes: number } {
@@ -34,6 +36,30 @@ describe('AI', () => {
     expect(victims).toHaveLength(4);
     expect(new Set(victims).size, `targets ${victims}`).toBe(4);
   }, 60_000);
+
+  it('in a free-for-all, a second enemy known at the far corner does not hold back a wave strong enough for the first', () => {
+    const goes = (both: boolean) => {
+      const w = createMatch(['isdaris', 'isdaris', 'isdaris', 'isdaris'], undefined, 'carrefour');
+      const hqs = [0, 1, 2, 3].map((p) => [...w.entities.values()].find((e) => e.owner === p && e.type === FACTIONS.isdaris.hq)!);
+      const ours = Array.from({ length: 12 }, (_, i) => w.spawn('archer', 0, hqs[0].x + (6 + (i % 4)) * FP, hqs[0].y + (6 + Math.floor(i / 4)) * FP));
+      // Each enemy side's eight Archers, seen by a Voyageur of ours by them.
+      for (const p of both ? [1, 2] : [1]) {
+        for (let i = 0; i < 8; i++) w.spawn('archer', p, hqs[p].x + (i % 4) * FP, hqs[p].y + 6 * FP + Math.floor(i / 4) * FP);
+        w.spawn('voyageur', 0, hqs[p].x, hqs[p].y + 9 * FP);
+      }
+      w.step([]);
+      w.tick = ticks(12 * 60) - (ticks(12 * 60) % 10);
+      const ai = new AI(w, 0, undefined, 'normal', { strategy: STRATEGIES.isdaris[0].id });
+      const sent = new Set<number>();
+      for (let i = 0; i < 40; i++) {
+        for (const c of ai.think()) if (c.kind === 'attack') for (const id of c.ids) sent.add(id);
+        w.tick += 10;
+      }
+      return ours.filter((u) => sent.has(u.id)).length;
+    };
+    expect(goes(false)).toBeGreaterThan(0);
+    expect(goes(true)).toBeGreaterThan(0);
+  });
 
   it('beats an idle opponent', () => {
     const w = createMatch();
@@ -107,6 +133,23 @@ describe('AI', () => {
     }
     expect(two.every((r) => r.hp <= 0)).toBe(true);
   }, 60_000);
+
+  it('a wave called back to a raid too strong for it is sent to the rally point, not left on its way to the enemy', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === FACTIONS.isdaris.hq)!;
+    const far = w.spawn('creature', 0, hq.x + 30 * FP, hq.y + 30 * FP);
+    const goal = { x: hq.x + 60 * FP, y: hq.y + 60 * FP };
+    w.step([{ player: 0, kind: 'attack', ids: [far.id], x: goal.x, y: goal.y }]);
+    const ai = new AI(w, 0);
+    (ai as unknown as { wave: Set<number> }).wave = new Set([far.id]);
+    for (let i = 0; i < 6; i++) w.spawn('legionnaire', 1, hq.x + (4 + (i % 3)) * FP, hq.y + (4 + Math.floor(i / 3)) * FP);
+    while (w.tick % 10 !== 0) w.step([]);
+    w.step(ai.think());
+    expect((ai as unknown as { wave: Set<number> }).wave.has(far.id)).toBe(false);
+    // The order the simulation now carries out: no longer the attack on the enemy's side.
+    const o = far.order as { kind: string; x?: number; y?: number } | null;
+    expect(o && o.x === goal.x && o.y === goal.y).toBeFalsy();
+  });
 
   it('pulls a wave group back from a fight it cannot win, not from one it can', () => {
     const w = createMatch();
@@ -257,6 +300,25 @@ describe('AI Z blind spots', () => {
     w.tick = thinkTick(6);
     ai.think();
     expect((ai as unknown as { enemyAir: number }).enemyAir).toBe(1);
+  });
+
+  it('unarmed enemy scouts seen, then gone, leave the army\'s shares as they were', () => {
+    const shares = (spies: number) => {
+      const w = createMatch(['isdaris', 'isdaris']);
+      const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === FACTIONS.isdaris.hq)!;
+      const seen = Array.from({ length: spies }, (_, i) => w.spawn('espion', 1, hq.x + (3 + i) * FP, hq.y + 3 * FP));
+      w.step([]);
+      w.tick = thinkTick(6);
+      const ai = new AI(w, 0);
+      const list = () => JSON.stringify((ai as unknown as { armyList: [string, number][] }).armyList);
+      for (let i = 0; i < 200; i++, w.tick += 10) ai.think();
+      const during = list();
+      for (const s of seen) w.remove(s);
+      for (let i = 0; i < 200; i++, w.tick += 10) ai.think();
+      return [during, list()];
+    };
+    const [usual] = shares(0);
+    expect(shares(3)).toEqual([usual, usual]);
   });
 
   it('never picks a drone sheltered in a building as a builder', () => {
@@ -454,6 +516,34 @@ describe('AI Z blind spots', () => {
     w.players[0].minerals = 1000;
     expect(new AI(w, 0).think().some((c) => c.kind === 'attack' && c.ids.includes(u.id))).toBe(true);
   });
+  it('Z: no income, its strategy\'s socles out of reach: a Plate-forme trains the drone de combat the bank pays, then the last soldiers go', () => {
+    const w = createMatch(['z', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
+    const ic = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;
+    const pod = w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    const plat = w.spawn('plateforme', 0, ic.x + 10 * FP, ic.y);
+    plat.host = pod.id;
+    w.spawn('centresocles', 0, ic.x - 8 * FP, ic.y);
+    for (const up of ['rquadripode', 'rhexapode']) w.players[0].upgrades[up] = 1;
+    const u = w.spawn('dronecombat', 0, ic.x, ic.y + 5 * FP);
+    // Its drones all there (none to train), before minute 10 (no drone's price kept against a raid).
+    for (let i = 0; i < 10; i++) w.spawn('drone', 0, ic.x - 3 * FP, ic.y + 3 * FP);
+    w.tick = thinkTick(8);
+    w.players[0].minerals = 130;
+    w.players[0].energy = 0;
+    const ai = new AI(w, 0, undefined, 'normal', { strategy: 'artillerie' });
+    let trained = false;
+    let goes = false;
+    for (let i = 0; i < 3000 && !goes; i++) {
+      const cmds = ai.think();
+      trained ||= cmds.some((c) => c.kind === 'train' && c.ids.includes(plat.id) && c.type === 'dronecombat');
+      goes = cmds.some((c) => c.kind === 'attack' && c.ids.includes(u.id));
+      w.step(cmds);
+    }
+    expect(trained).toBe(true);
+    expect(goes).toBe(true);
+  });
+
   it('Z: no Intelligence nor its price, a Plate-forme still trains what the bank pays', () => {
     const w = createMatch(['z', 'humains']);
     const ic = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;

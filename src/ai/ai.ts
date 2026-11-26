@@ -453,7 +453,7 @@ export class AI {
       if (e.buildLeft === 0 && !!w.weapon(e) && !kin(e, of.hq) && e.type !== of.outpost && !kin(e, of.supply)) armed = true;
     }
     const ours = this.power(s.army.map((u) => [u.hp + u.shield, this.dps(u)]));
-    const theirs = this.power([...this.foes.values()]);
+    const theirs = this.knownPower();
     // Not two before 2:20 as in SC2: that is the Humains' usual opening here.
     const rushing = (minute < 4 && producers >= 3) || (this.foes.size >= 4 && theirs > 2 * ours);
     const attack = this.strategy.attackMinute ?? 0;
@@ -482,7 +482,9 @@ export class AI {
       const now = new Map<string, number>();
       for (const e of w.entities.values()) {
         if (!w.hostile(e.owner, this.player) || !w.sees(this.player, e)) continue;
-        if (e.def.kind === 'unit' && !(e.def as UnitDef).worker) now.set(e.type, (now.get(e.type) ?? 0) + 1);
+        // Only units that fight: three unarmed Espions seen turned the Isdaris' shares towards anti-air for the rest of
+        // the game (Codex review, point 4; a read of unarmed scouts counters nothing).
+        if (e.def.kind === 'unit' && !(e.def as UnitDef).worker && w.weapon(e)) now.set(e.type, (now.get(e.type) ?? 0) + 1);
         // A building that trains flyers, seen: a few of them guessed before they come.
         const flyer = e.def.kind === 'building' && e.buildLeft === 0 ? (e.def as BuildingDef).trains?.find((t) => (DEFS[t] as UnitDef | undefined)?.flying && (DEFS[t] as UnitDef).attack) : undefined;
         if (flyer) now.set(flyer, Math.max(now.get(flyer) ?? 0, this.doctrine === LEGACY ? 2 : COUNTER_MIN));
@@ -891,7 +893,7 @@ export class AI {
     // the base is under attack; the bases after it sooner with the stronger army (×0.8 the interval, ours over 1.5 times
     // the enemy known), later with the weaker (×1.25).
     const ours = this.power(army.map((u) => [u.hp + u.shield, this.dps(u)]));
-    const theirs = this.power([...this.foes.values()]);
+    const theirs = this.knownPower();
     // Reserves' thresholds ×1.25 with the stronger army (ours over 1.5 times the enemy known), ×0.8 with the weaker.
     const pace = this.easy || !theirs ? 1 : ours > 1.5 * theirs ? 1.25 : ours < theirs ? 0.8 : 1;
     // The natural at its family's workers (OPENING_WORKERS: a rush takes none but at its minute), the plan's for a
@@ -1604,8 +1606,10 @@ export class AI {
           const u = w.entities.get(id)!;
           if (near(u)) continue;
           this.wave.delete(id);
-          // A god (not in the army) is given no order with it: it went on alone to the enemy base and died.
-          if (gods.includes(u)) back.push(id);
+          // Each one called back is sent home: a god (not in the army) is given no order with it, nor a soldier when the
+          // defence is too weak to send it at the raid (both went on alone to the enemy base; Codex review, point 2).
+          // The defenders' orders below come after this one and replace it.
+          back.push(id);
         }
         if (back.length) ctx.out.push({ player: this.player, kind: 'move', ids: back, x: ctx.rally.x, y: ctx.rally.y });
         atHome = army.filter((u) => !this.wave.has(u.id));
@@ -1736,7 +1740,7 @@ export class AI {
     // Before the strategy's minute, only to strike back at a raid just beaten off (« Siège » waited for minute 11 while
     // the Humans' raids wore its army down one socle at a time, and the wave never left).
     if (ctx.minute < (this.strategy.attackMinute ?? 0) && this.world.tick - this.repelled >= ticks(60)) return false;
-    const known = this.power([...this.foes.values()]);
+    const known = this.knownPower();
     const armed = atHome.filter((u) => !!this.world.weapon(u));
     // Ours by the damage each does to the classes of the enemies known (a Créature does 6 to a Z socle, not 18): the
     // Isdaris Créatures went at the Z's drones and Tourelle at half their strength.
@@ -2151,6 +2155,25 @@ export class AI {
     return d;
   }
 
+  /**
+   * The power of the strongest enemy side known: enemies that fight each other (a free-for-all) are weighed apart, a
+   * team together. All summed, two sides of eight Archers known at opposite corners counted four times one of them
+   * (hit points times damage), and twelve Archers stayed home (Codex review, point 3).
+   */
+  private knownPower(): number {
+    const sides: { owners: number[]; group: [number, number][] }[] = [];
+    for (const [id, v] of this.foes) {
+      const owner = this.world.entities.get(id)?.owner;
+      if (owner === undefined) continue;
+      const side = sides.find((s) => s.owners.some((o) => o === owner || !this.world.hostile(o, owner)));
+      if (side) {
+        if (!side.owners.includes(owner)) side.owners.push(owner);
+        side.group.push(v);
+      } else sides.push({ owners: [owner], group: [v] });
+    }
+    return Math.max(0, ...sides.map((s) => this.power(s.group)));
+  }
+
   /** A group's fighting power: its hp and shields times its damage per second. */
   private power(group: [number, number][]): number {
     let hp = 0;
@@ -2175,7 +2198,7 @@ export class AI {
       const e = this.world.entities.get(id);
       if (!e || (this.world.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
     }
-    const known = this.power([...this.foes.values()]);
+    const known = this.knownPower();
     // No enemy fighter or armed building left that we know of, after a wave: whatever is armed at home goes and
     // razes what stands (a side down to its last buildings sat there to the time limit, the winner's few soldiers
     // waiting at home for a full wave).
@@ -2573,7 +2596,12 @@ export class AI {
       // A strategy's army with fewer than two types that can come yet (Octopodes and Mastodontes before their buildings):
       // the camp's usual units too, so the rotation can move on past one whose weapon cannot be paid.
       const ready = this.armyList.filter(([t]) => !this.world.lacks(this.player, t, undefined, at)).length;
-      const list = ready >= 2 ? this.armyList : [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
+      // Likewise with no income and none of the strategy's units within the bank, as `affordable` judges the last units
+      // (Artillerie with 130 minerals: its socles out of reach, the drone de combat at 115 never came, the last soldiers waited).
+      const usual = () => [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
+      const pays = ([t]: [string, number]) => (DEFS[t] as UnitDef).cost.minerals <= minerals && (DEFS[t] as UnitDef).cost.energy <= energy && !this.world.lacks(this.player, t, undefined, at);
+      const dry = this.world.tick - this.lastIncome >= ticks(60) && !this.armyList.some(pays) ? usual().filter(pays) : [];
+      const list = dry.length ? dry : ready >= 2 ? this.armyList : usual();
       const has = (t: string) => (DEFS[t] as UnitDef).cost.energy <= energy;
       const fits = list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
       const affordable = fits.length ? fits : list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));
