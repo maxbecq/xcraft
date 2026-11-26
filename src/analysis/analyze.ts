@@ -552,7 +552,8 @@ export const REPLAY_TAIL = 10 * 60;
  * cut at its last order, a game won 111 ticks later read as one without a winner (Codex review, point 5).
  */
 export function analyzeReplay(r: Replay, maxTicks = Infinity): Analysis {
-  const w = createMatch([...r.factions], r.teams, r.map ?? DEFAULT_MAP, r.biome);
+  // A replay's own map first: the page's registry may not have it, or have another under its id (Codex, 2026-11-26).
+  const w = createMatch([...r.factions], r.teams, r.carte ?? r.map ?? DEFAULT_MAP, r.biome);
   r.handicap.forEach((h, i) => (w.players[i].handicap = h));
   const a = new Analyzer(w);
   const orders = new Map<number, Command[]>(r.ticks);

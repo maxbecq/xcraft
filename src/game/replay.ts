@@ -93,7 +93,8 @@ export function parseReplay(text: string): Replay | string {
   // Every side needs a start on the map it plays on (the original one for a map this version lacks); a map from
   // outside, at a players count it offers (the counts it was checked at).
   if (n > Math.max(...(r.carte ?? MAPS[r.map ?? DEFAULT_MAP]).players)) return `${bad} (plus de camps que la carte n’a de places).`;
-  if (r.carte && !r.carte.players.includes(n)) return `${bad} (la carte jointe ne se joue pas à ${n}).`;
+  // A Bac à sable game is one side alone, on any map (Codex, 2026-11-26: refused for an imported one).
+  if (r.carte && n > 1 && !r.carte.players.includes(n)) return `${bad} (la carte jointe ne se joue pas à ${n}).`;
   if (r.version !== undefined && (typeof r.version !== 'string' || !/^[\w.-]{1,24}$/.test(r.version))) delete r.version;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   delete (r as { perf?: unknown }).perf; // a measures file (measuresFile) carries its telemetry beside the replay

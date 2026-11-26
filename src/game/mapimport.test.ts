@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AI } from '../ai/ai';
+import { analyzeReplay } from '../analysis/analyze';
 import { checkMap, MAP_MAX_CHARS, MAX_MAP_ID, mapPrint, parseMap } from '../mapcheck';
 import { addMap, MAPS, MAX_FRIEND_MAPS, type MapFile, ownImports, receiveMap, removeMap } from '../maps';
 import { CARTE_PART, carteParts, lobbyOk } from '../net';
@@ -44,6 +45,26 @@ describe('an imported map in a replay', () => {
     expect(w.hash()).toBe(hash);
     removeMap(def.id);
   }, 60_000);
+
+  // Codex, 2026-11-26 (final review): the analyser played the replay's map by its id, so on a browser without it, on
+  // Origine; and a Bac à sable game on an imported map (one side) was refused when read back.
+  it('is analysed on its own map, on a browser that never had it', () => {
+    const def = imported();
+    addMap(def);
+    const { ticks: orders } = play(def, 30);
+    const replay: Replay = { v: 1, map: def.id, carte: def, factions: ['humains', 'z'], teams: [0, 1], biome: def.biome, handicap: [100, 100], ticks: orders, endTick: ticks(30) };
+    const here = JSON.stringify(analyzeReplay(parseReplay(JSON.stringify(replay)) as Replay));
+    removeMap(def.id);
+    const r = parseReplay(JSON.stringify(replay));
+    if (typeof r === 'string') throw new Error(r);
+    expect(JSON.stringify(analyzeReplay(r))).toBe(here);
+  }, 60_000);
+
+  it('reads back a Bac à sable game on an imported map', () => {
+    const def = imported();
+    const r = parseReplay(JSON.stringify({ v: 1, map: def.id, carte: def, factions: ['humains'], teams: [0], biome: def.biome, handicap: [100], ticks: [] }));
+    expect(typeof r).toBe('object');
+  });
 
   it('refuses a replay whose map does not check out, or is not the one it names', () => {
     const def = imported();
