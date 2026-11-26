@@ -2569,7 +2569,12 @@ export class AI {
       // A strategy's army with fewer than two types that can come yet (Octopodes and Mastodontes before their buildings):
       // the camp's usual units too, so the rotation can move on past one whose weapon cannot be paid.
       const ready = this.armyList.filter(([t]) => !this.world.lacks(this.player, t, undefined, at)).length;
-      const list = ready >= 2 ? this.armyList : [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
+      // Likewise with no income and none of the strategy's units within the bank, as `affordable` judges the last units
+      // (Artillerie with 130 minerals: its socles out of reach, the drone de combat at 115 never came, the last soldiers waited).
+      const usual = () => [...this.armyList, ...this.faction.army.filter(([t]) => !this.armyList.some(([u]) => u === t))];
+      const pays = ([t]: [string, number]) => (DEFS[t] as UnitDef).cost.minerals <= minerals && (DEFS[t] as UnitDef).cost.energy <= energy && !this.world.lacks(this.player, t, undefined, at);
+      const dry = this.world.tick - this.lastIncome >= ticks(60) && !this.armyList.some(pays) ? usual().filter(pays) : [];
+      const list = dry.length ? dry : ready >= 2 ? this.armyList : usual();
       const has = (t: string) => (DEFS[t] as UnitDef).cost.energy <= energy;
       const fits = list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at) && (DEFS[t] as UnitDef).supply <= room);
       const affordable = fits.length ? fits : list.filter(([t]) => has(t) && !(DEFS[t] as UnitDef).cloaked && !this.world.lacks(this.player, t, undefined, at));

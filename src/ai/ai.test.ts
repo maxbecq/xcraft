@@ -454,6 +454,34 @@ describe('AI Z blind spots', () => {
     w.players[0].minerals = 1000;
     expect(new AI(w, 0).think().some((c) => c.kind === 'attack' && c.ids.includes(u.id))).toBe(true);
   });
+  it('Z: no income, its strategy\'s socles out of reach: a Plate-forme trains the drone de combat the bank pays, then the last soldiers go', () => {
+    const w = createMatch(['z', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.type === 'minerai') w.remove(e);
+    const ic = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;
+    const pod = w.spawn('pod', 0, ic.x + 8 * FP, ic.y);
+    const plat = w.spawn('plateforme', 0, ic.x + 10 * FP, ic.y);
+    plat.host = pod.id;
+    w.spawn('centresocles', 0, ic.x - 8 * FP, ic.y);
+    for (const up of ['rquadripode', 'rhexapode']) w.players[0].upgrades[up] = 1;
+    const u = w.spawn('dronecombat', 0, ic.x, ic.y + 5 * FP);
+    // Its drones all there (none to train), before minute 10 (no drone's price kept against a raid).
+    for (let i = 0; i < 10; i++) w.spawn('drone', 0, ic.x - 3 * FP, ic.y + 3 * FP);
+    w.tick = thinkTick(8);
+    w.players[0].minerals = 130;
+    w.players[0].energy = 0;
+    const ai = new AI(w, 0, undefined, 'normal', { strategy: 'artillerie' });
+    let trained = false;
+    let goes = false;
+    for (let i = 0; i < 3000 && !goes; i++) {
+      const cmds = ai.think();
+      trained ||= cmds.some((c) => c.kind === 'train' && c.ids.includes(plat.id) && c.type === 'dronecombat');
+      goes = cmds.some((c) => c.kind === 'attack' && c.ids.includes(u.id));
+      w.step(cmds);
+    }
+    expect(trained).toBe(true);
+    expect(goes).toBe(true);
+  });
+
   it('Z: no Intelligence nor its price, a Plate-forme still trains what the bank pays', () => {
     const w = createMatch(['z', 'humains']);
     const ic = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'intelligence')!;
