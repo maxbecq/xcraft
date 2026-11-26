@@ -1302,6 +1302,9 @@ body.alt .console { position: fixed !important; inset: 0 !important; height: aut
 body.alt .console::before, body.alt .console::after { display: none !important; }
 body.alt .console > * { pointer-events: auto; }
 body.alt .console > .map-slot { position: absolute !important; left: 16px !important; right: auto !important; top: auto !important; bottom: 16px !important; width: 220px !important; height: 220px !important; margin: 0 !important; border-radius: 50% !important; translate: none !important; }
+/* The map fills its round slot, 10 px in all round (its diamond's corners touch the canvas's edges); clicks and drags
+   scale with it (minimap.ts). Over every camp's own size, small windows included. */
+body.alt .console > .map-slot > .minimap { width: 200px !important; height: 200px !important; }
 body.alt .console > .hud-panel { position: absolute !important; left: auto !important; right: 16px !important; top: 50% !important; bottom: auto !important; translate: 0 -50% !important; width: 200px !important; height: auto !important; max-height: calc(100vh - 128px); overflow: auto; margin: 0 !important; }
 /* Tall and narrow (the user's choice of 2026-11-24): the portrait on top, all the rest stacked under it. */
 body.alt .hud-panel .portrait { float: none; display: block; width: 128px !important; height: 128px !important; margin: 0 auto 8px !important; }
