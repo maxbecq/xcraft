@@ -265,3 +265,22 @@ describe('équilibreur 24/11, Isdaris powers', () => {
     expect(portail.trainLeft2).toBeGreaterThan(0);
   });
 });
+
+describe('équilibreur 24/11, defences aimed by hand', () => {
+  it('a defence fires at what it is pointed at, an ally too; Stop gives it back its own choice', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const orbe = w.site('orbe', 0, 40, 40);
+    orbe.buildLeft = 0;
+    const friend = w.spawn('archer', 0, 43 * FP, 41 * FP);
+    const foe = w.spawn('legionnaire', 1, 44 * FP, 41 * FP);
+    w.step([{ player: 0, kind: 'attack', ids: [orbe.id], x: friend.x, y: friend.y, target: friend.id }]);
+    expect(orbe.focus).toBe(friend.id);
+    friend.shield = 0;
+    const hp = friend.hp;
+    foe.held = 1 << 20;
+    run(w, 1.2);
+    expect(friend.hp).toBeLessThan(hp);
+    w.step([{ player: 0, kind: 'stop', ids: [orbe.id] }]);
+    expect(orbe.focus).toBe(0);
+  });
+});

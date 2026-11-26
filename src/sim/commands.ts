@@ -79,6 +79,7 @@ export function apply(this: World, c: Command): void {
     }
     case 'stop':
     case 'hold':
+      for (const b of buildings) b.focus = 0;
       units.forEach((e) => {
         e.next = [];
         this.setOrder(e, null);
@@ -106,6 +107,8 @@ export function apply(this: World, c: Command): void {
     }
     case 'attack': {
       const t = this.target(c);
+      // A defence fires at what is pointed out, an ally too, as long as it is in reach (équilibreur 24/11).
+      for (const b of buildings) if (this.weapon(b) && t && t !== b && t.def.kind !== 'resource') b.focus = t.id;
       const fighters = units.filter((e) => this.weapon(e));
       // An explicit attack may also aim at one's own side (or an ally's): to finish off a wounded unit, deny a kill,
       // clear a building. Never at a resource or a neutral thing.

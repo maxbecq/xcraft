@@ -284,7 +284,7 @@ export class Input {
       const hit = click ? this.entityAt(e.clientX, e.clientY) : undefined;
       if (hit) return this.pick(hit, e.ctrlKey || e.metaKey, e.shiftKey);
       if (!e.shiftKey) this.selected.clear();
-      if (!click) for (const id of this.inBox(r, e.shiftKey)) this.selected.add(id);
+      if (!click) for (const id of this.inBox(r)) this.selected.add(id);
     });
     window.addEventListener('keydown', (e) => this.groupKey(e));
   }
@@ -851,10 +851,10 @@ export class Input {
 
   /** Own units inside a screen rectangle. */
   /**
-   * Ours inside a dragged box. Soldiers come first: workers caught at the edge of a fight are left out unless
-   * the box holds nothing else (or `workers`, with Shift). A box with no unit at all picks our buildings.
+   * Ours inside a dragged box: every unit, workers with soldiers (équilibreur 24/11: a mixed box picked only one kind).
+   * A box with no unit at all picks our buildings.
    */
-  private inBox(r: { x: number; y: number; w: number; h: number }, workers = false): number[] {
+  private inBox(r: { x: number; y: number; w: number; h: number }): number[] {
     const inside = [...this.world.entities.values()].filter((e) => {
       if (e.owner !== this.player || e.inside || (e.def.kind !== 'unit' && e.def.kind !== 'building')) return false;
       // A god (Dieux) stands as tall as a building: a box round its body takes it, not only one round its feet.
@@ -865,8 +865,7 @@ export class Input {
       });
     });
     const units = inside.filter((e) => e.def.kind === 'unit');
-    const army = units.filter((e) => !(e.def as UnitDef).worker);
-    const picked = units.length ? (army.length && !workers ? army : units) : inside;
+    const picked = units.length ? units : inside;
     return picked.map((e) => e.id);
   }
 

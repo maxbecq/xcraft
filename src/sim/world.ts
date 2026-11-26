@@ -170,6 +170,9 @@ export interface Entity {
   airborne: boolean;
   /** Créature under ground (Enfouissement). */
   burrowed: boolean;
+  /** A defence's chosen target (équilibreur 24/11: a Tourelle, a Récepteur armé… fire at what the player points out, an ally
+   * too); 0: the nearest enemy. */
+  focus: number;
   /** Ticks left: marked by an Espion's Ciblage, it takes 10 % more damage (équilibreur 24/11). */
   marked: number;
   /** Ticks left: an Orbe plasma being redeployed, still and silent (équilibreur 24/11). */
@@ -426,7 +429,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, raising: 0, autoOff: false, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, marked: 0, muted: 0, veil: 0, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, focus: 0, marked: 0, muted: 0, veil: 0, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);

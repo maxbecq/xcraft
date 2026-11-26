@@ -1,6 +1,7 @@
 /** The command card: its buttons for the selection, their keys, presses and tooltips, and a Z socle's weapon panel. */
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, type Cost, DEFS, FACTIONS, raises, spell, type UnitDef, type UpgradeDef, WEAPONS, withKit } from '../data';
+import { ticks } from '../sim/fixed';
 import { type Command, cdOf, type Entity } from '../sim/world';
 import { GLYPHS, img, pictogram, weaponIcon } from './glyphs';
 import type { Hud } from './hud';
@@ -144,9 +145,11 @@ export function buttonsFor(h: Hud): Button[] {
       const mana = price !== undefined ? ` · ${price} énergie` : '';
       // On its own or not (the balancer, 2026-11-22): the Soin and the Réanimation switch from a button of their own, a
       // gold light running round it while on (any of the selected casters).
-      const auto = ab === 'autosoin' ? casters.some((u) => !u.autoOff) : ab === 'autoreanimation' ? casters.some((u) => u.autoRaise) : undefined;
+      const auto = ab === 'autosoin' || ab === 'autorecharge' ? casters.some((u) => !u.autoOff) : ab === 'autoreanimation' ? casters.some((u) => u.autoRaise) : undefined;
       const on = auto === undefined ? '' : auto ? ' : oui' : ' : non';
-      list.push({ label: `${a.name}${on}${mana}${ready ? '' : ' (recharge)'}`, key: a.hotkey, reason, action, ability: ab, auto });
+      // How long before the first caster has it back (équilibreur 24/11).
+      const wait = ready ? '' : ` (recharge ${secondsLeft(Math.min(...casters.map((u) => Math.max(u.abilityCd, (u.spellCd[ab] ?? 0) - h.world.tick))))} s)`;
+      list.push({ label: `${a.name}${on}${mana}${wait}`, key: a.hotkey, reason, action, ability: ab, auto });
     }
     // Passive effects (Odin's war aura, Athéna's protection): an icon that does nothing, its effect in the tooltip.
     for (const p of new Set(units.flatMap((u) => (u.def as UnitDef).passives ?? []))) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
@@ -234,9 +237,15 @@ export function buttonsFor(h: Hud): Button[] {
     // Behind an extension, the buildings that carry it (the Orbe's Observatoire, the Trône's).
     const able = same.filter((o) => !h.world.needs(h.player, a.research, o));
     if (!able.length) continue;
+    // The Trône's group transfer only once a group is phased (équilibreur 24/11).
+    if (name === 'transfertgroupe' && !h.world.phaseGroups.some((g) => g.owner === h.player)) continue;
     const ready = able.some((o) => cdOf(o, name) === 0);
     const go = a.target === 'self' ? () => cmd({ kind: 'ability', ids: able.map((o) => o.id), name }) : () => h.setTargeting(true, true, name);
-    list.push({ label: `${a.name}${ready ? '' : ' (recharge)'}`, key: a.hotkey, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
+    // How long before it is back (équilibreur 24/11).
+    const wait = ready ? '' : ` (recharge ${secondsLeft(Math.min(...able.map((o) => cdOf(o, name))))} s)`;
+    // Its own switch, as the Soin's (équilibreur 24/11: Recharge de bouclier on by default).
+    const auto = name === 'autorecharge' ? able.some((o) => !o.autoOff) : undefined;
+    list.push({ label: `${a.name}${auto === undefined ? '' : auto ? ' : oui' : ' : non'}${wait}`, key: a.hotkey, auto, cost: { minerals: a.minerals ?? 0, energy: a.energy ?? 0 }, action: go, ability: name });
   }
   // Passive effects (the Humains' Échevins, Planification, Tour's detector): an icon that does nothing, its effect in the tooltip.
   for (const p of (b.def as BuildingDef).passives ?? []) list.push({ label: `${ABILITIES[p].name} (passif)`, key: '', reason: 'Effet permanent', ability: p, action: () => {} });
@@ -291,16 +300,44 @@ export function buttonsFor(h: Hud): Button[] {
     const weapon = Object.keys(WEAPONS).find((k) => WEAPONS[k].research === d.line || WEAPONS[k].research === t);
     list.push({ label: d.name, type: t, key: d.hotkey, cost: d.cost, reason: lackAt(t) || undefined, action: () => cmd({ kind: 'train', ids: order, type: t }), weapon });
   }
+  // A defence of ours fires at what we point out, an ally too, until told to stop (équilibreur 24/11); on A and S unless
+  // the card has them already (a Tourelle's Arc électrique).
+  if (b.owner === h.player && h.world.weapon(b)) {
+    const key = (k: string, other: string) => (list.some((x) => x.key === k) ? other : k);
+    list.push({ label: 'Attaquer', cmd: 'attaquer', key: key('A', 'Q'), action: () => h.setTargeting(true) });
+    list.push({ label: 'Cesser le feu ciblé', cmd: 'stop', key: key('S', 'W'), action: () => cmd({ kind: 'stop', ids: same.map((o) => o.id) }) });
+  }
   // Last, so the other buttons keep their places (and grid keys).
   if (b.def.trains?.length) list.push({ label: 'Point de ralliement', cmd: 'rally', key: 'Y', action: () => h.setTargeting(true, true, 'rally') });
   if (same.some((o) => o.queue.length)) {
     list.push({ label: 'Annuler', cmd: 'annuler', key: 'Escape', action: () => cmd({ kind: 'cancel', ids: [same.find((o) => o.queue.length)!.id] }) });
   }
-  return list;
+  return b.type === 'nanoassembleur' ? folded(h, b, list) : list;
+}
+
+/** Ticks left, in whole seconds of the game's clock, rounded up. */
+const secondsLeft = (t: number) => Math.max(1, Math.ceil(t / ticks(1)));
+
+/**
+ * The Psycho-assembleur's card (équilibreur 24/11: too many buttons): its units under « Unités », its research (not
+ * its extensions) under « Recherches », each a sub-menu with a way back; the rest as it was.
+ */
+function folded(h: Hud, b: Entity, list: Button[]): Button[] {
+  const unit = (x: Button) => !!x.icon && !!(b.def as BuildingDef).trains?.includes(x.icon);
+  const research = (x: Button) => !!x.type && DEFS[x.type]?.kind === 'upgrade' && !(DEFS[x.type] as UpgradeDef).host;
+  const open = h.subMenu && h.subMenu.sel === h.selKey ? h.subMenu.kind : null;
+  const back: Button = { label: 'Retour', cmd: 'retour', key: 'Escape', action: () => (h.subMenu = null) };
+  if (open === 'units') return [...list.filter(unit), back];
+  if (open === 'research') return [...list.filter(research), back];
+  const rest = list.filter((x) => !unit(x) && !research(x));
+  const sub = (kind: 'units' | 'research') => () => (h.subMenu = { sel: h.selKey, kind });
+  const lead: Button[] = [{ label: 'Unités', icon: 'discobole', key: 'U', action: sub('units') }];
+  if (list.some(research)) lead.push({ label: 'Recherches', type: 'assembleuratk1', key: 'R', action: sub('research') });
+  return [...lead, ...rest];
 }
 
 export function updateCard(h: Hud): void {
-  const bk = `${h.world.tick}|${h.selKey}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.gridKeys}`;
+  const bk = `${h.world.tick}|${h.selKey}|${h.activeType}|${h.placing}|${h.targeting}|${h.scanning}|${h.aimed}|${h.buildMenu}|${h.weaponMenu}|${h.subMenu?.kind}|${h.gridKeys}`;
   if (bk === h.buttonsKey) return placeMenu(h);
   h.buttonsKey = bk;
   h.buttons = buttonsFor(h);

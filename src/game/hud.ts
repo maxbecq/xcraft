@@ -74,6 +74,8 @@ export class Hud {
   buildMenu: false | 'basic' | 'advanced' = false;
   /** Z Plate-forme: the socle whose weapon is being picked before it is queued. */
   weaponMenu: string | null = null;
+  /** The Psycho-assembleur's sub-menu open (équilibreur 24/11: its units, its research), for the selection it was opened on. */
+  subMenu: { sel: string; kind: 'units' | 'research' } | null = null;
   /** Its weapons, in a menu dropped under the socle's button (`menu`). */
   menuItems: Button[] = [];
   readonly menu = el('div', 'cmd-menu');

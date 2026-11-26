@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, type BuildingDef, DEFS, HQ_MINERAL_GAP, HQ_TYPES, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
+import { hits } from './combat';
 import { flies, type Entity, type World } from './world';
 
 /** Can `player` put this building here? (Without a player, the power field is not checked.) */
@@ -285,7 +286,9 @@ export function operate(this: World, b: Entity): void {
   // An Orbe plasma being redeployed does not shoot (équilibreur 24/11).
   const attack = (off && !off.shoots) || b.muted > 0 ? undefined : this.weapon(b);
   if (attack && b.cooldown === 0) {
-    const t = this.enemyNear(b, toFp(attack.range), true);
+    const f = b.focus ? this.entities.get(b.focus) : undefined;
+    if (b.focus && (!f || f.hp <= 0 || f.inside)) b.focus = 0;
+    const t = f && f.hp > 0 && !f.inside && this.gap(b, f) <= toFp(attack.range) && hits(attack, f) ? f : this.enemyNear(b, toFp(attack.range), true);
     if (t && (!b.kit || reaches(attack, flies(t)))) {
       b.cooldown = ticks(attack.cooldown);
       this.hit(b, t, attack);
