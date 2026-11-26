@@ -453,7 +453,7 @@ export class AI {
       if (e.buildLeft === 0 && !!w.weapon(e) && !kin(e, of.hq) && e.type !== of.outpost && !kin(e, of.supply)) armed = true;
     }
     const ours = this.power(s.army.map((u) => [u.hp + u.shield, this.dps(u)]));
-    const theirs = this.power([...this.foes.values()]);
+    const theirs = this.knownPower();
     // Not two before 2:20 as in SC2: that is the Humains' usual opening here.
     const rushing = (minute < 4 && producers >= 3) || (this.foes.size >= 4 && theirs > 2 * ours);
     const attack = this.strategy.attackMinute ?? 0;
@@ -890,7 +890,7 @@ export class AI {
     // the base is under attack; the bases after it sooner with the stronger army (×0.8 the interval, ours over 1.5 times
     // the enemy known), later with the weaker (×1.25).
     const ours = this.power(army.map((u) => [u.hp + u.shield, this.dps(u)]));
-    const theirs = this.power([...this.foes.values()]);
+    const theirs = this.knownPower();
     // Reserves' thresholds ×1.25 with the stronger army (ours over 1.5 times the enemy known), ×0.8 with the weaker.
     const pace = this.easy || !theirs ? 1 : ours > 1.5 * theirs ? 1.25 : ours < theirs ? 0.8 : 1;
     // The natural at its family's workers (OPENING_WORKERS: a rush takes none but at its minute), the plan's for a
@@ -1734,7 +1734,7 @@ export class AI {
     // Before the strategy's minute, only to strike back at a raid just beaten off (« Siège » waited for minute 11 while
     // the Humans' raids wore its army down one socle at a time, and the wave never left).
     if (ctx.minute < (this.strategy.attackMinute ?? 0) && this.world.tick - this.repelled >= ticks(60)) return false;
-    const known = this.power([...this.foes.values()]);
+    const known = this.knownPower();
     const armed = atHome.filter((u) => !!this.world.weapon(u));
     // Ours by the damage each does to the classes of the enemies known (a Créature does 6 to a Z socle, not 18): the
     // Isdaris Créatures went at the Z's drones and Tourelle at half their strength.
@@ -2149,6 +2149,25 @@ export class AI {
     return d;
   }
 
+  /**
+   * The power of the strongest enemy side known: enemies that fight each other (a free-for-all) are weighed apart, a
+   * team together. All summed, two sides of eight Archers known at opposite corners counted four times one of them
+   * (hit points times damage), and twelve Archers stayed home (Codex review, point 3).
+   */
+  private knownPower(): number {
+    const sides: { owners: number[]; group: [number, number][] }[] = [];
+    for (const [id, v] of this.foes) {
+      const owner = this.world.entities.get(id)?.owner;
+      if (owner === undefined) continue;
+      const side = sides.find((s) => s.owners.some((o) => o === owner || !this.world.hostile(o, owner)));
+      if (side) {
+        if (!side.owners.includes(owner)) side.owners.push(owner);
+        side.group.push(v);
+      } else sides.push({ owners: [owner], group: [v] });
+    }
+    return Math.max(0, ...sides.map((s) => this.power(s.group)));
+  }
+
   /** A group's fighting power: its hp and shields times its damage per second. */
   private power(group: [number, number][]): number {
     let hp = 0;
@@ -2173,7 +2192,7 @@ export class AI {
       const e = this.world.entities.get(id);
       if (!e || (this.world.sees(this.player, e) && !seen.includes(e))) this.foes.delete(id);
     }
-    const known = this.power([...this.foes.values()]);
+    const known = this.knownPower();
     // No enemy fighter or armed building left that we know of, after a wave: whatever is armed at home goes and
     // razes what stands (a side down to its last buildings sat there to the time limit, the winner's few soldiers
     // waiting at home for a full wave).

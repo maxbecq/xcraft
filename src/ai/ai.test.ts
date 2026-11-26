@@ -4,6 +4,7 @@ import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
 import { FACTIONS } from '../data';
 import { AI, DIFFICULTY, teamFocus } from './ai';
+import { STRATEGIES } from './strategy';
 
 /** Plays until someone wins or the time runs out; returns the winner and the game time in minutes. */
 function play(world: World, ais: AI[], minutes: number): { winner: number | null; minutes: number } {
@@ -35,6 +36,30 @@ describe('AI', () => {
     expect(victims).toHaveLength(4);
     expect(new Set(victims).size, `targets ${victims}`).toBe(4);
   }, 60_000);
+
+  it('in a free-for-all, a second enemy known at the far corner does not hold back a wave strong enough for the first', () => {
+    const goes = (both: boolean) => {
+      const w = createMatch(['isdaris', 'isdaris', 'isdaris', 'isdaris'], undefined, 'carrefour');
+      const hqs = [0, 1, 2, 3].map((p) => [...w.entities.values()].find((e) => e.owner === p && e.type === FACTIONS.isdaris.hq)!);
+      const ours = Array.from({ length: 12 }, (_, i) => w.spawn('archer', 0, hqs[0].x + (6 + (i % 4)) * FP, hqs[0].y + (6 + Math.floor(i / 4)) * FP));
+      // Each enemy side's eight Archers, seen by a Voyageur of ours by them.
+      for (const p of both ? [1, 2] : [1]) {
+        for (let i = 0; i < 8; i++) w.spawn('archer', p, hqs[p].x + (i % 4) * FP, hqs[p].y + 6 * FP + Math.floor(i / 4) * FP);
+        w.spawn('voyageur', 0, hqs[p].x, hqs[p].y + 9 * FP);
+      }
+      w.step([]);
+      w.tick = ticks(12 * 60) - (ticks(12 * 60) % 10);
+      const ai = new AI(w, 0, undefined, 'normal', { strategy: STRATEGIES.isdaris[0].id });
+      const sent = new Set<number>();
+      for (let i = 0; i < 40; i++) {
+        for (const c of ai.think()) if (c.kind === 'attack') for (const id of c.ids) sent.add(id);
+        w.tick += 10;
+      }
+      return ours.filter((u) => sent.has(u.id)).length;
+    };
+    expect(goes(false)).toBeGreaterThan(0);
+    expect(goes(true)).toBeGreaterThan(0);
+  });
 
   it('beats an idle opponent', () => {
     const w = createMatch();
