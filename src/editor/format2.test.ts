@@ -3,7 +3,7 @@ import { rotateFootprint, rotateTile } from '../map';
 import { checkMap, MAP_MAX_CHARS, parseMap as parseMap1, parseMap as parseMapText } from '../mapcheck';
 import { addMap, buildMap, CORNERS, type MapFile, MAPS, removeMap, turnsOf } from '../maps';
 import { createMatch } from '../sim/setup';
-import { blankMap, DECOR, fromFormat1, gameCounts, gameText, type MapFile2, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { blankMap, DECOR, fromFormat1, gameCounts, gameText, type MapFile2, mineralSites, parseMap, rampTiles, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 
 describe('format 2', () => {
@@ -271,5 +271,24 @@ describe('le texte exporté pour le jeu', () => {
     expect(() => gameText(big)).toThrow(); // as saved, it would not
     const text = gameText(MAPS['le-col']);
     expect(typeof parseMapText(text)).toBe('object');
+  });
+});
+
+describe('mineral sites', () => {
+  it('counts each mineral once, for its nearest base, and flags those too near a headquarters', () => {
+    const f = blankMap(64);
+    f.players[0].start = [10, 10];
+    f.players[1].start = [50, 50];
+    f.bases = [[10, 50]];
+    // Player 1: 10 fields 3 tiles east of its headquarters (x 13 is its last column); one 2 tiles south (y 15).
+    for (let y = 8; y < 18; y++) f.minerals.push([16, y]);
+    f.minerals.push([11, 15]);
+    // The free base: 2 fields.
+    f.minerals.push([5, 52], [5, 53]);
+    const [p1, p2, b1] = mineralSites(f);
+    expect([p1.count, p2.count, b1.count]).toEqual([11, 0, 2]);
+    expect(p1.tooClose).toEqual([10]);
+    expect(b1.tooClose).toEqual([]);
+    expect([p1.name, b1.name]).toEqual(['Joueur 1', 'Base 1']);
   });
 });

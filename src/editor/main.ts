@@ -25,7 +25,7 @@ import { Space } from '../render/space';
 import { DEFS, FACTIONS, LOOKS } from '../data';
 import { checkMap } from '../mapcheck';
 import { unplayable } from '../mapplay';
-import { DECOR, type MapFile2, type Ramp2, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
+import { DECOR, type MapFile2, mineralSites, type Ramp2, rampTiles, tileOf, toFormat1, toGameMap, turnRamp, turnsOfSymmetry } from './format2';
 import { previewWorld } from './world';
 import { act, changed, ed, REGION_COLORS, type Selection, startNumbers, TOOL_LAYER, TOOL_NAMES, triggersOf } from './state';
 import { buildShell, type Shell } from './shell';
@@ -306,6 +306,16 @@ function rebuildThings(full: boolean): void {
       layer.add(l);
     }
   }
+  // Minerals nearer a headquarters than the game allows: in red, as they are painted.
+  if (!shown.has('resources')) {
+    const close = new Set(mineralSites(f).flatMap((s) => s.tooClose));
+    for (const i of close) {
+      const mark = square(f.minerals[i][0], f.minerals[i][1], 1, 1, markMat(0xff3030, 0.6));
+      (mark.material as Material).depthTest = false; // seen through the headquarters, under which it may lie
+      mark.renderOrder = 7;
+      layer.add(mark);
+    }
+  }
   if (!shown.has('regions')) {
     (f.triggers?.regions ?? []).forEach((g, i) => {
       const c = REGION_COLORS[i % REGION_COLORS.length];
@@ -553,14 +563,13 @@ const near = (a: [number, number], x: number, y: number, r: number) => Math.abs(
 const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
 
 /** The brush's tiles around (x, y): a square, or a disc. */
-function brushTiles(x: number, y: number): [number, number][] {
-  const n = ed.brush;
+function brushTiles(x: number, y: number, n = ed.brush, round = ed.round): [number, number][] {
   const h = Math.floor((n - 1) / 2);
   const out: [number, number][] = [];
   const r = n / 2;
   for (let dy = -h; dy < n - h; dy++) {
     for (let dx = -h; dx < n - h; dx++) {
-      if (ed.round && n > 2 && (dx + 0.5 - (n % 2 ? 0.5 : 0)) ** 2 + (dy + 0.5 - (n % 2 ? 0.5 : 0)) ** 2 > r * r) continue;
+      if (round && n > 2 && (dx + 0.5 - (n % 2 ? 0.5 : 0)) ** 2 + (dy + 0.5 - (n % 2 ? 0.5 : 0)) ** 2 > r * r) continue;
       out.push([x + dx, y + dy]);
     }
   }
@@ -592,7 +601,8 @@ function apply(x: number, y: number, erase: boolean, first: boolean): void {
       break;
     }
     case 'minerai':
-      for (const [bx, by] of brushTiles(x, y)) {
+      erase ||= ed.mineErase;
+      for (const [bx, by] of brushTiles(x, y, ed.mineBrush, false)) {
         for (const c of copies(bx, by)) {
           const at = f.minerals.findIndex((m) => same(m, c));
           if (erase && at >= 0) f.minerals.splice(at, 1);
@@ -703,7 +713,8 @@ cursor.renderOrder = 6;
 (cursor.material as Material).depthTest = false;
 scene.add(cursor);
 function footprint(): number {
-  if (ed.tool === 'relief' || ed.tool === 'minerai') return ed.brush;
+  if (ed.tool === 'relief') return ed.brush;
+  if (ed.tool === 'minerai') return ed.mineBrush;
   if (ed.tool === 'puits') return 3;
   if (ed.tool === 'depart' || ed.tool === 'base') return 4;
   if (ed.tool === 'unite') return DEFS[ed.unitType]?.kind === 'building' ? (DEFS[ed.unitType] as { size: number }).size : 1;
@@ -730,6 +741,7 @@ function moveCursor(t: [number, number] | null): void {
   if (t) {
     const [x, y, w, h] = cursorRect(t);
     cursor.scale.set(w, 1, h);
+    (cursor.material as MeshBasicMaterial).color.set(ed.tool === 'minerai' && ed.mineErase ? 0xff5050 : 0xffe080);
     cursor.position.set(x + w / 2, heightAt(map, t[0] + 0.5, t[1] + 0.5) + 0.15, y + h / 2);
     const c = tileOf(f, t[0], t[1]);
     ed.hover = `Curseur (${t[0]}, ${t[1]}) · ${c === 'x' ? 'gouffre' : `niveau ${c}`}${map.ramp[t[1] * f.size + t[0]] ? ' · rampe' : ''}`;
