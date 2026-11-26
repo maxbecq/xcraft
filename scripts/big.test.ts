@@ -9,7 +9,7 @@ import { createMatch } from '../src/sim/setup';
 // minerals a trip; a trip carries 10 and rounds down, so finer handicaps replay the same game). `distinct` counts the
 // games that ended differently, by a hash of the final state; it should be close to `games`.
 // Pairings: BIG_MATCH=humains-isdaris,z-humains,z-isdaris (the default: all three). Wins are counted per pairing.
-// Map: BIG_MAP=le-col (an id from public/maps/; default the original map).
+// Map: BIG_MAP=le-col (an id from src/maps/; default the original map).
 // Run: npm run balance:big, or BIG=1 BIG_MATCH=z-humains npx vitest run scripts/big.test.ts --silent=false --reporter=verbose
 it.skipIf(!process.env.BIG)('big', () => {
   const pairs = (process.env.BIG_MATCH ?? 'humains-isdaris,z-humains,z-isdaris').split(',').map((m) => m.split('-') as [Faction, Faction]);

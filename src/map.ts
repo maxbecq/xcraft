@@ -50,7 +50,7 @@ export const SUB = 12;
 
 export const STEP: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 
-/** The original map (public/maps/origine.json) for `players` players; `chasms`: as on the city planet. */
+/** The original map (src/maps/origine.json) for `players` players; `chasms`: as on the city planet. */
 export function createMap(players = 2, chasms = false): GameMap {
   return buildMap(mapFile(DEFAULT_MAP), players, chasms ? 'ville' : '');
 }

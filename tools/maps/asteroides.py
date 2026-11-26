@@ -1,4 +1,4 @@
-"""Writes public/maps/asteroides.json: islands with broken coasts joined by natural arches, over the void.
+"""Writes src/maps/asteroides.json: islands with broken coasts joined by natural arches, over the void.
 
 The layout is the validated plan (recherches-visuelles/asteroides-carte/plan.png). Player 1's islands and arches are
 outlines (polygons); the game copies them by a half turn. Run: python3 tools/maps/asteroides.py

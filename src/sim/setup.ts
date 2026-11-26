@@ -40,7 +40,7 @@ export function expansion(world: World, owner: number): [number, number] {
 }
 
 /**
- * A new match on a map (an id from public/maps/), two to four players, each with its faction's headquarters and
+ * A new match on a map (an id from src/maps/), two to four players, each with its faction's headquarters and
  * workers on its start; `teams[i]` puts player i in a team (default: everyone alone). `biome` picks the shapes
  * meant for that planet only.
  */

@@ -4,8 +4,8 @@ import type { Triggers } from './sim/triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
- * Maps are files: one JSON per map in public/maps/ (see public/maps/README.md). They are bundled at build time
- * (dropping a file in the folder is enough) and also served as they are.
+ * Maps are files: one JSON per map in src/maps/ (see src/maps/README.md). They are bundled at build time
+ * (dropping a file in the folder is enough), not served on their own.
  */
 export interface MapFile {
   format: 1;
@@ -89,7 +89,7 @@ export interface BaseSpot {
 /** Which corner each player starts in, as quarter turns from the top-left: 1 v 1 stays across the map. */
 export const CORNERS = [0, 2, 1, 3];
 
-const FILES = import.meta.glob<MapFile>('/public/maps/*.json', { eager: true, import: 'default' });
+const FILES = import.meta.glob<MapFile>('/src/maps/*.json', { eager: true, import: 'default' });
 
 /** Every valid map, by id: the original map first, then by name. */
 export const MAPS: Record<string, MapFile> = Object.fromEntries(

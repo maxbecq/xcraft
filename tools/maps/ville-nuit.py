@@ -1,4 +1,4 @@
-"""The night city's map (public/maps/ville-nuit.json): a whole city of building blocks (impassable, like cliffs and
+"""The night city's map (src/maps/ville-nuit.json): a whole city of building blocks (impassable, like cliffs and
 chasms elsewhere) cut by wide avenues and squares, with raised decks for the bases and a viaduct over the lower city.
 Only player 1's part (top left) is described; the game copies it by a half turn for player 2.
 Run from the repository: python3 tools/maps/ville-nuit.py"""
@@ -91,5 +91,5 @@ out = {
     "streets": streets,
     "bases": bases,
 }
-open("public/maps/ville-nuit.json", "w").write(json.dumps(out, ensure_ascii=False, indent=1) + "\n")
+open("src/maps/ville-nuit.json", "w").write(json.dumps(out, ensure_ascii=False, indent=1) + "\n")
 print("ok", len(terrain), "formes")
