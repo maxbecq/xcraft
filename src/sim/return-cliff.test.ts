@@ -48,4 +48,28 @@ describe('a worker back from a field below the cliff its headquarters stands on'
     expect(ramp).toBe(true);
     expect(blocked).toBe(0);
   });
+
+  it('turns to a closer drop-off built on its way back', () => {
+    const w = new World(plateauMap(), 2);
+    const size = (DEFS.conseil as BuildingDef).size;
+    w.spawn('conseil', 0, (10 + size / 2) * FP, (12 + size / 2) * FP);
+    const field = w.spawn('minerai', -1, 12 * FP, (CLIFF + 1) * FP);
+    const serf = w.spawn('serf', 0, 12 * FP + FP / 2, (CLIFF + 3) * FP + FP / 2);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: field.x, y: field.y, target: field.id }]);
+    const carrying = () => serf.order?.kind === 'gather' && serf.order.phase === 'return';
+    while (w.tick < ticks(30) && !carrying()) w.step([]);
+    w.step([]); // a first tick on the way to the plateau: the way to the ramp is planned
+    const near = w.spawn('conseil', 0, (16 + size / 2) * FP, (CLIFF + 4 + size / 2) * FP);
+    const minerals = w.players[0].minerals;
+    const start = w.tick;
+    let ramp = false;
+    while (w.tick < start + ticks(30) && w.players[0].minerals === minerals) {
+      w.step([]);
+      if (tileOf(serf.x) >= RAMP_X) ramp = true;
+    }
+    expect(w.players[0].minerals).toBeGreaterThan(minerals);
+    expect(ramp).toBe(false);
+    expect(w.tick - start).toBeLessThan(ticks(5));
+    expect(w.nearestDropoff(serf)).toBe(near);
+  });
 });

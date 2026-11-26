@@ -15,6 +15,11 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
     o.phase = 'return';
     const home = this.nearestDropoff(e);
     if (!home) return this.setOrder(e, null);
+    // The way planned leads to the drop-off it was planned for: a closer one (just built) needs a way of its own.
+    if (o.home !== home.id) {
+      o.home = home.id;
+      e.goal = null;
+    }
     const size = (home.def as BuildingDef).size;
     if (!this.reachRect(e, home.tx, home.ty, size)) return void this.goNear(e, home.tx, home.ty, size);
     const p = this.players[e.owner];
