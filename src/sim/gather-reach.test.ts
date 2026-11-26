@@ -14,13 +14,18 @@ describe('a worker sent to a field it cannot step into from where it stands', ()
     ['below the cliff, at its corner', 44.001, 6.999, 43, 7],
     ['on the plateau, diagonal to it', 43.001, 16.001, 42, 15],
     ['below the cliff, under it', 52.999, 79.999, 53, 80],
-    ['below the cliff, at its other corner', 51.999, 88.001, 52, 88],
+    ['below the cliff, at its other corner', 51.999, 89.001, 52, 88],
   ];
   for (const [what, x, y, fx, fy] of cases) {
     it(`${what}: mines it, never standing still on its way`, () => {
       const w = createMatch(['dieux', 'z'], undefined, 'l-anneau');
       const field = [...w.entities.values()].find((e) => e.type === 'minerai' && e.tx === fx && e.ty === fy)!;
       const esprit = w.spawn('esprit', 0, Math.round(x * FP), Math.round(y * FP));
+      // At a cliff's corner the field is not one step away: neither side shared with it can be walked (the detour this tests).
+      if (what.includes('corner')) {
+        const [tx, ty] = [Math.floor(x), Math.floor(y)];
+        expect([w.grid.canStep(tx, ty, fx, ty), w.grid.canStep(tx, ty, tx, fy)], 'direct way').toEqual([false, false]);
+      }
       w.step([{ player: 0, kind: 'smart', ids: [esprit.id], x: field.x, y: field.y, target: field.id }]);
       let still = 0;
       let longest = 0;
@@ -32,6 +37,7 @@ describe('a worker sent to a field it cannot step into from where it stands', ()
         [px, py] = [esprit.x, esprit.y];
       }
       expect(esprit.order?.kind).toBe('gather');
+      expect(esprit.order?.kind === 'gather' && esprit.order.target).toBe(field.id); // the field asked for, not another
       expect(esprit.order?.kind === 'gather' && esprit.order.phase).not.toBe('go');
       expect(longest).toBeLessThan(ticks(3));
     });
