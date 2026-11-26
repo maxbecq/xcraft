@@ -1063,6 +1063,7 @@ export class EntityRenderer {
           if (p >= 1) {
             materialiseEnd(v.mat);
             v.mat = undefined;
+            occluder(v.model);
           }
         } else {
           v.model.scale.y = e.buildLeft > 0 ? 0.15 + 0.85 * p : 1;
@@ -2065,7 +2066,8 @@ export class EntityRenderer {
       }
     }
     if (v.unit) xrayable(pivot, e.owner);
-    else if (e.def.kind === 'building') occluder(pivot);
+    // A building materialising hides nothing yet: it joins the silhouettes' occluders once built (see sync).
+    else if (e.def.kind === 'building' && !mat) occluder(pivot);
     stableShadowDepth(root);
     this.views.set(e.id, v);
     return v;
