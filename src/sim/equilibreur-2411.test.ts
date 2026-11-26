@@ -253,6 +253,30 @@ describe('équilibreur 24/11, Isdaris powers', () => {
     expect(w.tunnelOf(a)).toBeUndefined();
   });
 
+  // Codex, 2026-11-26 (final review): the way out was always south of the far Espion, so a flyer came out past the
+  // map's edge when it hovered there (place() keeps walkers on open tiles only).
+  it('Couloir temporel: out beyond the far Espion along the way in, never off the map, the same turned round', () => {
+    const outs: number[][] = [];
+    for (const turned of [false, true]) {
+      const w = isd();
+      const S = w.map.width * FP;
+      const at = (x: number, y: number): [number, number] => (turned ? [S - x, S - y] : [x, y]);
+      w.players[0].upgrades.couloir = 1;
+      const a = Object.assign(w.spawn('espion', 0, ...at(11 * FP + FP / 2, S - 20 * FP)), { mana: 1 << 30 });
+      const b = w.spawn('espion', 0, ...at(11 * FP + FP / 2, S - FP / 2));
+      w.castAt(a, 'couloir', b.x, b.y);
+      const u = w.spawn('dragon', 0, ...at(12 * FP, S - 20 * FP));
+      w.step([{ player: 0, kind: 'smart', ids: [u.id], x: a.x, y: a.y, target: a.id }]);
+      run(w, 2);
+      expect(w.tunnelOf(a)!.crossed).toBe(1);
+      expect(u.x >= 0 && u.y >= 0 && u.x < S && u.y < S, `turned ${turned}: ${u.x},${u.y}`).toBe(true);
+      expect(dist(u.x, u.y, b.x, b.y)).toBeLessThan(2 * FP);
+      outs.push(at(u.x, u.y));
+    }
+    // A unit apart at most: a flyer's goal is held within [0, size - 1] (plan), not [1, size - 1], at the map's edge.
+    for (const k of [0, 1]) expect(Math.abs(outs[1][k] - outs[0][k])).toBeLessThanOrEqual(1);
+  });
+
   it('Recharge de bouclier switches off and on; Laboratoire: a unit and a research at once', () => {
     const w = isd();
     const r = w.spawn('reservepsy', 0, 30 * FP, 30 * FP);

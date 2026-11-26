@@ -1051,7 +1051,13 @@ export class World {
             this.say(e.owner, 'Couloir temporel : trop de ravitaillement.');
             return this.setOrder(e, null);
           }
-          this.place(e, other.x, other.y + other.radius + e.radius);
+          // Out beyond the far Espion, on along the way in (it turns with the map), within the map (Codex, 2026-11-26:
+          // always south, a flyer came out past the map's edge).
+          const [dx, dy, d] = [other.x - b!.x, other.y - b!.y, dist(b!.x, b!.y, other.x, other.y)];
+          const reach = other.radius + e.radius;
+          const [ox, oy] = d > 0 ? [idiv(dx * reach, d), idiv(dy * reach, d)] : [0, reach];
+          const inMap = (v: number, n: number) => Math.max(1, Math.min(n * FP - 1, v)); // 1 and n - 1: one turned into the other
+          this.place(e, inMap(other.x + ox, this.map.width), inMap(other.y + oy, this.map.height));
           this.teleports.push({ phase: 'end', owner: e.owner, x1: b!.x, y1: b!.y, x2: other.x, y2: other.y, ids: [e.id] });
           tunnel.crossed++;
           tunnel.supply += supply;
