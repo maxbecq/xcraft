@@ -391,19 +391,23 @@ export class Analyzer {
    */
   private wipedOut(): void {
     const w = this.world;
-    const dead = new Map<number, { x: number; y: number; worth: number }>();
+    // By player and by place: two groups wiped at once far apart are two fights (Codex, 2026-11-26: the second went unseen).
+    const dead: { p: number; x: number; y: number; worth: number }[] = [];
     for (const d of w.deaths) {
       const def = DEFS[d.type] as UnitDef | undefined;
       if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
-      const at = dead.get(d.owner);
-      if (at && Math.hypot(d.x - at.x, d.y - at.y) > T.fightRadius * FP) continue;
-      dead.set(d.owner, { x: at?.x ?? d.x, y: at?.y ?? d.y, worth: (at?.worth ?? 0) + def.cost.minerals + def.cost.energy });
+      const at = dead.find((c) => c.p === d.owner && Math.hypot(d.x - c.x, d.y - c.y) <= T.fightRadius * FP);
+      if (at) at.worth += def.cost.minerals + def.cost.energy;
+      else dead.push({ p: d.owner, x: d.x, y: d.y, worth: def.cost.minerals + def.cost.energy });
     }
-    for (const [p, now] of dead) {
+    for (const now of dead) {
+      const p = now.p;
       // The dead of the last `fightJudge` seconds at that place count together (a group killed over a few ticks).
-      const prev = this.fallen[p];
-      const d = prev && w.tick - prev.tick <= sec(T.fightJudge) && Math.hypot(now.x - prev.x, now.y - prev.y) <= T.fightRadius * FP ? { ...prev, worth: prev.worth + now.worth } : { ...now, tick: w.tick };
-      this.fallen[p] = d;
+      const windows = (this.fallen[p] ??= []).filter((f) => w.tick - f.tick <= sec(T.fightJudge));
+      const prev = windows.find((f) => Math.hypot(now.x - f.x, now.y - f.y) <= T.fightRadius * FP);
+      const d = prev ? Object.assign(prev, { worth: prev.worth + now.worth }) : { x: now.x, y: now.y, worth: now.worth, tick: w.tick };
+      if (!prev) windows.push(d);
+      this.fallen[p] = windows;
       const g = this.engaged[p];
       const [x, y] = [tiles(d.x), tiles(d.y)];
       if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= 2 * T.fightRadius) continue;
@@ -414,14 +418,14 @@ export class Analyzer {
       if ([...w.entities.values()].some((b) => b.owner === p && b.def.kind === 'building' && Math.abs(b.x - d.x) <= T.homeRadius * FP && Math.abs(b.y - d.y) <= T.homeRadius * FP)) continue;
       if (f.enemy < T.fightFloor || d.worth >= T.outnumbered * f.enemy) continue;
       this.engaged[p] = { x, y, start: w.tick, seen: w.tick, judged: true };
-      this.fallen[p] = undefined;
+      this.fallen[p] = windows.filter((f) => f !== d);
       const [tx, ty] = [Math.round(x), Math.round(y)];
       this.note({ player: p, kind: 'combat-en-inferiorite', tick: w.tick, x: tx, y: ty, detail: `${Math.round(d.worth)} contre ${Math.round(f.enemy)} (${Math.round((100 * d.worth) / f.enemy)} %), tous tués d’emblée` });
       this.note({ player: p, kind: 'pas-de-repli', tick: w.tick, endTick: w.tick, x: tx, y: ty, detail: 'groupe engagé en infériorité, 100 % perdus d’emblée' });
     }
   }
 
-  private fallen: ({ x: number; y: number; worth: number; tick: number } | undefined)[] = [];
+  private fallen: { x: number; y: number; worth: number; tick: number }[][] = [];
 
   /** Each tick: combat units just killed with hardly any of theirs round them, in front of a real enemy force. */
   private lonely(): void {

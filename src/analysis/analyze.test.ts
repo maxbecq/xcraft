@@ -84,6 +84,25 @@ describe('analyse de partie', () => {
     expect(k.has('pas-de-repli')).toBe(true);
   });
 
+  // Codex, 2026-11-26 (final review): one group per player and tick was kept, so a second one wiped the same tick
+  // elsewhere went unseen.
+  it('relève deux groupes tués entiers au même moment, à deux endroits', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+    const doomed = [-11 * FP, 11 * FP].map((ox) => {
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+      return w.spawn('creature', 0, cx + ox - 2 * FP, cy + FP);
+    });
+    const a = new Analyzer(w);
+    // Both killed in the same tick (in a game, two volleys landing together).
+    run(w, 20, a, (w) => {
+      if (w.tick === 1) for (const c of doomed) w.hurt(c, 100000);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights).toHaveLength(2);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;
