@@ -221,6 +221,8 @@ function menus(): [string, Item[]][] {
       SEP,
       { label: 'Tester la carte', key: 'F9', run: () => testMap(false) },
       { label: 'Tester en spectateur (IA contre IA)', key: '⇧F9', run: () => testMap(true) },
+      SEP,
+      { label: 'Retour au jeu', run: () => (location.href = import.meta.env.BASE_URL) },
     ]],
     ['Édition', [
       { label: 'Annuler', key: '⌘Z', run: () => act.undo(), off: () => !ed.undo.length },
@@ -295,7 +297,7 @@ function setSymmetry(s: Symmetry): void {
 function about(): void {
   dialog('À propos de l\'éditeur', h(`<div class="form"><p>Éditeur de cartes de Xcraft. La vue est le rendu du jeu ; les panneaux sont faits avec dockview et Tweakpane (licences MIT).</p>
     <p>Le fichier de l'éditeur (format 2) garde tout ce qui se règle ici. « Exporter pour le jeu » écrit le format que le jeu importe (format 1) ; ce que le jeu ne lit pas encore est signalé à l'export.</p>
-    <p class="note">Page de test : elle n'est liée nulle part dans le jeu.</p></div>`), [{ label: 'Fermer', main: true }]);
+    <p class="note">Ouvert depuis le menu du jeu (Éditeur de cartes) ; Fichier › Retour au jeu y ramène. Il se joue à la souris et au clavier.</p></div>`), [{ label: 'Fermer', main: true }]);
 }
 
 let openMenu: HTMLElement | null = null;

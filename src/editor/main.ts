@@ -1,5 +1,5 @@
 /**
- * Map editor: /xcraft/editeur/ (editeur/index.html), a second page of the build, reached by its address only. The view
+ * Map editor: /xcraft/editeur/ (editeur/index.html), a second page of the build, opened from the game's main menu (Éditeur de cartes). The view
  * is the game's own renderer (terrain, cliffs, planet, models) under the game's camera, on a format 2 file
  * (format2.ts); a button (or Tab) turns the camera to look straight down, the same scene, to paint precisely. Around it, panels (shell.ts, panels.ts) docked with
  * dockview: palettes, players, minimap, properties, layers.
@@ -958,5 +958,5 @@ requestAnimationFrame(frame);
 addEventListener('beforeunload', (e) => {
   if (!ed.saved) e.preventDefault();
 });
-// The format 1 export and a few probes, from the browser's console (to build a scenario by script).
-Object.assign(window, { editor: { get file() { return f; }, get rig() { return rig; }, get state() { return { building, dirty, groundDirty, buildMs, times, chunks: chunks.length, tool: TOOL_NAMES[ed.tool] }; }, gameFile: () => toFormat1(f), set: (next: MapFile2) => act.open(next) } });
+// The format 1 export and a few probes, from the browser's console (to build a scenario by script): dev only.
+if (import.meta.env.DEV) Object.assign(window, { editor: { get file() { return f; }, get rig() { return rig; }, get state() { return { building, dirty, groundDirty, buildMs, times, chunks: chunks.length, tool: TOOL_NAMES[ed.tool] }; }, gameFile: () => toFormat1(f), set: (next: MapFile2) => act.open(next) } });

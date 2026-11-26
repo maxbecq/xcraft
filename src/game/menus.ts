@@ -77,6 +77,7 @@ export function showHome(): void {
     <button data-m="friend">Jouer avec un ami</button>
     <button data-m="join">Rejoindre un ami</button>
     <button data-m="sandbox">Bac à sable</button>
+    <button data-m="editor" title="Faire ses cartes : relief, ressources, joueurs, déclencheurs. À la souris et au clavier.">Éditeur de cartes</button>
     <button data-m="options">Options</button>
     <div class="row">
       ${stored(REPLAY_KEY) ? '<button data-m="last-replay">Revoir la dernière partie</button>' : ''}
@@ -90,6 +91,8 @@ export function showHome(): void {
     else if (m === 'friend') showLobby(menu as HTMLElement, newRoom(), true);
     else if (m === 'join') showJoin(menu as HTMLElement);
     else if (m === 'options') showOptions(menu as HTMLElement);
+    // The map editor: its own page, in this tab as every other entry (it leads back here from its Fichier menu).
+    else if (m === 'editor') location.href = `${import.meta.env.BASE_URL}editeur/`;
     else if (m === 'last-replay') {
       const r = readReplay('last');
       if (r) playReplay(r, 'last');
