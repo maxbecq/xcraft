@@ -188,7 +188,7 @@ export class Analyzer {
   private lastNoted = new Map<string, number>();
   private bases: Set<number>[];
   private lost: { player: number; tick: number; type: string; fault?: Fault }[] = [];
-  private engaged: ({ x: number; y: number; start: number; seen: number; judged: boolean } | undefined)[] = [];
+  private engaged: ({ x: number; y: number; start: number; seen: number; judged: boolean; wiped?: boolean } | undefined)[] = [];
   private groups: { player: number; tick: number; ids: number[]; worth: number; x: number; y: number }[] = [];
   private keys: { id: number; fault: Fault; until: number }[] = [];
   private researched: (number | null)[];
@@ -410,14 +410,16 @@ export class Analyzer {
       this.fallen[p] = windows;
       const g = this.engaged[p];
       const [x, y] = [tiles(d.x), tiles(d.y)];
-      if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= 2 * T.fightRadius) continue;
+      // A group wiped out is one place as the dead are grouped (fightRadius), not a fight's wider reach: two wiped
+      // 15 tiles apart in one tick are two (Codex, 2026-11-26).
+      if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= (g.wiped ? 1 : 2) * T.fightRadius) continue;
       const foes = w.players.filter((q) => q.id !== p && w.hostile(p, q.id)).map((q) => q.id);
       const f = this.forces(p, foes, d.x, d.y, T.fightRadius);
       // Survivors there: the fight goes on, judged as usual.
       if (f.ids.length) continue;
       if ([...w.entities.values()].some((b) => b.owner === p && b.def.kind === 'building' && Math.abs(b.x - d.x) <= T.homeRadius * FP && Math.abs(b.y - d.y) <= T.homeRadius * FP)) continue;
       if (f.enemy < T.fightFloor || d.worth >= T.outnumbered * f.enemy) continue;
-      this.engaged[p] = { x, y, start: w.tick, seen: w.tick, judged: true };
+      this.engaged[p] = { x, y, start: w.tick, seen: w.tick, judged: true, wiped: true };
       this.fallen[p] = windows.filter((f) => f !== d);
       const [tx, ty] = [Math.round(x), Math.round(y)];
       this.note({ player: p, kind: 'combat-en-inferiorite', tick: w.tick, x: tx, y: ty, detail: `${Math.round(d.worth)} contre ${Math.round(f.enemy)} (${Math.round((100 * d.worth) / f.enemy)} %), tous tués d’emblée` });

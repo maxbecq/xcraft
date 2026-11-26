@@ -86,10 +86,10 @@ describe('analyse de partie', () => {
 
   // Codex, 2026-11-26 (final review): one group per player and tick was kept, so a second one wiped the same tick
   // elsewhere went unseen.
-  it('relève deux groupes tués entiers au même moment, à deux endroits', () => {
+  it.each([11, 7.5])('relève deux groupes tués entiers au même moment, à deux endroits (%s cases du milieu)', (half) => {
     const w = createMatch(['isdaris', 'humains']);
     const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
-    const doomed = [-11 * FP, 11 * FP].map((ox) => {
+    const doomed = [-half * FP, half * FP].map((ox) => {
       for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
       return w.spawn('creature', 0, cx + ox - 2 * FP, cy + FP);
     });
