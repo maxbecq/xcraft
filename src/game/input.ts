@@ -462,7 +462,8 @@ export class Input {
   /** A tap: select own things; with a selection, order on anything else; double tap selects all of a kind. */
   private tap(x: number, y: number): void {
     const ground = this.groundAt(x, y);
-    const target = this.entityAt(x, y, this.harvesting());
+    // Picked as a click picks: the order a tap may become takes the resource first (see below), never the selection.
+    const target = this.entityAt(x, y);
     const now = performance.now();
     this.tappedAt = now;
     if (this.hooks.click?.(0, ground, false, target)) return;
@@ -491,7 +492,7 @@ export class Input {
     }
     // Buildings alone: a tap elsewhere lets go of them (their rally point takes a long press).
     if (this.own().length && ground && !this.own().every((e) => e.def.kind === 'building')) {
-      this.orderAt(ground.x, ground.z, target);
+      this.orderAt(ground.x, ground.z, this.harvesting() ? this.entityAt(x, y, true) : target);
       return;
     }
     this.selected.clear();
@@ -758,18 +759,20 @@ export class Input {
     this.raycaster.setFromCamera(this.ndc(x, y), this.hooks.camera());
     const hits: { e: Entity; seen: boolean; xray: boolean }[] = [];
     for (const hit of this.raycaster.intersectObjects(this.hooks.roots(), true)) {
-      // Scaffolding, selection rings and light pools are see-through for clicks.
-      if (hit.object.userData.noPick) continue;
+      // Scaffolding, selection rings and light pools are see-through for clicks, and so is all within a group marked so
+      // (a well's sparks, inside its effects group).
       let o: Object3D | null = hit.object;
-      while (o && o.userData.id === undefined) o = o.parent;
-      const e = o && this.world.entities.get(o.userData.id);
+      while (o && o.userData.id === undefined && !o.userData.noPick) o = o.parent;
+      if (!o || o.userData.noPick) continue;
+      const e = this.world.entities.get(o.userData.id);
       // Not what the fog hides (its root is hidden: a mineral never found, a building never seen).
-      if (!e || !hit.object.visible || !o!.visible || e.inside) continue;
+      if (!e || !hit.object.visible || !o.visible || e.inside) continue;
       hits.push({ e, seen: e.def.kind !== 'unit' || this.sees(e), xray: silhouetted(hit.object) });
     }
     const occupant = this.wellOccupants();
     // No resource caught off its stones (a well's veins and glow, the ground round a field): see caughtAt.
-    return pickAt(hits, () => this.caughtAt(x, y, occupant), () => undefined, occupant, () => (harvest ? undefined : this.caughtAt(x, y, occupant, true)));
+    const zone = (only?: 'unit' | 'resource') => () => this.caughtAt(x, y, occupant, only);
+    return pickAt(hits, zone(), () => undefined, occupant, harvest ? () => undefined : zone('unit'), harvest ? zone('resource') : undefined);
   }
 
   /** Workers among ours: an order on a resource the ray meets is theirs to harvest, never a worker crowding it. */
@@ -785,15 +788,15 @@ export class Input {
     return (well) => (well.type === 'puits' ? on.get(well.ty * this.map.width + well.tx) : undefined);
   }
 
-  /** The unit or resource (`units`: unit only) whose catch zone holds the point (see nearestCatch). */
-  private caughtAt(x: number, y: number, occupant: (well: Entity) => Entity | undefined = () => undefined, units = false): Entity | undefined {
+  /** The unit or resource (`only`: of that kind only) whose catch zone holds the point (see nearestCatch). */
+  private caughtAt(x: number, y: number, occupant: (well: Entity) => Entity | undefined = () => undefined, only?: 'unit' | 'resource'): Entity | undefined {
     const roots = new Map<number, Object3D>();
     for (const r of this.hooks.roots()) roots.set(r.userData.id, r);
     const catches: Catch[] = [];
     let ground: Vector3 | false | undefined;
     for (const e of this.world.entities.values()) {
       const resource = e.def.kind === 'resource';
-      if (resource && units) continue;
+      if (only && only !== (resource ? 'resource' : 'unit')) continue;
       if (!resource && (e.def.kind !== 'unit' || e.inside || !this.sees(e))) continue;
       const feet = this.screenOf(e);
       if (Math.abs(feet.x - x) > 400 || Math.abs(feet.y - y) > 400) continue;
