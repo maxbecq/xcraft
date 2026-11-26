@@ -1,7 +1,8 @@
 /** The selection panel: the live portrait's text beside it, a group's tiles, a queue, the cargo and the fighting stats. */
 import BALANCE from '../balance.json';
-import { ABILITIES, type BuildingDef, DEFS, KIT, MYTHS, type Mythology, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
+import { ABILITIES, type BuildingDef, CLASSES, type DamageClass, DEFS, KIT, MYTHS, type Mythology, type UnitDef, type UpgradeDef, WEAPONS } from '../data';
 import { FP, TICK_RATE, ticks } from '../sim/fixed';
+import { clsOf } from '../sim/combat';
 import type { Entity } from '../sim/world';
 import { img } from './glyphs';
 import type { Hud } from './hud';
@@ -115,12 +116,17 @@ function stats(h: Hud, e: Entity): string {
   const fmt = (v: number) => (Math.round(v * 10) / 10).toLocaleString('fr-FR');
   const plus = (n: number) => (n > 0 ? ` <em>+${n}</em>` : '');
   const parts: string[] = [];
+  // What it is, for the attacks' tables (équilibreur 24/11).
+  parts.push(`<span title="Type">${CLASS_NAMES[clsOf(e)]}</span>`);
   const a = h.world.weapon(e);
   if (a) {
-    // shortcut: the value against light biologicals (BL) with the attack research on it; the other bonuses (Conseil, auras…) are left out.
+    // Against light infantry, research, Présence des Échevins and Odin's aura on it (équilibreur 23/11: the Échevins' +1
+    // shown), the Robot moissonneur's +2 too (24/11); every class's value in its tooltip (24/11).
+    const extra = e.owner >= 0 ? auras(h, e) : 0;
+    const up = (v: number) => (e.owner >= 0 ? h.world.researched(e, a, v) : 0) + extra;
     const light = h.world.classValue(e, a, 0);
-    const up = e.owner >= 0 ? h.world.researched(e, a, light) : 0;
-    parts.push(`<span title="Dégâts par coup contre l'infanterie légère ; selon la cible, la valeur et le bonus de recherche changent">Attaque ${light}${plus(up)}</span>`);
+    const table = CLASSES.map((c, i) => `${CLASS_NAMES[c]} : ${h.world.classValue(e, a, i) + up(h.world.classValue(e, a, i))}`).join('&#10;');
+    parts.push(`<span title="Dégâts par coup, bonus compris :&#10;${table}">Attaque ${light}${plus(up(light))}</span>`);
     // With its research (Canons sciés: the balancer, 2026-11-22, wants it shown on the Auxiliaire).
     const reach = e.owner >= 0 ? h.world.rangeBonus(e) : 0;
     parts.push(`<span title="Portée">${a.range < 1 ? 'Mêlée' : `Portée ${fmt(a.range)}${plus(reach)}`}</span>`);
@@ -137,6 +143,23 @@ function stats(h: Hud, e: Entity): string {
   // Isdaris: the extensions built onto this building, its own.
   if (e.exts.length) parts.push(`<span title="Extensions de ce bâtiment">${e.exts.map((x) => DEFS[x].name.replace('Extension : ', '')).join(', ')}</span>`);
   return parts.length ? `<div class="stats">${parts.join('')}</div>` : '';
+}
+
+const CLASS_NAMES: Record<DamageClass, string> = { BL: 'Infanterie légère', BA: 'Infanterie lourde', M: 'Véhicule', MM: 'Véhicule blindé', S: 'Bâtiment', H: 'Héros' };
+
+/** Attack bonuses that are not research: Présence des Échevins, Odin's war aura, the Robot moissonneur's upgrade. */
+function auras(h: Hud, e: Entity): number {
+  const w = h.world;
+  const U = BALANCE.rules.upgrades;
+  let n = e.type === 'moissonneur' ? w.level(e.owner, 'robots') * U.robots : 0;
+  if (e.def.kind !== 'unit') return n;
+  if (w.nearCouncil(e)) n += U.conseilAura.damage;
+  if (w.players[e.owner]?.faction === 'dieux') {
+    let odin = 0;
+    for (const g of w.listed().odins) if (g.owner === e.owner && g.hp > 0 && Math.hypot(g.x - e.x, g.y - e.y) <= U.auraguerre.radius[g.lvl - 1] * FP) odin = Math.max(odin, U.auraguerre.damage[g.lvl - 1]);
+    n += odin;
+  }
+  return n;
 }
 
 function progress(label: string, f: number): string {

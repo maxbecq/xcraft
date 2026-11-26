@@ -285,6 +285,10 @@ export interface AbilityDef {
   /** Area radius (tiles), damage, and the like, depending on the ability. */
   radius?: number;
   damage?: number;
+  /** Damage by target class (CLASSES order), when it differs (Mine alchimique, équilibreur 23/11). */
+  vs?: number[];
+  /** Gaz euphorisant: percent of their full health the allies give for it (équilibreur 23/11). */
+  drain?: number;
   /** Most units it moves at once. */
   max?: number;
   /** Percent of its damage it does to buildings (Pluie de feu: balance designer 2026-11-22). */
@@ -396,7 +400,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Alchimiste (notice): the ally nearest the point cannot be hurt for a while, then the toxins nearly kill it (1 hp). */
   /** Char Pégase (notice, 2010 sheet, mod): invisible chemical mines, 5 in stock, one more every 12 s, 160 damage. */
   // The balancer (2026-11-22): the Bourdon drops a mine, in sight, that goes off 3 s later on its own.
-  minealchimique: { name: 'Larguer une mine alchimique', effect: 'Largue au sol une mine visible qui explose 3 s plus tard : 160 dégâts dans un rayon de 1,75. Coûte 50 minerais et 15 énergie.', hotkey: 'M', ...BALANCE.abilities.minealchimique },
+  minealchimique: { name: 'Larguer une mine alchimique', effect: 'Largue au sol une mine visible qui explose 3 s plus tard dans un rayon de 1,75 : 80 dégâts aux unités, 160 aux mécaniques massifs et aux bâtiments. Coûte 50 minerais et 15 énergie.', hotkey: 'M', ...BALANCE.abilities.minealchimique },
   posermine: { name: 'Mine chimique', effect: 'Pose sous le char une mine invisible qui explose au passage des troupes ennemies (5 en réserve ; le char en refait une toutes les 12 s, pour 35 minerais et 20 énergie prélevés d\'office).', hotkey: 'M', ...(BALANCE.abilities.posermine as object) } as AbilityDef,
   /** Isdaris major buildings (notice: Obélisque, Portail, Psycho-assembleur, Orbe de commandement, Trône): a plasma shield
    * that makes it unhurt for a while, unable to shoot or produce (sheet and mod « Déphasage »; the mod's 10 s, cooldown 90). */
@@ -405,7 +409,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   // The balancer (2026-11-22): aimed at where a living unit (ally or enemy) has just died; +75 HP, then 1.5 s still.
   festin: { name: 'Festin', effect: 'Dévore la dépouille d\'une unité organique morte depuis peu, alliée ou ennemie : +75 PV, puis immobile 1,5 s.', hotkey: 'F', target: 'point', ...(BALANCE.abilities.festin as object) } as AbilityDef,
   /** Réservoir de substances (notice; mod and 2010 sheet for the numbers): its three abilities. */
-  gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment.', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
+  gazeuphorisants: { name: 'Gaz euphorisants', effect: 'Les alliés vivants de la zone attaquent et se déplacent plus vite un moment, au prix d\'un dixième de leur vie (sans tuer).', hotkey: 'Z', target: 'point', ...(BALANCE.abilities.gazeuphorisants as object) } as AbilityDef,
   acidedissolvant: { name: 'Acide dissolvant', effect: 'Un torrent d\'acide sur un bâtiment ennemi : de très lourds dégâts.', hotkey: 'Q', target: 'point', research: 'acide', ...(BALANCE.abilities.acidedissolvant as object) } as AbilityDef,
   explosioncuve: { name: 'Explosion suicidaire', effect: 'La cuve explose : toutes les unités au sol autour et les bâtiments ennemis sont gravement touchés.', hotkey: 'X', ...(BALANCE.abilities.explosioncuve as object) } as AbilityDef,
   regenerant: { name: 'Régénérant', effect: 'Les alliés de la zone ne peuvent plus être blessés un moment, puis les toxines les laissent à 1 PV.', hotkey: 'G', target: 'point', research: 'regenerant', ...BALANCE.abilities.regenerant },
@@ -524,7 +528,8 @@ export const SKIN_REDUCTION = BALANCE.rules.peauDeRoc.reduction;
 export const STIM_HP = BALANCE.rules.stimulantHp;
 
 /** Buildings each level needs: level 3 a Tour alchimistique (the balancer, 2026-11-22: no second Caserne any more). */
-const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, undefined, { tour: 1 }];
+// Équilibreur 23/11: no Tour alchimistique for level 3 either.
+const UPGRADE_REQUIRES: (Record<string, number> | undefined)[] = [undefined, undefined, undefined];
 
 /** What each thing is; its numbers come from balance.json (merged into DEFS below). */
 const BASE: Record<string, object> = {

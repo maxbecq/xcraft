@@ -402,7 +402,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     // Allies of the zone (living ones) walk and strike faster for a while.
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
-    for (const t of allies) this.setPace(t, ticks(ab.duration), 100 + ab.damage!, idiv(10000, 100 + ab.damage!));
+    // At the price of a tenth of their full health, never the last hit point (équilibreur 23/11).
+    for (const t of allies) {
+      this.setPace(t, ticks(ab.duration), 100 + ab.damage!, idiv(10000, 100 + ab.damage!));
+      t.hp = Math.max(Math.min(t.hp, 1), t.hp - idiv(t.maxHp * ab.drain!, 100));
+    }
   } else if (name === 'acidedissolvant') {
     // A torrent of acid on the enemy building nearest the point.
     const b = [...this.entities.values()].filter((t) => t.def.kind === 'building' && this.hostile(t.owner, e.owner) && t.hp > 0 && dist(t.x, t.y, x, y) <= toFp(ab.radius! + (t.def as BuildingDef).size / 2)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
@@ -470,12 +474,15 @@ export function mineTrigger(this: World, m: Entity): void {
   m.hp = 0;
 }
 
-/** A Bourdon's alchemical mine at the end of its fuse: its damage on every enemy walker of the zone. */
+/** A Bourdon's alchemical mine at the end of its fuse: every enemy walker and building of the zone, 80 to the living and
+ * the machines, 160 to the massive machines and the buildings (équilibreur 23/11). */
 export function mineBlast(this: World, m: Entity): void {
   const ab = ABILITIES.minealchimique;
   const r = toFp(ab.radius!);
+  const blast = { damage: ab.damage!, vs: ab.vs, range: 99, cooldown: 0 };
   for (const t of [...this.entities.values()]) {
-    if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
+    if (t.hp <= 0 || !this.hostile(t.owner, m.owner)) continue;
+    if (t.def.kind === 'building' ? this.gap(m, t) <= r : t.def.kind === 'unit' && !t.inside && !flies(t) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, blast);
   }
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
 }

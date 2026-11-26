@@ -104,15 +104,19 @@ describe('Scarabée (fiche 2010)', () => {
   });
 });
 
-describe('the Dirigeable (the balancer, 2026-11-22: its own unit, 4 of supply, no research)', () => {
-  it('lifts a Char Pégase (4 of supply) alone, then nobody more; unloaded, the hold is free', () => {
+describe('the Dirigeable (the balancer: its own unit, 8 of supply since 23/11, no research)', () => {
+  it('lifts two Chars Pégase (4 of supply each), then nobody more; unloaded, the hold is free', () => {
     const w = new World(createMap());
     const b = w.spawn('dirigeable', 0, ...at(40, 60));
     const tank = w.spawn('pegase', 0, ...at(42, 60));
+    const tank2 = w.spawn('pegase', 0, ...at(42, 62));
     const man = w.spawn('auxiliaire', 0, ...at(40, 62));
     w.step([{ player: 0, kind: 'smart', ids: [tank.id], x: b.x, y: b.y, target: b.id }]);
     for (let i = 0; i < ticks(8) && !tank.inside; i++) w.step([]);
     expect(tank.inside).toBe(b.id);
+    w.step([{ player: 0, kind: 'smart', ids: [tank2.id], x: b.x, y: b.y, target: b.id }]);
+    for (let i = 0; i < ticks(8) && !tank2.inside; i++) w.step([]);
+    expect(tank2.inside).toBe(b.id);
     w.step([{ player: 0, kind: 'smart', ids: [man.id], x: b.x, y: b.y, target: b.id }]);
     for (let i = 0; i < ticks(8); i++) w.step([]);
     expect(man.inside).toBe(0); // full

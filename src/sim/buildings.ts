@@ -220,13 +220,14 @@ export function room(this: World, b: Entity): number {
   return (b.def as BuildingDef | UnitDef).bunker ?? 0;
 }
 
-/** Who may get in: soldiers that shoot into a Fortin or a Scarabée; into a Barge or a Dirigeable, any ground unit but workers. */
+/** Who may get in: soldiers that shoot into a Fortin or a Scarabée; into a Barge or a Dirigeable, any ground unit, its
+ * workers too, each taking its supply's room (équilibreur 23-24/11, every side). */
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
   // No shelter within a carried shelter: a Scarabée in a Dirigeable takes nobody, and goes in only empty.
   if (b.inside || ((b.def as UnitDef).transport && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
-  if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
+  if ((b.def as UnitDef).transport || b.type === 'drake') return !flies(e);
   // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully, the
   // Dieux' Puits 4 Esprits.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
@@ -534,7 +535,7 @@ export function besideTile(this: World, b: Entity, toward: { x: number; y: numbe
 
 /** What a carrier holds: units, or for a Z Barge, their supply. */
 export function load(this: World, b: Entity, extra?: Entity): number {
-  const barge = !!(b.def as UnitDef).transport;
+  const barge = !!(b.def as UnitDef).transport || b.type === 'drake';
   const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : 1);
   let n = extra ? weigh(extra) : 0;
   for (const u of this.entities.values()) if (u.inside === b.id) n += weigh(u);

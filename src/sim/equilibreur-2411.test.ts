@@ -74,3 +74,25 @@ describe('équilibreur 23-24/11, Z', () => {
     expect(BALANCE.rules.z.offCreep).toEqual({ shoots: false, produces: false, energy: true });
   });
 });
+
+describe('équilibreur 23-24/11, Humains', () => {
+  it('Gaz euphorisants takes a tenth of full health, never the last point', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const cuve = Object.assign(w.spawn('cuve', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const aux = w.spawn('auxiliaire', 0, 34 * FP, 30 * FP);
+    const weak = w.spawn('auxiliaire', 0, 34 * FP, 31 * FP);
+    weak.hp = 2;
+    w.step([{ player: 0, kind: 'ability', ids: [cuve.id], name: 'gazeuphorisants', x: aux.x, y: aux.y }]);
+    expect(aux.hp).toBe(aux.maxHp - Math.floor(aux.maxHp / 10));
+    expect(weak.hp).toBe(1);
+  });
+
+  it('a Dirigeable takes Serfs, by their supply; the Plésiosaure detects at 10', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const d = w.spawn('dirigeable', 0, 30 * FP, 30 * FP);
+    const serf = w.spawn('serf', 0, 31 * FP, 30 * FP);
+    expect(w.boards(serf, d)).toBe(true);
+    expect(w.room(d)).toBe(8);
+    expect((DEFS.plesiosaure as UnitDef).detector).toBe(10);
+  });
+});
