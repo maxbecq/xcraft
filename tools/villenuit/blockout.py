@@ -27,7 +27,7 @@ DEEP = -16.0  # the lower city's streets, under the viaduct
 GLB = "glb" in sys.argv  # the game's copy: the plain volumes, none of the detail the painter needs
 g = json.load(open("tools/villenuit/grid.json"))
 N = g["size"]
-streets = json.load(open("public/maps/ville-nuit.json"))["streets"]
+streets = json.load(open("src/maps/ville-nuit.json"))["streets"]
 rnd = random.Random(7)
 
 MATS = {
@@ -116,7 +116,7 @@ def on_street(x, z):
     return best
 
 
-SQUARES = [t for t in json.load(open("public/maps/ville-nuit.json"))["terrain"] if t["shape"] == "octagon" and t.get("fill")]
+SQUARES = [t for t in json.load(open("src/maps/ville-nuit.json"))["terrain"] if t["shape"] == "octagon" and t.get("fill")]
 
 
 def in_square(x, z):

@@ -37,7 +37,7 @@ export function initMenus(page: {
 export interface Setup {
   /** Four seats; `control` 'none' leaves a seat empty (the third and fourth by default). */
   sides: { faction: Faction; control: string; team: number }[];
-  /** Map id (public/maps/); it gives the planet. */
+  /** Map id (src/maps/); it gives the planet. */
   map: string;
   speed: number;
 }
