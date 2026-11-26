@@ -1,6 +1,8 @@
 /** Replays: a game kept as the commands the simulation took, saved, opened from a file and played back. */
 import { type Faction, FACTIONS } from '../data';
-import { DEFAULT_MAP, MAPS } from '../maps';
+import { DEFAULT_MAP, MAPS, type MapFile } from '../maps';
+import { checkMap } from '../mapcheck';
+import { unplayable } from '../mapplay';
 import { commandOk } from '../net';
 import type { Command } from '../sim/world';
 
@@ -13,6 +15,8 @@ export interface Replay {
   version?: string;
   /** Map id; missing in replays from before map files (the original map). */
   map?: string;
+  /** An imported map, carried whole so the replay plays anywhere (checked again on reading, as any outside map). */
+  carte?: MapFile;
   /** A map this version does not have, replaced by the original one (said to the viewer: the game may differ). */
   lostMap?: string;
   factions: Faction[];
@@ -76,15 +80,24 @@ export function parseReplay(text: string): Replay | string {
   if (r.endTick !== undefined && (!Number.isInteger(r.endTick) || r.endTick <= last)) delete r.endTick;
   if (r.end !== undefined && !ENDS.includes(r.end)) delete r.end;
   if (r.seed !== undefined && (!Number.isInteger(r.seed) || r.seed < 0 || r.seed > 0xffffffff)) delete r.seed;
-  if (r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
+  if (r.carte !== undefined) {
+    const def = checkMap(r.carte);
+    const why = typeof def === 'string' ? def : def.id !== r.map ? 'elle ne porte pas le nom de la partie' : unplayable(def);
+    if (why || typeof def === 'string') return `${bad} (carte jointe : ${why}).`;
+    r.carte = def;
+  }
+  if (!r.carte && r.map !== undefined && (typeof r.map !== 'string' || !Object.hasOwn(MAPS, r.map))) {
     r.lostMap = String(r.map).replace(/[^\w.-]/g, '').slice(0, 60); // shown on screen: letters only, never markup
     delete r.map;
   }
-  // Every side needs a start on the map it plays on (the original one for a map this version lacks).
-  if (n > Math.max(...MAPS[r.map ?? DEFAULT_MAP].players)) return `${bad} (plus de camps que la carte n’a de places).`;
+  // Every side needs a start on the map it plays on (the original one for a map this version lacks); a map from
+  // outside, at a players count it offers (the counts it was checked at).
+  if (n > Math.max(...(r.carte ?? MAPS[r.map ?? DEFAULT_MAP]).players)) return `${bad} (plus de camps que la carte n’a de places).`;
+  if (r.carte && !r.carte.players.includes(n)) return `${bad} (la carte jointe ne se joue pas à ${n}).`;
   if (r.version !== undefined && (typeof r.version !== 'string' || !/^[\w.-]{1,24}$/.test(r.version))) delete r.version;
   if (typeof r.biome !== 'string' || !/^[a-z-]{1,24}$/.test(r.biome)) r.biome = 'desert';
   delete (r as { perf?: unknown }).perf; // a measures file (measuresFile) carries its telemetry beside the replay
+  // The page's maps stay as they are: the replay plays on its own copy (config.ts MAP), never one of the player's.
   return r;
 }
 

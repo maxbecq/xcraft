@@ -6,6 +6,7 @@
   "size": 96,
   "players": [2],
   "symmetry": "rot180",
+  "biome": "glace",
   "terrain": [
     { "shape": "octagon", "at": [20, 20], "half": 16, "cut": 9, "ragged": 1, "level": 1 },
     { "shape": "octagon", "at": [14, 14], "half": 12, "cut": 6, "ragged": 2, "level": 2 },

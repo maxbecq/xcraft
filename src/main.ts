@@ -37,6 +37,7 @@ import { heightAt } from './map';
 import type { Command, Entity, SandboxTool } from './sim/world';
 import './style.css';
 import { addFog, buildTerrain, createFog, fogMaterial, lavaTime, setBiome, UNDER_DECK } from './terrain';
+import { isImported } from './maps';
 import { cityAbyss, cityRoads, cityScape, cityStreets, cityUnderdeck, pickBiome } from './render/biome';
 import { Decor } from './render/decor';
 import { addDeposits } from './render/deposits';
@@ -80,7 +81,7 @@ renderer.shadowMap.enabled = GFX.shadows > 0;
 renderer.shadowMap.type = PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const world = createMatch(factions, slots.map((s) => s.team), MAP.id, biome.id);
+const world = createMatch(factions, slots.map((s) => s.team), MAP, biome.id); // the map itself: a replay's own copy
 /** The end-of-game analysis being gathered (none on the title screen). */
 const recap = ATTRACT ? null : new Recorder(world);
 /** `?perf=rec` or the Options box: frame-by-frame telemetry of this game, to send at the end. */
@@ -118,6 +119,7 @@ if (!REPLAY && !NET_ROLE) slots.forEach((s, i) => (world.players[i].handicap = D
 if (REPLAY) REPLAY.handicap.forEach((h, i) => (world.players[i].handicap = h));
 /** Every command the simulation took, by tick: the whole game, since it is deterministic. */
 const record: Replay = { v: 1, version: GAME_VERSION, map: MAP.id, factions, teams: slots.map((s) => s.team), biome: biome.id, handicap: world.players.map((p) => p.handicap), ticks: [], seed: AI_SEED };
+if (isImported(MAP)) record.carte = MAP; // the replay carries the imported map: it plays on another browser too
 const replayed = new Map(REPLAY?.ticks ?? []);
 let replayEnded = false;
 /** Keeps the game as the last game, once: a write that fails (storage full or blocked) is not tried again every tick,
@@ -609,7 +611,7 @@ if (!ATTRACT) {
   document.body.classList.add('attract');
   // Shaders compiled in the background (parallel compile where the browser has it) rather than in one long first frame.
   ready.then(() => renderer.compileAsync(scene, rig.camera)).catch(() => {}).then(start);
-  initMenus({ myFaction, foeFaction, biome, MAP, perf, DETECTED, controlFields, controlChange, recField: () => rec.field() });
+  initMenus({ myFaction, foeFaction, MAP, perf, DETECTED, controlFields, controlChange, recField: () => rec.field() });
   const friend = readRoom(params.get('ami') ?? '');
   if (friend) showLobby(document.body.appendChild(Object.assign(document.createElement('div'), { className: 'menu' })), friend, params.has('hote'));
   else showHome();

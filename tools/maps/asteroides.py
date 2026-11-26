@@ -85,7 +85,7 @@ bases.append({'name': 'centre', 'hq': [50, 49], 'minerals': [[46, 48], [46, 50],
 out = {
     'format': 1, 'id': 'asteroides', 'name': 'Astéroïdes',
     'description': 'Des îlots de basalte au-dessus du vide, reliés par des arches de roche : trois routes, un centre riche.',
-    'size': N, 'players': [2], 'symmetry': 'rot180', 'biomes': ['asteroides'], 'biomesOnly': True,
+    'size': N, 'players': [2], 'symmetry': 'rot180', 'biome': 'asteroides',
     'terrain': terrain, 'bases': bases,
 }
 here = os.path.dirname(os.path.abspath(__file__))

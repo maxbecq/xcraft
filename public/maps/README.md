@@ -19,6 +19,7 @@ L'id `origine` est la carte d'origine : la carte par défaut, et celle des repla
   "size": 96,
   "players": [2],
   "symmetry": "rot180",
+  "biome": "volcan",
   "terrain": [ … ],
   "bases": [ … ]
 }
@@ -32,8 +33,7 @@ L'id `origine` est la carte d'origine : la carte par défaut, et celle des repla
 | `players` | Nombres de joueurs possibles, par exemple `[2]` ou `[2, 3, 4]`. Le menu n'ouvre pas plus de places que le plus grand. |
 | `symmetry` | On ne décrit que la part du joueur 1, en haut à gauche ; le jeu la recopie par rotation pour les autres. `rot180` : deux parts (le joueur 2 en bas à droite). `rot90` : quatre parts, une par coin (à deux joueurs, ils sont dans les coins opposés et les deux autres coins restent des bases libres). `auto` : deux parts à deux joueurs, quatre au-delà. |
 | `calm` | Facultatif : les points près desquels les bords irréguliers (`ragged`) restent droits. Par défaut, les deux bouts de chaque rampe. |
-| `biomes` | Facultatif : les planètes spéciales (Astéroïdes) que la carte accepte en plus des planètes communes. |
-| `biomesOnly` | Facultatif : `true` pour n'accepter que les planètes de `biomes`. Le menu ne propose alors qu'elles, et toute autre planète retombe sur la première de la liste. |
+| `biome` | La planète de la carte, comme un tileset : le menu ne propose pas d'en changer. Planètes communes : `desert` (Désert), `lune` (Lune), `alien` (Monde étrange), `glace` (Glace), `volcan` (Volcan), `ville` (Ville futuriste). Planètes spéciales, réservées à la carte dessinée pour elles : `asteroides`, `villenuit`. Un lien ou un replay d'avant les planètes par carte (`?biome=`) garde la planète qu'il nomme, sauf une planète spéciale. |
 
 Coordonnées : `[x, y]` en tuiles, x vers l'est (la droite), y vers le sud (le bas), `[0, 0]` en haut à gauche.
 
@@ -75,3 +75,27 @@ La liste des emplacements de base du joueur 1, dans l'ordre où l'IA s'étend. U
 | `wells` | La tuile en haut à gauche de chaque puits d'énergie (3 × 3 tuiles). |
 
 L'IA prend d'abord ses propres bases, dans l'ordre du fichier, puis les autres bases libres, les plus proches d'abord. Elle ne prend jamais une base plus proche du départ d'un adversaire que du sien. Une base posée au centre exact d'une carte `rot90` (de taille impaire) n'existe qu'une fois, partagée entre tous les joueurs.
+
+## Importer une carte
+
+Le bouton « Importer une carte », sous les cartes de l'écran « Nouvelle partie » (et du Bac à sable), lit un fichier `.json` de ce format sans passer par le dossier : par exemple une carte faite avec l'éditeur. Le fichier est une donnée venue de l'extérieur : le jeu le vérifie champ par champ (`src/mapcheck.ts`) et refuse, avec la raison, tout ce qui sort de ces bornes :
+
+| Quoi | Borne |
+|---|---|
+| Fichier | 64 Ko au plus, du JSON |
+| Champs | seulement ceux décrits ici, nulle part un champ inconnu |
+| `id` | 1 à 32 lettres minuscules, chiffres ou tirets |
+| `name`, `description` | 40 et 200 caractères au plus, sans `<`, `>`, `"` ni `&` |
+| `size` | entier de 32 à 160 |
+| `players` | 1 à 3 nombres de joueurs, de 2 à 4, sans doublon |
+| `biome` | une planète connue (voir plus haut) |
+| `terrain` | 300 formes au plus ; un `polygon` ou une rue, 256 points au plus ; chaque forme fait exactement une chose (`level` de 0 à 2, `chasm` ou `fill`) |
+| `bases` | 1 à 16 bases, une seule de départ ; 32 minerais et 4 puits au plus par base |
+| Coordonnées | toutes sur la carte : une tuile de 0 à `size - 1`, un QG de 0 à `size - 5`, un puits de 0 à `size - 3` ; les points (polygones, centres, rues) de 0 à `size` |
+
+Le jeu vérifie ensuite qu'elle se joue, à chaque nombre de joueurs qu'elle propose : chaque départ a son QG, rejoint les autres départs et chaque base à pied ; chaque base libre a la place pour un QG ; chaque minerai et chaque puits est sur un sol plat, au-dessus d'aucun gouffre, sans chevaucher autre chose, à moins de 12 cases d'une base, et s'atteint à pied. Sinon la carte est refusée avec la raison (par exemple « À 2 joueurs : la base en (24, 24) n'est pas reliée aux départs. »).
+
+Une carte acceptée prend l'id `import-<id>` (jamais celui d'une carte du jeu) et reste dans ce navigateur (20 au plus). Elle apparaît dans la liste, marquée « importée », et le bouton « Supprimer cette carte » l'efface quand elle est choisie.
+
+- **Partie entre amis** : quand l'hôte choisit une carte importée, son fichier part vers l'invité avant la partie, qui le vérifie de la même façon et le garde. Si l'invité a déjà une autre carte du même id, la sienne reste telle quelle et celle de l'hôte est gardée à côté, sous l'id suivi de six lettres de son empreinte. Les cartes reçues d'amis sont gardées à part, les 5 dernières seulement (la plus ancienne est remplacée), et ne comptent pas dans les 20 imports du joueur ; un salon ne vérifie pas plus de 10 cartes différentes. Les deux comparent ensuite l'empreinte de la carte (son contenu, pas son id) ; si elles diffèrent, la partie ne démarre pas.
+- **Replays** : le replay d'une partie sur une carte importée emporte la carte entière (`carte`), vérifiée de nouveau à la lecture. Il se rejoue donc dans un navigateur qui ne l'a jamais eue.

@@ -1,47 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import '../terrain'; // terrain first: it and render/biome import each other (as in main.ts)
-import { BIOMES, biomesFor, fitBiome, pickBiome } from './biome';
-import { MAPS } from '../maps';
+import { BIOMES, biomeOf, pickBiome } from './biome';
+import { buildMap, MAPS } from '../maps';
 import { createMatch } from '../sim/setup';
 
-describe('planets per map', () => {
-  it('Astéroïdes is special: only its own map takes it, and that map takes nothing else', () => {
-    expect(BIOMES.asteroides.special).toBe(true);
-    for (const m of Object.values(MAPS)) if (m.id !== 'asteroides') expect(biomesFor(m).map((b) => b.id)).not.toContain('asteroides');
-    expect(biomesFor(MAPS.asteroides).map((b) => b.id)).toEqual(['asteroides']);
-    expect(fitBiome('desert', MAPS.asteroides).id).toBe('asteroides');
-    expect(fitBiome(null, MAPS.asteroides).id).toBe('asteroides');
+describe('one planet per map', () => {
+  it('every map names a planet this build has, as chosen for it', () => {
+    for (const m of Object.values(MAPS)) expect(Object.hasOwn(BIOMES, m.biome)).toBe(true);
+    const chosen = Object.fromEntries(Object.values(MAPS).map((m) => [m.id, m.biome]));
+    expect(chosen).toMatchObject({ origine: 'desert', carrefour: 'lune', 'l-anneau': 'glace', 'le-col': 'volcan', 'les-ponts': 'desert', asteroides: 'asteroides', 'ville-nuit': 'villenuit' });
   });
 
-  it('the night city is special too: only its own map takes it, and that map takes nothing else', () => {
-    expect(BIOMES.villenuit.special).toBe(true);
-    for (const m of Object.values(MAPS)) if (m.id !== 'ville-nuit') expect(biomesFor(m).map((b) => b.id)).not.toContain('villenuit');
-    expect(biomesFor(MAPS['ville-nuit']).map((b) => b.id)).toEqual(['villenuit']);
-    expect(fitBiome('ville', MAPS['ville-nuit']).id).toBe('villenuit');
+  it('a new game plays on the map\'s planet', () => {
+    for (const m of Object.values(MAPS)) expect(pickBiome(new URLSearchParams(''), m).id).toBe(m.biome);
   });
 
-  it('every map offers every common planet; a map drawn for a special one offers it too', () => {
-    const common = Object.values(BIOMES).filter((b) => !b.special).map((b) => b.id);
-    for (const m of Object.values(MAPS)) if (!m.biomesOnly) expect(biomesFor(m).map((b) => b.id)).toEqual(common);
-    expect(biomesFor({ biomes: ['asteroides'] }).map((b) => b.id)).toContain('asteroides');
-    expect(fitBiome('asteroides', { biomes: ['asteroides'] }).id).toBe('asteroides');
+  it('an older link or replay keeps the planet it names, so it plays again the same', () => {
+    expect(pickBiome(new URLSearchParams('biome=glace'), MAPS.origine).id).toBe('glace');
+    expect(pickBiome(new URLSearchParams('biome=ville'), MAPS.origine).id).toBe('ville');
+    expect(pickBiome(new URLSearchParams('biome=desert'), MAPS.carrefour).id).toBe('desert');
   });
 
-  it('a planet the map does not take, or an unknown one, falls back to the desert without error', () => {
-    const origine = MAPS.origine;
-    expect(fitBiome('asteroides', origine).id).toBe('desert');
-    expect(fitBiome('nulle-part', origine).id).toBe('desert');
-    expect(fitBiome('constructor', origine).id).toBe('desert');
-    expect(fitBiome(null, origine).id).toBe('desert');
-    expect(fitBiome('volcan', origine).id).toBe('volcan');
-    expect(pickBiome(new URLSearchParams('biome=asteroides'), origine).id).toBe('desert');
-    expect(pickBiome(new URLSearchParams('biome=glace'), origine).id).toBe('glace');
+  it('never a special planet off its map, nor another planet on a special map (older builds dropped them too)', () => {
+    expect(pickBiome(new URLSearchParams('biome=asteroides'), MAPS.origine).id).toBe('desert');
+    expect(pickBiome(new URLSearchParams('biome=villenuit'), MAPS.carrefour).id).toBe('lune');
+    expect(pickBiome(new URLSearchParams('biome=desert'), MAPS.asteroides).id).toBe('asteroides');
+    expect(pickBiome(new URLSearchParams('biome=ville'), MAPS['ville-nuit']).id).toBe('villenuit');
   });
 
-  it('the fallback leaves the match as it was: same World.hash on every map (old Astéroïdes replays still play the same)', () => {
+  it('an unknown planet, in a link or in a map file, gives no error', () => {
+    expect(pickBiome(new URLSearchParams('biome=constructor'), MAPS.origine).id).toBe('desert');
+    // An imported map: its own planet, whatever the link says (its shapes were checked for that one).
+    expect(pickBiome(new URLSearchParams('biome=glace'), { ...MAPS.carrefour, id: 'import-carrefour' }).id).toBe(MAPS.carrefour.biome);
+    expect(pickBiome(new URLSearchParams('biome=nulle-part'), MAPS['le-col']).id).toBe('volcan');
+    expect(biomeOf({ biome: 'nulle-part' }).id).toBe('desert');
+  });
+
+  it('the planet shapes the map only where the file says so (Origine\'s city): the same match on every other planet', () => {
     for (const m of Object.values(MAPS)) {
-      const before = createMatch(['humains', 'z'], undefined, m.id, 'asteroides').hash();
-      expect(createMatch(['humains', 'z'], undefined, m.id, fitBiome('asteroides', m).id).hash()).toBe(before);
+      const own = createMatch(['humains', 'z'], undefined, m.id, m.biome).hash();
+      for (const b of Object.keys(BIOMES)) if (!(m.id === 'origine' && b === 'ville')) expect(createMatch(['humains', 'z'], undefined, m.id, b).hash()).toBe(own);
     }
+    expect(buildMap(MAPS.origine, 2, 'ville').chasm).not.toEqual(buildMap(MAPS.origine, 2, 'desert').chasm);
   });
 });

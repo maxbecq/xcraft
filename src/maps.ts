@@ -1,4 +1,5 @@
 import { HQ_MINERAL_GAP } from './data';
+import { IMPORTED, MAX_MAP_ID, mapPrint, parseMap } from './mapcheck';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, type Street, rotateFootprint, rotateTile } from './map';
 
 /**
@@ -18,10 +19,8 @@ export interface MapFile {
   symmetry: 'rot180' | 'rot90' | 'auto';
   /** Points near which ragged edges stay straight (default: both ends of every ramp). */
   calm?: [number, number][];
-  /** Special planets this map was drawn for (render/biome.ts `special`), offered beside the common ones. */
-  biomes?: string[];
-  /** Only the planets in `biomes` (none of the common ones): a map whose ground makes no sense elsewhere. */
-  biomesOnly?: boolean;
+  /** The planet it is played on (render/biome.ts BIOMES id): the map gives it, as a tileset does. */
+  biome: string;
   terrain: Shape[];
   /** Streets painted on the ground (player 1's part, turned like the terrain). For the eye only. */
   streets?: Street[];
@@ -69,7 +68,7 @@ const FILES = import.meta.glob<MapFile>('/public/maps/*.json', { eager: true, im
 export const MAPS: Record<string, MapFile> = Object.fromEntries(
   Object.values(FILES)
     .filter((m) => {
-      const ok = m.format === 1 && !!m.id && m.size > 0 && m.players?.length > 0 && m.bases?.filter((b) => b.start).length === 1;
+      const ok = m.format === 1 && !!m.id && typeof m.biome === 'string' && m.size > 0 && m.players?.length > 0 && m.bases?.filter((b) => b.start).length === 1;
       if (!ok) console.warn(`Carte ignorée (format inconnu ou incomplet) : ${m.id ?? '?'}`);
       return ok;
     })
@@ -77,6 +76,136 @@ export const MAPS: Record<string, MapFile> = Object.fromEntries(
     .map((m) => [m.id, m]),
 );
 export const DEFAULT_MAP = 'origine';
+
+/** Where an imported map is kept in this browser: one entry per map, its checked JSON. */
+const STORE = 'xcraft.carte:';
+/** Most imported maps kept. */
+export const MAX_IMPORTED = 20;
+/** Friends' maps, kept apart (their own entries, their own list, oldest first): never counted in the player's imports. */
+const FRIEND = 'xcraft.ami:';
+const FRIEND_LIST = 'xcraft.amis';
+/** Most friends' maps kept: a new one past this replaces the oldest. */
+export const MAX_FRIEND_MAPS = 5;
+/** The player's own imports kept (ids), and the friends' maps kept, oldest first. */
+const own = new Set<string>();
+const friends: string[] = [];
+/** The ids of the maps the player imported and keeps (MAX_IMPORTED at most), friends' and replays' left out. */
+export const ownImports = (): string[] => [...own];
+
+/** Whether a map came from outside the game (an import, a friend's, a replay's). */
+export const isImported = (def: MapFile) => def.id.startsWith(IMPORTED);
+
+/** Maps imported earlier in this browser, checked again (storage can be edited) and listed after the game's own. */
+function loadImported(): void {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)!;
+      if (!key.startsWith(STORE)) continue;
+      const def = parseMap(localStorage.getItem(key) ?? '');
+      if (typeof def === 'string' || !isImported(def)) console.warn(`Carte importée illisible, ignorée : ${key}`);
+      else {
+        MAPS[def.id] = def;
+        own.add(def.id);
+      }
+    }
+    const list: unknown = JSON.parse(localStorage.getItem(FRIEND_LIST) ?? '[]');
+    for (const id of Array.isArray(list) ? list.slice(-MAX_FRIEND_MAPS) : []) {
+      const def = typeof id === 'string' ? parseMap(localStorage.getItem(FRIEND + id) ?? '') : '';
+      if (typeof def === 'string' || def.id !== id || own.has(id)) continue;
+      MAPS[id] = def;
+      friends.push(id);
+    }
+  } catch {
+    // no storage (private window, node): none imported
+  }
+}
+loadImported();
+
+/** A checked map made playable for this page (a replay's, a friend's on its way); `keep` also stores it for later pages. False if storage refused it. */
+export function addMap(def: MapFile, keep = false): boolean {
+  // Kept first, listed after: a map the storage refused would be offered, then lost at the match's page (Origine instead).
+  if (keep) {
+    try {
+      localStorage.setItem(STORE + def.id, JSON.stringify(def));
+    } catch {
+      return false;
+    }
+    own.add(def.id);
+  }
+  MAPS[def.id] = def;
+  return true;
+}
+
+/**
+ * A friend's imported map, checked, kept for the match's page: under its own id, or, when this browser already has
+ * another map of that id, beside it under the id with its print added (the player's own is never overwritten). The
+ * id to play it under here, or null if storage refused it.
+ */
+export function receiveMap(def: MapFile): string | null {
+  const print = mapPrint(def);
+  const same = (id: string) => Object.hasOwn(MAPS, id) && mapPrint(MAPS[id]) === print;
+  if (same(def.id)) return def.id;
+  // An id free for it: none of the player's own, nor of the game, nor another map, unless an older friend's copy of
+  // that id (replaced). Within MAX_MAP_ID, as a waiting room takes it (net.ts lobbyOk): the base shortened, never the print.
+  const free = (id: string) => !own.has(id) && (!Object.hasOwn(MAPS, id) || same(id) || friends.includes(id));
+  const base = def.id.slice(0, MAX_MAP_ID - 9);
+  let id = def.id;
+  for (let k = 0; !free(id); k++) id = `${base}-${print.slice(0, 6)}${k ? k : ''}`;
+  if (same(id)) return id;
+  // Kept apart from the player's imports, MAX_FRIEND_MAPS at most: the oldest goes (a hostile host cannot fill storage).
+  const list = friends.filter((f) => f !== id);
+  const gone: string[] = [];
+  while (list.length >= MAX_FRIEND_MAPS) gone.push(list.shift()!);
+  list.push(id);
+  const copy = { ...def, id };
+  // Written first, then listed: if storage refuses, the page and storage stay as they were (the transfer may be retried).
+  let had: string | null = null;
+  try {
+    had = localStorage.getItem(FRIEND + id);
+    localStorage.setItem(FRIEND + id, JSON.stringify(copy));
+    localStorage.setItem(FRIEND_LIST, JSON.stringify(list));
+  } catch {
+    try {
+      if (had === null) localStorage.removeItem(FRIEND + id);
+      else localStorage.setItem(FRIEND + id, had);
+    } catch {
+      // nothing more to undo
+    }
+    return null;
+  }
+  for (const g of gone) forget(g);
+  friends.splice(0, friends.length, ...list);
+  MAPS[id] = copy;
+  return id;
+}
+
+/** A friend's map gone from the page and from storage (the list is written by the caller). */
+function forget(id: string): void {
+  if (!own.has(id)) delete MAPS[id];
+  try {
+    localStorage.removeItem(FRIEND + id);
+  } catch {
+    // nothing kept
+  }
+}
+
+/** Forgets an imported map, here and in storage. */
+export function removeMap(id: string): void {
+  if (!id.startsWith(IMPORTED)) return;
+  delete MAPS[id];
+  own.delete(id);
+  const at = friends.indexOf(id);
+  if (at >= 0) friends.splice(at, 1);
+  try {
+    localStorage.removeItem(STORE + id);
+    if (at >= 0) {
+      localStorage.removeItem(FRIEND + id);
+      localStorage.setItem(FRIEND_LIST, JSON.stringify(friends));
+    }
+  } catch {
+    // nothing kept
+  }
+}
 
 /** The map with this id, or the original map (said in the console when an id was given: a network game checks it first). */
 /** The main buildings' size (the balancer, 2026-11-22: 4x4, in the 5x5 slots the map files keep). */
@@ -162,6 +291,7 @@ export function buildMap(def: MapFile, players = 2, biome = ''): GameMap {
     });
 
   const each = (x: number, y: number, f: (i: number, q: number) => void) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return; // off the grid: never another tile by its index
     for (const q of turns) {
       const [rx, ry] = rotateTile(width, x, y, q);
       f(ry * width + rx, q);
