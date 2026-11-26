@@ -700,4 +700,37 @@ describe('AI Isdaris, the équilibreur rules', () => {
     }
   });
 
+  it('an Obélisque puts its Bouclier de plasma on a Portail of the zone under fire', () => {
+    const { w, ob } = base();
+    const portail = w.spawn('portail', 0, ob.x + 8 * FP, ob.y);
+    [portail.hp, portail.shield] = [100, 0];
+    w.tick = thinkTick(8);
+    portail.lastHit = w.tick;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [ob.id], name: 'bouclierplasma', x: portail.x, y: portail.y }));
+  });
+
+  it('trains a Drone protecteur for every eight soldiers', () => {
+    const { w, ob } = base();
+    const pa = w.spawn('nanoassembleur', 0, ob.x + 8 * FP, ob.y);
+    for (let i = 0; i < 16; i++) w.spawn('creature', 0, ob.x - 6 * FP, ob.y + (i - 8) * FP / 2);
+    w.spawn('droneprotecteur', 0, ob.x - 4 * FP, ob.y);
+    for (let i = 0; i < 4; i++) w.spawn('reservepsy', 0, ob.x + (i - 2) * 4 * FP, ob.y - 9 * FP);
+    w.tick = thinkTick(14);
+    w.players[0].minerals = 3000;
+    w.players[0].energy = 3000;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [pa.id], type: 'droneprotecteur' }));
+  });
+
+  it('an Orbe plasma afloat never goes with a wave', () => {
+    const { w, ob } = base();
+    const orbe = w.spawn('orbemob', 0, ob.x - 6 * FP, ob.y);
+    for (let i = 0; i < 12; i++) w.spawn('creature', 0, ob.x - 6 * FP, ob.y + (i - 6) * FP / 2);
+    w.tick = thinkTick(12);
+    const ai = new AI(w, 0);
+    const cmds = ai.think();
+    expect((ai as unknown as { wave: Set<number> }).wave.size).toBeGreaterThan(0);
+    expect((ai as unknown as { wave: Set<number> }).wave.has(orbe.id)).toBe(false);
+    expect(cmds.some((c) => 'ids' in c && c.ids.includes(orbe.id))).toBe(false);
+  });
 });

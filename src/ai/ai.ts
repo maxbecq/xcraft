@@ -135,6 +135,8 @@ const SIMPLE = ['stimulant', 'charge'];
 /** Powers tried before a unit's others (they share one cooldown), in this order. */
 const FIRST = ['cone', 'gravite', 'gel'];
 const CROWD: Record<string, number> = { explosiftoxique: 3, silence: 2, pluiedefeu: 3, lumiereardente: 3, tempete: 2, impulsion: 3, vacarme: 3 };
+/** Soldiers for each Isdaris Drone protecteur. */
+const PROTECTED = 8;
 /** Spells that take a caster out of a lost fight: the mana for them is never spent on another. */
 const ESCAPE = ['voyage'];
 /** Dieux: the gods the Porte d'Asgaard summons, and from which minute (one at a time, in this order). */
@@ -784,10 +786,14 @@ export class AI {
       }
     }
 
-    // Isdaris: a major building under fire (hit within the last 3 s, not after the fight), below a third of its hit points and shield, raises its Bouclier de plasma.
-    for (const b of buildings.filter((b) => abilitiesOf(b.def as BuildingDef).includes('bouclierplasma') && b.buildLeft === 0 && b.plasmaCd === 0 && b.phased === 0 && 3 * (b.hp + b.shield) < b.maxHp + b.maxShield && this.world.tick - b.lastHit < ticks(3))) {
-      ctx.out.push({ player: this.player, kind: 'ability', ids: [b.id], name: 'bouclierplasma' });
-    }
+    // Isdaris: a building under fire (hit within the last 3 s, not after the fight), below a third of its hit points and
+    // shield, gets the Bouclier de plasma of an Obélisque at rest, the Obélisque's alone, on any building of the zone
+    // (équilibreur 24/11), the most damaged first.
+    const shields = buildings.filter((b) => abilitiesOf(b.def as BuildingDef).includes('bouclierplasma') && b.buildLeft === 0 && b.plasmaCd === 0);
+    const failing = buildings
+      .filter((b) => (b.def as BuildingDef).faction === 'isdaris' && b.buildLeft === 0 && b.phased === 0 && 3 * (b.hp + b.shield) < b.maxHp + b.maxShield && this.world.tick - b.lastHit < ticks(3) && this.world.powered(this.player, b.x, b.y))
+      .sort((a, b) => (a.hp + a.shield) * (b.maxHp + b.maxShield) - (b.hp + b.shield) * (a.maxHp + a.maxShield) || a.id - b.id);
+    for (const [o, b] of shields.map((o, i) => [o, failing[i]] as const)) if (b) ctx.out.push({ player: this.player, kind: 'ability', ids: [o.id], name: 'bouclierplasma', x: b.x, y: b.y });
   }
 
   /** The buildings wanted this turn, most urgent first, and the tech state they depend on. */
@@ -1284,7 +1290,9 @@ export class AI {
       // held the Créaturium to one Plésiosaure); against flyers, only what can shoot them. One of each unarmed unit
       // (Scarabée, Isdaris Espion and Voyageur).
       const own = (u: string) => mine.filter((o) => o.type === u).length;
-      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) < (abilitiesOf(DEFS[u] as UnitDef).includes('couloir') && w.level(this.player, 'couloir') ? 2 : 1)) && (t.type === f.tech || own(u) < 3));
+      // The Isdaris Drone protecteur (its aura takes 2 from every blow within 4) one for every eight soldiers.
+      const unarmed = (u: string) => ((DEFS[u] as UnitDef).passives?.includes('protection') ? Math.ceil((army.length + 1) / PROTECTED) : abilitiesOf(DEFS[u] as UnitDef).includes('couloir') && w.level(this.player, 'couloir') ? 2 : 1);
+      const trains = ((t.def as BuildingDef).trains ?? []).filter((u) => !w.lacks(this.player, u, undefined, t) && ((DEFS[u] as UnitDef).attack || own(u) < unarmed(u)) && (t.type === f.tech || own(u) < 3));
       const antiAirTrains = trains.filter((u) => (DEFS[u] as UnitDef).attack && reaches((DEFS[u] as UnitDef).attack!, true));
       const pays = (u: string) => ctx.minerals - ctx.keep >= (DEFS[u] as UnitDef).cost.minerals && ctx.energy >= (DEFS[u] as UnitDef).cost.energy && (DEFS[u] as UnitDef).supply <= this.room(ctx);
       // Against flyers, what shoots them if one can be paid, else what can (the last Créaturium waited for an
@@ -2326,6 +2334,17 @@ export class AI {
           const hurt = allies.filter((a) => a.hp * 10 < a.maxHp * 7 && !flies(a));
           const best = hurt.map((a) => [a, around(hurt, a.x, a.y, radius).length] as const).sort((a, b) => b[1] - a[1] || a[0].id - b[0].id)[0];
           if (best && best[1] >= 3) cmd = at(u, name, best[0]);
+        } else if (name === 'concentration') {
+          // Druide, in defence: three enemy fighters on foot coming for it in melee get a wall of energy across their way,
+          // between them and it (nobody walks through for 15 s; the shots of ours go by).
+          const melee = near.filter((f) => !flies(f) && !!(f.def as UnitDef).attack && (f.def as UnitDef).attack!.range < 1 && !(f.def as UnitDef).worker);
+          if (melee.length >= 3) {
+            const cx = Math.trunc(melee.reduce((n, f) => n + f.x, 0) / melee.length);
+            const cy = Math.trunc(melee.reduce((n, f) => n + f.y, 0) / melee.length);
+            const d = dist(u.x, u.y, cx, cy);
+            const gap = radius + 3 * FP / 2;
+            if (d > gap) cmd = { player: this.player, kind: 'ability', ids: [u.id], name, x: u.x + Math.trunc(((cx - u.x) * gap) / d), y: u.y + Math.trunc(((cy - u.y) * gap) / d) };
+          }
         } else if (name === 'renvoi' || name === 'double') {
           // The biggest ally under fire (Renvoi), or simply the biggest one in the fight (Double).
           const pick = allies.filter((a) => a !== u && a.type !== 'cadavre' && (name === 'double' || w.tick - a.lastHit < ticks(2))).sort((a, b) => b.maxHp + b.maxShield - (a.maxHp + a.maxShield) || a.id - b.id)[0];

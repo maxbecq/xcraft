@@ -191,4 +191,16 @@ describe('AI spells, each in a scene made for it', () => {
     at('elementaire', 0, 1, 0);
     expect(cast(orders(w, ai), 'fusion')).toBe(true);
   });
+
+  it('Concentration énergétique across the way of three enemy fighters on foot coming in melee', () => {
+    const { w, ai, at } = arena(['isdaris', 'humains']);
+    w.players[0].upgrades.laboratoire = 1;
+    const druide = at('druide', 0, 0, 0);
+    crowd(at, 'legionnaire', 3, 7, 0);
+    const wall = orders(w, ai).find((c) => c.kind === 'ability' && c.name === 'concentration') as Extract<Command, { kind: 'ability' }> | undefined;
+    expect(wall).toBeDefined();
+    // Between them: east of the Druide, short of the légionnaires.
+    expect(wall!.x!).toBeGreaterThan(druide.x);
+    expect(wall!.x!).toBeLessThan(druide.x + 7 * FP);
+  });
 });
