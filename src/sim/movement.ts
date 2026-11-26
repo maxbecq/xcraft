@@ -187,8 +187,11 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
       // of the tile beyond (floor), it was pushed further into that one, at times across a cliff: a waypoint no step
       // reached, and the unit pressed at the wall with its order never done.
       const goal = exact && k === pts.length - 2 && end === gy * g.width + gx;
-      const qx = goal && pts[k] === (gx + 1) * FP ? pts[k] - 1 : pts[k];
-      const qy = goal && pts[k + 1] === (gy + 1) * FP ? pts[k + 1] - 1 : pts[k + 1];
+      // On either edge (Codex, 2026-11-26: the low one alone was a point of two tiles, so the same move turned a
+      // quarter round was kept off differently).
+      const inside = (v: number, t: number) => (v === (t + 1) * FP ? v - 1 : v === t * FP ? v + 1 : v);
+      const qx = goal ? inside(pts[k], gx) : pts[k];
+      const qy = goal ? inside(pts[k + 1], gy) : pts[k + 1];
       const [kx, ky] = g.keepOff(qx, qy, e.radius);
       if (kx !== qx || ky !== qy) [pts[k], pts[k + 1]] = [kx, ky];
     }

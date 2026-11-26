@@ -228,6 +228,30 @@ describe('cliffs', () => {
     expect(8 * FP - a.x).toBeLessThan(BAND + KEEP + FP / 8);
   });
 
+  // Codex, 2026-11-26 (final review): a goal on its tile's low edge was a point of two tiles to keepOff, on its high
+  // edge one of its own only: the same move, the map turned a quarter round, ended in one way and never in the other.
+  it('a move to the edge of a plateau from just below it ends the same way on the map turned round', () => {
+    const N = 16;
+    const S = N * FP;
+    const turnTile = (x: number, y: number) => [N - 1 - y, x];
+    const turn = ([x, y]: number[]) => [S - y, x];
+    for (let q = 0; q < 4; q++) {
+      const level = new Uint8Array(N * N);
+      for (let y = 8; y <= 14; y++) for (let x = 8; x <= 14; x++) {
+        let [tx, ty] = [x, y];
+        for (let k = 0; k < q; k++) [tx, ty] = turnTile(tx, ty);
+        level[ty * N + tx] = 1;
+      }
+      const w = new World({ width: N, height: N, level, ramp: new Array(N * N).fill(null), rampStep: new Uint8Array(N * N) });
+      let [from, to] = [[Math.round(9.5 * FP), Math.round(7.8535 * FP)], [Math.round(9.5 * FP), 8 * FP]];
+      for (let k = 0; k < q; k++) [from, to] = [turn(from), turn(to)];
+      const a = w.spawn('serf', 0, from[0], from[1]);
+      w.step([{ player: 0, kind: 'move', ids: [a.id], x: to[0], y: to[1] }]);
+      for (let i = 0; i < 240 && a.order; i++) w.step([]);
+      expect(a.order, `turned ${q}`).toBeNull();
+    }
+  });
+
   // Codex, 2026-11-26: a point kept off a limit was at times left within another's reach (on a cut corner, what an
   // axis could not take at the tile's edge was dropped; off a corner, the sides brought it back). Given as a waypoint,
   // no step reached it, and the unit pressed there with its order never done.
