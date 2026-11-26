@@ -158,6 +158,9 @@ export function receiveMap(def: MapFile): string | null {
   while (list.length >= MAX_FRIEND_MAPS) gone.push(list.shift()!);
   list.push(id);
   const copy = { ...def, id };
+  // Read back on the match's page as stored: a map just under the limit may pass it once its id is suffixed, and the
+  // guest then played Origine while the host played this one (Codex, 2026-11-26). Refused here, the lobby says so.
+  if (typeof parseMap(JSON.stringify(copy)) === 'string') return null;
   // Written first, then listed: if storage refuses, the page and storage stay as they were (the transfer may be retried).
   let had: string | null = null;
   try {

@@ -136,6 +136,26 @@ describe('a friend\'s imported map with the id of one of the guest\'s own', () =
       expect(parseMap(store.get(`xcraft.ami:${other}`)!)).toEqual(MAPS[other]);
     }));
 
+  // Codex, 2026-11-26: a map of 64 Ko exactly, its id suffixed, no longer read back on the match's page (the guest fell
+  // back to Origine while the host played the imported map).
+  it('refuses a copy that would not read back under its new id, rather than lose it on the match\'s page', () =>
+    withStorage(() => {
+      const mine = imported();
+      addMap(mine, true);
+      const big = { ...imported(), name: 'Gros col', description: '', terrain: [...imported().terrain] } as MapFile;
+      const poly = MAPS.asteroides.terrain.find((t) => t.shape === 'polygon' && !('arch' in t && t.arch))!;
+      const size = (m: MapFile) => JSON.stringify(checkMap(JSON.parse(JSON.stringify(m)), false)).length;
+      while (size({ ...big, terrain: [...big.terrain, poly] }) <= MAP_MAX_CHARS) big.terrain.push(poly);
+      const dot = { shape: 'circle', at: [12.5, 37.5], r: 12, level: 1 } as MapFile['terrain'][number];
+      while (size({ ...big, terrain: [...big.terrain, dot] }) <= MAP_MAX_CHARS - 150) big.terrain.push(dot);
+      big.description = 'x'.repeat(MAP_MAX_CHARS - size(big));
+      const theirs = checkMap(JSON.parse(JSON.stringify(big)), false) as MapFile;
+      expect(JSON.stringify(theirs).length).toBe(MAP_MAX_CHARS);
+      expect(typeof parseMap(JSON.stringify(theirs))).toBe('object'); // valid as sent
+      expect(receiveMap(theirs)).toBeNull(); // suffixed, it would not read back
+      expect([...store.keys()].some((k) => k.startsWith('xcraft.ami:'))).toBe(false);
+    }));
+
   it('never takes one of the guest\'s own ids, even the suffixed one it would have picked', () =>
     withStorage(() => {
       const mine = imported();

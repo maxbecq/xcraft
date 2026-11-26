@@ -480,7 +480,7 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
         if (kept && typeof def !== 'string') received[def.id] = kept;
         seenCartes.set(carte, kept);
         mapRefused = typeof def === 'string' ? `La carte importée par votre ami est refusée : ${def}`.replace(/[<>&]/g, '')
-          : !kept ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé).'
+          : !kept ? 'Votre navigateur ne peut pas garder la carte importée par votre ami (stockage plein ou désactivé, ou carte trop grosse sous un autre nom).'
           : null;
         if (mapRefused) status = mapRefused;
       } else if ('setup' in m && !host) {
