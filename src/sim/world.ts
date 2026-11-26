@@ -934,7 +934,12 @@ export class World {
   }
   /** The Couloir temporel an Espion is an end of, if open. */
   tunnelOf(e: Entity): World['tunnels'][number] | undefined {
-    return this.tunnels.find((t) => t.left > 0 && (t.a === e.id || t.b === e.id));
+    // Both ends standing and still ours (Codex 26/11: a dead Espion served as a way out until removed).
+    const up = (id: number) => {
+      const s = this.entities.get(id);
+      return !!s && s.hp > 0;
+    };
+    return this.tunnels.find((t) => t.left > 0 && (t.a === e.id || t.b === e.id) && up(t.a) && up(t.b) && this.entities.get(t.a)!.owner === t.owner && this.entities.get(t.b)!.owner === t.owner);
   }
 
   /** The lists are out of date (an entity came, went, changed type or gained a shield). */
@@ -1031,10 +1036,16 @@ export class World {
           // 8 of supply.
           if (this.gap(e, b!) > FP) return this.chase(e, b!);
           const other = this.entities.get(tunnel.a === b!.id ? tunnel.b : tunnel.a)!;
+          // Within its 8 of supply, the unit counted before it goes (Codex 26/11: two Béhémoths of 5 went through).
+          const supply = (e.def as UnitDef).supply ?? 0;
+          if (tunnel.supply + supply > ABILITIES.couloir.supply!) {
+            this.say(e.owner, 'Couloir temporel : trop de ravitaillement.');
+            return this.setOrder(e, null);
+          }
           this.place(e, other.x, other.y + other.radius + e.radius);
           this.teleports.push({ phase: 'end', owner: e.owner, x1: b!.x, y1: b!.y, x2: other.x, y2: other.y, ids: [e.id] });
           tunnel.crossed++;
-          tunnel.supply += (e.def as UnitDef).supply ?? 0;
+          tunnel.supply += supply;
           if (tunnel.crossed >= ABILITIES.couloir.max! || tunnel.supply >= ABILITIES.couloir.supply!) tunnel.left = 0;
           return;
         }

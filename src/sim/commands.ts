@@ -459,7 +459,7 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
     } else if (t && t !== e && t.owner === e.owner && t.type === 'espion' && this.tunnelOf(t)) {
       // Couloir temporel (équilibreur 24/11): up to the Espion, then out by the other one.
       this.setOrder(e, { kind: 'enter', target: t.id });
-    } else if ((!worker || !!(t?.def as UnitDef | undefined)?.transport) && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
+    } else if ((!worker || !!(t?.def as UnitDef | undefined)?.transport || t?.type === 'drake') && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
       // Into a transport, a worker too (équilibreur 23-24/11).
       this.setOrder(e, { kind: 'enter', target: t.id });
     } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).energyRate && this.room(t) && t.buildLeft === 0 && this.boards(e, t)) {
@@ -568,7 +568,7 @@ export function materialise(this: World, o: Entity, type: string, tx: number, ty
   if (lack) return void this.say(o.owner, lack);
   if (!this.canPlace(type, tx, ty, o.owner)) return void this.say(o.owner, this.misplaced(def, tx, ty, o.owner));
   // An Obélisque raises an Obélisque or a Récepteur inside the zone only; a robot may go beyond (équilibreur 24/11).
-  if (!this.powered(o.owner, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return void this.say(o.owner, 'Hors de la zone de construction.');
+  if (!this.materialisable(o.owner, type, tx, ty)) return void this.say(o.owner, 'Hors de la zone de construction.');
   const mid = Math.floor(def.size / 2);
   if (!this.vision[o.owner].visible(tx + mid, ty + mid)) return void this.say(o.owner, 'Il faut voir l’emplacement.');
   if (!this.pay(o.owner, def)) return;

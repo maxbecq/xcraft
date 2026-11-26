@@ -270,6 +270,7 @@ export function guarded(this: World, t: Entity): boolean {
 export function regenerate(this: World, e: Entity): void {
   if (e.hp <= 0) return;
   if (e.poison > 0 && --e.poison % ticks(1) === 0) e.hp -= BALANCE.rules.upgrades.poison.damage;
+  if (e.hp <= 0) return; // killed by the poison: not healed back this tick (Codex 26/11)
   // A Sphinx in stone heals at its statue's own rate only (équilibreur 24/11).
   const regen = 'regen' in e.def && !(e.statue > 0) ? e.def.regen : undefined;
   // Living units heal at their own pace, hit or not, the shield apart (équilibreur 23-24/11: an Isdaris archer has both).
@@ -584,9 +585,11 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     this.hurt(e, back);
     if ((t.reflectLeft -= back) <= 0) t.reflect = 0;
   }
+  const hp0 = Math.max(0, t.hp);
   const dealt = this.hurt(t, damage);
-  // Attaque de singularité (équilibreur 24/11): the Druide's blow drains as much energy as it takes hit points.
-  if (e.type === 'druide' && t.mana > 0) t.mana = Math.max(0, t.mana - toFp(dealt));
+  // Attaque de singularité (équilibreur 24/11): the Druide's blow drains as much energy as it takes hit points (not
+  // shield, Codex 26/11).
+  if (e.type === 'druide' && t.mana > 0) t.mana = Math.max(0, t.mana - toFp(hp0 - Math.max(0, t.hp)));
   // Disque tournoyant (équilibreur 24/11, after its research): 15 % of what the target took to the enemies round it.
   if (e.type === 'discobole' && e.owner >= 0 && this.level(e.owner, 'disque')) {
     const D = ABILITIES.disquetournoyant;

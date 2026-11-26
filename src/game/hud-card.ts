@@ -148,7 +148,9 @@ export function buttonsFor(h: Hud): Button[] {
       const auto = ab === 'autosoin' || ab === 'autorecharge' ? casters.some((u) => !u.autoOff) : ab === 'autoreanimation' ? casters.some((u) => u.autoRaise) : undefined;
       const on = auto === undefined ? '' : auto ? ' : oui' : ' : non';
       // How long before the first caster has it back (équilibreur 24/11).
-      const wait = ready ? '' : ` (recharge ${secondsLeft(Math.min(...casters.map((u) => Math.max(u.abilityCd, (u.spellCd[ab] ?? 0) - h.world.tick))))} s)`;
+      // A countdown only while a cooldown runs; else what is missing is energy (Codex 26/11).
+      const cd = Math.min(...casters.map((u) => Math.max(u.abilityCd, (u.spellCd[ab] ?? 0) - h.world.tick)));
+      const wait = ready ? '' : cd > 0 ? ` (recharge ${secondsLeft(cd)} s)` : ' (énergie insuffisante)';
       list.push({ label: `${a.name}${on}${mana}${wait}`, key: a.hotkey, reason, action, ability: ab, auto });
     }
     // Passive effects (Odin's war aura, Athéna's protection): an icon that does nothing, its effect in the tooltip.

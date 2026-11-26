@@ -1053,7 +1053,10 @@ export class AI {
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
       // Isdaris (fiche 2010, mod): an Obélisque at rest materialises it, on a spot its side sees; the robots only beam
       // down Obélisques and Récepteurs, for a third more, where no Obélisque can.
-      const obelisk = buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id));
+      // Out of the construction zone, no Obélisque raises it: a robot does (Codex 26/11: the AI asked the Obélisque again
+      // and again for a natural out of its zone).
+      const zoned = !spot || w.materialisable(this.player, type, spot[0], spot[1]);
+      const obelisk = zoned ? buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id)) : undefined;
       // Its middle seen: any of its middle tiles (one tile, or four for an even size: the one below and right of the
       // middle alone was another tile from the other corners, and the same game went otherwise there).
       const lo = (def.size - 1) >> 1;

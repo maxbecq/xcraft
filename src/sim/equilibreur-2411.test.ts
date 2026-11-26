@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import BALANCE from '../balance.json';
 import { type BuildingDef, DEFS, type UnitDef } from '../data';
 import { kitLevel } from './combat';
+import { noRegen } from './noregen';
 import { FP, dist, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
@@ -298,5 +299,108 @@ describe('équilibreur 24/11, every side', () => {
     run(w, 10);
     expect(w.players[0].energy - e0).toBe(3);
     expect(well.amount).toBe(0);
+  });
+});
+
+describe('revue Codex du 26/11', () => {
+  const isd = () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].minerals = w.players[0].energy = 99999;
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    return { w, ob };
+  };
+
+  it('1. no Obélisque raises an Obélisque out of the zone: the AI leaves it to a robot', () => {
+    const { w, ob } = isd();
+    const [tx, ty] = [Math.floor(ob.x / FP), Math.floor(ob.y / FP)];
+    expect(w.materialisable(0, 'obelisque', tx + 30, ty)).toBe(false);
+    expect(w.materialisable(0, 'obelisque', tx + 8, ty)).toBe(true);
+    expect(w.materialisable(0, 'portail', tx + 30, ty)).toBe(true); // canPlace refuses it there anyway
+  });
+
+  it('2. the Couloir temporel lets no more than 8 of supply through, and never by a dead Espion', () => {
+    const { w } = isd();
+    w.players[0].upgrades.couloir = 1;
+    const a = Object.assign(w.spawn('espion', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const b = w.spawn('espion', 0, 70 * FP, 70 * FP);
+    w.castAt(a, 'couloir', b.x, b.y);
+    const [one, two] = [w.spawn('behemoth', 0, 31 * FP, 30 * FP), w.spawn('behemoth', 0, 30 * FP, 31 * FP)];
+    w.step([{ player: 0, kind: 'smart', ids: [one.id], x: a.x, y: a.y, target: a.id }]);
+    run(w, 2);
+    expect(w.tunnelOf(a)!.supply).toBe(5);
+    w.step([{ player: 0, kind: 'smart', ids: [two.id], x: a.x, y: a.y, target: a.id }]);
+    run(w, 2);
+    expect(dist(one.x, one.y, b.x, b.y)).toBeLessThan(8 * FP);
+    expect(dist(two.x, two.y, a.x, a.y)).toBeLessThan(8 * FP); // refused: 5 + 5 > 8
+    expect(w.tunnelOf(a)!.crossed).toBe(1);
+    b.hp = 0;
+    expect(w.tunnelOf(a)).toBeUndefined();
+  });
+
+  it('3. a site one tick from done, its zone gone between two checks, is lost', () => {
+    const { w, ob } = isd();
+    const site = w.site('portail', 0, Math.floor(ob.x / FP) + 6, Math.floor(ob.y / FP));
+    while (w.tick % 10 !== 4) w.step([]);
+    site.buildLeft = 1;
+    ob.hp = 0;
+    w.step([]);
+    expect(site.buildLeft).toBeGreaterThan(0);
+    expect(site.hp).toBeLessThanOrEqual(0);
+  });
+
+  it('4. a defence drops a target it no longer sees, or under a Bouclier de plasma, for another', () => {
+    noRegen();
+    const { w } = isd();
+    const r = w.site('recepteurarme', 0, 40, 40);
+    r.buildLeft = 0;
+    const foe = w.spawn('legionnaire', 1, 44 * FP, 41 * FP);
+    const other = w.spawn('legionnaire', 1, 45 * FP, 39 * FP);
+    for (const u of [foe, other]) u.held = 1 << 20;
+    w.step([{ player: 0, kind: 'attack', ids: [r.id], x: foe.x, y: foe.y, target: foe.id }]);
+    foe.camo = 1 << 20; // hidden, no detector near
+    const hp = foe.hp;
+    run(w, 2);
+    expect(foe.hp).toBe(hp);
+    expect(other.hp).toBeLessThan(other.maxHp);
+    const gate = w.site('portail', 1, 44, 43);
+    gate.buildLeft = 0;
+    gate.phased = 1 << 20;
+    w.step([{ player: 0, kind: 'attack', ids: [r.id], x: gate.x, y: gate.y, target: gate.id }]);
+    const h2 = other.hp;
+    run(w, 2);
+    expect(other.hp).toBeLessThan(h2);
+  });
+
+  it('6. an Esprit right-clicked on a Drake géant goes in', () => {
+    const w = createMatch(['dieux', 'humains']);
+    w.players[0].upgrades.drakegeant = 1;
+    const drake = w.spawn('drake', 0, 40 * FP, 40 * FP);
+    drake.held = 1 << 20;
+    const esprit = w.spawn('esprit', 0, 42 * FP, 40 * FP);
+    w.step([{ player: 0, kind: 'smart', ids: [esprit.id], x: drake.x, y: drake.y, target: drake.id }]);
+    run(w, 4);
+    expect(esprit.inside).toBe(drake.id);
+  });
+
+  it('7. the Attaque de singularité drains no energy for a blow the shield took, as much as the hit points lost otherwise', () => {
+    const { w } = isd();
+    const d = w.spawn('druide', 0, 40 * FP, 40 * FP);
+    const v = Object.assign(w.spawn('voyageur', 1, 44 * FP, 40 * FP), { mana: 200 * FP });
+    w.hit(d, v, w.weapon(d)!);
+    expect(v.mana).toBe(200 * FP);
+    v.shield = 0;
+    const hp = v.hp;
+    w.hit(d, v, w.weapon(d)!);
+    expect(200 * FP - v.mana).toBe((hp - v.hp) * FP);
+  });
+
+  it('8. a unit killed by its poison is not healed back the same tick', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const s = w.spawn('serf', 0, 40 * FP, 40 * FP);
+    s.hp = 5;
+    s.poison = ticks(1) + 1;
+    let k = 0;
+    while (s.hp > 0 && k++ < ticks(3)) w.regenerate(s);
+    expect(s.hp).toBeLessThanOrEqual(0);
   });
 });

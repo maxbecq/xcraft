@@ -164,6 +164,13 @@ export function buildTicks(this: World, b: Entity): number {
   return this.players[b.owner]?.faction === 'z' && this.level(b.owner, 'deploiement') ? idiv(t * 100, 100 + BALANCE.rules.z.deploiementSpeedup) : t;
 }
 
+/** Whether an Obélisque may raise this building there: inside the construction zone (équilibreur 24/11; a robot alone
+ * goes beyond it). What must stand in the zone anyway, canPlace checks. */
+export function materialisable(this: World, player: number, type: string, tx: number, ty: number): boolean {
+  const def = DEFS[type] as BuildingDef;
+  return !!def.needsPower || this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2);
+}
+
 /** Is a point inside one of the player's linked power fields (Isdaris)? */
 export function powered(this: World, player: number, x: number, y: number): boolean {
   return this.powerNetwork(player).some((b) => dist(b.x, b.y, x, y) <= (b.def as BuildingDef).power! * FP);
@@ -174,7 +181,7 @@ export function powered(this: World, player: number, x: number, y: number): bool
  * zones touch, step by step. An emitter cut off from it powers nothing.
  */
 export function powerNetwork(this: World, player: number): Entity[] {
-  const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0);
+  const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0 && b.hp > 0);
   // Z (Z.doc): each Intelligence and Pod supérieur spreads its own creep, linked or not.
   if (this.players[player]?.faction === 'z') return nodes;
   const linked = nodes.filter((b) => (b.def as BuildingDef).dropoff);
@@ -258,7 +265,8 @@ export function operate(this: World, b: Entity): void {
   if (b.buildLeft > 0) {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
     // An Isdaris site whose construction zone is lost is gone, nothing paid back (équilibreur 24/11).
-    if ((b.def as BuildingDef).faction === 'isdaris' && (b.def as BuildingDef).needsPower && this.tick % 10 === 0 && !this.powered(b.owner, b.x, b.y)) {
+    // Checked every 10 ticks, and on the tick it would be done (Codex 26/11: one finished between two checks).
+    if ((b.def as BuildingDef).faction === 'isdaris' && (b.def as BuildingDef).needsPower && (this.tick % 10 === 0 || b.buildLeft <= b.lvl) && !this.powered(b.owner, b.x, b.y)) {
       this.say(b.owner, `Zone de construction perdue : ${b.def.name} annulé${b.def.name.endsWith('e') ? 'e' : ''}.`);
       b.hp = 0;
       return;
@@ -288,7 +296,9 @@ export function operate(this: World, b: Entity): void {
   if (attack && b.cooldown === 0) {
     const f = b.focus ? this.entities.get(b.focus) : undefined;
     if (b.focus && (!f || f.hp <= 0 || f.inside)) b.focus = 0;
-    const t = f && f.hp > 0 && !f.inside && this.gap(b, f) <= toFp(attack.range) && hits(attack, f) ? f : this.enemyNear(b, toFp(attack.range), true);
+    // The target pointed out while it is seen and not under a Bouclier de plasma (Codex 26/11), else the nearest enemy.
+    const aimed = f && f.hp > 0 && !f.inside && !(f.phased > 0 && f.def.kind === 'building') && this.sees(b.owner, f) && this.gap(b, f) <= toFp(attack.range) && hits(attack, f);
+    const t = aimed ? f : this.enemyNear(b, toFp(attack.range), true);
     if (t && (!b.kit || reaches(attack, flies(t)))) {
       b.cooldown = ticks(attack.cooldown);
       this.hit(b, t, attack);
