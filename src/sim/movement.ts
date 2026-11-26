@@ -286,7 +286,7 @@ export function pace(this: World, e: Entity): number {
  * turned into a unit stands on its footprint's middle, a corner). Floor alone took the tile after it, so a scene and
  * its mirror started from different tiles.
  */
-function standsOn(x: number, y: number): [number, number][] {
+export function standsOn(x: number, y: number): [number, number][] {
   const xs = x % FP === 0 ? [x / FP - 1, x / FP] : [tileOf(x)];
   const ys = y % FP === 0 ? [y / FP - 1, y / FP] : [tileOf(y)];
   return xs.flatMap((tx) => ys.map((ty): [number, number] => [tx, ty]));

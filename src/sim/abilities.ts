@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
+import { standsOn } from './movement';
 import { flies, soars, type Entity, type World } from './world';
 import { healable } from './combat';
 
@@ -102,7 +103,16 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
     e.phased = ticks(ab.duration);
   } else if (name === 'decollage') {
     // Take off, or land where the ground is open (and a body fits: not between two cliff feet); either takes a moment.
-    if (e.airborne && !this.grid.stands(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
+    if (e.airborne) {
+      // On a tile's edge, by the tiles it touches (Codex, 2026-11-26: floor took the tile after it, so a landing refused
+      // on one side of the map was allowed at the turned spot): a unit towards those a body fits on, landing only where
+      // every tile it then touches has room.
+      const fit = standsOn(e.x, e.y).filter(([tx, ty]) => this.grid.stands(tx, ty));
+      const toward = (v: number, k: 0 | 1) => (v % FP ? v : v + Math.sign(fit.reduce((n, t) => n + t[k] * FP + FP / 2 - v, 0)));
+      const [x, y] = fit.length ? [toward(e.x, 0), toward(e.y, 1)] : [e.x, e.y];
+      if (!fit.length || !standsOn(x, y).every(([tx, ty]) => this.grid.stands(tx, ty))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
+      [e.x, e.y] = [x, y];
+    }
     e.airborne = !e.airborne;
     e.speed = this.baseSpeed(e); // its speed in the air or on the ground
     e.held = ticks(ab.duration);

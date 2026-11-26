@@ -377,6 +377,33 @@ describe('cliffs', () => {
     expect(moved).toBeGreaterThan(50);
   });
 
+  // Codex, 2026-11-26 (final review): on a tile's edge, floor took the tile after it: on Origine a Char Pégase was
+  // refused landing at (31.5, 11) and allowed at the turned spot (64.5, 85).
+  it('a Char Pégase lands on a tile\'s edge the same way on the map turned round', () => {
+    const w = createMatch(['humains', 'humains']);
+    w.players[0].upgrades.decollage = 1;
+    const S = w.map.width * FP;
+    let seen = 0;
+    for (let ty = 2; ty < w.map.height - 2; ty++) {
+      for (let tx = 2; tx < w.map.width - 2; tx++) {
+        for (const [x, y] of [[tx * FP + FP / 2, ty * FP], [tx * FP, ty * FP + FP / 2], [tx * FP, ty * FP]]) {
+          const land = (px: number, py: number) => {
+            const p = w.spawn('pegase', 0, px, py);
+            p.airborne = true;
+            w.cast(p, 'decollage');
+            const out = [p.airborne ? 1 : 0, p.x, p.y];
+            w.remove(p);
+            return out;
+          };
+          const [a, b] = [land(x, y), land(S - x, S - y)];
+          if (a[0] !== b[0] || (!a[0] && (a[1] !== S - b[1] || a[2] !== S - b[2]))) expect([tx, ty, x, y, a, b]).toBe('the same turned round');
+          if (!a[0]) seen++;
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(100);
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);
