@@ -281,6 +281,8 @@ export function operate(this: World, b: Entity): void {
     if (b.buildLeft === 0) {
       b.shield = b.maxShield;
       this.say(b.owner, `${(b.def as BuildingDef).absorbs ? 'Assemblage' : 'Matérialisation'} terminé${(b.def as BuildingDef).absorbs ? '' : 'e'} : ${b.def.name}.`, 'done');
+      // Équilibreur 26/11: the Orbe plasma, once there, floats free (slowly).
+      if (b.type === 'orbe') this.transmute(b, 'orbemob');
     }
     return;
   }
@@ -365,6 +367,8 @@ export function produce(this: World, b: Entity): void {
 export function twoLines(this: World, b: Entity): boolean {
   const [a, c] = b.queue;
   const research = (t: string) => DEFS[t].kind === 'upgrade' && !(DEFS[t] as UpgradeDef).host;
+  // Raising an extension, it does nothing else (équilibreur 26/11).
+  if ((DEFS[a] as UpgradeDef).host) return false;
   if (b.type === 'portail' && b.exts.includes('miniportail') && DEFS[c].kind === 'unit') return true;
   const lab = (b.type === 'portail' && b.exts.includes('laboratoire')) || (b.type === 'nanoassembleur' && b.exts.includes('totem'));
   return lab && ((DEFS[a].kind === 'unit' && research(c)) || (research(a) && DEFS[c].kind === 'unit'));

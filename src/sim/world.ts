@@ -16,6 +16,8 @@ import { Vision } from './vision';
 const MORPHED_FROM: Record<string, string> = Object.fromEntries(
   Object.entries(DEFS).flatMap(([k, d]) => ((d as BuildingDef).morphs ?? []).map((m) => [m, k])),
 );
+// The floating Orbe plasma is still an Orbe plasma in the tree (équilibreur 26/11).
+MORPHED_FROM.orbemob = 'orbe';
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
   /** `skip`: fields this trip gave up on, no way into them, since tick `skipped` (economy.ts gather). */
@@ -170,6 +172,8 @@ export interface Entity {
   airborne: boolean;
   /** Créature under ground (Enfouissement). */
   burrowed: boolean;
+  /** Raised by a robot (Isdaris): no shaft from an Obélisque on it (équilibreur 24/11). */
+  byRobot: boolean;
   /** A defence's chosen target (équilibreur 24/11: a Tourelle, a Récepteur armé… fire at what the player points out, an ally
    * too); 0: the nearest enemy. */
   focus: number;
@@ -399,6 +403,9 @@ export class World {
   storms: { owner: number; x: number; y: number; r: number; until: number }[] = [];
   /** Explosifs toxiques: clouds that hurt every enemy unit in them, once a second, `hits` more times from tick `next`. */
   clouds: { owner: number; x: number; y: number; r: number; damage: number; hits: number; next: number }[] = [];
+  /** Pluies de feu (équilibreur 26/11): `hits` waves more, the next at tick `next`, then every `gap` ticks; friend and foe
+   * alike, buildings at `building` percent. */
+  rains: { owner: number; x: number; y: number; r: number; damage: number; building: number; hits: number; next: number; gap: number }[] = [];
   /** Units coming back by themselves at their side's headquarters (Gaïa), at a tick. */
   private respawns: { owner: number; type: string; at: number }[] = [];
   /** Units hidden this tick by a Déflecteur's aura. */
@@ -429,7 +436,7 @@ export class World {
       order: null, goal: null, path: [], blockedTicks: 0, wn: -1, wd: 0, still: 0, inside: 0, ignore: 0, ignoreUntil: 0, calmUntil: 0, shortTicks: 0, stuck: 0,
       tx: 0, ty: 0, buildLeft: 0, queue: [], kits: [], host: 0, tier: 1, evolving: 0, frozen: 0, cone: 0, support: 0, iemCd: 0, seizedBy: 0, seizedFrom: 0, seizedLeft: 0, trainLeft: 0, mana: 'mana' in def && def.mana ? toFp(def.mana[1]) : 'levels' in def && def.levels && def.faction === 'dieux' ? toFp(BALANCE.rules.godMana.max[0] / 2) : 0, spellCd: {}, buildFrac: 0, trainLeft2: 0, raising: 0, autoOff: false, illusion: false, rally: null, rallyTarget: 0,
       carry: 0, amount: def.kind === 'resource' ? def.amount : 0, miner: 0, timer: 0, cooldown: 0,
-      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, focus: 0, marked: 0, muted: 0, veil: 0, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
+      shield: 'shield' in def ? (def.shield ?? 0) : 0, maxShield: 'shield' in def ? (def.shield ?? 0) : 0, lastHit: -1e9, regenTimer: 0, boost: 0, skin: 0, ferveur: 0, fuse: 0, autoRaise: false, abilityCd: 0, held: 0, stand: false, lastAttacker: 0, lastHitBy: -1, poison: 0, camo: 0, invuln: 0, airborne: false, burrowed: false, byRobot: false, focus: 0, marked: 0, muted: 0, veil: 0, phased: 0, reflect: 0, reflectLeft: 0, kit: '', charged: 0, lvl: 1, war: 0, warPct: 0, charm: 0, charmOwner: -1, swarm: 0, statue: 0, chill: 0, pace: 0, paceMove: 100, paceAtk: 100, heavy: 0, blind: 0, dealt: 0, gravity: 0, plasmaCd: 0, charges: 'abilities' in def && def.abilities?.includes('posermine') ? ABILITIES.posermine.max! : 0, arts: [], exts: [], ttl: 'lifetime' in def && def.lifetime ? ticks(def.lifetime) : 0,
     };
     if (size) {
       e.tx = tileOf(x);
@@ -875,7 +882,7 @@ export class World {
       if (e.owner !== player || e.buildLeft > 0) continue;
       // A Humains building turned into another (Grande Alchimisterie, Caserne volante, Grand Conseil) still counts as
       // what it was: « requiert Alchimisterie » stays met once it has grown (the balancer's tree, 2026-11-22).
-      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' || t === 'podsup' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
+      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' || t === 'podsup' || t === 'orbemob' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
     }
     return n;
   }
@@ -1100,10 +1107,11 @@ export class World {
           this.say(e.owner, lack);
           return this.setOrder(e, null);
         }
-        // Fiche 2010: an Obélisque or a Récepteur beamed down on a robot costs a third more, out of the construction zone
-        // only (équilibreur 24/11).
-        if (!this.pay(e.owner, def.faction === 'isdaris' && !this.powered(e.owner, cx, cy) ? { cost: this.beaconCost(def) } : def)) return this.setOrder(e, null);
+        // Fiche 2010: an Obélisque or a Récepteur beamed down on a robot costs a third more, in the zone or out of it
+        // (équilibreur 26/11); an Obélisque raising it in the zone pays its price.
+        if (!this.pay(e.owner, def.faction === 'isdaris' ? { cost: this.beaconCost(def) } : def)) return this.setOrder(e, null);
         const b = this.site(o.type, e.owner, o.tx, o.ty, e.lvl);
+        b.byRobot = def.faction === 'isdaris';
         if ((e.def as UnitDef).unique) e.raising = b.id;
         if (def.absorbs) {
           // The drone becomes part of the structure, which then assembles itself.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import BALANCE from '../balance.json';
-import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { ABILITIES, type BuildingDef, DEFS, type UnitDef } from '../data';
 import { kitLevel } from './combat';
 import { noRegen } from './noregen';
 import { FP, dist, ticks } from './fixed';
@@ -402,5 +402,93 @@ describe('revue Codex du 26/11', () => {
     let k = 0;
     while (s.hp > 0 && k++ < ticks(3)) w.regenerate(s);
     expect(s.hp).toBeLessThanOrEqual(0);
+  });
+});
+
+describe('équilibreur, réponses du 26/11', () => {
+  it('Pluie de feu: nothing for 2 s, then waves of XC damage, 3 at level 1, 3.5 s apart', () => {
+    noRegen();
+    const w = createMatch(['dieux', 'humains']);
+    const apollon = Object.assign(w.spawn('apollon', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
+    const foe = Object.assign(w.spawn('legionnaire', 1, 34 * FP, 30 * FP), { hp: 1000, maxHp: 1000, frozen: ticks(30), held: ticks(30) });
+    w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    apollon.frozen = ticks(30);
+    const blow = 20 - (DEFS.legionnaire as UnitDef).armor;
+    run(w, 1.9);
+    expect(foe.hp).toBe(1000);
+    run(w, 0.2);
+    expect(1000 - foe.hp).toBe(blow);
+    run(w, 3.5);
+    expect(1000 - foe.hp).toBe(2 * blow);
+    run(w, 10);
+    expect(1000 - foe.hp).toBe(3 * blow);
+    expect(w.rains).toHaveLength(0);
+  });
+
+  it('the Réparateur at socle level 4 mends 12 within 5, at level 5 16 within 6', () => {
+    const w = createMatch(['z', 'humains']);
+    const o = Object.assign(w.spawn('octopode', 0, 20 * FP, 20 * FP), { kit: 'reparateur' });
+    expect([w.healRate(o), w.healReach(o) / FP]).toEqual([12, 5]);
+    o.tier = 2;
+    expect([w.healRate(o), w.healReach(o) / FP]).toEqual([16, 6]);
+  });
+
+  it('an Orbe plasma, once materialised, floats at 0.2, shoots, still counts as an Orbe, and redeploys by teleport', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    w.players[0].minerals = 1000;
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    const site = w.site('orbe', 0, Math.floor(ob.x / FP) + 6, Math.floor(ob.y / FP) + 6);
+    site.buildLeft = 1;
+    w.step([]);
+    expect(site.type).toBe('orbemob');
+    expect((DEFS.orbemob as UnitDef).speed).toBe(0.2);
+    expect(w.weapon(site)).toBeDefined();
+    expect(w.builtCounts(0).get('orbe')).toBe(1);
+    const [x, y] = [ob.x - 8 * FP, ob.y];
+    expect(w.castAt(site, 'redeploiement', x, y)).not.toBe(false);
+    expect(site.muted).toBeGreaterThan(0);
+    expect(w.players[0].minerals).toBe(950);
+    run(w, 17.1);
+    expect(dist(site.x, site.y, x, y)).toBeLessThan(2 * FP);
+    expect(site.muted).toBeGreaterThan(ticks(16));
+  });
+
+  it('a robot pays a third more, in the zone too; an Obélisque in the zone its price', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const p = w.players[0];
+    p.minerals = 5000;
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    const robot = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'moissonneur')!;
+    let spot: [number, number] | undefined;
+    for (let r = 5; r < 14 && !spot; r++) for (let dx = -r; dx <= r && !spot; dx++) for (const dy of [-r, r]) if (!spot && w.canPlace('obelisque', ob.tx + dx, ob.ty + dy, 0) && w.materialisable(0, 'obelisque', ob.tx + dx, ob.ty + dy)) spot = [ob.tx + dx, ob.ty + dy];
+    w.step([{ player: 0, kind: 'build', ids: [robot.id], type: 'obelisque', tx: spot![0], ty: spot![1] }]);
+    for (let i = 0; i < ticks(40) && p.minerals === 5000; i++) w.step([]);
+    expect(5000 - p.minerals).toBe(w.beaconCost(DEFS.obelisque as BuildingDef).minerals);
+  });
+
+  it('a building raising an extension trains and researches nothing else meanwhile', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const portail = w.spawn('portail', 0, 40 * FP, 30 * FP);
+    portail.exts.push('miniportail', 'laboratoire');
+    portail.queue.push('cuvegenetique', 'creature');
+    portail.trainLeft = w.trainTime(portail, 'cuvegenetique');
+    w.step([]);
+    expect(portail.trainLeft2).toBe(0);
+  });
+
+  it('the Couloir temporel needs no research', () => {
+    expect(ABILITIES.couloir.research).toBeUndefined();
+    expect((DEFS.nanoassembleur as BuildingDef).researches).not.toContain('couloir');
+  });
+
+  it('the Putréfaction burns the living only: not a Golem', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const osiris = w.spawn('osiris', 0, 40 * FP, 40 * FP);
+    const golem = w.spawn('golem', 1, 41 * FP, 40 * FP);
+    const man = w.spawn('legionnaire', 1, 40 * FP, 41 * FP);
+    for (const u of [golem, man, osiris]) u.held = u.frozen = ticks(30);
+    run(w, 2);
+    expect(golem.hp).toBe(golem.maxHp);
+    expect(man.hp).toBeLessThan(man.maxHp);
   });
 });

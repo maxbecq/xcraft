@@ -472,12 +472,12 @@ describe('Z Réparateur (notice: « véhicules et bâtiments »; équilibreur 22
     expect(w.patient(medic)).toBe(ic);
   });
 
-  it('heals by the level of its socle, 2 4 8 16 hp a second within 2 3 4 5, for no energy of its own', () => {
+  it('heals by the level of its socle, 2 4 8 12 16 hp a second within 2 3 4 5 6 (équilibreur 26/11), for no energy of its own', () => {
     const w = createMatch(['z', 'humains']);
     const at = (type: string, x: number, tier = 1) => Object.assign(w.spawn(type, 0, x * FP, 60 * FP), { kit: 'reparateur', tier });
-    const levels = [at('quadripode', 20), at('quadripode', 30, 2), at('hexapode', 40, 2), at('octopode', 50, 2)];
-    expect(levels.map((m) => w.healRate(m))).toEqual([2, 4, 8, 16]);
-    expect(levels.map((m) => w.healReach(m) / FP)).toEqual([2, 3, 4, 5]);
+    const levels = [at('quadripode', 20), at('quadripode', 30, 2), at('hexapode', 40, 2), at('octopode', 50), at('octopode', 60, 2)];
+    expect(levels.map((m) => w.healRate(m))).toEqual([2, 4, 8, 12, 16]);
+    expect(levels.map((m) => w.healReach(m) / FP)).toEqual([2, 3, 4, 5, 6]);
     expect(w.manaOf(levels[0])).toBeUndefined();
   });
 

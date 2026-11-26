@@ -515,7 +515,7 @@ export class PowerNet {
     for (const b of world.entities.values()) {
       if (b.def.kind !== 'building' || !(b.def as BuildingDef).warp || b.buildLeft <= 0 || !sees(b)) continue;
       // Beamed down by a robot out of the zone: no shaft from an Obélisque (équilibreur 24/11).
-      if (!(b.def as BuildingDef).needsPower && !world.powered(b.owner, b.x, b.y)) continue;
+      if (b.byRobot) continue;
       let source: Entity | undefined;
       let best = Infinity;
       for (const o of world.entities.values()) {

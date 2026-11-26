@@ -448,7 +448,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Baliste plasma (notice): the cannon spins, firing at every enemy around. */
   feucirculaire: { name: 'Feu circulaire', effect: 'Le canon tourne sur lui-même et tire sur tous les ennemis autour.', hotkey: 'F', research: 'feucirculaire', ...BALANCE.abilities.feucirculaire },
   /** Espion (notice): with another Espion, a time corridor: the units round this one appear by the other. */
-  couloir: { name: 'Couloir temporel', effect: 'Relie cet Espion à un autre des vôtres pendant 30 s : un clic droit sur l\'un fait passer l\'unité près de l\'autre ; le couloir se ferme après 5 passages ou 8 de ravitaillement.', hotkey: 'C', target: 'point', research: 'couloir', ...BALANCE.abilities.couloir },
+  couloir: { name: 'Couloir temporel', effect: 'Relie cet Espion à un autre des vôtres pendant 30 s : un clic droit sur l\'un fait passer l\'unité près de l\'autre ; le couloir se ferme après 5 passages ou 8 de ravitaillement.', hotkey: 'C', target: 'point', ...BALANCE.abilities.couloir },
   /** Voyageur (notice): a cloak of negative energy over itself and the allies round it. */
   manteau: { name: 'Manteau', effect: 'Un manteau d\'énergie négative sur le Voyageur et les alliés autour.', hotkey: 'M', research: 'manteau', ...BALANCE.abilities.manteau },
   /** Voyageur (notice): itself and the allies round it appear by the friendly building nearest the point. */
@@ -527,7 +527,7 @@ export const ABILITIES: Record<string, AbilityDef> = {
   /** Égyptien: the enemies of the zone blinded and held long (machines more briefly). */
   amonra: { name: "Flamboiement d'Amon-Râ", effect: 'Les ennemis de la zone sont aveuglés et immobilisés longtemps (les machines moins).', hotkey: 'U', target: 'point', ultimate: 'egyptien', ...BALANCE.abilities.amonra },
   /** Apollon (notice, « Pluie de feu »): burning meteors on every enemy in a zone. */
-  pluiedefeu: { name: 'Pluie de feu', effect: 'Des météores en feu sur tous les ennemis d\'une zone.', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
+  pluiedefeu: { name: 'Pluie de feu', effect: 'Une pluie de météores sur une zone : 2 s après, 3 à 5 vagues qui brûlent tout ce qui s\'y trouve, alliés compris, et les bâtiments en partie.', hotkey: 'F', target: 'point', ...BALANCE.abilities.pluiedefeu },
   /** Apollon (notice; XC.doc 2008 for the numbers, its zones scaled as the Tempête's): enemy infantry of the zone walks and
    * strikes half as fast for a while. */
   lumiereardente: { name: 'Lumière ardente', effect: 'Une lumière insoutenable : l\'infanterie ennemie de la zone se déplace et attaque deux fois moins vite.', hotkey: 'O', target: 'point', ...(BALANCE.abilities.lumiereardente as object) } as AbilityDef,
@@ -673,11 +673,12 @@ const BASE: Record<string, object> = {
   // Mod: « Orbe plasmique ».
   orbe: { kind: 'building', name: 'Orbe plasma', size: 2, warp: true, needsPower: true, ability: 'redeploiement', passives: ['detecteurorbe'], faction: 'isdaris', hotkey: 'B' },
   /** Redéploiement: an Orbe plasma on the move; it does not shoot until set down again. */
-  orbemob: { kind: 'unit', name: 'Orbe plasma (en mouvement)', radius: 0.9, ability: 'ancrer', faction: 'isdaris', hotkey: 'B' },
+  // Équilibreur 26/11: once materialised, the Orbe plasma floats, always free to move at 0.2, and keeps its Redéploiement.
+  orbemob: { kind: 'unit', name: 'Orbe plasma', radius: 0.9, mechanical: true, ability: 'redeploiement', passives: ['detecteurorbe'], faction: 'isdaris', hotkey: 'B' },
   // Mod: « Nano-assembleur » (needs a gateway), here making the Chasseur Discobole (its red upgrade in the mod).
   nanoassembleur: {
     kind: 'building', name: 'Psycho-assembleur', size: 3, requires: { portail: 1 }, trains: ['droneprotecteur', 'discobole', 'baliste', 'espion', 'chimere', 'dragon', 'voyageur', 'behemoth'], warp: true, needsPower: true, faction: 'isdaris', hotkey: 'N',
-    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'disque', 'manteau', 'feucirculaire', 'couloir'],
+    researches: ['assembleur', 'balise', 'totem', 'assembleuratk1', 'assembleuratk2', 'assembleuratk3', 'assembleurarmor1', 'assembleurarmor2', 'assembleurarmor3', 'disque', 'manteau', 'feucirculaire'],
   },
   // Notice: « Orbe de commandement », the fourth major building, for large battles: shields research, and its extensions.
   orbecommandement: {

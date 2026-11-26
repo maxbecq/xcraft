@@ -271,6 +271,21 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const copy = this.spawn(t.type, e.owner, t.x + (t.x < idiv(this.map.width * FP, 2) ? FP : -FP), t.y);
     copy.ttl = ticks(ab.duration);
     copy.illusion = true;
+  } else if (name === 'redeploiement') {
+    // The floating Orbe plasma (équilibreur 26/11): to a spot of the zone, 17 s still and silent, there, 17 s more.
+    if (e.muted > 0) return true;
+    if (!this.powered(e.owner, x, y) || !this.grid.open(tileOf(x), tileOf(y))) {
+      this.say(e.owner, 'Hors de la zone de construction.');
+      return true;
+    }
+    const p = this.players[e.owner];
+    if (p.minerals < (ab.minerals ?? 0)) {
+      this.say(e.owner, 'Pas assez de minerais.');
+      return true;
+    }
+    p.minerals -= ab.minerals ?? 0;
+    e.muted = e.held = ticks(ab.duration);
+    this.redeploys.push({ id: e.id, tx: tileOf(x), ty: tileOf(y), left: ticks(ab.duration) });
   } else if (name === 'concentration') {
     // Druide (équilibreur 24/11, Isdaris.doc): a block of energy no one walks through, a disc of 3, for 15 s; it does
     // not stop shots (a Mur d'énergie does).
@@ -387,12 +402,9 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'pluiedefeu') {
-    // Balance designer 2026-11-22: on an area, friend and foe alike, buildings too at a share of the damage by level.
-    for (const t of near(() => true)) this.hurt(t, ab.damage!);
-    for (const b of [...this.entities.values()]) {
-      if (b.def.kind !== 'building' || b.hp <= 0 || dist(b.x, b.y, x, y) > toFp(ab.radius! + (b.def as BuildingDef).size / 2)) continue;
-      this.hurt(b, idiv(ab.damage! * ab.building!, 100));
-    }
+    // Équilibreur 26/11 (Warcraft III's Rain of Fire): seen at once, nothing for 2 s, then 3, 4 or 5 waves 3.5, 3 or
+    // 2.5 s apart by Apollon's level, each XC's damage, friend and foe, buildings at a share of it (World.rains).
+    this.rains.push({ owner: e.owner, x, y, r: toFp(ab.radius!), damage: ab.damage!, building: ab.building!, hits: ab.max!, next: this.tick + ticks(2), gap: ticks(ab.duration) });
   } else if (name === 'teleportgaia') {
     const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
     if (!b) return false;
@@ -466,8 +478,19 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   return true;
 }
 
-/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. */
+/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. A Pluie de feu's waves too. */
 export function poisonClouds(this: World): void {
+  for (const r of this.rains) {
+    if (r.next > this.tick) continue;
+    for (const t of [...this.entities.values()]) {
+      if (t.hp <= 0 || t.inside || t.def.kind === 'resource') continue;
+      if (t.def.kind === 'unit' ? dist(t.x, t.y, r.x, r.y) <= r.r + t.radius : dist(t.x, t.y, r.x, r.y) <= r.r + ((t.def as BuildingDef).size * FP) / 2) this.hurt(t, t.def.kind === 'unit' ? r.damage : idiv(r.damage * r.building, 100));
+    }
+    this.casts.push({ kind: 'pluiedefeu', x: r.x, y: r.y });
+    r.hits--;
+    r.next = this.tick + r.gap;
+  }
+  this.rains = this.rains.filter((r) => r.hits > 0);
   for (const c of this.clouds) {
     if (c.next > this.tick) continue;
     // Allies and enemies alike (the balancer, 2026-11-22).
@@ -601,6 +624,15 @@ export function redeployed(this: World, r: { id: number; tx: number; ty: number 
   const b = this.entities.get(r.id);
   if (!b || b.hp <= 0) return;
   b.muted = 0;
+  if (b.def.kind === 'unit') {
+    // The floating Orbe: there if the spot is still in the zone, nothing back otherwise.
+    const [x, y] = [r.tx * FP + FP / 2, r.ty * FP + FP / 2];
+    b.held = 0;
+    if (!this.powered(b.owner, x, y)) return void this.say(b.owner, 'Redéploiement annulé : zone de construction perdue.');
+    this.place(b, x, y);
+    b.muted = b.held = ticks(ABILITIES.redeploiement.duration);
+    return;
+  }
   this.block(b, -1);
   const free = this.canPlace(b.type, r.tx, r.ty, b.owner);
   this.block(b, 1);

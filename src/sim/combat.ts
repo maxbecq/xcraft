@@ -175,7 +175,8 @@ export function ascend(this: World, g: Entity): void {
  */
 export function pulse(this: World, e: Entity): void {
   const U = BALANCE.rules.upgrades;
-  const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical;
+  // Biological only (équilibreur 26/11): no machine, nor a Golem, Titan or Sphinx in stone (massive mechanical).
+  const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical && clsOf(t) !== 'MM';
   if (e.type === 'osiris' || (e.type === 'immortel' && this.level(e.owner, 'auraputride'))) {
     const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
     for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
@@ -454,7 +455,7 @@ export function strike(this: World, e: Entity, t: Entity): void {
   e.shortTicks = 0;
   e.goal = null;
   e.path = [];
-  if (e.cooldown > 0 || e.frozen > 0) return;
+  if (e.cooldown > 0 || e.frozen > 0 || e.muted > 0) return;
   // Stimulant: attacks 50 % faster.
   if (e.phased > 0) return;
   // Inside an enemy Tempête de sable, ranged weapons are useless.

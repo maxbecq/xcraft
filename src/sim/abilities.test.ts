@@ -219,6 +219,7 @@ describe('powers from inside a Fortin (notice)', () => {
     god.spellCd = {};
     god.abilityCd = 0;
     w.step([{ player: 0, kind: 'ability', ids: [god.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
+    run(w, 2.1); // its first wave, 2 s after (équilibreur 26/11)
     expect(foe.hp).toBeLessThan(1000);
   });
 });

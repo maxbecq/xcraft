@@ -686,10 +686,13 @@ describe('Apollon\'s Pluie de feu (balance designer, 2026-11-22)', () => {
   it('falls on an area, burns friend and foe, and buildings at a quarter, a third, a half by level', () => {
     const w = createMatch(['dieux', 'humains']);
     const apollon = Object.assign(w.spawn('apollon', 0, 30 * FP, 30 * FP), { mana: 1 << 30 });
-    const friend = w.spawn('nain', 0, 34 * FP, 30 * FP);
+    const friend = Object.assign(w.spawn('nain', 0, 34 * FP, 30 * FP), { frozen: ticks(30) }); // strikes nothing meanwhile
     const store = w.spawn('grenier', 1, 35 * FP, 32 * FP);
     const [fh, sh] = [friend.hp, store.hp];
     w.step([{ player: 0, kind: 'ability', ids: [apollon.id], name: 'pluiedefeu', x: 34 * FP, y: 31 * FP }]);
+    apollon.frozen = ticks(3); // only the spell hurts the Grenier
+    run(w, 2.1); // its first wave, 2 s after (équilibreur 26/11)
+    apollon.frozen = 0;
     expect(friend.hp).toBeLessThan(fh);
     const toStore = sh - store.hp;
     expect(toStore).toBeGreaterThan(0);

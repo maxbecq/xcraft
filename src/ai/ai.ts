@@ -608,10 +608,11 @@ export class AI {
     const gods = mine.filter((e) => f.gods?.includes(e.type));
     // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
     const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
-    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside);
+    // The floating Orbe plasma (équilibreur 26/11) is a defence, not a soldier: it stays where it was raised.
+    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside && e.type !== 'orbemob');
     const buildings = mine.filter((e) => e.def.kind === 'building');
     // A building turned into another (Récepteur armé…) still counts as what it was.
-    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + builders.reduce((n, s) => n + [s.order, ...s.next].filter((o) => o?.kind === 'build' && o.type === type).length, 0);
+    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + (type === 'orbe' ? mine.filter((e) => e.type === 'orbemob').length : 0) + builders.reduce((n, s) => n + [s.order, ...s.next].filter((o) => o?.kind === 'build' && o.type === type).length, 0);
     const p = w.players[this.player];
     // Resources promised to serfs walking to a construction site are already spent.
     let minerals = p.minerals;
