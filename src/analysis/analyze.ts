@@ -75,6 +75,8 @@ export interface Analysis {
   faults: Fault[];
   notes: GameNote[];
   timeline: Sample[];
+  /** A replay with no end recorded, played on REPLAY_TAIL seconds past its last order with no winner: cut short. */
+  truncated?: boolean;
 }
 
 /** Rules of thumb, in seconds, tiles and resources (minerals + energy). */
@@ -202,13 +204,19 @@ export class Analyzer {
   observe(): void {
     const w = this.world;
     this.lonely();
+    this.wipedOut();
     if (w.tick % TICK_RATE !== 0) return;
     const armies = w.players.map((p) => [...w.entities.values()].filter((e) => e.owner === p.id && this.combatant(e)));
     const worth = armies.map((a) => a.reduce((s, e) => s + strength(e), 0));
     const playing = (p: number) => !w.players[p].resigned && [...w.entities.values()].some((e) => e.owner === p && e.def.kind === 'building');
     for (const p of w.players) {
       if (!playing(p.id)) {
-        this.gone[p.id] ??= w.tick;
+        // Its states closed when it leaves, not at the game's end (an ally plays on: Codex review, point 6).
+        if (this.gone[p.id] === undefined) {
+          this.gone[p.id] = w.tick;
+          for (const key of [...this.since.keys()]) if (key.startsWith(`${p.id}:`)) this.close(key, w.tick);
+          this.closeTrickle(p.id);
+        }
         continue;
       }
       const foes = w.players.filter((q) => q.id !== p.id && w.hostile(p.id, q.id) && playing(q.id)).map((q) => q.id);
@@ -243,12 +251,13 @@ export class Analyzer {
       if (l.fault || (this.gone[l.player] ?? w.tick) - l.tick < sec(T.baseGrace)) continue;
       this.note({ player: l.player, kind: 'base-perdue', tick: l.tick, detail: `${DEFS[l.type]?.name ?? l.type} perdu, jamais remplacé (fin à ${clock(w.tick)})` });
     }
-    if (w.tick >= sec(T.research)) {
-      for (const p of w.players) if (this.researched[p.id] === null && !p.resigned) this.note({ player: p.id, kind: 'recherche-absente', tick: sec(T.research), detail: `aucune recherche en ${clock(w.tick)} de partie` });
-      for (const p of w.players) {
-        const at = this.researched[p.id];
-        if (at !== null && at > sec(T.research)) this.note({ player: p.id, kind: 'recherche-absente', tick: sec(T.research), detail: `première recherche seulement à ${clock(at)}` });
-      }
+    // Over the time each player played (to its defeat or resignation).
+    for (const p of w.players) {
+      const played = this.gone[p.id] ?? w.tick;
+      if (played < sec(T.research)) continue;
+      const at = this.researched[p.id];
+      if (at === null && !p.resigned) this.note({ player: p.id, kind: 'recherche-absente', tick: sec(T.research), detail: `aucune recherche en ${clock(played)} de partie` });
+      if (at !== null && at > sec(T.research)) this.note({ player: p.id, kind: 'recherche-absente', tick: sec(T.research), detail: `première recherche seulement à ${clock(at)}` });
     }
     this.faults.sort((a, b) => a.tick - b.tick || a.player - b.player);
     return { factions: w.players.map((p) => p.faction), ticks: w.tick, winner: w.winner, faults: this.faults, notes: this.notes, timeline: this.timeline };
@@ -376,6 +385,44 @@ export class Analyzer {
     this.groups.push({ player: p, tick: w.tick, ids: f.ids, worth: f.own, x, y });
   }
 
+  /**
+   * Each tick: a group killed whole before its fight could be judged (`fightJudge` seconds in, on its survivors) is
+   * judged on its dead: a Créature killed at the first volley by twelve Auxiliaires far from home went unseen.
+   */
+  private wipedOut(): void {
+    const w = this.world;
+    const dead = new Map<number, { x: number; y: number; worth: number }>();
+    for (const d of w.deaths) {
+      const def = DEFS[d.type] as UnitDef | undefined;
+      if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
+      const at = dead.get(d.owner);
+      if (at && Math.hypot(d.x - at.x, d.y - at.y) > T.fightRadius * FP) continue;
+      dead.set(d.owner, { x: at?.x ?? d.x, y: at?.y ?? d.y, worth: (at?.worth ?? 0) + def.cost.minerals + def.cost.energy });
+    }
+    for (const [p, now] of dead) {
+      // The dead of the last `fightJudge` seconds at that place count together (a group killed over a few ticks).
+      const prev = this.fallen[p];
+      const d = prev && w.tick - prev.tick <= sec(T.fightJudge) && Math.hypot(now.x - prev.x, now.y - prev.y) <= T.fightRadius * FP ? { ...prev, worth: prev.worth + now.worth } : { ...now, tick: w.tick };
+      this.fallen[p] = d;
+      const g = this.engaged[p];
+      const [x, y] = [tiles(d.x), tiles(d.y)];
+      if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= 2 * T.fightRadius) continue;
+      const foes = w.players.filter((q) => q.id !== p && w.hostile(p, q.id)).map((q) => q.id);
+      const f = this.forces(p, foes, d.x, d.y, T.fightRadius);
+      // Survivors there: the fight goes on, judged as usual.
+      if (f.ids.length) continue;
+      if ([...w.entities.values()].some((b) => b.owner === p && b.def.kind === 'building' && Math.abs(b.x - d.x) <= T.homeRadius * FP && Math.abs(b.y - d.y) <= T.homeRadius * FP)) continue;
+      if (f.enemy < T.fightFloor || d.worth >= T.outnumbered * f.enemy) continue;
+      this.engaged[p] = { x, y, start: w.tick, seen: w.tick, judged: true };
+      this.fallen[p] = undefined;
+      const [tx, ty] = [Math.round(x), Math.round(y)];
+      this.note({ player: p, kind: 'combat-en-inferiorite', tick: w.tick, x: tx, y: ty, detail: `${Math.round(d.worth)} contre ${Math.round(f.enemy)} (${Math.round((100 * d.worth) / f.enemy)} %), tous tués d’emblée` });
+      this.note({ player: p, kind: 'pas-de-repli', tick: w.tick, endTick: w.tick, x: tx, y: ty, detail: 'groupe engagé en infériorité, 100 % perdus d’emblée' });
+    }
+  }
+
+  private fallen: ({ x: number; y: number; worth: number; tick: number } | undefined)[] = [];
+
   /** Each tick: combat units just killed with hardly any of theirs round them, in front of a real enemy force. */
   private lonely(): void {
     const w = this.world;
@@ -496,24 +543,33 @@ export class Analyzer {
   }
 }
 
-/** Plays a replay again without rendering, up to its end (or `maxTicks`), and analyses it. */
+/** A replay with no end recorded is played on after its last order, as the game's player does, this long at most. */
+export const REPLAY_TAIL = 10 * 60;
+
+/**
+ * Plays a replay again without rendering, up to its end (or `maxTicks`), and analyses it. An older replay with no end
+ * recorded goes on after its last order until someone wins, REPLAY_TAIL seconds at most (`truncated` if no one has):
+ * cut at its last order, a game won 111 ticks later read as one without a winner (Codex review, point 5).
+ */
 export function analyzeReplay(r: Replay, maxTicks = Infinity): Analysis {
   const w = createMatch([...r.factions], r.teams, r.map ?? DEFAULT_MAP, r.biome);
   r.handicap.forEach((h, i) => (w.players[i].handicap = h));
   const a = new Analyzer(w);
   const orders = new Map<number, Command[]>(r.ticks);
-  const last = r.endTick ?? (r.ticks.length ? r.ticks[r.ticks.length - 1][0] + 1 : 0);
+  const last = r.endTick ?? (r.ticks.length ? r.ticks[r.ticks.length - 1][0] + 1 + sec(REPLAY_TAIL) : 0);
   while (w.tick < Math.min(last, maxTicks) && w.winner === null) {
     w.step(orders.get(w.tick) ?? []);
     a.observe();
   }
-  return a.finish();
+  const done = a.finish();
+  return r.endTick === undefined && w.winner === null && w.tick >= last && last > 0 ? { ...done, truncated: true } : done;
 }
 
 /** The analysis as a report to read. */
 export function reportMarkdown(a: Analysis): string {
   const name = (p: number) => `J${p + 1} (${FACTIONS[a.factions[p] as keyof typeof FACTIONS]?.name ?? a.factions[p]})`;
   const out = [`# Analyse de partie`, '', `${a.factions.map((_, i) => name(i)).join(' contre ')}, ${clock(a.ticks)}${a.winner !== null && a.winner >= 0 ? `, victoire de ${name(a.winner)}` : ''}.`, ''];
+  if (a.truncated) out.push(`Replay sans fin enregistrée, lu ${clock(sec(REPLAY_TAIL))} après son dernier ordre sans vainqueur : analyse tronquée.`, '');
   for (let p = 0; p < a.factions.length; p++) {
     out.push(`## ${name(p)}`, '');
     for (const family of ['economie', 'tactique'] as Family[]) {

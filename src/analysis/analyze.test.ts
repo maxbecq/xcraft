@@ -72,6 +72,54 @@ describe('analyse de partie', () => {
     }
   });
 
+  it('relève un groupe tué entier à la première salve, loin de chez lui', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+    for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    w.spawn('creature', 0, cx - 2 * FP, cy + FP);
+    const a = new Analyzer(w);
+    run(w, 20, a);
+    const k = kinds(a, 0);
+    expect(k.has('combat-en-inferiorite')).toBe(true);
+    expect(k.has('pas-de-repli')).toBe(true);
+  });
+
+  it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
+    const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
+    w.players[0].minerals = 2000;
+    const a = new Analyzer(w);
+    run(w, 1, a);
+    run(w, 1, a, () => (w.players[0].resigned ? [] : [{ player: 0, kind: 'resign', ids: [] }]));
+    run(w, 100, a);
+    expect(w.winner).toBeNull();
+    const floats = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'ressources-accumulees');
+    expect(floats).toEqual([]);
+  });
+
+  it('lit un ancien replay sans fin enregistrée jusqu’à la victoire, jouée après le dernier ordre', () => {
+    // The Z AI against an idle side: its last order at 10 760, the win at 10 801.
+    const live = createMatch(['z', 'humains']);
+    const ai = new AI(live, 0);
+    const record: [number, Command[]][] = [];
+    while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
+      const cmds = ai.think();
+      if (cmds.length) record.push([live.tick, cmds]);
+      live.step(cmds);
+    }
+    expect(live.winner).toBe(0);
+    expect(record[record.length - 1][0] + 1).toBeLessThan(live.tick);
+    const replay: Replay = JSON.parse(JSON.stringify({ v: 1, factions: ['z', 'humains'], biome: '', handicap: [100, 100], ticks: record }));
+    const again = analyzeReplay(replay);
+    expect(again.winner).toBe(0);
+    expect(again.ticks).toBe(live.tick);
+    expect(again.truncated).toBeUndefined();
+    // Cut before the win: played on to REPLAY_TAIL past its last order, and told as cut short.
+    const cut = analyzeReplay({ ...replay, ticks: record.slice(0, 1) }, Infinity);
+    expect(cut.winner).toBeNull();
+    expect(cut.truncated).toBe(true);
+    expect(reportMarkdown(cut)).toContain('analyse tronquée');
+  }, 120_000);
+
   it('rejoue un replay et trouve la même chose que pendant la partie', () => {
     const factions = ['z', 'isdaris'] as const;
     const live = createMatch([...factions]);
