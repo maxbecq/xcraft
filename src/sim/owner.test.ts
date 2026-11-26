@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FP, ticks } from './fixed';
+import { noRegen } from './noregen';
 import { createMatch } from './setup';
 import type { World } from './world';
 
@@ -23,6 +24,7 @@ describe('owner changes', () => {
   });
 
   it('a charmed unit drops its queued orders, and its new friends stop attacking it', () => {
+    noRegen(); // hit points count blows only
     const w = createMatch(['dieux', 'humains']);
     const foe = w.spawn('legionnaire', 1, 34 * FP, 30 * FP);
     foe.hp = foe.maxHp = 100000;
@@ -37,10 +39,10 @@ describe('owner changes', () => {
     expect(foe.order).toBeNull();
     expect(foe.next).toEqual([]);
     expect(nain.order).toBeNull();
-    const hp = foe.hp;
+    const [hp, hit] = [foe.hp, foe.lastHit];
     run(w, 3);
-    // Not hit again; a living unit heals by itself (0.5 hp/s), so it may have gained a point.
-    expect(foe.hp).toBeGreaterThanOrEqual(hp);
+    expect(foe.hp).toBe(hp);
+    expect(foe.lastHit).toBe(hit);
   });
 
   it('a charmed unit dies its own player’s', () => {
