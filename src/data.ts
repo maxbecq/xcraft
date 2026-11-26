@@ -924,7 +924,8 @@ const BASE: Record<string, object> = {
   niveau: research('Niveau divin', 'L', 'Le dieu monte d’un niveau : vie, armure, dégâts et vitesse ; il invoque et bâtit plus vite.', undefined, 'dieux'),
 
   minerai: { kind: 'resource', name: 'Champ de minerai', size: 1 },
-  puits: { kind: 'resource', name: 'Puits énergétique', size: 3, amount: Infinity },
+  // 7500 of energy in a well (équilibreur 24/11), then dry.
+  puits: { kind: 'resource', name: 'Puits énergétique', size: 3 },
 };
 
 /** The three levels of a Forge line (costs and times in balance.json); `base`: buildings the line needs from level 1. */

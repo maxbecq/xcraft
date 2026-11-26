@@ -310,8 +310,14 @@ export function operate(this: World, b: Entity): void {
     b.timer += def.bunker ? 4 - def.bunker + this.load(b) : 4;
     const full = ticks(1 / def.energyRate) * 4;
     if (b.timer >= full) {
-      b.timer -= full;
-      this.players[b.owner].energy++;
+      // Its well runs dry at last (équilibreur 24/11: 7500 in each).
+      const well = [...this.entities.values()].find((w) => w.type === 'puits' && w.tx === b.tx && w.ty === b.ty);
+      if (well && well.amount <= 0) b.timer = 0;
+      else {
+        b.timer -= full;
+        this.players[b.owner].energy++;
+        if (well) well.amount--;
+      }
     }
   }
   if (!(off && !off.produces)) this.produce(b);

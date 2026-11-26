@@ -284,3 +284,19 @@ describe('équilibreur 24/11, defences aimed by hand', () => {
     expect(orbe.focus).toBe(0);
   });
 });
+
+describe('équilibreur 24/11, every side', () => {
+  it('an energy well holds 7500, then its extractor gives nothing', () => {
+    const w = createMatch(['humains', 'isdaris']);
+    const well = [...w.entities.values()].find((e) => e.type === 'puits')!;
+    expect(well.amount).toBe(7500);
+    const mine = w.spawn('mine', 0, well.x, well.y);
+    Object.assign(mine, { tx: well.tx, ty: well.ty, buildLeft: 0 });
+    for (let i = 0; i < 4; i++) Object.assign(w.spawn('serf', 0, mine.x, mine.y), { inside: mine.id });
+    well.amount = 3;
+    const e0 = w.players[0].energy;
+    run(w, 10);
+    expect(w.players[0].energy - e0).toBe(3);
+    expect(well.amount).toBe(0);
+  });
+});
