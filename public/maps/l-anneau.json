@@ -12,6 +12,7 @@
     { "shape": "circle", "at": [28.5, 28.5], "r": 12, "level": 1 },
     { "shape": "octagon", "at": [14, 14], "half": 13, "cut": 6, "ragged": 2, "level": 2 },
     { "shape": "octagon", "at": [47, 13], "half": 7, "cut": 3, "ragged": 3, "level": 1 },
+    { "shape": "circle", "at": [47.5, 47.5], "r": 18, "level": 0 },
     { "shape": "circle", "at": [47.5, 47.5], "r": 18, "chasm": true },
     { "shape": "ramp", "at": [28, 11], "up": "W", "width": 3, "level": 1 },
     { "shape": "ramp", "at": [18, 37], "up": "N", "width": 3, "level": 0 },

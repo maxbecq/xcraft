@@ -127,6 +127,14 @@ describe('map files', () => {
       expect(Array.from(a.level)).toEqual(Array.from(b.level));
     }
   });
+
+  it('puts no level under a chasm (the editor writes a chasm tile with no level, and the grid reads it)', () => {
+    for (const def of Object.values(MAPS)) {
+      const m = buildMap(def, Math.max(...def.players));
+      const raised = m.chasm ? [...m.chasm.keys()].filter((i) => m.chasm![i] && m.level[i] !== 0) : [];
+      expect(raised.map((i) => `${i % m.width},${Math.floor(i / m.width)}`), def.id).toEqual([]);
+    }
+  });
 });
 
 describe('the Volcan and Astéroïdes planets', () => {
