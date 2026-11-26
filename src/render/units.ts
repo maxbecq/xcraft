@@ -7,7 +7,7 @@ import {
 import { stableShadowDepth } from './shadowdepth';
 import { dressSprite, spriteOf } from './sprites';
 import { type BuildingDef, DEFS, FLY_HEIGHT, KIT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
-import { armillaries } from './life';
+import { armillaries, floaters } from './life';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
 import { type Entity, type World, soars } from '../sim/world';
@@ -1960,7 +1960,7 @@ export class EntityRenderer {
       root.add(well.group);
       fx = well;
     }
-    fx ??= armillaries(body, e.id) ?? undefined;
+    fx ??= armillaries(body, e.id) ?? floaters(body, e.id) ?? undefined;
     if (e.type === 'assimilateur') fx = assimFx(body, e);
     if (e.type === 'armement') fx = forgeFx(body, e);
     if (e.type === 'mastodonte') fx = thrusterFx(body, e);
