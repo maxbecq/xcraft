@@ -49,6 +49,17 @@ describe('whether an imported map can be played', () => {
     expect(unplayable(m)).toMatch(/ne rejoint pas son QG/);
   });
 
+  // Codex, 2026-11-26 (third final review): the walk round the headquarters started from every open tile by it, Gaïa's
+  // one-tile rise too when it touched the headquarters: she passed, though no step leads from it into the building.
+  it('refuses a start whose first walker stands on a rise beside its headquarters, with no way down', () => {
+    const w = createMatch(['dieux', 'dieux'], undefined, open(), 'desert');
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'asgaard')!;
+    const m = withBase(0, { workers: [hq.tx - 2, hq.ty + 3] }); // Gaïa then at (hq.tx + 1, hq.ty + 4), by its south side
+    expect(unplayable(m)).toBeNull();
+    m.terrain = [{ shape: 'rect', from: [hq.tx + 1, hq.ty + 4], to: [hq.tx + 1, hq.ty + 4], level: 1 }];
+    expect(unplayable(m)).toMatch(/ne rejoint pas son QG/);
+  });
+
   it('refuses a base cut off from the starts', () => {
     const m = open();
     m.terrain = [{ shape: 'rect', from: [18, 18], to: [36, 36], chasm: true }, { shape: 'rect', from: [21, 21], to: [33, 33], fill: true }];

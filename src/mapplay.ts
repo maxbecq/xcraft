@@ -41,7 +41,9 @@ function starts(def: MapFile, players: number): string | null {
       const size = (hq.def as BuildingDef).size;
       const W = m.map.width;
       const ring: [number, number][] = [];
-      for (let y = hq.ty - 1; y <= hq.ty + size; y++) for (let x = hq.tx - 1; x <= hq.tx + size; x++) if (m.grid.inside(x, y) && m.grid.open(x, y)) ring.push([x, y]);
+      // Only tiles a step leads from into the footprint, as doorstep (Codex, 2026-11-26: a rise touching it is no way in).
+      const inFoot = (v: number, t: number) => Math.max(t, Math.min(v, t + size - 1));
+      for (let y = hq.ty - 1; y <= hq.ty + size; y++) for (let x = hq.tx - 1; x <= hq.tx + size; x++) if (m.grid.inside(x, y) && m.grid.open(x, y) && m.grid.canStep(x, y, inFoot(x, hq.tx), inFoot(y, hq.ty), true)) ring.push([x, y]);
       const from = new Uint8Array(W * m.map.height);
       for (const [x, y] of ring) if (!from[y * W + x]) reach(m, x, y).forEach((v, i) => (from[i] |= v));
       for (const e of m.entities.values()) {
