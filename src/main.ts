@@ -848,7 +848,7 @@ function start(): void {
     overlay.draw(world, rig.camera, input.selected, sees, acc / TICK);
     lap('overlay');
     const placed = hud.placingType && (DEFS[hud.placingType] as BuildingDef).warp;
-    power.update(world, sees, !!placed || [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power), (o) => !SPECTATE && world.hostile(o, PLAYER));
+    power.update(world, sees, placed ? 'placing' : [...input.selected].some((id) => !!(world.entities.get(id)?.def as BuildingDef | undefined)?.power) ? 'selected' : false, (o) => !SPECTATE && world.hostile(o, PLAYER));
     lap('power');
     paving.update(world, sees);
     lap('paving');
