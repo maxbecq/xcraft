@@ -14,9 +14,9 @@ type Row = { games: Analysis[]; seats: number[]; wins: number; strategies: Recor
 export function campReport(camp: Faction, rows: Record<'avant' | 'apres', Row>, n: number): string[] {
   const { avant, apres } = rows;
   const both = avant.games.length > 0;
-  const per = (r: Row, kind: FaultKind) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i] && f.kind === kind).length, 0) / r.games.length;
-  const share = (r: Row, kind: FaultKind) => r.games.filter((g, i) => g.faults.some((f) => f.player === r.seats[i] && f.kind === kind)).length / r.games.length;
-  const total = (r: Row) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i]).length, 0) / r.games.length;
+  const per = (r: Row, kind: FaultKind) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i] && f.kind === kind).length, 0) / Math.max(1, r.games.length);
+  const share = (r: Row, kind: FaultKind) => r.games.filter((g, i) => g.faults.some((f) => f.player === r.seats[i] && f.kind === kind)).length / Math.max(1, r.games.length);
+  const total = (r: Row) => r.games.reduce((s, g, i) => s + g.faults.filter((f) => f.player === r.seats[i]).length, 0) / Math.max(1, r.games.length);
   const out = [`## ${FACTIONS[camp].name}`, ''];
   if (both) out.push(`${avant.games.length} parties par colonne. Victoires contre l’IA actuelle : avant ${avant.wins}, après ${apres.wins}. Fautes par partie : avant ${total(avant).toFixed(1)}, après ${total(apres).toFixed(1)}.`, '');
   else out.push(`${apres.games.length} parties, après seulement. Victoires contre l’IA actuelle : ${apres.wins}. Fautes par partie : ${total(apres).toFixed(1)}.`, '');
