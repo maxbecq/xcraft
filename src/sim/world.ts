@@ -692,7 +692,8 @@ export class World {
         this.players[e.lastHitBy].energy += idiv(e.def.cost.energy * share, 100);
       }
       if (e.order?.kind === 'gather') this.release(e, e.order.target);
-      if (e.def.kind === 'unit' && e.def.respawn) this.respawns.push({ owner: e.owner, type: e.type, at: this.tick + ticks(e.def.respawn) });
+      // A player's god only: a neutral one (placed by a map) is gone for good (Codex, 2026-11-26: players[-1]).
+      if (e.def.kind === 'unit' && e.def.respawn && this.players[e.owner]) this.respawns.push({ owner: e.owner, type: e.type, at: this.tick + ticks(e.def.respawn) });
       this.remove(e);
     }
   }
@@ -730,7 +731,7 @@ export class World {
   /** Gaïa comes back by her side's headquarters once her time is up (later, if it has none standing). */
   private revive(): void {
     for (const r of this.respawns) {
-      if (this.tick < r.at) continue;
+      if (this.tick < r.at || !this.players[r.owner]) continue;
       // The first finished headquarters, looked for without copying every entity (done each tick while there is none).
       let hq: Entity | undefined;
       for (const b of this.entities.values())
