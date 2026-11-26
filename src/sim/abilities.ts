@@ -494,7 +494,8 @@ export function poisonClouds(this: World): void {
     if (r.next > this.tick) continue;
     for (const t of [...this.entities.values()]) {
       if (t.hp <= 0 || t.inside || t.def.kind === 'resource') continue;
-      if (t.def.kind === 'unit' ? dist(t.x, t.y, r.x, r.y) <= r.r + t.radius : dist(t.x, t.y, r.x, r.y) <= r.r + ((t.def as BuildingDef).size * FP) / 2) this.hurt(t, t.def.kind === 'unit' ? r.damage : idiv(r.damage * r.building, 100));
+      // A unit by its centre, as the spell always reached (Codex, 2026-11-26), a building by its footprint.
+      if (t.def.kind === 'unit' ? dist(t.x, t.y, r.x, r.y) <= r.r : dist(t.x, t.y, r.x, r.y) <= r.r + ((t.def as BuildingDef).size * FP) / 2) this.hurt(t, t.def.kind === 'unit' ? r.damage : idiv(r.damage * r.building, 100));
     }
     this.casts.push({ kind: 'pluiedefeu', x: r.x, y: r.y });
     r.hits--;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ABILITIES, DEFS, type UnitDef } from '../data';
+import { ABILITIES, DEFS, spell, type UnitDef } from '../data';
 import { createMap } from '../map';
-import { FP, ticks } from './fixed';
+import { FP, ticks, toFp } from './fixed';
 import { World } from './world';
 
 const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
@@ -221,5 +221,19 @@ describe('powers from inside a Fortin (notice)', () => {
     w.step([{ player: 0, kind: 'ability', ids: [god.id], name: 'pluiedefeu', x: foe.x, y: foe.y }]);
     run(w, 2.1); // its first wave, 2 s after (équilibreur 26/11)
     expect(foe.hp).toBeLessThan(1000);
+  });
+
+  // Codex, 2026-11-26 (final review): the waves reached a unit's body (radius added), no longer its centre as before.
+  it('a Pluie de feu wave hurts the units whose centre is within its radius, not those whose body only reaches it', () => {
+    const w = new World(createMap());
+    const god = Object.assign(w.spawn('apollon', 0, 40 * FP, 60 * FP), { mana: 1 << 30 });
+    const r = toFp(spell('pluiedefeu', 1)!.radius!);
+    const [x, y] = [god.x + 4 * FP, god.y];
+    const inside = Object.assign(w.spawn('legionnaire', 1, x, y + r - FP / 8), { hp: 1000, maxHp: 1000, held: ticks(30) });
+    const beside = Object.assign(w.spawn('legionnaire', 1, x, y - r - FP / 8), { hp: 1000, maxHp: 1000, held: ticks(30) });
+    w.step([{ player: 0, kind: 'ability', ids: [god.id], name: 'pluiedefeu', x, y }]);
+    run(w, 2.1);
+    expect(inside.hp).toBeLessThan(1000);
+    expect(beside.hp).toBe(1000);
   });
 });
