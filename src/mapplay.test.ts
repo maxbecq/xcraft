@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { checkMap } from './mapcheck';
 import { unplayable } from './mapplay';
 import { MAPS, type MapFile } from './maps';
+import { FP } from './sim/fixed';
+import { createMatch } from './sim/setup';
 
 /** A small open map: one start in a corner, minerals and a well beside it, a free base further on. */
 const open = (): MapFile =>
@@ -35,6 +37,16 @@ describe('whether an imported map can be played', () => {
   // east edge passed, and Gaïa (a Dieux start) came out past it.
   it('refuses a start any camp\'s first units would stand off the map at', () => {
     expect(unplayable(withBase(0, { workers: [61, 32] }))).toMatch(/hors de la carte|enfermé|pas la place/);
+  });
+
+  // Codex, 2026-11-26 (second final review): Gaïa on a one-tile rise with no ramp, her start open, passed.
+  it('refuses a start whose first walkers cannot reach their headquarters on foot', () => {
+    const w = createMatch(['dieux', 'dieux'], undefined, open(), 'desert');
+    const gaia = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'gaia')!;
+    const [x, y] = [Math.floor(gaia.x / FP), Math.floor(gaia.y / FP)];
+    const m = open();
+    m.terrain = [{ shape: 'rect', from: [x, y], to: [x, y], level: 1 }];
+    expect(unplayable(m)).toMatch(/ne rejoint pas son QG/);
   });
 
   it('refuses a base cut off from the starts', () => {

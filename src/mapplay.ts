@@ -33,6 +33,22 @@ function starts(def: MapFile, players: number): string | null {
       const off = e.x < 0 || e.y < 0 || e.x >= W || e.y >= H;
       if (off || (!('flying' in e.def && e.def.flying) && !m.grid.open(Math.floor(e.x / FP), Math.floor(e.y / FP)))) return `les premières unités des ${FACTIONS[f].name} sont hors de la carte ou sur un sol fermé (${Math.floor(e.x / FP)}, ${Math.floor(e.y / FP)}).`;
     }
+    // ...and every walker reaches its headquarters on foot (Codex, 2026-11-26: Gaïa on a one-tile rise, no ramp).
+    for (let p = 0; p < players; p++) {
+      const hq = [...m.entities.values()].find((b) => b.owner === p && b.def.kind === 'building');
+      if (!hq) continue;
+      const size = (hq.def as { size: number }).size;
+      const W = m.map.width;
+      const ring: [number, number][] = [];
+      for (let y = hq.ty - 1; y <= hq.ty + size; y++) for (let x = hq.tx - 1; x <= hq.tx + size; x++) if (m.grid.inside(x, y) && m.grid.open(x, y)) ring.push([x, y]);
+      const from = new Uint8Array(W * m.map.height);
+      for (const [x, y] of ring) if (!from[y * W + x]) reach(m, x, y).forEach((v, i) => (from[i] |= v));
+      for (const e of m.entities.values()) {
+        if (e.owner !== p || e.def.kind !== 'unit' || ('flying' in e.def && e.def.flying)) continue;
+        const [x, y] = [Math.floor(e.x / FP), Math.floor(e.y / FP)];
+        if (!from[y * W + x]) return `${e.def.name} des ${FACTIONS[f].name} en (${x}, ${y}) ne rejoint pas son QG à pied.`;
+      }
+    }
   }
   return null;
 }
