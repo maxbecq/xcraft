@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
+import { FACTIONS } from '../data';
 import { AI, DIFFICULTY, teamFocus } from './ai';
 
 /** Plays until someone wins or the time runs out; returns the winner and the game time in minutes. */
@@ -107,6 +108,23 @@ describe('AI', () => {
     }
     expect(two.every((r) => r.hp <= 0)).toBe(true);
   }, 60_000);
+
+  it('a wave called back to a raid too strong for it is sent to the rally point, not left on its way to the enemy', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const hq = [...w.entities.values()].find((e) => e.owner === 0 && e.type === FACTIONS.isdaris.hq)!;
+    const far = w.spawn('creature', 0, hq.x + 30 * FP, hq.y + 30 * FP);
+    const goal = { x: hq.x + 60 * FP, y: hq.y + 60 * FP };
+    w.step([{ player: 0, kind: 'attack', ids: [far.id], x: goal.x, y: goal.y }]);
+    const ai = new AI(w, 0);
+    (ai as unknown as { wave: Set<number> }).wave = new Set([far.id]);
+    for (let i = 0; i < 6; i++) w.spawn('legionnaire', 1, hq.x + (4 + (i % 3)) * FP, hq.y + (4 + Math.floor(i / 3)) * FP);
+    while (w.tick % 10 !== 0) w.step([]);
+    w.step(ai.think());
+    expect((ai as unknown as { wave: Set<number> }).wave.has(far.id)).toBe(false);
+    // The order the simulation now carries out: no longer the attack on the enemy's side.
+    const o = far.order as { kind: string; x?: number; y?: number } | null;
+    expect(o && o.x === goal.x && o.y === goal.y).toBeFalsy();
+  });
 
   it('pulls a wave group back from a fight it cannot win, not from one it can', () => {
     const w = createMatch();

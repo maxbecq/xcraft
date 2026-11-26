@@ -1600,8 +1600,10 @@ export class AI {
           const u = w.entities.get(id)!;
           if (near(u)) continue;
           this.wave.delete(id);
-          // A god (not in the army) is given no order with it: it went on alone to the enemy base and died.
-          if (gods.includes(u)) back.push(id);
+          // Each one called back is sent home: a god (not in the army) is given no order with it, nor a soldier when the
+          // defence is too weak to send it at the raid (both went on alone to the enemy base; Codex review, point 2).
+          // The defenders' orders below come after this one and replace it.
+          back.push(id);
         }
         if (back.length) ctx.out.push({ player: this.player, kind: 'move', ids: back, x: ctx.rally.x, y: ctx.rally.y });
         atHome = army.filter((u) => !this.wave.has(u.id));
