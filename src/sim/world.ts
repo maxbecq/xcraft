@@ -19,7 +19,7 @@ const MORPHED_FROM: Record<string, string> = Object.fromEntries(
 export type Order =
   | { kind: 'move'; x: number; y: number; arrive: number }
   /** `skip`: fields this trip gave up on, no way into them, since tick `skipped` (economy.ts gather). */
-  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number; skip?: number[]; skipped?: number }
+  | { kind: 'gather'; target: number; phase: 'go' | 'mine' | 'return'; timer: number; skip?: number[]; skipped?: number; home?: number }
   | { kind: 'build'; type: string; tx: number; ty: number }
   | { kind: 'construct'; target: number }
   /** Z drone (Z.doc): repairs an own machine or building, paying as it goes; `owed` in thousandths of a resource. */

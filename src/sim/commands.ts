@@ -550,8 +550,10 @@ export function materialise(this: World, o: Entity, type: string, tx: number, ty
   const lack = this.lacks(o.owner, type);
   if (lack) return void this.say(o.owner, lack);
   if (!this.canPlace(type, tx, ty, o.owner)) return void this.say(o.owner, this.misplaced(def, tx, ty, o.owner));
-  const mid = Math.floor(def.size / 2);
-  if (!this.vision[o.owner].visible(tx + mid, ty + mid)) return void this.say(o.owner, 'Il faut voir l’emplacement.');
+  // Its middle seen: any of its middle tiles (one, or four for an even size). The tile below and right of the middle
+  // alone was another tile from the other corners: the same site was seen from one corner, not from the other.
+  const [lo, hi] = [(def.size - 1) >> 1, def.size >> 1];
+  if (![lo, hi].some((dx) => [lo, hi].some((dy) => this.vision[o.owner].visible(tx + dx, ty + dy)))) return void this.say(o.owner, 'Il faut voir l’emplacement.');
   if (!this.pay(o.owner, def)) return;
   this.site(type, o.owner, tx, ty);
   // The rest is half the building's time (the mod's figure); with the Cercle d'énergie, a quarter (fiche 2010).

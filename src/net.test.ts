@@ -111,7 +111,9 @@ describe('lockstep between two browsers', () => {
       const [a, b] = play(ticks, link);
       expect(a.world.tick).toBe(ticks);
       expect(b.world.tick).toBe(ticks);
-      expect(a.log.length).toBeGreaterThan(10); // the AIs did play
+      // The AIs did play: each side trained and built, whatever the link did to the timing of its orders.
+      const given = a.log.flatMap(([, cmds]) => cmds);
+      for (const player of [0, 1]) for (const kind of ['train', 'build']) expect(given.some((c) => c.player === player && c.kind === kind), `${player} ${kind}`).toBe(true);
       expect(a.log).toEqual(b.log);
       expect(fingerprint(a.world)).toBe(fingerprint(b.world));
       expect(fingerprint(replay(a.log, ticks))).toBe(fingerprint(a.world));
