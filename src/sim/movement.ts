@@ -245,7 +245,17 @@ export function follow(this: World, e: Entity): boolean {
   const ny = d === 0 ? ty : e.y + idiv((ty - e.y) * step, d);
   if (!this.tryMove(e, nx, ny)) {
     e.vel = 0;
-    if (++e.blockedTicks > 10 && e.goal) this.plan(e, e.goal.x, e.goal.y); // replan around the obstacle
+    if (++e.blockedTicks > 10 && e.goal) {
+      const [wx, wy] = [e.path[0], e.path[1]];
+      this.plan(e, e.goal.x, e.goal.y); // replan around the obstacle
+      // The same way again, held back by a cliff's limit (not by a step the terrain or a building refuses, which a
+      // crowd's pushes may yet undo): no body gets there (a ledge a cliff's foot closes, which the
+      // path, found tile by tile, takes for open). As near as it goes: the path is done, not pressed at for good.
+      if (this.heldOff && e.path[0] === wx && e.path[1] === wy) {
+        e.path = [];
+        return true;
+      }
+    }
     return false;
   }
   if (step === d) e.path.splice(0, 2);
@@ -301,6 +311,7 @@ function sides(from: number, to: number): [number, number][] {
 }
 
 export function tryMove(this: World, e: Entity, nx: number, ny: number, throughBuildings = false): boolean {
+  this.heldOff = false;
   if (soars(e)) {
     if (nx < 0 || ny < 0 || nx >= this.grid.width * FP || ny >= this.grid.height * FP) return false;
     e.x = nx;
@@ -337,6 +348,7 @@ export function tryMove(this: World, e: Entity, nx: number, ny: number, throughB
         // band its path runs along or into, it stood there for good).
         [kx, ky] = this.grid.keepOff(e.x, e.y, e.radius);
         const out = dist(e.x, e.y, kx, ky);
+        this.heldOff = out <= FP / 64;
         // A corner's push rounds by a unit or two: only a body well inside counts, or one on the limit crept for good.
         if (out <= FP / 64) return false;
         if (out > e.speed) [kx, ky] = [e.x + idiv((kx - e.x) * e.speed, out), e.y + idiv((ky - e.y) * e.speed, out)];

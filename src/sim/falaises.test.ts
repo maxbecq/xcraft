@@ -228,6 +228,83 @@ describe('cliffs', () => {
     expect(8 * FP - a.x).toBeLessThan(BAND + KEEP + FP / 8);
   });
 
+  // Codex, 2026-11-26: a point kept off a limit was at times left within another's reach (on a cut corner, what an
+  // axis could not take at the tile's edge was dropped; off a corner, the sides brought it back). Given as a waypoint,
+  // no step reached it, and the unit pressed there with its order never done.
+  describe('a point kept off the cliffs is one a body may stand at', () => {
+    it('on every map, by any cliff: kept again, it stays where it is', () => {
+      const at = [1, 100, 256, 512, 768, 924, FP - 1];
+      for (const id of Object.keys(MAPS)) {
+        const w = createMatch(['humains', 'humains'], undefined, id, MAPS[id].biomesOnly ? MAPS[id].biomes![0] : '');
+        const g = w.grid;
+        const { steps, narrow } = g as unknown as { steps: Uint8Array; narrow(x: number, y: number): boolean };
+        let seen = 0;
+        for (let ty = 0; ty < w.map.height; ty++) {
+          for (let tx = 0; tx < w.map.width; tx++) {
+            // Not open ground (nothing to keep off), nor a tile between two feet (never stepped into).
+            if (!g.open(tx, ty) || steps[ty * w.map.width + tx] === 255 || narrow.call(g, tx, ty)) continue;
+            seen++;
+            for (const r of [FP / 4, (FP * 3) / 8, KEEP, FP]) {
+              for (const u of at) {
+                for (const v of at) {
+                  const [kx, ky] = g.keepOff(tx * FP + u, ty * FP + v, r).slice();
+                  const [jx, jy] = g.keepOff(kx, ky, r);
+                  // Within the rounding of a corner's push.
+                  if (Math.abs(jx - kx) + Math.abs(jy - ky) > 4) expect([jx, jy], `${id} ${tx},${ty} r ${r} from ${u},${v}`).toEqual([kx, ky]);
+                }
+              }
+            }
+          }
+        }
+        if (id !== 'asteroides') expect(seen, id).toBeGreaterThan(0);
+      }
+    });
+
+    it('a move to a point a unit from the edge of a cut corner\'s tile: the order ends', () => {
+      const N = 16;
+      for (const type of ['scarabee', 'serf']) {
+        for (const [gx, gy] of [[8 * FP + 1, 9 * FP - 1], [8 * FP + 121, 9 * FP - 1], [9 * FP - 1, 8 * FP + 1], [8 * FP + 1, 8 * FP + 1]]) {
+          const level = new Uint8Array(N * N);
+          for (let y = 8; y < N; y++) for (let x = 8; x < N; x++) level[y * N + x] = 1;
+          const w = new World({ width: N, height: N, level, ramp: new Array(N * N).fill(null), rampStep: new Uint8Array(N * N) });
+          const a = w.spawn(type, 0, 8 * FP + FP / 2, 10 * FP + FP / 2);
+          w.step([{ player: 0, kind: 'move', ids: [a.id], x: gx, y: gy }]);
+          for (let i = 0; i < 240 && a.order; i++) w.step([]);
+          expect(a.order, `${type} to ${gx - 8 * FP},${gy - 8 * FP}`).toBeNull();
+        }
+      }
+    });
+
+    it('Origine, Le Col, Les Ponts: a move onto the edges and corners of a tile by a cliff, from the tile beside it, ends', () => {
+      for (const id of ['origine', 'le-col', 'les-ponts']) {
+        const w0 = createMatch(['humains', 'humains'], undefined, id);
+        const g0 = w0.grid;
+        const { steps, narrow } = g0 as unknown as { steps: Uint8Array; narrow(x: number, y: number): boolean };
+        const W = w0.map.width;
+        const tiles: [number, number, number, number][] = [];
+        for (let ty = 1; ty < w0.map.height - 1; ty++) {
+          for (let tx = 1; tx < W - 1; tx++) {
+            if (!g0.open(tx, ty) || steps[ty * W + tx] === 255 || narrow.call(g0, tx, ty)) continue;
+            const from = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => g0.open(tx + dx, ty + dy) && g0.canStep(tx + dx, ty + dy, tx, ty) && !narrow.call(g0, tx + dx, ty + dy));
+            if (from) tiles.push([tx, ty, tx + from[0], ty + from[1]]);
+          }
+        }
+        expect(tiles.length, id).toBeGreaterThan(20);
+        // A spread of them (every one is a whole game made): cut corners, feet, plateau corners.
+        const stride = Math.ceil(tiles.length / 24);
+        for (let n = 0; n < tiles.length; n += stride) {
+          const [tx, ty, sx, sy] = tiles[n];
+          const [u, v] = [[1, FP - 1], [FP - 1, 1], [1, 1], [FP - 1, FP - 1], [FP / 2, 1], [1, FP / 2]][(n / stride) % 6];
+          const w = createMatch(['humains', 'humains'], undefined, id);
+          const a = w.spawn(n % 2 ? 'scarabee' : 'serf', 0, sx * FP + FP / 2, sy * FP + FP / 2);
+          w.step([{ player: 0, kind: 'move', ids: [a.id], x: tx * FP + u, y: ty * FP + v }]);
+          for (let i = 0; i < 240 && a.order; i++) w.step([]);
+          expect(a.order, `${id} ${a.type} from ${sx},${sy} to ${tx},${ty} + ${u},${v}`).toBeNull();
+        }
+      }
+    });
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);
