@@ -5,7 +5,7 @@
 import { TEAM_COLORS } from '../render/models';
 import { DEFS, type Faction } from '../data';
 import { gameCounts, RACES } from './format2';
-import { act, ed } from './state';
+import { act, ed, iconOf } from './state';
 
 const h = (html: string) => {
   const t = document.createElement('template');
@@ -77,7 +77,7 @@ export function techTree(start: number): void {
       const c = h(`<div><h4>${title}</h4></div>`);
       for (const [id, d] of items) {
         const on = !forbid[who].has(id);
-        const row = h(`<label class="ck${on ? '' : ' no'}"><input type="checkbox"${on ? ' checked' : ''}><img src="${ICONS}${id}.png" alt="" onerror="this.remove()">${esc(d.name)}</label>`);
+        const row = h(`<label class="ck${on ? '' : ' no'}"><input type="checkbox"${on ? ' checked' : ''}><img src="${ICONS}${iconOf(id)}.png" alt="" onerror="this.remove()">${esc(d.name)}</label>`);
         row.querySelector('input')!.onchange = (e) => {
           if ((e.target as HTMLInputElement).checked) forbid[who].delete(id);
           else forbid[who].add(id);

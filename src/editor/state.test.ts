@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { DEFS } from '../data';
 import { MAPS } from '../maps';
 import { fromFormat1 } from './format2';
-import { startNumbers } from './state';
+import { iconOf, startNumbers } from './state';
+// Node's file system, reached at run time (the project carries no Node types), as in render/pivots.test.ts.
+const fs = 'node:fs';
+const { existsSync } = (await import(/* @vite-ignore */ fs)) as { existsSync(path: string): boolean };
 
 describe('éditeur : numéros des départs', () => {
   it('numérote les départs de haut en bas puis de gauche à droite, un numéro chacun', () => {
@@ -26,5 +30,13 @@ describe('éditeur : numéros des départs', () => {
     // The same point keeps its number, whoever starts there.
     expect(f.players.map((p, i) => [after[i], p.start.join(',')]).sort()).toEqual(points.sort());
     expect(after[0]).toBe(before[2]);
+  });
+});
+
+describe('éditeur : icônes', () => {
+  it('chaque type des palettes a une icône qui existe (pas de requête en 404)', () => {
+    const types = ['minerai', 'puits', ...Object.entries(DEFS).filter(([, d]) => d.kind !== 'upgrade' && 'faction' in d).map(([t]) => t)];
+    expect(types.filter((t) => !existsSync(`public/icons/${iconOf(t)}.png`))).toEqual([]);
+    expect([iconOf('dirigeable'), iconOf('casernevol'), iconOf('cadavre')]).toEqual(['bourdon', 'casernevolante', 'serf']);
   });
 });
