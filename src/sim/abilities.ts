@@ -96,21 +96,10 @@ export function cast(this: World, e: Entity, name = (e.def as UnitDef).ability):
   } else if (name === 'feucirculaire') {
     for (const t of around(ab.radius!, (t) => this.hostile(t.owner, e.owner))) this.hit(e, t, { damage: ab.damage!, range: 1, cooldown: 0 });
   } else if (name === 'manteau') {
-    for (const t of around(ab.radius!, (t) => t.owner === e.owner)) t.camo = ticks(ab.duration);
+    // An aura round the Voyageur while it lasts, not the Voyageur itself (équilibreur 24/11): World.shrouded.
+    e.veil = ticks(ab.duration);
   } else if (name === 'dephasage') {
     e.phased = ticks(ab.duration);
-  } else if (name === 'couloir') {
-    // Through the corridor to the nearest other Espion of ours.
-    const other = [...this.entities.values()].filter((o) => o !== e && o.owner === e.owner && o.type === 'espion').sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y) || a.id - b.id)[0];
-    if (!other) return void this.say(e.owner, 'Il faut un second Espion.');
-    // As many as 8 supply (2010 sheet).
-    let room = ab.max!;
-    for (const t of around(ab.radius!, (t) => t.owner === e.owner && t !== e && !flies(t))) {
-      const supply = (t.def as UnitDef).supply;
-      if (supply > room) continue;
-      room -= supply;
-      this.place(t, other.x, other.y);
-    }
   } else if (name === 'decollage') {
     // Take off, or land where the ground is open (and a body fits: not between two cliff feet); either takes a moment.
     if (e.airborne && !this.grid.stands(tileOf(e.x), tileOf(e.y))) return void this.say(e.owner, 'Impossible d’atterrir ici.');
@@ -282,6 +271,47 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     const copy = this.spawn(t.type, e.owner, t.x + (t.x < idiv(this.map.width * FP, 2) ? FP : -FP), t.y);
     copy.ttl = ticks(ab.duration);
     copy.illusion = true;
+  } else if (name === 'redeploiement') {
+    // The floating Orbe plasma (équilibreur 26/11): to a spot of the zone, 17 s still and silent, there, 17 s more.
+    if (e.muted > 0) return true;
+    if (!this.powered(e.owner, x, y) || !this.grid.open(tileOf(x), tileOf(y))) {
+      this.say(e.owner, 'Hors de la zone de construction.');
+      return true;
+    }
+    const p = this.players[e.owner];
+    if (p.minerals < (ab.minerals ?? 0)) {
+      this.say(e.owner, 'Pas assez de minerais.');
+      return true;
+    }
+    p.minerals -= ab.minerals ?? 0;
+    e.muted = e.held = ticks(ab.duration);
+    this.redeploys.push({ id: e.id, tx: tileOf(x), ty: tileOf(y), left: ticks(ab.duration) });
+  } else if (name === 'concentration') {
+    // Druide (équilibreur 24/11, Isdaris.doc): a block of energy no one walks through, a disc of 3, for 15 s; it does
+    // not stop shots (a Mur d'énergie does).
+    const tiles: number[] = [];
+    const r = toFp(ab.radius!);
+    for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++)
+      for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) if (this.grid.inside(tx, ty) && dist(tx * FP + FP / 2, ty * FP + FP / 2, x, y) <= r) tiles.push(ty * this.grid.width + tx);
+    this.forbid(e.owner, tiles, ticks(ab.duration), true);
+  } else if (name === 'ciblage') {
+    // Espion (équilibreur 24/11): the enemies there now, units and buildings, marked for 30 s wherever they go.
+    let any = false;
+    for (const t of this.entities.values()) {
+      if (t.def.kind === 'resource' || t.hp <= 0 || t.inside || !this.hostile(t.owner, e.owner) || dist(t.x, t.y, x, y) > toFp(ab.radius!) + t.radius) continue;
+      t.marked = ticks(ab.duration);
+      any = true;
+    }
+    if (!any) return false;
+  } else if (name === 'couloir') {
+    // Couloir temporel (équilibreur 24/11): to another Espion of ours, any distance, for 30 s.
+    const other = [...this.entities.values()].find((o) => o !== e && o.owner === e.owner && o.type === 'espion' && o.hp > 0 && dist(o.x, o.y, x, y) <= o.radius + toFp(ab.radius!));
+    if (!other) {
+      this.say(e.owner, 'Visez un autre de vos Espions.');
+      return true;
+    }
+    this.tunnels = this.tunnels.filter((t) => t.a !== e.id && t.b !== e.id && t.a !== other.id && t.b !== other.id);
+    this.tunnels.push({ owner: e.owner, a: e.id, b: other.id, left: ticks(ab.duration), crossed: 0, supply: 0 });
   } else if (name === 'deflagration') {
     const t = [...this.entities.values()]
       .filter((t) => t.def.kind !== 'resource' && t.hp > 0 && this.hostile(t.owner, e.owner) && dist(t.x, t.y, x, y) <= toFp(ab.radius!) + t.radius)
@@ -372,12 +402,9 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'tempete') {
     this.storms.push({ owner: e.owner, x, y, r: toFp(ab.radius!), until: this.tick + ticks(ab.duration) });
   } else if (name === 'pluiedefeu') {
-    // Balance designer 2026-11-22: on an area, friend and foe alike, buildings too at a share of the damage by level.
-    for (const t of near(() => true)) this.hurt(t, ab.damage!);
-    for (const b of [...this.entities.values()]) {
-      if (b.def.kind !== 'building' || b.hp <= 0 || dist(b.x, b.y, x, y) > toFp(ab.radius! + (b.def as BuildingDef).size / 2)) continue;
-      this.hurt(b, idiv(ab.damage! * ab.building!, 100));
-    }
+    // Équilibreur 26/11 (Warcraft III's Rain of Fire): seen at once, nothing for 2 s, then 3, 4 or 5 waves 3.5, 3 or
+    // 2.5 s apart by Apollon's level, each XC's damage, friend and foe, buildings at a share of it (World.rains).
+    this.rains.push({ owner: e.owner, x, y, r: toFp(ab.radius!), damage: ab.damage!, building: ab.building!, hits: ab.max!, next: this.tick + ticks(2), gap: ticks(ab.duration) });
   } else if (name === 'teleportgaia') {
     const b = [...this.entities.values()].filter((b) => b.owner === e.owner && b.def.kind === 'building' && b.buildLeft === 0).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
     if (!b) return false;
@@ -402,7 +429,11 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
     // Allies of the zone (living ones) walk and strike faster for a while.
     const allies = near((t) => t.owner === e.owner && !(t.def as UnitDef).mechanical);
     if (!allies.length) return false;
-    for (const t of allies) this.setPace(t, ticks(ab.duration), 100 + ab.damage!, idiv(10000, 100 + ab.damage!));
+    // At the price of a tenth of their full health, never the last hit point (équilibreur 23/11).
+    for (const t of allies) {
+      this.setPace(t, ticks(ab.duration), 100 + ab.damage!, idiv(10000, 100 + ab.damage!));
+      t.hp = Math.max(Math.min(t.hp, 1), t.hp - idiv(t.maxHp * ab.drain!, 100));
+    }
   } else if (name === 'acidedissolvant') {
     // A torrent of acid on the enemy building nearest the point.
     const b = [...this.entities.values()].filter((t) => t.def.kind === 'building' && this.hostile(t.owner, e.owner) && t.hp > 0 && dist(t.x, t.y, x, y) <= toFp(ab.radius! + (t.def as BuildingDef).size / 2)).sort((a, c) => dist(a.x, a.y, x, y) - dist(c.x, c.y, x, y) || a.id - c.id)[0];
@@ -447,8 +478,19 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   return true;
 }
 
-/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. */
+/** The toxic clouds hurt the units in them, allies too, once a second; a spent cloud goes. A Pluie de feu's waves too. */
 export function poisonClouds(this: World): void {
+  for (const r of this.rains) {
+    if (r.next > this.tick) continue;
+    for (const t of [...this.entities.values()]) {
+      if (t.hp <= 0 || t.inside || t.def.kind === 'resource') continue;
+      if (t.def.kind === 'unit' ? dist(t.x, t.y, r.x, r.y) <= r.r + t.radius : dist(t.x, t.y, r.x, r.y) <= r.r + ((t.def as BuildingDef).size * FP) / 2) this.hurt(t, t.def.kind === 'unit' ? r.damage : idiv(r.damage * r.building, 100));
+    }
+    this.casts.push({ kind: 'pluiedefeu', x: r.x, y: r.y });
+    r.hits--;
+    r.next = this.tick + r.gap;
+  }
+  this.rains = this.rains.filter((r) => r.hits > 0);
   for (const c of this.clouds) {
     if (c.next > this.tick) continue;
     // Allies and enemies alike (the balancer, 2026-11-22).
@@ -470,12 +512,15 @@ export function mineTrigger(this: World, m: Entity): void {
   m.hp = 0;
 }
 
-/** A Bourdon's alchemical mine at the end of its fuse: its damage on every enemy walker of the zone. */
+/** A Bourdon's alchemical mine at the end of its fuse: every enemy walker and building of the zone, 80 to the living and
+ * the machines, 160 to the massive machines and the buildings (équilibreur 23/11). */
 export function mineBlast(this: World, m: Entity): void {
   const ab = ABILITIES.minealchimique;
   const r = toFp(ab.radius!);
+  const blast = { damage: ab.damage!, vs: ab.vs, range: 99, cooldown: 0 };
   for (const t of [...this.entities.values()]) {
-    if (t.def.kind === 'unit' && t.hp > 0 && !t.inside && !flies(t) && this.hostile(t.owner, m.owner) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, { damage: ab.damage!, range: 99, cooldown: 0 });
+    if (t.hp <= 0 || !this.hostile(t.owner, m.owner)) continue;
+    if (t.def.kind === 'building' ? this.gap(m, t) <= r : t.def.kind === 'unit' && !t.inside && !flies(t) && dist(t.x, t.y, m.x, m.y) <= r + t.radius) this.hit(m, t, blast);
   }
   this.casts.push({ kind: 'minechimique', x: m.x, y: m.y });
 }
@@ -547,20 +592,63 @@ export function wall(this: World, owner: number, from: Entity, x: number, y: num
     const [tx, ty] = [tileOf(x + Math.trunc((ux * k * FP) / 2)), tileOf(y + Math.trunc((uy * k * FP) / 2))];
     if (this.grid.inside(tx, ty)) tiles.add(ty * this.grid.width + tx);
   }
+  this.forbid(owner, [...tiles], left);
+}
+
+/** Tiles no one walks through for a while (Mur d'énergie, Concentration énergétique: `field`, which lets shots by). */
+export function forbid(this: World, owner: number, tiles: number[], left: number, field = false): void {
   for (const i of tiles) this.grid.blocked[i]++;
   this.grid.changes++;
-  this.walls.push({ owner, tiles: [...tiles], left });
-  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && tiles.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+  this.walls.push(field ? { owner, tiles, left, field } : { owner, tiles, left });
+  const on = new Set(tiles);
+  for (const u of this.entities.values()) if (u.def.kind === 'unit' && !soars(u) && !u.inside && on.has(tileOf(u.y) * this.grid.width + tileOf(u.x))) this.place(u, u.x, u.y);
+}
+
+/** Redéploiement (équilibreur 24/11): an Orbe plasma bound for a spot of the construction zone, still and silent 17 s,
+ * then there, still and silent 17 s more; paid at once, nothing back if it cannot go. */
+export function redeploy(this: World, b: Entity, x: number, y: number): void {
+  const ab = ABILITIES.redeploiement;
+  if (b.buildLeft > 0 || b.muted > 0) return;
+  const size = (b.def as BuildingDef).size;
+  const [tx, ty] = [tileOf(x) - (size >> 1), tileOf(y) - (size >> 1)];
+  if (!this.canPlace(b.type, tx, ty, b.owner)) return void this.say(b.owner, 'Hors de la zone de construction.');
+  const p = this.players[b.owner];
+  if (p.minerals < (ab.minerals ?? 0)) return void this.say(b.owner, 'Pas assez de minerais.');
+  p.minerals -= ab.minerals ?? 0;
+  b.muted = ticks(ab.duration);
+  this.redeploys.push({ id: b.id, tx, ty, left: ticks(ab.duration) });
+}
+
+/** The first 17 s over: the Orbe goes, if its spot is still in the zone and free; then 17 s more still and silent. */
+export function redeployed(this: World, r: { id: number; tx: number; ty: number }): void {
+  const b = this.entities.get(r.id);
+  if (!b || b.hp <= 0) return;
+  b.muted = 0;
+  if (b.def.kind === 'unit') {
+    // The floating Orbe: there if the spot is still in the zone, nothing back otherwise.
+    const [x, y] = [r.tx * FP + FP / 2, r.ty * FP + FP / 2];
+    b.held = 0;
+    if (!this.powered(b.owner, x, y)) return void this.say(b.owner, 'Redéploiement annulé : zone de construction perdue.');
+    this.place(b, x, y);
+    b.muted = b.held = ticks(ABILITIES.redeploiement.duration);
+    return;
+  }
+  this.block(b, -1);
+  const free = this.canPlace(b.type, r.tx, r.ty, b.owner);
+  this.block(b, 1);
+  if (!free) return void this.say(b.owner, 'Redéploiement annulé : zone de construction perdue.');
+  this.transmute(b, b.type, r.tx, r.ty);
+  b.muted = ticks(ABILITIES.redeploiement.duration);
 }
 
 /** Where a shot from (x1, y1) to (x2, y2) meets a Mur d'énergie, if it does. */
 export function walled(this: World, x1: number, y1: number, x2: number, y2: number): { x: number; y: number } | undefined {
-  if (!this.walls.length) return undefined;
+  if (!this.walls.some((m) => !m.field)) return undefined;
   const steps = Math.ceil((dist(x1, y1, x2, y2) * 2) / FP);
   for (let k = 1; k < steps; k++) {
     const [x, y] = [x1 + Math.trunc(((x2 - x1) * k) / steps), y1 + Math.trunc(((y2 - y1) * k) / steps)];
     const i = tileOf(y) * this.grid.width + tileOf(x);
-    if (this.walls.some((m) => m.tiles.includes(i))) return { x, y };
+    if (this.walls.some((m) => !m.field && m.tiles.includes(i))) return { x, y };
   }
   return undefined;
 }

@@ -500,7 +500,8 @@ describe('AI Isdaris blind spots', () => {
     w.players[0].minerals = 600;
     w.players[0].energy = 600;
     const cmds = new AI(w, 0).think();
-    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [portails[1].id], type: 'miniportail' }));
+    // Which extension first is the AI's choice (archers need the Miniportail since the équilibreur's 24/11 mail).
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [portails[1].id], type: expect.stringMatching(/^(miniportail|laboratoire)$/) }));
   });
 
   it('from minute 6 the Portails keep the price of the Laboratoire', () => {

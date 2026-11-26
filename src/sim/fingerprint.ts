@@ -62,7 +62,7 @@ export function fingerprint(world: World): number {
   for (const p of world.players) value(p, 2);
   tiles(world.grid.blocked);
   for (const v of world.vision) tiles(v.tiles);
-  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.clouds, world.recalls, world.strikes, world.phaseGroups, world.corpses]) value(lasting, 3);
+  for (const lasting of [world.scans, world.walls, world.silences, world.storms, world.clouds, world.recalls, world.strikes, world.phaseGroups, world.corpses, world.tunnels, world.redeploys, world.rains]) value(lasting, 3);
   // Private to the World but lasting: units coming back (Gaïa), and the next id (an entity made on one side only).
   const inside = world as unknown as { respawns: unknown; nextId: number };
   value(inside.respawns, 3);

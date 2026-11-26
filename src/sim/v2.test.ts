@@ -34,7 +34,7 @@ describe('Forge upgrades', () => {
     expect(w.researchable(0, 'ranged2')).toBe(true);
   });
 
-  it('level 2 needs nothing more (the balancer, 2026-11-22: no second Caserne), level 3 a Tour alchimistique', () => {
+  it('level 2 needs nothing more (the balancer, 2026-11-22: no second Caserne), level 3 nothing either (équilibreur 23/11)', () => {
     const w = new World(createMap());
     const forge = w.spawn('forge', 0, 40 * FP, 60 * FP);
     w.spawn('caserne', 0, 30 * FP, 60 * FP);
@@ -46,9 +46,7 @@ describe('Forge upgrades', () => {
     expect(forge.queue).toEqual(['armor2']);
     p.upgrades.armor = 2;
     forge.queue = [];
-    expect(w.lacks(0, 'armor3')).toBe('Requiert : Tour alchimistique');
-    w.spawn('tour', 0, 36 * FP, 66 * FP);
-    expect(w.lacks(0, 'armor3')).toBe('');
+    expect(w.lacks(0, 'armor3')).toBe(''); // no Tour alchimistique needed (équilibreur 23/11)
   });
 
   it('adds damage per level to the right weapons, and armour to soldiers', () => {
@@ -120,7 +118,7 @@ describe('invisibility and detection', () => {
   });
 
   // Danse du soldat (20 Nov 2026): the auxiliaires' shots deal two thirds; it took 5 of them before.
-  it('a detected assassin loses to 6 auxiliaires but beats 5', () => {
+  it('a detected assassin loses to 5 auxiliaires but beats 4', () => {
     const fight = (n: number) => {
       const w = new World(createMap());
       w.players[1].faction = 'isdaris';
@@ -131,8 +129,9 @@ describe('invisibility and detection', () => {
       for (let i = 0; i < ticks(40) && w.entities.has(sin.id) && aux.some((a) => w.entities.has(a.id)); i++) w.step([]);
       return w.entities.has(sin.id);
     };
-    expect(fight(6)).toBe(false);
-    expect(fight(5)).toBe(true);
+    // Équilibreur 24/11: the Assassin strikes every 2.1 s (was 1.25): 5 auxiliaires now beat it.
+    expect(fight(5)).toBe(false);
+    expect(fight(4)).toBe(true);
   });
 
   it('a tower under construction does not detect', () => {

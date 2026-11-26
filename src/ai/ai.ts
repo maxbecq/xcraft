@@ -608,10 +608,11 @@ export class AI {
     const gods = mine.filter((e) => f.gods?.includes(e.type));
     // Invisible units (Isdaris Assassins) do not join waves: they raid the enemy workers on their own.
     const raiders = mine.filter((e) => e.def.kind === 'unit' && (e.def as UnitDef).cloaked);
-    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside);
+    // The floating Orbe plasma (équilibreur 26/11) is a defence, not a soldier: it stays where it was raised.
+    const army = mine.filter((e) => e.def.kind === 'unit' && !(e.def as UnitDef).worker && !(e.def as UnitDef).cloaked && !(e.def as UnitDef).trains && !e.inside && e.type !== 'orbemob');
     const buildings = mine.filter((e) => e.def.kind === 'building');
     // A building turned into another (Récepteur armé…) still counts as what it was.
-    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + builders.reduce((n, s) => n + [s.order, ...s.next].filter((o) => o?.kind === 'build' && o.type === type).length, 0);
+    const count = (type: string) => buildings.filter((b) => b.type === type || (DEFS[type] as BuildingDef | undefined)?.morphs?.includes(b.type)).length + (type === 'orbe' ? mine.filter((e) => e.type === 'orbemob').length : 0) + builders.reduce((n, s) => n + [s.order, ...s.next].filter((o) => o?.kind === 'build' && o.type === type).length, 0);
     const p = w.players[this.player];
     // Resources promised to serfs walking to a construction site are already spent.
     let minerals = p.minerals;
@@ -1053,7 +1054,10 @@ export class AI {
       const spot = this.spot(type, home, (DEFS[type] as BuildingDef).bunker ? this.rallyPoint(home) : undefined);
       // Isdaris (fiche 2010, mod): an Obélisque at rest materialises it, on a spot its side sees; the robots only beam
       // down Obélisques and Récepteurs, for a third more, where no Obélisque can.
-      const obelisk = buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id));
+      // Out of the construction zone, no Obélisque raises it: a robot does (Codex 26/11: the AI asked the Obélisque again
+      // and again for a natural out of its zone).
+      const zoned = !spot || w.materialisable(this.player, type, spot[0], spot[1]);
+      const obelisk = zoned ? buildings.find((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0 && (b.spellCd.materialisation ?? 0) <= w.tick && !beamed.has(b.id)) : undefined;
       // Its middle seen: any of its middle tiles (one tile, or four for an even size: the one below and right of the
       // middle alone was another tile from the other corners, and the same game went otherwise there).
       const lo = (def.size - 1) >> 1;

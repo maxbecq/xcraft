@@ -21,7 +21,9 @@ describe('Dieux, by XC.doc 2008', () => {
   it('the spells grow with the god: Marteau de Thor reach and stun, Pluie de feu damage', () => {
     expect([1, 2, 3].map((l) => spell('foudre', l).range)).toEqual([5, 5.75, 6.5]);
     expect([1, 2, 3].map((l) => spell('foudre', l).duration)).toEqual([3, 4, 5]);
-    expect(spell('pluiedefeu', 3).damage).toBe(210);
+    // Équilibreur 26/11: XC's 20, 25 and 35 a wave, 3, 4 or 5 waves 3.5, 3 or 2.5 s apart, on 2, 2.5 or 3, from 7, 7.5 or 8.
+    expect([1, 2, 3].map((l) => spell('pluiedefeu', l).damage)).toEqual([20, 25, 35]);
+    expect([1, 2, 3].map((l) => [spell('pluiedefeu', l).max, spell('pluiedefeu', l).duration, spell('pluiedefeu', l).radius, spell('pluiedefeu', l).range])).toEqual([[3, 3.5, 2, 7], [4, 3, 2.5, 7.5], [5, 2.5, 3, 8]]);
   });
 
   it('the units: Drake, Walkyrie, Titan', () => {

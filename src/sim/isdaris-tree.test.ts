@@ -66,7 +66,7 @@ describe('Isdaris tree (notice 1.2-1)', () => {
     expect(w.sees(1, a)).toBe(false);
   });
 
-  it("the Trône's orbital cannon needs an Espion watching the spot", () => {
+  it("the Trône's orbital cannon needs to see the spot (an Espion there, équilibreur 24/11: any spot seen)", () => {
     const w = isdaris();
     w.players[0].energy = 1000;
     const t = w.spawn('trone', 0, 20 * FP, 20 * FP);
@@ -75,6 +75,7 @@ describe('Isdaris tree (notice 1.2-1)', () => {
     w.step([{ player: 0, kind: 'ability', ids: [t.id], name: 'canonorbital', x: target.x, y: target.y }]);
     expect(target.hp).toBe(target.maxHp);
     w.spawn('espion', 0, ...at(58, 60));
+    run(w, 0.5); // its sight counted
     w.step([{ player: 0, kind: 'ability', ids: [t.id], name: 'canonorbital', x: target.x, y: target.y }]);
     run(w, 4.5);
     expect(target.hp).toBe(target.maxHp); // the beam strikes 5 s after the order (2010 sheet), time to flee

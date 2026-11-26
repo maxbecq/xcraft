@@ -221,7 +221,8 @@ export function updateGhost(h: Hud): void {
 
 /** An aimed spell's cursor: its zone's size and shape under it (the balancer, 2026-11-22), a circle of its radius. */
 function zoneCursor(h: Hud): void {
-  const aim = h.targeting ? h.input.aim() : null;
+  // A plain attack (A, then a click) aims at one target: no zone (équilibreur 24/11, the Créature's showed its Enfouissement's).
+  const aim = h.targeting && h.scanning ? h.input.aim() : null;
   // The unit ability being aimed, or (none) the selected building's power.
   const caster = aim && [...h.input.selected].map((id) => h.world.entities.get(id)).find((e) => e && (h.aimed ? h.world.abilitiesFor(e).includes(h.aimed) : (e.def as BuildingDef).ability));
   const name = h.aimed ?? (caster ? (caster.def as BuildingDef).ability : undefined);

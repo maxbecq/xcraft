@@ -69,7 +69,7 @@ export function empower(this: World, u: Entity, type: string): void {
 export function armorBonus(this: World, t: Entity): number {
   const d = t.def as UnitDef;
   const faction = this.players[t.owner].faction;
-  let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? this.level(t.owner, 'armor') : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
+  let bonus = faction === 'z' ? (t.def.kind === 'building' ? this.level(t.owner, 'titane') * BALANCE.rules.z.titaneArmor : this.level(t.owner, 'zblindage')) : faction === 'dieux' ? (d.levels ? 0 : this.level(t.owner, 'armor')) : faction === 'isdaris' ? this.level(t.owner, d.mechanical ? 'assembleurarmor' : 'portailarmor') : this.level(t.owner, d.mechanical ? 'vehicles' : d.beast ? 'skin' : 'armor');
   if (t.type === 'moissonneur') bonus += this.level(t.owner, 'robots') * BALANCE.rules.upgrades.robots;
   if (t.type === 'legionnaire') bonus += this.level(t.owner, 'cuirasse');
   // Peau de roc (the balancer, 2026-11-22): +5 armour, shown with the rest.
@@ -146,7 +146,7 @@ export function baseSpeed(this: World, e: Entity): number {
   const mega = e.type === 'zespion' && this.level(e.owner, 'megaespion');
   // Scarabée amélioré (fiche 2010): +0.1 of speed.
   const assault = e.type === 'scarabee' && e.owner >= 0 && this.level(e.owner, 'scarabeassaut') ? BALANCE.rules.upgrades.scarabeSpeed : 0;
-  // Boost génétique (fiche 2010): +0.25 of speed for the Créature.
+  // Boost génétique: the Créature at 3.1 (équilibreur 24/11).
   const genetic = e.type === 'creature' && e.owner >= 0 && this.level(e.owner, 'boostgenetique') ? BALANCE.rules.upgrades.boost.speed : e.type === 'immortel' && e.owner >= 0 && this.level(e.owner, 'auraputride') ? BALANCE.rules.upgrades.auraputride.speed : 0;
   const fast = e.arts.filter((a) => a === 'artvitesse').length * BALANCE.rules.upgrades.artefacts.vitesse;
   const stone = (e.statue > 0 ? BALANCE.rules.upgrades.statue.speed : 100) * (e.chill > 0 ? 100 - BALANCE.rules.upgrades.glace.slow : 100) * this.paceOf(e)[0] / 10000;
@@ -175,7 +175,8 @@ export function ascend(this: World, g: Entity): void {
  */
 export function pulse(this: World, e: Entity): void {
   const U = BALANCE.rules.upgrades;
-  const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical;
+  // Biological only (équilibreur 26/11): no machine, nor a Golem, Titan or Sphinx in stone (massive mechanical).
+  const living = (t: Entity) => t.def.kind === 'unit' && t.hp > 0 && !t.inside && !(t.def as UnitDef).mechanical && clsOf(t) !== 'MM';
   if (e.type === 'osiris' || (e.type === 'immortel' && this.level(e.owner, 'auraputride'))) {
     const dmg = U.putride.damage[e.type === 'osiris' ? e.lvl - 1 : 0];
     for (const t of this.entities.values()) if (living(t) && !flies(t) && this.hostile(t.owner, e.owner) && this.gap(e, t) <= toFp(U.putride.radius)) this.hurt(t, dmg);
@@ -239,6 +240,9 @@ export function hurt(this: World, t: Entity, damage: number): number {
   // caster take half the damage; several clouds over the same spot do not add up.
   if (t.frozen > 0 && t.def.kind === 'building') return 0;
   if (t.def.kind === 'unit' && (t.def as UnitDef).mechanical && this.coned(t)) damage = idiv(damage, 2);
+  // Ciblage (équilibreur 24/11): 10 % more on what an Espion marked; a Drone protecteur near: 2 less (one drone counts).
+  if (t.marked > 0) damage += idiv(damage * ABILITIES.ciblage.damage!, 100);
+  if (t.def.kind === 'unit' && this.guarded(t)) damage = Math.max(1, damage - ABILITIES.protection.damage!);
   // Régénérant (the balancer, 2026-11-22): the host takes 5 % of the damage.
   if (t.ferveur > 0) damage = Math.max(1, idiv(damage * BALANCE.rules.upgrades.regenerantTaken, 100));
   // Bouclier psychique (2010 sheet): +1 to the shield's armour a level.
@@ -256,20 +260,28 @@ export function hurt(this: World, t: Entity, damage: number): number {
   return absorbed;
 }
 
+/** A unit within a Drone protecteur's reach, of the drone's side (the drone itself too). */
+export function guarded(this: World, t: Entity): boolean {
+  const r = toFp(ABILITIES.protection.radius!);
+  for (const g of this.listed().guards) if (g.owner === t.owner && g.hp > 0 && !g.inside && dist(g.x, g.y, t.x, t.y) <= r) return true;
+  return false;
+}
+
 /** Shields recharge a few seconds after the last hit (at once, and faster, near a psy reserve); some units heal. */
 export function regenerate(this: World, e: Entity): void {
   if (e.hp <= 0) return;
   if (e.poison > 0 && --e.poison % ticks(1) === 0) e.hp -= BALANCE.rules.upgrades.poison.damage;
-  const regen = 'regen' in e.def ? e.def.regen : undefined;
+  if (e.hp <= 0) return; // killed by the poison: not healed back this tick (Codex 26/11)
+  // A Sphinx in stone heals at its statue's own rate only (équilibreur 24/11).
+  const regen = 'regen' in e.def && !(e.statue > 0) ? e.def.regen : undefined;
+  // Living units heal at their own pace, hit or not, the shield apart (équilibreur 23-24/11: an Isdaris archer has both).
+  if (regen && e.hp < e.maxHp && this.tick % ticks(1 / regen) === 0) e.hp++;
   const shielding = e.shield < e.maxShield && (e.def.kind !== 'building' || e.buildLeft === 0);
-  if (!shielding && !(regen && e.hp < e.maxHp)) return;
-  if (shielding && this.tick - e.lastHit < ticks(7)) return;
+  if (!shielding || this.tick - e.lastHit < ticks(7)) return;
   // Shields come back 1 a second (2010 sheet).
-  const rate = regen && e.hp < e.maxHp ? regen : 1;
-  if (++e.regenTimer < ticks(1 / rate)) return;
+  if (++e.regenTimer < ticks(1)) return;
   e.regenTimer = 0;
-  if (shielding) e.shield++;
-  else e.hp++;
+  e.shield++;
 }
 
 /**
@@ -278,7 +290,8 @@ export function regenerate(this: World, e: Entity): void {
  */
 export function rechargeShields(this: World, e: Entity): void {
   const ab = ABILITIES.rechargebouclier;
-  if (!(e.def as BuildingDef).shieldCharge || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
+  // Switched off by its button (équilibreur 24/11: on by default).
+  if (!(e.def as BuildingDef).shieldCharge || e.autoOff || e.hp <= 0 || e.buildLeft > 0 || e.inside || e.mana < toFp(ab.mana!) || (e.spellCd.rechargebouclier ?? 0) > this.tick) return;
   let best: Entity | undefined;
   // Outside the units' turn there is no index of who is where (it is made after this): only what carries a shield is
   // gone through, not every entity, once a tick for each Réserve psy and Voyageur ready to give. The pick does not
@@ -298,7 +311,8 @@ export function rechargeShields(this: World, e: Entity): void {
 /** The level of a Z weapon on its socle or tower (1 to 4): its base weapon level and its tier (the Réparateur's « niveau
  * de socle », proposition 3, provisional: a Tourelle at its weapon level 2). */
 export function kitLevel(e: Entity): number {
-  return Math.min(4, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
+  // Five levels of socle (équilibreur 23/11, XC's table); a table of four stops at its last.
+  return Math.min(5, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
 }
 
 /** A healer's Soin spends its energy (healMana, balance designer 2026-11-22); false when it has run dry. The Z
@@ -316,7 +330,7 @@ export function healRate(this: World, e: Entity): number {
   const def = e.def as UnitDef;
   if (def.levels?.heal) return def.levels.heal[e.lvl - 1];
   const heal = e.kit ? WEAPONS[e.kit]?.heal : undefined;
-  return def.heal ?? (heal ? heal[kitLevel(e) - 1] : 0);
+  return def.heal ?? (heal ? heal[Math.min(heal.length, kitLevel(e)) - 1] : 0);
 }
 
 /** Hp a pulse of healing gives: a god's by its level (a pulse a second), a Soigneur's card, a Réparateur its rate once
@@ -329,7 +343,7 @@ export function healPulse(this: World, e: Entity): number {
 /** How far it heals from (its edge): a healer's own range, a Z Réparateur's by its level (2 to 5). */
 export function healReach(this: World, e: Entity): number {
   const range = e.kit ? WEAPONS[e.kit]?.healRange : undefined;
-  return toFp(range ? range[kitLevel(e) - 1] : ((e.def as UnitDef).healRange ?? 2));
+  return toFp(range ? range[Math.min(range.length, kitLevel(e)) - 1] : ((e.def as UnitDef).healRange ?? 2));
 }
 
 /** Inside a Nuage de nanites (Z Accumulateur): a unit of a caster's team within its radius, the caster excepted. */
@@ -419,7 +433,8 @@ export function fight(this: World, e: Entity, o: Extract<Order, { kind: 'attack'
     return this.strike(e, t);
   }
   const t = this.entities.get(o.target);
-  if (!t || t.hp <= 0 || t.inside || (!this.sees(e.owner, t) && (o.auto || this.hidden(t)))) return this.setOrder(e, null);
+  // A building under a Bouclier de plasma: its attackers turn to something else (équilibreur 24/11).
+  if (!t || t.hp <= 0 || t.inside || (t.phased > 0 && t.def.kind === 'building') || (!this.sees(e.owner, t) && (o.auto || this.hidden(t)))) return this.setOrder(e, null);
   if (o.auto && dist(e.x, e.y, o.lx, o.ly) > (def.sight + 3) * FP) {
     // Chased too far: walk back.
     return this.setOrder(e, { kind: 'move', x: o.lx, y: o.ly, arrive: FP });
@@ -440,13 +455,14 @@ export function strike(this: World, e: Entity, t: Entity): void {
   e.shortTicks = 0;
   e.goal = null;
   e.path = [];
-  if (e.cooldown > 0 || e.frozen > 0) return;
+  if (e.cooldown > 0 || e.frozen > 0 || e.muted > 0) return;
   // Stimulant: attacks 50 % faster.
   if (e.phased > 0) return;
   // Inside an enemy Tempête de sable, ranged weapons are useless.
   if (a.range >= 1 && this.storms.some((z) => this.hostile(z.owner, e.owner) && dist(z.x, z.y, e.x, e.y) <= z.r)) return;
   e.cooldown = e.boost > 0 && (e.def as UnitDef).ability === 'stimulant' ? idiv(ticks(a.cooldown) * 2, 3) : ticks(a.cooldown);
-  if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = idiv(e.cooldown * (100 - BALANCE.rules.upgrades.boost.rate), 100);
+  // Boost génétique: the Créature strikes every 0.9 s (équilibreur 24/11).
+  if (e.type === 'creature' && this.level(e.owner, 'boostgenetique')) e.cooldown = ticks(BALANCE.rules.upgrades.boost.cooldown);
   // The Artefacterie's Agilité: each one a share off the time between blows.
   const quick = e.arts.length ? e.arts.filter((x) => x === 'artagilite').length * BALANCE.rules.upgrades.artefacts.agilite : 0;
   if (quick) e.cooldown = Math.max(1, idiv(e.cooldown * (100 - quick), 100));
@@ -509,7 +525,8 @@ export function classValue(this: World, e: Entity, a: Attack, cls: number): numb
 
 /** The attack research's share of a blow worth `value` (+10 % a level), for an attacker that gets it. */
 export function researched(this: World, e: Entity, a: Attack, value: number): number {
-  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' : this.players[e.owner]?.faction === 'z';
+  // The gods grow by their levels, not by the units' weapon research (équilibreur 24/11).
+  const armed = e.def.kind === 'unit' ? e.type !== 'moissonneur' && !(e.def as UnitDef).levels : this.players[e.owner]?.faction === 'z';
   if (!armed) return 0;
   // The Auxiliaire: +1 a level, not 10 % of its 15 (the balancer, 2026-11-22).
   const step = e.type === 'auxiliaire' ? BALANCE.rules.upgrades.auxiliaireRanged : Math.max(1, Math.round(value / 10));
@@ -569,7 +586,21 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
     this.hurt(e, back);
     if ((t.reflectLeft -= back) <= 0) t.reflect = 0;
   }
+  const hp0 = Math.max(0, t.hp);
   const dealt = this.hurt(t, damage);
+  // Attaque de singularité (équilibreur 24/11): the Druide's blow drains as much energy as it takes hit points (not
+  // shield, Codex 26/11).
+  if (e.type === 'druide' && t.mana > 0) t.mana = Math.max(0, t.mana - toFp(hp0 - Math.max(0, t.hp)));
+  // Disque tournoyant (équilibreur 24/11, after its research): 15 % of what the target took to the enemies round it.
+  if (e.type === 'discobole' && e.owner >= 0 && this.level(e.owner, 'disque')) {
+    const D = ABILITIES.disquetournoyant;
+    const share = idiv(dealt * D.damage!, 100);
+    if (share > 0)
+      for (const o of [...this.entities.values()]) {
+        if (o === t || o.def.kind === 'resource' || o.hp <= 0 || o.inside || flies(o) || !this.hostile(o.owner, e.owner) || this.gap(t, o) > toFp(D.radius!)) continue;
+        this.hurt(o, share);
+      }
+  }
   // Armée des enfers (notice): a ghost vanishes once it has dealt its share of damage (or when its time is up).
   if (e.type === 'fantome' && (e.dealt += dealt) >= U.fantomeDamage) e.hp = 0;
   // Z Jet sonique: every ground unit on the line from the shooter to its target is hit too, friend or foe (Z.doc).
@@ -717,7 +748,7 @@ export function enemyNear(this: World, e: Entity, range: number, unitsOnly = fal
     if (!this.hostile(t.owner, e.owner) || t.def.kind === 'resource' || t.hp <= 0 || (unitsOnly && t.def.kind !== 'unit')) continue;
     if (a && !hits(a, t)) continue;
     if (t.id === e.ignore && this.tick < e.ignoreUntil) continue;
-    if (t.inside) continue; // sheltering in a bunker: hit the bunker
+    if (t.inside || (t.phased > 0 && t.def.kind === 'building')) continue; // sheltering in a bunker: hit the bunker; a plasma shield: another
     const d = this.gap(e, t);
     // No rank brings the score under d: past the best already, it cannot win (rank costs a weapon lookup).
     if (d > range || d > bestScore || !this.sees(e.owner, t)) continue;

@@ -2,6 +2,7 @@
 import BALANCE from '../balance.json';
 import { ABILITIES, type BuildingDef, DEFS, HQ_MINERAL_GAP, HQ_TYPES, KIT, reaches, type UnitDef, type UpgradeDef } from '../data';
 import { FP, dist, idiv, ticks, tileOf, toFp } from './fixed';
+import { hits } from './combat';
 import { flies, type Entity, type World } from './world';
 
 /** Can `player` put this building here? (Without a player, the power field is not checked.) */
@@ -9,8 +10,8 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
   const def = DEFS[type] as BuildingDef;
   const g = this.grid;
   if (def.energyRate) {
-    // Z Assimilateur (équilibreur 22/11): on the creep too.
-    if (def.needsPower && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
+    // The Z Assimilateur goes anywhere, off the creep too (équilibreur 23/11); off it, it extracts but does not shoot.
+    if (def.needsPower && def.faction !== 'z' && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
     // Extractors go exactly on a free energy well.
     for (const w of this.entities.values()) {
       if (w.type === 'puits' && w.tx === tx && w.ty === ty) {
@@ -154,13 +155,20 @@ export function tileFits(this: World, type: string, x: number, y: number, player
   // `net`: the player's power network, worked out once for a whole grid of tiles. canPlace wants the building's
   // centre in the field: this tile counts if it lies within reach of a centre that is (half the footprint's diagonal).
   const slack = Math.ceil((def.size - 1) * FP * Math.SQRT1_2);
-  return !def.needsPower || net.some((b) => dist(b.x, b.y, x * FP + FP / 2, y * FP + FP / 2) <= (b.def as BuildingDef).power! * FP + slack);
+  return !def.needsPower || (def.faction === 'z' && !!def.energyRate) || net.some((b) => dist(b.x, b.y, x * FP + FP / 2, y * FP + FP / 2) <= (b.def as BuildingDef).power! * FP + slack);
 }
 
 /** Ticks a building takes to raise: Z ones 20 % faster with Déploiement rapide. */
 export function buildTicks(this: World, b: Entity): number {
   const t = ticks((b.def as BuildingDef).buildTime);
   return this.players[b.owner]?.faction === 'z' && this.level(b.owner, 'deploiement') ? idiv(t * 100, 100 + BALANCE.rules.z.deploiementSpeedup) : t;
+}
+
+/** Whether an Obélisque may raise this building there: inside the construction zone (équilibreur 24/11; a robot alone
+ * goes beyond it). What must stand in the zone anyway, canPlace checks. */
+export function materialisable(this: World, player: number, type: string, tx: number, ty: number): boolean {
+  const def = DEFS[type] as BuildingDef;
+  return !!def.needsPower || this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2);
 }
 
 /** Is a point inside one of the player's linked power fields (Isdaris)? */
@@ -173,7 +181,7 @@ export function powered(this: World, player: number, x: number, y: number): bool
  * zones touch, step by step. An emitter cut off from it powers nothing.
  */
 export function powerNetwork(this: World, player: number): Entity[] {
-  const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0);
+  const nodes = [...this.entities.values()].filter((b) => b.owner === player && (b.def as BuildingDef).power && b.buildLeft === 0 && b.hp > 0);
   // Z (Z.doc): each Intelligence and Pod supérieur spreads its own creep, linked or not.
   if (this.players[player]?.faction === 'z') return nodes;
   const linked = nodes.filter((b) => (b.def as BuildingDef).dropoff);
@@ -220,13 +228,14 @@ export function room(this: World, b: Entity): number {
   return (b.def as BuildingDef | UnitDef).bunker ?? 0;
 }
 
-/** Who may get in: soldiers that shoot into a Fortin or a Scarabée; into a Barge or a Dirigeable, any ground unit but workers. */
+/** Who may get in: soldiers that shoot into a Fortin or a Scarabée; into a Barge or a Dirigeable, any ground unit, its
+ * workers too, each taking its supply's room (équilibreur 23-24/11, every side). */
 export function boards(this: World, e: Entity, b: Entity): boolean {
   const d = e.def as UnitDef;
   // No shelter within a carried shelter: a Scarabée in a Dirigeable takes nobody, and goes in only empty.
   if (b.inside || ((b.def as UnitDef).transport && this.load(e) > 0)) return false;
   // Z Barge: any ground unit of its side, machines too.
-  if ((b.def as UnitDef).transport) return !d.worker && !flies(e);
+  if ((b.def as UnitDef).transport || b.type === 'drake') return !flies(e);
   // Z Refuge (notice): the Intelligence shelters its drones, and only them; the Assimilateur takes 3 to run fully, the
   // Dieux' Puits 4 Esprits.
   if ((b.def as BuildingDef).dropoff || (b.def as BuildingDef).energyRate) return !!d.worker;
@@ -255,6 +264,13 @@ export function trainTime(this: World, b: Entity, type: string): number {
 export function operate(this: World, b: Entity): void {
   if (b.buildLeft > 0) {
     if (!(b.def as BuildingDef).warp && !(b.def as BuildingDef).absorbs) return;
+    // An Isdaris site whose construction zone is lost is gone, nothing paid back (équilibreur 24/11).
+    // Checked every 10 ticks, and on the tick it would be done (Codex 26/11: one finished between two checks).
+    if ((b.def as BuildingDef).faction === 'isdaris' && (b.def as BuildingDef).needsPower && (this.tick % 10 === 0 || b.buildLeft <= b.lvl) && !this.powered(b.owner, b.x, b.y)) {
+      this.say(b.owner, `Zone de construction perdue : ${b.def.name} annulé${b.def.name.endsWith('e') ? 'e' : ''}.`);
+      b.hp = 0;
+      return;
+    }
     // Materialising (Isdaris) or assembling (Z): builds itself, hp and shield filling up.
     const total = this.buildTicks(b);
     // Called down by Gaïa at level N: N steps a tick.
@@ -265,6 +281,8 @@ export function operate(this: World, b: Entity): void {
     if (b.buildLeft === 0) {
       b.shield = b.maxShield;
       this.say(b.owner, `${(b.def as BuildingDef).absorbs ? 'Assemblage' : 'Matérialisation'} terminé${(b.def as BuildingDef).absorbs ? '' : 'e'} : ${b.def.name}.`, 'done');
+      // Équilibreur 26/11: the Orbe plasma, once there, floats free (slowly).
+      if (b.type === 'orbe') this.transmute(b, 'orbemob');
     }
     return;
   }
@@ -275,9 +293,14 @@ export function operate(this: World, b: Entity): void {
   // Proposition 6 (provisional): what a Z building off its creep stops doing (all of it), its hp kept.
   const off = def.faction === 'z' && (def.needsPower || def.addon) && !this.onCreep(b) ? BALANCE.rules.z.offCreep : undefined;
   // Defences (Orbe plasma) shoot the closest enemy unit in range.
-  const attack = off && !off.shoots ? undefined : this.weapon(b);
+  // An Orbe plasma being redeployed does not shoot (équilibreur 24/11).
+  const attack = (off && !off.shoots) || b.muted > 0 ? undefined : this.weapon(b);
   if (attack && b.cooldown === 0) {
-    const t = this.enemyNear(b, toFp(attack.range), true);
+    const f = b.focus ? this.entities.get(b.focus) : undefined;
+    if (b.focus && (!f || f.hp <= 0 || f.inside)) b.focus = 0;
+    // The target pointed out while it is seen and not under a Bouclier de plasma (Codex 26/11), else the nearest enemy.
+    const aimed = f && f.hp > 0 && !f.inside && !(f.phased > 0 && f.def.kind === 'building') && this.sees(b.owner, f) && this.gap(b, f) <= toFp(attack.range) && hits(attack, f);
+    const t = aimed ? f : this.enemyNear(b, toFp(attack.range), true);
     if (t && (!b.kit || reaches(attack, flies(t)))) {
       b.cooldown = ticks(attack.cooldown);
       this.hit(b, t, attack);
@@ -299,8 +322,14 @@ export function operate(this: World, b: Entity): void {
     b.timer += def.bunker ? 4 - def.bunker + this.load(b) : 4;
     const full = ticks(1 / def.energyRate) * 4;
     if (b.timer >= full) {
-      b.timer -= full;
-      this.players[b.owner].energy++;
+      // Its well runs dry at last (équilibreur 24/11: 7500 in each).
+      const well = [...this.entities.values()].find((w) => w.type === 'puits' && w.tx === b.tx && w.ty === b.ty);
+      if (well && well.amount <= 0) b.timer = 0;
+      else {
+        b.timer -= full;
+        this.players[b.owner].energy++;
+        if (well) well.amount--;
+      }
     }
   }
   if (!(off && !off.produces)) this.produce(b);
@@ -317,32 +346,44 @@ export function produce(this: World, b: Entity): void {
     }
   }
   // Miniportail (notice: a second production building): the unit second in the queue is made alongside the first.
-  if (!b.trainLeft2 && b.type === 'portail' && b.queue.length > 1 && DEFS[b.queue[1]].kind === 'unit' && b.exts.includes('miniportail'))
-    b.trainLeft2 = this.trainTime(b, b.queue[1]);
+  // Laboratoire on a Portail, Totem on a Psycho-assembleur (équilibreur 24/11): a unit and a research at once.
+  if (!b.trainLeft2 && b.queue.length > 1 && this.twoLines(b)) b.trainLeft2 = this.trainTime(b, b.queue[1]);
   if (b.trainLeft2 && --b.trainLeft2 === 0) {
     const [type] = b.queue.splice(1, 1);
     const [kit] = b.kits.splice(1, 1);
-    this.deliver(b, type, kit ?? '');
+    if (DEFS[type].kind === 'upgrade') this.finish(b, type);
+    else this.deliver(b, type, kit ?? '');
   }
   if (b.queue.length && --b.trainLeft <= 0) {
     const type = b.queue.shift()!;
     const kit = b.kits.shift() ?? '';
-    if (type === 'niveau') {
-      this.ascend(b);
-      this.next(b);
-      return;
-    }
+    this.finish(b, type, kit);
+    this.next(b);
+  }
+}
+
+/** Whether the second of a queue runs alongside the first: two units with a Miniportail; a unit and a research with a
+ * Laboratoire on a Portail or a Totem on a Psycho-assembleur (équilibreur 24/11). */
+export function twoLines(this: World, b: Entity): boolean {
+  const [a, c] = b.queue;
+  const research = (t: string) => DEFS[t].kind === 'upgrade' && !(DEFS[t] as UpgradeDef).host;
+  // Raising an extension, it does nothing else (équilibreur 26/11).
+  if ((DEFS[a] as UpgradeDef).host) return false;
+  if (b.type === 'portail' && b.exts.includes('miniportail') && DEFS[c].kind === 'unit') return true;
+  const lab = (b.type === 'portail' && b.exts.includes('laboratoire')) || (b.type === 'nanoassembleur' && b.exts.includes('totem'));
+  return lab && ((DEFS[a].kind === 'unit' && research(c)) || (research(a) && DEFS[c].kind === 'unit'));
+}
+
+/** What a queue's item does once done: a god's level, a morph, an extension, a research, a unit. */
+export function finish(this: World, b: Entity, type: string, kit = ''): void {
+  {
+    if (type === 'niveau') return this.ascend(b);
     const up = DEFS[type];
-    if (up.kind === 'building') {
-      this.morph(b, type);
-      this.next(b);
-      return;
-    }
+    if (up.kind === 'building') return this.morph(b, type);
     if (up.kind === 'upgrade' && up.host) {
       // An Isdaris extension: onto this building, its own.
       b.exts.push(type);
       this.say(b.owner, `${b.def.name} : ${up.name}.`, 'done');
-      this.next(b);
       return;
     }
     if (up.kind === 'upgrade') {
@@ -353,11 +394,9 @@ export function produce(this: World, b: Entity): void {
       if (type === 'sonderobuste') for (const u of this.entities.values()) if (u.owner === b.owner && (u.type === 'drone' || u.type === 'dronecombat')) this.fortify(u);
       if (type === 'croissance') for (const u of this.entities.values()) if (u.owner === b.owner && this.grows(u)) this.fortify(u);
       if (type.startsWith('cercle') || ['boostgenetique', 'drakegeant', 'auraputride'].includes(type)) for (const u of this.entities.values()) if (u.owner === b.owner) this.empower(u, type);
-      this.next(b);
       return;
     }
     this.deliver(b, type, kit);
-    this.next(b);
   }
 }
 
@@ -534,7 +573,7 @@ export function besideTile(this: World, b: Entity, toward: { x: number; y: numbe
 
 /** What a carrier holds: units, or for a Z Barge, their supply. */
 export function load(this: World, b: Entity, extra?: Entity): number {
-  const barge = !!(b.def as UnitDef).transport;
+  const barge = !!(b.def as UnitDef).transport || b.type === 'drake';
   const weigh = (u: Entity) => (barge ? (u.def as UnitDef).supply : 1);
   let n = extra ? weigh(extra) : 0;
   for (const u of this.entities.values()) if (u.inside === b.id) n += weigh(u);

@@ -29,23 +29,23 @@ describe('Isdaris, by the 2010 sheet', () => {
     expect(a.maxShield - a.shield).toBe(7);
   });
 
-  it('the Boost génétique gives the Créature 8 hp and 0.25 speed, kept after a slow', () => {
+  it('the Boost génétique gives the Créature 8 hp and 3.1 of speed (équilibreur 24/11), kept after a slow', () => {
     const w = createMatch(['isdaris', 'humains']);
     const plain = w.spawn('creature', 0, ...at(34, 30)).speed;
     w.players[0].upgrades.boostgenetique = 1;
     const c = w.spawn('creature', 0, ...at(30, 30));
     expect(c.maxHp).toBe((DEFS.creature as UnitDef).hp + 8);
-    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.35));
     expect(c.speed).toBeGreaterThan(plain);
     // An Élémentaire d'eau's icy shot slows it; once the ice wears off, the boosted speed is back.
     const ice = w.spawn('elemeau', 1, ...at(33, 30));
     w.hit(ice, c, (DEFS.elemeau as UnitDef).attack!);
     w.entities.delete(ice.id);
-    expect(c.speed).toBeLessThan(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    expect(c.speed).toBeLessThan(speedPerTick((DEFS.creature as UnitDef).speed + 0.35));
     c.held = ticks(10); // stays put, unhurried
     for (let i = 0; i < ticks(3); i++) w.step([]);
     expect(c.chill).toBe(0);
-    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.25));
+    expect(c.speed).toBe(speedPerTick((DEFS.creature as UnitDef).speed + 0.35));
   });
 
   it('the Robots améliorés give the Robot moissonneur +2 armour', () => {

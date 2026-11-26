@@ -3,6 +3,7 @@ import { ABILITIES } from '../data';
 import { createMap } from '../map';
 import { FP, ticks } from './fixed';
 import { World } from './world';
+import { noRegen } from './noregen';
 
 const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
 const run = (w: World, s: number) => {
@@ -68,6 +69,7 @@ describe('energy of the casters', () => {
 
 describe('Soins (fiche 2010)', () => {
   it('the Soigneur gives 25 PV at a time, every 2.5 s, from 5 tiles', () => {
+    noRegen();
     const w = new World(createMap());
     const s = w.spawn('soigneur', 0, ...at(40, 60));
     const hurt = w.spawn('legionnaire', 0, ...at(44, 60));

@@ -3,6 +3,7 @@ import { DEFS, type UnitDef } from '../data';
 import { createMap } from '../map';
 import { FP, ticks } from './fixed';
 import { World } from './world';
+import { noRegen } from './noregen';
 
 // The Humans' numbers as the 2010 sheet (and the mod, where it agrees) gives them.
 const at = (tx: number, ty: number) => [tx * FP + FP / 2, ty * FP + FP / 2] as const;
@@ -13,6 +14,7 @@ const attack = (type: string) => (DEFS[type] as UnitDef).attack!;
 
 describe('Humans, by the 2010 sheet', () => {
   it('the Belluaire poison burns 5 hp a second for 11 s', () => {
+    noRegen();
     const w = new World(createMap());
     w.players[0].upgrades.lamesempoisonnees = 1;
     const b = w.spawn('belluaire', 0, ...at(40, 60));
@@ -27,6 +29,7 @@ describe('Humans, by the 2010 sheet', () => {
   });
 
   it('the Explosif toxique burns 37 a second for 4 s in a zone of 3, and two clouds add up', () => {
+    noRegen();
     const w = new World(createMap());
     w.players[0].upgrades.cocktail = 1;
     const [one, two] = [w.spawn('legionnaire', 1, ...at(46, 60)), w.spawn('legionnaire', 1, ...at(46, 64))];

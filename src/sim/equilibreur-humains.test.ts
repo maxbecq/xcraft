@@ -3,6 +3,7 @@ import { DEFS, type UnitDef } from '../data';
 import { FP, speedPerTick, ticks } from './fixed';
 import { createMatch } from './setup';
 import type { World } from './world';
+import { noRegen } from './noregen';
 
 // The balancer's answer of 2026-11-22, section « 1. Humains »: followed to the letter.
 const humans = () => {
@@ -45,14 +46,14 @@ describe('the balancer, Humains', () => {
     expect(lacks('metallurgie')).toContain('Forge');
   });
 
-  it('the Forge: levels 2 and 3 no longer need two Casernes (level 3 still the Tour)', () => {
+  it('the Forge: levels 2 and 3 no longer need two Casernes, nor the Tour (équilibreur 23/11)', () => {
     const w = humans();
     put(w, 'caserne');
     put(w, 'forge');
     w.players[0].upgrades.ranged = 1;
     expect(w.lacks(0, 'ranged2')).toBe('');
     w.players[0].upgrades.ranged = 2;
-    expect(w.lacks(0, 'ranged3')).toContain('Tour');
+    expect(w.lacks(0, 'ranged3')).toBe('');
   });
 
   it('numbers: supply 12 (Conseil, Grand Conseil), Grand Conseil armour 7, Légionnaire 22 s at 1.1, Soigneur 50 mana, Belluaire 2.9, Plésiosaure 2 / 3 / 2.5', () => {
@@ -117,21 +118,21 @@ describe('the balancer, Humains', () => {
     expect((DEFS.alchimisterie as { researches: string[] }).researches).toContain('scientisme');
   });
 
-  it('Bourdon and Dirigeable, two units: the Dirigeable carries 4 of supply (a Pégase alone), the Bourdon shoots flyers only', () => {
+  it('Bourdon and Dirigeable, two units: the Dirigeable carries 8 of supply, Serfs too (équilibreur 23/11), the Bourdon shoots flyers only', () => {
     const w = humans();
     expect((DEFS.metallurgie as { trains: string[] }).trains).toEqual(expect.arrayContaining(['bourdon', 'dirigeable']));
     expect((DEFS.metallurgie as { researches: string[] }).researches).not.toContain('chargement');
     const d = put(w, 'dirigeable');
     expect([(DEFS.dirigeable as UnitDef).cost, (DEFS.bourdon as UnitDef).cost]).toEqual([{ minerals: 200, energy: 200 }, { minerals: 260, energy: 175 }]);
-    expect(w.room(d)).toBe(4);
-    const auxs = Array.from({ length: 5 }, () => w.spawn('auxiliaire', 0, d.x, d.y + FP));
-    for (const a of auxs.slice(0, 4)) expect(w.boards(a, d) && w.load(d, a) <= w.room(d)).toBe(true);
-    for (const a of auxs.slice(0, 4)) a.inside = d.id;
-    expect(w.load(d, auxs[4]) <= w.room(d)).toBe(false);
-    for (const a of auxs.slice(0, 4)) a.inside = 0;
+    expect(w.room(d)).toBe(8);
+    const auxs = Array.from({ length: 9 }, () => w.spawn('auxiliaire', 0, d.x, d.y + FP));
+    for (const a of auxs.slice(0, 8)) expect(w.boards(a, d) && w.load(d, a) <= w.room(d)).toBe(true);
+    for (const a of auxs.slice(0, 8)) a.inside = d.id;
+    expect(w.load(d, auxs[8]) <= w.room(d)).toBe(false);
+    for (const a of auxs.slice(0, 8)) a.inside = 0;
     const tank = w.spawn('pegase', 0, d.x, d.y + 2 * FP);
     expect(w.boards(tank, d) && w.load(d, tank) <= w.room(d)).toBe(true);
-    expect(w.boards(w.spawn('serf', 0, d.x, d.y), d)).toBe(false);
+    expect(w.boards(w.spawn('serf', 0, d.x, d.y), d)).toBe(true);
     const b = (DEFS.bourdon as UnitDef).attack!;
     expect([b.range, b.ground]).toEqual([5, false]);
     expect((DEFS.bourdon as UnitDef).detector).toBeGreaterThan(0);
@@ -149,7 +150,8 @@ describe('the balancer, Humains', () => {
     expect(p.speed).toBe(speedPerTick(2.4));
   });
 
-  it('Larguer une mine alchimique: 50 minerals and 15 energy, a mine in sight that goes off 3 s later, 160 round 1.75, 10 s of cooldown', () => {
+  it('Larguer une mine alchimique: 50 minerals and 15 energy, a mine in sight that goes off 3 s later, 80 (160 to massive machines and buildings) round 1.75, 10 s of cooldown', () => {
+    noRegen();
     const w = humans();
     const b = w.spawn('bourdon', 0, 26 * FP, 40 * FP);
     const foe = w.spawn('legionnaire', 1, b.x + FP, b.y);
@@ -166,6 +168,7 @@ describe('the balancer, Humains', () => {
     expect(foe.hp).toBe(foe.maxHp);
     for (let i = 0; i < 4; i++) w.step([]);
     expect(foe.hp).toBeLessThan(foe.maxHp);
+    expect(foe.maxHp - foe.hp).toBe(80 + w.researched(mine, { damage: 80, range: 99, cooldown: 0 }, 80) - (DEFS.legionnaire as UnitDef).armor); // 80 to the living (équilibreur 23/11)
     expect(far.hp).toBe(far.maxHp);
     expect(w.entities.has(mine.id)).toBe(false);
   });
@@ -207,6 +210,7 @@ describe('the balancer, Humains', () => {
   });
 
   it('Soin: 25 HP for 5 mana, never on a machine, on its own or not (autosoin)', () => {
+    noRegen();
     const w = humans();
     const m = w.spawn('soigneur', 0, 30 * FP, 40 * FP);
     const man = w.spawn('legionnaire', 0, 31 * FP, 40 * FP);

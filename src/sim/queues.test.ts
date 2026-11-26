@@ -96,11 +96,11 @@ describe('Miniportail', () => {
   it('the Portail with its Miniportail trains the first two of its queue at once', () => {
     for (const mini of [false, true]) {
       const { w, b } = gate(mini);
-      const n0 = of(w, 0, 'archer').length;
-      w.step([{ player: 0, kind: 'train', ids: [b.id], type: 'archer' }, { player: 0, kind: 'train', ids: [b.id], type: 'archer' }]);
-      const t = w.trainTime(b, 'archer');
+      const n0 = of(w, 0, 'creature').length;
+      w.step([{ player: 0, kind: 'train', ids: [b.id], type: 'creature' }, { player: 0, kind: 'train', ids: [b.id], type: 'creature' }]);
+      const t = w.trainTime(b, 'creature');
       for (let i = 0; i < t + 1; i++) w.step([]);
-      expect(of(w, 0, 'archer').length - n0).toBe(mini ? 2 : 1);
+      expect(of(w, 0, 'creature').length - n0).toBe(mini ? 2 : 1);
       expect(b.queue.length).toBe(mini ? 0 : 1);
     }
   });

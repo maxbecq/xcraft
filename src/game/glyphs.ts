@@ -22,6 +22,7 @@ const WEAPON_GLYPHS: Record<string, string> = {
   roquettes: 'M5 19l3-3M8 16l9-9 3-1-1 3-9 9zM8 12l-3 1M12 16l-1 3',
   dechiqueteur: 'M12 3l2 3 3-1v3l3 2-3 2v3l-3-1-2 3-2-3-3 1v-3l-3-2 3-2V5l3 1zM12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4',
   jetsonique: 'M3 12h3M9 7a7 7 0 0 1 0 10M13 5a10 10 0 0 1 0 14M17 3a13 13 0 0 1 0 18',
+  laserlourd: 'M3 10h11M3 14h11M14 9l3 3-3 3zM17 12h4M8 7v-2M8 17v2',
   arc: 'M13 2L6 13h5l-2 9 8-12h-5z',
   canonx04: 'M3 10h12l3 2h3M3 14h12l3-2M6 14v4M11 14v4M3 10v4',
   reparateur: 'M15 4a4 4 0 0 0-1 6l-8 8 2 2 8-8a4 4 0 0 0 6-1l-3-1-1-3z',

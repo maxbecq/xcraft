@@ -4,7 +4,7 @@ import { ABILITIES, abilitiesOf, ARTEFACTS, type BuildingDef, DEFS, type Faction
 import { onMap } from './abilities';
 import { healable } from './combat';
 import { commandOk } from './validate';
-import { FP, dist, idiv, isqrt, ticks, toFp } from './fixed';
+import { FP, dist, idiv, isqrt, ticks, tileOf, toFp } from './fixed';
 import { type Order, cdOf, flies, repairs, type Entity, type Command, type World } from './world';
 
 /** The supply building of each faction, for the "not enough supply" message. */
@@ -79,6 +79,7 @@ export function apply(this: World, c: Command): void {
     }
     case 'stop':
     case 'hold':
+      for (const b of buildings) b.focus = 0;
       units.forEach((e) => {
         e.next = [];
         this.setOrder(e, null);
@@ -106,6 +107,8 @@ export function apply(this: World, c: Command): void {
     }
     case 'attack': {
       const t = this.target(c);
+      // A defence fires at what is pointed out, an ally too, as long as it is in reach (équilibreur 24/11).
+      for (const b of buildings) if (this.weapon(b) && t && t !== b && t.def.kind !== 'resource') b.focus = t.id;
       const fighters = units.filter((e) => this.weapon(e));
       // An explicit attack may also aim at one's own side (or an ally's): to finish off a wounded unit, deny a kill,
       // clear a building. Never at a resource or a neutral thing.
@@ -298,6 +301,11 @@ export function apply(this: World, c: Command): void {
       return;
     }
     case 'ability': {
+      // Recharge de bouclier on or off (équilibreur 24/11), for every Réserve psy and Voyageur picked.
+      if (c.name === 'autorecharge') {
+        for (const e of mine) if ((e.def as BuildingDef).shieldCharge) e.autoOff = !e.autoOff;
+        return;
+      }
       // Replays recorded before the Walkyrie had her own Camouflage: hers under the old name.
       if (c.name === 'camouflage' && mine.some((e) => e.type === 'walkyrie')) {
         const ids = mine.filter((e) => e.type === 'walkyrie').map((e) => e.id);
@@ -340,7 +348,8 @@ export function apply(this: World, c: Command): void {
       const own = (b: Entity) => (b.def as BuildingDef).ability && b.abilityCd === 0;
       const b = named || buildings.find((b) => own(b) && unlocked(b, (b.def as BuildingDef).ability!)) || buildings.find(own);
       if (b && c.name === 'envol') return void this.takeOff(b);
-      if (b && (c.name === 'deraciner' || c.name === 'redeploiement')) return void this.uproot(b, c.name);
+      if (b && c.name === 'deraciner') return void this.uproot(b, c.name);
+      if (b && c.name === 'redeploiement') return void (c.x !== undefined && c.y !== undefined && this.redeploy(b, c.x, c.y));
       if (b && c.name === 'refuge') {
         // Z Refuge: the workers round the shelter go in, the nearest first, only as many as there are seats free (those
         // already on their way hold theirs); the others keep to their work.
@@ -355,10 +364,14 @@ export function apply(this: World, c: Command): void {
         return;
       }
       if (b && c.name === 'bouclierplasma') {
+        // Équilibreur 24/11: on the building clicked (the Obélisque itself if none), Isdaris, finished, in the zone.
         const ab = ABILITIES.bouclierplasma;
-        b.phased = ticks(ab.duration);
+        const at = c.x === undefined || c.y === undefined ? b : [...this.entities.values()].find((t) => t.owner === b.owner && t.def.kind === 'building' && t.hp > 0 && Math.abs(t.x - c.x!) <= ((t.def as BuildingDef).size * FP) / 2 && Math.abs(t.y - c.y!) <= ((t.def as BuildingDef).size * FP) / 2);
+        if (!at || at.buildLeft > 0 || (at.def as BuildingDef).faction !== 'isdaris') return void this.say(c.player, 'Visez un bâtiment isdaris achevé.');
+        if (!this.powered(c.player, at.x, at.y)) return void this.say(c.player, 'Hors de la zone de construction.');
+        at.phased = ticks(ab.duration);
         b.plasmaCd = ticks(ab.cooldown);
-        this.casts.push({ kind: c.name, x: b.x, y: b.y });
+        this.casts.push({ kind: c.name, x: at.x, y: at.y });
         return;
       }
       if (!b || c.x === undefined || c.y === undefined) return;
@@ -402,12 +415,12 @@ export function apply(this: World, c: Command): void {
       if (kind === 'observation') this.scans.push({ owner: c.player, x: ax, y: ay, left: ticks(ab.duration) });
       if (kind === 'observatoire') this.scans.push({ owner: c.player, x: ax, y: ay, left: ticks(ab.duration), radius: ab.radius });
       if (kind === 'canonorbital') {
-        // The beam needs an Espion watching the spot; it spares nothing under it.
+        // Any spot its side sees, the ground, its own buildings too (équilibreur 24/11); it spares nothing under it.
         const [cx, cy] = [ax, ay];
-        if (![...this.entities.values()].some((s) => s.owner === c.player && s.type === 'espion' && dist(s.x, s.y, cx, cy) <= toFp((s.def as UnitDef).sight))) return void this.say(c.player, 'Un Espion doit viser la cible.');
-        // It strikes a few seconds later (2010 sheet: 5 s; the mod: 6 s), the players warned, time to get away.
+        if (!this.vision[c.player].visible(tileOf(cx), tileOf(cy))) return void this.say(c.player, 'Il faut voir la cible.');
+        // It strikes 5 s later, seen or not by then; every player hears the alert, its own too, time to get away.
         this.strikes.push({ owner: c.player, x: cx, y: cy, left: ticks(BALANCE.rules.canonDelay) });
-        for (const p of this.players) if (p.id !== c.player) this.say(p.id, 'Frappe orbitale imminente !', 'alert');
+        for (const p of this.players) this.say(p.id, 'Frappe orbitale imminente !', 'alert');
       }
       if (kind === 'murenergie') this.wall(c.player, b, ax, ay, ab.radius!, ticks(ab.duration));
       if (kind === 'portedephasage') {
@@ -443,7 +456,11 @@ export function smart(this: World, c: Extract<Command, { kind: 'smart' }>, units
       this.setOrder(e, { kind: 'repair', target: t.id, owedM: 0, owedE: 0 });
     } else if (worker && t && t.owner === e.owner && t.def.kind === 'building' && t.buildLeft > 0 && !(t.def as BuildingDef).warp && !(t.def as BuildingDef).absorbs) {
       this.setOrder(e, { kind: 'construct', target: t.id });
-    } else if (!worker && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
+    } else if (t && t !== e && t.owner === e.owner && t.type === 'espion' && this.tunnelOf(t)) {
+      // Couloir temporel (équilibreur 24/11): up to the Espion, then out by the other one.
+      this.setOrder(e, { kind: 'enter', target: t.id });
+    } else if ((!worker || !!(t?.def as UnitDef | undefined)?.transport || t?.type === 'drake') && t && t !== e && t.owner === e.owner && this.room(t) && t.buildLeft === 0 && !flies(e) && this.boards(e, t)) {
+      // Into a transport, a worker too (équilibreur 23-24/11).
       this.setOrder(e, { kind: 'enter', target: t.id });
     } else if (worker && t && t.owner === e.owner && (t.def as BuildingDef).energyRate && this.room(t) && t.buildLeft === 0 && this.boards(e, t)) {
       // Z Assimilateur: a drone goes in to work it.
@@ -550,6 +567,8 @@ export function materialise(this: World, o: Entity, type: string, tx: number, ty
   const lack = this.lacks(o.owner, type);
   if (lack) return void this.say(o.owner, lack);
   if (!this.canPlace(type, tx, ty, o.owner)) return void this.say(o.owner, this.misplaced(def, tx, ty, o.owner));
+  // An Obélisque raises an Obélisque or a Récepteur inside the zone only; a robot may go beyond (équilibreur 24/11).
+  if (!this.materialisable(o.owner, type, tx, ty)) return void this.say(o.owner, 'Hors de la zone de construction.');
   // Its middle seen: any of its middle tiles (one, or four for an even size). The tile below and right of the middle
   // alone was another tile from the other corners: the same site was seen from one corner, not from the other.
   const [lo, hi] = [(def.size - 1) >> 1, def.size >> 1];
