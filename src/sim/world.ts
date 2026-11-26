@@ -844,7 +844,7 @@ export class World {
       if (e.owner !== player || e.buildLeft > 0) continue;
       // A Humains building turned into another (Grande Alchimisterie, Caserne volante, Grand Conseil) still counts as
       // what it was: « requiert Alchimisterie » stays met once it has grown (the balancer's tree, 2026-11-22).
-      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
+      for (let t: string | undefined = e.type; t; t = (DEFS[t] as BuildingDef).faction === 'humains' || t === 'podsup' ? MORPHED_FROM[t] : undefined) n.set(t, (n.get(t) ?? 0) + 1);
     }
     return n;
   }
@@ -869,7 +869,8 @@ export class World {
             : this.level(player, (DEFS[t] as UpgradeDef).line) < (DEFS[t] as UpgradeDef).level
           : count(t) < n,
       )
-      .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].name));
+      // A research is named as such: « Pod supérieur » alone read as the building (équilibreur 23/11).
+      .map(([t, n]) => (n > 1 ? `${n} × ${DEFS[t].name}` : DEFS[t].kind === 'upgrade' && Object.values(DEFS).some((d) => d.kind !== 'upgrade' && d.name === DEFS[t].name) ? `recherche ${DEFS[t].name}` : DEFS[t].name));
     return missing.length ? `Requiert : ${missing.join(', ')}` : '';
   }
 

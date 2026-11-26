@@ -144,8 +144,8 @@
     "quadripode": { "cls": "M", "tiers": [{ "cost": { "minerals": 85, "energy": 0 }, "buildTime": 8, "hp": 180, "armor": 0, "speed": 2.6 }, { "cost": { "minerals": 85, "energy": 0 }, "buildTime": 10, "hp": 220, "armor": 0, "speed": 2.7 }], "weaponLevel": 1, "hp": 140, "armor": 0, "speed": 2.5, "accel": 8, "sight": 9, "supply": 1, "cost": { "minerals": 160, "energy": 0 }, "buildTime": 30, "attack": { "damage": 14, "range": 4, "cooldown": 1 } },
     "hexapode": { "cls": "M", "tiers": [{ "cost": { "minerals": 100, "energy": 50 }, "buildTime": 10, "hp": 350, "armor": 2, "speed": 2.3 }], "weaponLevel": 2, "hp": 290, "armor": 1, "speed": 2.2, "accel": 5, "sight": 9, "supply": 2, "cost": { "minerals": 325, "energy": 50 }, "buildTime": 45, "attack": { "damage": 17, "range": 4, "cooldown": 1 } },
     "coleoptere": { "cls": "M", "tiers": [{ "cost": { "minerals": 75, "energy": 75 }, "buildTime": 9, "hp": 250, "armor": 0, "speed": 2.7 }, { "cost": { "minerals": 75, "energy": 75 }, "buildTime": 11, "hp": 300, "armor": 1, "speed": 2.9 }], "weaponLevel": 1, "hp": 185, "armor": 0, "speed": 2.5, "sight": 10, "supply": 1, "cost": { "minerals": 200, "energy": 150 }, "buildTime": 36, "attack": { "damage": 14, "range": 4, "cooldown": 1 } },
-    "octopode": { "cls": "MM", "tiers": [{ "cost": { "minerals": 200, "energy": 150 }, "buildTime": 17, "hp": 1050, "armor": 3, "speed": 1.9 }], "weaponLevel": 3, "hp": 860, "armor": 3, "speed": 1.8, "accel": 4, "sight": 9, "supply": 4, "cost": { "minerals": 675, "energy": 375 }, "buildTime": 69, "attack": { "damage": 19, "range": 4, "cooldown": 1 } },
-    "mastodonte": { "cls": "MM", "tiers": [{ "cost": { "minerals": 200, "energy": 100 }, "buildTime": 14, "hp": 960, "armor": 3, "speed": 2.1 }], "weaponLevel": 3, "hp": 785, "armor": 2, "speed": 2, "sight": 10, "supply": 4, "cost": { "minerals": 550, "energy": 250 }, "buildTime": 54, "attack": { "damage": 19, "range": 4, "cooldown": 1 } },
+    "octopode": { "cls": "MM", "tiers": [{ "cost": { "minerals": 200, "energy": 150 }, "buildTime": 17, "hp": 1050, "armor": 3, "speed": 1.9 }], "weaponLevel": 4, "hp": 860, "armor": 3, "speed": 1.8, "accel": 4, "sight": 9, "supply": 4, "cost": { "minerals": 675, "energy": 375 }, "buildTime": 69, "attack": { "damage": 19, "range": 4, "cooldown": 1 } },
+    "mastodonte": { "cls": "MM", "tiers": [{ "cost": { "minerals": 200, "energy": 100 }, "buildTime": 14, "hp": 960, "armor": 3, "speed": 2.1 }], "weaponLevel": 4, "hp": 785, "armor": 2, "speed": 2, "sight": 10, "supply": 4, "cost": { "minerals": 550, "energy": 250 }, "buildTime": 54, "attack": { "damage": 19, "range": 4, "cooldown": 1 } },
     "barge": { "cls": "M", "tiers": [{ "cost": { "minerals": 50, "energy": 200 }, "buildTime": 9, "hp": 450, "armor": 2, "speed": 2.6 }], "transport": [8, 12], "hp": 300, "armor": 1, "speed": 2.5, "sight": 9, "supply": 1, "cost": { "minerals": 350, "energy": 0 }, "buildTime": 36 },
     "roctopode": {"cost": {"minerals": 500, "energy": 300}, "buildTime": 50},
     "roctopode2": {"cost": {"minerals": 600, "energy": 400}, "buildTime": 55},
@@ -179,6 +179,7 @@
     "megaespion": {"cost": {"minerals": 250, "energy": 250}, "buildTime": 60},
     "rdechiqueteur": {"cost": {"minerals": 150, "energy": 0}, "buildTime": 30},
     "rjetsonique": {"cost": {"minerals": 100, "energy": 200}, "buildTime": 50},
+    "rlaserlourd": {"cost": {"minerals": 100, "energy": 200}, "buildTime": 50},
     "rarc": {"cost": {"minerals": 125, "energy": 125}, "buildTime": 50},
     "rreparateur": {"cost": {"minerals": 50, "energy": 150}, "buildTime": 50},
     "raccumulateur": {"cost": {"minerals": 50, "energy": 350}, "buildTime": 70},
@@ -273,6 +274,7 @@
     "roquettes": { "levels": [[9, 18, 37, 56, 56, 18], [11, 22, 43, 65, 65, 22], [12, 24, 48, 72, 72, 24], [14, 28, 55, 83, 83, 28]], "ranges": [4, 5, 6, 7], "cooldown": 2, "cost": { "minerals": 70, "energy": 20 } },
     "dechiqueteur": { "levels": [[48, 36, 24, 12, 6, 24], [56, 42, 28, 14, 7, 28], [61, 45, 31, 15, 8, 31], [70, 53, 35, 18, 9, 35]], "range": 0.1, "cooldown": 1.1, "air": false, "airIfFlying": true, "cost": { "minerals": 80, "energy": 0 } },
     "jetsonique": { "levels": [[60, 60, 60, 60, 15, 30], [69, 69, 69, 69, 18, 35], [77, 77, 77, 77, 20, 39], [88, 88, 88, 88, 22, 44]], "ranges": [3, 3, 4, 4], "cooldown": 2.5, "air": false, "line": true, "cost": { "minerals": 125, "energy": 60 } },
+    "laserlourd": { "levels": [[69, 69, 69, 69, 69, 69], [76, 76, 76, 76, 76, 76], [84, 84, 84, 84, 84, 84], [92, 92, 92, 92, 92, 92], [101, 101, 101, 101, 101, 101]], "ranges": [5, 5.75, 6.5, 7.25, 8], "cooldown": 3.5, "cost": { "minerals": 80, "energy": 80 } },
     "arc": { "levels": [[16, 12, 16, 12, 8, 8], [19, 15, 19, 15, 9, 9], [21, 15, 21, 15, 10, 10], [24, 18, 24, 18, 12, 12]], "range": 5, "cooldown": 1.5, "targets": 3, "cost": { "minerals": 80, "energy": 80 } },
     "canonx04": { "levels": [[19, 9, 38, 75, 75, 38], [23, 12, 46, 92, 92, 46], [26, 13, 51, 101, 101, 51], [30, 15, 59, 117, 117, 59]], "ranges": [7, 9, 10, 12], "cooldown": 4.7, "air": false, "splash": 2, "selfHit": true, "cost": { "minerals": 200, "energy": 25 } },
     "reparateur": { "levels": [], "heal": [2, 4, 8, 16], "healRange": [2, 3, 4, 5], "cost": { "minerals": 100, "energy": 70 } },
@@ -372,7 +374,7 @@
     "canonDelay": 5,
     "repair": {"drone": {"hp": 4, "percent": 25, "units": true}, "serf": {"hp": 4, "percent": 25, "units": true}, "esprit": {"hp": 4, "percent": 25, "units": false}},
     "z": { "megaEspion": { "hp": 60, "sight": 1, "speed": 0.15 }, "kitRepair": 3, "optimisationSpeedup": 50, "titaneArmor": 2, "deploiementSpeedup": 20, "sondeRobusteHp": 25, "supremeSpeedup": 25, "podAddons": 3,
-      "podCreep": { "radius": 2, "fromEdge": true }, "addonOnCreepWithPod": true, "flameHitsAllies": false, "offCreep": { "shoots": false, "produces": false, "energy": false } }
+      "podCreep": { "radius": 1, "fromEdge": true }, "addonOnCreepWithPod": true, "flameHitsAllies": false, "offCreep": { "shoots": false, "produces": false, "energy": true } }
   },
   "ai": {
     "plan": { "serfs": 16, "casernes": [[9, 1], [12, 2], [15, 3]], "mineAfter": 2, "wave": 8, "waveGrowth": 4, "healerEvery": 4, "legionShare": 0.3 },
@@ -385,13 +387,13 @@
     "research": {
       "humains": ["ranged1", "armor1", "croissance", "melee1", "ranged2", "armor2", "melee2", "pillage", "regenerant", "armeschimiques", "ranged3", "armor3", "melee3"],
       "isdaris": ["portailatk1", "portailarmor1", "miniportail", "enfouissement", "bouclier1", "portailatk2", "portailarmor2", "deflagration", "totem", "feucirculaire", "assembleuratk1", "assembleurarmor1", "bouclier2", "portailatk3", "portailarmor3", "bouclier3"],
-      "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rdechiqueteur", "rarc", "rjetsonique", "rreparateur", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "rbarge", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "rcanonx04", "roctopode", "rmastodonte", "roctopode2", "rmastodonte2"],
+      "z": ["rquadripode", "laser", "rhexapode", "lanceroquettes", "lanceflammes", "rquadripode2", "rcoleoptere", "zdist1", "rdechiqueteur", "rarc", "rjetsonique", "rlaserlourd", "rreparateur", "rhexapode2", "rquadripode3", "podsuperieur", "rcoleoptere2", "rbarge", "optimisationp", "rcoleoptere3", "zblindage1", "zproxi1", "sonderobuste", "zdist2", "zblindage2", "zproxi2", "zdist3", "zblindage3", "zproxi3", "titane", "rcanonx04", "roctopode", "rmastodonte", "roctopode2", "rmastodonte2"],
       "dieux": ["dmelee1", "darmor1", "offrandes", "celerite", "dranged1", "dmelee2", "darmor2", "dranged2", "dmelee3", "darmor3", "dranged3", "coupuissant"]
     },
     "extra": { "humains": [["marche", 8], ["alchimisterie", 11]], "isdaris": [["orbecommandement", 12]], "z": [["centresocles", 2], ["armement", 10], ["optimisation", 10], ["centrek", 14]], "dieux": [["fontaine", 16], ["primordial", 17], ["artefacterie", 19]] },
     "army": { "humains": { "auxiliaire": 5, "legionnaire": 2, "soigneur": 2 }, "isdaris": { "archer": 4, "creature": 4, "druide": 2, "assassin": 1 }, "z": { "dronecombat": 2, "quadripode": 3, "hexapode": 3, "coleoptere": 1, "octopode": 1, "mastodonte": 1 }, "dieux": { "nain": 4, "minotaure": 2, "sphinx": 2, "elembase": 2, "drake": 1, "pretresse": 1, "corbeau": 1, "walkyrie": 1, "titan": 1, "immortel": 1 } },
     "gods": [["thor", 0], ["seth", 3], ["apollon", 5], ["odin", 9], ["isis", 11], ["athena", 13], ["osiris", 16], ["hades", 18], ["frigg", 20]],
     "godLevelMargin": 300,
-    "kits": { "laser": 2, "flammes": 1, "roquettes": 2, "dechiqueteur": 1, "jetsonique": 1, "arc": 1, "canonx04": 1, "reparateur": 1 }
+    "kits": { "laser": 2, "flammes": 1, "roquettes": 2, "dechiqueteur": 1, "jetsonique": 1, "laserlourd": 1, "arc": 1, "canonx04": 1, "reparateur": 1 }
   }
 }

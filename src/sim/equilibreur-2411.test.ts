@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import BALANCE from '../balance.json';
-import { DEFS, type UnitDef } from '../data';
+import { type BuildingDef, DEFS, type UnitDef } from '../data';
+import { kitLevel } from './combat';
 import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World } from './world';
 
-const run = (w: World, seconds: number) => {
+export const run = (w: World, seconds: number) => {
   for (let i = 0; i < ticks(seconds); i++) w.step([]);
 };
 
@@ -37,5 +38,39 @@ describe('équilibreur 23-24/11, Dieux', () => {
     w.pushApart(walker, god);
     w.pushApart(god, walker);
     expect([god.x, god.y]).toEqual([x, y]);
+  });
+});
+
+describe('équilibreur 23-24/11, Z', () => {
+  it("the Pod's creep reaches 1 past its edge", () => {
+    expect((DEFS.pod as BuildingDef).power).toBe(1 + (DEFS.pod as BuildingDef).size / 2);
+  });
+
+  it('five levels of socle: the Octopode 4 then 5; the Laser lourd as strong as its socle, the Réparateur stops at its fourth', () => {
+    const w = createMatch(['z', 'humains']);
+    const octo = w.spawn('octopode', 0, 20 * FP, 20 * FP);
+    expect(kitLevel(octo)).toBe(4);
+    octo.tier = 2;
+    expect(kitLevel(octo)).toBe(5);
+    octo.kit = 'laserlourd';
+    expect(w.weapon(octo)!.damage).toBe(101);
+    expect(w.weapon(octo)!.range).toBe(8);
+    octo.kit = 'reparateur';
+    expect(w.healRate(octo)).toBe(16);
+    expect((DEFS.rlaserlourd as UnitDef).requires).toEqual({ supreme: 1 });
+  });
+
+  it('a Pod supérieur stands for a Pod in the tree; the Pod supérieur research is named as a research', () => {
+    const w = createMatch(['z', 'humains']);
+    for (const e of [...w.entities.values()]) if (e.owner === 0 && e.type === 'pod') w.remove(e);
+    expect(w.lacks(0, 'armement')).toBe('Requiert : Pod');
+    const ps = w.spawn('podsup', 0, 20 * FP, 20 * FP);
+    ps.buildLeft = 0;
+    expect(w.lacks(0, 'armement')).toBe('');
+    expect(w.lacks(0, 'podsup')).toBe('Requiert : recherche Pod supérieur');
+  });
+
+  it('off its creep a Z building still extracts', () => {
+    expect(BALANCE.rules.z.offCreep).toEqual({ shoots: false, produces: false, energy: true });
   });
 });

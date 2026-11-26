@@ -5,6 +5,7 @@ import { FP, ticks } from './fixed';
 import { createMatch } from './setup';
 import { type Entity, World, flies, soars } from './world';
 import { reaches } from '../data';
+import { noRegen } from './noregen';
 
 const of = (w: World, owner: number, type: string): Entity[] => [...w.entities.values()].filter((e) => e.owner === owner && e.type === type);
 const run = (w: World, seconds: number) => {
@@ -93,6 +94,7 @@ describe('audit gaps', () => {
   });
 
   it('the Allosaure feasts on a fresh body it is aimed at (notice): +75 HP, then 1.5 s still (the balancer, 2026-11-22)', () => {
+    noRegen();
     const w = createMatch(['humains', 'isdaris']);
     const allo = w.spawn('allosaure', 0, 30 * FP, 30 * FP);
     allo.hp = 100;

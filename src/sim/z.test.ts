@@ -297,18 +297,18 @@ describe('Z', () => {
     expect(w.cones).toBe(0);
   });
 
-  it('the large socles: Octopode and Mastodonte at weapon level 3, the Barge carries 8 then 12 of supply', () => {
+  it('the large socles: Octopode and Mastodonte at weapon level 4 (équilibreur 23/11, socles of XC), the Barge carries 8 then 12 of supply', () => {
     const w = createMatch(['z', 'humains']);
     const p = w.players[0];
     p.minerals = 5000;
     p.energy = 5000;
     const octo = w.spawn('octopode', 0, 20 * FP, 20 * FP);
-    expect(w.weapon(octo)!.damage).toBe(19); // machine gun N3
+    expect(w.weapon(octo)!.damage).toBe(22); // machine gun N4
     p.upgrades.roctopode = 2;
     w.step([{ player: 0, kind: 'evolve', ids: [octo.id] }]);
     run(w, 18);
     expect(octo.tier).toBe(2);
-    expect(w.weapon(octo)!.damage).toBe(22); // N4
+    expect(w.weapon(octo)!.damage).toBe(22); // socle level 5: the machine gun's table stops at N4
     expect((DEFS.mastodonte as UnitDef).weapons).not.toContain('canonx04');
     const barge = w.spawn('barge', 0, 30 * FP, 30 * FP);
     expect(w.weapon(barge)).toBeUndefined();
@@ -630,8 +630,8 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
     expect(w.addonsOf(pod)).toBe(2);
   });
 
-  it('the Pod spreads a creep 2 round it, the Pod supérieur 13', () => {
-    expect((DEFS.pod as BuildingDef).power).toBe(3); // from its centre: 2 past its edge
+  it('the Pod spreads a creep 1 round it (équilibreur 23/11), the Pod supérieur 13', () => {
+    expect((DEFS.pod as BuildingDef).power).toBe(2); // from its centre: 1 past its edge
     expect((DEFS.podsup as BuildingDef).power).toBe(13);
   });
 
@@ -652,7 +652,7 @@ describe('Z Pod: 8 places for its add-ons, and the creep (équilibreur 22/11)', 
     expect(spots.some(([x, y]) => w.canPlace('armement', x, y, 0))).toBe(true); // on its creep
     expect(w.canPlace('armement', pod.tx + 2, pod.ty, 0)).toBe(false); // a 3×3 centre 2.5 off: past the Pod's creep
     const far = [...w.entities.values()].filter((e) => e.type === 'puits').sort((a, b) => b.x - a.x)[0];
-    expect(w.canPlace('assimilateur', far.tx, far.ty, 0)).toBe(false);
+    expect(w.canPlace('assimilateur', far.tx, far.ty, 0)).toBe(true); // anywhere (équilibreur 23/11)
   });
 
   it('a Z building off its creep stops working; a Pod\'s add-on stops when its Pod falls', () => {
@@ -774,7 +774,7 @@ describe('Z, revue du 23/11', () => {
     patte();
     expect(quad.support & KIT.patte).toBe(0);
     expect(p.minerals).toBe(5000);
-    w.spawn('pod', 0, 63 * FP, 60 * FP);
+    w.spawn('pod', 0, 62 * FP, 60 * FP);
     expect(w.onCreep(k)).toBe(true);
     patte();
     expect(quad.support & KIT.patte).toBeTruthy();

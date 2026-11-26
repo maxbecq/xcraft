@@ -298,7 +298,8 @@ export function rechargeShields(this: World, e: Entity): void {
 /** The level of a Z weapon on its socle or tower (1 to 4): its base weapon level and its tier (the Réparateur's « niveau
  * de socle », proposition 3, provisional: a Tourelle at its weapon level 2). */
 export function kitLevel(e: Entity): number {
-  return Math.min(4, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
+  // Five levels of socle (équilibreur 23/11, XC's table); a table of four stops at its last.
+  return Math.min(5, Math.max(1, ((e.def as UnitDef | BuildingDef).weaponLevel ?? 1) + e.tier - 1));
 }
 
 /** A healer's Soin spends its energy (healMana, balance designer 2026-11-22); false when it has run dry. The Z
@@ -316,7 +317,7 @@ export function healRate(this: World, e: Entity): number {
   const def = e.def as UnitDef;
   if (def.levels?.heal) return def.levels.heal[e.lvl - 1];
   const heal = e.kit ? WEAPONS[e.kit]?.heal : undefined;
-  return def.heal ?? (heal ? heal[kitLevel(e) - 1] : 0);
+  return def.heal ?? (heal ? heal[Math.min(heal.length, kitLevel(e)) - 1] : 0);
 }
 
 /** Hp a pulse of healing gives: a god's by its level (a pulse a second), a Soigneur's card, a Réparateur its rate once
@@ -329,7 +330,7 @@ export function healPulse(this: World, e: Entity): number {
 /** How far it heals from (its edge): a healer's own range, a Z Réparateur's by its level (2 to 5). */
 export function healReach(this: World, e: Entity): number {
   const range = e.kit ? WEAPONS[e.kit]?.healRange : undefined;
-  return toFp(range ? range[kitLevel(e) - 1] : ((e.def as UnitDef).healRange ?? 2));
+  return toFp(range ? range[Math.min(range.length, kitLevel(e)) - 1] : ((e.def as UnitDef).healRange ?? 2));
 }
 
 /** Inside a Nuage de nanites (Z Accumulateur): a unit of a caster's team within its radius, the caster excepted. */

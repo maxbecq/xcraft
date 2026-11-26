@@ -9,8 +9,8 @@ export function canPlace(this: World, type: string, tx: number, ty: number, play
   const def = DEFS[type] as BuildingDef;
   const g = this.grid;
   if (def.energyRate) {
-    // Z Assimilateur (équilibreur 22/11): on the creep too.
-    if (def.needsPower && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
+    // The Z Assimilateur goes anywhere, off the creep too (équilibreur 23/11); off it, it extracts but does not shoot.
+    if (def.needsPower && def.faction !== 'z' && player >= 0 && !this.powered(player, tx * FP + (def.size * FP) / 2, ty * FP + (def.size * FP) / 2)) return false;
     // Extractors go exactly on a free energy well.
     for (const w of this.entities.values()) {
       if (w.type === 'puits' && w.tx === tx && w.ty === ty) {
@@ -154,7 +154,7 @@ export function tileFits(this: World, type: string, x: number, y: number, player
   // `net`: the player's power network, worked out once for a whole grid of tiles. canPlace wants the building's
   // centre in the field: this tile counts if it lies within reach of a centre that is (half the footprint's diagonal).
   const slack = Math.ceil((def.size - 1) * FP * Math.SQRT1_2);
-  return !def.needsPower || net.some((b) => dist(b.x, b.y, x * FP + FP / 2, y * FP + FP / 2) <= (b.def as BuildingDef).power! * FP + slack);
+  return !def.needsPower || (def.faction === 'z' && !!def.energyRate) || net.some((b) => dist(b.x, b.y, x * FP + FP / 2, y * FP + FP / 2) <= (b.def as BuildingDef).power! * FP + slack);
 }
 
 /** Ticks a building takes to raise: Z ones 20 % faster with Déploiement rapide. */

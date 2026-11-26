@@ -13,10 +13,10 @@ export interface Cost {
 }
 
 /** Every Z weapon a socle can be built with; the ones that fight, for the Tourelle and the Assimilateur. */
-const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04', 'reparateur', 'accumulateur'];
+const SOCLE_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'laserlourd', 'arc', 'canonx04', 'reparateur', 'accumulateur'];
 // Flying socles: no Canon X-04, nor the Lance-flammes (notice: « uniquement terrestre »).
 const FLYER_WEAPONS = SOCLE_WEAPONS.filter((k) => k !== 'canonx04' && k !== 'flammes');
-const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'arc', 'canonx04'];
+const TOWER_WEAPONS = ['laser', 'flammes', 'roquettes', 'dechiqueteur', 'jetsonique', 'laserlourd', 'arc', 'canonx04'];
 /** The Tourelle takes the Réparateur too (équilibreur 22/11), the Assimilateur not. */
 const TURRET_WEAPONS = [...TOWER_WEAPONS, 'reparateur'];
 
@@ -751,7 +751,7 @@ const BASE: Record<string, object> = {
   },
   armement: {
     kind: 'building', name: "Centre d'armement", size: 3, absorbs: true, needsPower: true, requires: { pod: 1 }, faction: 'z', hotkey: 'R',
-    researches: ['laser', 'lanceflammes', 'lanceroquettes', 'rdechiqueteur', 'rjetsonique', 'rarc', 'rreparateur', 'raccumulateur', 'rcanonx04'],
+    researches: ['laser', 'lanceflammes', 'lanceroquettes', 'rdechiqueteur', 'rjetsonique', 'rlaserlourd', 'rarc', 'rreparateur', 'raccumulateur', 'rcanonx04'],
   },
   centrerecherche: {
     kind: 'building', name: 'Centre de recherche', size: 3, absorbs: true, needsPower: true, requires: { pod: 1 }, faction: 'z', hotkey: 'C',
@@ -793,6 +793,8 @@ const BASE: Record<string, object> = {
   lanceflammes: research('Lance-flammes', 'F', 'Lance-flammes pour les socles, choisi à leur construction.', undefined, 'z'),
   rdechiqueteur: research('Déchiqueteur', 'D', 'Lame de corps à corps pour les socles (contre les volants sur un socle volant).', undefined, 'z'),
   rjetsonique: research('Jet sonique', 'J', 'Onde qui frappe tout sur sa ligne, alliés compris.', { supreme: 1 }, 'z'),
+  // Équilibreur 23/11: the Laser lourd (XC: 69 to 101 by the socle's level, every 3.5 s, 5 to 8 far, air and ground).
+  rlaserlourd: research('Laser lourd', 'H', 'Rayon lourd et lent, air et sol.', { supreme: 1 }, 'z'),
   rarc: research('Arc électrique', 'A', 'Frappe trois cibles à la fois devant le socle.', { supreme: 1 }, 'z'),
   rreparateur: research('Réparateur', 'P', 'Nanites qui réparent les machines alliées proches.', { supreme: 1 }, 'z'),
   raccumulateur: research('Accumulateur', 'C', 'Gel électronique, Balise de vacarme, Nuage de nanites, Gravité alourdie.', { supreme: 1, optimisation: 1 }, 'z'),
@@ -1007,6 +1009,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   roquettes: weaponDef('roquettes', 'Lance-roquettes', 'R', 'lanceroquettes'),
   dechiqueteur: weaponDef('dechiqueteur', 'Déchiqueteur', 'D', 'rdechiqueteur'),
   jetsonique: weaponDef('jetsonique', 'Jet sonique', 'J', 'rjetsonique'),
+  laserlourd: weaponDef('laserlourd', 'Laser lourd', 'H', 'rlaserlourd'),
   arc: weaponDef('arc', 'Arc électrique', 'A', 'rarc'),
   canonx04: weaponDef('canonx04', 'Canon X-04', 'X', 'rcanonx04', true),
   reparateur: weaponDef('reparateur', 'Réparateur', 'P', 'rreparateur'),

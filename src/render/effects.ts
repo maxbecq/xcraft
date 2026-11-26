@@ -1048,6 +1048,7 @@ export class Effects {
         }
         this.hits.push({ at: to, color: Z_GREEN, left: flight });
         return true;
+      case 'laserlourd': // provisional look (équilibreur 23/11): the laser's beam, until the DA draws its own
       case 'laser': // a straight beam, instant, fading
         this.streaks.spawn(0x7affb8, muzzle, to, 0, 0.25, 0, 0.1, 1);
         this.streaks.spawn(0xffffff, muzzle, to, 0, 0.12, 0, 0.04, 1);
