@@ -39,7 +39,8 @@ describe('owner changes', () => {
     expect(nain.order).toBeNull();
     const hp = foe.hp;
     run(w, 3);
-    expect(foe.hp).toBe(hp);
+    // Not hit again; a living unit heals by itself (0.5 hp/s), so it may have gained a point.
+    expect(foe.hp).toBeGreaterThanOrEqual(hp);
   });
 
   it('a charmed unit dies its own player’s', () => {
