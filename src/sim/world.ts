@@ -980,7 +980,7 @@ export class World {
     // Gaïa's Esprits come out as she walks (balance designer, 2026-11-22).
     if (e.queue.length && (!e.goal || e.type === 'gaia') && e.held === 0) this.produce(e);
     // Caught under a new building (with or without orders): walk out first.
-    if (!soars(e) && !this.grid.open(tileOf(e.x), tileOf(e.y))) return this.evict(e);
+    if (!soars(e) && this.caught(e)) return this.evict(e);
     if (e.held > 0) return;
     // Célérité naine: a Nain leaps at the enemy it goes for.
     if (e.type === 'nain' && e.order?.kind === 'attack' && e.abilityCd === 0 && e.boost === 0 && this.level(e.owner, 'celerite')) {

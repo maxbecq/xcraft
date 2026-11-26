@@ -278,13 +278,47 @@ export function pace(this: World, e: Entity): number {
   return e.vel;
 }
 
+/**
+ * The tiles a point stands on: one, or the two or four it touches on a tile's edge or corner (a building of even size
+ * turned into a unit stands on its footprint's middle, a corner). Floor alone took the tile after it, so a scene and
+ * its mirror started from different tiles.
+ */
+function standsOn(x: number, y: number): [number, number][] {
+  const xs = x % FP === 0 ? [x / FP - 1, x / FP] : [tileOf(x)];
+  const ys = y % FP === 0 ? [y / FP - 1, y / FP] : [tileOf(y)];
+  return xs.flatMap((tx) => ys.map((ty): [number, number] => [tx, ty]));
+}
+
+/** On no open tile: caught under a building (or on closed ground). A point on an edge is free if a tile it touches is. */
+export function caught(this: World, e: Entity): boolean {
+  return !standsOn(e.x, e.y).some(([x, y]) => this.grid.open(x, y));
+}
+
 /** Idle units standing on a blocked tile walk off it. */
 export function evict(this: World, e: Entity): void {
-  const x = tileOf(e.x);
-  const y = tileOf(e.y);
-  if (this.grid.open(x, y)) return;
+  if (!this.caught(e)) return;
+  const g = this.grid;
   // Ties toward the map's centre: no other direction is known here, and the scan's order did not turn with the map.
-  const [ox, oy] = this.grid.nearestOpen(x, y, this.grid.level(x, y), [(this.grid.width - 1) / 2, (this.grid.height - 1) / 2]);
+  const from: [number, number] = [(g.width - 1) / 2, (g.height - 1) / 2];
+  // On an edge, from each tile it touches: the open tile whose middle is nearest the body, then nearest the map's
+  // centre, then on the same turning side of it (all unchanged by the map turned round).
+  const C = (g.width * FP) / 2;
+  const key = ([tx, ty]: [number, number]) => {
+    const [px, py] = [tx * FP + FP / 2, ty * FP + FP / 2];
+    const cross = (e.x - C) * (py - C) - (e.y - C) * (px - C);
+    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, Math.sign(cross)];
+  };
+  let best: [number, number] | null = null;
+  let bk: number[] = [];
+  for (const [x, y] of standsOn(e.x, e.y)) {
+    if (!g.inside(x, y)) continue;
+    const t = g.nearestOpen(x, y, g.level(x, y), from);
+    const k = key(t);
+    const i = k.findIndex((v, j) => v !== bk[j]);
+    if (!best || (i >= 0 && k[i] < bk[i])) [best, bk] = [t, k];
+  }
+  if (!best) return;
+  const [ox, oy] = best;
   const d = dist(e.x, e.y, ox * FP + FP / 2, oy * FP + FP / 2);
   const s = Math.min(e.speed, d);
   if (d > 0) this.tryMove(e, e.x + idiv((ox * FP + FP / 2 - e.x) * s, d), e.y + idiv((oy * FP + FP / 2 - e.y) * s, d), true);
