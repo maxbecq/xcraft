@@ -213,9 +213,13 @@ export class Scenario {
             if (named(all[a].owner)) came = true;
             a++;
           } else if (a >= now.length || before[b] < now[a]) {
-            // Leaving: still alive and out of the region (dying is not leaving).
+            // Leaving: still alive and out of the region (dying is not leaving; nor is a flying Caserne landing
+            // where it is, gone from the units but still there: Codex, 2026-11-26).
             const e = w.entities.get(before[b++]);
-            if (e && e.hp > 0 && named(e.owner)) went = true;
+            const [x, y, rw, rh] = this.table.regions[c.region].rect;
+            const [tx, ty] = e ? [Math.floor(e.x / FP), Math.floor(e.y / FP)] : [0, 0];
+            const there = tx >= x && ty >= y && tx < x + rw && ty < y + rh;
+            if (e && e.hp > 0 && !there && named(e.owner)) went = true;
           } else (a++, b++);
         }
         return c.kind === 'enter' ? came : went;

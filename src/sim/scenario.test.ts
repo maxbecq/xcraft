@@ -355,6 +355,20 @@ describe('déclencheurs : précisions', () => {
     expect((w.scenario!.state() as { vars: [string, number][] }).vars).toEqual([['n', 0], ['out', 0]]);
   });
 
+  // Codex, 2026-11-26 (third final review): landed, a flying Caserne is a building, gone from the units in the region,
+  // and that was taken for leaving it.
+  it('une Caserne volante qui atterrit dans la région n\'en « sort » pas', () => {
+    const def = map({ vars: [{ id: 'n', value: 0 }, { id: 'out', value: 0 }], triggers: [trig({ enter: 'centre' }), trig({ leave: 'centre', owner: 0 }, { add: 'out', value: '1' })] });
+    def.units = [{ type: 'casernevol', owner: 0, at: [32, 42] }];
+    const w = createMatch(['humains', 'humains'], undefined, def);
+    run(w, 1);
+    const c = of(w, 0, 'casernevol')[0];
+    w.castAt(c, 'atterrissage', c.x, c.y);
+    expect(c.type).toBe('casernevolante');
+    run(w, 1);
+    expect((w.scenario!.state() as { vars: [string, number][] }).vars).toEqual([['n', 0], ['out', 0]]);
+  });
+
   it('la fin d\'une illusion n\'est pas une mort ; les chantiers et illusions ne comptent pas', () => {
     const w = createMatch(['humains', 'humains'], undefined, map({ vars: [{ id: 'n', value: 0 }, { id: 'u', value: 0 }, { id: 'b', value: 0 }], triggers: [trig({ killed: '' }), trig({ every: 1 }, { set: 'u', value: "units(2, 'auxiliaire')" }, { set: 'b', value: "buildings(1, 'caserne')" })] }));
     const ghost = w.spawn('auxiliaire', 1, 31 * FP, 41 * FP);
