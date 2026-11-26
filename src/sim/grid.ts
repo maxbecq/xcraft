@@ -127,7 +127,31 @@ export class Grid {
    * tiles wide stays open to every unit. Buildings are not counted.
    * Returns the same array at every call (it runs at every step of every unit): read it before calling again.
    */
-  keepOff(x: number, y: number, r: number, again = false): [number, number] {
+  keepOff(x: number, y: number, r: number): [number, number] {
+    if (x % FP !== 0 && y % FP !== 0) return this.keep(x, y, r);
+    // On a tile's edge (a building of even size turned into a unit stands on a corner): the point is of no tile more
+    // than another, and taking the one after it (floor) kept a scene and its mirror off different cliffs. As a point
+    // a unit inside each tile it touches: the one moved least; none, where two are moved as little to different
+    // places.
+    const [ox, oy] = [x, y];
+    let best = -1;
+    let tie = false;
+    let [bx, by] = [x, y];
+    for (const qx of x % FP === 0 ? [x - 1, x + 1] : [x]) {
+      for (const qy of y % FP === 0 ? [y - 1, y + 1] : [y]) {
+        const [kx, ky] = this.keep(qx, qy, r);
+        const d = (kx - ox) * (kx - ox) + (ky - oy) * (ky - oy);
+        if (best < 0 || d < best) [best, tie, bx, by] = [d, false, kx, ky];
+        else if (d === best && (kx !== bx || ky !== by)) tie = true;
+      }
+    }
+    const out = this.kept;
+    // Moved by the one unit into a tile only: where it was.
+    [out[0], out[1]] = tie || best <= 2 ? [ox, oy] : [bx, by];
+    return out;
+  }
+
+  private keep(x: number, y: number, r: number, again = false): [number, number] {
     const out = this.kept;
     out[0] = x;
     out[1] = y;
@@ -209,7 +233,7 @@ export class Grid {
       if (Math.abs(x - px) + Math.abs(y - py) <= 2) break;
       // Never settled (two corners handing the point to each other): from the tile's middle instead, which the
       // pushes take towards the tile's open part.
-      if (round === ROUNDS - 1 && !again) return this.keepOff(x0 + FP / 2, y0 + FP / 2, r, true);
+      if (round === ROUNDS - 1 && !again) return this.keep(x0 + FP / 2, y0 + FP / 2, r, true);
     }
     out[0] = x;
     out[1] = y;

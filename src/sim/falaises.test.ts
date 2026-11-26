@@ -327,6 +327,32 @@ describe('cliffs', () => {
     expect(p.airborne).toBe(false);
   });
 
+  // Assembling 0.9.173: an Orbe turned into a unit stands on its footprint's middle, a corner of four tiles; kept
+  // off the cliffs as a point of the tile after it (floor), the game and its mirror moved it to different places.
+  it('a point on a tile\'s edge or corner is kept off the cliffs the same way on the map turned round (Carrefour, four corners)', () => {
+    const w = createMatch(['humains', 'humains', 'humains', 'humains'], undefined, 'carrefour');
+    const g = w.grid;
+    const S = w.map.width * FP;
+    const turn = ([x, y]: number[]) => [S - y, x]; // a quarter turn
+    let moved = 0;
+    for (let ty = 1; ty < w.map.height / 2; ty++) {
+      for (let tx = 1; tx < w.map.width / 2; tx++) {
+        for (const [u, v] of [[0, 0], [0, 300], [512, 0], [0, 900]]) {
+          for (const r of [300, KEEP, 922]) {
+            let p = [tx * FP + u, ty * FP + v];
+            let k = g.keepOff(p[0], p[1], r).slice();
+            if (k[0] !== p[0] || k[1] !== p[1]) moved++;
+            for (let q = 0; q < 3; q++) {
+              [p, k] = [turn(p), turn(k)];
+              expect(g.keepOff(p[0], p[1], r).slice(), `${tx},${ty} + ${u},${v} r ${r} turned ${q + 1}`).toEqual(k);
+            }
+          }
+        }
+      }
+    }
+    expect(moved).toBeGreaterThan(50);
+  });
+
   it('a unit standing in the band walks out of it at its own pace, not in one leap', () => {
     const w = createMatch(['humains', 'humains']);
     const [tx, ty] = foot(w);
