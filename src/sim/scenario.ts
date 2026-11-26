@@ -72,7 +72,8 @@ export class Scenario {
       };
       return {
         kind,
-        at: kind === 'time' ? ticks(w.time as number) : kind === 'every' ? ticks(w.every as number) : 0,
+        // time 0: the very first tick, before the first judgement (ticks(0) is 1).
+        at: kind === 'time' ? ((w.time as number) === 0 ? 0 : ticks(w.time as number)) : kind === 'every' ? ticks(w.every as number) : 0,
         region: kind === 'enter' || kind === 'leave' ? table.regions.findIndex((g) => g.id === w[kind]) : -1,
         owner: w.owner as number | undefined,
         type: kind === 'killed' ? (w.killed as string) : kind === 'built' ? (w.built as string) : '',
@@ -196,20 +197,25 @@ export class Scenario {
       case 'every': return w.tick > 0 && w.tick % c.at === 0;
       case 'enter': case 'leave': {
         if (c.region < 0) return false;
+        // Where units stand, whoever owns them: a unit taken where it stands neither enters nor leaves. The owner
+        // the trigger names is looked at only for those that came or went (any player's if none, never a neutral).
         const all = regions.get(c.region)!;
-        const now = all.filter((u) => (c.owner === undefined ? u.owner >= 0 : u.owner === c.owner)).map((u) => u.id);
+        const now = all.map((u) => u.id);
         const before = this.inside[i];
         this.inside[i] = now;
         // Those there at the first tick did not « enter ».
         if (!this.started) return false;
+        const named = (owner: number | undefined) => owner !== undefined && (c.owner === undefined ? owner >= 0 : owner === c.owner);
         // Both lists in id order: one walk tells who came and who went.
         let [a, b, came, went] = [0, 0, false, false];
         while (a < now.length || b < before.length) {
-          if (b >= before.length || (a < now.length && now[a] < before[b])) (came = true), a++;
-          else if (a >= now.length || before[b] < now[a]) {
-            // Leaving: still alive and out of the region (not dead, not just taken by another player where it stands).
-            const id = before[b++];
-            if (w.entities.get(id)?.hp && !all.some((u) => u.id === id)) went = true;
+          if (b >= before.length || (a < now.length && now[a] < before[b])) {
+            if (named(all[a].owner)) came = true;
+            a++;
+          } else if (a >= now.length || before[b] < now[a]) {
+            // Leaving: still alive and out of the region (dying is not leaving).
+            const e = w.entities.get(before[b++]);
+            if (e && e.hp > 0 && named(e.owner)) went = true;
           } else (a++, b++);
         }
         return c.kind === 'enter' ? came : went;

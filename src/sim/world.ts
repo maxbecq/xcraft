@@ -555,7 +555,8 @@ export class World {
       if (e.id > last) break;
       if (e.hp <= 0 && e.def.kind !== 'resource') continue;
       if (e.def.kind === 'unit') this.think(e);
-      else if (e.def.kind === 'building') this.operate(e);
+      // A neutral building (a map's) is scenery that can be shot: no player of its own to produce, train or pay for.
+      else if (e.def.kind === 'building' && e.owner >= 0) this.operate(e);
     }
     this.cells = null;
     if (this.tick % TICK_RATE === 0) this.repairOnCreep();
@@ -831,7 +832,7 @@ export class World {
   /** Why this upgrade cannot be researched yet (missing buildings), or '' if it can. */
   /** Level researched in an upgrade line (0: none). */
   level(player: number, line: UpgradeLine): number {
-    return this.players[player].upgrades[line] ?? 0;
+    return this.players[player]?.upgrades[line] ?? 0; // a neutral (-1) has researched nothing
   }
 
   /**

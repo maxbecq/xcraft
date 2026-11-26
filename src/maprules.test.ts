@@ -175,3 +175,13 @@ describe('règles de carte : équipes imposées', () => {
     expect(w.winner).toBeNull();
   });
 });
+
+describe('règles de carte : équipes imposées, quel que soit l\'appelant', () => {
+  it('createMatch prend les équipes de la carte, pas celles qu\'on lui passe', () => {
+    const def = rules({ seats: [{ team: 3 }, { team: 0 }] }) as MapFile;
+    const w = createMatch(['humains', 'humains'], [0, 0], def);
+    expect(w.players.map((p) => p.team)).toEqual([3, 0]);
+    for (let i = 0; i < 25; i++) w.step([]);
+    expect(w.winner).toBeNull();
+  });
+});

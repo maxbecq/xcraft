@@ -7,7 +7,6 @@ import { FP, ticks } from './fixed';
 import { MAX_SPAWN, secondsAt } from './scenario';
 import { evaluate, parseExpr } from './triggers';
 import { parseReplay } from '../game/replay';
-import { removeMap } from '../maps';
 import { createMatch } from './setup';
 import type { Action, Trigger, Triggers, When } from './triggers';
 import type { Command, World } from './world';
@@ -424,11 +423,36 @@ describe('déclencheurs : un replay portant sa carte', () => {
     const text = JSON.stringify({ v: 1, map: def.id, carte: def, factions: ['humains', 'z'], teams: [0, 1], biome: def.biome, handicap: [100, 100], ticks: log });
     const r = parseReplay(text);
     if (typeof r === 'string') throw new Error(r);
-    const again = createMatch(r.factions, r.teams, r.map, r.biome);
+    const again = createMatch(r.factions, r.teams, r.carte!, r.biome); // the replay's own copy, as the game plays it
     expect(again.scenario).not.toBeNull();
     let k = 0;
     while (again.tick < w.tick) again.step(r.ticks[k]?.[0] === again.tick ? r.ticks[k++][1] : []);
     expect(fingerprint(again)).toBe(fingerprint(w));
-    removeMap(def.id);
   }, 60_000);
+});
+
+describe('déclencheurs : revue Codex', () => {
+  it('une unité prise sur place n\'« entre » pas pour son nouveau propriétaire', () => {
+    const def = map({ vars: [{ id: 'n', value: 0 }, { id: 'out', value: 0 }], triggers: [trig({ enter: 'centre', owner: 1 }), trig({ leave: 'centre', owner: 0 }, { add: 'out', value: '1' })] });
+    def.units = [{ type: 'legionnaire', owner: 0, at: [31, 41] }];
+    const w = createMatch(['humains', 'humains'], undefined, def);
+    run(w, 1);
+    of(w, 0, 'legionnaire')[0].owner = 1; // taken where it stands
+    run(w, 1);
+    expect((w.scenario!.state() as { vars: [string, number][] }).vars).toEqual([['n', 0], ['out', 0]]);
+    // It walks out, then back in: now it leaves and enters, as player 2's.
+    const u = of(w, 1, 'legionnaire')[0];
+    w.step([{ player: 1, kind: 'move', ids: [u.id], x: 26 * FP, y: 41 * FP }]);
+    run(w, 10);
+    w.step([{ player: 1, kind: 'move', ids: [u.id], x: 31 * FP + FP / 2, y: 41 * FP + FP / 2 }]);
+    run(w, 10);
+    expect(n(w)).toBe(1);
+  });
+
+  it('« time: 0 » agit au tout premier tick, avant le premier jugement', () => {
+    const w = createMatch(['humains', 'humains'], undefined, map({ triggers: [trig({ time: 0 }, { set: 'n', value: '7' }, { victory: 1 })] }));
+    w.step([]);
+    expect(n(w)).toBe(7);
+    expect(w.winner).toBe(1);
+  });
 });

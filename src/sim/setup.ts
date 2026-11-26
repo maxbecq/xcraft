@@ -96,6 +96,8 @@ export function createMatch(factions: Faction[] = ['humains', 'humains'], teams?
     if (d.kind === 'unit') world.spawn(u.type, u.owner, u.at[0] * FP + FP / 2, u.at[1] * FP + FP / 2);
     else world.spawn(u.type, u.owner, ...px(u.at));
   }
+  // Teams a map imposes win over the caller's, as its races do (the game's page does the same: config.ts).
+  if (def.seats?.some((s) => s.team !== undefined)) teams = factions.map((_, i) => def.seats?.[i]?.team ?? teams?.[i] ?? i);
   if (teams) world.setTeams(teams);
   if (def.triggers?.triggers.length) world.scenario = new Scenario(def.triggers);
   return world;
