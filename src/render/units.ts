@@ -76,8 +76,9 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
  * hides the back of a ring drawn hugging it, so the ring looks pushed toward the viewer; a wider one shows all round.
  */
 // The Grand Conseil (0.9.151): its tall belfry, 6 tiles up, hid the back of the usual ring (2.2): one round its
-// footprint's corners instead (the user's remark 105, 2026-11-24).
-const RING_RADIUS: Record<string, number> = { reservepsy: 1.4, trone: 2.5, grandconseil: 2.9 };
+// footprint's corners instead (the user's remark 105, 2026-11-24). The Conseil des échevins below it is the same
+// model, 4.1 by 3.8 across (corners 2.8 out), over its whole 4-tile footprint: the same ring (remark 120, 2026-11-26).
+const RING_RADIUS: Record<string, number> = { reservepsy: 1.4, trone: 2.5, conseil: 2.9, grandconseil: 2.9 };
 
 /** Not drawn, but hit by the click raycast. */
 const PICK_PROXY = new MeshBasicMaterial({ visible: false });
