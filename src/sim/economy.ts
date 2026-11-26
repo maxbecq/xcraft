@@ -13,8 +13,12 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
   }
   if (o.phase === 'return' || e.carry > 0) {
     o.phase = 'return';
-    const home = this.nearestDropoff(e, o.skip) ?? this.nearestDropoff(e);
+    // A drop-off taken for want of a nearer one it could reach is kept until the load is in (Codex, 2026-11-26: the
+    // nearer one let back into the choice, the worker turned round each time, its load never delivered).
+    const kept = o.fallback ? this.entities.get(o.home ?? 0) : undefined;
+    const home = kept && kept.hp > 0 && kept.owner === e.owner ? kept : (this.nearestDropoff(e, o.skip) ?? this.nearestDropoff(e));
     if (!home) return this.setOrder(e, null);
+    if (home !== kept) delete o.fallback;
     // The way planned leads to the drop-off it was planned for: a closer one (just built) needs a way of its own.
     if (o.home !== home.id) {
       o.home = home.id;
@@ -25,10 +29,13 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
     if (!this.reachRect(e, home.tx, home.ty, size)) {
       // No way to it (a closer one on a rise with no ramp, Codex 2026-11-26): left out a while, as a field is, so the
       // worker goes back to one it can reach; the only one left is tried still.
-      if (e.stuck > 2 && this.nearestDropoff(e, [...(o.skip ?? []), home.id])) {
+      const next = e.stuck > 2 ? this.nearestDropoff(e, [...(o.skip ?? []), home.id]) : undefined;
+      if (next) {
         e.stuck = 0;
         o.skipped ??= this.tick;
         (o.skip ??= []).push(home.id);
+        [o.home, o.fallback] = [next.id, true];
+        e.goal = null;
         return;
       }
       return void this.goNear(e, home.tx, home.ty, size);
@@ -36,6 +43,7 @@ export function gather(this: World, e: Entity, o: Extract<Order, { kind: 'gather
     const p = this.players[e.owner];
     p.minerals += idiv(e.carry * p.handicap, 100);
     e.carry = 0;
+    delete o.fallback;
     o.phase = 'go';
     e.goal = null;
   }

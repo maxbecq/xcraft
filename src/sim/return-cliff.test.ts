@@ -95,4 +95,21 @@ describe('a worker back from a field below the cliff its headquarters stands on'
     expect(w.players[0].minerals).toBeGreaterThan(minerals);
     expect(w.tick - start).toBeLessThan(ticks(25)); // the way by the ramp, a few seconds lost at the rise
   });
+
+  // Codex, 2026-11-26 (second final review): with the reachable drop-off far off, the unreachable one was tried again
+  // each time it was let back into the choice, and the worker went back and forth with its load for good.
+  it('keeps to the drop-off it can reach, however far, until it has delivered', () => {
+    const [w2, h2] = [160, 20];
+    const level = new Uint8Array(w2 * h2);
+    for (let y = 4; y < 13; y++) level.fill(1, y * w2 + 21, y * w2 + 30); // a rise, no ramp
+    const w = new World({ width: w2, height: h2, level, ramp: new Array(w2 * h2).fill(null), rampStep: new Uint8Array(w2 * h2) }, 2);
+    const size = (DEFS.conseil as BuildingDef).size;
+    w.spawn('conseil', 0, 23 * FP + (size / 2) * FP, 6 * FP + (size / 2) * FP);
+    w.spawn('conseil', 0, 147 * FP, 15 * FP);
+    const field = w.spawn('minerai', -1, 14 * FP, 16 * FP);
+    const serf = w.spawn('serf', 0, 15 * FP + FP / 2, 16 * FP + FP / 2);
+    w.step([{ player: 0, kind: 'smart', ids: [serf.id], x: field.x, y: field.y, target: field.id }]);
+    while (w.tick < 4500 && w.players[0].minerals === 0) w.step([]);
+    expect(w.players[0].minerals).toBeGreaterThan(0);
+  });
 });
