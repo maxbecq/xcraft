@@ -264,7 +264,7 @@
     "artagilite": { "cost": { "minerals": 200, "energy": 200 }, "buildTime": 10 },
     "artvitesse": { "cost": { "minerals": 100, "energy": 100 }, "buildTime": 10 },
     "niveau": { "cost": { "minerals": 0, "energy": 0 }, "buildTime": 40 },
-    "minerai": { "amount": 3000 }
+    "minerai": { "amount": 2500 }
   },
   "weapons": {
     "mitrailleuse": { "levels": [[14, 11, 11, 7, 4, 7], [17, 13, 13, 9, 4, 9], [19, 15, 15, 10, 5, 10], [22, 16, 16, 11, 6, 11]], "range": 4, "cooldown": 1, "cost": { "minerals": 0, "energy": 0 } },
