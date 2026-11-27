@@ -91,6 +91,15 @@ const PLATFORM_HALF = 1.22;
 /** The longest a Pod's arm gets: add-ons are built flush against the Pod (World.addonSpot), the arm never reaches out. */
 const DOCK_MAX = 1.2;
 /**
+ * The Laser lourd's rings (zring_<k>, breech to muzzle): over the last quarter before each shot the charge runs up them;
+ * they flare as it fires, cool down, and glow softly between fights. `fired`: the cooldown left, 1 just fired.
+ */
+function pulseRings(rings: MeshStandardMaterial[], fighting: boolean, fired: number): void {
+  const charge = fighting ? Math.max(0, (0.25 - fired) / 0.25) * rings.length : 0;
+  rings.forEach((m, k) => (m.emissiveIntensity = !fighting ? 1 : fired > 0.85 ? 1 + (2 * (fired - 0.85)) / 0.15 : charge > k ? 1.2 + 1.3 * Math.min(1, charge - k) : 0.35));
+}
+
+/**
  * Z socle weapons: one module per weapon, public/models/zw_<weapon>.glb, the same on every socle; a socle built
  * without a weapon carries the free default machine gun. The nine weapons are Rodin Low Poly models (fal), made from
  * the chosen boards and normalised by concepts-z/normweapon.py; the machine gun is a Blender stand-in
@@ -944,6 +953,12 @@ export class EntityRenderer {
         this.standOff(v, e, e.order?.kind === 'attack' ? this.views.get(e.order.target) : undefined, world.entities.get(e.order?.kind === 'attack' ? e.order.target : -1), dt);
       } else if (v.weapon?.pivot) {
         this.ringFight(v, e, world, dt);
+      } else if (v.weapon?.rings) {
+        // A Tourelle's Laser lourd: it shoots as soon as its cooldown is out and a foe is in reach, so the cooldown runs
+        // from shot to shot; after the last one, no charge runs up its rings with no foe left to fire at.
+        const a = world.weapon(e);
+        const fired = a && e.cooldown > 0 ? e.cooldown / ticks(a.cooldown) : 0;
+        pulseRings(v.weapon.rings, fired > 0.25 || (fired > 0 && !!world.enemyNear(e, a!.range * FP, true)), fired);
       }
       if (v.weapon && !v.weapon.pivot) this.aimWeapon(v, e, world, foe, dt);
       if (v.cargo) v.cargo.visible = e.carry > 0;
@@ -1465,13 +1480,7 @@ export class EntityRenderer {
     const mining = e.type === 'drone' && !moving && e.order?.kind === 'gather' && e.order.phase === 'mine';
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
-    if (v.weapon?.rings) {
-      // Laser lourd: over the last quarter before each shot the charge runs up its rings, breech to muzzle; they flare as
-      // it fires, cool down, and glow softly between fights.
-      const n = v.weapon.rings.length;
-      const charge = fighting ? Math.max(0, (0.25 - fired) / 0.25) * n : 0;
-      v.weapon.rings.forEach((m, k) => (m.emissiveIntensity = !fighting ? 1 : fired > 0.85 ? 1 + (2 * (fired - 0.85)) / 0.15 : charge > k ? 1.2 + 1.3 * Math.min(1, charge - k) : 0.35));
-    }
+    if (v.weapon?.rings) pulseRings(v.weapon.rings, fighting, fired);
     const melee = !!a && a.range < 1;
     // A turret turns to its foe while it fights, and back to the front after.
     const turret: Object3D | null = (v.model.userData.turret ??= v.model.getObjectByName('zturret') ?? null);
