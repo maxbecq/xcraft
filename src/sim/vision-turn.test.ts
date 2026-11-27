@@ -35,7 +35,9 @@ describe('sight turned with the map', () => {
           for (const e of [...w.entities.values()]) if (e.owner >= 0) w.entities.delete(e.id);
           const at = turn(cx + Math.round(dx * FP), cy + Math.round(dy * FP), q);
           w.spawn(kind, owner, ...at);
-          w.step([]);
+          // Seen afresh for each spot: a step sees only every fourth tick (Codex final, 2026-11-27: 45 of 60 spots
+          // read the sight of the one before).
+          (w as unknown as { see(): void }).see();
           const v = w.vision[owner];
           const back: number[] = [];
           for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
