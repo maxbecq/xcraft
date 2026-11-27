@@ -39,6 +39,11 @@ describe('sight turned with the map', () => {
           // read the sight of the one before).
           (w as unknown as { see(): void }).see();
           const v = w.vision[owner];
+          // Fresh, or the test fails (Codex final 2, 2026-11-27): the unit's own tile seen, and nothing past its sight.
+          const [ux, uy] = [Math.floor(at[0] / FP), Math.floor(at[1] / FP)];
+          expect(v.visible(ux, uy)).toBe(true);
+          const sight = (DEFS[kind] as UnitDef).sight;
+          for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (v.visible(x, y)) expect(Math.hypot(x - ux, y - uy)).toBeLessThanOrEqual(sight + 1);
           const back: number[] = [];
           for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
             const [tx, ty] = rotateTile(N, x, y, q);
