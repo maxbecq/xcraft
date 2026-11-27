@@ -10,6 +10,7 @@ import { owned, SHARED } from './models';
  * following the true build progress. The model's own lights (halos, veil, beams) wait for the end.
  * The cut is in world height, so it fits every model, Meshy or Blender; the materials are this view's own copies,
  * given back at the end. Shadows and ambient occlusion would draw the whole model, cut or not: off until then.
+ * Its lights (skeleton, band, sparks) toned down by about 30 %: their bloom haloed the whole site (the user's remark, 0.9.182).
  */
 export interface Materialising {
   /** World heights of the marble's front and of the skeleton's top. */
@@ -76,7 +77,7 @@ function cut(m: Material, front: { value: number }): Material {
     sh.fragmentShader = `uniform float uFront;\nvarying vec3 vMatW;\nvarying vec3 vMatN;\n${sh.fragmentShader}`
       .replace('void main() {', 'void main() {\n  if (vMatW.y > uFront) discard;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      totalEmissiveRadiance += vec3(0.08, 0.6, 0.95) * exp(-max(0.0, uFront - vMatW.y) * 45.0) * (1.0 - 0.85 * abs(vMatN.y));`);
+      totalEmissiveRadiance += vec3(0.055, 0.42, 0.66) * exp(-max(0.0, uFront - vMatW.y) * 45.0) * (1.0 - 0.85 * abs(vMatN.y));`);
   };
   c.customProgramCacheKey = () => `${key()}-materialise`;
   return c;
@@ -121,7 +122,7 @@ export function materialise(body: Object3D, root: Object3D): Materialising {
     };
     const e = edges(mesh.geometry);
     const count = e.getAttribute('position').count / 2;
-    const lm = owned(new LineBasicMaterial({ color: new Color(0.05, 0.5, 0.85), transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false }));
+    const lm = owned(new LineBasicMaterial({ color: new Color(0.035, 0.36, 0.62), transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false }));
     // A dense mesh (the Portail's statues) would pile its lines up into a blot of light.
     lm.opacity = Math.min(1, 900 / Math.max(1, count));
     lm.onBeforeCompile = (sh) => {
@@ -148,7 +149,7 @@ export function materialise(body: Object3D, root: Object3D): Materialising {
   const order = [...Array(pts.length / 3).keys()].sort((a, b) => pts[a * 3 + 1] - pts[b * 3 + 1]);
   const verts = new Float32Array(pts.length);
   order.forEach((k, i) => verts.set(pts.slice(k * 3, k * 3 + 3), i * 3));
-  sparkMaterial ??= new PointsMaterial({ color: new Color(0.6, 1.8, 2.4), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false });
+  sparkMaterial ??= new PointsMaterial({ color: new Color(0.4, 1.25, 1.7), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false });
   const sparks = new Points(new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(SPARKS * 3), 3)), sparkMaterial);
   sparks.userData.noPick = true;
   sparks.visible = false;

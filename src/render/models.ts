@@ -349,6 +349,15 @@ function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
  */
 function fableLights(scene: Object3D): void {
   const halos = new Map<Material, ShaderMaterial>();
+  const basins = new Map<Material, MeshStandardMaterial>();
+  const basin = (m: MeshStandardMaterial) => {
+    const c = m.clone();
+    c.color.setRGB(0.03, 0.16, 0.38); // a deep pool, not a lit white plate under the sun
+    c.emissive.setRGB(0.04, 0.42, 0.95);
+    c.emissiveIntensity = 0.22;
+    veinGlow(c);
+    return c;
+  };
   scene.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     const m = o.material as MeshStandardMaterial;
@@ -361,6 +370,13 @@ function fableLights(scene: Object3D): void {
       m.emissiveIntensity = 2.2;
       m.depthWrite = false;
       o.userData.noShadow = true;
+    } else if (o.name.startsWith('fx_cyan_bassin')) {
+      // The Réserve psy's basin on its crown: a wide disc facing the sky, at the lines' strength it bloomed into a white
+      // cap and blanched the building (the user's remark, 0.9.182). A deeper, fainter cyan of its own.
+      o.material = basins.get(m) ?? basins.set(m, basin(m)).get(m)!;
+    } else if (m.name === 'reserve_verre' && !m.userData.dim) {
+      m.userData.dim = true;
+      m.emissiveIntensity = 0.45; // its pale blue-white light added to the vat's under the bloom
     } else if (m.name === 'marbre' && !m.userData.dim) {
       // Pure white marble flared in the bloom, past the other Isdaris buildings (the user's remark, 0.9.173).
       m.userData.dim = true;
@@ -429,7 +445,7 @@ function boil(m: MeshStandardMaterial): void {
       float churn = 0.7 + 0.3 * sin(veinTime * 3.1 + vBoil.y * 11.0 + 2.0 * sin(vBoil.x * 14.5 + veinTime * 1.7));
       float b = bubbleRings(vec2(vBoil.x * 6.9, vBoil.y * 5.0 - veinTime * 1.4))
         + 0.7 * bubbleRings(vec2(vBoil.x * 12.25 + 3.0, vBoil.y * 9.0 - veinTime * 2.3));
-      totalEmissiveRadiance = totalEmissiveRadiance * churn + vec3(0.45, 0.9, 1.0) * b * 1.3;`);
+      totalEmissiveRadiance = totalEmissiveRadiance * churn + vec3(0.18, 0.72, 1.0) * b * 1.4; // cyan bubbles, not white (0.9.182)`);
   };
   m.customProgramCacheKey = () => 'boil';
 }
