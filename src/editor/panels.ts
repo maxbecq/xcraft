@@ -8,10 +8,10 @@ import { rotateFootprint } from '../map';
 import { CORNERS } from '../maps';
 import { BIOMES } from '../render/biome';
 import { TEAM_COLORS } from '../render/models';
-import { DEFS, type Faction, START } from '../data';
+import { DEFS, type Faction, HQ_MINERAL_GAP, START } from '../data';
 import { PLANETS } from '../mapcheck';
-import { DECOR, RACES, type Symmetry } from './format2';
-import { act, changed, ed, LAYERS, onChanged, startNumbers, type Tool, triggersOf } from './state';
+import { DECOR, mineralSites, RACES, SITE_MINERALS, type Symmetry } from './format2';
+import { act, changed, ed, iconOf, LAYERS, onChanged, startNumbers, type Tool, triggersOf } from './state';
 import { NAME, renameRegion, RESERVED } from '../sim/triggers';
 import { teamsWindow, techTree } from './windows';
 
@@ -25,7 +25,7 @@ const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 export const RACE_NAMES: Record<Faction, string> = { humains: 'Humains', z: 'Z', isdaris: 'Isdaris', dieux: 'Dieux' };
 const ICONS = `${import.meta.env.BASE_URL}icons/`;
 /** The game's icon for a type, or its initials when it has none. */
-const icon = (type: string) => `<img src="${ICONS}${type}.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:${esc(JSON.stringify((DEFS[type]?.name ?? type).slice(0, 2)))}}))">`;
+const icon = (type: string) => `<img src="${ICONS}${iconOf(type)}.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:${esc(JSON.stringify((DEFS[type]?.name ?? type).slice(0, 2)))}}))">`;
 /** Names shown for the doodads file's pieces. */
 export const DECOR_NAMES: Record<string, string> = {
   barrels: 'Barils', barrier: 'Barrière', billboard: 'Panneau', bones: 'Ossements', cables: 'Câbles', crates: 'Caisses', dead_tree: 'Arbre mort', dry_bush: 'Buisson sec',
@@ -105,6 +105,17 @@ export function palettePanel(): HTMLElement {
   res.appendChild(resRow);
   const departNote = h('<p class="note"></p>');
   res.appendChild(departNote);
+  // The mineral brush: its size, the eraser, and each base's count against the game's rules.
+  const mine = h(`<div class="mine"><div class="row"><span class="lbl">Minerai</span><button class="chip" data-e="0">◆ Poser</button><button class="chip" data-e="1">⌫ Gomme</button></div></div>`);
+  mine.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
+    ed.mineErase = b.dataset.e === '1';
+    pickTool('minerai');
+  }));
+  const minePane = new Pane({ container: mine });
+  minePane.addBinding(ed, 'mineBrush', { label: 'Taille', min: 1, max: 4, step: 1 }).on('change', () => pickTool('minerai'));
+  const sites = h('<ul class="sites"></ul>');
+  mine.append(sites, h(`<p class="note">Règles du jeu : ${SITE_MINERALS} gisements par base ; le QG à ${HQ_MINERAL_GAP} cases au moins du minerai (en rouge sur la carte, trop près).</p>`));
+  res.appendChild(mine);
 
   // Scenery.
   const dec = section('Décor', 'D');
@@ -167,6 +178,14 @@ export function palettePanel(): HTMLElement {
     sel.innerHTML = `<option value="-1">Neutre</option>${ed.f.players.map((_, i) => `<option value="${i}">Joueur ${i + 1}</option>`).join('')}`;
     sel.value = String(ed.unitOwner);
     unitGrid.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('on', ed.tool === 'unite' && b.dataset.t === ed.unitType));
+    mine.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('on', ed.tool === 'minerai' && (b.dataset.e === '1') === ed.mineErase));
+    sites.replaceChildren(...mineralSites(ed.f).map((s) => {
+      const warn = [s.count !== SITE_MINERALS ? `${s.count < SITE_MINERALS ? 'manque' : 'trop'} ${Math.abs(SITE_MINERALS - s.count)}` : '', s.tooClose.length ? `${s.tooClose.length} trop près du QG` : ''].filter(Boolean).join(', ');
+      const li = h(`<li class="${warn ? 'bad' : 'ok'}"><b>${esc(s.name)}</b> ${s.count} / ${SITE_MINERALS}${warn ? ` · ${esc(warn)}` : ' ✓'}</li>`);
+      li.onclick = () => act.lookAt(s.at[0] + 2, s.at[1] + 2);
+      return li;
+    }));
+    minePane.refresh();
     departNote.textContent = ed.tool === 'depart' ? `Départ du joueur ${ed.seat + 1} (choisi dans le panneau Joueurs).` : '';
     reliefPane.refresh();
     rampPane.refresh();

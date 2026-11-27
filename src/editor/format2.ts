@@ -1,4 +1,4 @@
-import { DEFS, type Faction, FACTIONS, START } from '../data';
+import { DEFS, type Faction, FACTIONS, HQ_MINERAL_GAP, START } from '../data';
 import { readTriggers, type Triggers } from '../sim/triggers';
 import { type Dir, type GameMap, RAMP_LENGTH, STEP, rotateFootprint, rotateTile } from '../map';
 import { CORNERS, type MapFile, type Shape, buildMap, hqSlot, turnsOf } from '../maps';
@@ -427,4 +427,39 @@ export function gameText(map: MapFile): string {
   const checked = parseMapText(text);
   if (typeof checked === 'string') throw new Error(checked);
   return text;
+}
+
+/** Mineral fields a base should have (the balancer, 2026-11-26: 10 fields of 2,500). */
+export const SITE_MINERALS = 10;
+/** One base of the map, start or free, with the minerals nearest it. */
+export interface MineralSite {
+  /** « Joueur 2 », « Base 1 ». */
+  name: string;
+  /** Its headquarters' tile (4 × 4). */
+  at: [number, number];
+  /** Minerals nearer this base than any other. */
+  count: number;
+  /** Indexes in `f.minerals` of those nearer its headquarters than the game allows (HQ_MINERAL_GAP). */
+  tooClose: number[];
+}
+/**
+ * The map's bases and the minerals each one gets: a mineral goes to the base whose centre is nearest, as `toFormat1`
+ * gives them; one nearer a headquarters than the game lets a headquarters stand (sim/buildings.ts nearMinerals) is
+ * counted too close, whichever base it goes to.
+ */
+export function mineralSites(f: MapFile2): MineralSite[] {
+  const sites: MineralSite[] = [
+    ...f.players.map((p, i) => ({ name: `Joueur ${i + 1}`, at: p.start, count: 0, tooClose: [] as number[] })),
+    ...f.bases.map((b, i) => ({ name: `Base ${i + 1}`, at: b, count: 0, tooClose: [] as number[] })),
+  ];
+  const d = (s: MineralSite, [x, y]: [number, number]) => Math.abs(s.at[0] + 2 - x) + Math.abs(s.at[1] + 2 - y);
+  f.minerals.forEach((m, i) => {
+    if (!sites.length) return;
+    sites.reduce((a, s) => (d(s, m) < d(a, m) ? s : a)).count++;
+    for (const s of sites) {
+      const gap = Math.max(Math.max(s.at[0] - m[0], m[0] - (s.at[0] + 3), 0), Math.max(s.at[1] - m[1], m[1] - (s.at[1] + 3), 0));
+      if (gap < HQ_MINERAL_GAP) s.tooClose.push(i);
+    }
+  });
+  return sites;
 }

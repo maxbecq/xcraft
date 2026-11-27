@@ -504,7 +504,7 @@ function status(): void {
   const s = hooks.stats();
   const parts = [
     ed.hover || 'Curseur hors de la carte',
-    `Outil : ${TOOL_NAMES[ed.tool]}${ed.tool === 'relief' || ed.tool === 'minerai' ? `, pinceau ${ed.round ? 'rond' : 'carré'} ${ed.brush}` : ''}`,
+    `Outil : ${TOOL_NAMES[ed.tool]}${ed.tool === 'relief' ? `, pinceau ${ed.round ? 'rond' : 'carré'} ${ed.brush}` : ed.tool === 'minerai' ? `, ${ed.mineErase ? 'gomme' : 'pinceau'} ${ed.mineBrush} × ${ed.mineBrush}` : ''}`,
     `Symétrie : ${SYM[f.symmetry]}`,
     `${f.size} × ${f.size} · ${BIOMES[f.biome]?.name ?? f.biome} · ${f.players.length} joueur${f.players.length > 1 ? 's' : ''}`,
     ed.selection ? `Sélection : ${SEL_NAMES[ed.selection.kind]}` : 'Aucune sélection',
@@ -610,7 +610,8 @@ export function buildShell(v: ViewHooks): Shell {
     if (e.key === 'g' || e.key === 'G') toggleLayer('grid');
     if (e.key === 'h' || e.key === 'H') act.lookAt(ed.f.players[ed.seat].start[0] + 2, ed.f.players[ed.seat].start[1] + 2);
     if (e.key === '[' || e.key === ']') {
-      ed.brush = Math.max(1, Math.min(15, ed.brush + (e.key === ']' ? 1 : -1)));
+      if (ed.tool === 'minerai') ed.mineBrush = Math.max(1, Math.min(4, ed.mineBrush + (e.key === ']' ? 1 : -1)));
+      else ed.brush = Math.max(1, Math.min(15, ed.brush + (e.key === ']' ? 1 : -1)));
       changed();
     }
     if (ed.tool === 'relief' && ['0', '1', '2', 'x', 'X'].includes(e.key)) {

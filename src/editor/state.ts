@@ -4,6 +4,7 @@
  * part draws itself again.
  */
 import type { Dir } from '../map';
+import { LOOKS } from '../data';
 import { MAPS } from '../maps';
 import { fromFormat1, type MapFile2 } from './format2';
 import type { Triggers } from '../sim/triggers';
@@ -16,7 +17,7 @@ export const TOOL_HELP: Record<Tool, string> = {
   select: 'Clic : choisir un objet (unité, décor, départ, base, puits, rampe, minerai). Suppr : l\'enlever.',
   relief: 'Clic : peindre. Clic droit : remettre au niveau 0. Touches 0, 1, 2, X : niveau ou gouffre ; [ ] : taille.',
   ramp: 'Clic : rampe dont la tuile du haut est sous le curseur. Clic droit : l\'enlever.',
-  minerai: 'Clic : poser du minerai. Clic droit : en enlever.',
+  minerai: 'Glisser : poser des gisements un par un (taille 1 à 4). Clic droit ou gomme : en enlever. [ ] : taille.',
   puits: 'Clic : puits d\'énergie 3×3 centré sur le curseur. Clic droit : l\'enlever.',
   base: 'Clic : emplacement de base libre (QG 4×4). Clic droit : l\'enlever.',
   depart: 'Clic : départ du joueur choisi (QG 4×4). Avec une symétrie, le départ du joueur 1 place les autres.',
@@ -52,6 +53,9 @@ export const ed = {
   f: fromFormat1(MAPS.origine, MAPS.origine.biome, 2) as MapFile2,
   tool: 'relief' as Tool,
   brush: 3,
+  /** The mineral brush: a square of 1 to 4 tiles a side, one field per tile; `mineErase`: the eraser. */
+  mineBrush: 1,
+  mineErase: false,
   round: true,
   /** '0', '1', '2', 'x', or 'up' / 'down' (one level). */
   paint: '1',
@@ -126,3 +130,11 @@ export function triggersOf(f: MapFile2): Triggers {
 }
 /** Regions' colours, by their place in the list. */
 export const REGION_COLORS = [0x6fb3ff, 0xd9534f, 0x5fbf6a, 0xe3a33b, 0xb05fd6, 0x3fc7c7, 0xd6d65f, 0xd67fa8];
+
+/** Types with no picture of their own in public/icons: they show the one of the type they look like (LOOKS). */
+const NO_ICON = new Set(['silo', 'casernevol', 'dirigeable', 'cadavre', 'orbemob', 'droneprotecteur', 'podsup', 'elembase', 'fantome', 'furieux', 'branchemob', 'protecteurmob', 'furieuxmob']);
+/** The icon file's name for a type (no request for a file that is not there: QA, 2026-11-27, three 404 online). */
+export function iconOf(type: string): string {
+  while (NO_ICON.has(type) && LOOKS[type]) type = LOOKS[type];
+  return type;
+}

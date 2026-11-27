@@ -210,3 +210,8 @@ kbd { background: #11141a; border: 1px solid var(--line); border-radius: 3px; pa
 .trig .checklist .x { color: #ff9a96; }
 .trig .checklist .ok { color: var(--ok); }
 .trig .checklist .w { color: var(--acc); }
+.palette .sites { list-style: none; margin: 4px 0; padding: 0; font-size: 12px; }
+.palette .sites li { padding: 2px 6px; cursor: pointer; border-radius: 3px; }
+.palette .sites li:hover { background: #ffffff14; }
+.palette .sites li.ok { color: #8fd98f; }
+.palette .sites li.bad { color: #ff8a7a; }
