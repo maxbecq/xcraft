@@ -1291,12 +1291,12 @@ export class Effects {
 
   /** A muzzle's flash: white core, the camp's colour round it. */
   /**
-   * The Z Laser lourd: one slow, heavy shot, unlike the Laser's quick green line. A wide cyan beam with a white-hot
+   * The Z Laser lourd: one slow, heavy shot, unlike the Laser's quick green line. A wide ice-blue beam with a white-hot
    * core lingers half a second and narrows as it fades; the air along it glows in motes drifting off; a big flare at the
    * muzzle, and where it lands a white burst, a blue flare and a spray of short white-blue sparks.
    */
   private heavyBeam(muzzle: Vector3, to: Vector3): void {
-    const BLUE = 0x2ee0f0; // the cyan of its rings (tools/blender/zw_laserlourd.py)
+    const BLUE = 0x3ac8ff;
     this.flash(muzzle, BLUE, 2.2);
     this.streaks.spawn(BLUE, muzzle, to, 0, 0.55, 0, 0.34, 0.75);
     this.streaks.spawn(0x9ae8ff, muzzle, to, 0, 0.4, 0, 0.16, 1);
