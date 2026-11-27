@@ -1070,7 +1070,7 @@ export class World {
           const reach = other.radius + e.radius;
           const [ox, oy] = d > 0 ? [idiv(dx * reach, d), idiv(dy * reach, d)] : [0, reach];
           const inMap = (v: number, n: number) => Math.max(1, Math.min(n * FP - 1, v)); // 1 and n - 1: one turned into the other
-          this.place(e, inMap(other.x + ox, this.map.width), inMap(other.y + oy, this.map.height));
+          this.place(e, inMap(other.x + ox, this.map.width), inMap(other.y + oy, this.map.height), [dx, dy]);
           this.teleports.push({ phase: 'end', owner: e.owner, x1: b!.x, y1: b!.y, x2: other.x, y2: other.y, ids: [e.id] });
           tunnel.crossed++;
           tunnel.supply += supply;

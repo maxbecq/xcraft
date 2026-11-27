@@ -518,9 +518,10 @@ export class Grid {
   /**
    * `from` (a tile, or between tiles): of a ring's tiles, the one nearest it, then on the left of the line from it to
    * (x, y), then furthest along it, rather than the first in the scan's fixed order. A unit and the mirror of its spot
-   * then pick mirrored tiles; without `from`, the scan's order as ever.
+   * then pick mirrored tiles; without `from`, the scan's order as ever. Tiles still even after that (`from` on (x, y)
+   * itself: a whole ring ties) go to the one nearest `tie`, then on its left, which the caller turns with the scene (Codex, point 122).
    */
-  nearestOpen(x: number, y: number, level = -1, from?: [number, number]): [number, number] {
+  nearestOpen(x: number, y: number, level = -1, from?: [number, number], tie?: [number, number]): [number, number] {
     let fallback: [number, number] | null = null;
     let found: [number, number] | null = null;
     const better = (a: [number, number], b: [number, number] | null) => {
@@ -528,7 +529,10 @@ export class Grid {
       const key = ([px, py]: [number, number]) => {
         const [rx, ry, lx, ly] = [px - from[0], py - from[1], x - from[0], y - from[1]];
         const cross = lx * ry - ly * rx;
-        return [rx * rx + ry * ry, cross < 0 ? 1 : 0, -(lx * rx + ly * ry), Math.abs(cross)];
+        // Nearest `tie`, then on the left of the line from `from` to it (a start on the diagonal leaves two at once).
+        const [tx, ty] = tie ? [tie[0] - from[0], tie[1] - from[1]] : [0, 0];
+        const near = tie ? (px - tie[0]) ** 2 + (py - tie[1]) ** 2 : 0;
+        return [rx * rx + ry * ry, cross < 0 ? 1 : 0, -(lx * rx + ly * ry), Math.abs(cross), near, tx * ry - ty * rx < 0 ? 0 : 1];
       };
       const [ka, kb] = [key(a), key(b)];
       for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i];

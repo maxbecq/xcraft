@@ -134,11 +134,9 @@ const STILL = TICK_RATE;
  * a long path searched this tick starts, headed within 3 tiles of where it ends, takes that path instead, when it can
  * walk straight onto its first tile and from its last to its own goal (cliffs and buildings checked as for any step).
  */
-export function pathFor(this: World, e: Entity, gx: number, gy: number): number[] {
+export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = tileOf(e.x), sy = tileOf(e.y)): number[] {
   const g = this.grid;
   const w = g.width;
-  const sx = tileOf(e.x);
-  const sy = tileOf(e.y);
   // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed.
   if (climbs(e)) return g.findPath(sx, sy, gx, gy, true);
   if (this.searchedAt !== this.tick) [this.searched, this.searchedAt] = [[], this.tick];
@@ -170,11 +168,49 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   // A goal right on a tile's edge (an even-sized building's middle) is in the tile on the unit's side of it: always the
   // one after it (floor) gave a scene and its mirror goal tiles a tile apart.
   const goalTile = (v: number, from: number) => (v % FP === 0 && from < v ? v / FP - 1 : tileOf(v));
-  let gx = Math.min(g.width - 1, Math.max(0, goalTile(x, e.x)));
-  let gy = Math.min(g.height - 1, Math.max(0, goalTile(y, e.y)));
-  const exact = g.open(gx, gy);
-  if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy), [tileOf(e.x), tileOf(e.y)]);
-  const tiles = this.pathFor(e, gx, gy);
+  // A goal on the very edge the unit stands on (start and goal sharing it): no side to take it from, and floor took the
+  // tile after it for both, so a scene and its turn walked either side of the edge (Codex, point 122). Both sides are
+  // tried, start and goal on the same one: the one whose path gets there, then the nearer end, the shorter path, and
+  // last the side on the right of the way (all unchanged by the map turned round).
+  const sides = (v: number, from: number) => (v % FP === 0 && from === v ? [v / FP - 1, v / FP] : [goalTile(v, from)]);
+  const [xs, ys] = [sides(x, e.x), sides(y, e.y)];
+  const clampX = (v: number) => Math.min(g.width - 1, Math.max(0, v));
+  const clampY = (v: number) => Math.min(g.height - 1, Math.max(0, v));
+  let gx = 0;
+  let gy = 0;
+  let exact = false;
+  let tiles: number[] = [];
+  let bestKey: number[] | null = null;
+  for (const cx of xs)
+    for (const cy of ys) {
+      let [tx, ty] = [clampX(cx), clampY(cy)];
+      const [sx, sy] = [xs.length > 1 ? tx : tileOf(e.x), ys.length > 1 ? ty : tileOf(e.y)];
+      // A side the unit cannot stand on is not its side.
+      if ((xs.length > 1 || ys.length > 1) && !g.open(sx, sy)) continue;
+      const open = g.open(tx, ty);
+      if (!open) [tx, ty] = g.nearestOpen(tx, ty, g.level(tx, ty), [sx, sy]);
+      const path = this.pathFor(e, tx, ty, sx, sy);
+      if (xs.length * ys.length > 1) {
+        const end = path.length ? path[path.length - 1] : sy * g.width + sx;
+        const [ex, ey] = [(end % g.width) * FP + FP / 2, Math.floor(end / g.width) * FP + FP / 2];
+        const [cxp, cyp] = [tx * FP + FP / 2 - e.x, ty * FP + FP / 2 - e.y];
+        const cross = (x - e.x) * cyp - (y - e.y) * cxp;
+        const key = [open && end === ty * g.width + tx ? 0 : 1, (ex - x) ** 2 + (ey - y) ** 2, path.length, cross < 0 ? 0 : 1];
+        if (bestKey) {
+          const i = key.findIndex((v, n) => v !== bestKey![n]);
+          if (i < 0 || key[i] > bestKey[i]) continue;
+        }
+        bestKey = key;
+      }
+      [gx, gy, exact, tiles] = [tx, ty, open, path];
+    }
+  if (!bestKey && xs.length * ys.length > 1) {
+    // No side open to stand on (caught under a building): as before.
+    [gx, gy] = [clampX(goalTile(x, e.x)), clampY(goalTile(y, e.y))];
+    exact = g.open(gx, gy);
+    if (!exact) [gx, gy] = g.nearestOpen(gx, gy, g.level(gx, gy), [tileOf(e.x), tileOf(e.y)]);
+    tiles = this.pathFor(e, gx, gy);
+  }
   const pts: number[] = [];
   for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);
   const end = tiles.length ? tiles[tiles.length - 1] : tileOf(e.y) * g.width + tileOf(e.x);
@@ -317,9 +353,12 @@ export function evict(this: World, e: Entity): void {
   };
   let best: [number, number] | null = null;
   let bk: number[] = [];
+  // The owner's start breaks ties inside the search too: at the map's middle a whole ring ties there, and the scan's
+  // order had already picked north before the start was asked (Codex, point 122).
+  const tie: [number, number] = [hx / FP - 0.5, hy / FP - 0.5];
   for (const [x, y] of standsOn(e.x, e.y)) {
     if (!g.inside(x, y)) continue;
-    const t = g.nearestOpen(x, y, g.level(x, y), from);
+    const t = g.nearestOpen(x, y, g.level(x, y), from, tie);
     const k = key(t);
     const i = k.findIndex((v, j) => v !== bk[j]);
     if (!best || (i >= 0 && k[i] < bk[i])) [best, bk] = [t, k];

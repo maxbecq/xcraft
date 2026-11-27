@@ -592,11 +592,26 @@ export function paceOf(this: World, e: Entity): [number, number] {
   return e.heavy > 0 ? [strong(move, 100 - g.damage!), strong(atk, g.max!)] : [move, atk];
 }
 
-/** Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. */
-export function place(this: World, t: Entity, x: number, y: number): void {
+/**
+ * Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. A point on a tile's
+ * edge touches two tiles (four on a corner): floor took the one after it, so a scene and its turn came out either side
+ * (Codex, point 122). The tile nearest the point, then the one ahead along `dir` (by default the way from where the
+ * unit stands, or away from the map's centre), then the one on its right: all unchanged by the map turned round.
+ */
+export function place(this: World, t: Entity, x: number, y: number, dir?: [number, number]): void {
   if (!soars(t)) {
-    const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1, [(this.map.width - 1) / 2, (this.map.height - 1) / 2]);
-    [x, y] = [ox * FP + FP / 2, oy * FP + FP / 2];
+    const centre: [number, number] = [(this.map.width - 1) / 2, (this.map.height - 1) / 2];
+    const [dx, dy] = dir ?? (x !== t.x || y !== t.y ? [x - t.x, y - t.y] : [x - (this.map.width * FP) / 2, y - (this.map.height * FP) / 2]);
+    let best: number[] | null = null;
+    let at: [number, number] = [0, 0];
+    for (const [sx, sy] of standsOn(x, y)) {
+      const [ox, oy] = this.grid.nearestOpen(Math.min(this.map.width - 1, Math.max(0, sx)), Math.min(this.map.height - 1, Math.max(0, sy)), -1, centre);
+      const [px, py] = [ox * FP + FP / 2 - x, oy * FP + FP / 2 - y];
+      const key = [px * px + py * py, -(px * dx + py * dy), dx * py - dy * px < 0 ? 0 : 1];
+      const i = best ? key.findIndex((v, n) => v !== best![n]) : 0;
+      if (i >= 0 && (!best || key[i] < best[i])) [best, at] = [key, [ox, oy]];
+    }
+    [x, y] = [at[0] * FP + FP / 2, at[1] * FP + FP / 2];
   }
   t.x = t.px = x;
   t.y = t.py = y;
