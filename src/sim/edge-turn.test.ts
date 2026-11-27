@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFS, type BuildingDef } from '../data';
 import { CORNERS } from '../maps';
 import { type Dir, type GameMap, rotateFootprint } from '../map';
@@ -11,25 +11,39 @@ import { World } from './world';
  * frame, every turn must end the same.
  */
 const N = 16;
-const S = N * FP;
-const turnPoint = (x: number, y: number, q: number): [number, number] => {
-  for (let k = 0; k < q; k++) [x, y] = [S - y, x];
+const turnPoint = (x: number, y: number, q: number, n = N): [number, number] => {
+  for (let k = 0; k < q; k++) [x, y] = [n * FP - y, x];
   return [x, y];
 };
-const turnTile = (x: number, y: number, q: number): [number, number] => {
-  for (let k = 0; k < q; k++) [x, y] = [N - 1 - y, x];
+const turnTile = (x: number, y: number, q: number, n = N): [number, number] => {
+  for (let k = 0; k < q; k++) [x, y] = [n - 1 - y, x];
   return [x, y];
 };
-/** A flat map, with tiles set to level 1 (`high`), turned `q` quarters. */
-function turnedMap(q: number, high: (x: number, y: number) => boolean): GameMap {
-  const level = new Uint8Array(N * N);
-  for (let y = 0; y < N; y++)
-    for (let x = 0; x < N; x++)
+/** A flat map `n` tiles wide, with tiles set to level 1 (`high`), turned `q` quarters. */
+function turnedMap(q: number, high: (x: number, y: number) => boolean, n = N): GameMap {
+  const level = new Uint8Array(n * n);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
       if (high(x, y)) {
-        const [tx, ty] = turnTile(x, y, q);
-        level[ty * N + tx] = 1;
+        const [tx, ty] = turnTile(x, y, q, n);
+        level[ty * n + tx] = 1;
       }
-  return { width: N, height: N, level, ramp: new Array<Dir | null>(N * N).fill(null), rampStep: new Uint8Array(N * N) };
+  return { width: n, height: n, level, ramp: new Array<Dir | null>(n * n).fill(null), rampStep: new Uint8Array(n * n) };
+}
+/** A Serf sent from `from` to `to` (points in tiles) from each quarter turn: its positions every half second, turned back. */
+function moveTurned(n: number, high: (x: number, y: number) => boolean, from: [number, number], to: [number, number], seconds: number): [number, number][][] {
+  return [0, 1, 2, 3].map((q) => {
+    const w = new World(turnedMap(q, high, n), 2);
+    const u = w.spawn('serf', 0, ...turnPoint(Math.round(from[0] * FP), Math.round(from[1] * FP), q, n));
+    const [gx, gy] = turnPoint(Math.round(to[0] * FP), Math.round(to[1] * FP), q, n);
+    w.step([{ player: 0, kind: 'move', ids: [u.id], x: gx, y: gy }]);
+    const track: [number, number][] = [];
+    while (w.tick < ticks(seconds)) {
+      w.step([]);
+      if (w.tick % ticks(0.5) === 0) track.push(turnPoint(u.x, u.y, (4 - q) % 4, n));
+    }
+    return track;
+  });
 }
 
 describe('a move whose goal shares a tile edge with its start', () => {
@@ -45,6 +59,29 @@ describe('a move whose goal shares a tile edge with its start', () => {
     });
     for (const [x, y] of ends) expect(Math.hypot(x - 8 * FP, y - (12 * FP + FP / 2))).toBeLessThan(FP);
     for (const e of ends.slice(1)) expect(e).toEqual(ends[0]);
+  });
+
+  // Codex, 2026-11-27: start and goal in the same tile of the side kept, the path empty; its end taken by floor was the
+  // other side's tile, so the order was done on the spot at 180° and 270°.
+  it('makes a short move along the edge from the four quarter turns', () => {
+    const tracks = moveTurned(N, () => false, [8, 4.25], [8, 4.75], 2);
+    for (const t of tracks) expect(Math.hypot(t[t.length - 1][0] - 8 * FP, t[t.length - 1][1] - 4.75 * FP)).toBeLessThan(FP / 8);
+    for (const t of tracks.slice(1)) expect(t).toEqual(tracks[0]);
+  });
+
+  // Codex, 2026-11-27: the first side tried lent its path to the second, one tile longer then: the way round a block
+  // across the edge went left or right with the turn.
+  it('goes round a block across the edge on the same side from the four quarter turns', () => {
+    const tracks = moveTurned(40, (x, y) => x >= 19 && x <= 20 && y >= 12 && y <= 20, [20, 4.5], [20, 32.5], 20);
+    for (const t of tracks.slice(1)) expect(t).toEqual(tracks[0]);
+  });
+
+  it('searches once when both sides fall on the map edge column (Codex, 2026-11-27)', () => {
+    const w = new World(turnedMap(0, () => false), 2);
+    const u = w.spawn('serf', 0, 0, 4 * FP + FP / 2);
+    const find = vi.spyOn(w.grid, 'findPath');
+    w.step([{ player: 0, kind: 'move', ids: [u.id], x: 0, y: 10 * FP + FP / 2 }]);
+    expect(find).toHaveBeenCalledTimes(1);
   });
 });
 

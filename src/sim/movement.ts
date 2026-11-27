@@ -134,11 +134,13 @@ const STILL = TICK_RATE;
  * a long path searched this tick starts, headed within 3 tiles of where it ends, takes that path instead, when it can
  * walk straight onto its first tile and from its last to its own goal (cliffs and buildings checked as for any step).
  */
-export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = tileOf(e.x), sy = tileOf(e.y)): number[] {
+export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = tileOf(e.x), sy = tileOf(e.y), alone = false): number[] {
   const g = this.grid;
   const w = g.width;
-  // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed.
+  // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed; nor does a side of
+  // an edge being weighed against the other (plan): each searched on its own, the one kept lent after (lend).
   if (climbs(e)) return g.findPath(sx, sy, gx, gy, true);
+  if (alone) return g.findPath(sx, sy, gx, gy);
   if (this.searchedAt !== this.tick) [this.searched, this.searchedAt] = [[], this.tick];
   const centre = (t: number) => [(t % w) * FP + FP / 2, Math.floor(t / w) * FP + FP / 2] as const;
   for (const s of this.searched) {
@@ -151,9 +153,15 @@ export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = til
     return [...s.tiles, goal];
   }
   const tiles = g.findPath(sx, sy, gx, gy);
-  // Only a path that reached its goal is lent: one that fell short ended on the nearest tile it could.
-  if (tiles.length >= SHARED_MIN && tiles[tiles.length - 1] === gy * w + gx) this.searched.push({ sx, sy, gx, gy, tiles });
+  lend(this, sx, sy, gx, gy, tiles);
   return tiles;
+}
+
+/** Puts a path searched this tick where the others given the same far order may take it (pathFor). */
+function lend(world: World, sx: number, sy: number, gx: number, gy: number, tiles: number[]): void {
+  if (world.searchedAt !== world.tick) [world.searched, world.searchedAt] = [[], world.tick];
+  // Only a path that reached its goal is lent: one that fell short ended on the nearest tile it could.
+  if (tiles.length >= SHARED_MIN && tiles[tiles.length - 1] === gy * world.grid.width + gx) world.searched.push({ sx, sy, gx, gy, tiles });
 }
 
 /** Builds a smoothed waypoint path from the entity to a point. */
@@ -176,35 +184,45 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   const [xs, ys] = [sides(x, e.x), sides(y, e.y)];
   const clampX = (v: number) => Math.min(g.width - 1, Math.max(0, v));
   const clampY = (v: number) => Math.min(g.height - 1, Math.max(0, v));
+  const both = xs.length * ys.length > 1;
+  // Each side once: on the map's outer edge both fall back to the same column (Codex, 2026-11-27).
+  const tried = new Map<string, [number, number, number, number]>();
+  for (const cx of xs)
+    for (const cy of ys) {
+      const [tx, ty] = [clampX(cx), clampY(cy)];
+      const [sx, sy] = [xs.length > 1 ? tx : tileOf(e.x), ys.length > 1 ? ty : tileOf(e.y)];
+      // A side the unit cannot stand on is not its side.
+      if (both && !g.open(sx, sy)) continue;
+      tried.set(`${tx},${ty},${sx},${sy}`, [tx, ty, sx, sy]);
+    }
   let gx = 0;
   let gy = 0;
+  let [bx, by] = [tileOf(e.x), tileOf(e.y)];
   let exact = false;
   let tiles: number[] = [];
   let bestKey: number[] | null = null;
-  for (const cx of xs)
-    for (const cy of ys) {
-      let [tx, ty] = [clampX(cx), clampY(cy)];
-      const [sx, sy] = [xs.length > 1 ? tx : tileOf(e.x), ys.length > 1 ? ty : tileOf(e.y)];
-      // A side the unit cannot stand on is not its side.
-      if ((xs.length > 1 || ys.length > 1) && !g.open(sx, sy)) continue;
-      const open = g.open(tx, ty);
-      if (!open) [tx, ty] = g.nearestOpen(tx, ty, g.level(tx, ty), [sx, sy]);
-      const path = this.pathFor(e, tx, ty, sx, sy);
-      if (xs.length * ys.length > 1) {
-        const end = path.length ? path[path.length - 1] : sy * g.width + sx;
-        const [ex, ey] = [(end % g.width) * FP + FP / 2, Math.floor(end / g.width) * FP + FP / 2];
-        const [cxp, cyp] = [tx * FP + FP / 2 - e.x, ty * FP + FP / 2 - e.y];
-        const cross = (x - e.x) * cyp - (y - e.y) * cxp;
-        const key = [open && end === ty * g.width + tx ? 0 : 1, (ex - x) ** 2 + (ey - y) ** 2, path.length, cross < 0 ? 0 : 1];
-        if (bestKey) {
-          const i = key.findIndex((v, n) => v !== bestKey![n]);
-          if (i < 0 || key[i] > bestKey[i]) continue;
-        }
-        bestKey = key;
+  for (let [tx, ty, sx, sy] of tried.values()) {
+    const open = g.open(tx, ty);
+    if (!open) [tx, ty] = g.nearestOpen(tx, ty, g.level(tx, ty), [sx, sy]);
+    // Two sides: each searched on its own, neither borrowing the other's road (Codex, 2026-11-27: the first lent its
+    // path to the second, one tile longer then, and the side kept turned with the order they were tried in).
+    const path = this.pathFor(e, tx, ty, sx, sy, tried.size > 1);
+    if (tried.size > 1) {
+      const end = path.length ? path[path.length - 1] : sy * g.width + sx;
+      const [ex, ey] = [(end % g.width) * FP + FP / 2, Math.floor(end / g.width) * FP + FP / 2];
+      const [cxp, cyp] = [tx * FP + FP / 2 - e.x, ty * FP + FP / 2 - e.y];
+      const cross = (x - e.x) * cyp - (y - e.y) * cxp;
+      const key = [open && end === ty * g.width + tx ? 0 : 1, (ex - x) ** 2 + (ey - y) ** 2, path.length, cross < 0 ? 0 : 1];
+      if (bestKey) {
+        const i = key.findIndex((v, n) => v !== bestKey![n]);
+        if (i < 0 || key[i] > bestKey[i]) continue;
       }
-      [gx, gy, exact, tiles] = [tx, ty, open, path];
+      bestKey = key;
     }
-  if (!bestKey && xs.length * ys.length > 1) {
+    [gx, gy, exact, tiles, bx, by] = [tx, ty, open, path, sx, sy];
+  }
+  if (bestKey && !climbs(e)) lend(this, bx, by, gx, gy, tiles);
+  if (!tried.size) {
     // No side open to stand on (caught under a building): as before.
     [gx, gy] = [clampX(goalTile(x, e.x)), clampY(goalTile(y, e.y))];
     exact = g.open(gx, gy);
@@ -213,7 +231,9 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   }
   const pts: number[] = [];
   for (const t of tiles) pts.push((t % g.width) * FP + FP / 2, Math.floor(t / g.width) * FP + FP / 2);
-  const end = tiles.length ? tiles[tiles.length - 1] : tileOf(e.y) * g.width + tileOf(e.x);
+  // An empty path ends where it starts: the side kept, not floor's (Codex, 2026-11-27: a short move along an edge was
+  // done on the spot, turned round).
+  const end = tiles.length ? tiles[tiles.length - 1] : by * g.width + bx;
   if (exact && end === gy * g.width + gx) {
     pts.splice(-2, 2, x, y); // on an empty path too: it then holds just the point
   }
