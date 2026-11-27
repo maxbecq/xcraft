@@ -20,11 +20,12 @@ const MODELS = {
   recepteur: { footprint: 3.3 }, // size 3; 3.8 high with its dish
   recepteurarme: { footprint: 3.3 },
   orbecommandement: { footprint: 3.2, yaw: 45 }, // size 3; modelled head-on as the Réserve psy
+  nanoassembleur: { footprint: 3.3 }, // the Psycho-assembleur, size 3; 4.7 high with its glass tube
   // Units (fable.mjs does not compress them: meshopt would move the pivots their turning parts spin about).
   discobole: { footprint: 1.1 }, // a monowheel 1.1 high, 1.8 in the game (units are drawn 1.65 times larger); the old Discobole stood 1.0
   droneprotecteur: { footprint: 0.7 }, // its plates 0.7 across, its top 0.6 above the ground (1.15 and 1.0 in the game)
 };
-const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu', 'emetteur_bleu', 'reserve_bleu', 'recepteur_bleu', 'orbecmd_bleu', 'discobole_bleu', 'drone_bleu']);
+const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu', 'emetteur_bleu', 'reserve_bleu', 'recepteur_bleu', 'orbecmd_bleu', 'discobole_bleu', 'drone_bleu', 'assembleur_bleu']);
 
 const [src, out, ...only] = process.argv.slice(2);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);

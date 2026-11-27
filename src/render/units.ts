@@ -7,7 +7,7 @@ import {
 import { stableShadowDepth } from './shadowdepth';
 import { dressSprite, spriteOf } from './sprites';
 import { type BuildingDef, DEFS, FLY_HEIGHT, KIT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
-import { armillaries, floaters } from './life';
+import { armillaries, assemblerFx, floaters } from './life';
 import { materialise, materialiseEnd, materialiseStep } from './materialise';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
@@ -1986,6 +1986,7 @@ export class EntityRenderer {
       root.add(reserve.group);
       fx = reserve;
     }
+    if (body.getObjectByName('float_robot')) fx = assemblerFx(body, e); // the Psycho-assembleur's tube at work
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
     const wheels: { o: Object3D; r: number }[] = [];

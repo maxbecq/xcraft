@@ -381,7 +381,7 @@ function fableLights(scene: Object3D): void {
       // The Orbe's plasma: its Voronoi cells drift round the sphere and ripple, like currents inside it.
       m.userData.ripple = true;
       ripple(m, 1.5, 0.02);
-    } else if (/_halo(_arme)?$/.test(m.name)) {
+    } else if (/_halo(_arme|_porte)?$/.test(m.name)) {
       // Red under the Pylône sanglant (its halo is red in Blender), cyan elsewhere.
       o.material = halos.get(m) ?? halos.set(m, fableHalo(m.emissive.r > m.emissive.b ? new Color(1.0, 0.12, 0.08) : undefined)).get(m)!;
       o.userData.noPick = true;
