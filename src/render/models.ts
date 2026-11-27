@@ -405,7 +405,7 @@ function fableLights(scene: Object3D): void {
 /**
  * The Réserve psy's vat (`fx_cuve`, the inside of its glass column) boiling all the time, strongly enough to read from
  * afar (the user's wish, 2026-11-27): two layers of bubble rings rising up it, over a light that churns in waves.
- * Its UVs run 0 to 1 round the arc (u) and up (v).
+ * Its UVs run 0 to 1 round the arc (u) and up (v); the arc spans 196° (v3, a wider bay), the rates across it set for that.
  */
 function boil(m: MeshStandardMaterial): void {
   m.onBeforeCompile = (shader) => {
@@ -424,9 +424,9 @@ function boil(m: MeshStandardMaterial): void {
         return smoothstep(r + 0.05, r, d) * (0.35 + 0.65 * smoothstep(r - 0.12, r, d)) * step(0.3, fract(h * 5.3));
       }
       ${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      float churn = 0.7 + 0.3 * sin(veinTime * 3.1 + vBoil.y * 11.0 + 2.0 * sin(vBoil.x * 19.0 + veinTime * 1.7));
-      float b = bubbleRings(vec2(vBoil.x * 9.0, vBoil.y * 5.0 - veinTime * 1.4))
-        + 0.7 * bubbleRings(vec2(vBoil.x * 16.0 + 3.0, vBoil.y * 9.0 - veinTime * 2.3));
+      float churn = 0.7 + 0.3 * sin(veinTime * 3.1 + vBoil.y * 11.0 + 2.0 * sin(vBoil.x * 14.5 + veinTime * 1.7));
+      float b = bubbleRings(vec2(vBoil.x * 6.9, vBoil.y * 5.0 - veinTime * 1.4))
+        + 0.7 * bubbleRings(vec2(vBoil.x * 12.25 + 3.0, vBoil.y * 9.0 - veinTime * 2.3));
       totalEmissiveRadiance = totalEmissiveRadiance * churn + vec3(0.45, 0.9, 1.0) * b * 1.3;`);
   };
   m.customProgramCacheKey = () => 'boil';
