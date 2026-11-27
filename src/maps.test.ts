@@ -70,12 +70,16 @@ describe('map files', () => {
           }
         });
 
-        it('gives every base spot 10 mineral fields, and a place for its headquarters two free tiles or more from every field', () => {
+        it('gives every base spot 10 mineral fields (the shared centre of Carrefour 12), and a place for its headquarters two free tiles or more from every field', () => {
           // The balancer, 2026-11-26: 10 fields of 2,500 a base; the main building never nearer the fields than HQ_MINERAL_GAP.
-          for (const b of def.bases) expect(b.minerals.length, b.name).toBe(10);
+          // Carrefour's centre turns onto itself: its file lists 3 fields, made once a quarter, 12 in all (the user, 2026-11-27:
+          // not 40, and 10 cannot be shared fairly by four corners).
+          const centre = (b: (typeof def.bases)[number]) => def.id === 'carrefour' && b.name === 'centre';
+          for (const b of def.bases) expect(b.minerals.length, b.name).toBe(centre(b) ? 3 : 10);
           // Every one of them made, none lost on another's tile once the map is turned, each with its 2,500.
           const fields = [...w.entities.values()].filter((e) => e.type === 'minerai');
-          expect(fields.length).toBe(10 * def.bases.length * turnsOf(def, players).length);
+          const turns = turnsOf(def, players).length;
+          expect(fields.length).toBe(def.bases.reduce((n, b) => n + (centre(b) ? 12 : 10 * turns), 0));
           for (const f of fields) expect(f.amount, `${f.tx},${f.ty}`).toBe(2500);
           for (const q of turnsOf(def, players)) {
             for (const b of def.bases) {
