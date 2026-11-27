@@ -596,16 +596,21 @@ export function paceOf(this: World, e: Entity): [number, number] {
 /**
  * Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. A point on a tile's
  * edge touches two tiles (four on a corner): floor took the one after it, so a scene and its turn came out either side
- * (Codex, point 122). The tile nearest the point, then the one ahead along `dir` (by default the way from where the
- * unit stands, or away from the map's centre), then the one on its right: all unchanged by the map turned round. The
+ * (Codex, point 122). Given `dir` (Jörmungand, the Couloir temporel), the tile nearest the point, then the one ahead
+ * along it, then the one on its right: all unchanged by the map turned round. Without, as before. The
  * point's tile blocked at the map's very centre, nearestOpen leans the same way (Codex final, 2026-11-27: its scan
  * order sent a Jörmungand called on a Forge there north, west, south and east with the turn).
  */
 export function place(this: World, t: Entity, x: number, y: number, dir?: [number, number]): void {
-  if (!soars(t)) {
+  if (!soars(t) && !dir) {
+    // No way given (a group teleported, an unload): as ever, so a group sent to one point lands together (Codex
+    // final 5, 2026-11-27: two Moissonneurs carried onto a cliff's edge, each its own way, came out a level apart).
+    const [ox, oy] = this.grid.nearestOpen(tileOf(x), tileOf(y), -1, [(this.map.width - 1) / 2, (this.map.height - 1) / 2]);
+    [x, y] = [ox * FP + FP / 2, oy * FP + FP / 2];
+  } else if (!soars(t) && dir) {
     const centre: [number, number] = [(this.map.width - 1) / 2, (this.map.height - 1) / 2];
     const [C, D] = [(this.map.width * FP) / 2, (this.map.height * FP) / 2];
-    let [dx, dy] = dir ?? (x !== t.x || y !== t.y ? [x - t.x, y - t.y] : [x - C, y - D]);
+    let [dx, dy] = dir;
     // No way at all (at the map's very centre, cast on itself): the line from the centre to the owner's start
     // (Codex, 2026-11-27: a Jörmungand called there came out north-west whatever the turn).
     const home = !dx && !dy ? startSite(this, t.owner) : undefined;

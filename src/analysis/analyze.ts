@@ -397,6 +397,8 @@ export class Analyzer {
     // A fight judged lately (within `wipeTime`, while its losses are still weighed, see review) holds its own dead:
     // left out before they are grouped, so neither their worth nor their place counts (Codex final 2, 2026-11-27: one
     // of them anchored the group 8 tiles from two reinforcements killed, and a Créature by it counted as a survivor).
+    // 123b : suivi des identifiants expiré pendant un combat long (Codex final 5, 2026-11-27: two Créatures judged
+    // outnumbered at 6 s, killed together at 40 s on the same spot, reported a second time as wiped out at once).
     const judged = (p: number, id: number) => this.groups.some((g) => g.player === p && w.tick - g.tick <= sec(T.wipeTime) && g.ids.includes(id));
     for (const d of w.deaths) {
       const def = DEFS[d.type] as UnitDef | undefined;

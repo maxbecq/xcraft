@@ -295,3 +295,15 @@ describe('a Jörmungand called on a Forge at the very centre of an odd map', () 
     for (const o of outs.slice(1)) expect(o).toEqual(outs[0]);
   });
 });
+
+describe('a group teleported onto a cliff edge', () => {
+  // Codex final 5, 2026-11-27: place weighed each unit's own way to the point, so two Moissonneurs carried together
+  // came out a level apart, one cut off. As on origin/main: both on the same tile.
+  it('lands every unit of it on the same level', () => {
+    const w = new World(turnedMap(0, (x) => x >= 8), 2);
+    const [a, b] = [w.spawn('moissonneur', 0, 4 * FP, 6 * FP + FP / 2), w.spawn('moissonneur', 0, 12 * FP, 6 * FP + FP / 2)];
+    for (const t of [a, b]) w.place(t, 8 * FP, 6 * FP + FP / 2);
+    expect(w.grid.level(Math.floor(a.x / FP), Math.floor(a.y / FP))).toBe(w.grid.level(Math.floor(b.x / FP), Math.floor(b.y / FP)));
+    expect([a.x, a.y]).toEqual([b.x, b.y]);
+  });
+});
