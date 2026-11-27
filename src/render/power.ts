@@ -504,7 +504,10 @@ export class PowerNet {
     // Selected, a little fainter than while placing (0.95): the ring was too strong on its own (the user's remark, 0.9.177).
     this.fieldMaterial.opacity = this.fieldFoe.opacity = highlight === 'placing' ? 0.95 : highlight ? 0.6 : 0.2;
     this.creepMaterial.opacity = this.creepFoe.opacity = highlight ? 1 : 0.75;
-    this.beamMaterial.opacity = this.beamFoe.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
+    // The links between power buildings: as bright as before while placing or selecting one, faint the rest of the time,
+    // their glow under the bloom crossing the whole base otherwise (the user's remark, 0.9.182).
+    this.beamMaterial.opacity = this.beamFoe.opacity = highlight ? 0.55 + 0.25 * Math.sin(t * 3.1) : 0.16 + 0.05 * Math.sin(t * 3.1);
+    this.glowMaterial.opacity = this.glowFoe.opacity = highlight ? 0.18 : 0.05;
     this.creepTime.value = t;
     this.updateWarps(world, sees, t);
   }
@@ -553,8 +556,9 @@ export class PowerNet {
       this.warps.delete(id);
     }
     // Light enough to see the units around and behind it.
-    this.warpCore.uniforms.opacity.value = 0.38 + 0.12 * Math.sin(t * 9);
-    this.warpGlow.uniforms.opacity.value = 0.2 + 0.07 * Math.sin(t * 5.3);
+    // A third fainter than it was (0.38, 0.2): with the materialisation's own lights it haloed the site (0.9.182).
+    this.warpCore.uniforms.opacity.value = 0.27 + 0.08 * Math.sin(t * 9);
+    this.warpGlow.uniforms.opacity.value = 0.14 + 0.05 * Math.sin(t * 5.3);
   }
 
   private rebuild(nodes: Entity[], world: World, fed: Entity[], key: string): void {
