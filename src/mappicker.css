@@ -1,49 +1,62 @@
-/* Map picker on the new-game screen: a row of cards, each with the map's picture. */
-.menu .maps { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; gap: 10px; width: min(900px, 94vw); }
-/* A fieldset will not shrink below its content (min-width: min-content): without this the row of cards ran off
-   small screens instead of scrolling. */
-.menu .maps { min-width: 0; }
-.menu .maps .map-card {
-  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; width: 158px;
-  padding: 8px; font: 13px var(--ui); letter-spacing: 0; text-align: left; opacity: 0.75;
+/* Map picker on the new-game screen: a list that scrolls on the left, a fixed panel on the right showing the map hovered,
+   focused or chosen in large (mappicker.ts mapCards). */
+.menu .maps {
+  display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; gap: 12px; width: min(900px, 94vw);
+  /* A fieldset will not shrink below its content (min-width: min-content) unless told. */
+  min-width: 0;
 }
-.menu .maps .map-card img { width: 140px; height: 140px; image-rendering: pixelated; border: 1px solid rgba(0, 0, 0, 0.6); }
-.menu .maps .map-card .map-name { font-weight: 700; font-size: 15px; letter-spacing: 0.06em; }
-.menu .maps .map-card .map-meta { font-size: 11px; opacity: 0.8; line-height: 1.3; }
-.menu .maps .map-card .map-imported { font-size: 10px; font-weight: 400; letter-spacing: 0.04em; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; opacity: 0.8; }
-.menu .map-tools { margin: -4px 0 0; }
-.menu .map-tools button { min-width: 0; padding: 6px 14px; font-size: 13px; }
-.menu .map-import-note { margin: 0; font: 13px var(--ui); letter-spacing: 0; color: #e0b34f; text-align: center; max-width: min(900px, 94vw); }
-.menu .maps .map-card.chosen { opacity: 1; border-color: var(--amber, #e0b34f); box-shadow: 0 0 12px rgba(224, 179, 79, 0.45); }
-.menu .map-about { width: min(900px, 94vw); margin: -8px 0 0; font: 13px var(--ui); letter-spacing: 0; color: #c9b896; text-align: center; }
-/* Hovering a card lights its frame only: the menu buttons' bright hover fill would wash out the picture and text. Its
-   own ink and panel stay (inherit gave the page's black). Only where there is a pointer to hover with: on a touch
-   screen :hover sticks to the card just tapped. No fade either, so the redrawn row does not flicker on a tap. */
-.menu .maps .map-card { transition: none; -webkit-tap-highlight-color: transparent; }
-.menu .maps .map-card:is(:hover, .vhover) { color: var(--space-ink); background: var(--space-panel); text-shadow: none; }
+.menu .maps .map-list {
+  position: relative; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; padding: 2px 6px 2px 2px;
+  scrollbar-width: thin; scrollbar-color: var(--amber, #e0b34f) rgba(0, 0, 0, 0.45);
+}
+.menu .maps .map-card {
+  display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 2px 10px; min-width: 0; width: 100%; flex: none;
+  padding: 4px 8px 4px 4px; font: 13px var(--ui); letter-spacing: 0; text-align: left; opacity: 0.75; border-radius: 3px;
+  transition: none; -webkit-tap-highlight-color: transparent;
+}
+.menu .maps .map-card img { width: 40px; height: 40px; image-rendering: pixelated; border: 1px solid rgba(0, 0, 0, 0.6); }
+.menu .maps .map-card .map-name { font-weight: 700; font-size: 14px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu .maps .map-card .map-meta { font-size: 12px; opacity: 0.8; white-space: nowrap; }
+.menu .maps .map-imported { font-size: 10px; font-weight: 400; letter-spacing: 0.04em; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; opacity: 0.8; }
+.menu .maps .map-card.chosen { opacity: 1; border-color: var(--amber, #e0b34f); box-shadow: 0 0 10px rgba(224, 179, 79, 0.4); }
+.menu .maps .map-card:disabled { opacity: 0.35; }
+/* Hovering a row lights its frame only: the menu buttons' bright hover fill would wash out the picture and text. Only
+   where there is a pointer to hover with: on a touch screen :hover sticks to the row just tapped. */
+.menu .maps .map-card:is(:hover, .vhover, :focus-visible) { color: var(--space-ink); background: var(--space-panel); text-shadow: none; }
+.menu .maps .map-card:focus-visible { outline: 2px solid var(--space-glow, #6fd3ff); outline-offset: -2px; opacity: 1; }
 @media (hover: hover) {
   .menu .maps .map-card:is(:hover, .vhover) { opacity: 1; border-color: var(--space-glow, #6fd3ff); }
 }
-/* Small screens: the maps get a step of their own, as a grid that scrolls with the page. */
-.menu.compact .maps { flex-wrap: wrap; justify-content: center; overflow: visible; width: min(640px, 94vw); }
-.menu.compact .maps .map-card { width: calc(50% - 6px); max-width: 158px; }
-.menu.compact .maps .map-card img { width: 100%; height: auto; aspect-ratio: 1; }
-.menu.compact .map-about { margin: 0; }
+.menu .maps.fixed .map-card { cursor: default; }
+/* The panel: the picture in large, its details beside or under it. */
+.menu .maps .map-view { display: flex; gap: 14px; align-items: flex-start; min-width: 0; color: #c9b896; font: 14px var(--ui); letter-spacing: 0; }
+.menu .maps .map-view img { flex: none; width: 300px; height: 300px; image-rendering: pixelated; border: 1px solid rgba(0, 0, 0, 0.7); box-shadow: 0 0 14px rgba(0, 0, 0, 0.6); }
+.menu .maps .map-view-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.menu .maps .map-view .map-name { font: 600 22px var(--title); letter-spacing: 0.08em; color: #ffd58a; text-transform: uppercase; }
+.menu .maps .map-view dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
+.menu .maps .map-view dt { opacity: 0.7; }
+.menu .maps .map-view dd { margin: 0; color: var(--ink, #efe6cf); }
+.menu .maps .map-view .map-desc { margin: 0; font: 13px/1.4 var(--ui); letter-spacing: 0; text-transform: none; color: #c9b896; }
+.menu .map-tools { margin: -4px 0 0; }
+.menu .map-tools button { min-width: 0; padding: 6px 14px; font-size: 13px; }
+.menu .map-import-note { margin: 0; font: 13px var(--ui); letter-spacing: 0; color: #e0b34f; text-align: center; max-width: min(900px, 94vw); }
 .menu .options .map-change { min-width: 0; padding: 6px 14px; font-size: 14px; letter-spacing: 0.06em; }
-/* Phones held sideways: little height, so smaller cards, the whole row of maps in view. */
+/* Middle widths: the details under the picture. */
+@media (max-width: 1000px) {
+  .menu .maps .map-view { flex-direction: column; }
+  .menu .maps .map-view img { width: 240px; height: 240px; }
+}
+/* Small screens (the maps' own step): the panel on top, picture and details side by side, the list under it. */
+.menu.compact .maps { grid-template-columns: minmax(0, 1fr); width: min(640px, 94vw); padding: 8px 10px 10px; }
+.menu.compact .maps .map-view { order: -1; flex-direction: row; gap: 10px; }
+.menu.compact .maps .map-view img { width: min(150px, 40vw); height: auto; aspect-ratio: 1; }
+.menu.compact .maps .map-view .map-name { font-size: 18px; }
+.menu.compact .maps .map-view .map-desc { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.menu.compact .maps .map-list { max-height: min(42vh, 360px); }
+.menu.compact .maps .map-card { padding-block: 6px; }
+/* Phones held sideways: little height, so the list and the panel side by side again. */
 @media (max-height: 600px) and (orientation: landscape) {
-  .menu.compact .maps { width: min(900px, 96vw); }
-  .menu.compact .maps .map-card { width: 128px; padding: 6px; }
-  .menu.compact .maps .map-card .map-meta { font-size: 10px; }
+  .menu.compact .maps { grid-template-columns: minmax(200px, 1fr) minmax(0, 1.2fr); width: min(900px, 96vw); }
+  .menu.compact .maps .map-view { order: 0; }
+  .menu.compact .maps .map-list { max-height: 58vh; }
 }
-/* Computers: the row shows that it scrolls, its scrollbar always drawn, a big arrow at its right end (mappicker.ts moreMaps). */
-.menu:not(.compact) .maps { padding-bottom: 8px; scrollbar-width: auto; scrollbar-color: var(--amber, #e0b34f) rgba(0, 0, 0, 0.45); }
-.menu:not(.compact) .maps::-webkit-scrollbar { height: 10px; }
-.menu:not(.compact) .maps::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.45); border-radius: 5px; }
-.menu:not(.compact) .maps::-webkit-scrollbar-thumb { background: var(--amber, #e0b34f); border-radius: 5px; }
-.menu .maps .maps-more {
-  position: sticky; right: 0; z-index: 1; flex: 0 0 52px; align-self: stretch; min-width: 0; margin: 0 0 0 -52px; padding: 0;
-  font: 700 46px/1 var(--ui); color: #ffd58a; text-shadow: 0 0 8px #000; background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.85) 60%);
-  border: 0; border-radius: 0; box-shadow: none; cursor: pointer;
-}
-.menu .maps .maps-more:is(:hover, .vhover) { color: #fff; background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.95) 60%); }

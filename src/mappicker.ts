@@ -68,41 +68,88 @@ export function mapThumb(def: MapFile, px = 192): string {
   return url;
 }
 
-/** One card per map: its picture, name, planet, players, size and bases; the chosen one highlighted. */
-/** The map cards; with `players`, those that do not play at that count are shown but cannot be picked. */
+const playersOf = (m: MapFile) => (m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)}` : `${m.players[0]}`);
+
+/** The fixed panel: the map in large, with what it is played with (its planet, players, size, bases, description). */
+function mapView(m: MapFile): string {
+  const bases = m.bases.length;
+  return `<img src="${mapThumb(m)}" alt="">
+    <div class="map-view-text">
+      <span class="map-name">${m.name}${isImported(m) ? ' <span class="map-imported">importée</span>' : ''}</span>
+      <dl>
+        <dt>Planète</dt><dd>${biomeOf(m).name}</dd>
+        <dt>Joueurs</dt><dd>${playersOf(m)}</dd>
+        <dt>Taille</dt><dd>${m.size}×${m.size}</dd>
+        <dt>Bases</dt><dd>${bases} chacun</dd>
+      </dl>
+      ${m.description ? `<p class="map-desc">${m.description}</p>` : ''}
+    </div>`;
+}
+
+/**
+ * The maps as a list that scrolls (picture, name, players, size; the chosen one lit) beside a fixed panel showing the map
+ * hovered, focused or chosen in large (the user's request, 2026-11-27: the row of cards grew too long). With `count`,
+ * those that do not play at that count are listed but cannot be picked. wireMaps makes the panel follow.
+ */
 export function mapCards(chosen: string, count?: number): string {
-  return Object.values(MAPS)
+  const rows = Object.values(MAPS)
     .map((m) => {
       const off = count !== undefined && !m.players.includes(count);
-      const bases = m.bases.length;
-      const players = m.players.length > 1 ? `${Math.min(...m.players)}–${seatsOf(m)} joueurs` : `${m.players[0]} joueurs`;
-      return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}" title="${off ? `Ne se joue pas à ${count}` : (m.description ?? '')}"${off ? ' disabled' : ''}>
+      return `<button type="button" class="map-card${m.id === chosen ? ' chosen' : ''}" data-map="${m.id}"${off ? ` disabled title="Ne se joue pas à ${count}"` : ''}>
         <img src="${mapThumb(m)}" alt="">
         <span class="map-name">${m.name}${isImported(m) ? ' <span class="map-imported">importée</span>' : ''}</span>
-        <span class="map-meta">${biomeOf(m).name} · ${players} · ${m.size}×${m.size} · ${bases} base${bases > 1 ? 's' : ''} chacun</span>
+        <span class="map-meta">${playersOf(m)} j. · ${m.size}×${m.size}</span>
       </button>`;
     })
     .join('');
+  const shown = MAPS[chosen] ?? Object.values(MAPS)[0];
+  return `<div class="map-list" role="listbox">${rows}</div><div class="map-view" aria-live="polite">${shown ? mapView(shown) : ''}</div>`;
 }
 
-/** Computers: the row of maps shows it scrolls (the user's request, 2026-11-24), a big arrow at its right end (a click
- * scrolls on) until the last map is in view, besides its scrollbar kept visible (mappicker.css). Again after each redraw. */
-export function moreMaps(row: HTMLElement | null): void {
-  if (!row || row.closest('.compact')) return;
-  const arrow = document.createElement('button');
-  arrow.type = 'button';
-  arrow.className = 'maps-more';
-  arrow.textContent = '›';
-  arrow.setAttribute('aria-label', 'Autres cartes');
-  arrow.onclick = () => row.scrollBy({ left: row.clientWidth * 0.8, behavior: 'smooth' });
-  row.append(arrow);
-  const update = () => {
-    const a = row.querySelector<HTMLElement>('.maps-more');
-    if (a) a.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 4;
+/** A map was picked from the keyboard: the list redrawn, the focus goes back to it. */
+let refocus = false;
+
+/**
+ * The panel follows the map under the pointer or the keyboard focus and comes back to the chosen one when they leave;
+ * the arrows move through the list (Entrée picks, as a click does). The chosen map is scrolled into view and, when the
+ * list had the focus before a redraw, focused again. Again after each redraw.
+ */
+export function wireMaps(box: HTMLElement | null): void {
+  const list = box?.querySelector<HTMLElement>('.map-list');
+  const view = box?.querySelector<HTMLElement>('.map-view');
+  if (!box || !list || !view) return;
+  const chosen = list.querySelector<HTMLElement>('.map-card.chosen');
+  let shown = chosen?.dataset.map;
+  const show = (id: string | undefined) => {
+    if (!id || id === shown || !Object.hasOwn(MAPS, id)) return;
+    shown = id;
+    view.innerHTML = mapView(MAPS[id]);
   };
-  if (!row.dataset.more) {
-    row.dataset.more = '1';
-    row.addEventListener('scroll', update, { passive: true });
-  }
-  requestAnimationFrame(update);
+  const back = () => show(chosen?.dataset.map);
+  const cardOf = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>('.map-card');
+  list.onpointerover = (e) => show(cardOf(e)?.dataset.map);
+  list.onpointerleave = () => (list.contains(document.activeElement) ? show((document.activeElement as HTMLElement).dataset.map) : back());
+  // The list is new at each redraw: its listeners go with it.
+  list.addEventListener('focusin', (e) => show(cardOf(e)?.dataset.map));
+  list.addEventListener('focusout', (e) => {
+    if (!list.contains(e.relatedTarget as Node)) back();
+  });
+  // Runs before the menu's own click (it redraws): a click without a pointer (detail 0) is Entrée or Espace.
+  list.onclick = (e) => (refocus = (e as MouseEvent).detail === 0);
+  list.onkeydown = (e) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const cards = [...list.querySelectorAll<HTMLButtonElement>('.map-card')];
+    const at = cards.indexOf(document.activeElement as HTMLButtonElement);
+    const next = cards[Math.max(0, Math.min(cards.length - 1, (at < 0 ? cards.indexOf(chosen as HTMLButtonElement) : at) + step))];
+    next?.focus({ preventScroll: true });
+    next?.scrollIntoView({ block: 'nearest' });
+  };
+  if (!chosen) return;
+  // Into view inside the list only (it is the cards' offsetParent), never scrolling the page.
+  const top = chosen.offsetTop;
+  if (top < list.scrollTop || top + chosen.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top - (list.clientHeight - chosen.offsetHeight) / 2;
+  if (refocus) chosen.focus({ preventScroll: true });
+  refocus = false;
 }

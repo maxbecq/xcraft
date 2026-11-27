@@ -3,7 +3,7 @@ import { type Faction, FACTIONS } from '../data';
 import { addMap, DEFAULT_MAP, isImported, MAPS, MAX_IMPORTED, type MapFile, mapFile, ownImports, receiveMap, removeMap } from '../maps';
 import { MAP_MAX_CHARS, mapPrint, parseMap } from '../mapcheck';
 import { unplayable } from '../mapplay';
-import { mapCards, moreMaps, seatsOf } from '../mappicker';
+import { mapCards, seatsOf, wireMaps } from '../mappicker';
 import { carteParts, Confirm, GUEST_WAITS_MS, HOST_LEAVES_MS, newRoom, openLobby, readRoom, type LobbySetup } from '../net';
 import type { PerfHud } from '../perf';
 import { type Quality, QUALITY_KEY, QUALITY_NAMES } from '../quality';
@@ -254,25 +254,25 @@ function showSetup(menu: HTMLElement, s: Setup, step: 'map' | 'players' = 'map',
     : `<fieldset class="seats"><legend>Joueurs</legend>${[0, 1, 2, 3].slice(0, seatsOf(chosen)).map(row).join('')}${oneTeam ? '<p class="seat-note">Tous dans la même équipe : chaque joueur jouera pour lui seul.</p>' : ''}</fieldset>`;
   const compact = COMPACT.matches;
   const maps = `<fieldset class="maps"><legend>Carte</legend>${mapCards(chosen.id)}</fieldset>
-    <p class="map-about">${chosen.description ?? ''}</p>
     <div class="row map-tools"><button type="button" data-m="import-map">Importer une carte</button>${isImported(chosen) ? '<button type="button" data-m="drop-map">Supprimer cette carte</button>' : ''}<input type="file" class="map-file" accept=".json,application/json" hidden></div>
     <p class="map-import-note"${importNote ? '' : ' hidden'}>${importNote}</p>`;
   importNote = '';
-  menu.className = `menu setup${compact ? ' compact' : ''}`;
+  // The choices scroll; Retour and Jouer stay in a bar at the foot of the screen (the user's request, 2026-11-27).
+  menu.className = `menu setup barred${compact ? ' compact' : ''}`;
   if (compact && step === 'map') {
-    menu.innerHTML = `<h2>${title}</h2>${maps}
-      <div class="row"><button data-m="back">Retour</button><button data-m="next" class="go">Suivant</button></div>`;
+    menu.innerHTML = `<div class="setup-body"><h2>${title}</h2>${maps}</div>
+      <div class="row setup-bar"><button data-m="back">Retour</button><button data-m="next" class="go">Suivant</button></div>`;
   } else
-    menu.innerHTML = `<h2>${title}</h2>
+    menu.innerHTML = `<div class="setup-body"><h2>${title}</h2>
     ${compact ? '' : maps}
     ${seats}
     <fieldset class="options"><legend>Partie</legend>
       ${compact ? `<label>Carte <button type="button" data-m="maps" class="map-change">${chosen.name}</button></label>` : ''}
       ${watching ? `<label>Vitesse ${select('speed', { 1: '×1', 2: '×2', 4: '×4' }, String(s.speed))}</label>` : ''}
     </fieldset>
-    ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}
-    <div class="row"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
-  moreMaps(menu.querySelector<HTMLElement>('.maps'));
+    ${sandbox ? `<fieldset class="options"><legend>Options du bac à sable</legend>${Object.entries(SANDBOX_TOOLS).map(([k, label]) => `<label><input type="checkbox" data-sandbox="${k}"${sandboxPicked.has(k) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>` : ''}</div>
+    <div class="row setup-bar"><button data-m="back">Retour</button><button data-m="go" class="go">${watching ? 'Regarder' : 'Jouer'}</button></div>`;
+  wireMaps(menu.querySelector<HTMLElement>('.maps'));
   menu.onchange = (e) => {
     const el = e.target as HTMLSelectElement | HTMLInputElement;
     const tool = el.dataset.sandbox;
@@ -401,8 +401,9 @@ export function showLobby(menu: HTMLElement, room: string, host: boolean): void 
     if (setup.map !== drawnMaps) {
       drawnMaps = setup.map;
       const cards = mapCards(mapFile(setup.map).id, 2); // a network match is a duel: maps that take two
-      $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${host ? cards : cards.replace(/<button/g, '<button disabled')}`;
-      moreMaps($<HTMLElement>('.maps'));
+      // The guest's list is the host's choice to look at: browsable, not to be picked (the click handler checks `host`).
+      $('.maps')!.innerHTML = `<legend>Carte${host ? '' : ' (choisie par votre ami)'}</legend>${cards}`;
+      wireMaps($<HTMLElement>('.maps'));
     }
     $<HTMLButtonElement>('[data-m="retry"]')!.hidden = !stuck;
     const go = $<HTMLButtonElement>('[data-m="go"]');
