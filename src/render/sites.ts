@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, PlaneGeometry, BoxGeometry, LineBasicMaterial, Vector3, CylinderGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, RingGeometry, BufferGeometry, SphereGeometry, type Texture,
+  MeshStandardMaterial, Object3D, RingGeometry, BufferGeometry, SphereGeometry, type Material, type Texture,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { owned, SHARED } from './models';
@@ -314,6 +314,14 @@ export function podDock(reach: number, height: number): NonNullable<View['dock']
     side.add(collar, ...jaws, ring);
     ports.add(side);
   }
+  // The four sides' parts, which never move, as one mesh per material.
+  ports.updateMatrixWorld(true);
+  const byMaterial = new Map<Material, BufferGeometry[]>();
+  ports.traverse((o) => {
+    if (o instanceof Mesh) (byMaterial.get(o.material) ?? byMaterial.set(o.material, []).get(o.material)!).push(o.geometry.clone().applyMatrix4(o.matrixWorld));
+  });
+  ports.clear();
+  for (const [material, list] of byMaterial) ports.add(new Mesh(mergeGeometries(list), material));
   const arm = dockArm(y);
   for (const o of [ports, arm]) o.traverse((m) => (m.userData.noPick = true));
   return { ports, arm, arms: [arm], glow, y, reach };
@@ -328,11 +336,8 @@ export function dockArm(y: number): Object3D {
   const arm = new Group();
   const segment = () => {
     const g = new Group();
-    const tube = new Mesh(new CylinderGeometry(0.1, 0.12, 1, 10).translate(0, 0.5, 0), ARM_STEEL);
-    const band = new Mesh(new CylinderGeometry(0.125, 0.125, 0.06, 10).translate(0, 0.5, 0), ARM_STEEL);
-    // a piston along its top
-    const rod = new Mesh(new CylinderGeometry(0.035, 0.035, 0.8, 6).translate(0.1, 0.5, 0), ARM_STEEL);
-    g.add(tube, band, rod);
+    // A tube, a band round it and a piston along its top, one mesh.
+    g.add(new Mesh(mergeGeometries([new CylinderGeometry(0.1, 0.12, 1, 10).translate(0, 0.5, 0), new CylinderGeometry(0.125, 0.125, 0.06, 10).translate(0, 0.5, 0), new CylinderGeometry(0.035, 0.035, 0.8, 6).translate(0.1, 0.5, 0)]), ARM_STEEL));
     return g;
   };
   const collar = () => {

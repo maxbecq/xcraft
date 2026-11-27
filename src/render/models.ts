@@ -641,6 +641,8 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             }
           }
           if (RIGS[type] && DEFS[type]?.kind === 'unit') procRig(gltf.scene, RIGS[type]);
+          // A Z machine's parts (body, legs, shins…) as one skinned mesh per material, as the Blender ones.
+          else if (isZ(type) && DEFS[type]?.kind === 'unit' && !STATIC_YAW[type]) rigidSkin(gltf.scene);
           fableLights(gltf.scene);
           const holder = new Group();
           gltf.scene.rotation.y = STATIC_YAW[type] ?? 0;
@@ -729,6 +731,8 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
   );
 }
 
+const inCargo = (o: Object3D | null): boolean => !!o && (/^cargo/.test(o.name) || inCargo(o.parent));
+
 /** Layer no camera draws: parts kept only to be measured (legs, wheels, the body's box). */
 const MEASURED_ONLY = 31;
 
@@ -738,6 +742,10 @@ const MEASURED_ONLY = 31;
  * The parts stay where they were, for measuring, on a layer no camera, light or ray sees.
  */
 function rigidSkin(scene: Group): void {
+  // Only where parts share materials: one skin per material is no fewer draws than one mesh per part.
+  const meshes: Mesh[] = [];
+  scene.traverse((o) => o instanceof Mesh && !inCargo(o) && meshes.push(o));
+  if (new Set(meshes.map((m) => m.material)).size >= meshes.length) return;
   scene.updateMatrixWorld(true);
   const all: Object3D[] = [];
   scene.traverse((o) => all.push(o));
@@ -745,7 +753,8 @@ function rigidSkin(scene: Group): void {
   const parts = new Map<Material, BufferGeometry[]>();
   const hidden: Mesh[] = [];
   for (const o of all) {
-    if (!(o instanceof Mesh)) continue;
+    // The Drone's load stays a mesh of its own: shown only while it carries, in the ore's colour (render/units.ts).
+    if (!(o instanceof Mesh) || inCargo(o)) continue;
     hidden.push(o);
     // A node with several materials loads as a group of meshes that do not move on their own: the group is the bone.
     const node = o.parent !== scene && o.matrix.equals(new Matrix4()) ? o.parent! : o;
@@ -814,6 +823,11 @@ function mergeGeodes(scene: Group): Group {
     slots[slot].push(g);
   });
   const field = new Group();
+  const one = oneGeode(parts);
+  if (one) {
+    field.add(one);
+    return field;
+  }
   for (const [material, slots] of parts) {
     // Only the attributes every part has (the main cluster carries a second UV set nothing reads).
     const all = slots.flat();
@@ -831,6 +845,59 @@ function mergeGeodes(scene: Group): Group {
     field.add(mesh);
   }
   return field;
+}
+
+/**
+ * A field's four stone materials (rock, band, lining, core: the same but for their colour, roughness and glow) as one
+ * mesh: each material's colour multiplied into its vertex colours, its roughness and glow carried by its vertices, so
+ * every pixel is worked out as before. Slot by slot (main cluster, then each small geode), all materials together, so
+ * mining still shortens what is drawn (`geodeCounts`). One draw call a pass instead of four, 30 to 60 fields on a map.
+ * Undefined when the materials differ in more than that: one mesh per material, as before.
+ */
+function oneGeode(parts: Map<Material, BufferGeometry[][]>): Mesh | undefined {
+  const mats = [...parts.keys()] as MeshStandardMaterial[];
+  const same = (k: keyof MeshStandardMaterial) => mats.every((m) => m[k] === mats[0][k]);
+  if (!mats.every((m) => m instanceof MeshStandardMaterial && !m.map && !m.emissiveMap && !m.roughnessMap && !m.normalMap && !m.aoMap)) return undefined;
+  if (!(['metalness', 'side', 'flatShading', 'transparent', 'opacity', 'envMapIntensity', 'alphaTest', 'onBeforeCompile'] as const).every(same)) return undefined;
+  const ordered: BufferGeometry[] = [];
+  const counts = [0, 0, 0, 0];
+  let n = 0;
+  for (let k = 0; k < 4; k++) {
+    for (const m of mats) {
+      for (const g of parts.get(m)![k]) {
+        const count = g.getAttribute('position').count;
+        const vc = m.vertexColors ? (g.getAttribute('color') as BufferAttribute | undefined) : undefined;
+        const color = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          color[i * 3] = m.color.r * (vc ? vc.getX(i) : 1);
+          color[i * 3 + 1] = m.color.g * (vc ? vc.getY(i) : 1);
+          color[i * 3 + 2] = m.color.b * (vc ? vc.getZ(i) : 1);
+        }
+        g.setAttribute('color', new BufferAttribute(color, 3));
+        const surface = new Float32Array(count * 4);
+        for (let i = 0; i < count; i++) surface.set([m.roughness, m.emissive.r * m.emissiveIntensity, m.emissive.g * m.emissiveIntensity, m.emissive.b * m.emissiveIntensity], i * 4);
+        g.setAttribute('aSurface', new BufferAttribute(surface, 4));
+        ordered.push(g);
+        n += g.index ? g.index.count : count;
+      }
+    }
+    counts[k] = n;
+  }
+  for (const g of ordered) for (const name of Object.keys(g.attributes)) if (!ordered.every((h) => h.getAttribute(name))) g.deleteAttribute(name);
+  const geo = mergeGeometries(ordered);
+  if (!geo) return undefined;
+  const material = mats[0].clone();
+  material.name = 'geode';
+  material.color.set(0xffffff);
+  material.emissive.set(0);
+  material.vertexColors = true;
+  material.onBeforeCompile = (sh) => {
+    sh.vertexShader = `attribute vec4 aSurface;\nvarying vec4 vSurface;\n${sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSurface = aSurface;')}`;
+    sh.fragmentShader = `varying vec4 vSurface;\n${sh.fragmentShader.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vSurface.x;').replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vSurface.yzw;')}`;
+  };
+  const mesh = new Mesh(geo, material);
+  mesh.userData.geodeCounts = counts;
+  return mesh;
 }
 
 /**
@@ -997,6 +1064,9 @@ function backBasket(character: Group, clips: AnimationClip[]): void {
     ];
     straps.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), 12, 0.006 * k, 4), leather));
   }
+  mergeByMaterial(carrier);
+  mergeByMaterial(cargo);
+  mergeByMaterial(straps);
   for (const part of [carrier, straps]) {
     part.traverse((o) => {
       if (o instanceof Mesh) o.castShadow = true;
@@ -1005,6 +1075,28 @@ function backBasket(character: Group, clips: AnimationClip[]): void {
     spine.attach(part);
   }
   mixer.stopAllAction();
+}
+
+/**
+ * The group's direct mesh children that share a material made into one mesh, each part's place baked into its
+ * vertices: one draw per material, not one per rivet (each mesh is drawn four times a frame: shadow, colour, mask and
+ * normals for the ink lines).
+ */
+function mergeByMaterial(group: Object3D): void {
+  const parts = new Map<Material, Mesh[]>();
+  for (const o of group.children) if (o instanceof Mesh && !(o instanceof SkinnedMesh) && !Array.isArray(o.material)) (parts.get(o.material) ?? parts.set(o.material, []).get(o.material)!).push(o);
+  for (const [material, list] of parts) {
+    if (list.length < 2) continue;
+    const geos = list.map((o) => (o.updateMatrix(), o.geometry.clone().applyMatrix4(o.matrix)));
+    for (const g of geos) for (const name of Object.keys(g.attributes)) if (!geos.every((h) => h.getAttribute(name))) g.deleteAttribute(name);
+    const geo = mergeGeometries(geos);
+    if (!geo) continue; // parts that do not match: left as they are
+    const merged = new Mesh(geo, material);
+    merged.castShadow = list[0].castShadow;
+    merged.receiveShadow = list[0].receiveShadow;
+    group.remove(...list);
+    group.add(merged);
+  }
 }
 
 /**
