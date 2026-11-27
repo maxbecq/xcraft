@@ -1981,7 +1981,7 @@ export class EntityRenderer {
     if (e.type === 'assimilateur') fx = assimFx(body, e);
     if (e.type === 'armement') fx = forgeFx(body, e);
     if (e.type === 'mastodonte') fx = thrusterFx(body, e);
-    if (e.type === 'reservepsy') {
+    if (e.type === 'reservepsy' && !body.getObjectByName('fx_cuve')) { // the old model's rings and halo; Fable's has its own
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);
       fx = reserve;

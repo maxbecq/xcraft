@@ -40,7 +40,22 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
   const spins = top('spin_').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
     o, q0: o.quaternion.clone(), axis: new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
   }));
-  if (!floats.length && !spins.length) return null;
+  // The Déflecteur's veils (`fx_voile_*`) turn slowly round the building (the user's wish, 2026-11-27): hung on a
+  // pivot at their parent's origin, the building's axis, since meshopt leaves each mesh's own origin elsewhere.
+  const veils = top('fx_voile_');
+  const pivots = new Set<Group>();
+  for (const v of veils) {
+    const parent = v.parent!;
+    let pivot = parent.children.find((c) => c.userData.veilPivot) as Group | undefined;
+    if (!pivot) {
+      pivot = new Group();
+      pivot.userData.veilPivot = true;
+      parent.add(pivot);
+      pivots.add(pivot);
+    }
+    pivot.add(v);
+  }
+  if (!floats.length && !spins.length && !pivots.size) return null;
   const boxes = floats.map((f) => new Box3().setFromObject(f).expandByScalar(0.1));
   const inFloat = (o: Object3D) => {
     for (let p = o.parent; p; p = p.parent) if (floats.includes(p)) return true;
@@ -63,6 +78,7 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
       const k = Math.sin(t * 0.9 + phase);
       for (const p of parts) p.o.position.y = p.y + p.amp * k;
       for (const s of spins) s.o.quaternion.copy(s.q0).multiply(turn.setFromAxisAngle(s.axis, t * s.speed + phase));
+      for (const p of pivots) p.rotation.y = t * 0.35 + phase;
     },
   };
 }
