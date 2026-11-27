@@ -682,15 +682,7 @@ export function hit(this: World, e: Entity, t: Entity, a: Attack): void {
 }
 
 export function chase(this: World, e: Entity, t: Entity): void {
-  if (t.def.kind === 'building') {
-    // Held a second within a tile of it, out of reach, its path not done: its own crowd stands on that face (point
-    // 115, Codex final 2026-11-27: of twelve Légionnaires all on one side of a headquarters, one never struck it).
-    // Then a door none of its side stands on.
-    const held = e.path.length > 0 && this.gap(e, t) < FP && ++e.shortTicks > ticks(1);
-    if (!held && !(e.path.length > 0 && this.gap(e, t) < FP)) e.shortTicks = 0;
-    if (held) [e.shortTicks, e.goal] = [0, null];
-    return this.goNear(e, t.tx, t.ty, (t.def as BuildingDef).size, held);
-  }
+  if (t.def.kind === 'building') return this.goNear(e, t.tx, t.ty, (t.def as BuildingDef).size);
   if (!e.goal || dist(e.goal.x, e.goal.y, t.x, t.y) > FP) this.plan(e, t.x, t.y);
   if (!this.follow(e) || flies(e)) return void (e.shortTicks = 0);
   // At the end of its path and still out of reach (the target stands below a cliff): after two seconds,
