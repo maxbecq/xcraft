@@ -5,6 +5,7 @@ import { FP } from '../sim/fixed';
 import { type Entity, type Order, type World, soars } from '../sim/world';
 import { FX_STYLE } from './effects';
 import { marksOf } from './marks';
+import { GOD_STATE_ON, drawGodState, godState } from './godstate';
 import { GLYPHS, Z_GLYPHS } from '../game/glyphs';
 import { DIEUX_GLYPHS, HUMAINS_GLYPHS, ISDARIS_GLYPHS } from '../game/glyphs-camps';
 
@@ -167,8 +168,29 @@ export class Overlay {
         ctx.fillRect(sx - bw / 2, sy - sh - 2, (bw * e.shield) / e.maxShield, sh);
       }
     }
+    if (GOD_STATE_ON) this.godStates(world, camera, sees, alpha, w, h);
     if (this.showQueue) this.drawQueue(world, camera, selected, w, h);
     this.drawMarks(camera, w, h);
+  }
+
+  /** Provisional (render/godstate.ts): over each god seen, what it is doing. */
+  private godStates(world: World, camera: Camera, sees: (e: Entity) => boolean, alpha: number, w: number, h: number): void {
+    const t = performance.now() / 1000;
+    for (const e of world.entities.values()) {
+      if (e.inside) continue;
+      const state = godState(world, e);
+      if (!state || !sees(e)) continue;
+      const x = (e.px + (e.x - e.px) * alpha) / FP;
+      const z = (e.py + (e.y - e.py) * alpha) / FP;
+      // Above the model's real top (it carries a flyer's height already).
+      const top = this.top(e.id, true) ?? heightAt(this.map, x, z) + 2.5 + (soars(e) ? FLY_HEIGHT : 0);
+      this.v.set(x, top + 0.6, z).project(camera);
+      if (this.v.z > 1) continue;
+      const sx = ((this.v.x + 1) / 2) * w;
+      const sy = ((1 - this.v.y) / 2) * h - 22;
+      if (sx < -50 || sy < -50 || sx > w + 50 || sy > h + 50) continue;
+      drawGodState(this.ctx, state, sx, sy, 17, t);
+    }
   }
 
   /** Whether two players are at war; set by the game (teams). */
