@@ -238,6 +238,9 @@ export class AI {
   strategy: Strategy;
   readonly doctrine: Doctrine;
   private gods: [string, number][];
+  /** Dieux: the gods fighting (godsJoin), which summon nothing, and the tick each last had a fight by it. */
+  private readonly fighting = new Set<number>();
+  private readonly calmSince = new Map<number, number>();
   private researchList: string[];
   /** Types of the enemies in `foes`, for their classes. */
   private foeTypes = new Map<number, string>();
@@ -426,6 +429,7 @@ export class AI {
     this.soldiers(ctx);
     this.machines(ctx);
     this.barge(ctx);
+    this.godsJoin(ctx);
     this.summon(ctx);
     this.watch(ctx);
     this.muster(ctx);
@@ -1465,6 +1469,34 @@ export class AI {
     return next && !w.lacks(this.player, next[0]) ? next[0] : undefined;
   }
 
+  /**
+   * Doctrine: a god whose army fights, or whose base is raided, within `godsFight` tiles drops its queue (refunded: a god
+   * summoning cannot move) and joins the fight; it summons again once `godsCalm` seconds have passed without one.
+   * In AI against AI the gods spent most of their time summoning, rooted to the spot, while their army fought by them.
+   */
+  private godsJoin(ctx: Turn): void {
+    const d = this.doctrine;
+    this.fighting.clear();
+    if (this.easy || !d.godsFight) return;
+    const { w, gods, army, buildings } = ctx;
+    if (!gods.length) return;
+    const R = d.godsFight * FP;
+    const foes = this.visibleFoes().filter((e) => e.def.kind === 'unit');
+    for (const g of gods) {
+      const near = foes.filter((e) => dist(e.x, e.y, g.x, g.y) < R);
+      const fights = near.length > 0 && (army.some((u) => dist(u.x, u.y, g.x, g.y) < R && (u.order?.kind === 'attack' || u.order?.kind === 'attackMove' || u.cooldown > 0)) || near.some((e) => buildings.some((b) => dist(b.x, b.y, e.x, e.y) < 10 * FP)));
+      if (fights) this.calmSince.set(g.id, w.tick);
+      const since = this.calmSince.get(g.id);
+      if (since === undefined || w.tick - since >= ticks(d.godsCalm)) continue;
+      this.fighting.add(g.id);
+      for (let i = 0; i < g.queue.length; i++) ctx.out.push({ player: this.player, kind: 'cancel', ids: [g.id] });
+      // Not one badly hurt (tactics sends it home), nor one fighting already.
+      if (!fights || g.hp * 2 <= g.maxHp || g.order?.kind === 'attack' || g.order?.kind === 'attackMove' || g.order?.kind === 'cast' || g.order?.kind === 'heal') continue;
+      const e = near.reduce((a, b) => (dist(b.x, b.y, g.x, g.y) < dist(a.x, a.y, g.x, g.y) ? b : a));
+      ctx.out.push({ player: this.player, kind: 'attack', ids: [g.id], x: e.x, y: e.y });
+    }
+  }
+
   /** Dieux: gods, their troops, levels and artefacts. */
   private summon(ctx: Turn): void {
     const { w, f, mine, home, gods, buildings, minute, saving, reserve, unitReserve } = ctx;
@@ -1510,6 +1542,7 @@ export class AI {
       const lackDef = lack ? (DEFS[lack] as UnitDef) : undefined;
       const hold = lackDef && w.tick - this.lastIncome < ticks(60) && this.room(ctx) >= lackDef.supply && !(lackDef.cost.energy > 0 && ctx.energy - unitReserve < lackDef.cost.energy) && ctx.minerals - ctx.keep < lackDef.cost.minerals ? lackDef.cost.minerals : 0;
       for (const g of order) {
+        if (this.fighting.has(g.id)) continue;
         // A god keeps `godQueue` summons ahead once minerals pile up (one ahead held the Dieux' bank at 2000 to 2600).
         if (g.queue.length > (this.easy ? 0 : ctx.minerals > 400 ? this.doctrine.godQueue : 1)) continue;
         if (this.doctrine !== LEGACY && g.queue.length > 0 && ratio(g) > most + 1) continue;
@@ -1536,7 +1569,7 @@ export class AI {
       const allGods = this.gods.every(([t]) => (DEFS[t] as UnitDef).requiresAny || gods.some((e) => e.type === t)) || minute >= 12;
       // A level that costs no energy (Thor's) comes sooner, from minerals to spare: energy, not minerals, held the next
       // gods back, and Thor's levels were the one place 1000 to 5000 idle minerals could go.
-      for (const g of gods.filter((e) => (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau'))) {
+      for (const g of gods.filter((e) => !this.fighting.has(e.id) && (e.def as UnitDef).levels && e.queue.length <= 2 && !e.queue.includes('niveau'))) {
         const lv = (g.def as UnitDef).levels!;
         const cost = g.lvl < lv.hp.length ? lv.cost[g.lvl - 1] : undefined;
         // Doctrine: a god's second level at once, without the margin: it summons twice as fast (base time over its

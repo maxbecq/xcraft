@@ -660,6 +660,34 @@ describe('AI Isdaris blind spots', () => {
     const cmds = ai.think();
     expect(cmds).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [ob2.id] }));
   });
+
+  it('a Dieux god drops its summons and joins its army fighting by it, then summons again once calm', () => {
+    const w = createMatch(['dieux', 'humains']);
+    const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+    const thor = w.spawn('thor', 0, cx, cy);
+    w.players[0].minerals = 3000;
+    for (let i = 0; i < 4; i++) w.spawn('branche', 0, cx - 12 * FP, cy + (i * 3 - 6) * FP);
+    w.step([{ player: 0, kind: 'train', ids: [thor.id], type: 'nain' }]);
+    expect(thor.queue.length).toBe(1);
+    const nains = Array.from({ length: 4 }, (_, i) => w.spawn('nain', 0, cx + 3 * FP, cy + (i - 2) * FP));
+    const foes = Array.from({ length: 3 }, (_, i) => w.spawn('legionnaire', 1, cx + 6 * FP, cy + (i - 1) * FP));
+    w.step([{ player: 0, kind: 'attack', ids: nains.map((n) => n.id), x: foes[0].x, y: foes[0].y }]);
+    w.tick = thinkTick(10);
+    const ai = new AI(w, 0);
+    const cmds = ai.think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'cancel', ids: [thor.id] }));
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'attack', ids: [thor.id] }));
+    expect(cmds.some((c) => c.kind === 'train' && c.ids.includes(thor.id))).toBe(false);
+    // The fight over: summoning again once calm.
+    for (const f of foes) w.remove(f);
+    let trained = false;
+    for (let t = 0; t < ticks(20) && !trained; t++) {
+      const out = ai.think();
+      trained = out.some((c) => c.kind === 'train' && c.ids.includes(thor.id));
+      w.step(out);
+    }
+    expect(trained).toBe(true);
+  });
 });
 
 
