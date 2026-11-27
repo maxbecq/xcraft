@@ -1038,6 +1038,10 @@ export class Effects {
       if (kit !== 'dechiqueteur') this.spawn(this.tex.glow, Z_GREEN, to.clone(), new Vector3(), 0.12, 0.3, 0.6, 0.9, 0, true);
       return true;
     }
+    if (kit === 'laserlourd') {
+      this.heavyBeam(muzzle, to);
+      return true;
+    }
     this.flash(muzzle, Z_GREEN, kit === 'canonx04' ? 2 : 1);
     const flight = Math.min(0.3, Math.max(0.06, dist / 30));
     switch (kit) {
@@ -1048,7 +1052,6 @@ export class Effects {
         }
         this.hits.push({ at: to, color: Z_GREEN, left: flight });
         return true;
-      case 'laserlourd': // provisional look (équilibreur 23/11): the laser's beam, until the DA draws its own
       case 'laser': // a straight beam, instant, fading
         this.streaks.spawn(0x7affb8, muzzle, to, 0, 0.25, 0, 0.1, 1);
         this.streaks.spawn(0xffffff, muzzle, to, 0, 0.12, 0, 0.04, 1);
@@ -1287,6 +1290,29 @@ export class Effects {
   }
 
   /** A muzzle's flash: white core, the camp's colour round it. */
+  /**
+   * The Z Laser lourd: one slow, heavy shot, unlike the Laser's quick green line. A wide ice-blue beam with a white-hot
+   * core lingers half a second and narrows as it fades; the air along it glows in motes drifting off; a big flare at the
+   * muzzle, and where it lands a white burst, a blue flare and a spray of short white-blue sparks.
+   */
+  private heavyBeam(muzzle: Vector3, to: Vector3): void {
+    const BLUE = 0x3ac8ff;
+    this.flash(muzzle, BLUE, 2.2);
+    this.streaks.spawn(BLUE, muzzle, to, 0, 0.55, 0, 0.34, 0.75);
+    this.streaks.spawn(0x9ae8ff, muzzle, to, 0, 0.4, 0, 0.16, 1);
+    this.streaks.spawn(0xffffff, muzzle, to, 0, 0.26, 0, 0.07, 1);
+    const along = to.clone().sub(muzzle);
+    for (let k = 1; k <= 10; k++) this.spawn(this.tex.glow, k % 2 ? 0xc8f4ff : BLUE, muzzle.clone().addScaledVector(along, k / 11).add(rnd(0.06)), rnd(0.5).setY(0.25), 0.5 + Math.random() * 0.3, 0.12, 0.05, 0.7, 0, true);
+    this.flash(to, BLUE, 2.4);
+    this.hits.push({ at: to, color: BLUE, left: 0 });
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.2 + Math.random() * 0.45;
+      const end = new Vector3(to.x + Math.cos(a) * r, to.y - 0.05, to.z + Math.sin(a) * r);
+      this.streaks.spawn(Math.random() < 0.5 ? 0xffffff : 0x9ae8ff, to, end, 0.1 + Math.random() * 0.1, 0.03, 0.06, 0.012, 1, 0.08 + Math.random() * 0.1);
+    }
+  }
+
   private flash(p: Vector3, color: number, k: number): void {
     this.spawn(this.tex.glow, 0xffffff, p, new Vector3(), 0.08, 0.45 * k, 0.2 * k, 1, 0, true);
     this.spawn(this.tex.glow, color, p, new Vector3(), 0.12, 0.6 * k, 0.3 * k, 0.9, 0, true);
