@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FP, ticks } from '../sim/fixed';
 import { createMatch } from '../sim/setup';
 import type { Command, Entity, World } from '../sim/world';
-import { FACTIONS } from '../data';
+import { DEFS, FACTIONS } from '../data';
 import { AI, DIFFICULTY, teamFocus } from './ai';
 import { STRATEGIES } from './strategy';
 
@@ -662,3 +662,87 @@ describe('AI Isdaris blind spots', () => {
   });
 });
 
+
+describe('AI Isdaris, the équilibreur rules', () => {
+  const thinkTick = (min: number) => ticks(min * 60) - (ticks(min * 60) % 10);
+  const base = () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const ob = [...w.entities.values()].find((e) => e.owner === 0 && e.type === 'obelisque')!;
+    return { w, ob };
+  };
+
+  it('puts a Miniportail on its Portail, and no Archer before it: the Archer needs one', () => {
+    const { w, ob } = base();
+    const portail = w.spawn('portail', 0, ob.x + 8 * FP, ob.y + 8 * FP);
+    w.tick = thinkTick(8);
+    const ai = new AI(w, 0);
+    const orders: string[] = [];
+    for (let i = 0; i < ticks(60) && !portail.exts.includes('miniportail'); i++) {
+      w.players[0].minerals = Math.max(w.players[0].minerals, 1000);
+      w.players[0].energy = Math.max(w.players[0].energy, 1000);
+      const cmds = ai.think();
+      for (const c of cmds) if (c.kind === 'train' && c.ids.includes(portail.id)) orders.push(c.type);
+      w.step(cmds);
+    }
+    expect(portail.exts).toContain('miniportail');
+    expect(orders.indexOf('archer')).toBe(-1);
+  });
+
+  it('an Obélisque puts its Bouclier de plasma on a Portail of the zone under fire', () => {
+    const { w, ob } = base();
+    const portail = w.spawn('portail', 0, ob.x + 8 * FP, ob.y);
+    [portail.hp, portail.shield] = [100, 0];
+    w.tick = thinkTick(8);
+    portail.lastHit = w.tick;
+    expect(new AI(w, 0).think()).toContainEqual(expect.objectContaining({ kind: 'ability', ids: [ob.id], name: 'bouclierplasma', x: portail.x, y: portail.y }));
+  });
+
+  it('trains a Drone protecteur for every eight soldiers', () => {
+    const { w, ob } = base();
+    const pa = w.spawn('nanoassembleur', 0, ob.x + 8 * FP, ob.y);
+    for (let i = 0; i < 16; i++) w.spawn('creature', 0, ob.x - 6 * FP, ob.y + (i - 8) * FP / 2);
+    w.spawn('droneprotecteur', 0, ob.x - 4 * FP, ob.y);
+    for (let i = 0; i < 4; i++) w.spawn('reservepsy', 0, ob.x + (i - 2) * 4 * FP, ob.y - 9 * FP);
+    w.tick = thinkTick(14);
+    w.players[0].minerals = 3000;
+    w.players[0].energy = 3000;
+    const cmds = new AI(w, 0).think();
+    expect(cmds).toContainEqual(expect.objectContaining({ kind: 'train', ids: [pa.id], type: 'droneprotecteur' }));
+  });
+
+  it('an Orbe plasma afloat never goes with a wave', () => {
+    const { w, ob } = base();
+    const orbe = w.spawn('orbemob', 0, ob.x - 6 * FP, ob.y);
+    for (let i = 0; i < 12; i++) w.spawn('creature', 0, ob.x - 6 * FP, ob.y + (i - 6) * FP / 2);
+    w.tick = thinkTick(12);
+    const ai = new AI(w, 0);
+    const cmds = ai.think();
+    expect((ai as unknown as { wave: Set<number> }).wave.size).toBeGreaterThan(0);
+    expect((ai as unknown as { wave: Set<number> }).wave.has(orbe.id)).toBe(false);
+    expect(cmds.some((c) => 'ids' in c && c.ids.includes(orbe.id))).toBe(false);
+  });
+
+  it('under a raid stronger than its army, keeps a robot\'s price, at any minute (QA 0.9.177, M2)', () => {
+    const { w, ob } = base();
+    w.spawn('portail', 0, ob.x + 8 * FP, ob.y + 8 * FP);
+    for (let i = 0; i < 8; i++) w.spawn('legionnaire', 1, ob.x + (4 + (i % 4)) * FP, ob.y + (4 + Math.floor(i / 4)) * FP);
+    // 19 robots, the opening's full line: not the « fewer than half » case.
+    for (let i = 0; i < 13; i++) w.spawn('moissonneur', 0, ob.x - (3 + (i % 4)) * FP, ob.y - (3 + Math.floor(i / 4)) * FP);
+    w.spawn('reservepsy', 0, ob.x - 8 * FP, ob.y + 8 * FP);
+    w.tick = thinkTick(3);
+    w.players[0].minerals = 150;
+    w.players[0].energy = 500;
+    const ai = new AI(w, 0);
+    const robot = (DEFS.moissonneur as { cost: { minerals: number } }).cost.minerals;
+    for (let i = 0; i < 40; i++) {
+      w.players[0].minerals = 150;
+      for (const c of ai.think()) {
+        if ((c.kind !== 'train' && c.kind !== 'build') || c.type === 'moissonneur' || c.player !== 0) continue;
+        const cost = (DEFS[c.type] as { cost: { minerals: number } }).cost.minerals;
+        // The first think sees the raid; from the next, nothing but a robot takes the last robot's price.
+        if (i > 0) expect(150 - cost).toBeGreaterThanOrEqual(robot);
+      }
+      w.step([]);
+    }
+  });
+});
