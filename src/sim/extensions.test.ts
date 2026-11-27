@@ -116,9 +116,7 @@ describe('Isdaris extensions, one building each', () => {
 
   it('the AI, rich, puts a Laboratoire on its second Portail too (the Druide is the Portail\'s own)', () => {
     const { w, a, b } = setup();
-    // Both with their Miniportail, which the AI puts on each Portail first.
-    a.exts.push('miniportail', 'laboratoire');
-    b.exts.push('miniportail');
+    a.exts.push('laboratoire');
     const ai = new AI(w, 0);
     for (let i = 0; i < 200 && !b.queue.includes('laboratoire') && !b.exts.includes('laboratoire'); i++) w.step(ai.think());
     expect(b.queue.includes('laboratoire') || b.exts.includes('laboratoire')).toBe(true);

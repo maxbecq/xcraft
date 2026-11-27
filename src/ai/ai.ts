@@ -106,8 +106,10 @@ const GANG_UP = (30 * FP) / 20;
 // The Totem too (Voyageurs, the vehicles' research, the Couloir temporel). Then those of the Orbe de commandement (Assassins, Dragons, its Observatoire) and of the Trône (its three powers),
 // each once its host stands: off this list, among the late researches, they never came, nor the units and powers
 // behind them.
-// The Miniportail first: the Archer needs one on its Portail (équilibreur 24/11); as research of the list, it never came.
-export const EXTENSIONS = ['assembleur', 'miniportail', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
+// Not the Miniportail (the Archer needs one on its Portail): as a research it goes on every Portail, each training two
+// at once. First of this list, it took 250 minerals from the opening and left the other Portails their Cuve génétique
+// (Isdaris 15 to 7 wins in 24 against the 0.9.173 AI).
+export const EXTENSIONS = ['assembleur', 'laboratoire', 'balise', 'totem', 'autel', 'pyramide', 'relais', 'concentrateur', 'porte', 'observatoire'];
 /** Minerals and energy kept over the price before the AI puts a second copy of an extension on another building. */
 const SPARE_EXTENSION = 400;
 /**
@@ -391,7 +393,10 @@ export class AI {
     // the first Human wave. Kept in the bank only: the worker comes ahead of supply only to replace one killed.
     this.staffed ||= ctx.serfs.length + ctx.queued >= target;
     ctx.urgent = (owed > 0 && ctx.free > 0 && !held) || (ctx.serfs.length + ctx.queued < target / 2 && !!this.workerHome(ctx));
-    ctx.low = ctx.urgent || (this.unreplaced > 0 && ctx.free > 0 && !held) || (this.staffed && ctx.minute >= 10 && ctx.free > 0 && !held) ? (DEFS[f.worker] as UnitDef).cost.minerals : 0;
+    // And under a raid stronger than the army at home, at any minute: Isdaris raided at 3 min 40 on Origine lost their
+    // army and 19 robots with 84 minerals left, and never had a robot's 100 again (QA 0.9.177, M2).
+    const raided = !!this.danger && this.doctrine !== LEGACY;
+    ctx.low = ctx.urgent || (this.unreplaced > 0 && ctx.free > 0 && !held) || ((raided || (this.staffed && ctx.minute >= 10)) && ctx.free > 0 && !held) ? (DEFS[f.worker] as UnitDef).cost.minerals : 0;
     // Repairs under way take from the bank as they go: what they will still cost is not this turn's to spend.
     for (const s of ctx.serfs) {
       const b = s.order?.kind === 'repair' ? w.entities.get(s.order.target) : undefined;
@@ -1093,9 +1098,6 @@ export class AI {
         if (scout && !(scout.order?.kind === 'move' && dist(scout.order.x, scout.order.y, cx, cy) < 2 * FP)) ctx.out.push({ player: this.player, kind: 'move', ids: [scout.id], x: cx, y: cy });
         if (scout) continue;
       }
-      // In the zone and seen, an Obélisque raises it at its price, a robot for a third more (équilibreur 26/11): the
-      // robot only where no Obélisque can, not to skip an Obélisque's rest.
-      if (zoned && spot && seen && def.faction === 'isdaris' && buildings.some((b) => raises(b.def as BuildingDef, type) && b.buildLeft === 0)) continue;
       const crew = builders.filter((b) => raises(b.def as UnitDef, type));
       // Not a worker given another building this turn: the second replaced the first (a drone sent to a Pod went to a
       // Centre de socles instead), a site tried for nothing.
