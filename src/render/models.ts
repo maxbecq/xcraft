@@ -1,5 +1,5 @@
 import {
-  Sprite, SpriteMaterial, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
+  Sprite, SpriteMaterial, TextureLoader, RepeatWrapping, AdditiveBlending, Box3, BufferAttribute, DoubleSide, CanvasTexture, SRGBColorSpace, Color, BoxGeometry, CapsuleGeometry, Vector3, ConeGeometry, CylinderGeometry, Group, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, type MeshStandardMaterialParameters, Object3D, AnimationMixer, type AnimationClip, SkinnedMesh, Skeleton, Matrix4, RingGeometry, SphereGeometry, BufferGeometry,
   ShaderMaterial, ShaderChunk, Raycaster, PlaneGeometry, type Material, type Texture, LatheGeometry, TorusGeometry, IcosahedronGeometry, Vector2, TubeGeometry, CatmullRomCurve3,
 } from 'three';
@@ -345,8 +345,18 @@ function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
  * The light of Fable's Blender Isdaris buildings, by material: cyan lines (`*_lueur`) breathing as the veins do, held to
  * a strength the bloom haloes without whitening; halos (`*_halo`, a disc or square under a floating part) a faint cyan
  * glow fading from the middle; the Portail's veil of lightning and its spires' glass (`voile`, `verre`) rippling, and a
- * blue light hung under its lintel. The marble is toned down from pure white and gets the buildings' faint rim. Their blue bands are `team` (model()); `float_*` levitate (life.ts floaters).
+ * blue light hung under its lintel. The marble wears Fable's veined texture A, toned down from pure white, and gets the buildings' faint rim. Their blue bands are `team` (model()); `float_*` levitate (life.ts floaters).
  */
+let marbleMap: Texture | undefined;
+function marble(): Texture {
+  const t = new TextureLoader().load(`${import.meta.env.BASE_URL}models/marbre-isdaris.jpg`);
+  t.flipY = false;
+  t.colorSpace = SRGBColorSpace;
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
 function fableLights(scene: Object3D): void {
   const halos = new Map<Material, ShaderMaterial>();
   const basins = new Map<Material, MeshStandardMaterial>();
@@ -380,7 +390,11 @@ function fableLights(scene: Object3D): void {
     } else if (m.name === 'marbre' && !m.userData.dim) {
       // Pure white marble flared in the bloom, past the other Isdaris buildings (the user's remark, 0.9.173).
       m.userData.dim = true;
-      m.color.multiplyScalar(0.72);
+      // Fable's marble A, toned down to 0.58, chosen by the user from the in-game board (0.9.183). One shared jpg: packed
+      // in each glb, compress.sh shrank its marble to a 3 KB webp that wiped out the veins.
+      m.map = marbleMap ??= marble();
+      m.color.setScalar(0.58);
+      m.needsUpdate = true;
       // Matte as the Meshy buildings (0.8): at Blender's 0.42 the sun's glint on the terraces and stairs, swollen by the
       // bloom, whitened the Obélisque's whole foot (the user's captures, 0.9.174).
       m.roughness = 0.85;
