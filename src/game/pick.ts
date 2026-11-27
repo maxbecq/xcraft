@@ -38,7 +38,8 @@ export function nearestCatch(x: number, y: number, catches: Catch[]): Entity | u
  * unit: one the ray meets further on, or one whose own catch zone holds the cursor (`unit`): a click at the edge of a
  * small unit standing on a well's flat stone, the ray missing the unit, takes the unit (remark, 0.9.174). Only when
  * the ray meets nothing do the wider catch zones of units and resources decide (`caught`), then the nearest resource
- * (`near`).
+ * (`near`). A harvest order (`harvest`: the resource whose catch zone holds the cursor) keeps the resource the ray meets
+ * first, whatever unit stands behind it, and between a field's geodes takes the resource before any unit's zone.
  */
 export function pickAt(
   hits: { e: Entity; seen: boolean; xray?: boolean }[],
@@ -46,12 +47,13 @@ export function pickAt(
   near: () => Entity | undefined,
   occupant: (well: Entity) => Entity | undefined = () => undefined,
   unit: () => Entity | undefined = () => undefined,
+  harvest?: () => Entity | undefined,
 ): Entity | undefined {
   const i = hits.findIndex(({ e, seen }) => e.def.kind !== 'unit' || seen);
-  if (i < 0) return caught() ?? near();
+  if (i < 0) return harvest?.() ?? caught() ?? near();
   // A well an extractor stands on is that extractor (its rocks and glow reach past the building's model).
   const first = occupant(hits[i].e) ?? hits[i].e;
-  if (first.def.kind === 'resource') return hits.slice(i + 1).find(({ e, seen }) => e.def.kind === 'unit' && seen)?.e ?? unit() ?? first;
+  if (first.def.kind === 'resource') return harvest ? first : hits.slice(i + 1).find(({ e, seen }) => e.def.kind === 'unit' && seen)?.e ?? unit() ?? first;
   if (first.def.kind !== 'building') return first;
   return hits.slice(i + 1).find(({ e, seen, xray }) => e.def.kind === 'unit' && seen && xray)?.e ?? first;
 }

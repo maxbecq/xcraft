@@ -100,6 +100,23 @@ describe('what the ray under the cursor picks', () => {
     expect(pickAt([{ e: well, seen: true }], () => worker, none, () => undefined, harvest)).toBe(well);
   });
 
+  it('a harvest order keeps the resource the ray meets first, the worker behind it or not', () => {
+    const worker = thing(17, 'unit');
+    expect(pickAt([{ e: well, seen: true }, { e: worker, seen: true }], none, none, () => undefined, none, none)).toBe(well);
+  });
+
+  it('a harvest order through a gap between geodes takes the field whose zone holds it before a worker nearby', () => {
+    const worker = thing(18, 'unit');
+    expect(pickAt([], () => worker, none, () => undefined, none, () => well)).toBe(well);
+    expect(pickAt([], () => worker, none, () => undefined, none, none)).toBe(worker); // out of every field's zone
+  });
+
+  it('a harvest order still takes a unit the ray meets first, and an extractor on its well', () => {
+    const extractor = thing(19, 'building');
+    expect(pickAt([{ e: drone, seen: true }, { e: well, seen: true }], none, none, () => undefined, none, () => well)).toBe(drone);
+    expect(pickAt([{ e: well, seen: true }], none, none, (w) => (w === well ? extractor : undefined), none, () => well)).toBe(extractor);
+  });
+
   it('a unit the ray meets behind a resource takes it over the resource', () => {
     expect(pickAt([{ e: well, seen: true }, { e: drone, seen: true }], none, none)).toBe(drone);
   });
