@@ -597,7 +597,9 @@ export function paceOf(this: World, e: Entity): [number, number] {
  * Puts a unit at (x, y), or on the nearest open tile there for a walker; it stops what it was doing. A point on a tile's
  * edge touches two tiles (four on a corner): floor took the one after it, so a scene and its turn came out either side
  * (Codex, point 122). The tile nearest the point, then the one ahead along `dir` (by default the way from where the
- * unit stands, or away from the map's centre), then the one on its right: all unchanged by the map turned round.
+ * unit stands, or away from the map's centre), then the one on its right: all unchanged by the map turned round. The
+ * point's tile blocked at the map's very centre, nearestOpen leans the same way (Codex final, 2026-11-27: its scan
+ * order sent a Jörmungand called on a Forge there north, west, south and east with the turn).
  */
 export function place(this: World, t: Entity, x: number, y: number, dir?: [number, number]): void {
   if (!soars(t)) {
@@ -611,7 +613,7 @@ export function place(this: World, t: Entity, x: number, y: number, dir?: [numbe
     let best: number[] | null = null;
     let at: [number, number] = [0, 0];
     for (const [sx, sy] of standsOn(x, y)) {
-      const [ox, oy] = this.grid.nearestOpen(Math.min(this.map.width - 1, Math.max(0, sx)), Math.min(this.map.height - 1, Math.max(0, sy)), -1, centre);
+      const [ox, oy] = this.grid.nearestOpen(Math.min(this.map.width - 1, Math.max(0, sx)), Math.min(this.map.height - 1, Math.max(0, sy)), -1, centre, [centre[0] + dx / FP, centre[1] + dy / FP]);
       const [px, py] = [ox * FP + FP / 2 - x, oy * FP + FP / 2 - y];
       const key = [px * px + py * py, -(px * dx + py * dy), dx * py - dy * px < 0 ? 0 : 1];
       const i = best ? key.findIndex((v, n) => v !== best![n]) : 0;

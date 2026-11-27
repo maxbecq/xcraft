@@ -83,6 +83,26 @@ describe('a move whose goal shares a tile edge with its start', () => {
     w.step([{ player: 0, kind: 'move', ids: [u.id], x: 0, y: 10 * FP + FP / 2 }]);
     expect(find).toHaveBeenCalledTimes(1);
   });
+
+  // Codex final, 2026-11-27: a group on an edge kept searching both sides, each unit apart: 24 searches for 12 Serfs.
+  it('lets a group on one edge share its road: 12 Serfs, two searches', () => {
+    const w = new World(turnedMap(0, () => false, 80), 2);
+    const ids = Array.from({ length: 12 }, (_, k) => w.spawn('serf', 0, 20 * FP, (4 + k) * FP + FP / 2).id);
+    const find = vi.spyOn(w.grid, 'findPath');
+    w.step([{ player: 0, kind: 'move', ids, x: 20 * FP, y: 70 * FP + FP / 2 }]);
+    expect(find.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('a move starting on a tile edge, its goal elsewhere', () => {
+  // Codex final, 2026-11-27: on a cliff's edge, floor put the Serf on top at 0° and 90° (stopped at the far edge), at
+  // the foot at 180° and 270° (went round).
+  it('ends the same from the four quarter turns, beside a plateau', () => {
+    const tracks = moveTurned(N, (x, y) => x >= 8 && x <= 10 && y >= 3 && y <= 6, [8, 4.5], [12.5, 4.5], 20);
+    for (const t of tracks.slice(1)) expect(t[t.length - 1]).toEqual(tracks[0][t.length - 1]);
+    const [x, y] = tracks[0][tracks[0].length - 1];
+    expect(Math.hypot(x - 12.5 * FP, y - 4.5 * FP)).toBeLessThan(FP);
+  });
 });
 
 describe('the Couloir temporel on a tile edge', () => {
@@ -105,6 +125,27 @@ describe('the Couloir temporel on a tile edge', () => {
       while (w.tick < ticks(4) && w.tunnelOf(a)?.crossed !== 1) w.step([]);
       expect(w.tunnelOf(a)?.crossed).toBe(1);
       return turn(u.x, u.y, (4 - q) % 4);
+    });
+    for (const o of outs.slice(1)) expect(o).toEqual(outs[0]);
+  });
+});
+
+describe('the Couloir temporel between two Espions on one point', () => {
+  // Codex final, 2026-11-27: no way from one Espion to the other, the walker came out south, in the scene's own frame.
+  it('lets a walker out on the same side from the four quarter turns', () => {
+    const M = 64;
+    const outs = [0, 1, 2, 3].map((q) => {
+      const w = new World(turnedMap(q, () => false, M), 2);
+      w.players[0].faction = 'isdaris';
+      w.players[0].upgrades.couloir = 1;
+      const a = Object.assign(w.spawn('espion', 0, ...turnPoint(30 * FP, 30 * FP + FP / 2, q, M)), { mana: 1 << 30 });
+      const b = w.spawn('espion', 0, a.x, a.y);
+      w.tunnels.push({ owner: 0, a: a.id, b: b.id, left: 1000, crossed: 0, supply: 0 });
+      const u = w.spawn('discobole', 0, ...turnPoint(31 * FP, 29 * FP + FP / 2, q, M));
+      w.step([{ player: 0, kind: 'smart', ids: [u.id], x: a.x, y: a.y, target: a.id }]);
+      while (w.tick < ticks(4) && w.tunnelOf(a)?.crossed !== 1) w.step([]);
+      expect(w.tunnelOf(a)?.crossed).toBe(1);
+      return turnPoint(u.x, u.y, (4 - q) % 4, M);
     });
     for (const o of outs.slice(1)) expect(o).toEqual(outs[0]);
   });
@@ -174,6 +215,28 @@ describe('a Jörmungand called at the very centre of an even map', () => {
       w.players[0].ultimates = { scandinave: 1 << 30 } as never;
       const thor = Object.assign(w.spawn('thor', 0, ...turnPoint(10 * FP + FP / 2, 13 * FP + FP / 2, q, M)), { mana: 1 << 30 });
       const [cx, cy] = turnPoint(16 * FP, 16 * FP, q, M);
+      w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: cx, y: cy }]);
+      const j = [...w.entities.values()].find((e) => e.type === 'jormungandr');
+      expect(j).toBeDefined();
+      return turnPoint(j!.x, j!.y, (4 - q) % 4, M);
+    });
+    for (const o of outs.slice(1)) expect(o).toEqual(outs[0]);
+  });
+});
+
+describe('a Jörmungand called on a Forge at the very centre of an odd map', () => {
+  // Codex final, 2026-11-27: the point's tile blocked, nearestOpen took the first of its ring in scan order before
+  // the cast's way could count: north, west, south, east with the turn.
+  it('comes out on the same tile from the four quarter turns', () => {
+    const M = 65;
+    const half = ((DEFS.forge as BuildingDef).size - 1) / 2;
+    const outs = [0, 1, 2, 3].map((q) => {
+      const w = new World(turnedMap(q, () => false, M), 2);
+      w.players[0].faction = 'dieux';
+      w.players[0].ultimates = { scandinave: 1 << 30 } as never;
+      w.spawn('forge', 1, (32 - half) * FP, (32 - half) * FP);
+      const thor = Object.assign(w.spawn('thor', 0, ...turnPoint(27 * FP + FP / 2, 30 * FP + FP / 2, q, M)), { mana: 1 << 30 });
+      const [cx, cy] = turnPoint(32 * FP + FP / 2, 32 * FP + FP / 2, q, M);
       w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: cx, y: cy }]);
       const j = [...w.entities.values()].find((e) => e.type === 'jormungandr');
       expect(j).toBeDefined();

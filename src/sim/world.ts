@@ -1068,11 +1068,14 @@ export class World {
           }
           // Out beyond the far Espion, on along the way in (it turns with the map), within the map (Codex, 2026-11-26:
           // always south, a flyer came out past the map's edge).
-          const [dx, dy, d] = [other.x - b!.x, other.y - b!.y, dist(b!.x, b!.y, other.x, other.y)];
+          // The two Espions on one point: on along the unit's own way to the first (Codex final, 2026-11-27: south, the
+          // scene's own frame); the unit on that point too, place leans as it does with no way (from the centre).
+          let [dx, dy, d] = [other.x - b!.x, other.y - b!.y, dist(b!.x, b!.y, other.x, other.y)];
+          if (d === 0) [dx, dy, d] = [b!.x - e.x, b!.y - e.y, dist(e.x, e.y, b!.x, b!.y)];
           const reach = other.radius + e.radius;
-          const [ox, oy] = d > 0 ? [idiv(dx * reach, d), idiv(dy * reach, d)] : [0, reach];
+          const [ox, oy] = d > 0 ? [idiv(dx * reach, d), idiv(dy * reach, d)] : [0, 0];
           const inMap = (v: number, n: number) => Math.max(1, Math.min(n * FP - 1, v)); // 1 and n - 1: one turned into the other
-          this.place(e, inMap(other.x + ox, this.map.width), inMap(other.y + oy, this.map.height), [dx, dy]);
+          this.place(e, inMap(other.x + ox, this.map.width), inMap(other.y + oy, this.map.height), d > 0 ? [dx, dy] : undefined);
           this.teleports.push({ phase: 'end', owner: e.owner, x1: b!.x, y1: b!.y, x2: other.x, y2: other.y, ids: [e.id] });
           tunnel.crossed++;
           tunnel.supply += supply;

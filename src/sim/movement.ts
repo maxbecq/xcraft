@@ -23,7 +23,7 @@ function rectTile(tx: number, ty: number, size: number, x: number, y: number): [
 }
 
 /** Walks to the point of a tile rectangle closest to the unit (callers stop once in reach). */
-export function goNear(this: World, e: Entity, tx: number, ty: number, size: number): void {
+export function goNear(this: World, e: Entity, tx: number, ty: number, size: number, crowd = false): void {
   const nx = Math.max(tx * FP, Math.min(e.x, (tx + size) * FP));
   const ny = Math.max(ty * FP, Math.min(e.y, (ty + size) * FP));
   // Plan to the tile just outside the edge: a point on the left or top edge belongs to the tile inside the
@@ -39,7 +39,8 @@ export function goNear(this: World, e: Entity, tx: number, ty: number, size: num
     // ...and only if that tile is at the rectangle's level: below a cliff, the rectangle is reached from the top.
     // A region found shut off from it this tick skips the path that would flood it again (see doorstep).
     const shut = this.shutAt === this.tick && !!this.shut.get((ty * this.grid.width + tx) * 8 + size)?.has(tileOf(e.y) * this.grid.width + tileOf(e.x));
-    if (!(!shut && this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
+    if (crowd) this.doorstep(e, tx, ty, size, nx, ny, true);
+    else if (!(!shut && this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
   }
   if (!this.follow(e)) return;
   // Path done (it ends on the open tile beside the rectangle): step straight at the edge.
@@ -72,9 +73,20 @@ export function planned(this: World, e: Entity, x: number, y: number): boolean {
  * for the tick (World.shut): every unit of that region sent there this tick is spared it. With no door reached, no
  * path: the unit steps straight at the rectangle until held, and goNear counts it stuck.
  */
-export function doorstep(this: World, e: Entity, tx: number, ty: number, size: number, nx: number, ny: number): void {
+export function doorstep(this: World, e: Entity, tx: number, ty: number, size: number, nx: number, ny: number, crowd = false): void {
   const g = this.grid;
   const w = g.width;
+  // `crowd`: a door none of its own side stands on (chase: held off a building by its own crowd). Not kept as shut:
+  // with none free, the doors as ever.
+  const taken = (x: number, y: number) => {
+    for (const u of this.around(x * FP + FP / 2, y * FP + FP / 2, FP)) if (u !== e && u.owner === e.owner && u.def.kind === 'unit' && tileOf(u.x) === x && tileOf(u.y) === y) return true;
+    return false;
+  };
+  if (crowd) {
+    const free = (x: number, y: number) => x >= tx - 1 && x <= tx + size && y >= ty - 1 && y <= ty + size && !(x >= tx && x < tx + size && y >= ty && y < ty + size) && g.open(x, y) && g.canStep(x, y, ...rectTile(tx, ty, size, x * FP + FP / 2, y * FP + FP / 2), true) && !taken(x, y);
+    const found = g.nearestDoors(tileOf(e.x), tileOf(e.y), (i) => free(i % w, Math.floor(i / w)), []);
+    if (found.length) return this.planDoor(e, tx, ty, size, found);
+  }
   const start = tileOf(e.y) * w + tileOf(e.x);
   if (this.shutAt !== this.tick) [this.shut, this.shutAt] = [new Map(), this.tick];
   const key = (ty * w + tx) * 8 + size;
@@ -100,6 +112,12 @@ export function doorstep(this: World, e: Entity, tx: number, ty: number, size: n
     e.blockedTicks = 0;
     return;
   }
+  this.planDoor(e, tx, ty, size, doors);
+}
+
+/** Of doors the same steps away, plans to the nearest to the unit, ties broken as Grid.nearestOpen does (doorstep). */
+export function planDoor(this: World, e: Entity, tx: number, ty: number, size: number, doors: number[]): void {
+  const w = this.grid.width;
   const lx = (tx * 2 + size) * (FP / 2) - e.x;
   const ly = (ty * 2 + size) * (FP / 2) - e.y;
   const keyOf = (i: number) => {
@@ -134,13 +152,11 @@ const STILL = TICK_RATE;
  * a long path searched this tick starts, headed within 3 tiles of where it ends, takes that path instead, when it can
  * walk straight onto its first tile and from its last to its own goal (cliffs and buildings checked as for any step).
  */
-export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = tileOf(e.x), sy = tileOf(e.y), alone = false): number[] {
+export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = tileOf(e.x), sy = tileOf(e.y), lends = true): number[] {
   const g = this.grid;
   const w = g.width;
-  // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed; nor does a side of
-  // an edge being weighed against the other (plan): each searched on its own, the one kept lent after (lend).
+  // A climber (Patte ultramécanique) takes its own road over the cliffs, neither lent nor borrowed.
   if (climbs(e)) return g.findPath(sx, sy, gx, gy, true);
-  if (alone) return g.findPath(sx, sy, gx, gy);
   if (this.searchedAt !== this.tick) [this.searched, this.searchedAt] = [[], this.tick];
   const centre = (t: number) => [(t % w) * FP + FP / 2, Math.floor(t / w) * FP + FP / 2] as const;
   for (const s of this.searched) {
@@ -153,7 +169,9 @@ export function pathFor(this: World, e: Entity, gx: number, gy: number, sx = til
     return [...s.tiles, goal];
   }
   const tiles = g.findPath(sx, sy, gx, gy);
-  lend(this, sx, sy, gx, gy, tiles);
+  // A side of an edge weighed against the other (plan) borrows what the others searched, but lends nothing until
+  // kept: lent at once, the first side's path went to the second (Codex, 2026-11-27).
+  if (lends) lend(this, sx, sy, gx, gy, tiles);
   return tiles;
 }
 
@@ -178,19 +196,24 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   const goalTile = (v: number, from: number) => (v % FP === 0 && from < v ? v / FP - 1 : tileOf(v));
   // A goal on the very edge the unit stands on (start and goal sharing it): no side to take it from, and floor took the
   // tile after it for both, so a scene and its turn walked either side of the edge (Codex, point 122). Both sides are
-  // tried, start and goal on the same one: the one whose path gets there, then the nearer end, the shorter path, and
-  // last the side on the right of the way (all unchanged by the map turned round).
-  const sides = (v: number, from: number) => (v % FP === 0 && from === v ? [v / FP - 1, v / FP] : [goalTile(v, from)]);
+  // tried, start and goal on the same one. A unit on an edge with its goal elsewhere starts from either side too
+  // (Codex, 2026-11-27: on a cliff's edge, floor put it on top at 0° and 90°, at the foot at 180° and 270°). Kept: the
+  // side whose path gets there, then the nearer end, the shorter path, the start toward the goal, and last the start
+  // on the right of the way (all unchanged by the map turned round).
+  const sides = (v: number, from: number): [number, number][] => {
+    if (from % FP !== 0) return [[goalTile(v, from), tileOf(from)]];
+    const starts = [from / FP - 1, from / FP];
+    return v === from ? starts.map((t) => [t, t]) : starts.map((t) => [goalTile(v, from), t]);
+  };
   const [xs, ys] = [sides(x, e.x), sides(y, e.y)];
   const clampX = (v: number) => Math.min(g.width - 1, Math.max(0, v));
   const clampY = (v: number) => Math.min(g.height - 1, Math.max(0, v));
   const both = xs.length * ys.length > 1;
   // Each side once: on the map's outer edge both fall back to the same column (Codex, 2026-11-27).
   const tried = new Map<string, [number, number, number, number]>();
-  for (const cx of xs)
-    for (const cy of ys) {
-      const [tx, ty] = [clampX(cx), clampY(cy)];
-      const [sx, sy] = [xs.length > 1 ? tx : tileOf(e.x), ys.length > 1 ? ty : tileOf(e.y)];
+  for (const [cx, csx] of xs)
+    for (const [cy, csy] of ys) {
+      const [tx, ty, sx, sy] = [clampX(cx), clampY(cy), clampX(csx), clampY(csy)];
       // A side the unit cannot stand on is not its side.
       if (both && !g.open(sx, sy)) continue;
       tried.set(`${tx},${ty},${sx},${sy}`, [tx, ty, sx, sy]);
@@ -204,15 +227,15 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   for (let [tx, ty, sx, sy] of tried.values()) {
     const open = g.open(tx, ty);
     if (!open) [tx, ty] = g.nearestOpen(tx, ty, g.level(tx, ty), [sx, sy]);
-    // Two sides: each searched on its own, neither borrowing the other's road (Codex, 2026-11-27: the first lent its
-    // path to the second, one tile longer then, and the side kept turned with the order they were tried in).
-    const path = this.pathFor(e, tx, ty, sx, sy, tried.size > 1);
+    // Two sides: neither lends before one is kept, so neither takes the other's road (pathFor).
+    const path = this.pathFor(e, tx, ty, sx, sy, tried.size < 2);
     if (tried.size > 1) {
       const end = path.length ? path[path.length - 1] : sy * g.width + sx;
       const [ex, ey] = [(end % g.width) * FP + FP / 2, Math.floor(end / g.width) * FP + FP / 2];
-      const [cxp, cyp] = [tx * FP + FP / 2 - e.x, ty * FP + FP / 2 - e.y];
-      const cross = (x - e.x) * cyp - (y - e.y) * cxp;
-      const key = [open && end === ty * g.width + tx ? 0 : 1, (ex - x) ** 2 + (ey - y) ** 2, path.length, cross < 0 ? 0 : 1];
+      const [cxp, cyp] = [sx * FP + FP / 2 - e.x, sy * FP + FP / 2 - e.y];
+      const [lx, ly] = [x - e.x, y - e.y];
+      const cross = lx * cyp - ly * cxp;
+      const key = [open && end === ty * g.width + tx ? 0 : 1, (ex - x) ** 2 + (ey - y) ** 2, path.length, -(lx * cxp + ly * cyp), cross < 0 ? 0 : 1];
       if (bestKey) {
         const i = key.findIndex((v, n) => v !== bestKey![n]);
         if (i < 0 || key[i] > bestKey[i]) continue;
