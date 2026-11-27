@@ -136,3 +136,49 @@ describe('a worker caught at the very middle of an odd map', () => {
     }
   });
 });
+
+describe('a worker caught at the middle of an even map', () => {
+  // Codex, 2026-11-27: the serf at the corner (8, 8) of four blocked tiles, (7, 6) blocked too, its start centred on
+  // (4, 4): two ways out stayed as near that start, and the first step went north-east or south-west with the turn.
+  it('walks off the same way from the four quarter turns', () => {
+    const size = (DEFS.conseil as BuildingDef).size;
+    const steps = [0, 1, 2, 3].map((q) => {
+      const map = turnedMap(q, () => false);
+      map.sites = [{ hq: rotateFootprint(N, 4 - size / 2, 4 - size / 2, size, q), turn: 0, start: true }];
+      const w = new World(map, 2);
+      for (const [x, y] of [[7, 7], [8, 7], [7, 8], [8, 8], [7, 6]]) {
+        const [tx, ty] = turnTile(x, y, q);
+        w.grid.blocked[ty * N + tx] = 1;
+      }
+      const serf = w.spawn('serf', 0, ...turnPoint(8 * FP, 8 * FP, q));
+      const track: [number, number][] = [];
+      for (let k = 0; k < 10; k++) {
+        w.step([]);
+        track.push(turnPoint(serf.x, serf.y, (4 - q) % 4));
+      }
+      return track;
+    });
+    expect(steps[0][9]).not.toEqual([8 * FP, 8 * FP]);
+    for (const s of steps.slice(1)) expect(s).toEqual(steps[0]);
+  });
+});
+
+describe('a Jörmungand called at the very centre of an even map', () => {
+  // Codex, 2026-11-27: spawned on the point and placed there, no way to weigh the four tiles by: north-west whatever
+  // the turn. The way from Thor to the point now turns with the scene.
+  it('comes out on the same tile from the four quarter turns', () => {
+    const M = 32;
+    const outs = [0, 1, 2, 3].map((q) => {
+      const w = new World(turnedMap(q, () => false, M), 2);
+      w.players[0].faction = 'dieux';
+      w.players[0].ultimates = { scandinave: 1 << 30 } as never;
+      const thor = Object.assign(w.spawn('thor', 0, ...turnPoint(10 * FP + FP / 2, 13 * FP + FP / 2, q, M)), { mana: 1 << 30 });
+      const [cx, cy] = turnPoint(16 * FP, 16 * FP, q, M);
+      w.step([{ player: 0, kind: 'ability', ids: [thor.id], name: 'jormungand', x: cx, y: cy }]);
+      const j = [...w.entities.values()].find((e) => e.type === 'jormungandr');
+      expect(j).toBeDefined();
+      return turnPoint(j!.x, j!.y, (4 - q) % 4, M);
+    });
+    for (const o of outs.slice(1)) expect(o).toEqual(outs[0]);
+  });
+});

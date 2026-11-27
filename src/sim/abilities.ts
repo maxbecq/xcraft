@@ -3,6 +3,7 @@ import BALANCE from '../balance.json';
 import { ABILITIES, abilitiesOf, type BuildingDef, DEFS, type Mana, WEAPONS, WEAPON_ABILITIES, RAPPEL, spell, KIT, STIM_HP, type UnitDef } from '../data';
 import { FP, dist, idiv, speedPerTick, ticks, tileOf, toFp } from './fixed';
 import { standsOn } from './movement';
+import { startSite } from './setup';
 import { flies, soars, type Entity, type World } from './world';
 import { healable } from './combat';
 
@@ -346,7 +347,7 @@ export function castAt(this: World, e: Entity, name: string, x: number, y: numbe
   } else if (name === 'jormungand') {
     if (banned(this, e.owner, 'jormungandr')) return this.say(e.owner, 'Interdit sur cette carte.');
     const u = this.spawn('jormungandr', e.owner, x, y);
-    this.place(u, x, y);
+    this.place(u, x, y, [x - e.x, y - e.y]);
   } else if (name === 'tempetezeus') {
     // Everyone under it, allies too, loses a share of its full health: the mightier, the harder hit.
     for (const t of [...this.entities.values()]) {
@@ -601,7 +602,12 @@ export function paceOf(this: World, e: Entity): [number, number] {
 export function place(this: World, t: Entity, x: number, y: number, dir?: [number, number]): void {
   if (!soars(t)) {
     const centre: [number, number] = [(this.map.width - 1) / 2, (this.map.height - 1) / 2];
-    const [dx, dy] = dir ?? (x !== t.x || y !== t.y ? [x - t.x, y - t.y] : [x - (this.map.width * FP) / 2, y - (this.map.height * FP) / 2]);
+    const [C, D] = [(this.map.width * FP) / 2, (this.map.height * FP) / 2];
+    let [dx, dy] = dir ?? (x !== t.x || y !== t.y ? [x - t.x, y - t.y] : [x - C, y - D]);
+    // No way at all (at the map's very centre, cast on itself): the line from the centre to the owner's start
+    // (Codex, 2026-11-27: a Jörmungand called there came out north-west whatever the turn).
+    const home = !dx && !dy ? startSite(this, t.owner) : undefined;
+    if (home) [dx, dy] = [home[0] * FP + 2 * FP - C, home[1] * FP + 2 * FP - D];
     let best: number[] | null = null;
     let at: [number, number] = [0, 0];
     for (const [sx, sy] of standsOn(x, y)) {

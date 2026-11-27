@@ -372,7 +372,10 @@ export function evict(this: World, e: Entity): void {
   const key = ([tx, ty]: [number, number]) => {
     const [px, py] = [tx * FP + FP / 2, ty * FP + FP / 2];
     const cross = (e.x - C) * (py - C) - (e.y - C) * (px - C);
-    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, (px - hx) ** 2 + (py - hy) ** 2, Math.sign(cross)];
+    // Last, of two as near the start (one either side of the line from the centre to it), the one on its left: the
+    // body on the centre leaves `cross` nothing to tell (Codex, 2026-11-27).
+    const side = (hx - C) * (py - C) - (hy - C) * (px - C);
+    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, (px - hx) ** 2 + (py - hy) ** 2, Math.sign(cross), side < 0 ? 0 : 1];
   };
   let best: [number, number] | null = null;
   let bk: number[] = [];
