@@ -200,15 +200,24 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
       if (both && !g.open(sx, sy)) continue;
       tried.set(`${tx},${ty},${sx},${sy}`, [tx, ty, sx, sy]);
     }
-  // Sides alike (open, at one level, a step apart, start and goal both): their roads differ by a step at most, so the
-  // side is taken by the way alone, ahead along it then on its right, and searched once, lent as ever (Codex final 2,
-  // 2026-11-27: twelve Serfs on an edge searched 24 times where floor searched 12, toward a near or unreachable goal).
-  // Only sides apart (a cliff's edge, a building) are each searched and weighed.
-  const cands = [...tried.values()];
-  const alike = (ts: [number, number][]) => ts.every(([ax, ay]) => g.open(ax, ay) && g.level(ax, ay) === g.level(...ts[0]) && (ax === ts[0][0] && ay === ts[0][1] ? true : g.canStep(...ts[0], ax, ay)));
+  // Each goal brought to an open tile first, the one nearest the unit's own point, the same for every side (a goal
+  // under a building: Codex final 3, 2026-11-27, it failed the test below and every side was searched, 22 searches
+  // where floor made 12; from each side's start, two sides came to two tiles round the building).
+  const at: [number, number] = [e.x / FP - 0.5, e.y / FP - 0.5];
+  let cands = [...tried.values()].map(([tx, ty, sx, sy]): [number, number, number, number, boolean] => {
+    const open = g.open(tx, ty);
+    return open ? [tx, ty, sx, sy, true] : [...g.nearestOpen(tx, ty, g.level(tx, ty), at), sx, sy, false];
+  });
+  // Sides alike (open, at one level, each a step from each other, start and goal both): their roads differ by a step
+  // at most, so the side is taken by the way alone, ahead along it then on its right, and searched once, lent as ever
+  // (Codex final 2, 2026-11-27: twelve Serfs on an edge searched 24 times where floor searched 12). Every pair is
+  // checked, not each against the first, which turned with the map (Codex final 3: round a block's corner, north at
+  // 0°, south at the other turns). Only sides apart (a cliff's edge, a building) are each searched and weighed.
+  const alike = (ts: [number, number][]) =>
+    ts.every(([ax, ay], i) => g.open(ax, ay) && g.level(ax, ay) === g.level(...ts[0]) && ts.slice(i + 1).every(([bx, by]) => (ax === bx && ay === by) || g.canStep(ax, ay, bx, by)));
   if (cands.length > 1 && alike(cands.map(([, , sx, sy]) => [sx, sy])) && alike(cands.map(([tx, ty]) => [tx, ty]))) {
     const [lx, ly] = [x - e.x, y - e.y];
-    const keyOf = ([, , sx, sy]: [number, number, number, number]) => {
+    const keyOf = ([, , sx, sy]: (typeof cands)[number]) => {
       const [cx, cy] = [sx * FP + FP / 2 - e.x, sy * FP + FP / 2 - e.y];
       return [-(lx * cx + ly * cy), lx * cy - ly * cx < 0 ? 0 : 1];
     };
@@ -218,8 +227,7 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
       const i = k.findIndex((v, n) => v !== b[n]);
       if (i >= 0 && k[i] < b[i]) pick = c;
     }
-    tried.clear();
-    tried.set('', pick);
+    cands = [pick];
   }
   let gx = 0;
   let gy = 0;
@@ -227,12 +235,10 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
   let exact = false;
   let tiles: number[] = [];
   let bestKey: number[] | null = null;
-  for (let [tx, ty, sx, sy] of tried.values()) {
-    const open = g.open(tx, ty);
-    if (!open) [tx, ty] = g.nearestOpen(tx, ty, g.level(tx, ty), [sx, sy]);
+  for (const [tx, ty, sx, sy, open] of cands) {
     // Two sides: neither lends before one is kept, so neither takes the other's road (pathFor).
-    const path = this.pathFor(e, tx, ty, sx, sy, tried.size < 2);
-    if (tried.size > 1) {
+    const path = this.pathFor(e, tx, ty, sx, sy, cands.length < 2);
+    if (cands.length > 1) {
       const end = path.length ? path[path.length - 1] : sy * g.width + sx;
       const [ex, ey] = [(end % g.width) * FP + FP / 2, Math.floor(end / g.width) * FP + FP / 2];
       const [cxp, cyp] = [sx * FP + FP / 2 - e.x, sy * FP + FP / 2 - e.y];

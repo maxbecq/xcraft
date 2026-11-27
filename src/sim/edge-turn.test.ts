@@ -113,6 +113,45 @@ describe('a move starting on a tile edge, its goal elsewhere', () => {
   });
 });
 
+describe('a move from a block\'s corner, and toward a building (Codex final 3, 2026-11-27)', () => {
+  // Sides weighed each against the first open one, which turned with the map: north at 0°, south at the others.
+  it('goes round a block the same way from the four quarter turns', () => {
+    const tracks = [0, 1, 2, 3].map((q) => {
+      const w = new World(turnedMap(q, () => false), 2);
+      for (const [x, y] of [[8, 8], [9, 8], [10, 8]]) {
+        const [tx, ty] = turnTile(x, y, q);
+        w.grid.blocked[ty * N + tx] = 1;
+      }
+      const u = w.spawn('serf', 0, ...turnPoint(8 * FP, 8 * FP, q));
+      w.step([{ player: 0, kind: 'move', ids: [u.id], x: turnPoint(12 * FP + FP / 2, 11 * FP + FP / 2, q)[0], y: turnPoint(12 * FP + FP / 2, 11 * FP + FP / 2, q)[1] }]);
+      const track: [number, number][] = [];
+      while (w.tick < ticks(10)) {
+        w.step([]);
+        if (w.tick % ticks(0.5) === 0) track.push(turnPoint(u.x, u.y, (4 - q) % 4));
+      }
+      return track;
+    });
+    for (const t of tracks.slice(1)) expect(t).toEqual(tracks[0]);
+    const [x, y] = tracks[0][tracks[0].length - 1];
+    expect(Math.hypot(x - 12.5 * FP, y - 11.5 * FP)).toBeLessThan(FP / 8);
+  });
+
+  // A goal under a Forge failed the sides' test before nearestOpen: 22 searches for 12 Serfs, 12 on origin/main.
+  it('searches no more than origin/main for 12 Serfs on an edge sent at a Forge', () => {
+    const M = 80;
+    const size = (DEFS.forge as BuildingDef).size;
+    for (const q of [0, 1, 2, 3]) {
+      const w = new World(turnedMap(q, () => false, M), 2);
+      const [fx, fy] = rotateFootprint(M, 29, 28, size, q);
+      const forge = w.spawn('forge', 1, fx * FP, fy * FP);
+      const ids = Array.from({ length: 12 }, (_, k) => w.spawn('serf', 0, ...turnPoint(28 * FP, (23 + k) * FP + FP / 2, q, M)).id);
+      const find = vi.spyOn(w.grid, 'findPath');
+      w.step([{ player: 0, kind: 'move', ids, x: forge.x, y: forge.y }]);
+      expect(find.mock.calls.length).toBeLessThanOrEqual(12);
+    }
+  });
+});
+
 describe('the Couloir temporel on a tile edge', () => {
   it('lets a walker out on the same side from the four quarter turns (Codex: x 20.5, turned round 19.5)', () => {
     const M = 64;
