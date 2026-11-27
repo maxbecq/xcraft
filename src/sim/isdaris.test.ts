@@ -203,7 +203,15 @@ describe('Isdaris', () => {
     for (const b of w.entities.values()) if (b.owner === 1 && b.def.kind === 'building') b.hp = b.maxHp = 1e8;
     const ai = new AI(w, 0);
     const made = () => [...w.entities.values()].some((e) => e.owner === 0 && advanced.includes(e.type));
-    while (w.tick < ticks(30 * 60) && !made()) w.step(ai.think());
+    // Its soldiers fall as in a game from minute 15 (half of them each minute): against buildings that never fall, its
+    // army filled the supply before the Psycho-assembleur's minute (18, strategy.ts) and left no room for its units.
+    while (w.tick < ticks(30 * 60) && !made()) {
+      w.step(ai.think());
+      if (w.tick >= ticks(15 * 60) && w.tick % ticks(60) === 0) {
+        const army = [...w.entities.values()].filter((e) => e.owner === 0 && e.def.kind === 'unit' && !(e.def as { worker?: boolean }).worker && !advanced.includes(e.type));
+        for (const u of army.slice(0, army.length >> 1)) u.hp = 0;
+      }
+    }
     expect(made()).toBe(true);
   }, 60_000);
 

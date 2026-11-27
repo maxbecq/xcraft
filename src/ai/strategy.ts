@@ -89,6 +89,8 @@ const USUAL: Strategy = { id: 'classique', name: 'Classique' };
 /** The natural's minute (game clock) of a strategy that names none, the usual one included. */
 export const EXPAND_MINUTE = 5;
 
+const ISDARIS_TECH = 18;
+
 export const STRATEGIES: Record<Faction, Strategy[]> = {
   dieux: [
     {
@@ -140,6 +142,9 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       attackMinute: 7,
     },
   ],
+  // The Psycho-assembleur at minute 18, not 12 (ai.tech): built at 12 or 8, its price in minerals and energy came
+  // out of the Portails' Archers and Créatures, and the army it left behind lost. Against the 0.9.182 AI, 7 maps,
+  // normal and hard: Z 30 → 40 wins in 84, Humains and Dieux 99 → 113 in 168 (at 8: 13 against the Z).
   isdaris: [
     {
       id: 'tir',
@@ -151,6 +156,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       extensionMinute: 3,
       expandMinute: 4,
       attackMinute: 7,
+      techMinute: ISDARIS_TECH,
     },
     {
       id: 'essaim',
@@ -164,6 +170,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       expandMinute: 5,
       attackMinute: 6,
       wave: 10,
+      techMinute: ISDARIS_TECH,
     },
     {
       id: 'mages',
@@ -176,6 +183,7 @@ export const STRATEGIES: Record<Faction, Strategy[]> = {
       expandMinute: 3,
       attackMinute: 8,
       wave: 10,
+      techMinute: ISDARIS_TECH,
     },
   ],
   z: [

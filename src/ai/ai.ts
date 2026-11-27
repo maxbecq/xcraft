@@ -944,7 +944,9 @@ export class AI {
     // razed them, evening replays of 24/11). Saving, which holds the units, as before: eight soldiers at home.
     const opened = councils < 2 && minute < firstAt + NATURAL_SAVING;
     // In the opening's window, from six soldiers at home (out of a raid).
-    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= (opened && !this.homeThreat ? 6 : 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && allowed(f.hq) && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (allowed(f.hq) && !this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
+    // Not the Isdaris: their natural, 1 330 by robot, held the Portails at six Créatures from 3:00, and the Humains' first
+    // raid at 3:30 (a dozen Auxiliaires and Légionnaires) razed them on Origine désert, 1 win in 16; training on, 15.
+    const saving = (expand && army.filter((u) => !this.wave.has(u.id)).length >= (opened && !this.homeThreat ? (f === FACTIONS.isdaris ? Infinity : 6) : 8) && ctx.minerals < outpostPrice && w.tick - this.lastIncome < ticks(60)) || (noHq && allowed(f.hq) && ctx.minerals < (DEFS[f.hq] as BuildingDef).cost.minerals && w.tick - this.lastIncome < ticks(60) && this.fieldsNear(buildings) > 0) || (allowed(f.hq) && !this.settled(home) && (this.raisers > 0 || buildings.some((b) => kin(b, f.hq) && b.buildLeft > 0 && ((b.def as BuildingDef).absorbs || (b.def as BuildingDef).warp))) && (building(f.hq) || (this.rebuildable && !!this.spot(f.hq, home))));
     // Saving for the expansion: no production building for floating minerals (the Isdaris spent 1 150 on a fifth Portail
     // at 7:17, their natural, 1 330 by robot, never came and their main ran dry at 8:00, the game lost).
     // Not the Z: their third Plate-forme so held, they fell from 53 to 45 wins in 96 against the 0.9.147 AI.
