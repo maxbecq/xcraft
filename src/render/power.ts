@@ -490,9 +490,9 @@ export class PowerNet {
     return list;
   }
 
-  /** `highlight`: an Isdaris building is being placed, or a power building is selected. `foe`: whether an owner is the
+  /** `highlight`: 'placing' an Isdaris building, 'selected' a power building, or false. `foe`: whether an owner is the
    * viewer's enemy, whose creep and wires show only where the viewer sees now. */
-  update(world: World, sees: (e: Entity) => boolean, highlight: boolean, foe: (owner: number) => boolean = () => false): void {
+  update(world: World, sees: (e: Entity) => boolean, highlight: 'placing' | 'selected' | false, foe: (owner: number) => boolean = () => false): void {
     this.foe = foe;
     // Only the linked network powers anything; a cut-off emitter shows no zone and no beam.
     const nodes = world.players.flatMap((p) => world.powerNetwork(p.id)).filter(sees);
@@ -501,7 +501,8 @@ export class PowerNet {
     const key = [...nodes, ...fed].map((e) => e.id).join(',');
     if (key !== this.key) this.rebuild(nodes, world, fed, key);
     const t = performance.now() / 1000;
-    this.fieldMaterial.opacity = this.fieldFoe.opacity = highlight ? 0.95 : 0.2;
+    // Selected, a little fainter than while placing (0.95): the ring was too strong on its own (the user's remark, 0.9.177).
+    this.fieldMaterial.opacity = this.fieldFoe.opacity = highlight === 'placing' ? 0.95 : highlight ? 0.6 : 0.2;
     this.creepMaterial.opacity = this.creepFoe.opacity = highlight ? 1 : 0.75;
     this.beamMaterial.opacity = this.beamFoe.opacity = 0.55 + 0.25 * Math.sin(t * 3.1);
     this.creepTime.value = t;

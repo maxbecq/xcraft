@@ -1,6 +1,6 @@
 import {
   AdditiveBlending, Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, EdgesGeometry, LineBasicMaterial, LineSegments, Mesh, Points, PointsMaterial,
-  Vector3, type Material, type Object3D, type WebGLProgramParametersWithUniforms, type WebGLRenderer,
+  Sphere, Vector3, type Intersection, type Material, type Raycaster, type Object3D, type WebGLProgramParametersWithUniforms, type WebGLRenderer,
 } from 'three';
 import { owned, SHARED } from './models';
 
@@ -15,9 +15,13 @@ export interface Materialising {
   /** World heights of the marble's front and of the skeleton's top. */
   front: { value: number };
   edge: { value: number };
+  /** World height up to which the footing still takes clicks while only the skeleton stands. */
+  footing: { value: number };
   bottom: number;
   top: number;
   originals: [Mesh, Material | Material[], boolean][];
+  /** This view's cut copies of the materials: not drawn while only the skeleton stands. */
+  copies: Material[];
   lines: LineSegments[];
   hidden: Object3D[];
   sparks: Points;
@@ -30,14 +34,25 @@ const SPARKS = 60;
 const EDGES = new WeakMap<BufferGeometry, EdgesGeometry>();
 let sparkMaterial: PointsMaterial | undefined;
 
-/** The skeleton's lines: the model's creases at 40° (35° picked up every step of the Portail's statues). */
+/**
+ * The skeleton's lines: the model's creases at 40° (35° picked up every step of the Portail's statues). Cached and
+ * shared only for a shared model geometry; a view's own one (a fallback model, `?proc`) gets its own, freed with it.
+ */
 function edges(g: BufferGeometry): EdgesGeometry {
+  if (!SHARED.has(g)) return new EdgesGeometry(g, 40);
   let e = EDGES.get(g);
   if (!e) {
     EDGES.set(g, (e = new EdgesGeometry(g, 40)));
     SHARED.add(e); // kept when a view is freed (free() spares shared geometries)
   }
   return e;
+}
+
+/** Clicks go through what is not built yet: only hits under the marble's front (or on the footing) count. */
+export function cutHits(hits: Intersection[], from: number, front: number, footing: number): void {
+  let k = from;
+  for (let i = from; i < hits.length; i++) if (hits[i].point.y <= Math.max(front, footing)) hits[k++] = hits[i];
+  hits.length = k;
 }
 
 /** A model effect (a halo, a beam, a glow card, the veil, the glass): hidden until built. */
@@ -73,7 +88,9 @@ export function materialise(body: Object3D, root: Object3D): Materialising {
   const box = new Box3().setFromObject(body);
   const front = { value: -1e3 };
   const edge = { value: -1e3 };
+  const footing = { value: box.min.y + 0.25 };
   const originals: Materialising['originals'] = [];
+  const copies: Material[] = [];
   const lines: LineSegments[] = [];
   const hidden: Object3D[] = [];
   const meshes: Mesh[] = [];
@@ -92,8 +109,16 @@ export function materialise(body: Object3D, root: Object3D): Materialising {
   for (const mesh of meshes) {
     originals.push([mesh, mesh.material, mesh.castShadow]);
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => cut(m, front)) : cut(mesh.material, front);
+    copies.push(...([] as Material[]).concat(mesh.material));
     mesh.castShadow = false;
     mesh.userData.noAo = true;
+    // The raycast keeps only what is built (the invisible rest took clicks: through a Portail's future arch).
+    const raycast = mesh.raycast.bind(mesh);
+    mesh.raycast = (r: Raycaster, out: Intersection[]) => {
+      const from = out.length;
+      raycast(r, out);
+      cutHits(out, from, front.value, footing.value);
+    };
     const e = edges(mesh.geometry);
     const count = e.getAttribute('position').count / 2;
     const lm = owned(new LineBasicMaterial({ color: new Color(0.05, 0.5, 0.85), transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false }));
@@ -126,9 +151,13 @@ export function materialise(body: Object3D, root: Object3D): Materialising {
   sparkMaterial ??= new PointsMaterial({ color: new Color(0.6, 1.8, 2.4), size: 0.07, transparent: true, depthWrite: false, blending: AdditiveBlending, toneMapped: false });
   const sparks = new Points(new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(SPARKS * 3), 3)), sparkMaterial);
   sparks.userData.noPick = true;
-  sparks.frustumCulled = false;
+  sparks.visible = false;
+  // Culled by the model's own bounds (in the root's frame), not by its points' last places.
+  sparks.geometry.boundingSphere = box.getBoundingSphere(new Sphere()).applyMatrix4(toRoot);
+  sparks.geometry.boundingSphere.radius += 0.2;
   root.add(sparks);
-  return { front, edge, bottom: box.min.y - root.position.y, top: box.max.y - root.position.y, originals, lines, hidden, sparks, verts };
+  for (const c of copies) c.visible = false;
+  return { front, edge, bottom: box.min.y - root.position.y, top: box.max.y - root.position.y, originals, copies, lines, hidden, sparks, verts, footing };
 }
 
 /** One frame at build progress p (0..1), the root standing at height `ground`. */
@@ -138,6 +167,9 @@ export function materialiseStep(m: Materialising, p: number, ground: number): vo
   const marble = Math.max(0, (p - SKELETON) / (1 - SKELETON));
   const h = m.bottom + span * marble; // in the root's frame
   m.front.value = marble > 0 ? ground + h : -1e3;
+  m.footing.value = ground + m.bottom + 0.25;
+  // Skeleton only: the solid marble is not submitted at all (its every fragment would be thrown away).
+  for (const c of m.copies) c.visible = marble > 0;
   // Sparks: perches near the front, picked at random each frame, a little jitter.
   const pos = m.sparks.geometry.getAttribute('position') as BufferAttribute;
   const n = m.verts.length / 3;
@@ -150,11 +182,11 @@ export function materialiseStep(m: Materialising, p: number, ground: number): vo
   }
   let end = lo;
   while (end < n && m.verts[end * 3 + 1] < h + 0.08) end++;
+  m.sparks.visible = marble > 0 && end > lo;
+  if (!m.sparks.visible) return;
   for (let i = 0; i < SPARKS; i++) {
-    if (end > lo && marble > 0) {
-      const k = (lo + Math.floor(Math.random() * (end - lo))) * 3;
-      pos.setXYZ(i, m.verts[k] + (Math.random() - 0.5) * 0.06, m.verts[k + 1] + Math.random() * 0.12, m.verts[k + 2] + (Math.random() - 0.5) * 0.06);
-    } else pos.setXYZ(i, 0, -50, 0);
+    const k = (lo + Math.floor(Math.random() * (end - lo))) * 3;
+    pos.setXYZ(i, m.verts[k] + (Math.random() - 0.5) * 0.06, m.verts[k + 1] + Math.random() * 0.12, m.verts[k + 2] + (Math.random() - 0.5) * 0.06);
   }
   pos.needsUpdate = true;
 }
@@ -166,11 +198,13 @@ export function materialiseEnd(m: Materialising): void {
     mesh.material = material;
     mesh.castShadow = shadow;
     mesh.userData.noAo = false;
+    delete (mesh as { raycast?: unknown }).raycast; // back to Mesh.prototype.raycast
     for (const c of ([] as Material[]).concat(copies)) c.dispose();
   }
   for (const l of m.lines) {
     l.removeFromParent();
-    (l.material as Material).dispose(); // its edges stay: cached by geometry
+    (l.material as Material).dispose();
+    if (!SHARED.has(l.geometry)) l.geometry.dispose(); // a view's own edges (a fallback model); cached ones stay
   }
   for (const o of m.hidden) o.visible = true;
   m.sparks.removeFromParent();
