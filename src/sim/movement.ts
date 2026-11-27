@@ -23,7 +23,7 @@ function rectTile(tx: number, ty: number, size: number, x: number, y: number): [
 }
 
 /** Walks to the point of a tile rectangle closest to the unit (callers stop once in reach). */
-export function goNear(this: World, e: Entity, tx: number, ty: number, size: number, crowd = false): void {
+export function goNear(this: World, e: Entity, tx: number, ty: number, size: number): void {
   const nx = Math.max(tx * FP, Math.min(e.x, (tx + size) * FP));
   const ny = Math.max(ty * FP, Math.min(e.y, (ty + size) * FP));
   // Plan to the tile just outside the edge: a point on the left or top edge belongs to the tile inside the
@@ -39,8 +39,7 @@ export function goNear(this: World, e: Entity, tx: number, ty: number, size: num
     // ...and only if that tile is at the rectangle's level: below a cliff, the rectangle is reached from the top.
     // A region found shut off from it this tick skips the path that would flood it again (see doorstep).
     const shut = this.shutAt === this.tick && !!this.shut.get((ty * this.grid.width + tx) * 8 + size)?.has(tileOf(e.y) * this.grid.width + tileOf(e.x));
-    if (crowd) this.doorstep(e, tx, ty, size, nx, ny, true);
-    else if (!(!shut && this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
+    if (!(!shut && this.grid.open(tileOf(ox), tileOf(oy)) && this.grid.canStep(tileOf(ox), tileOf(oy), ...rectTile(tx, ty, size, ox, oy), true) && this.planned(e, ox, oy))) this.doorstep(e, tx, ty, size, nx, ny);
   }
   if (!this.follow(e)) return;
   // Path done (it ends on the open tile beside the rectangle): step straight at the edge.
@@ -73,20 +72,9 @@ export function planned(this: World, e: Entity, x: number, y: number): boolean {
  * for the tick (World.shut): every unit of that region sent there this tick is spared it. With no door reached, no
  * path: the unit steps straight at the rectangle until held, and goNear counts it stuck.
  */
-export function doorstep(this: World, e: Entity, tx: number, ty: number, size: number, nx: number, ny: number, crowd = false): void {
+export function doorstep(this: World, e: Entity, tx: number, ty: number, size: number, nx: number, ny: number): void {
   const g = this.grid;
   const w = g.width;
-  // `crowd`: a door none of its own side stands on (chase: held off a building by its own crowd). Not kept as shut:
-  // with none free, the doors as ever.
-  const taken = (x: number, y: number) => {
-    for (const u of this.around(x * FP + FP / 2, y * FP + FP / 2, FP)) if (u !== e && u.owner === e.owner && u.def.kind === 'unit' && tileOf(u.x) === x && tileOf(u.y) === y) return true;
-    return false;
-  };
-  if (crowd) {
-    const free = (x: number, y: number) => x >= tx - 1 && x <= tx + size && y >= ty - 1 && y <= ty + size && !(x >= tx && x < tx + size && y >= ty && y < ty + size) && g.open(x, y) && g.canStep(x, y, ...rectTile(tx, ty, size, x * FP + FP / 2, y * FP + FP / 2), true) && !taken(x, y);
-    const found = g.nearestDoors(tileOf(e.x), tileOf(e.y), (i) => free(i % w, Math.floor(i / w)), []);
-    if (found.length) return this.planDoor(e, tx, ty, size, found);
-  }
   const start = tileOf(e.y) * w + tileOf(e.x);
   if (this.shutAt !== this.tick) [this.shut, this.shutAt] = [new Map(), this.tick];
   const key = (ty * w + tx) * 8 + size;
@@ -112,12 +100,6 @@ export function doorstep(this: World, e: Entity, tx: number, ty: number, size: n
     e.blockedTicks = 0;
     return;
   }
-  this.planDoor(e, tx, ty, size, doors);
-}
-
-/** Of doors the same steps away, plans to the nearest to the unit, ties broken as Grid.nearestOpen does (doorstep). */
-export function planDoor(this: World, e: Entity, tx: number, ty: number, size: number, doors: number[]): void {
-  const w = this.grid.width;
   const lx = (tx * 2 + size) * (FP / 2) - e.x;
   const ly = (ty * 2 + size) * (FP / 2) - e.y;
   const keyOf = (i: number) => {
@@ -218,6 +200,27 @@ export function plan(this: World, e: Entity, x: number, y: number): void {
       if (both && !g.open(sx, sy)) continue;
       tried.set(`${tx},${ty},${sx},${sy}`, [tx, ty, sx, sy]);
     }
+  // Sides alike (open, at one level, a step apart, start and goal both): their roads differ by a step at most, so the
+  // side is taken by the way alone, ahead along it then on its right, and searched once, lent as ever (Codex final 2,
+  // 2026-11-27: twelve Serfs on an edge searched 24 times where floor searched 12, toward a near or unreachable goal).
+  // Only sides apart (a cliff's edge, a building) are each searched and weighed.
+  const cands = [...tried.values()];
+  const alike = (ts: [number, number][]) => ts.every(([ax, ay]) => g.open(ax, ay) && g.level(ax, ay) === g.level(...ts[0]) && (ax === ts[0][0] && ay === ts[0][1] ? true : g.canStep(...ts[0], ax, ay)));
+  if (cands.length > 1 && alike(cands.map(([, , sx, sy]) => [sx, sy])) && alike(cands.map(([tx, ty]) => [tx, ty]))) {
+    const [lx, ly] = [x - e.x, y - e.y];
+    const keyOf = ([, , sx, sy]: [number, number, number, number]) => {
+      const [cx, cy] = [sx * FP + FP / 2 - e.x, sy * FP + FP / 2 - e.y];
+      return [-(lx * cx + ly * cy), lx * cy - ly * cx < 0 ? 0 : 1];
+    };
+    let pick = cands[0];
+    for (const c of cands.slice(1)) {
+      const [k, b] = [keyOf(c), keyOf(pick)];
+      const i = k.findIndex((v, n) => v !== b[n]);
+      if (i >= 0 && k[i] < b[i]) pick = c;
+    }
+    tried.clear();
+    tried.set('', pick);
+  }
   let gx = 0;
   let gy = 0;
   let [bx, by] = [tileOf(e.x), tileOf(e.y)];

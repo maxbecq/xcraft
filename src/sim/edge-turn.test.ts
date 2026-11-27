@@ -85,12 +85,20 @@ describe('a move whose goal shares a tile edge with its start', () => {
   });
 
   // Codex final, 2026-11-27: a group on an edge kept searching both sides, each unit apart: 24 searches for 12 Serfs.
-  it('lets a group on one edge share its road: 12 Serfs, two searches', () => {
-    const w = new World(turnedMap(0, () => false, 80), 2);
-    const ids = Array.from({ length: 12 }, (_, k) => w.spawn('serf', 0, 20 * FP, (4 + k) * FP + FP / 2).id);
-    const find = vi.spyOn(w.grid, 'findPath');
-    w.step([{ player: 0, kind: 'move', ids, x: 20 * FP, y: 70 * FP + FP / 2 }]);
-    expect(find.mock.calls.length).toBeLessThanOrEqual(2);
+  // Codex final 2: toward a near goal, or one past a cliff no ramp climbs, still 24 where floor searched 12. No more
+  // than origin/main (counts measured there), from each quarter turn.
+  it.each([
+    ['far', [20, 70.5], 4],
+    ['near', [20, 13.5], 12],
+    ['past a cliff', [20, 70.5], 12],
+  ] as const)('lets a group on one edge share its road: 12 Serfs, %s', (_, to, most) => {
+    for (const q of [0, 1, 2, 3]) {
+      const w = new World(turnedMap(q, (x, y) => _ === 'past a cliff' && y >= 60 && y <= 75 && x >= 5 && x <= 35, 80), 2);
+      const ids = Array.from({ length: 12 }, (_, k) => w.spawn('serf', 0, ...turnPoint(20 * FP, (4 + k) * FP + FP / 2, q, 80)).id);
+      const find = vi.spyOn(w.grid, 'findPath');
+      w.step([{ player: 0, kind: 'move', ids, x: turnPoint(Math.round(to[0] * FP), Math.round(to[1] * FP), q, 80)[0], y: turnPoint(Math.round(to[0] * FP), Math.round(to[1] * FP), q, 80)[1] }]);
+      expect(find.mock.calls.length).toBeLessThanOrEqual(most);
+    }
   });
 });
 
