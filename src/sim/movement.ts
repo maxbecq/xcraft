@@ -263,7 +263,10 @@ export function follow(this: World, e: Entity): boolean {
   // second without getting nearer its waypoint, or reaching one, and it replans.
   // Only on a move: in a fight (a chase, an attack-move pressing on, a crowd round a building) getting no nearer for
   // a while is the fight itself, and replanning there kept armies from ever finishing a base.
-  const walk = e.order?.kind === 'move';
+  // An attack-move with nothing to fight yet is a walk too (point 115: three Légionnaires sent at a headquarters on
+  // ville-nuit stood for good at one waypoint they pushed each other off).
+  const o = e.order;
+  const walk = o?.kind === 'move' || (o?.kind === 'attackMove' && !o.target);
   const near = walk ? dist(e.x, e.y, e.path[0], e.path[1]) : 0;
   if (!walk || e.path.length !== e.wn || near < e.wd) {
     e.wn = e.path.length;

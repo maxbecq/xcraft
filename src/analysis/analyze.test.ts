@@ -103,6 +103,27 @@ describe('analyse de partie', () => {
     expect(fights).toHaveLength(2);
   });
 
+  // Codex, 2026-11-26 (final review 3, point 8): the second group wiped took the place of the fight remembered, and a
+  // third group fighting 15 tiles from it, 30 from the first, kept that judged engagement alive: never judged itself.
+  it('juge un troisième combat voisin de deux groupes tués entiers', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+    const groups = [-15, 0, 12].map((ox) => {
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+      return [0, 1].map((k) => w.spawn('creature', 0, cx + ox * FP - 2 * FP, cy + k * FP));
+    });
+    // The third holds out (its fight is judged 5 s in): hit points enough, its worth unchanged.
+    for (const c of groups[2]) Object.assign(c, { hp: 1e7, maxHp: 1e7 });
+    const a = new Analyzer(w);
+    run(w, 20, a, (w) => {
+      if (w.tick === 1) for (const c of [...groups[0], ...groups[1]]) w.hurt(c, 100000);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights).toHaveLength(3);
+    expect(fights.some((f) => (f.x ?? 0) > cx / FP + 6)).toBe(true);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;
@@ -116,12 +137,14 @@ describe('analyse de partie', () => {
   });
 
   it('lit un ancien replay sans fin enregistrée jusqu’à la victoire, jouée après le dernier ordre', () => {
-    // The Z AI against an idle side: its last order at 10 760, the win at 10 801.
+    // The Z AI against an idle side, silent its last 5 s (11 000 on): the win at 11 101, some ticks after its last
+    // order. Ordering to the end, the win came the tick after it once attack-moves replanned where they stood (point
+    // 115), and nothing was left to play past the last order.
     const live = createMatch(['z', 'humains']);
     const ai = new AI(live, 0);
     const record: [number, Command[]][] = [];
     while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
-      const cmds = ai.think();
+      const cmds = live.tick < 11000 ? ai.think() : [];
       if (cmds.length) record.push([live.tick, cmds]);
       live.step(cmds);
     }
