@@ -124,6 +124,34 @@ describe('analyse de partie', () => {
     expect(fights.some((f) => (f.x ?? 0) > cx / FP + 6)).toBe(true);
   });
 
+  // Codex, 2026-11-27: a fight judged near one place hid a group wiped out 15 tiles from it (its reach, 20 tiles,
+  // stood for its own dead).
+  it('relève un groupe tué entier à 15 cases d’un combat déjà jugé', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    const foes = (ox: number) => {
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    };
+    // The fight judged: two Créatures holding out against twelve.
+    foes(-6);
+    for (const k of [0, 1]) Object.assign(w.spawn('creature', 0, cx, cy + k * FP), { hp: 1e7, maxHp: 1e7 });
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once it is judged (5 s in), two groups wiped in one tick, 30 and 15 tiles off.
+      if (w.tick === 7 * TICK_RATE)
+        for (const ox of [30, 15]) {
+          foes(ox);
+          doomed.push(w.spawn('creature', 0, cx + ox * FP - 2 * FP, cy + FP));
+        }
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 100000);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(2);
+    expect(fights).toHaveLength(3);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;
@@ -137,17 +165,15 @@ describe('analyse de partie', () => {
   });
 
   it('lit un ancien replay sans fin enregistrée jusqu’à la victoire, jouée après le dernier ordre', () => {
-    // The Z AI against an idle side, silent its last 5 s (11 000 on): the win at 11 101, some ticks after its last
-    // order. Ordering to the end, the win came the tick after it once attack-moves replanned where they stood (point
-    // 115), and nothing was left to play past the last order.
+    // Orders written out (Codex, 2026-11-27: an AI's last order and its win a tick apart left nothing to play past it):
+    // a Serf sent off, then the Humains give up; the win comes at the next judgement, some ticks on.
     const live = createMatch(['z', 'humains']);
-    const ai = new AI(live, 0);
-    const record: [number, Command[]][] = [];
-    while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
-      const cmds = live.tick < 11000 ? ai.think() : [];
-      if (cmds.length) record.push([live.tick, cmds]);
-      live.step(cmds);
-    }
+    const serf = [...live.entities.values()].find((e) => e.owner === 1 && e.type === 'serf')!;
+    const record: [number, Command[]][] = [
+      [3, [{ player: 1, kind: 'move', ids: [serf.id], x: serf.x + 4 * FP, y: serf.y }]],
+      [25, [{ player: 1, kind: 'resign', ids: [] }]],
+    ];
+    while (live.tick < 60 * TICK_RATE && live.winner === null) live.step(record.find(([t]) => t === live.tick)?.[1] ?? []);
     expect(live.winner).toBe(0);
     expect(record[record.length - 1][0] + 1).toBeLessThan(live.tick);
     const replay: Replay = JSON.parse(JSON.stringify({ v: 1, factions: ['z', 'humains'], biome: '', handicap: [100, 100], ticks: record }));
@@ -160,6 +186,23 @@ describe('analyse de partie', () => {
     expect(cut.winner).toBeNull();
     expect(cut.truncated).toBe(true);
     expect(reportMarkdown(cut)).toContain('analyse tronquée');
+  }, 120_000);
+
+  it('lit un replay de l’IA jouant jusqu’à la victoire', () => {
+    // The Z AI against an idle side, ordering to the end: the replay finds the same win on the same tick.
+    const live = createMatch(['z', 'humains']);
+    const ai = new AI(live, 0);
+    const record: [number, Command[]][] = [];
+    while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
+      const cmds = ai.think();
+      if (cmds.length) record.push([live.tick, cmds]);
+      live.step(cmds);
+    }
+    expect(live.winner).toBe(0);
+    const again = analyzeReplay(JSON.parse(JSON.stringify({ v: 1, factions: ['z', 'humains'], biome: '', handicap: [100, 100], ticks: record })));
+    expect(again.winner).toBe(0);
+    expect(again.ticks).toBe(live.tick);
+    expect(again.truncated).toBeUndefined();
   }, 120_000);
 
   it('rejoue un replay et trouve la même chose que pendant la partie', () => {

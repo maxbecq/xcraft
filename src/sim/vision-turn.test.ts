@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFS, type BuildingDef } from '../data';
+import { DEFS, type BuildingDef, type UnitDef } from '../data';
 import { CORNERS } from '../maps';
 import { rotateTile } from '../map';
 import { FP } from './fixed';
@@ -47,5 +47,23 @@ describe('sight turned with the map', () => {
       return tiles;
     });
     for (const s of seen.slice(1)) expect(s).toEqual(seen[0]);
+    // Not empty everywhere (Codex, 2026-11-27): a Créature on the natural's middle sees its middle tiles, and from
+    // somewhere about it a Dragon sees a higher tile the cliffs hide from the Créature.
+    const w = createMatch(['isdaris', 'isdaris', 'isdaris', 'isdaris'], undefined, 'carrefour');
+    const [nx, ny] = expansion(w, 0);
+    const [lo, hi] = [(size - 1) >> 1, size >> 1];
+    const middle = seen[0][offsets.findIndex(([dx, dy]) => dx === 0 && dy === 0)];
+    for (const t of [lo, hi].flatMap((dx) => [lo, hi].map((dy) => (ny + dy) * N + nx + dx))) expect(middle).toContain(t);
+    const r = Math.min((DEFS.creature as UnitDef).sight, (DEFS.dragon as UnitDef).sight) - 1;
+    const above = offsets.some(([dx, dy], k) => {
+      const ground = new Set(seen[0][k]);
+      const [ux, uy] = [Math.floor(nx + size / 2 + dx), Math.floor(ny + size / 2 + dy)];
+      // Within both sights, higher than where the Créature stands: hidden by the relief, not by reach.
+      return seen[0][offsets.length + k].some((t) => {
+        const [tx, ty] = [t % N, Math.floor(t / N)];
+        return !ground.has(t) && Math.hypot(tx - ux, ty - uy) <= r && w.grid.level(tx, ty) > w.grid.level(ux, uy);
+      });
+    });
+    expect(above).toBe(true);
   });
 });
