@@ -2,11 +2,12 @@ import { TEAM_COLORS } from './models';
 import { BoxGeometry, type Camera, CanvasTexture, CircleGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Scene, Vector3 } from 'three';
 import { Particles, type Picture } from './particles';
 import { Streaks } from './streaks';
+import { Prisms } from './prism';
 import type { Audio, Sfx } from '../audio';
 import { DEFS, FLY_HEIGHT, KIT, type UnitDef } from '../data';
 import BALANCE from '../balance.json';
 import { type GameMap, heightAt } from '../map';
-import { FP } from '../sim/fixed';
+import { FP, TICK_RATE } from '../sim/fixed';
 import { type Entity, type Shot, type World, soars } from '../sim/world';
 
 const MAX_PARTICLES = 1200;
@@ -270,7 +271,12 @@ export class Effects {
   private readonly jets = new Map<number, { id: number; from: Vector3; to: Vector3; left: number; spill: number }>();
 
   /** Sprites go to `fx` (drawn after ambient occlusion); debris, which casts shadows, to the main scene. */
+  /** Concentrations énergétiques standing, and which of them are in sight (as `collect` last saw it). */
+  private readonly prisms: Prisms;
+  private readonly fieldSeen = new WeakMap<object, boolean>();
+
   constructor(fx: Scene, private readonly scene: Scene, private readonly map: GameMap, private readonly audio: Audio) {
+    this.prisms = new Prisms(scene);
     fx.add(this.particles.mesh);
     fx.add(this.streaks.mesh);
     this.rocks.count = 0;
@@ -307,7 +313,7 @@ export class Effects {
     stain.position.copy(at);
     mark.position.copy(at);
     bit.position.copy(at);
-    return [sprite, streak, stain, mark, bit];
+    return [sprite, streak, stain, mark, bit, Prisms.sample()];
   }
 
   /** Collects the effects of the tick that just ran. */
@@ -343,8 +349,13 @@ export class Effects {
       const alch = c.kind === 'minechimique' && world.deaths.some((d) => d.type === 'minealchimique' && d.x === c.x && d.y === c.y);
       this.ability(c.kind, this.at(c.x, c.y, 0.1), alch);
     }
-    // Murs d'énergie: a shimmering curtain of cyan sparks over each tile while it stands.
+    // Murs d'énergie: a shimmering curtain of cyan sparks over each tile while it stands (a Concentration énergétique
+    // is a prism instead: Effects.isSpells).
     for (const m of world.walls) {
+      if (m.field) {
+        this.fieldSeen.set(m, m.tiles.some((i) => seen(((i % this.map.width) + 0.5) * FP, (Math.floor(i / this.map.width) + 0.5) * FP)));
+        continue;
+      }
       for (const i of m.tiles) {
         const [x, y] = [((i % this.map.width) + 0.5) * FP, (Math.floor(i / this.map.width) + 0.5) * FP];
         if (!seen(x, y)) continue;
@@ -690,7 +701,7 @@ export class Effects {
    * mental holds, a golden sphere round a unit under the Sphère de renvoi, sparkles on a phased unit (its see-through
    * body, with the Double's, the Manteau's and the Assassin's: render/units.ts), rings of light turning round a building
    * under the Bouclier de plasma, a dome of cold light with a marked edge over a Silence des ions, lines of field along
-   * a Mur d'énergie, a red target closing in where the Canon orbital aims, sparkles over an Observatoire's zone.
+   * a Mur d'énergie, a low prism of energy over a Concentration énergétique, a red target closing in where the Canon orbital aims, sparkles over an Observatoire's zone.
    * A mound of earth over a buried Créature. Render only.
    */
   private isSpells(world: World, sees: (e: Entity) => boolean, alpha: number, dt: number): void {
@@ -759,14 +770,24 @@ export class Effects {
         this.spawn(this.tex.glow, 0xd8e8ff, p.clone().add(new Vector3(Math.cos(a) * d, 0.3 + Math.random() * R * 0.3, Math.sin(a) * d)), new Vector3(0, -0.15, 0), 2, 0.18, 0.12, 0.9, 0, true);
       }
     }
-    // Mur d'énergie: lines of field running along it.
+    // Mur d'énergie: lines of field running along it. Concentration énergétique: a prism over its disc.
+    this.prisms.begin(dt);
     for (const m of world.walls) {
+      if (m.field) {
+        if (!this.fieldSeen.get(m)) continue;
+        let [x, z] = [0, 0];
+        for (const i of m.tiles) [x, z] = [x + (i % this.map.width) + 0.5, z + Math.floor(i / this.map.width) + 0.5];
+        [x, z] = [x / m.tiles.length, z / m.tiles.length];
+        this.prisms.put(m, x, heightAt(this.map, x, z), z, m.left / TICK_RATE, dt);
+        continue;
+      }
       for (const i of m.tiles) {
         const p = new Vector3((i % this.map.width) + 0.5, 0, Math.floor(i / this.map.width) + 0.5);
         p.y = heightAt(this.map, p.x, p.z);
         for (const h of [0.4, 1, 1.6]) this.hold(this.tex.glow, CYAN, p.clone().setY(p.y + h + 0.1 * Math.sin(t * 4 + i)), 0.3, 0.6, dt, true);
       }
     }
+    this.prisms.end();
     // Canon orbital, aimed: a red target turning and closing in.
     for (const st of world.strikes) {
       const p = this.at(st.x, st.y, 0.1);
