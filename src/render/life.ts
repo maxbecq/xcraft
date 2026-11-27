@@ -1,4 +1,5 @@
-import { Box3, Group, Quaternion, Vector3, type Object3D } from 'three';
+import { Box3, Group, Quaternion, Vector3, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
+import type { Entity } from '../sim/world';
 
 /**
  * Human buildings coming alive: their brass armillary spheres turn slowly, the meridians one way and the
@@ -37,10 +38,29 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
   const floats = top('float_');
   // The Orbe's rings (`spin_*`), each turning about one of its own diameters, the two opposite ways at their own
   // speeds, as a gyroscope (Fable's proposal): modelled flat in their local XZ plane, so X and Z are diameters.
-  const spins = top('spin_').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
-    o, q0: o.quaternion.clone(), axis: new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
+  // The Drone protecteur's plates (`spin_plaques`) orbit about the vertical; the Discobole's wheel (`spin_anneau`) rolls
+  // with its travel instead (units.ts wheels).
+  const spins = top('spin_').filter((o) => o.name !== 'spin_anneau').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
+    o, q0: o.quaternion.clone(), axis: o.name === 'spin_plaques' ? new Vector3(0, 1, 0) : new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
   }));
-  if (!floats.length && !spins.length) return null;
+  // The Déflecteur's veils (`fx_voile_*`) turn slowly round the building (the user's wish, 2026-11-27): hung on a
+  // pivot at their parent's origin, the building's axis, since meshopt leaves each mesh's own origin elsewhere.
+  // The Orbe de commandement's black globe turns slowly on itself (an annotation on its board), on the same kind of pivot.
+  const globe = floats.filter((f) => { let g = false; f.traverse((m) => { g ||= ((m as Mesh).material as Material | undefined)?.name === 'orbecmd_orbe'; }); return g; });
+  const veils = [...top('fx_voile_'), ...globe];
+  const pivots = new Set<Group>();
+  for (const v of veils) {
+    const parent = v.parent!;
+    let pivot = parent.children.find((c) => c.userData.veilPivot) as Group | undefined;
+    if (!pivot) {
+      pivot = new Group();
+      pivot.userData.veilPivot = true;
+      parent.add(pivot);
+      pivots.add(pivot);
+    }
+    pivot.add(v);
+  }
+  if (!floats.length && !spins.length && !pivots.size) return null;
   const boxes = floats.map((f) => new Box3().setFromObject(f).expandByScalar(0.1));
   const inFloat = (o: Object3D) => {
     for (let p = o.parent; p; p = p.parent) if (floats.includes(p)) return true;
@@ -63,6 +83,7 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
       const k = Math.sin(t * 0.9 + phase);
       for (const p of parts) p.o.position.y = p.y + p.amp * k;
       for (const s of spins) s.o.quaternion.copy(s.q0).multiply(turn.setFromAxisAngle(s.axis, t * s.speed + phase));
+      for (const p of pivots) p.rotation.y = t * (globe.length ? 0.25 : 0.35) + phase;
     },
   };
 }
@@ -104,3 +125,51 @@ export const LIFE_GLSL = `
     }
     return vec4(glow, dim);
   }`;
+
+/**
+ * The Psycho-assembleur at work (Fable's model, the user's wishes 2026-11-27): while it builds a unit, its rings
+ * (`float_anneaux`) and the three parts in assembly (`spin_pieces_1..3`) turn the opposite ways in turn round the tube,
+ * the robot (`float_robot`) stands inside, and the beam (`fx_rayon`) flickers in strength. Idle, the tube is empty. The
+ * turning parts hang on pivots at their parent's origin, the tube's axis (meshopt leaves their own origins elsewhere).
+ */
+export function assemblerFx(body: Object3D, e: Entity): { group: Group; update(dt: number, t: number): void } {
+  const turning: { pivot: Group; speed: number }[] = [];
+  for (const [name, speed] of [['float_anneaux', 0.9], ['spin_pieces_1', -1.3], ['spin_pieces_2', 1.1], ['spin_pieces_3', -1.5]] as const) {
+    const o = body.getObjectByName(name);
+    if (!o?.parent) continue;
+    const pivot = new Group();
+    o.parent.add(pivot);
+    pivot.add(o);
+    turning.push({ pivot, speed });
+  }
+  const robot = body.getObjectByName('float_robot');
+  const ray = body.getObjectByName('fx_rayon');
+  // The beam's own copy of the cyan lines' material, so only it flickers; it keeps their breathing.
+  const beams: MeshStandardMaterial[] = [];
+  ray?.traverse((m) => {
+    if (!(m as Mesh).isMesh) return;
+    const mat = (m as Mesh).material as MeshStandardMaterial;
+    const c = mat.clone();
+    c.userData.owned = true; // freed with the view, as models.ts owned() marks it (not imported: models imports this file)
+    c.onBeforeCompile = mat.onBeforeCompile;
+    c.customProgramCacheKey = mat.customProgramCacheKey;
+    (m as Mesh).material = c;
+    beams.push(c);
+  });
+  const base = beams[0]?.emissiveIntensity ?? 1;
+  let angle = 0;
+  return {
+    group: new Group(),
+    update(dt, t) {
+      const working = e.buildLeft === 0 && e.queue.length > 0;
+      for (const p of turning) p.pivot.visible = working;
+      if (robot) robot.visible = working;
+      if (ray) ray.visible = working;
+      if (!working) return;
+      angle += dt;
+      for (const p of turning) p.pivot.rotation.y = angle * p.speed;
+      const k = 0.75 + 0.25 * Math.sin(t * 4.7) + 0.15 * Math.sin(t * 13.1 + 1.3);
+      for (const b of beams) b.emissiveIntensity = base * k;
+    },
+  };
+}

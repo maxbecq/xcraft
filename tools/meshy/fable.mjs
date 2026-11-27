@@ -12,18 +12,28 @@ const MODELS = {
   portail: { footprint: 2.76 }, // as the Meshy one it replaces (size 3)
   trone: { footprint: 3.9, yaw: -45 }, // modelled turned 45° for its board's three-quarter view; size 4
   obelisque: { footprint: 4.7 }, // its own terrace now, as wide as the plaza it stood on (size 4)
-  orbe: { footprint: 1.6 },
-  emetteur: { footprint: 2.6 }, // size 2: its octagon about 2.3 wide, the ramps on its diagonals reaching past; 2.9 high (the old one 4.3) // the Orbe plasma, a unit now (orbemob, drawn with orbe's model); 2.0 high, the old one 1.73
+  orbe: { footprint: 1.6 }, // the Orbe plasma, a unit now (orbemob, drawn with orbe's model); 2.0 high, the old one 1.73
+  emetteur: { footprint: 2.6 }, // size 2: its octagon about 2.3 wide, the ramps on its diagonals reaching past; 2.9 high (the old one 4.3)
+  deflecteur: { footprint: 2.6 }, // the Émetteur's socle and size; its four veils turn round it (life.ts)
+  reservepsy: { footprint: 2.7, yaw: 45 }, // size 2; modelled facing its board's camera, head-on: turned to face the game's
+  pylonesanglant: { footprint: 2.6, ownColours: true }, // the Émetteur's socle; its panels stay blood red, not the team's
+  recepteur: { footprint: 3.3 }, // size 3; 3.8 high with its dish
+  recepteurarme: { footprint: 3.3 },
+  orbecommandement: { footprint: 3.2, yaw: 45 }, // size 3; modelled head-on as the Réserve psy
+  nanoassembleur: { footprint: 3.3 }, // the Psycho-assembleur, size 3; 4.7 high with its glass tube
+  // Units (fable.mjs does not compress them: meshopt would move the pivots their turning parts spin about).
+  discobole: { footprint: 1.1 }, // a monowheel 1.1 high, 1.8 in the game (units are drawn 1.65 times larger); the old Discobole stood 1.0
+  droneprotecteur: { footprint: 0.7 }, // its plates 0.7 across, its top 0.6 above the ground (1.15 and 1.0 in the game)
 };
-const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu', 'emetteur_bleu']);
+const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu', 'emetteur_bleu', 'reserve_bleu', 'recepteur_bleu', 'orbecmd_bleu', 'discobole_bleu', 'drone_bleu', 'assembleur_bleu']);
 
 const [src, out, ...only] = process.argv.slice(2);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-for (const [type, { footprint, yaw = 0 }] of Object.entries(MODELS)) {
+for (const [type, { footprint, yaw = 0, ownColours = false }] of Object.entries(MODELS)) {
   if (only.length && !only.includes(type)) continue;
   const doc = await io.read(`${src}/${type}.glb`);
   const scene = doc.getRoot().listScenes()[0];
-  for (const m of doc.getRoot().listMaterials()) if (TEAM.has(m.getName())) m.setName('team');
+  if (!ownColours) for (const m of doc.getRoot().listMaterials()) if (TEAM.has(m.getName())) m.setName('team');
   const root = doc.createNode(type);
   for (const n of scene.listChildren()) {
     scene.removeChild(n);

@@ -212,7 +212,6 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   ankylosaure: { height: 1.01 },
   allosaure: { height: 1.21 },
   belluaire: { height: 0.95, weapon: 'trident', grip: 'hast' }, // a heavy gladiator: its guard is its aim clip, its thrust its attack
-  discobole: { height: 1.0 },
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
@@ -228,7 +227,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
   'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
-  'trone', 'emetteur'];
+  'trone', 'emetteur', 'deflecteur', 'reservepsy', 'pylonesanglant', 'orbecommandement',
+  // and two Isdaris units: the Discobole's monowheel rolls (units.ts wheels), the Drone's plates orbit (life.ts)
+  'discobole', 'droneprotecteur'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
  * wide band only (a coloured outline round it read as a border). */
 const NO_TEAM_RIM = new Set(['mastodonte']);
@@ -349,7 +350,16 @@ function fableLights(scene: Object3D): void {
   scene.traverse((o) => {
     if (!(o instanceof Mesh)) return;
     const m = o.material as MeshStandardMaterial;
-    if (m.name === 'marbre' && !m.userData.dim) {
+    if (o.name.startsWith('fx_cuve') && !m.userData.boil) {
+      m.userData.boil = true;
+      boil(m);
+    } else if (m.name === 'deflecteur_voile' && !m.userData.veil) {
+      // The Déflecteur's veils glow as on its board, not as Blender's near-clear glass; drawn after the marble behind them.
+      m.userData.veil = true;
+      m.emissiveIntensity = 2.2;
+      m.depthWrite = false;
+      o.userData.noShadow = true;
+    } else if (m.name === 'marbre' && !m.userData.dim) {
       // Pure white marble flared in the bloom, past the other Isdaris buildings (the user's remark, 0.9.173).
       m.userData.dim = true;
       m.color.multiplyScalar(0.72);
@@ -371,8 +381,9 @@ function fableLights(scene: Object3D): void {
       // The Orbe's plasma: its Voronoi cells drift round the sphere and ripple, like currents inside it.
       m.userData.ripple = true;
       ripple(m, 1.5, 0.02);
-    } else if (m.name.endsWith('_halo')) {
-      o.material = halos.get(m) ?? halos.set(m, fableHalo()).get(m)!;
+    } else if (/_halo(_arme|_porte)?$/.test(m.name)) {
+      // Red under the Pylône sanglant (its halo is red in Blender), cyan elsewhere.
+      o.material = halos.get(m) ?? halos.set(m, fableHalo(m.emissive.r > m.emissive.b ? new Color(1.0, 0.12, 0.08) : undefined)).get(m)!;
       o.userData.noPick = true;
       o.userData.noShadow = true;
     } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
@@ -389,6 +400,36 @@ function fableLights(scene: Object3D): void {
     const o = scene.getObjectByName(name);
     if (o) glowCard(scene, o, name === 'fx_voile' ? 0.5 : 0.3);
   }
+}
+
+/**
+ * The Réserve psy's vat (`fx_cuve`, the inside of its glass column) boiling all the time, strongly enough to read from
+ * afar (the user's wish, 2026-11-27): two layers of bubble rings rising up it, over a light that churns in waves.
+ * Its UVs run 0 to 1 round the arc (u) and up (v); the arc spans 196° (v3, a wider bay), the rates across it set for that.
+ */
+function boil(m: MeshStandardMaterial): void {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.veinTime = veinTime;
+    shader.vertexShader = `varying vec2 vBoil;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vBoil = uv;`);
+    shader.fragmentShader = `uniform float veinTime;
+      varying vec2 vBoil;
+      float bubbleRings(vec2 p) {
+        vec2 c = floor(p);
+        vec2 f = fract(p) - 0.5;
+        float h = fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453);
+        vec2 o = (vec2(h, fract(h * 7.13)) - 0.5) * 0.45;
+        float r = 0.12 + 0.2 * fract(h * 3.71);
+        float d = length(f - o);
+        return smoothstep(r + 0.05, r, d) * (0.35 + 0.65 * smoothstep(r - 0.12, r, d)) * step(0.3, fract(h * 5.3));
+      }
+      ${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float churn = 0.7 + 0.3 * sin(veinTime * 3.1 + vBoil.y * 11.0 + 2.0 * sin(vBoil.x * 14.5 + veinTime * 1.7));
+      float b = bubbleRings(vec2(vBoil.x * 6.9, vBoil.y * 5.0 - veinTime * 1.4))
+        + 0.7 * bubbleRings(vec2(vBoil.x * 12.25 + 3.0, vBoil.y * 9.0 - veinTime * 2.3));
+      totalEmissiveRadiance = totalEmissiveRadiance * churn + vec3(0.45, 0.9, 1.0) * b * 1.3;`);
+  };
+  m.customProgramCacheKey = () => 'boil';
 }
 
 let cardMaterial: ShaderMaterial | undefined;
@@ -517,9 +558,9 @@ function groundGlow(): ShaderMaterial {
 }
 
 /** A thin cyan glow under a floating part (the Obélisque's shaft, the Trône's crown): small, faint, fading from the middle. */
-function fableHalo(): ShaderMaterial {
+function fableHalo(color = new Color(0.1, 0.65, 1.0)): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { color: { value: new Color(0.1, 0.65, 1.0) }, veinTime },
+    uniforms: { color: { value: color }, veinTime },
     vertexShader: `uniform float veinTime;
       varying vec2 vUv;
       varying float vVein;

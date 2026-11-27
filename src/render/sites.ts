@@ -169,8 +169,8 @@ export const POOLS: Record<string, [number, number, number, number][]> = {
   mine: [[1.0, -0.9, 1.0, 0xff8030], [0.3, 0.6, 1.0, 0xb060ff]],
   obelisque: [[0, 0, 2.6, 0x40d8ff]],
   emetteur: [[0, 0, 1.6, 0x40d8ff]],
-  reservepsy: [[0, 0, 1.5, 0xb070ff]],
-  recepteur: [[0, 0, 1.6, 0xb070ff]],
+  reservepsy: [[0, 0, 1.5, 0x40d8ff]], // cyan as its vat since Fable's model (was violet)
+  recepteur: [[0, 0, 1.6, 0x40d8ff]], // cyan as its lights since Fable's model (was violet)
   minerai: [[0, 0, 1.6, 0xb06020]], // the geodes' halo
   puits: [[0, 0, 2.4, 0xb060ff]],
 };

@@ -7,7 +7,7 @@ import {
 import { stableShadowDepth } from './shadowdepth';
 import { dressSprite, spriteOf } from './sprites';
 import { type BuildingDef, DEFS, FLY_HEIGHT, KIT, LOOK_SCALE, LOOKS, type UnitDef, WEAPONS } from '../data';
-import { armillaries, floaters } from './life';
+import { armillaries, assemblerFx, floaters } from './life';
 import { materialise, materialiseEnd, materialiseStep } from './materialise';
 import { type GameMap, heightAt } from '../map';
 import { FP, GAME_SPEED, ticks } from '../sim/fixed';
@@ -1981,17 +1981,18 @@ export class EntityRenderer {
     if (e.type === 'assimilateur') fx = assimFx(body, e);
     if (e.type === 'armement') fx = forgeFx(body, e);
     if (e.type === 'mastodonte') fx = thrusterFx(body, e);
-    if (e.type === 'reservepsy') {
+    if (e.type === 'reservepsy' && !body.getObjectByName('fx_cuve')) { // the old model's rings and halo; Fable's has its own
       const reserve = reserveFx(body, e.id);
       root.add(reserve.group);
       fx = reserve;
     }
+    if (body.getObjectByName('float_robot')) fx = assemblerFx(body, e); // the Psycho-assembleur's tube at work
     const insect = insectLegs(body);
     // Measured before the view is placed or turned; the first move is a jump from the origin, not a step.
     const wheels: { o: Object3D; r: number }[] = [];
     root.updateMatrixWorld(true); // the unit's scale must be in before the tyres are measured
     body.traverse((o) => {
-      if (/^zwheel_\d+$/.test(o.name)) {
+      if (/^zwheel_\d+$/.test(o.name) || o.name === 'spin_anneau') { // the Discobole's monowheel rolls as a wheel
         const b = new Box3().setFromObject(o);
         wheels.push({ o, r: (b.max.y - b.min.y) / 2 });
       }
