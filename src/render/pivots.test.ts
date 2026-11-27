@@ -39,7 +39,7 @@ function load(name: string): Object3D {
 const MOVING = /^(zrotor|zduct|zmast|zturret|ztread|zwheel|zstep|zvat|zpumper|zlever|zwing|armillaryb?|zshin_\d+_[lr]|zw_saw|cargo)(_\d+)*$/;
 
 describe('moving parts keep their pivots through compression (tools/meshy/pivots.py)', () => {
-  for (const name of ['bourdon', 'scarabee', 'casernevolante', 'grandconseil', 'pegase', 'cuve', 'barge', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'octopode', 'zw_dechiqueteur.glb']) {
+  for (const name of ['bourdon', 'scarabee', 'casernevolante', 'pegase', 'cuve', 'barge', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'octopode', 'zw_dechiqueteur.glb']) {
     it(`${name}: every moving part is a pivot node, its mesh in a child`, () => {
       const parts: Object3D[] = [];
       load(name).traverse((o) => MOVING.test(o.name) && parts.push(o));

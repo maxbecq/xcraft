@@ -51,6 +51,14 @@ for img in bpy.data.images:
         img.pack()
 for m in bpy.data.materials:
     m.name = "meshy"
+    # Rodin's "Shaded" material is its texture as emission on black: lit by nothing, it skips the team colour.
+    nodes = m.node_tree.nodes if m.use_nodes else []
+    bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf and not bsdf.inputs["Base Color"].is_linked and bsdf.inputs["Emission Color"].is_linked:
+        m.node_tree.links.new(bsdf.inputs["Emission Color"].links[0].from_socket, bsdf.inputs["Base Color"])
+        m.node_tree.links.remove(bsdf.inputs["Emission Color"].links[0])
+        bsdf.inputs["Emission Strength"].default_value = 0
+        bsdf.inputs["Roughness"].default_value = 0.8
 
 bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_image_format="JPEG", export_jpeg_quality=85, export_apply=True)
 print(f"normalised {src} -> {dst}: {len(o.data.polygons)} faces, scale {s:.4f}")

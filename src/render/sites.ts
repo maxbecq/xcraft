@@ -163,7 +163,7 @@ function makeSite(footprint: number, size: Vector3): { footing: Mesh; storeys: O
 }
 /** Pools of light on the ground around glowing things: [x, z offset, radius, colour]. */
 export const POOLS: Record<string, [number, number, number, number][]> = {
-  conseil: [[0.2, 1.9, 1.7, 0xffa040], [-1.4, 2.0, 0.9, 0xff7020]],
+  conseil: [[0, 1.4, 1.6, 0xffa040]], // its lit arcades, along its front
   caserne: [[0, 1.6, 1.3, 0xffb050]],
   grenier: [[0, 1.0, 0.8, 0xffc070]],
   mine: [[1.0, -0.9, 1.0, 0xff8030], [0.3, 0.6, 1.0, 0xb060ff]],

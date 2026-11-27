@@ -226,8 +226,10 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   'intelligence', 'assimilateur', 'plateforme', 'armement', 'vacarme', 'podsup', 'drone', 'dronecombat', 'quadripode', 'hexapode', 'coleoptere', 'minechimique', 'grandealchimisterie', 'casernevolante', 'scarabee', 'cuve', 'minealchimique',
   // the Dirigeable, a zeppelin built in Blender (tools/meshy/dirigeable.py): it wore the Bourdon's model, larger, and was taken for it
   'dirigeable',
-  // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
-  'grandconseil',
+  // Human civic buildings, Rodin Low Poly from their OpenAI boards: the Grenier à silo (it wore the Grenier's model,
+  // larger), the Marché as a small Baltard pavilion, the Grand Conseil as the Conseil's arcaded hall with an openwork
+  // belfry rising from its roof (the Conseil itself is in the first row)
+  'silo', 'marche', 'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
   'trone', 'emetteur', 'deflecteur', 'reservepsy', 'pylonesanglant', 'orbecommandement',
   // and two Isdaris units: the Discobole's monowheel rolls (units.ts wheels), the Drone's plates orbit (life.ts)
@@ -239,7 +241,8 @@ const NO_TEAM_RIM = new Set(['mastodonte']);
 const FIXED_TEAM: Record<string, number> = { assimilateur: 0x2cff50 };
 /** Meshy buildings with Blender parts fitted on them (`<type>-dress.glb`, tools/blender/models.py DRESS). */
 // The Alchimisterie redone from its chosen board (Rodin) carries its own cyan lines: its old dress no longer fits it.
-const DRESSED = ['conseil', 'caserne', 'grenier', 'mine', 'forge', 'metallurgie'];
+// The Conseil rebuilt as an arcaded civic hall (Rodin): its old dress no longer fits it.
+const DRESSED = ['caserne', 'grenier', 'mine', 'forge', 'metallurgie'];
 /** Turn (radians) to face +Z, for static Meshy models that came out facing another way. */
 const STATIC_YAW: Record<string, number> = { chimere: Math.PI / 2, bourdon: -Math.PI / 2, dirigeable: -Math.PI / 2 };
 export const rigged = new Map<string, { scene: Group; clips: AnimationClip[]; skins: MeshStandardMaterial[]; shields?: MeshStandardMaterial[] }>();
