@@ -41,7 +41,7 @@ function softLight(color: number): ShaderMaterial {
 }
 
 /** Where the beam leaves each power building, above its ground (model heights). */
-const BEAM_TOP: Record<string, number> = { obelisque: 6.6, emetteur: 3.1, pylonesanglant: 3.4 };
+const BEAM_TOP: Record<string, number> = { obelisque: 6.6, emetteur: 2.75, pylonesanglant: 3.4 };
 
 let fieldTexture: CanvasTexture | null = null;
 /** A soft disc with a bright rim and faint Art Deco rays: the emission zone seen from above. */
