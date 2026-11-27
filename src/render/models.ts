@@ -228,7 +228,7 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
   'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
-  'trone'];
+  'trone', 'emetteur'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
  * wide band only (a coloured outline round it read as a border). */
 const NO_TEAM_RIM = new Set(['mastodonte']);

@@ -12,9 +12,10 @@ const MODELS = {
   portail: { footprint: 2.76 }, // as the Meshy one it replaces (size 3)
   trone: { footprint: 3.9, yaw: -45 }, // modelled turned 45° for its board's three-quarter view; size 4
   obelisque: { footprint: 4.7 }, // its own terrace now, as wide as the plaza it stood on (size 4)
-  orbe: { footprint: 1.6 }, // the Orbe plasma, a unit now (orbemob, drawn with orbe's model); 2.0 high, the old one 1.73
+  orbe: { footprint: 1.6 },
+  emetteur: { footprint: 2.6 }, // size 2: its octagon about 2.3 wide, the ramps on its diagonals reaching past; 2.9 high (the old one 4.3) // the Orbe plasma, a unit now (orbemob, drawn with orbe's model); 2.0 high, the old one 1.73
 };
-const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu']);
+const TEAM = new Set(['bleu', 'obelisque_bleu', 'orbe_bleu', 'emetteur_bleu']);
 
 const [src, out, ...only] = process.argv.slice(2);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
