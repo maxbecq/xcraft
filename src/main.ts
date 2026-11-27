@@ -467,7 +467,9 @@ document.addEventListener('click', (e) => {
       netGame.stopNetClock?.();
       link.leave();
     }
-    showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name), () => button.click());
+    // From the end banner, its other buttons come along to the analysis' bar.
+    const more = button.closest('.hud-banner') ? [...button.parentElement!.querySelectorAll<HTMLElement>('button[data-p]')].filter((b) => b !== button) : [];
+    showRecap(recap, world, world.players.map((q) => FACTIONS[q.faction].name), () => button.click(), more);
   }
   else if (p === 'quit' || p === 'restart') {
     link?.leave();

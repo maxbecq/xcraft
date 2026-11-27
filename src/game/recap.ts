@@ -103,28 +103,49 @@ const CSS = `
 .recap .wrap{overflow-x:auto}.recap table{border-collapse:collapse;width:100%;max-width:760px}
 .recap td,.recap th{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;white-space:nowrap}
 .recap td:first-child,.recap th:first-child{text-align:left;white-space:normal;opacity:.85}
-.recap .end-row{display:flex;justify-content:center;margin:24px 0 8px}
+.recap.ending{display:flex;flex-direction:column;overflow:hidden;padding:0}
+.recap.ending .body{flex:1;min-height:0;overflow-y:auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 24px max(16px,env(safe-area-inset-left));scrollbar-gutter:stable}
+.recap .body::-webkit-scrollbar{width:12px}.recap .body::-webkit-scrollbar-track{background:rgba(255,255,255,.08)}
+.recap .body::-webkit-scrollbar-thumb{background:var(--amber,#ffcf5a);border-radius:6px;border:2px solid #0b0d12}
+@supports not selector(::-webkit-scrollbar){.recap .body{scrollbar-width:auto;scrollbar-color:var(--amber,#ffcf5a) rgba(255,255,255,.08)}}
+.recap .end-row{flex:none;display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:10px 16px max(10px,env(safe-area-inset-bottom));background:#0b0d12;border-top:1px solid rgba(255,207,90,.35);box-shadow:0 -6px 16px rgba(0,0,0,.6)}
+.recap .end-row button{min-width:0}
+@media (max-width:600px){.recap .end-row{gap:6px;padding-top:8px}.recap .end-row button{flex:1 1 0;margin:0;padding:8px 6px;font-size:12px;letter-spacing:.06em}.recap .end-row .close{flex-basis:100%}}
 .recap .note{opacity:.55;font-size:12px;margin-top:6px}
 .recap ol{list-style:none;padding:0;margin:4px 0;columns:2 280px}.recap li{padding:2px 0;break-inside:avoid}.recap li b{display:inline-block;width:44px;opacity:.6;font-weight:400}
 `;
 
 /** Opens the analysis over the game. */
-/** `onClose`: what follows it (from the end of a match: the main menu, the analysis a step on the way there). */
-export function showRecap(rec: Recorder, world: World, names: string[], onClose?: () => void): void {
+/**
+ * `onClose`: what follows it (from the end of a match: the main menu, the analysis a step on the way there). Then its
+ * way out stays in a bar at the foot of the screen, the analysis scrolling above it, with `more`: the end banner's other
+ * buttons (Rejouer, the replay…), each pressing its original (the user's request, 2026-11-27).
+ */
+export function showRecap(rec: Recorder, world: World, names: string[], onClose?: () => void, more: HTMLElement[] = []): void {
   const colors = world.players.map((p) => hex(TEAM_COLORS[p.id % TEAM_COLORS.length]));
   const tl = rec.timeline;
   // Building after building, the first of each kind, is too many to read: the fights, bases and the end.
   const major = rec.moments.filter((m) => m.kind !== 'batiment' && m.kind !== 'unite');
   const box = document.createElement('div');
-  box.className = 'recap';
+  box.className = onClose ? 'recap ending' : 'recap';
   const legend = `<div class="legend">${names.map((n, i) => `<span><i style="background:${colors[i]}"></i>${esc(n)}</span>`).join('')}</div>`;
   const table = `<div class="wrap"><table><tr><th></th>${names.map((n, i) => `<th style="color:${colors[i]}">${esc(n)}</th>`).join('')}</tr>${rows(tl, rec.totals)
     .map(([label, v]) => `<tr><td>${label}</td>${names.map((_, i) => `<td>${v(i)}</td>`).join('')}</tr>`)
     .join('')}</table></div><p class="note">Récolté : tout ce qui est entré en réserve, remboursements et pillage compris. Tuées, détruits, perdus : au combat seulement (une unité absorbée ou consommée n’y compte pas).</p>`;
   const list = `<ol>${major.map((m) => `<li><b>${clock(m.tick)}</b><span style="color:${colors[m.player] ?? '#fff'}">${MOMENT_ICON[m.kind]}</span> ${esc(names[m.player] ?? '')} — ${esc(m.detail)}</li>`).join('')}</ol>`;
-  box.innerHTML = `<style>${CSS}</style>${onClose ? '' : '<button class="close" aria-label="Fermer">✕</button>'}<h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
+  const content = `<h2>Analyse de la partie</h2><div class="sub">Durée ${clock(world.tick)}</div>${legend}
     <div class="tabs">${METRICS.map((m, i) => `<button data-t="${i}" class="${i ? '' : 'on'}">${m.label}</button>`).join('')}</div><div class="card"><canvas></canvas></div>
-    <h3>Totaux</h3>${table}<h3>Moments clés</h3>${list}${onClose ? '<div class="end-row"><button class="close end">Revenir au menu principal</button></div>' : ''}`;
+    <h3>Totaux</h3>${table}<h3>Moments clés</h3>${list}`;
+  box.innerHTML = onClose
+    ? `<style>${CSS}</style><div class="body">${content}</div><div class="end-row"><button class="close end">Revenir au menu principal</button>${more.map((b, i) => `<button class="end" data-more="${i}">${esc(b.textContent ?? '')}</button>`).join('')}</div>`
+    : `<style>${CSS}</style><button class="close" aria-label="Fermer">✕</button>${content}`;
+  box.querySelector('.end-row')?.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-more]');
+    if (!b) return;
+    const original = more[Number(b.dataset.more)];
+    original.click();
+    b.textContent = original.textContent; // « Revanche : en attente… »
+  });
   document.body.append(box);
   let at = 0;
   const cv = box.querySelector('canvas')!;
