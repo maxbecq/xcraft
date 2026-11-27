@@ -10,7 +10,6 @@ import { currentBiome } from '../terrain';
 
 /** Where buildings give off smoke or steam: [x, y, z offset from the centre, dark smoke?]. */
 const VENTS: Record<string, [number, number, number, boolean]> = {
-  conseil: [-1.4, 0.8, 2.0, true], // the burning tyre stack
   mine: [-0.9, 0.9, -0.7, false], // generator steam
   puits: [0, 0.2, 0, false], // energy mist rising from the well
 };
