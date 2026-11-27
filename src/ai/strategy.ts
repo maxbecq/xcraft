@@ -63,6 +63,10 @@ export interface Doctrine {
   godsDefend: boolean;
   /** Dieux: the second- and third-rank gods go out with the waves (else they stay home and summon). */
   godsWave: boolean;
+  /** Dieux: a god stops summoning (its queue cancelled, refunded) and joins the fight once its army fights or the base
+   * is raided within this many tiles of it (0: never); it summons again after `godsCalm` seconds without one. */
+  godsFight: number;
+  godsCalm: number;
   /** Dieux: the level each god buys as soon as its minerals are there, without the usual margin (1: none). */
   godLevel: number;
   /** Dieux: the minute of the first expansion (0: the usual 7). */
@@ -75,7 +79,7 @@ export interface Doctrine {
   counterRanged: boolean;
 }
 
-export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godLevel: 3, dieuxExpand: 5, researchHosts: 2, counterRanged: false };
+export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort: 0.5, godQueue: 3, godsDefend: true, godsWave: true, godsFight: 10, godsCalm: 5, godLevel: 3, dieuxExpand: 5, researchHosts: 2, counterRanged: false };
 
 /** Camps whose AI plays its strategies and the doctrine by default, each after a tournament showed a clear gain
  * (23/11, against the AI as it was, 96 games a side: Dieux 71 wins against 51, Isdaris 64 against 56, Z 56 against
@@ -83,7 +87,7 @@ export const DOCTRINE: Doctrine = { engage: 1, retreat: 1.25, regroup: 4, escort
 export const ON_BY_DEFAULT: Faction[] = ['dieux', 'isdaris', 'z'];
 
 /** The AI before strategies: the usual lists, no doctrine (for comparison and the older tests). */
-export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godLevel: 1, dieuxExpand: 0, researchHosts: 3, counterRanged: false };
+export const LEGACY: Doctrine = { engage: 0, retreat: 2, regroup: 1, escort: 0, godQueue: 1, godsDefend: false, godsWave: true, godsFight: 0, godsCalm: 0, godLevel: 1, dieuxExpand: 0, researchHosts: 3, counterRanged: false };
 
 const USUAL: Strategy = { id: 'classique', name: 'Classique' };
 /** The natural's minute (game clock) of a strategy that names none, the usual one included. */
