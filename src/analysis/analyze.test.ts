@@ -152,6 +152,28 @@ describe('analyse de partie', () => {
     expect(fights).toHaveLength(3);
   });
 
+  // Codex final, 2026-11-27: one dead of a fight judged, killed with two fresh reinforcements, hid them all.
+  it('relève deux renforts tués entiers avec le dernier d’un combat déjà jugé', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx - 6 * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    const held = [0, 1].map((k) => Object.assign(w.spawn('creature', 0, cx, cy + k * FP), { hp: 1e7, maxHp: 1e7 }));
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once the fight is judged (5 s in): one Créature gone off, two reinforcements beside the other, all three killed.
+      if (w.tick === 7 * TICK_RATE) {
+        w.entities.delete(held[0].id);
+        doomed.push(held[1], ...[2, 3].map((k) => w.spawn('creature', 0, cx, cy + k * FP)));
+      }
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 1e8);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights).toHaveLength(2);
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(1);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;
