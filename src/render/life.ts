@@ -1,4 +1,4 @@
-import { Box3, Group, Quaternion, Vector3, type Object3D } from 'three';
+import { Box3, Group, Quaternion, Vector3, type Material, type Mesh, type Object3D } from 'three';
 
 /**
  * Human buildings coming alive: their brass armillary spheres turn slowly, the meridians one way and the
@@ -37,12 +37,16 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
   const floats = top('float_');
   // The Orbe's rings (`spin_*`), each turning about one of its own diameters, the two opposite ways at their own
   // speeds, as a gyroscope (Fable's proposal): modelled flat in their local XZ plane, so X and Z are diameters.
-  const spins = top('spin_').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
-    o, q0: o.quaternion.clone(), axis: new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
+  // The Drone protecteur's plates (`spin_plaques`) orbit about the vertical; the Discobole's wheel (`spin_anneau`) rolls
+  // with its travel instead (units.ts wheels).
+  const spins = top('spin_').filter((o) => o.name !== 'spin_anneau').sort((a, b) => a.name.localeCompare(b.name)).map((o, i) => ({
+    o, q0: o.quaternion.clone(), axis: o.name === 'spin_plaques' ? new Vector3(0, 1, 0) : new Vector3(i % 2 ? 0 : 1, 0, i % 2 ? 1 : 0), speed: i % 2 ? -1.25 : 0.8,
   }));
   // The Déflecteur's veils (`fx_voile_*`) turn slowly round the building (the user's wish, 2026-11-27): hung on a
   // pivot at their parent's origin, the building's axis, since meshopt leaves each mesh's own origin elsewhere.
-  const veils = top('fx_voile_');
+  // The Orbe de commandement's black globe turns slowly on itself (an annotation on its board), on the same kind of pivot.
+  const globe = floats.filter((f) => { let g = false; f.traverse((m) => { g ||= ((m as Mesh).material as Material | undefined)?.name === 'orbecmd_orbe'; }); return g; });
+  const veils = [...top('fx_voile_'), ...globe];
   const pivots = new Set<Group>();
   for (const v of veils) {
     const parent = v.parent!;
@@ -78,7 +82,7 @@ export function floaters(body: Object3D, seed: number): { group: Group; update(d
       const k = Math.sin(t * 0.9 + phase);
       for (const p of parts) p.o.position.y = p.y + p.amp * k;
       for (const s of spins) s.o.quaternion.copy(s.q0).multiply(turn.setFromAxisAngle(s.axis, t * s.speed + phase));
-      for (const p of pivots) p.rotation.y = t * 0.35 + phase;
+      for (const p of pivots) p.rotation.y = t * (globe.length ? 0.25 : 0.35) + phase;
     },
   };
 }

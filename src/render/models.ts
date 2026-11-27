@@ -212,7 +212,6 @@ export const CHARACTERS: Record<string, { height: number; weapon?: string; grip?
   ankylosaure: { height: 1.01 },
   allosaure: { height: 1.21 },
   belluaire: { height: 0.95, weapon: 'trident', grip: 'hast' }, // a heavy gladiator: its guard is its aim clip, its thrust its attack
-  discobole: { height: 1.0 },
   creature: { height: 0.45 }, // four legs, rigged in Blender (tools/meshy/quadruped.py)
   assassin: { height: 0.9 },
 };
@@ -228,7 +227,9 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Grand Conseil, the Conseil des échevins raised with a Brussels-style openwork belfry (Rodin, from its chosen board)
   'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
-  'trone', 'emetteur', 'deflecteur', 'reservepsy'];
+  'trone', 'emetteur', 'deflecteur', 'reservepsy', 'pylonesanglant', 'orbecommandement',
+  // and two Isdaris units: the Discobole's monowheel rolls (units.ts wheels), the Drone's plates orbit (life.ts)
+  'discobole', 'droneprotecteur'];
 /** Units whose silhouette keeps a plain rim, not one in the team colour: the large Mastodonte, its team colour on one
  * wide band only (a coloured outline round it read as a border). */
 const NO_TEAM_RIM = new Set(['mastodonte']);
@@ -380,8 +381,9 @@ function fableLights(scene: Object3D): void {
       // The Orbe's plasma: its Voronoi cells drift round the sphere and ripple, like currents inside it.
       m.userData.ripple = true;
       ripple(m, 1.5, 0.02);
-    } else if (m.name.endsWith('_halo')) {
-      o.material = halos.get(m) ?? halos.set(m, fableHalo()).get(m)!;
+    } else if (/_halo(_arme)?$/.test(m.name)) {
+      // Red under the Pylône sanglant (its halo is red in Blender), cyan elsewhere.
+      o.material = halos.get(m) ?? halos.set(m, fableHalo(m.emissive.r > m.emissive.b ? new Color(1.0, 0.12, 0.08) : undefined)).get(m)!;
       o.userData.noPick = true;
       o.userData.noShadow = true;
     } else if ((m.name === 'voile' || m.name === 'verre') && !m.userData.ripple) {
@@ -556,9 +558,9 @@ function groundGlow(): ShaderMaterial {
 }
 
 /** A thin cyan glow under a floating part (the Obélisque's shaft, the Trône's crown): small, faint, fading from the middle. */
-function fableHalo(): ShaderMaterial {
+function fableHalo(color = new Color(0.1, 0.65, 1.0)): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { color: { value: new Color(0.1, 0.65, 1.0) }, veinTime },
+    uniforms: { color: { value: color }, veinTime },
     vertexShader: `uniform float veinTime;
       varying vec2 vUv;
       varying float vVein;

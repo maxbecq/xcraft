@@ -1991,7 +1991,7 @@ export class EntityRenderer {
     const wheels: { o: Object3D; r: number }[] = [];
     root.updateMatrixWorld(true); // the unit's scale must be in before the tyres are measured
     body.traverse((o) => {
-      if (/^zwheel_\d+$/.test(o.name)) {
+      if (/^zwheel_\d+$/.test(o.name) || o.name === 'spin_anneau') { // the Discobole's monowheel rolls as a wheel
         const b = new Box3().setFromObject(o);
         wheels.push({ o, r: (b.max.y - b.min.y) / 2 });
       }
