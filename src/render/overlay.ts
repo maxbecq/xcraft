@@ -8,6 +8,10 @@ import { marksOf } from './marks';
 import { GLYPHS, Z_GLYPHS } from '../game/glyphs';
 import { DIEUX_GLYPHS, HUMAINS_GLYPHS, ISDARIS_GLYPHS } from '../game/glyphs-camps';
 
+/** Bars held lower than a model's top (height above the ground): the Fable Obélisque's tip, 6.9 up, left its bar
+ * off the screen at the usual zoom (QA B2, 2026-11-27): it sits on the shaft, above the terrace, instead. */
+const BAR_CAP: Record<string, number> = { obelisque: 3.4 };
+
 /** Pictograms of the lasting effects (style c), by their mark's key. */
 const MARK_GLYPHS: Record<string, string> = { ...GLYPHS, ...Z_GLYPHS, ...HUMAINS_GLYPHS, ...ISDARIS_GLYPHS, ...DIEUX_GLYPHS, invuln: 'M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z' };
 const paths = new Map<string, Path2D>();
@@ -109,7 +113,8 @@ export class Overlay {
       const z = (e.py + (e.y - e.py) * alpha) / FP;
       // A building's bar sits just above its model's real top (a tower is far taller than its footprint says).
       const top = size ? this.top(e.id, e.buildLeft === 0) : undefined;
-      const y = top !== undefined ? top + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (soars(e) ? FLY_HEIGHT : 0);
+      const capped = top !== undefined && BAR_CAP[e.type] !== undefined ? Math.min(top, heightAt(this.map, x, z) + BAR_CAP[e.type]) : top;
+      const y = capped !== undefined ? capped + 0.25 : heightAt(this.map, x, z) + (size ? 1.2 + size * 0.45 : 1.05) + (soars(e) ? FLY_HEIGHT : 0);
       this.v.set(x, y, z).project(camera);
       if (this.v.z > 1) continue;
       const sx = ((this.v.x + 1) / 2) * w;
