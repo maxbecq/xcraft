@@ -37,6 +37,6 @@ describe('éditeur : icônes', () => {
   it('chaque type des palettes a une icône qui existe (pas de requête en 404)', () => {
     const types = ['minerai', 'puits', ...Object.entries(DEFS).filter(([, d]) => d.kind !== 'upgrade' && 'faction' in d).map(([t]) => t)];
     expect(types.filter((t) => !existsSync(`public/icons/${iconOf(t)}.png`))).toEqual([]);
-    expect([iconOf('dirigeable'), iconOf('casernevol'), iconOf('cadavre')]).toEqual(['bourdon', 'casernevolante', 'serf']);
+    expect([iconOf('dirigeable'), iconOf('casernevol'), iconOf('cadavre')]).toEqual(['dirigeable', 'casernevolante', 'serf']);
   });
 });

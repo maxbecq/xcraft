@@ -132,7 +132,7 @@ export function triggersOf(f: MapFile2): Triggers {
 export const REGION_COLORS = [0x6fb3ff, 0xd9534f, 0x5fbf6a, 0xe3a33b, 0xb05fd6, 0x3fc7c7, 0xd6d65f, 0xd67fa8];
 
 /** Types with no picture of their own in public/icons: they show the one of the type they look like (LOOKS). */
-const NO_ICON = new Set(['silo', 'casernevol', 'dirigeable', 'cadavre', 'orbemob', 'droneprotecteur', 'podsup', 'elembase', 'fantome', 'furieux', 'branchemob', 'protecteurmob', 'furieuxmob']);
+const NO_ICON = new Set(['silo', 'casernevol', 'cadavre', 'orbemob', 'droneprotecteur', 'podsup', 'elembase', 'fantome', 'furieux', 'branchemob', 'protecteurmob', 'furieuxmob']);
 /** The icon file's name for a type (no request for a file that is not there: QA, 2026-11-27, three 404 online). */
 export function iconOf(type: string): string {
   while (NO_ICON.has(type) && LOOKS[type]) type = LOOKS[type];
