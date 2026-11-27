@@ -569,7 +569,13 @@ export class EntityRenderer {
       }
     }
     o.userData.yaw0 = o.rotation.y;
-    v.weapon = { name, o, arm, saw, reach, mod, tip, sawR: sawW };
+    // The Laser lourd's focusing rings (tools/blender/zw_laserlourd.py), breech to muzzle, each lit on its own.
+    const rings: MeshStandardMaterial[] = [];
+    for (let k = 0; o.getObjectByName(`zring_${k}`); k++) {
+      const ring = o.getObjectByName(`zring_${k}`) as Mesh;
+      rings.push((ring.material = owned((ring.material as MeshStandardMaterial).clone())));
+    }
+    v.weapon = { name, o, arm, saw, reach, mod, tip, sawR: sawW, rings: rings.length ? rings : undefined };
   }
 
   private release(v: View): void {
@@ -1459,6 +1465,13 @@ export class EntityRenderer {
     const mining = e.type === 'drone' && !moving && e.order?.kind === 'gather' && e.order.phase === 'mine';
     const fighting = !!a && !moving && e.cooldown > 0 && (e.order?.kind === 'attack' || e.order?.kind === 'attackMove');
     const fired = fighting && a ? e.cooldown / ticks(a.cooldown) : 0;
+    if (v.weapon?.rings) {
+      // Laser lourd: over the last quarter before each shot the charge runs up its rings, breech to muzzle; they flare as
+      // it fires, cool down, and glow softly between fights.
+      const n = v.weapon.rings.length;
+      const charge = fighting ? Math.max(0, (0.25 - fired) / 0.25) * n : 0;
+      v.weapon.rings.forEach((m, k) => (m.emissiveIntensity = !fighting ? 1 : fired > 0.85 ? 1 + (2 * (fired - 0.85)) / 0.15 : charge > k ? 1.2 + 1.3 * Math.min(1, charge - k) : 0.35));
+    }
     const melee = !!a && a.range < 1;
     // A turret turns to its foe while it fights, and back to the front after.
     const turret: Object3D | null = (v.model.userData.turret ??= v.model.getObjectByName('zturret') ?? null);

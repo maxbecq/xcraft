@@ -46,7 +46,7 @@ export interface View {
   gait?: { x: number; z: number; phase: number; cycle: number; hip: number; crouch: number; speed: number; stride: number };
   /** Z socle: the weapon module mounted on its back (see weaponModule), and the module's name. */
   /** `sawR`: the Déchiqueteur's blade radius, world units. `pivot`: a building's ring carrying its Déchiqueteur, turned to `aim` (world x, z), its last foe. */
-  weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D; reach?: number; mod?: Object3D; tip?: Vector3; sawR?: number; pivot?: Object3D; aim?: [number, number] };
+  weapon?: { name: string; o: Object3D; arm?: Object3D; saw?: Object3D; reach?: number; mod?: Object3D; tip?: Vector3; sawR?: number; pivot?: Object3D; aim?: [number, number]; rings?: MeshStandardMaterial[] };
   /** A rigged character's hand tool and the hand holding it; `bit` (world), the tool's point while it drills, where its sparks fly. */
   held?: { tool: Object3D; right: Object3D; moved: boolean; bit?: Vector3 };
   /** A two-handed gunner's aim pose for its spine and arms (render/units.ts aimArms), laid over its walk. */
