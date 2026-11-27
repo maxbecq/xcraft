@@ -1285,6 +1285,8 @@ export class Effects {
         this.lobs.push({ ammo: 'plasma', from: muzzle.clone(), to: to.clone(), age: 0, flight: Math.max(0.3, dist * 0.09), arc: Math.max(0.4, dist * 0.25), chem: false, spill: 0 });
         return true;
       case 'pylonesanglant': { // a crimson beam from the sky on the target, a pillar of light
+        // First a pulse up the tower's own red ray (Fable's model), then the strike falls on the target.
+        this.streaks.spawn(0xff2a4a, muzzle, muzzle.clone().setY(muzzle.y + 7), 0, 0.3, 0, 0.12, 1);
         const sky = to.clone().setY(to.y + 9);
         this.streaks.spawn(0xff2a4a, sky, to, 0, 0.45, 0, 0.35, 1);
         this.streaks.spawn(0xffe0e8, sky, to, 0, 0.25, 0, 0.1, 1);
