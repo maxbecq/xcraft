@@ -395,7 +395,8 @@ export class EntityRenderer {
     const fx = new Set<Object3D>();
     v.fx?.group.traverse((o) => fx.add(o));
     body.traverse((o) => {
-      if ((o as Mesh).isMesh && !fx.has(o) && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
+      // A Z machine's parts measured as modelled (kept, unseen, under its skins: models.ts rigidSkin), not its skins.
+      if ((o as Mesh).isMesh && !o.userData.rigid && !fx.has(o) && !/^z(leg|shin|rotor|wheel)_/.test(o.name) && !/^z(leg|shin|rotor|wheel)_/.test(o.parent?.name ?? '')) parts.push(o);
     });
     v.root.updateMatrixWorld(true);
     // Measured in the body's own frame (glTF +Z forward), whatever way the unit faces.
@@ -434,7 +435,9 @@ export class EntityRenderer {
       const a = (k * Math.PI) / 4;
       const r = k ? (melee ? 0.1 : 0.25) * scale : 0;
       const from = body.localToWorld(new Vector3(spot.x + r * Math.cos(a), box.max.y + 1, spot.z + r * Math.sin(a)));
-      const hit = new Raycaster(from, down).intersectObjects(parts, false)[0];
+      const ray = new Raycaster(from, down);
+      ray.layers.enableAll(); // the unseen parts too
+      const hit = ray.intersectObjects(parts, false)[0];
       if (hit) top = Math.max(top, body.worldToLocal(hit.point.clone()).y);
     }
     const at = body.localToWorld(spot.setY(top > -Infinity ? top : box.max.y));
