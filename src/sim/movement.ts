@@ -227,7 +227,10 @@ export function follow(this: World, e: Entity): boolean {
   // second without getting nearer its waypoint, or reaching one, and it replans.
   // Only on a move: in a fight (a chase, an attack-move pressing on, a crowd round a building) getting no nearer for
   // a while is the fight itself, and replanning there kept armies from ever finishing a base.
-  const walk = e.order?.kind === 'move';
+  // An attack-move with nothing to fight yet is a walk too (point 115: three Légionnaires sent at a headquarters on
+  // ville-nuit stood for good at one waypoint they pushed each other off).
+  const o = e.order;
+  const walk = o?.kind === 'move' || (o?.kind === 'attackMove' && !o.target);
   const near = walk ? dist(e.x, e.y, e.path[0], e.path[1]) : 0;
   if (!walk || e.path.length !== e.wn || near < e.wd) {
     e.wn = e.path.length;
@@ -313,13 +316,19 @@ export function evict(this: World, e: Entity): void {
   const key = ([tx, ty]: [number, number]) => {
     const [px, py] = [tx * FP + FP / 2, ty * FP + FP / 2];
     const cross = (e.x - C) * (py - C) - (e.y - C) * (px - C);
-    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, (px - hx) ** 2 + (py - hy) ** 2, Math.sign(cross)];
+    // Last, of two as near the start (one either side of the line from the centre to it), the one on its left: the
+    // body on the centre leaves `cross` nothing to tell (Codex, 2026-11-27).
+    const side = (hx - C) * (py - C) - (hy - C) * (px - C);
+    return [(px - e.x) ** 2 + (py - e.y) ** 2, (px - C) ** 2 + (py - C) ** 2, (px - hx) ** 2 + (py - hy) ** 2, Math.sign(cross), side < 0 ? 0 : 1];
   };
   let best: [number, number] | null = null;
   let bk: number[] = [];
+  // The owner's start breaks ties inside the search too: at the map's middle a whole ring ties there, and the scan's
+  // order had already picked north before the start was asked (Codex, point 122).
+  const tie: [number, number] = [hx / FP - 0.5, hy / FP - 0.5];
   for (const [x, y] of standsOn(e.x, e.y)) {
     if (!g.inside(x, y)) continue;
-    const t = g.nearestOpen(x, y, g.level(x, y), from);
+    const t = g.nearestOpen(x, y, g.level(x, y), from, tie);
     const k = key(t);
     const i = k.findIndex((v, j) => v !== bk[j]);
     if (!best || (i >= 0 && k[i] < bk[i])) [best, bk] = [t, k];

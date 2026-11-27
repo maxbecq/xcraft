@@ -188,7 +188,7 @@ export class Analyzer {
   private lastNoted = new Map<string, number>();
   private bases: Set<number>[];
   private lost: { player: number; tick: number; type: string; fault?: Fault }[] = [];
-  private engaged: ({ x: number; y: number; start: number; seen: number; judged: boolean; wiped?: boolean } | undefined)[] = [];
+  private engaged: ({ x: number; y: number; start: number; seen: number; judged: boolean } | undefined)[] = [];
   private groups: { player: number; tick: number; ids: number[]; worth: number; x: number; y: number }[] = [];
   private keys: { id: number; fault: Fault; until: number }[] = [];
   private researched: (number | null)[];
@@ -392,42 +392,59 @@ export class Analyzer {
   private wipedOut(): void {
     const w = this.world;
     // By player and by place: two groups wiped at once far apart are two fights (Codex, 2026-11-26: the second went unseen).
-    const dead: { p: number; x: number; y: number; worth: number }[] = [];
+    // Each dead as [id, worth]: -1 for a death without its id (never one of a group judged).
+    const dead: { p: number; x: number; y: number; units: [number, number][] }[] = [];
+    // A fight judged lately (within `wipeTime`, while its losses are still weighed, see review) holds its own dead:
+    // left out before they are grouped, so neither their worth nor their place counts (Codex final 2, 2026-11-27: one
+    // of them anchored the group 8 tiles from two reinforcements killed, and a Créature by it counted as a survivor).
+    // 123b : suivi des identifiants expiré pendant un combat long (Codex final 5, 2026-11-27: two Créatures judged
+    // outnumbered at 6 s, killed together at 40 s on the same spot, reported a second time as wiped out at once).
+    const judged = (p: number, id: number) => this.groups.some((g) => g.player === p && w.tick - g.tick <= sec(T.wipeTime) && g.ids.includes(id));
     for (const d of w.deaths) {
       const def = DEFS[d.type] as UnitDef | undefined;
       if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
+      if (d.id !== undefined && judged(d.owner, d.id)) continue;
       const at = dead.find((c) => c.p === d.owner && Math.hypot(d.x - c.x, d.y - c.y) <= T.fightRadius * FP);
-      if (at) at.worth += def.cost.minerals + def.cost.energy;
-      else dead.push({ p: d.owner, x: d.x, y: d.y, worth: def.cost.minerals + def.cost.energy });
+      const unit: [number, number] = [d.id ?? -1, def.cost.minerals + def.cost.energy];
+      if (at) at.units.push(unit);
+      else dead.push({ p: d.owner, x: d.x, y: d.y, units: [unit] });
     }
     for (const now of dead) {
       const p = now.p;
       // The dead of the last `fightJudge` seconds at that place count together (a group killed over a few ticks).
       const windows = (this.fallen[p] ??= []).filter((f) => w.tick - f.tick <= sec(T.fightJudge));
       const prev = windows.find((f) => Math.hypot(now.x - f.x, now.y - f.y) <= T.fightRadius * FP);
-      const d = prev ? Object.assign(prev, { worth: prev.worth + now.worth }) : { x: now.x, y: now.y, worth: now.worth, tick: w.tick };
+      const d = prev ? Object.assign(prev, { units: [...prev.units, ...now.units] }) : { x: now.x, y: now.y, tick: w.tick, units: now.units };
       if (!prev) windows.push(d);
       this.fallen[p] = windows;
-      const g = this.engaged[p];
       const [x, y] = [tiles(d.x), tiles(d.y)];
-      // A group wiped out is one place as the dead are grouped (fightRadius), not a fight's wider reach: two wiped
-      // 15 tiles apart in one tick are two (Codex, 2026-11-26).
-      if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= (g.wiped ? 1 : 2) * T.fightRadius) continue;
+      // Judged already, as a fight or as a group wiped out. A fight judged holds its own dead (left out above), not a
+      // place: by its reach, a group wiped 15 tiles from it went unseen (Codex, 2026-11-27). A group wiped out is one place as the dead are grouped (fightRadius): two
+      // wiped 15 tiles apart in one tick are two (Codex, 2026-11-26). Kept apart from the fight going on: written over
+      // it, a third group fighting near the second kept that judged place alive and was never judged itself.
+      // Its dead were left out above, so a fight judged holds none of them here (Codex final, 2026-11-27: one of them
+      // among the window's fresh dead hid the rest).
+      const worth = d.units.reduce((n, [, v]) => n + v, 0);
+      const wipes = (this.wipes[p] ?? []).filter((v) => w.tick - v.tick <= sec(T.fightEnd));
+      this.wipes[p] = wipes;
+      if (wipes.some((v) => Math.hypot(v.x - x, v.y - y) <= T.fightRadius)) continue;
       const foes = w.players.filter((q) => q.id !== p && w.hostile(p, q.id)).map((q) => q.id);
       const f = this.forces(p, foes, d.x, d.y, T.fightRadius);
       // Survivors there: the fight goes on, judged as usual.
       if (f.ids.length) continue;
       if ([...w.entities.values()].some((b) => b.owner === p && b.def.kind === 'building' && Math.abs(b.x - d.x) <= T.homeRadius * FP && Math.abs(b.y - d.y) <= T.homeRadius * FP)) continue;
-      if (f.enemy < T.fightFloor || d.worth >= T.outnumbered * f.enemy) continue;
-      this.engaged[p] = { x, y, start: w.tick, seen: w.tick, judged: true, wiped: true };
+      if (f.enemy < T.fightFloor || worth >= T.outnumbered * f.enemy) continue;
+      wipes.push({ x, y, tick: w.tick });
       this.fallen[p] = windows.filter((f) => f !== d);
       const [tx, ty] = [Math.round(x), Math.round(y)];
-      this.note({ player: p, kind: 'combat-en-inferiorite', tick: w.tick, x: tx, y: ty, detail: `${Math.round(d.worth)} contre ${Math.round(f.enemy)} (${Math.round((100 * d.worth) / f.enemy)} %), tous tués d’emblée` });
+      this.note({ player: p, kind: 'combat-en-inferiorite', tick: w.tick, x: tx, y: ty, detail: `${Math.round(worth)} contre ${Math.round(f.enemy)} (${Math.round((100 * worth) / f.enemy)} %), tous tués d’emblée` });
       this.note({ player: p, kind: 'pas-de-repli', tick: w.tick, endTick: w.tick, x: tx, y: ty, detail: 'groupe engagé en infériorité, 100 % perdus d’emblée' });
     }
   }
 
-  private fallen: { x: number; y: number; worth: number; tick: number }[][] = [];
+  private fallen: { x: number; y: number; tick: number; units: [number, number][] }[][] = [];
+  /** Per player, the groups reported wiped out lately (wipedOut), apart from the fight followed (engaged). */
+  private wipes: { x: number; y: number; tick: number }[][] = [];
 
   /** Each tick: combat units just killed with hardly any of theirs round them, in front of a real enemy force. */
   private lonely(): void {

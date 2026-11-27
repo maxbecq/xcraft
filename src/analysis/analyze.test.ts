@@ -103,6 +103,98 @@ describe('analyse de partie', () => {
     expect(fights).toHaveLength(2);
   });
 
+  // Codex, 2026-11-26 (final review 3, point 8): the second group wiped took the place of the fight remembered, and a
+  // third group fighting 15 tiles from it, 30 from the first, kept that judged engagement alive: never judged itself.
+  it('juge un troisième combat voisin de deux groupes tués entiers', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2) * FP, (w.map.height / 2) * FP];
+    const groups = [-15, 0, 12].map((ox) => {
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+      return [0, 1].map((k) => w.spawn('creature', 0, cx + ox * FP - 2 * FP, cy + k * FP));
+    });
+    // The third holds out (its fight is judged 5 s in): hit points enough, its worth unchanged.
+    for (const c of groups[2]) Object.assign(c, { hp: 1e7, maxHp: 1e7 });
+    const a = new Analyzer(w);
+    run(w, 20, a, (w) => {
+      if (w.tick === 1) for (const c of [...groups[0], ...groups[1]]) w.hurt(c, 100000);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights).toHaveLength(3);
+    expect(fights.some((f) => (f.x ?? 0) > cx / FP + 6)).toBe(true);
+  });
+
+  // Codex, 2026-11-27: a fight judged near one place hid a group wiped out 15 tiles from it (its reach, 20 tiles,
+  // stood for its own dead).
+  it('relève un groupe tué entier à 15 cases d’un combat déjà jugé', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    const foes = (ox: number) => {
+      for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + ox * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    };
+    // The fight judged: two Créatures holding out against twelve.
+    foes(-6);
+    for (const k of [0, 1]) Object.assign(w.spawn('creature', 0, cx, cy + k * FP), { hp: 1e7, maxHp: 1e7 });
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once it is judged (5 s in), two groups wiped in one tick, 30 and 15 tiles off.
+      if (w.tick === 7 * TICK_RATE)
+        for (const ox of [30, 15]) {
+          foes(ox);
+          doomed.push(w.spawn('creature', 0, cx + ox * FP - 2 * FP, cy + FP));
+        }
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 100000);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(2);
+    expect(fights).toHaveLength(3);
+  });
+
+  // Codex final, 2026-11-27: one dead of a fight judged, killed with two fresh reinforcements, hid them all.
+  it('relève deux renforts tués entiers avec le dernier d’un combat déjà jugé', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx - 6 * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    const held = [0, 1].map((k) => Object.assign(w.spawn('creature', 0, cx, cy + k * FP), { hp: 1e7, maxHp: 1e7 }));
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once the fight is judged (5 s in): one Créature gone off, two reinforcements beside the other, all three killed.
+      if (w.tick === 7 * TICK_RATE) {
+        w.entities.delete(held[0].id);
+        doomed.push(held[1], ...[2, 3].map((k) => w.spawn('creature', 0, cx, cy + k * FP)));
+      }
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 1e8);
+      return [];
+    });
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights).toHaveLength(2);
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(1);
+  });
+
+  // Codex final 2, 2026-11-27: the dead of the fight judged, left out of the worth, still anchored the group by its
+  // place, 8 tiles from the reinforcements killed: a Créature alive 8 tiles the other way counted as a survivor.
+  it('relève deux renforts tués entiers, un mort d’un combat déjà jugé tombé à 8 cases d’eux', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + 2 * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    // Rooted, so the dead stays 8 tiles from both.
+    const held = [0, -8].map((ox) => Object.assign(w.spawn('creature', 0, cx + ox * FP, cy), { hp: 1e7, maxHp: 1e7, speed: 0 }));
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once the fight is judged (5 s in): its Créature at the middle killed with two reinforcements 8 tiles east.
+      if (w.tick === 7 * TICK_RATE) doomed.push(held[0], ...[0, 1].map((k) => w.spawn('creature', 0, cx + 8 * FP, cy + k * FP)));
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 1e8);
+      return [];
+    });
+    expect(w.entities.has(held[1].id)).toBe(true);
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(1);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;
@@ -116,15 +208,15 @@ describe('analyse de partie', () => {
   });
 
   it('lit un ancien replay sans fin enregistrée jusqu’à la victoire, jouée après le dernier ordre', () => {
-    // The Z AI against an idle side: its last order at 10 760, the win at 10 801.
+    // Orders written out (Codex, 2026-11-27: an AI's last order and its win a tick apart left nothing to play past it):
+    // a Serf sent off, then the Humains give up; the win comes at the next judgement, some ticks on.
     const live = createMatch(['z', 'humains']);
-    const ai = new AI(live, 0);
-    const record: [number, Command[]][] = [];
-    while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
-      const cmds = ai.think();
-      if (cmds.length) record.push([live.tick, cmds]);
-      live.step(cmds);
-    }
+    const serf = [...live.entities.values()].find((e) => e.owner === 1 && e.type === 'serf')!;
+    const record: [number, Command[]][] = [
+      [3, [{ player: 1, kind: 'move', ids: [serf.id], x: serf.x + 4 * FP, y: serf.y }]],
+      [25, [{ player: 1, kind: 'resign', ids: [] }]],
+    ];
+    while (live.tick < 60 * TICK_RATE && live.winner === null) live.step(record.find(([t]) => t === live.tick)?.[1] ?? []);
     expect(live.winner).toBe(0);
     expect(record[record.length - 1][0] + 1).toBeLessThan(live.tick);
     const replay: Replay = JSON.parse(JSON.stringify({ v: 1, factions: ['z', 'humains'], biome: '', handicap: [100, 100], ticks: record }));
@@ -137,6 +229,23 @@ describe('analyse de partie', () => {
     expect(cut.winner).toBeNull();
     expect(cut.truncated).toBe(true);
     expect(reportMarkdown(cut)).toContain('analyse tronquée');
+  }, 120_000);
+
+  it('lit un replay de l’IA jouant jusqu’à la victoire', () => {
+    // The Z AI against an idle side, ordering to the end: the replay finds the same win on the same tick.
+    const live = createMatch(['z', 'humains']);
+    const ai = new AI(live, 0);
+    const record: [number, Command[]][] = [];
+    while (live.tick < 20 * 60 * TICK_RATE && live.winner === null) {
+      const cmds = ai.think();
+      if (cmds.length) record.push([live.tick, cmds]);
+      live.step(cmds);
+    }
+    expect(live.winner).toBe(0);
+    const again = analyzeReplay(JSON.parse(JSON.stringify({ v: 1, factions: ['z', 'humains'], biome: '', handicap: [100, 100], ticks: record })));
+    expect(again.winner).toBe(0);
+    expect(again.ticks).toBe(live.tick);
+    expect(again.truncated).toBeUndefined();
   }, 120_000);
 
   it('rejoue un replay et trouve la même chose que pendant la partie', () => {
