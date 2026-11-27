@@ -174,6 +174,27 @@ describe('analyse de partie', () => {
     expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(1);
   });
 
+  // Codex final 2, 2026-11-27: the dead of the fight judged, left out of the worth, still anchored the group by its
+  // place, 8 tiles from the reinforcements killed: a Créature alive 8 tiles the other way counted as a survivor.
+  it('relève deux renforts tués entiers, un mort d’un combat déjà jugé tombé à 8 cases d’eux', () => {
+    const w = createMatch(['isdaris', 'humains']);
+    const [cx, cy] = [(w.map.width / 2 - 20) * FP, (w.map.height / 2) * FP];
+    for (let i = 0; i < 12; i++) w.spawn('auxiliaire', 1, cx + 2 * FP + (i % 4) * FP, cy + Math.floor(i / 4) * FP);
+    // Rooted, so the dead stays 8 tiles from both.
+    const held = [0, -8].map((ox) => Object.assign(w.spawn('creature', 0, cx + ox * FP, cy), { hp: 1e7, maxHp: 1e7, speed: 0 }));
+    const a = new Analyzer(w);
+    const doomed: ReturnType<World['spawn']>[] = [];
+    run(w, 20, a, (w) => {
+      // Once the fight is judged (5 s in): its Créature at the middle killed with two reinforcements 8 tiles east.
+      if (w.tick === 7 * TICK_RATE) doomed.push(held[0], ...[0, 1].map((k) => w.spawn('creature', 0, cx + 8 * FP, cy + k * FP)));
+      if (w.tick === 7 * TICK_RATE + 1) for (const c of doomed) w.hurt(c, 1e8);
+      return [];
+    });
+    expect(w.entities.has(held[1].id)).toBe(true);
+    const fights = a.finish().faults.filter((f) => f.player === 0 && f.kind === 'combat-en-inferiorite');
+    expect(fights.filter((f) => f.detail.includes('tous tués'))).toHaveLength(1);
+  });
+
   it('ferme les états d’un joueur au moment où il abandonne, la partie continuant avec son allié', () => {
     const w = createMatch(['humains', 'humains', 'humains', 'humains'], [0, 0, 1, 1]);
     w.players[0].minerals = 2000;

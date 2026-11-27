@@ -394,9 +394,14 @@ export class Analyzer {
     // By player and by place: two groups wiped at once far apart are two fights (Codex, 2026-11-26: the second went unseen).
     // Each dead as [id, worth]: -1 for a death without its id (never one of a group judged).
     const dead: { p: number; x: number; y: number; units: [number, number][] }[] = [];
+    // A fight judged lately (within `wipeTime`, while its losses are still weighed, see review) holds its own dead:
+    // left out before they are grouped, so neither their worth nor their place counts (Codex final 2, 2026-11-27: one
+    // of them anchored the group 8 tiles from two reinforcements killed, and a Créature by it counted as a survivor).
+    const judged = (p: number, id: number) => this.groups.some((g) => g.player === p && w.tick - g.tick <= sec(T.wipeTime) && g.ids.includes(id));
     for (const d of w.deaths) {
       const def = DEFS[d.type] as UnitDef | undefined;
       if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
+      if (d.id !== undefined && judged(d.owner, d.id)) continue;
       const at = dead.find((c) => c.p === d.owner && Math.hypot(d.x - c.x, d.y - c.y) <= T.fightRadius * FP);
       const unit: [number, number] = [d.id ?? -1, def.cost.minerals + def.cost.energy];
       if (at) at.units.push(unit);
@@ -411,17 +416,13 @@ export class Analyzer {
       if (!prev) windows.push(d);
       this.fallen[p] = windows;
       const [x, y] = [tiles(d.x), tiles(d.y)];
-      // Judged already, as a fight or as a group wiped out. A fight judged lately (within `wipeTime`, while its losses
-      // are still weighed, see review) holds its own dead, not a place: by its reach, a group wiped 15 tiles from it
-      // went unseen (Codex, 2026-11-27). A group wiped out is one place as the dead are grouped (fightRadius): two
+      // Judged already, as a fight or as a group wiped out. A fight judged holds its own dead (left out above), not a
+      // place: by its reach, a group wiped 15 tiles from it went unseen (Codex, 2026-11-27). A group wiped out is one place as the dead are grouped (fightRadius): two
       // wiped 15 tiles apart in one tick are two (Codex, 2026-11-26). Kept apart from the fight going on: written over
       // it, a third group fighting near the second kept that judged place alive and was never judged itself.
-      // Only those dead: one of them among the window's fresh dead hid the rest (Codex final, 2026-11-27: two
-      // reinforcements killed beside the last of a fight judged went unseen).
-      const judged = (id: number) => this.groups.some((g) => g.player === p && w.tick - g.tick <= sec(T.wipeTime) && g.ids.includes(id));
-      const fresh = d.units.filter(([id]) => id < 0 || !judged(id));
-      if (!fresh.length) continue;
-      const worth = fresh.reduce((n, [, v]) => n + v, 0);
+      // Its dead were left out above, so a fight judged holds none of them here (Codex final, 2026-11-27: one of them
+      // among the window's fresh dead hid the rest).
+      const worth = d.units.reduce((n, [, v]) => n + v, 0);
       const wipes = (this.wipes[p] ?? []).filter((v) => w.tick - v.tick <= sec(T.fightEnd));
       this.wipes[p] = wipes;
       if (wipes.some((v) => Math.hypot(v.x - x, v.y - y) <= T.fightRadius)) continue;
