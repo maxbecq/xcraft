@@ -392,29 +392,31 @@ export class Analyzer {
   private wipedOut(): void {
     const w = this.world;
     // By player and by place: two groups wiped at once far apart are two fights (Codex, 2026-11-26: the second went unseen).
-    const dead: { p: number; x: number; y: number; worth: number }[] = [];
+    const dead: { p: number; x: number; y: number; worth: number; ids: number[] }[] = [];
     for (const d of w.deaths) {
       const def = DEFS[d.type] as UnitDef | undefined;
       if (d.owner < 0 || def?.kind !== 'unit' || def.worker || !(def.attack || def.heal || def.weapons)) continue;
       const at = dead.find((c) => c.p === d.owner && Math.hypot(d.x - c.x, d.y - c.y) <= T.fightRadius * FP);
-      if (at) at.worth += def.cost.minerals + def.cost.energy;
-      else dead.push({ p: d.owner, x: d.x, y: d.y, worth: def.cost.minerals + def.cost.energy });
+      if (at) {
+        at.worth += def.cost.minerals + def.cost.energy;
+        if (d.id !== undefined) at.ids.push(d.id);
+      } else dead.push({ p: d.owner, x: d.x, y: d.y, worth: def.cost.minerals + def.cost.energy, ids: d.id === undefined ? [] : [d.id] });
     }
     for (const now of dead) {
       const p = now.p;
       // The dead of the last `fightJudge` seconds at that place count together (a group killed over a few ticks).
       const windows = (this.fallen[p] ??= []).filter((f) => w.tick - f.tick <= sec(T.fightJudge));
       const prev = windows.find((f) => Math.hypot(now.x - f.x, now.y - f.y) <= T.fightRadius * FP);
-      const d = prev ? Object.assign(prev, { worth: prev.worth + now.worth }) : { x: now.x, y: now.y, worth: now.worth, tick: w.tick };
+      const d = prev ? Object.assign(prev, { worth: prev.worth + now.worth, ids: [...prev.ids, ...now.ids] }) : { x: now.x, y: now.y, worth: now.worth, tick: w.tick, ids: now.ids };
       if (!prev) windows.push(d);
       this.fallen[p] = windows;
-      const g = this.engaged[p];
       const [x, y] = [tiles(d.x), tiles(d.y)];
-      // Judged already, as a fight going on there or as a group wiped out. A group wiped out is one place as the dead
-      // are grouped (fightRadius), not a fight's wider reach: two wiped 15 tiles apart in one tick are two (Codex,
-      // 2026-11-26). Kept apart from the fight going on: written over it, a third group fighting near the second kept
-      // that judged place alive and was never judged itself (Codex, 2026-11-26, final review 3).
-      if (g?.judged && w.tick - g.seen <= sec(T.fightEnd) && Math.hypot(g.x - x, g.y - y) <= 2 * T.fightRadius) continue;
+      // Judged already, as a fight or as a group wiped out. A fight judged lately (within `wipeTime`, while its losses
+      // are still weighed, see review) holds its own dead, not a place: by its reach, a group wiped 15 tiles from it
+      // went unseen (Codex, 2026-11-27). A group wiped out is one place as the dead are grouped (fightRadius): two
+      // wiped 15 tiles apart in one tick are two (Codex, 2026-11-26). Kept apart from the fight going on: written over
+      // it, a third group fighting near the second kept that judged place alive and was never judged itself.
+      if (d.ids.length && this.groups.some((g) => g.player === p && w.tick - g.tick <= sec(T.wipeTime) && d.ids.some((id) => g.ids.includes(id)))) continue;
       const wipes = (this.wipes[p] ?? []).filter((v) => w.tick - v.tick <= sec(T.fightEnd));
       this.wipes[p] = wipes;
       if (wipes.some((v) => Math.hypot(v.x - x, v.y - y) <= T.fightRadius)) continue;
@@ -432,7 +434,7 @@ export class Analyzer {
     }
   }
 
-  private fallen: { x: number; y: number; worth: number; tick: number }[][] = [];
+  private fallen: { x: number; y: number; worth: number; tick: number; ids: number[] }[][] = [];
   /** Per player, the groups reported wiped out lately (wipedOut), apart from the fight followed (engaged). */
   private wipes: { x: number; y: number; tick: number }[][] = [];
 

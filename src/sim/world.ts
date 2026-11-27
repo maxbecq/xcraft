@@ -322,6 +322,8 @@ export interface Cast {
 }
 
 export interface Death {
+  /** The entity's id (the analyser tells the dead of a fight it judged). */
+  id?: number;
   x: number;
   y: number;
   type: string;
@@ -682,7 +684,7 @@ export class World {
       if (e.hp > 0 || e.def.kind === 'resource') continue;
       // A unit taken for a while (Soumission, Canon IEM) dies its own player's.
       const owner = e.charm ? e.charmOwner : e.seizedLeft ? e.seizedFrom : e.owner;
-      this.deaths.push({ x: e.x, y: e.y, type: e.type, owner, air: flies(e), ...(e.illusion ? { illusion: true } : {}) });
+      this.deaths.push({ id: e.id, x: e.x, y: e.y, type: e.type, owner, air: flies(e), ...(e.illusion ? { illusion: true } : {}) });
       // Living units leave a body an Alchimiste can raise for a while.
       if (e.def.kind === 'unit' && !e.def.mechanical && !flies(e) && e.type !== 'cadavre') this.corpses.push({ x: e.x, y: e.y, tick: this.tick, owner, type: e.type });
       // Pillage: the player who brings an enemy building down takes a share of what it cost.
