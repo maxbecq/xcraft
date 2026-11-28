@@ -227,8 +227,8 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Dirigeable, a zeppelin built in Blender (tools/meshy/dirigeable.py): it wore the Bourdon's model, larger, and was taken for it
   'dirigeable',
   // Human civic buildings, Rodin Low Poly from their OpenAI boards: the Grenier à silo (it wore the Grenier's model,
-  // larger), the Marché as a small Baltard pavilion, the Grand Conseil as the Conseil's arcaded hall with an openwork
-  // belfry rising from its roof (the Conseil itself is in the first row)
+  // larger), the Marché as a small Baltard pavilion, the Grand Conseil as the Conseil's domed hall enriched: gold-ribbed
+  // dome on an arcaded drum, crocketed gables (tools/meshy/conseildome.py; the Conseil itself is in the first row)
   'silo', 'marche', 'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
   'trone', 'emetteur', 'deflecteur', 'reservepsy', 'pylonesanglant', 'orbecommandement',
@@ -321,31 +321,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
 }
 
 /**
- * The Grand Conseil's belfry, from its chosen board (light science-fiction touch, the discreet dose): its few cyan
- * windows lit from inside, and the cyan LED points up its spire blinking each at its own pace. Heights are fractions
- * of the model's (the windows from 0.43 up, the LEDs from 0.73), above the cyan energy lines round its base.
- */
-function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
-  const compile = m.onBeforeCompile;
-  m.onBeforeCompile = (shader, r) => {
-    compile.call(m, shader, r);
-    // veinTime is already declared and bound by teamSkin's living Human skin.
-    shader.vertexShader = `varying vec3 vBelfry;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
-      vBelfry = vec3(position.xz, (position.y - ${low.toFixed(4)}) / ${(high - low).toFixed(4)});`);
-    shader.fragmentShader = `varying vec3 vBelfry;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      float belfryCyan = smoothstep(0.05, 0.2, paint.g - paint.r) * smoothstep(0.05, 0.2, paint.b - paint.r) * smoothstep(0.4, 0.55, paint.g);
-      float belfryWindow = belfryCyan * step(0.43, vBelfry.z) * (1.0 - step(0.73, vBelfry.z));
-      float belfryCell = fract(sin(dot(floor(vec3(vBelfry.xy * 24.0, vBelfry.z * 60.0)), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-      float belfryBlink = step(0.45, fract(veinTime * (0.5 + belfryCell) + belfryCell * 7.0));
-      float belfryLed = belfryCyan * step(0.73, vBelfry.z) * belfryBlink;
-      totalEmissiveRadiance += vec3(0.25, 0.95, 1.0) * (belfryWindow * 0.9 + belfryLed * 2.2);`);
-  };
-  const key = m.customProgramCacheKey.bind(m);
-  m.customProgramCacheKey = () => `belfry-${key()}`;
-}
-
-/**
- * The Conseil's glass dome (an annotation on its board): its cyan glass and light column, above `low` (a fraction of
+ * The Conseil's and Grand Conseil's glass domes (an annotation on the Conseil's board): its cyan glass and light column, above `low` (a fraction of
  * the model's height, over the cyan lines on its piers), brighten and dim slowly, a breath of about seven seconds.
  */
 function domeGlow(m: MeshStandardMaterial, min: number, max: number, low: number): void {
@@ -724,13 +700,9 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             // From the model's own textured material, not whichever part comes first (a plain added part, the
             // Drone's bin floor, made it the whole model's skin).
             if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, FIXED_TEAM[type] ?? c, DEFS[type]?.kind === 'building' || NO_TEAM_RIM.has(type) ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit' && !NO_TEAM_RIM.has(type), DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
-            if (type === 'grandconseil' && o instanceof Mesh && o.material.name === 'meshy') {
+            if ((type === 'conseil' || type === 'grandconseil') && o instanceof Mesh && o.material.name === 'meshy') {
               o.geometry.computeBoundingBox();
-              meshySkins.get(type)!.forEach((m) => belfryGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y));
-            }
-            if (type === 'conseil' && o instanceof Mesh && o.material.name === 'meshy') {
-              o.geometry.computeBoundingBox();
-              meshySkins.get(type)!.forEach((m) => domeGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y, 0.76));
+              meshySkins.get(type)!.forEach((m) => domeGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y, type === 'conseil' ? 0.76 : 0.6));
             }
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.

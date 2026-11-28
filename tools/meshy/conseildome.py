@@ -7,15 +7,18 @@
    stone greyed toward the board's and darkened, its highlights compressed (bloom and rim light blew the stepped
    gables' edges to white);
 4. team-colour banners flat on the four corner piers' outward faces, swallow-tailed.
-Usage: Blender -b --factory-startup -P tools/meshy/conseildome.py -- in.glb board.png out.glb 1.15 0.6
-(k the walls' stretch, then the glass's darkening), then SIZE=1024 tools/meshy/compress.sh."""
+Usage: Blender -b --factory-startup -P tools/meshy/conseildome.py -- in.glb board.png out.glb 1.15 0.6 [0.41 [light]]
+(k the walls' stretch, the glass's darkening, where the board's dome ends; the Grand Conseil: 0.46 light), then SIZE=1024 tools/meshy/compress.sh."""
 import bpy, bmesh, sys, math, numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 a = sys.argv[sys.argv.index("--") + 1:]
 src, sketch, dst = a[:3]; K = float(a[3]) if len(a) > 3 else 1.3
-ZC = 1.55
-GLASS = float(a[4]) if len(a) > 4 else 0.6  # eave: walls below it stretched by K
+ZC = 1.55  # eave: walls below it stretched by K
+GLASS = float(a[4]) if len(a) > 4 else 0.6
+DOME_BOTTOM = float(a[5]) if len(a) > 5 else 0.41  # where the board's dome ends, a fraction of its height
+# 'light': only the board's light column is taken (the Grand Conseil, whose own glass and gold ribs fit its mesh better).
+LIGHT_ONLY = len(a) > 6 and a[6] == "light"
 bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=src)
 o = [o for o in bpy.context.scene.objects if o.type == "MESH"][0]; me = o.data
 im = bpy.data.images[0]; S = im.size[0]
@@ -41,7 +44,7 @@ me.update()
 # 2. dome from the sketch, projected along the view (camera at +x -y, 35° up, as in game: door on the left face)
 sk = bpy.data.images.load(sketch); W, H = sk.size
 skp = np.array(sk.pixels[:], dtype=np.float32).reshape(H, W, 4)[::-1, :, :3]  # row 0 = top
-g = skp; m = (g[:, :, 1] > 0.5) & (g[:, :, 2] > 0.5) & (g[:, :, 0] < 0.55 * g[:, :, 1]); m[int(H * 0.41):] = False; m[:, :int(W * 0.29)] = False; m[:, int(W * 0.71):] = False  # the dome only, not the piers' bands
+g = skp; m = (g[:, :, 1] > 0.5) & (g[:, :, 2] > 0.5) & (g[:, :, 0] < 0.55 * g[:, :, 1]); m[int(H * DOME_BOTTOM):] = False; m[:, :int(W * 0.29)] = False; m[:, int(W * 0.71):] = False  # the dome only, not the piers' bands
 ys, xs = np.nonzero(m); X0, X1, Y0 = np.percentile(xs, 0.5), np.percentile(xs, 99.5), np.percentile(ys, 0.5)
 az = math.radians(315); d = Vector((math.cos(az), math.sin(az), 0.7)).normalized()
 right = (-d).cross(Vector((0, 0, 1))).normalized(); up = right.cross(-d)
@@ -68,6 +71,7 @@ for t in me.loop_triangles:
     lum = px @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
     # Only the sketch's glass and frame: where the fit lands on its stone ring or roof, the model's own glass stays.
     glass = ((px[:, 1] > 0.4) & (px[:, 2] > 0.4) & (px[:, 1] > 1.2 * px[:, 0])) | (lum < 0.3)
+    if LIGHT_ONLY: glass = (lum > 0.72) & (px[:, 1] > 1.2 * px[:, 0]) & (px[:, 2] > 1.2 * px[:, 0])  # cyan light, not the gold ribs' highlights
     old = tex[q[:, 1], q[:, 0], :3]
     tex[q[:, 1], q[:, 0], :3] = np.where(glass[:, None], px * np.where(lum > 0.72, 1.0, GLASS)[:, None], old * GLASS); n += len(q)
 print("dome faces", len(dome), "texels", n, "sketch box", X0, X1, Y0)
