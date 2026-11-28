@@ -76,7 +76,7 @@ function dialMaterial(core: MeshBasicMaterial): MeshBasicMaterial {
  * Selection ring radius (tiles) for squat buildings that fill their footprint: from the camera's low pitch the body
  * hides the back of a ring drawn hugging it, so the ring looks pushed toward the viewer; a wider one shows all round.
  */
-// The Grand Conseil (0.9.151): its tall belfry, 6 tiles up, hid the back of the usual ring (2.2): one round its
+// The Grand Conseil (0.9.151): its tall belfry (since a dome), 6 tiles up, hid the back of the usual ring (2.2): one round its
 // footprint's corners instead (the user's remark 105, 2026-11-24). The Conseil des échevins below it is the same
 // model, 4.1 by 3.8 across (corners 2.8 out), over its whole 4-tile footprint: the same ring (remark 120, 2026-11-26).
 // The Fable Obélisque's terrace (4.7 across, corners 3.3 out) hid the usual one (2.2) all but entirely (QA B2, 2026-11-27).
