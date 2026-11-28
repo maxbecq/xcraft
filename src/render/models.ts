@@ -345,6 +345,27 @@ function belfryGlow(m: MeshStandardMaterial, low: number, high: number): void {
 }
 
 /**
+ * The Conseil's glass dome (an annotation on its board): its cyan glass and light column, above `low` (a fraction of
+ * the model's height, over the cyan lines on its piers), brighten and dim slowly, a breath of about seven seconds.
+ */
+function domeGlow(m: MeshStandardMaterial, min: number, max: number, low: number): void {
+  if (m.userData.dome) return; // the model's mesh comes in parts, each wearing the skin
+  m.userData.dome = true;
+  const compile = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, r) => {
+    compile.call(m, shader, r);
+    // veinTime is already declared and bound by teamSkin's living Human skin.
+    shader.vertexShader = `varying float vDome;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vDome = (position.y - ${min.toFixed(4)}) / ${(max - min).toFixed(4)};`);
+    shader.fragmentShader = `varying float vDome;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float domeCyan = smoothstep(0.05, 0.2, paint.g - paint.r) * smoothstep(0.05, 0.2, paint.b - paint.r) * smoothstep(0.35, 0.5, paint.g) * step(${low.toFixed(2)}, vDome);
+      totalEmissiveRadiance += vec3(0.25, 0.95, 1.0) * domeCyan * paint.g * (0.05 + 0.75 * (0.5 + 0.5 * sin(veinTime * 0.9)));`);
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => `dome-${key()}`;
+}
+
+/**
  * The light of Fable's Blender Isdaris buildings, by material: cyan lines (`*_lueur`) breathing as the veins do, held to
  * a strength the bloom haloes without whitening; halos (`*_halo`, a disc or square under a floating part) a faint cyan
  * glow fading from the middle; the Portail's veil of lightning and its spires' glass (`voile`, `verre`) rippling, and a
@@ -706,6 +727,10 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             if (type === 'grandconseil' && o instanceof Mesh && o.material.name === 'meshy') {
               o.geometry.computeBoundingBox();
               meshySkins.get(type)!.forEach((m) => belfryGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y));
+            }
+            if (type === 'conseil' && o instanceof Mesh && o.material.name === 'meshy') {
+              o.geometry.computeBoundingBox();
+              meshySkins.get(type)!.forEach((m) => domeGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y, 0.76));
             }
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
