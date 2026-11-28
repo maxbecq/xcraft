@@ -54,6 +54,9 @@
 .menu.compact .maps .map-view .map-desc { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .menu.compact .maps .map-list { max-height: min(42vh, 360px); }
 .menu.compact .maps .map-card { padding-block: 6px; }
+/* Phones: the list is names only, the panel above already shows the picture. */
+.menu.compact .maps .map-card { grid-template-columns: 1fr auto; padding-left: 8px; }
+.menu.compact .maps .map-card img { display: none; }
 /* Phones held sideways: little height, so the list and the panel side by side again. */
 @media (max-height: 600px) and (orientation: landscape) {
   .menu.compact .maps { grid-template-columns: minmax(200px, 1fr) minmax(0, 1.2fr); width: min(900px, 96vw); }
