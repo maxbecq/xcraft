@@ -227,9 +227,11 @@ const STATIC_MESHY = ['moissonneur', 'conseil', 'grenier', 'caserne', 'mine', 'o
   // the Dirigeable, a zeppelin built in Blender (tools/meshy/dirigeable.py): it wore the Bourdon's model, larger, and was taken for it
   'dirigeable',
   // Human civic buildings, Rodin Low Poly from their OpenAI boards: the Grenier à silo (it wore the Grenier's model,
-  // larger), the Marché as a small Baltard pavilion, the Grand Conseil as the Conseil's domed hall enriched: gold-ribbed
-  // dome on an arcaded drum, crocketed gables (tools/meshy/conseildome.py; the Conseil itself is in the first row)
-  'silo', 'marche', 'grandconseil',
+  // larger), the Marché as a small Baltard pavilion (the Conseil itself is in the first row)
+  'silo', 'marche',
+  // the Grand Conseil, built by Fable in Blender on the Conseil (tools/meshy/grandconseil.mjs): gold-ribbed glass dome
+  // round a light column, flamboyant windows, corner spires; its dome breathes (domeBreath)
+  'grandconseil',
   // Isdaris buildings modelled in Blender by Fable from their chosen boards (tools/meshy/fable.mjs): see fableLights
   'trone', 'emetteur', 'deflecteur', 'reservepsy', 'pylonesanglant', 'orbecommandement',
   // and two Isdaris units: the Discobole's monowheel rolls (units.ts wheels), the Drone's plates orbit (life.ts)
@@ -321,7 +323,7 @@ function teamSkin(source: MeshStandardMaterial, color: number, rim = 0.45, vivid
 }
 
 /**
- * The Conseil's and Grand Conseil's glass domes (an annotation on the Conseil's board): its cyan glass and light column, above `low` (a fraction of
+ * The Conseil's glass dome (an annotation on its board): its cyan glass and light column, above `low` (a fraction of
  * the model's height, over the cyan lines on its piers), brighten and dim slowly, a breath of about seven seconds.
  */
 function domeGlow(m: MeshStandardMaterial, min: number, max: number, low: number): void {
@@ -339,6 +341,21 @@ function domeGlow(m: MeshStandardMaterial, min: number, max: number, low: number
   };
   const key = m.customProgramCacheKey.bind(m);
   m.customProgramCacheKey = () => `dome-${key()}`;
+}
+
+/**
+ * The Grand Conseil's dome breathing with the Conseil's (domeGlow's phase): its own emission between 0.4 and 1.2 times
+ * Fable's, so the glass (emission 0.15) never washes out and the column and rings pulse.
+ */
+function domeBreath(m: MeshStandardMaterial): void {
+  if (m.userData.dome) return; // shared by the column, the rings and the door
+  m.userData.dome = true;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.veinTime = veinTime;
+    shader.fragmentShader = `uniform float veinTime;\n${shader.fragmentShader}`.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance *= 0.4 + 0.8 * (0.5 + 0.5 * sin(veinTime * 0.9));`);
+  };
+  m.customProgramCacheKey = () => 'dome-breath';
 }
 
 /**
@@ -700,10 +717,12 @@ export async function loadModels(types: string[], onProgress?: (done: number, to
             // From the model's own textured material, not whichever part comes first (a plain added part, the
             // Drone's bin floor, made it the whole model's skin).
             if (o instanceof Mesh && (o.material as Material).name === 'meshy' && !meshySkins.has(type)) meshySkins.set(type, TEAM_COLORS.map((c) => teamSkin(o.material as MeshStandardMaterial, FIXED_TEAM[type] ?? c, DEFS[type]?.kind === 'building' || NO_TEAM_RIM.has(type) ? 0.22 : 0.45, isHuman(type), DEFS[type]?.kind === 'unit' && !NO_TEAM_RIM.has(type), DEFS[type]?.kind === 'unit' && isIsdaris(type), isZ(type), isHuman(type))));
-            if ((type === 'conseil' || type === 'grandconseil') && o instanceof Mesh && o.material.name === 'meshy') {
+            if (type === 'conseil' && o instanceof Mesh && o.material.name === 'meshy') {
               o.geometry.computeBoundingBox();
-              meshySkins.get(type)!.forEach((m) => domeGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y, type === 'conseil' ? 0.76 : 0.6));
+              meshySkins.get(type)!.forEach((m) => domeGlow(m, o.geometry.boundingBox!.min.y, o.geometry.boundingBox!.max.y, 0.76));
             }
+            // The Grand Conseil's dome (Fable's) has materials of its own: its light column, rings and door, and its glass.
+            if (type === 'grandconseil' && o instanceof Mesh && (o.material.name === 'cyan' || o.material.name === 'dome_verre')) domeBreath(o.material);
           });
           // Some models come out of Meshy facing sideways: turned in a holder, which the animation leaves alone.
           if (DRESSED.includes(type)) {
